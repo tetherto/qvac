@@ -20,10 +20,9 @@
 
 #include "qlog.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // Single-pass connected-component scan and the per-pixel max loop access
-// cv::Mat planes via raw pointer arithmetic; bounds are established by
-// `labels_.total()`.
+// cv::Mat planes via raw pointer arithmetic and use math-style identifiers.
 
 namespace easyocr::ggml::pipeline {
 
@@ -136,13 +135,11 @@ void alignDiamondShape(
       std::max(width, height) / (std::min(width, height) + 1e-5);
   if (std::abs(1.0 - boxRatio) <= DIAMOND_RATIO_TOL /* NOLINT(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers) */) {
     const auto [minXIt, maxXIt] = std::ranges::minmax_element(
-        segMapPoints,
-        [](const cv::Point& pointA, const cv::Point& pointB) {
+        segMapPoints, [](const cv::Point& pointA, const cv::Point& pointB) {
           return pointA.x < pointB.x;
         });
     const auto [minYIt, maxYIt] = std::ranges::minmax_element(
-        segMapPoints,
-        [](const cv::Point& pointA, const cv::Point& pointB) {
+        segMapPoints, [](const cv::Point& pointA, const cv::Point& pointB) {
           return pointA.y < pointB.y;
         });
     box.at(0) = cv::Point2f(
@@ -160,9 +157,11 @@ void alignDiamondShape(
 
 } // namespace
 
+// TODO(clang-tidy): wrap (textMap, linkMap) in a `DetectorOutputs` struct so
+// the same-type cv::Mat pair cannot be swapped at the call site.
 void StepBoundingBox::loadConnectedComponents(
-    const cv::Mat& textMap,
-    const cv::Mat& linkMap) { /* NOLINT(bugprone-easily-swappable-parameters) */
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    const cv::Mat& textMap, const cv::Mat& linkMap) {
   cv::threshold(textMap, textMapBinary_, TEXT_CLIP_VALUE, 1, cv::THRESH_BINARY);
   cv::threshold(linkMap, linkMapBinary_, LINK_CLIP_VALUE, 1, cv::THRESH_BINARY);
   cv::Mat textScoreComb;
@@ -265,8 +264,11 @@ StepBoundingBox::getBoxFromComponent(Input& input, int component) {
   cv::findNonZero(segmap, nonZeroPoints);
   cv::RotatedRect rectangle = cv::minAreaRect(nonZeroPoints);
   std::array<cv::Point2f, 4> box;
-  // NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays) - cv::RotatedRect::points takes a Point2f[4] out-array
+  // cv::RotatedRect::points takes a Point2f[4] out-array, so a C-array is
+  // required at the interop boundary.
+  // NOLINTBEGIN(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays)
   cv::Point2f tmp[4];
+  // NOLINTEND(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays)
   rectangle.points(tmp); // NOLINT(hicpp-no-array-decay)
   std::ranges::copy(tmp, box.begin());
 
@@ -360,12 +362,14 @@ StepBoundingBox::turnPolysIntoBoxes(
       int margin = static_cast<int>(
           MARGIN_SCALE * boxMarginMultiplier * std::min(widthVal, heightVal));
 
-      const float theta13 = std::abs(std::atan(
-          (poly[0].y - poly[2].y) /
-          std::max(MIN_DELTA_FOR_SLOPE, poly[0].x - poly[2].x)));
-      const float theta24 = std::abs(std::atan(
-          (poly[1].y - poly[3].y) /
-          std::max(MIN_DELTA_FOR_SLOPE, poly[1].x - poly[3].x)));
+      const float theta13 = std::abs(
+          std::atan(
+              (poly[0].y - poly[2].y) /
+              std::max(MIN_DELTA_FOR_SLOPE, poly[0].x - poly[2].x)));
+      const float theta24 = std::abs(
+          std::atan(
+              (poly[1].y - poly[3].y) /
+              std::max(MIN_DELTA_FOR_SLOPE, poly[1].x - poly[3].x)));
 
       const float xOne =
           poly[0].x - (std::cos(theta13) * static_cast<float>(margin));
@@ -667,4 +671,4 @@ std::vector<UnalignedBox> StepBoundingBox::getOutputUnalignedBoxes(
 
 } // namespace easyocr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

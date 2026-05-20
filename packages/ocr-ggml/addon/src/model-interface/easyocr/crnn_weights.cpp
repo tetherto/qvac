@@ -13,15 +13,22 @@
 #include "ggml.h"
 #include "gguf_loader.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // BatchNorm fold loops iterate over raw tensor byte buffers with pointer
-// arithmetic; bounds invariants are checked against the GGUF metadata.
+// arithmetic and snake_case identifiers matching upstream PyTorch
+// state-dict paths.
 
 namespace easyocr::ggml {
 
 namespace {
 
 constexpr float kBnEps = 1e-5F;
+
+// Lengths of the PyTorch state-dict tensor-name suffixes that
+// upload_weights / declare_weights strip when reverse-mapping tensors back
+// to their conv prefix.
+constexpr size_t kWeightSuffixLen = 7; // strlen(".weight")
+constexpr size_t kBiasSuffixLen = 5;   // strlen(".bias")
 
 // Spec for one conv, optionally followed by BN.  `bn_path` is the dotted
 // state-dict path of the BN module (empty for plain convs).
@@ -82,6 +89,9 @@ const std::vector<std::string>& verbatim_paths_after_feature_extractor() {
 // Run the standard BN-fold + verbatim-copy load given a conv inventory and
 // a prebuilt context with destination tensors already declared.  Returns
 // empty string on success; non-empty error message on failure.
+// TODO(clang-tidy): split into helpers (uploadFeatureConvs, uploadLstmStack,
+// uploadLinearHead) to drop cognitive complexity below 25.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 std::string upload_weights(
     const GgufLoader& loader, const std::vector<ConvSpec>& convs,
     const std::vector<std::string>& verbatim_paths,
@@ -175,9 +185,9 @@ std::string upload_weights(
     if (auto it = t_.find(full_name); it != t_.end()) {
       dst = it->second;
     } else if (full_name.ends_with(".weight")) {
-      dst = w_[full_name.substr(0, full_name.size() - 7)];
+      dst = w_[full_name.substr(0, full_name.size() - kWeightSuffixLen)];
     } else if (full_name.ends_with(".bias")) {
-      dst = b_[full_name.substr(0, full_name.size() - 5)];
+      dst = b_[full_name.substr(0, full_name.size() - kBiasSuffixLen)];
     }
     if (dst == nullptr) {
       return "internal: no destination for " + full_name;
@@ -235,9 +245,9 @@ std::string declare_weights(
     const bool is_b = full_name.ends_with(".bias");
     const bool is_lstm = full_name.find(".rnn.") != std::string::npos;
     if (is_w && !is_lstm) {
-      w_[full_name.substr(0, full_name.size() - 7)] = dst;
+      w_[full_name.substr(0, full_name.size() - kWeightSuffixLen)] = dst;
     } else if (is_b && !is_lstm) {
-      b_[full_name.substr(0, full_name.size() - 5)] = dst;
+      b_[full_name.substr(0, full_name.size() - kBiasSuffixLen)] = dst;
     } else {
       t_[full_name] = dst;
     }
@@ -355,4 +365,4 @@ void CrnnGen2Weights::build_(const GgufLoader& loader, ggml_backend_t backend) {
 
 } // namespace easyocr::ggml
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

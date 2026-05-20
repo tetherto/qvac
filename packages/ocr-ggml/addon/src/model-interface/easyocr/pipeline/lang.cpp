@@ -1117,9 +1117,14 @@ validateAndGetInfoFromLangList(std::span<const std::string> langList) {
  * @param langList : languages list (which is mapped internally to the
  * characters present in each language)
  */
+// TODO(clang-tidy): wrap (fullCharList, symbols) in a `CharSetSources`
+// struct so the same-type std::u32string_view pair cannot be swapped at the
+// call site; the two inputs are semantically disjoint (vocabulary chars vs
+// language-symbol chars) and accidental swap would yield silently wrong
+// ignore masks.
 std::vector<bool> populateIgnoreIndexVector(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     std::u32string_view fullCharList, std::u32string_view symbols,
-    /* NOLINT(bugprone-easily-swappable-parameters) */
     std::span<const std::string> langList) {
   std::unordered_set<char32_t> langCharsSet(symbols.begin(), symbols.end());
 

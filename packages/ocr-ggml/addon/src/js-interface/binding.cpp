@@ -1,5 +1,4 @@
 #include <bare.h>
-
 #include <opencv2/core.hpp>
 
 #include "../addon/AddonJs.hpp"
@@ -11,7 +10,7 @@
 namespace {
 struct OpenCVSingleThread {
   OpenCVSingleThread() { cv::setNumThreads(1); }
-} g_opencvInit; // NOLINT(cert-err58-cpp,bugprone-throwing-static-initialization)
+} g_opencvInit; // NOLINT(cert-err58-cpp,bugprone-throwing-static-initialization,cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
 js_value_t*
@@ -41,7 +40,7 @@ qvac_lib_infer_ocr_ggml_exports( // NOLINT(readability-identifier-naming)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
-// NOLINTEND(cppcoreguidelines-macro-usage)
+  // NOLINTEND(cppcoreguidelines-macro-usage)
 
   return exports;
 }

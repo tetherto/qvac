@@ -2,6 +2,10 @@
 
 #include "ggml.h"
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// Op helpers use math-style parameter names (x, OC, s0..s1, p0..p1, d0..d1,
+// W_target, H_target) that mirror the ggml C-API documentation.
+
 namespace easyocr::ggml::ops {
 
 namespace {
@@ -9,8 +13,11 @@ namespace {
 // Add a [OC] bias to a [W, H, OC, N] activation map. We explicitly broadcast
 // via ggml_repeat (matching the pattern used in ggml's own yolo example) to
 // avoid relying on implicit broadcast semantics in ggml_add.
-::ggml_tensor*
-add_channel_bias(::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* bias) {
+// TODO(clang-tidy): wrap (x, bias) in a small `BiasInput` struct so the
+// same-type ggml_tensor* pair cannot be swapped at the call site.
+::ggml_tensor* add_channel_bias(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* bias) {
   const int64_t oc = bias->ne[0];
   auto* b4 = ggml_reshape_4d(ctx, bias, 1, 1, oc, 1);
   return ggml_add(ctx, x, ggml_repeat(ctx, b4, x));
@@ -18,9 +25,13 @@ add_channel_bias(::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* bias) {
 
 } // namespace
 
+// TODO(clang-tidy): wrap (x, kernel, bias) in a small `ConvInput` struct so
+// the same-type ggml_tensor* triple cannot be swapped at the call site.
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 ::ggml_tensor* conv_2d_bias(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
     ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   auto* y = ggml_conv_2d(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
   return add_channel_bias(ctx, y, bias);
 }
@@ -50,3 +61,5 @@ add_channel_bias(::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* bias) {
 }
 
 } // namespace easyocr::ggml::ops
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

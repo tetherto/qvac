@@ -11,6 +11,10 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// MobileNet header exposes architecture-defined layer-dim constants and
+// uses snake_case identifiers to mirror upstream PyTorch state-dict paths.
+
 namespace qvac_lib_infer_ggml_classification::graph {
 
 /// Per-block hyperparameters for one torchvision MobileNetV3-Large
@@ -252,3 +256,5 @@ ComputeGraph
 buildGraph(const WeightsBundle& weights, std::vector<ggml_backend_t>& backends);
 
 } // namespace qvac_lib_infer_ggml_classification::graph
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

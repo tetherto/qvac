@@ -14,7 +14,14 @@
 #include <cstdint>
 #include <string>
 
+// NOLINTBEGIN(readability-identifier-naming,cppcoreguidelines-macro-usage)
+// Shim macros (QLOG, ALOG_DEBUG, ALOG_INFO) replace upstream qvac logging
+// in lifted files; macro form preserves diff-vs-upstream parity.
+
 namespace qvac_lib_inference_addon_cpp::logger {
+// Unscoped to mirror upstream `qvac::logger::Priority` enum used at the QLOG
+// call sites lifted verbatim from ocr-onnx.
+// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
 enum Priority : std::uint8_t {
   DEBUG,
   INFO,
@@ -26,3 +33,5 @@ enum Priority : std::uint8_t {
 #define QLOG(_prio, _msg) ((void)(_prio), (void)(_msg))
 #define ALOG_DEBUG(_msg) ((void)(_msg))
 #define ALOG_INFO(_msg) ((void)(_msg))
+
+// NOLINTEND(readability-identifier-naming,cppcoreguidelines-macro-usage)

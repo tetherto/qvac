@@ -4,6 +4,11 @@
 #include "ggml.h"
 #include "ops.hpp"
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// CRAFT graph builder uses snake_case identifiers matching upstream
+// PyTorch state-dict (basenet, conv_cls, upconv) and single-letter math
+// identifiers (x, t, W, b).
+
 namespace easyocr::ggml {
 
 namespace {
@@ -176,7 +181,10 @@ cat_channels(::ggml_context* ctx, ::ggml_tensor* a, ::ggml_tensor* b) {
       /*s1=*/1,
       /*p0=*/1.0F,
       /*p1=*/1.0F);
-  // Dilated Conv 512 -> 1024, k=3, p=6, d=6
+  // Dilated Conv 512 -> 1024, k=3, p=6, d=6 (dilation 6 is part of the CRAFT
+  // basenet.slice5.1 architecture spec; padding matches dilation to preserve
+  // spatial resolution).
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   h = conv_only(ctx, W, h, "basenet.slice5.1", /*s=*/1, /*p=*/6, /*d=*/6);
   // Conv 1024 -> 1024, k=1
   h = conv_only(ctx, W, h, "basenet.slice5.2", /*s=*/1, /*p=*/0, /*d=*/1);
@@ -259,3 +267,5 @@ cat_channels(::ggml_context* ctx, ::ggml_tensor* a, ::ggml_tensor* b) {
 }
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

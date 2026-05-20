@@ -22,6 +22,10 @@
 
 #include <opencv2/imgproc.hpp>
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// Pipeline DTOs lifted byte-for-byte from upstream ocr-onnx; field names
+// preserved for diffability.
+
 namespace easyocr::ggml::pipeline {
 
 struct PipelineContext {
@@ -100,3 +104,5 @@ cv::Mat fourPointTransform(
 int defaultPhysicalThreadCount();
 
 } // namespace easyocr::ggml::pipeline
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

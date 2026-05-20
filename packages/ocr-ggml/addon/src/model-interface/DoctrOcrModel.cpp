@@ -7,124 +7,144 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "ggml.h"
 #include "ggml-backend.h"
+#include "ggml.h"
+
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// DoctrOcrModel mirrors the @qvac/ocr-onnx C++ DoctrOcrModel: identifiers
+// and structure preserved for diffability against upstream.
 
 namespace qvac_lib_infer_ocr_ggml {
 
 namespace {
 
+constexpr double kMillisecondsPerSecond = 1000.0;
+
 cv::Mat decodeOrWrapImageDoctr(const OcrInput& input) {
-    if (input.isEncoded) {
-        cv::Mat encoded(
-            1,
-            static_cast<int>(input.data.size()),
-            CV_8UC1,
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat ctor wants non-const void* but cv::imdecode does not write through it
-            const_cast<uint8_t*>(input.data.data()));
-        cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
-        if (decoded.empty()) {
-            throw std::runtime_error(
-                "doctr-ocr-ggml: failed to decode image");
-        }
-        cv::cvtColor(decoded, decoded, cv::COLOR_BGR2RGB);
-        return decoded;
+  if (input.isEncoded) {
+    // cv::Mat ctor wants non-const void* but cv::imdecode does not write.
+    cv::Mat encoded(
+        1,
+        static_cast<int>(input.data.size()),
+        CV_8UC1,
+        const_cast<uint8_t*>( // NOLINT(cppcoreguidelines-pro-type-const-cast)
+            input.data.data()));
+    cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
+    if (decoded.empty()) {
+      throw std::runtime_error("doctr-ocr-ggml: failed to decode image");
     }
-    if (input.imageWidth <= 0 || input.imageHeight <= 0 || input.data.empty()) {
-        throw std::runtime_error(
-            "doctr-ocr-ggml: raw image requires positive width/height and data");
-    }
-    cv::Mat raw(
-        input.imageHeight,
-        input.imageWidth,
-        CV_8UC3,
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat wants non-const void* but we clone() before mutating
-        const_cast<uint8_t*>(input.data.data()));
-    return raw.clone();
+    cv::cvtColor(decoded, decoded, cv::COLOR_BGR2RGB);
+    return decoded;
+  }
+  if (input.imageWidth <= 0 || input.imageHeight <= 0 || input.data.empty()) {
+    throw std::runtime_error(
+        "doctr-ocr-ggml: raw image requires positive width/height and data");
+  }
+  // cv::Mat ctor wants non-const void* but we clone() before mutating.
+  cv::Mat raw(
+      input.imageHeight,
+      input.imageWidth,
+      CV_8UC3,
+      const_cast<uint8_t*>( // NOLINT(cppcoreguidelines-pro-type-const-cast)
+          input.data.data()));
+  return raw.clone();
 }
 
 double elapsedMs(std::chrono::steady_clock::time_point start) {
-    using namespace std::chrono;
-    return duration_cast<duration<double, std::milli>>(
-               steady_clock::now() - start)
-        .count();
+  using namespace std::chrono;
+  return duration_cast<duration<double, std::milli>>(
+             steady_clock::now() - start)
+      .count();
 }
 
 } // namespace
 
-DoctrOcrModel::DoctrOcrModel(std::string pathDetector,
-                             std::string pathRecognizer,
-                             OcrConfig config)
+// TODO(clang-tidy): consider wrapping the two model paths in a small
+// `OcrModelPaths { std::string detector; std::string recognizer; }` struct
+// to make them un-swappable at the call site.
+DoctrOcrModel::DoctrOcrModel(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    const std::string& pathDetector, const std::string& pathRecognizer,
+    OcrConfig config)
     : config_(std::move(config)) {
-    if (!config_.backendsDir.empty()) {
-        ggml_backend_load_all_from_path(config_.backendsDir.c_str());
-    } else {
-        ggml_backend_load_all();
-    }
+  if (!config_.backendsDir.empty()) {
+    ggml_backend_load_all_from_path(config_.backendsDir.c_str());
+  } else {
+    ggml_backend_load_all();
+  }
 
-    detector_ = std::make_unique<doctr::ggml::pipeline::StepDoctrDetectionGGML>(
-        pathDetector, config_.nThreads);
+  detector_ = std::make_unique<doctr::ggml::pipeline::StepDoctrDetectionGGML>(
+      pathDetector, config_.nThreads);
 
-    recognizer_ = std::make_unique<doctr::ggml::pipeline::StepDoctrRecognitionGGML>(
-        pathRecognizer, config_.recognizerBatchSize);
+  recognizer_ =
+      std::make_unique<doctr::ggml::pipeline::StepDoctrRecognitionGGML>(
+          pathRecognizer, config_.recognizerBatchSize);
 }
 
 DoctrOcrModel::~DoctrOcrModel() {
-    recognizer_.reset();
-    detector_.reset();
+  recognizer_.reset();
+  detector_.reset();
 }
 
 std::any DoctrOcrModel::process(const std::any& input) {
-    if (const auto* asInput = std::any_cast<OcrInput>(&input)) {
-        return processImage(*asInput);
-    }
-    throw std::runtime_error(
-        "doctr-ocr-ggml: invalid input type (expected OcrInput)");
+  if (const auto* asInput = std::any_cast<OcrInput>(&input)) {
+    return processImage(*asInput);
+  }
+  throw std::runtime_error(
+      "doctr-ocr-ggml: invalid input type (expected OcrInput)");
 }
 
 DoctrOcrModel::Output DoctrOcrModel::processImage(const Input& input) {
-    cancelFlag_.store(false, std::memory_order_relaxed);
+  cancelFlag_.store(false, std::memory_order_relaxed);
 
-    const auto t0 = std::chrono::steady_clock::now();
+  const auto t0 = std::chrono::steady_clock::now();
 
-    cv::Mat img = decodeOrWrapImageDoctr(input);
+  cv::Mat img = decodeOrWrapImageDoctr(input);
 
-    doctr::ggml::pipeline::PipelineContext ctx{
-        .origImg = img,
-        .paragraph = false,
-        .rotationAngles = std::nullopt,
-        .boxMarginMultiplier = input.boxMarginMultiplier,
-        .initialResizeRatio = 1.0F,
-    };
+  doctr::ggml::pipeline::PipelineContext ctx{
+      .origImg = img,
+      .paragraph = false,
+      .rotationAngles = std::nullopt,
+      .boxMarginMultiplier = input.boxMarginMultiplier,
+      .initialResizeRatio = 1.0F,
+  };
 
-    const auto tDetectStart = std::chrono::steady_clock::now();
-    auto detOut = detector_->process(ctx);
-    lastDetectionMs_ = elapsedMs(tDetectStart);
-    lastNumBoxes_ = static_cast<int>(detOut.polygons.size());
+  const auto tDetectStart = std::chrono::steady_clock::now();
+  auto detOut = detector_->process(ctx);
+  lastDetectionMs_ = elapsedMs(tDetectStart);
+  lastNumBoxes_ = static_cast<int>(detOut.polygons.size());
 
-    if (cancelFlag_.load(std::memory_order_relaxed)) {
-        return {};
-    }
+  if (cancelFlag_.load(std::memory_order_relaxed)) {
+    return {};
+  }
 
-    const auto tRecogStart = std::chrono::steady_clock::now();
-    auto texts = recognizer_->process(std::move(detOut), &cancelFlag_);
-    lastRecognitionMs_ = elapsedMs(tRecogStart);
+  const auto tRecogStart = std::chrono::steady_clock::now();
+  auto texts = recognizer_->process(std::move(detOut), &cancelFlag_);
+  lastRecognitionMs_ = elapsedMs(tRecogStart);
 
-    lastProcessMs_ = elapsedMs(t0);
-    return texts;
+  lastProcessMs_ = elapsedMs(t0);
+  return texts;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats DoctrOcrModel::runtimeStats() const {
-    return {
-        std::make_pair("totalTime",
-                       std::variant<double, int64_t>(lastProcessMs_ / 1000.0)),
-        std::make_pair("detectionTime",
-                       std::variant<double, int64_t>(lastDetectionMs_ / 1000.0)),
-        std::make_pair("recognitionTime",
-                       std::variant<double, int64_t>(lastRecognitionMs_ / 1000.0)),
-        std::make_pair("numBoxes",
-                       std::variant<double, int64_t>(
-                           static_cast<int64_t>(lastNumBoxes_)))};
+  return {
+      std::make_pair(
+          "totalTime",
+          std::variant<double, int64_t>(
+              lastProcessMs_ / kMillisecondsPerSecond)),
+      std::make_pair(
+          "detectionTime",
+          std::variant<double, int64_t>(
+              lastDetectionMs_ / kMillisecondsPerSecond)),
+      std::make_pair(
+          "recognitionTime",
+          std::variant<double, int64_t>(
+              lastRecognitionMs_ / kMillisecondsPerSecond)),
+      std::make_pair(
+          "numBoxes",
+          std::variant<double, int64_t>(static_cast<int64_t>(lastNumBoxes_)))};
 }
 
 } // namespace qvac_lib_infer_ocr_ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

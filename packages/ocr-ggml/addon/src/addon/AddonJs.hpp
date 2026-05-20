@@ -32,6 +32,10 @@
 #include "model-interface/OcrModel.hpp"
 #include "model-interface/easyocr/pipeline/steps.hpp"
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// JS-side glue: identifiers follow the @qvac/ocr-onnx JS API surface; layer
+// indices and shape constants come straight from the JS payload.
+
 namespace qvac_lib_infer_ocr_ggml {
 
 namespace {
@@ -41,21 +45,23 @@ createArrayFromElements(js_env_t* env, std::span<js_value_t*> elements) {
   js_value_t* jsArray = nullptr;
   js_create_array_with_length(env, elements.size(), &jsArray);
   js_set_array_elements(
-      env, jsArray,
+      env,
+      jsArray,
       const_cast<const js_value_t**>(elements.data()),
-      elements.size(), 0);
+      elements.size(),
+      0);
   return jsArray;
 }
 
 // Mirrors @qvac/ocr-onnx's `getJsArrayFromOutput`. Output schema for each
 // inferred text: [ [[x,y]*4], text, confidence ].
-js_value_t* outputToJs(
-    js_env_t* env,
-    const OcrModel::Output& inferredTextList) {
+js_value_t*
+outputToJs(js_env_t* env, const OcrModel::Output& inferredTextList) {
   const size_t n = inferredTextList.size();
-  auto jsInferredTextListElements =
-      std::make_unique<js_value_t*[]>( // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays) - std::make_unique<T[]> idiom
-          n);
+  auto jsInferredTextListElements = std::make_unique<
+      js_value_t*[]>( // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
+                      // - std::make_unique<T[]> idiom
+      n);
 
   for (size_t i = 0; i < n; ++i) {
     constexpr size_t kBoxLen = 4;
@@ -77,12 +83,10 @@ js_value_t* outputToJs(
     std::array<js_value_t*, kRowLen> jsRowElements{};
     jsRowElements.at(0) =
         createArrayFromElements(env, std::span{jsBoxCoordinatesElements});
-    jsRowElements.at(1) =
-        qvac_lib_inference_addon_cpp::js::String::create(
-            env, inferredTextList[i].text);
-    jsRowElements.at(2) =
-        qvac_lib_inference_addon_cpp::js::Number::create(
-            env, inferredTextList[i].confidenceScore);
+    jsRowElements.at(1) = qvac_lib_inference_addon_cpp::js::String::create(
+        env, inferredTextList[i].text);
+    jsRowElements.at(2) = qvac_lib_inference_addon_cpp::js::Number::create(
+        env, inferredTextList[i].confidenceScore);
 
     jsInferredTextListElements[i] =
         createArrayFromElements(env, std::span{jsRowElements});
@@ -167,8 +171,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   if (auto optLow =
           args1.getOptionalProperty<js::Number>(env, "lowConfidenceThreshold");
       optLow) {
-    config.lowConfidenceThreshold =
-        static_cast<float>(optLow->as<double>(env));
+    config.lowConfidenceThreshold = static_cast<float>(optLow->as<double>(env));
   }
   if (auto optBatch =
           args1.getOptionalProperty<js::Number>(env, "recognizerBatchSize");
@@ -197,19 +200,22 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   std::unique_ptr<qvac_lib_inference_addon_cpp::model::IModel> model;
   if (pipelineType == "doctr") {
-    model = std::make_unique<DoctrOcrModel>(pathDetector, pathRecognizer, config);
+    model =
+        std::make_unique<DoctrOcrModel>(pathDetector, pathRecognizer, config);
   } else {
     model = std::make_unique<OcrModel>(
-        pathDetector, pathRecognizer,
-        std::span<const std::string>(langList), config);
+        pathDetector,
+        pathRecognizer,
+        std::span<const std::string>(langList),
+        config);
   }
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(std::make_shared<OcrOutputHandler>());
 
   std::unique_ptr<OutputCallBackInterface> callback =
-      std::make_unique<OutputCallBackJs>(env, args[0], args[2],
-                                         std::move(outHandlers));
+      std::make_unique<OutputCallBackJs>(
+          env, args[0], args[2], std::move(outHandlers));
 
   auto addon =
       std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
@@ -239,8 +245,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   auto input = args1.getProperty<js::Object>(env, "input");
 
-  if (auto isEncoded =
-          input.getOptionalProperty<js::Boolean>(env, "isEncoded");
+  if (auto isEncoded = input.getOptionalProperty<js::Boolean>(env, "isEncoded");
       isEncoded && isEncoded->as<bool>(env)) {
     modelInput.isEncoded = true;
     modelInput.data = input.getProperty<js::TypedArray<uint8_t>>(env, "data")
@@ -283,3 +288,5 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 } // namespace qvac_lib_infer_ocr_ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

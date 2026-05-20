@@ -18,9 +18,11 @@
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
-// MobileNet weight loaders and graph builders pass ggml tensor `ne[]`
-// dimension arrays and raw float buffers via pointer arithmetic.
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// MobileNet weight loaders and graph builders use single-letter math
+// identifiers, snake_case state-dict paths mirroring upstream PyTorch,
+// architecture-defined layer-dim magic numbers, and raw pointer/array
+// access on ggml tensor `ne[]` dimension arrays and float buffers.
 
 namespace qvac_lib_infer_ggml_classification::graph {
 
@@ -37,6 +39,18 @@ using qvac_errors::general_error::InvalidArgument;
 [[noreturn]] void raiseInvalid(const std::string& msg) {
   throw StatusError(InvalidArgument, msg);
 }
+
+// Sizing constants for the weights / graph ggml contexts and the upper
+// bound passed to ggml_new_graph_custom. Deliberately oversized; the real
+// MobileNet+FPN footprint stays well below them.
+constexpr int kCtxTensorOverhead = 4096;
+constexpr int kMaxGraphNodes = 8192;
+
+// FPN feature-tap indices: blocks 3, 6, 12 produce the three lateral inputs
+// to the FPN (matches torchvision's MobileNetV3-Large feature-extractor).
+constexpr int kFpnFeatureTap1 = 3;
+constexpr int kFpnFeatureTap2 = 6;
+constexpr int kFpnFeatureTap3 = 12;
 
 void printGgufMetadataKeys(const gguf_context* gguf) {
   if (gguf == nullptr) {
@@ -136,7 +150,11 @@ std::vector<float> loadVector1d(
 
 /// Applies folded BatchNorm inline: `x * scale + shift` with pre-reshaped
 /// [1, 1, C, 1] scale/shift broadcasted across [W, H, C, 1].
+// TODO(clang-tidy): wrap the (scale, shift) ggml_tensor* pair in a small
+// `FoldedBnParams { ggml_tensor* scale; ggml_tensor* shift; }` struct so the
+// two same-type pointers cannot be swapped at the call site.
 struct ggml_tensor* applyFoldedBn(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     struct ggml_context* ctx, struct ggml_tensor* x, struct ggml_tensor* scale,
     struct ggml_tensor* shift) {
   struct ggml_tensor* scaled = ggml_mul(ctx, x, scale);
@@ -145,7 +163,10 @@ struct ggml_tensor* applyFoldedBn(
 
 struct GraphBuilder {
   struct ggml_context* ctx;
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members) - GraphBuilder is a stateless one-shot helper that never outlives its caller; storing the weight map by reference avoids a deep copy on every graph build
+  // GraphBuilder is a stateless one-shot helper that never outlives its
+  // caller; storing the weight map by reference avoids a deep copy on every
+  // graph build.
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
 
   [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
@@ -158,16 +179,19 @@ struct GraphBuilder {
 
   /// Activation selection: HardSwish for later blocks, ReLU for early
   /// layers, matching torchvision's MobileNetV3-Large config.
-  struct ggml_tensor*
-  activate(struct ggml_tensor* x, bool useHardswish) const {
+  struct ggml_tensor* activate(struct ggml_tensor* x, bool useHardswish) const {
     return useHardswish ? ggml_hardswish(ctx, x) : ggml_relu(ctx, x);
   }
 
   /// Conv2d + folded BN, optionally followed by an activation.
+  // TODO(clang-tidy): wrap (stride, kernel, [pad, dilation]) ints in a small
+  // `ConvShape { int stride; int kernel; int pad; int dilation; }` struct so
+  // adjacent same-type ints cannot be swapped at the call site.
   struct ggml_tensor* convBnAct(
       struct ggml_tensor* x, const std::string& convPrefix,
+      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
       const std::string& bnPrefix, int stride, int kernel, bool activate,
-      bool useHardswish) {
+      bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
     struct ggml_tensor* conv =
@@ -182,7 +206,8 @@ struct GraphBuilder {
     return this->activate(bn, useHardswish);
   }
 
-  struct ggml_tensor* fpnInBranch(struct ggml_tensor* input, int branchIndex) {
+  struct ggml_tensor*
+  fpnInBranch(struct ggml_tensor* input, int branchIndex) const {
     const std::string base =
         "dbnet.fpn.in_branches." + std::to_string(branchIndex);
     return convBnAct(
@@ -211,7 +236,8 @@ struct GraphBuilder {
     return ggml_add(ctx, upsampled, lateral);
   }
 
-  struct ggml_tensor* fpnOutBranch(struct ggml_tensor* input, int branchIndex) {
+  struct ggml_tensor*
+  fpnOutBranch(struct ggml_tensor* input, int branchIndex) const {
     constexpr std::array<int, 4> upsampleScaleFactors = {1, 2, 4, 8};
     const int upsampleScaleFactor =
         upsampleScaleFactors.at(static_cast<size_t>(branchIndex));
@@ -250,7 +276,7 @@ struct GraphBuilder {
     return ggml_relu(ctx, normed);
   }
 
-  struct ggml_tensor* probHead(struct ggml_tensor* input) {
+  struct ggml_tensor* probHead(struct ggml_tensor* input) const {
     struct ggml_tensor* output = convBnAct(
         input,
         "dbnet.prob_head.0",
@@ -267,9 +293,14 @@ struct GraphBuilder {
   }
 
   /// Depthwise Conv2d + folded BN + activation.
+  // TODO(clang-tidy): wrap (stride, kernel, [pad, dilation]) ints in a small
+  // `ConvShape` struct shared with convBnAct so adjacent same-type ints
+  // cannot be swapped.
   struct ggml_tensor* dwConvBnAct(
       struct ggml_tensor* x, const std::string& convPrefix,
-      const std::string& bnPrefix, int stride, int kernel, bool useHardswish) {
+      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+      const std::string& bnPrefix, int stride, int kernel,
+      bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
     struct ggml_tensor* conv =
@@ -283,8 +314,7 @@ struct GraphBuilder {
   /// Squeeze-and-excite block: global avg pool → 1x1 conv (reduce) → ReLU →
   /// 1x1 conv (expand) → HardSigmoid → element-wise multiply with input.
   struct ggml_tensor* seBlock(
-      struct ggml_tensor* x, const std::string& sePrefix,
-      int spatialHw) const {
+      struct ggml_tensor* x, const std::string& sePrefix, int spatialHw) const {
     // Global avg pool: kernel = full spatial extent, stride = same.
     struct ggml_tensor* pooled = ggml_pool_2d(
         ctx,
@@ -312,9 +342,12 @@ struct GraphBuilder {
   }
 
   /// One torchvision InvertedResidual block.
+  // TODO(clang-tidy): pack (featuresIndex, inputSpatialHw) in a struct so the
+  // adjacent ints cannot be swapped at the call site.
   struct ggml_tensor* invertedResidual(
+      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
       struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex,
-      int inputSpatialHw) {
+      int inputSpatialHw) const {
     const std::string base = "features." + std::to_string(featuresIndex);
     const bool hasExpand = cfg.expansionSize != cfg.inputChannels;
 
@@ -480,6 +513,10 @@ void ComputeGraph::reset() {
   }
 }
 
+// TODO(clang-tidy): split this ~400-line function into helpers
+// (loadFeatureExtractor, loadFpnBranches, loadDbnetHead, loadFoldedBn) to
+// drop cognitive complexity below the 25 threshold.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 WeightsBundle loadWeights(
     const std::string& ggufPath, std::vector<ggml_backend_t>& backends,
     std::vector<std::string>& outLabels) {
@@ -511,10 +548,9 @@ WeightsBundle loadWeights(
   // Fresh ggml ctx sized for our folded set of tensors (no alloc; tensors
   // will be backed by `backend` after ggml_backend_alloc_ctx_tensors).
   WeightsBundle bundle;
-  const size_t ctxSize = ggml_tensor_overhead() * 4096;
+  const size_t ctxSize = ggml_tensor_overhead() * kCtxTensorOverhead;
   bundle.ctx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
-      ggml_init(
-          {.mem_size = ctxSize, .mem_buffer = nullptr, .no_alloc = true}),
+      ggml_init({.mem_size = ctxSize, .mem_buffer = nullptr, .no_alloc = true}),
       ggml_free);
   if (!bundle.ctx) {
     raise("Failed to allocate weights ggml context");
@@ -765,9 +801,9 @@ WeightsBundle loadWeights(
     ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
   }
 
-  // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores) - kept for the
-  // future classifier-bytes upload path (see commented-out
-  // uploadClassifierTensor block at the bottom of this function)
+  // Kept for the future classifier-bytes upload path (see commented-out
+  // uploadClassifierTensor block at the bottom of this function).
+  // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores)
   auto uploadTensorBytes = [&](struct ggml_tensor* dst,
                                const std::string& srcName) {
     struct ggml_tensor* src = ggml_get_tensor(ggmlCtx, srcName.c_str());
@@ -916,10 +952,9 @@ ComputeGraph buildGraph(
     const WeightsBundle& weights, std::vector<ggml_backend_t>& backends) {
   ComputeGraph cg;
   const size_t ctxSize =
-      (ggml_tensor_overhead() * 4096) + ggml_graph_overhead();
+      (ggml_tensor_overhead() * kCtxTensorOverhead) + ggml_graph_overhead();
   cg.ctx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
-      ggml_init(
-          {.mem_size = ctxSize, .mem_buffer = nullptr, .no_alloc = true}),
+      ggml_init({.mem_size = ctxSize, .mem_buffer = nullptr, .no_alloc = true}),
       ggml_free);
   if (!cg.ctx) {
     raise("Failed to allocate graph ggml context");
@@ -952,13 +987,13 @@ ComputeGraph buildGraph(
       spatial = (spatial + 1) / 2;
     }
     switch (graphFeatureIndex) {
-    case 3:
+    case kFpnFeatureTap1:
       cg.output_1 = x;
       break;
-    case 6:
+    case kFpnFeatureTap2:
       cg.output_2 = x;
       break;
-    case 12:
+    case kFpnFeatureTap3:
       cg.output_3 = x;
       break;
     default:
@@ -1015,7 +1050,7 @@ ComputeGraph buildGraph(
   ggml_set_name(cg.output_3, "output_3");
   ggml_set_name(cg.output_4, "output_4");
 
-  cg.graph = ggml_new_graph_custom(ctx, 8192, /*grads=*/false);
+  cg.graph = ggml_new_graph_custom(ctx, kMaxGraphNodes, /*grads=*/false);
   ggml_build_forward_expand(cg.graph, cg.output_4);
 
   cg.allocr =
@@ -1033,4 +1068,4 @@ ComputeGraph buildGraph(
 
 } // namespace qvac_lib_infer_ggml_classification::graph
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

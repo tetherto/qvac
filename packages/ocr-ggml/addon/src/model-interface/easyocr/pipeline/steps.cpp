@@ -12,6 +12,10 @@
 
 #include <opencv2/opencv.hpp>
 
+// NOLINTBEGIN(readability-identifier-length)
+// `hc` (half-circle) is the documented PerspectiveTransform local from
+// upstream ocr-onnx; preserved verbatim for diffability.
+
 namespace easyocr::ggml::pipeline {
 
 std::string InferredText::toString() const {
@@ -82,3 +86,5 @@ int defaultPhysicalThreadCount() {
 }
 
 } // namespace easyocr::ggml::pipeline
+
+// NOLINTEND(readability-identifier-length)

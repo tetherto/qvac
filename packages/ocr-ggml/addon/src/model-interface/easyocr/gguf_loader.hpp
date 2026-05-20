@@ -19,9 +19,12 @@
 #include <string>
 #include <string_view>
 
+// NOLINTBEGIN(readability-identifier-naming)
 struct gguf_context;
 struct ggml_context;
 struct ggml_tensor;
+// GgufLoader public API mirrors the ggml/gguf C-API surface (get_tensor,
+// get_string, n_kv, n_tensors, get_u32, get_u64) which uses snake_case.
 
 namespace easyocr::ggml {
 
@@ -69,3 +72,5 @@ private:
 };
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(readability-identifier-naming)

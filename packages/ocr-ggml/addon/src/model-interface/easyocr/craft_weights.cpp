@@ -11,9 +11,10 @@
 #include "ggml.h"
 #include "gguf_loader.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // BatchNorm fold loops iterate over raw tensor byte buffers with pointer
-// arithmetic; bounds invariants are checked against the GGUF metadata.
+// arithmetic and snake_case identifiers matching upstream PyTorch
+// state-dict paths.
 
 namespace easyocr::ggml {
 
@@ -30,7 +31,8 @@ struct ConvDef {
   const char* bn; // "" => no BN
 };
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays) - kept as C array so kNumConvs deduces below
+// Kept as C-style array so kNumConvs deduces below.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
 constexpr ConvDef kConvInventory[] = {
     // basenet.slice1: 4 conv-BN pairs (idx 0+1, 3+4, 7+8, 10+11)
     {.conv = "basenet.slice1.0", .bn = "basenet.slice1.1"},
@@ -120,6 +122,9 @@ int CraftWeights::n_loaded() const noexcept {
   return static_cast<int>(w_.size());
 }
 
+// TODO(clang-tidy): split into helpers (declareTensors, uploadConvFiltered,
+// uploadBnFiltered) to drop cognitive complexity below 25.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
   if (!loader.ok()) {
     err_ = "GgufLoader is not ok";
@@ -132,7 +137,9 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
 
   // --- Step 1: declare every destination tensor in our own ctx --------------
   // We need 2 tensors per conv (W + b) and a small headroom margin.
+  // TODO(clang-tidy): hoist tensor-overhead headroom 16 as kCtxHeadroom.
   ggml_init_params ctx_params{
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
       .mem_size = ggml_tensor_overhead() * ((kNumConvs * 2) + 16),
       .mem_buffer = nullptr,
       .no_alloc = true,
@@ -266,4 +273,4 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
 
 } // namespace easyocr::ggml
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

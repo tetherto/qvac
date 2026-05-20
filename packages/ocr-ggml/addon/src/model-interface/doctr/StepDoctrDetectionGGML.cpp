@@ -16,9 +16,9 @@
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 #include "model-interface/easyocr/pipeline/steps.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // Detection post-processing iterates over cv::Mat planes with raw pointer
-// arithmetic.
+// arithmetic and uses standard math/DSP identifier conventions.
 
 namespace doctr::ggml::pipeline {
 
@@ -177,8 +177,14 @@ StepDoctrDetectionGGML::extractPolygons(
   const int mapW = probMap.cols;
 
   cv::Mat binary;
+  // TODO(clang-tidy): hoist epsilon nudge as kBinarizeEpsilon constant.
   cv::threshold(
-      probMap, binary, BINARIZE_THRESHOLD - 1e-6F, 1.0, cv::THRESH_BINARY);
+      probMap,
+      binary,
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+      BINARIZE_THRESHOLD - 1e-6F,
+      1.0,
+      cv::THRESH_BINARY);
   binary.convertTo(binary, CV_8U);
 
   const cv::Mat kernel =
@@ -222,6 +228,11 @@ StepDoctrDetectionGGML::extractPolygons(
     float ny1 = ey1 / static_cast<float>(mapH);
 
     // Remove symmetric-padding bias (OnnxTR _remove_padding logic).
+    // The 0.5F offsets here re-center each normalized coordinate around the
+    // image midpoint before applying the aspect-ratio scale, then translate
+    // back; they are intrinsic to the symmetric-pad inverse and not a tunable
+    // parameter.
+    // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     if (origH > origW) {
       const float ratio = static_cast<float>(origH) / static_cast<float>(origW);
       nx0 = ((nx0 - 0.5F) * ratio) + 0.5F;
@@ -231,6 +242,7 @@ StepDoctrDetectionGGML::extractPolygons(
       ny0 = ((ny0 - 0.5F) * ratio) + 0.5F;
       ny1 = ((ny1 - 0.5F) * ratio) + 0.5F;
     }
+    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
     nx0 = std::clamp(nx0, 0.0F, 1.0F);
     ny0 = std::clamp(ny0, 0.0F, 1.0F);
@@ -297,4 +309,4 @@ StepDoctrDetectionGGML::process(const Input& input) {
 
 } // namespace doctr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

@@ -62,6 +62,9 @@ private:
       const cv::Mat& origImg, const std::array<cv::Point2f, 4>& polygon);
   cv::Mat runSingleInference(const cv::Mat& image);
 
+  // TODO(clang-tidy): wrap (numClasses, batchSize) in a small struct so the
+  // adjacent same-type ints cannot be swapped at the call site.
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   static SoftmaxResult softmaxArgmax(
       const cv::Mat& preds, int batchIdx, int timestep, int vocabSize);
   std::pair<std::string, float>

@@ -34,10 +34,10 @@
 #include "model-interface/easyocr/craft_weights.hpp"
 #include "model-interface/easyocr/gguf_loader.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // DSP / inference inner loops use raw pointer arithmetic on cv::Mat planes
-// and ggml buffers; bounds invariants are established by the surrounding
-// loop bounds.
+// and ggml buffers, single-letter math identifiers, and CRAFT/DBNet
+// architecture-defined magic numbers.
 #include "qlog.hpp"
 
 namespace easyocr::ggml::pipeline {
@@ -165,7 +165,11 @@ cv::Mat StepDetectionInference::preprocess(
   return normalizeAndBuildCHW(imgResized);
 }
 
+// TODO(clang-tidy): the (magRatio, nThreads) pair is convertible (float vs
+// int); make the constructor accept named parameters or distinct strong
+// types to prevent accidental swap.
 StepDetectionInference::StepDetectionInference(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& gguf_path, float magRatio, int nThreads)
     : magRatio_(magRatio),
       backend_(
@@ -471,4 +475,4 @@ StepDetectionInference::process(const StepDetectionInference::Input& input) {
 
 } // namespace easyocr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

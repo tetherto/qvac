@@ -5,6 +5,13 @@
 #include "ggml.h"
 #include "gguf.h"
 
+// `id` is the canonical gguf C-API name for a key index; renaming it loses
+// the visual link to gguf_find_key / gguf_get_kv_type / gguf_get_val_*.
+
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// GgufLoader method names mirror the ggml/gguf C API (get_tensor,
+// get_string, n_tensors, n_kv, get_u32, get_u64).
+
 namespace easyocr::ggml {
 
 GgufLoader::GgufLoader(std::string path, bool load_tensor_data)
@@ -94,3 +101,5 @@ GgufLoader::get_u64(const std::string& key) const noexcept {
 }
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

@@ -7,9 +7,13 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "ggml.h"
 #include "ggml-backend.h"
 #include "ggml-cpu.h"
+#include "ggml.h"
+
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// OcrModel mirrors @qvac/ocr-onnx's OcrModel.cpp; identifiers preserved
+// for upstream diffability.
 
 namespace qvac_lib_infer_ocr_ggml {
 
@@ -17,16 +21,19 @@ namespace {
 
 cv::Mat decodeOrWrapImage(const OcrInput& input) {
   if (input.isEncoded) {
+    // cv::Mat constructor wants non-const void* but cv::imdecode does not
+    // write through it.
     cv::Mat encoded(
         1,
         static_cast<int>(input.data.size()),
         CV_8UC1,
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat constructor wants non-const void* but cv::imdecode does not write through it
-        const_cast<uint8_t*>(input.data.data()));
+        const_cast<uint8_t*>( // NOLINT(cppcoreguidelines-pro-type-const-cast)
+            input.data.data()));
     cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
     if (decoded.empty()) {
-      throw std::runtime_error("ocr-ggml: failed to decode image (unsupported "
-                               "format or corrupt data)");
+      throw std::runtime_error(
+          "ocr-ggml: failed to decode image (unsupported "
+          "format or corrupt data)");
     }
     // cv::imdecode returns BGR; the EasyOCR pre-processing expects RGB.
     cv::cvtColor(decoded, decoded, cv::COLOR_BGR2RGB);
@@ -40,27 +47,32 @@ cv::Mat decodeOrWrapImage(const OcrInput& input) {
 
   // Raw RGB bytes — wrap without copying, then clone so OcrInput can be safely
   // destroyed afterwards.
+  // cv::Mat constructor wants non-const void* but we clone() before mutating.
   cv::Mat raw(
       input.imageHeight,
       input.imageWidth,
       CV_8UC3,
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat wants non-const void* but we clone() before mutating
-      const_cast<uint8_t*>(input.data.data()));
+      const_cast<uint8_t*>( // NOLINT(cppcoreguidelines-pro-type-const-cast)
+          input.data.data()));
   return raw.clone();
 }
 
 double elapsedMs(std::chrono::steady_clock::time_point start) {
   using namespace std::chrono;
-  return duration_cast<duration<double, std::milli>>(steady_clock::now() - start)
+  return duration_cast<duration<double, std::milli>>(
+             steady_clock::now() - start)
       .count();
 }
 
 } // namespace
 
-OcrModel::OcrModel(std::string pathDetector,
-                   std::string pathRecognizer,
-                   std::span<const std::string> langList,
-                   OcrConfig config)
+// TODO(clang-tidy): consider wrapping the two model paths in a small
+// `OcrModelPaths { std::string detector; std::string recognizer; }` struct
+// to make them un-swappable at the call site.
+OcrModel::OcrModel(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    const std::string& pathDetector, const std::string& pathRecognizer,
+    std::span<const std::string> langList, OcrConfig config)
     : config_(std::move(config)) {
   // Make every available ggml backend visible to the runtime. When backendsDir
   // is set, prefer the explicit search path (matches translation-nmtcpp's
@@ -92,12 +104,13 @@ OcrModel::OcrModel(std::string pathDetector,
   boxer_ = std::make_unique<easyocr::ggml::pipeline::StepBoundingBox>();
 
   easyocr::ggml::pipeline::StepRecognizeText::Config recogConfig(
-      config_.defaultRotationAngles, config_.contrastRetry,
-      config_.lowConfidenceThreshold, config_.recognizerBatchSize);
+      config_.defaultRotationAngles,
+      config_.contrastRetry,
+      config_.lowConfidenceThreshold,
+      config_.recognizerBatchSize);
 
-  recognizer_ =
-      std::make_unique<easyocr::ggml::pipeline::StepRecognizeText>(
-          pathRecognizer, langList, recognizerBackend_, recogConfig);
+  recognizer_ = std::make_unique<easyocr::ggml::pipeline::StepRecognizeText>(
+      pathRecognizer, langList, recognizerBackend_, recogConfig);
 }
 
 OcrModel::~OcrModel() {
@@ -144,8 +157,8 @@ OcrModel::Output OcrModel::processImage(const Input& input) {
   }
 
   auto bbOut = boxer_->process(detOut);
-  lastNumBoxes_ = static_cast<int>(bbOut.alignedBoxes.size() +
-                                   bbOut.unalignedBoxes.size());
+  lastNumBoxes_ =
+      static_cast<int>(bbOut.alignedBoxes.size() + bbOut.unalignedBoxes.size());
 
   if (cancelFlag_.load(std::memory_order_relaxed)) {
     return {};
@@ -168,15 +181,16 @@ qvac_lib_inference_addon_cpp::RuntimeStats OcrModel::runtimeStats() const {
   const double recognitionTimeSec = lastRecognitionMs_ / 1000.0;
 
   return {
-      std::make_pair("totalTime",
-                     std::variant<double, int64_t>(totalTimeSec)),
-      std::make_pair("detectionTime",
-                     std::variant<double, int64_t>(detectionTimeSec)),
-      std::make_pair("recognitionTime",
-                     std::variant<double, int64_t>(recognitionTimeSec)),
+      std::make_pair("totalTime", std::variant<double, int64_t>(totalTimeSec)),
+      std::make_pair(
+          "detectionTime", std::variant<double, int64_t>(detectionTimeSec)),
+      std::make_pair(
+          "recognitionTime", std::variant<double, int64_t>(recognitionTimeSec)),
       std::make_pair(
           "numBoxes",
           std::variant<double, int64_t>(static_cast<int64_t>(lastNumBoxes_)))};
 }
 
 } // namespace qvac_lib_infer_ocr_ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

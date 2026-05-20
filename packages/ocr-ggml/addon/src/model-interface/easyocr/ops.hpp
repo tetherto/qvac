@@ -7,8 +7,11 @@
 
 #include <cstdint>
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 struct ggml_context;
 struct ggml_tensor;
+// Op helpers use math-style parameter names (x, kernel, bias, KW, KH, IC,
+// OC) that mirror the ggml C-API documentation.
 
 namespace easyocr::ggml::ops {
 
@@ -37,3 +40,5 @@ namespace easyocr::ggml::ops {
     ::ggml_context* ctx, ::ggml_tensor* x, int64_t W_target, int64_t H_target);
 
 } // namespace easyocr::ggml::ops
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

@@ -31,6 +31,11 @@
 
 using ggml_backend_t = struct ggml_backend*;
 
+// NOLINTBEGIN(readability-identifier-naming)
+// OcrInput / OcrConfig field names follow the @qvac/ocr-onnx JS API
+// surface; constructor parameter pairs (pathDetector/pathRecognizer) and
+// (imageWidth/imageHeight) are documented at the call site.
+
 namespace qvac_lib_infer_ocr_ggml {
 
 // Mirrors @qvac/ocr-onnx's PipelineInput so the JS side can interchangeably
@@ -43,9 +48,14 @@ struct OcrInput {
   bool isEncoded{false};
   bool paragraph{false};
   std::optional<std::vector<int>> rotationAngles;
+  // TODO(clang-tidy): extract OcrInput / OcrConfig defaults as named
+  // constants (kDefaultBoxMargin, kDefaultMagRatio, kDefaultRotationAngles,
+  // kDefaultLowConfidenceThreshold, kDefaultRecognizerBatchSize).
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   float boxMarginMultiplier{0.1F};
 };
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 struct OcrConfig {
   float magRatio{1.5F};
   std::vector<int> defaultRotationAngles{90, 270};
@@ -55,21 +65,21 @@ struct OcrConfig {
   // <0 leave GGML default, 0 auto-detect physical cores, >0 explicit override.
   int nThreads{0};
   // Directory that holds dynamic ggml backend shared libraries (libggml-*.so).
-  // Default empty -> ggml_backend_load_all() picks up backends via env / dl path.
+  // Default empty -> ggml_backend_load_all() picks up backends via env / dl
+  // path.
   std::string backendsDir;
 };
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
-class OcrModel
-    : public qvac_lib_inference_addon_cpp::model::IModel,
-      public qvac_lib_inference_addon_cpp::model::IModelCancel {
+class OcrModel : public qvac_lib_inference_addon_cpp::model::IModel,
+                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   using Input = OcrInput;
   using Output = std::vector<easyocr::ggml::pipeline::InferredText>;
 
-  OcrModel(std::string pathDetector,
-           std::string pathRecognizer,
-           std::span<const std::string> langList,
-           OcrConfig config);
+  OcrModel(
+      const std::string& pathDetector, const std::string& pathRecognizer,
+      std::span<const std::string> langList, OcrConfig config);
 
   ~OcrModel() override;
 
@@ -110,3 +120,5 @@ private:
 };
 
 } // namespace qvac_lib_infer_ocr_ggml
+
+// NOLINTEND(readability-identifier-naming)

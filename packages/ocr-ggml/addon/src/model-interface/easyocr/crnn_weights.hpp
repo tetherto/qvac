@@ -20,10 +20,13 @@
 #include <string>
 #include <unordered_map>
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 struct ggml_context;
 struct ggml_tensor;
 using ggml_backend_t = struct ggml_backend*;
 using ggml_backend_buffer_t = struct ggml_backend_buffer*;
+// CrnnGen2Weights API uses snake_case (n_loaded, w_, b_, t_) to mirror
+// upstream PyTorch state-dict names.
 
 namespace easyocr::ggml {
 
@@ -67,3 +70,5 @@ private:
 };
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

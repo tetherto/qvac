@@ -28,8 +28,12 @@
 #include <string>
 #include <unordered_map>
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 struct ggml_context;
 struct ggml_tensor;
+// CRNN gen-2 header declares the public graph-builder API; identifiers
+// mirror upstream PyTorch state-dict paths (snake_case) and contain
+// architecture-defined constants (256, 64, T=W/4-1).
 
 namespace easyocr::ggml {
 
@@ -49,3 +53,5 @@ inline constexpr const char* kLogits = "logits";   // final
     std::unordered_map<std::string, ::ggml_tensor*>* taps = nullptr);
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

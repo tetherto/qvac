@@ -23,6 +23,11 @@
 
 using ggml_backend_t = struct ggml_backend*;
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// StepDetectionInference header uses snake_case (gguf_path) to mirror the
+// upstream EasyOCR API and contains CRAFT magic numbers (mag_ratio=1.5,
+// warmup_per_tap=1, runs_per_tap=3).
+
 namespace easyocr::ggml {
 
 class GgufLoader;
@@ -93,7 +98,9 @@ public:
   //   - <0:          leave the GGML CPU backend's built-in default
   //                  unchanged (escape hatch for thread-scaling
   //                  experiments).
+  // TODO(clang-tidy): hoist magRatio default 1.5F to kDefaultMagRatio.
   explicit StepDetectionInference(
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
       const std::string& gguf_path, float magRatio = 1.5F, int nThreads = 0);
   ~StepDetectionInference();
 
@@ -152,3 +159,5 @@ private:
 
 } // namespace pipeline
 } // namespace easyocr::ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

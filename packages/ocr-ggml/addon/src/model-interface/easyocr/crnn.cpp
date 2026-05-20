@@ -8,6 +8,10 @@
 #include "ggml.h"
 #include "ops.hpp"
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// CRNN graph builder uses snake_case identifiers (W_hh, b_ih, i_gate)
+// matching upstream PyTorch and single-letter math identifiers (x, t, h, c).
+
 namespace easyocr::ggml {
 
 namespace {
@@ -86,6 +90,10 @@ struct LstmStep {
   ggml_tensor* c;
 };
 
+// TODO(clang-tidy): pack the (W_ii/h_ii/b_ii) and (W_hi/h_hi/b_hi) tensor
+// triples in `LstmGateWeights` structs so the same-type ggml_tensor*
+// parameters cannot be swapped at the call site.
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 LstmStep lstm_cell_step(
     ggml_context* ctx,
     ggml_tensor* gates_x_t, // [4*hidden]   = W_ih·x_t + b_ih
@@ -93,6 +101,7 @@ LstmStep lstm_cell_step(
     ggml_tensor* b_hh,      // [4*hidden]
     ggml_tensor* h_prev,    // [hidden]
     ggml_tensor* c_prev) {  // [hidden]
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   const int64_t hidden = h_prev->ne[0];
 
   // gates = gates_x_t + W_hh·h_prev + b_hh
@@ -124,6 +133,10 @@ LstmStep lstm_cell_step(
 //
 // We pre-compute the full [4*hidden, T] = (W_ih · seq) + b_ih in a single
 // matmul + broadcast-add to avoid a per-step input projection.
+// TODO(clang-tidy): pack the (ih_weights, hh_weights, bias) tensor triple in
+// an `LstmLayerWeights` struct so the same-type ggml_tensor* parameters
+// cannot be swapped at the call site.
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 ggml_tensor* lstm_one_direction(
     ggml_context* ctx,
     ggml_tensor* seq,  // ggml ne [input, T]
@@ -132,6 +145,7 @@ ggml_tensor* lstm_one_direction(
     ggml_tensor* b_ih, // [4*hidden]
     ggml_tensor* b_hh, // [4*hidden]
     bool reverse) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   const int64_t T = seq->ne[1];
   const int64_t hidden4 = W_ih->ne[1];
   const int64_t hidden = hidden4 / 4;
@@ -337,3 +351,5 @@ ggml_tensor* build_crnn_gen2(
 }
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

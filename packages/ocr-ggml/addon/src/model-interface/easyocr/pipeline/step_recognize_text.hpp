@@ -38,6 +38,11 @@
 
 using ggml_backend_t = struct ggml_backend*;
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// StepRecognizeText header uses snake_case to mirror upstream EasyOCR
+// recognizer API and contains architecture-defined constants (batch=32,
+// rotation 90/270).
+
 namespace easyocr::ggml {
 
 class GgufLoader;
@@ -96,6 +101,10 @@ public:
           isMultiCharacter{isMultiCharacterFlag} {}
   };
 
+  // TODO(clang-tidy): extract Config defaults as named constants
+  // (kDefaultRotationAngles, kDefaultLowConfidenceThreshold,
+  // kDefaultRecognizerBatchSize) shared between Config and OcrConfig.
+  // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   struct Config {
     std::vector<int> defaultRotationAngles;
     bool contrastRetry{false};
@@ -103,12 +112,17 @@ public:
     int recognizerBatchSize{32};
 
     Config() : defaultRotationAngles{90, 270} {}
+    // TODO(clang-tidy): the (retry, threshold) pair is convertible (bool
+    // promotes to float); use named struct fields or distinct strong types
+    // to make the order un-swappable.
     Config(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
         std::vector<int> angles, bool retry, float threshold,
         int batchSize = 32)
         : defaultRotationAngles(std::move(angles)), contrastRetry(retry),
           lowConfidenceThreshold(threshold), recognizerBatchSize(batchSize) {}
   };
+  // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
   // Construct with the recognizer GGUF, a list of language codes for vocab
   // / LTR / ignore-list lookup, and a CPU backend the step does NOT take
@@ -141,10 +155,15 @@ private:
   std::unique_ptr<CrnnGen2Weights> gen2_weights_;
   ggml_backend_t backend_ = nullptr;
 
-  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations) - std::wstring_convert
-  // is deprecated in C++17+ but there is no drop-in replacement before C++26;
-  // switching to ICU/iconv is a separate refactor.
+  // std::wstring_convert is deprecated in C++17+ but there is no drop-in
+  // replacement before C++26; switching to ICU/iconv is a separate refactor.
+  // The deprecation warning is emitted at template instantiation inside
+  // libc++ so a NOLINT on the field decl is not enough — gate with a
+  // pragma push/pop instead.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
   std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter_;
+#pragma clang diagnostic pop
   std::u32string_view utf32Characters_;
   std::u32string utf32Owned_; // backs the view when sourced from GGUF
   std::vector<bool> ignoreChars_;
@@ -172,3 +191,5 @@ private:
 
 } // namespace pipeline
 } // namespace easyocr::ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)

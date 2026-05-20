@@ -1,3 +1,10 @@
+// std::wstring_convert (used by decodeGreedy → converter_.to_bytes) is
+// deprecated in C++17+ but there is no drop-in replacement before C++26;
+// switching to ICU/iconv is a separate refactor. Suppress the deprecation
+// warning for the whole translation unit so the template instantiation is
+// quiet regardless of where libc++ emits the diagnostic.
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
 // Adapted from @qvac/ocr-onnx's addon/pipeline/StepRecognizeText.cpp.
 // Most of the body (image cropping, contrast
 // retry, rotation retry, CTC greedy decode, paragraph merge) is lifted
@@ -42,10 +49,10 @@
 #include "model-interface/easyocr/gguf_loader.hpp"
 #include "qlog.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // DSP / inference inner loops use raw pointer arithmetic on cv::Mat /
-// std::vector row buffers; bounds invariants are established by the
-// surrounding loop bounds.
+// std::vector row buffers, single-letter math identifiers, and
+// architecture-defined magic numbers from upstream EasyOCR.
 
 namespace easyocr::ggml::pipeline {
 
@@ -55,6 +62,11 @@ namespace {
 
 // model_height and imgH in python
 // specific per recognizer model. Not an API option
+// Upper bound on the CRNN ggml node budget passed to ggml_new_graph_custom
+// in ggml_run_one_T / ggml_run_recognizer_t. Deliberately oversized; the
+// real CRNN gen-2 graph stays well below this.
+constexpr size_t kCrnnRunGraphSize = static_cast<size_t>(32) * 1024;
+
 constexpr int RECOGNIZER_MODEL_HEIGHT = 64;
 
 // not present in python
@@ -246,7 +258,11 @@ adjustContrastGrey(const cv::Mat& img, double target = PARAGRAPH_Y_DELTA) {
 constexpr double PIXEL_MAX_DOUBLE = 255.0;
 
 cv::Mat
-normalizeAndPad(const cv::Mat& img, int channels, int height, int maxWidth) {
+// TODO(clang-tidy): pack (height, maxWidth) in a small `ImageDims` struct so
+// the adjacent same-type ints cannot be swapped at the call site.
+normalizeAndPad(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    const cv::Mat& img, int channels, int height, int maxWidth) {
   cv::Mat gray;
   if (img.channels() == 3 && channels == 1) {
     // Use RGB2GRAY since image is in RGB format (converted from BGR in
@@ -310,7 +326,10 @@ int calculateProportionalWidth(int width, int height) {
  * @param adjustContrast : target contrast
  * @return adjusted image
  */
+// TODO(clang-tidy): wrap (adjustContrast, padMaxWidth) in a small struct so
+// the convertible types cannot be swapped at the call site.
 cv::Mat alignAndCollate(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const SubImage& subImage, int targetWidth, double adjustContrast = 0.0) {
   cv::Mat image = subImage.image;
   int width = image.cols;
@@ -346,6 +365,9 @@ cv::Mat alignAndCollate(
  * @brief Legacy version for backward compatibility - uses fixed
  * RECOGNIZER_MODEL_WIDTH
  */
+// TODO(clang-tidy): wrap (adjustContrast, padMaxWidth) in a small struct so
+// the convertible types cannot be swapped at the call site.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 cv::Mat alignAndCollate(const SubImage& subImage, double adjustContrast = 0.0) {
   return alignAndCollate(subImage, RECOGNIZER_MODEL_WIDTH, adjustContrast);
 }
@@ -653,9 +675,10 @@ StepRecognizeText::StepRecognizeText(
       // trust the GGUF (which is what the model was trained on).
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARN,
-          std::string("[Recognition] GGUF crnn.vocab differs from "
-                      "Lang.cpp table for the requested language "
-                      "list (sizes: gguf=") +
+          std::string(
+              "[Recognition] GGUF crnn.vocab differs from "
+              "Lang.cpp table for the requested language "
+              "list (sizes: gguf=") +
               std::to_string(utf32Characters_.size()) +
               ", lang=" + std::to_string(langChars.size()) +
               ") — using GGUF as the runtime vocab.");
@@ -825,10 +848,13 @@ void StepRecognizeText::populateImageList(const Input& input) {
       [rowThreshold](
           const std::vector<SubImage>& listA,
           const std::vector<SubImage>& listB) {
+        constexpr float kQuadEdgeMidpointDivisor = 2.0F;
         const auto& coordsA = listA[0].coords;
         const auto& coordsB = listB[0].coords;
-        float yCenterA = (coordsA[0].y + coordsA[3].y) / 2.0F;
-        float yCenterB = (coordsB[0].y + coordsB[3].y) / 2.0F;
+        float yCenterA =
+            (coordsA[0].y + coordsA[3].y) / kQuadEdgeMidpointDivisor;
+        float yCenterB =
+            (coordsB[0].y + coordsB[3].y) / kQuadEdgeMidpointDivisor;
         // If y_centers are within threshold, consider them on same row and sort
         // by x
         if (std::abs(yCenterA - yCenterB) < rowThreshold) {
@@ -990,6 +1016,9 @@ namespace {
 // Templated single-image runner.
 // Returns a [T, num_classes] cv::Mat.
 template <class W>
+// TODO(clang-tidy): wrap the (height, width) image dims and weights/runtime
+// pointers in dedicated structs so the convertible parameters cannot be
+// swapped at the call site.
 cv::Mat ggml_run_one_T(
     ggml_backend_t backend, const W& weights, const float* input_data,
     int height, int width, size_t graph_size);
@@ -997,10 +1026,10 @@ cv::Mat ggml_run_one_T(
 template <>
 cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
     ggml_backend_t backend, const easyocr::ggml::CrnnGen2Weights& weights,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const float* input_data, int height, int width, size_t graph_size) {
-  const size_t graph_ctx_size =
-      (ggml_tensor_overhead() * graph_size) +
-      ggml_graph_overhead_custom(graph_size, false);
+  const size_t graph_ctx_size = (ggml_tensor_overhead() * graph_size) +
+                                ggml_graph_overhead_custom(graph_size, false);
   std::vector<uint8_t> graph_buf(graph_ctx_size);
   ggml_init_params init{
       .mem_size = graph_ctx_size,
@@ -1042,8 +1071,12 @@ cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
 // optimisation: keep the batch axis through AAP so we can do one graph
 // for the whole batch.
 template <class W>
+// TODO(clang-tidy): pack (height, width) in an `ImageDims` struct and
+// (batchSize) in a strong type so the adjacent same-type ints cannot be
+// swapped at the call site.
 cv::Mat ggml_run_recognizer_t(
     ggml_backend_t backend, const W& weights, const float* input_data,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     int batch_size, int height, int width, size_t graph_size) {
   if (batch_size <= 0) {
     return {};
@@ -1093,7 +1126,7 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
       /*batch_size=*/1,
       height,
       width,
-      /*graph_size=*/static_cast<size_t>(32) * 1024);
+      /*graph_size=*/kCrnnRunGraphSize);
 }
 
 cv::Mat StepRecognizeText::runBatchInference(
@@ -1135,7 +1168,7 @@ cv::Mat StepRecognizeText::runBatchInference(
       batchSize,
       height,
       width,
-      static_cast<size_t>(32) * 1024);
+      kCrnnRunGraphSize);
 
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs =
@@ -1170,6 +1203,9 @@ void StepRecognizeText::processImg(SubImage& subImage) {
 }
 
 std::vector<InferredText>
+// TODO(clang-tidy): split into helpers (groupByWidth, runPrimaryPass,
+// runContrastRetry, mergeResults) to drop cognitive complexity below 25.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -1439,4 +1475,4 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
 
 } // namespace easyocr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)

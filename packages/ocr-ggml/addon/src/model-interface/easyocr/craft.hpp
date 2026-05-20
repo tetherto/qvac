@@ -18,10 +18,14 @@
 #include <string>
 #include <unordered_map>
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 struct ggml_context;
 struct ggml_tensor;
 
 namespace easyocr::ggml {
+// CRAFT header declares the public graph-builder API; identifiers mirror
+// upstream PyTorch state-dict paths (snake_case) and contain layer-dim
+// constants that are part of the model architecture.
 
 class CraftWeights;
 
@@ -51,3 +55,5 @@ inline constexpr const char* kOutputNhwc = "output_nhwc";
     std::unordered_map<std::string, ::ggml_tensor*>* taps = nullptr);
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(readability-identifier-naming,readability-identifier-length)
