@@ -42,6 +42,11 @@
 #include "model-interface/easyocr/gguf_loader.hpp"
 #include "qlog.hpp"
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// DSP / inference inner loops use raw pointer arithmetic on cv::Mat /
+// std::vector row buffers; bounds invariants are established by the
+// surrounding loop bounds.
+
 namespace easyocr::ggml::pipeline {
 
 using SubImage = StepRecognizeText::SubImage;
@@ -1433,3 +1438,5 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
 }
 
 } // namespace easyocr::ggml::pipeline
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)

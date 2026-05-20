@@ -20,6 +20,11 @@
 
 #include "qlog.hpp"
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// Single-pass connected-component scan and the per-pixel max loop access
+// cv::Mat planes via raw pointer arithmetic; bounds are established by
+// `labels_.total()`.
+
 namespace easyocr::ggml::pipeline {
 
 namespace {
@@ -260,10 +265,9 @@ StepBoundingBox::getBoxFromComponent(Input& input, int component) {
   cv::findNonZero(segmap, nonZeroPoints);
   cv::RotatedRect rectangle = cv::minAreaRect(nonZeroPoints);
   std::array<cv::Point2f, 4> box;
-  cv::Point2f tmp
-      [4]; /* NOLINT(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays)
-            */
-  rectangle.points(tmp); /* NOLINT(hicpp-no-array-decay) */
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays) - cv::RotatedRect::points takes a Point2f[4] out-array
+  cv::Point2f tmp[4];
+  rectangle.points(tmp); // NOLINT(hicpp-no-array-decay)
   std::ranges::copy(tmp, box.begin());
 
   alignDiamondShape(box, nonZeroPoints);
@@ -662,3 +666,5 @@ std::vector<UnalignedBox> StepBoundingBox::getOutputUnalignedBoxes(
 }
 
 } // namespace easyocr::ggml::pipeline
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)

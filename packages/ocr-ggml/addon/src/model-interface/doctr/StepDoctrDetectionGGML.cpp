@@ -16,6 +16,10 @@
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 #include "model-interface/easyocr/pipeline/steps.hpp"
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// Detection post-processing iterates over cv::Mat planes with raw pointer
+// arithmetic.
+
 namespace doctr::ggml::pipeline {
 
 namespace {
@@ -292,3 +296,5 @@ StepDoctrDetectionGGML::process(const Input& input) {
 }
 
 } // namespace doctr::ggml::pipeline
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)

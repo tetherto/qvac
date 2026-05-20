@@ -11,6 +11,10 @@
 #include "ggml.h"
 #include "gguf_loader.hpp"
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// BatchNorm fold loops iterate over raw tensor byte buffers with pointer
+// arithmetic; bounds invariants are checked against the GGUF metadata.
+
 namespace easyocr::ggml {
 
 namespace {
@@ -26,6 +30,7 @@ struct ConvDef {
   const char* bn; // "" => no BN
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays) - kept as C array so kNumConvs deduces below
 constexpr ConvDef kConvInventory[] = {
     // basenet.slice1: 4 conv-BN pairs (idx 0+1, 3+4, 7+8, 10+11)
     {.conv = "basenet.slice1.0", .bn = "basenet.slice1.1"},
@@ -260,3 +265,5 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
 }
 
 } // namespace easyocr::ggml
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)

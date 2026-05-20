@@ -22,6 +22,13 @@
 
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// DSP / LSTM / CRNN inner loops use raw pointer arithmetic and runtime indices
+// on cv::Mat / ggml / std::vector / std::array buffers where the bounds
+// invariants are established by the surrounding loop bounds. Bounds-checking
+// every access would be a measurable hot-path cost in CTC decode and the
+// LSTM gate compute.
+
 namespace doctr::ggml::pipeline {
 
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization)
@@ -252,8 +259,11 @@ struct ggml_tensor* cloneRaw(
   if (src == nullptr) {
     raise("missing GGUF tensor: " + name);
   }
-  struct ggml_tensor* dst =
-      ggml_new_tensor(dstCtx, src->type, ggml_n_dims(src), src->ne);
+  struct ggml_tensor* dst = ggml_new_tensor(
+      dstCtx,
+      src->type,
+      ggml_n_dims(src),
+      src->ne); // NOLINT(hicpp-no-array-decay) - ggml struct member is C array
   ggml_set_name(dst, name.c_str());
   return dst;
 }
@@ -270,8 +280,11 @@ struct ggml_tensor* newF32Tensor(
 struct ggml_tensor* newF16TensorLike(
     struct ggml_context* ctx, struct ggml_tensor* src,
     const std::string& name) {
-  struct ggml_tensor* tensor =
-      ggml_new_tensor(ctx, GGML_TYPE_F16, ggml_n_dims(src), src->ne);
+  struct ggml_tensor* tensor = ggml_new_tensor(
+      ctx,
+      GGML_TYPE_F16,
+      ggml_n_dims(src),
+      src->ne); // NOLINT(hicpp-no-array-decay) - ggml struct member is C array
   ggml_set_name(tensor, name.c_str());
   return tensor;
 }
@@ -655,10 +668,11 @@ private:
     auto addBiasBroadcast = [&](const std::string& name) {
       const std::vector<float> values =
           tensorToF32(ggml_get_tensor(srcCtx, name.c_str()), name);
-      const int64_t shape[4] = {1, 1, static_cast<int64_t>(values.size()), 1};
+      const std::array<int64_t, 4> shape = {
+          1, 1, static_cast<int64_t>(values.size()), 1};
       graph.weights.emplace(
           name + "_br",
-          newF32Tensor(graph.weightsCtx.get(), name + "_br", 4, shape));
+          newF32Tensor(graph.weightsCtx.get(), name + "_br", 4, shape.data()));
     };
 
     auto addBnAffine = [&](const std::string& prefix) {
@@ -678,13 +692,16 @@ private:
           weight.size() != var.size()) {
         raise("BatchNorm tensor size mismatch for " + prefix);
       }
-      const int64_t shape[4] = {1, 1, static_cast<int64_t>(weight.size()), 1};
+      const std::array<int64_t, 4> shape = {
+          1, 1, static_cast<int64_t>(weight.size()), 1};
       graph.weights.emplace(
           prefix + ".scale",
-          newF32Tensor(graph.weightsCtx.get(), prefix + ".scale", 4, shape));
+          newF32Tensor(
+              graph.weightsCtx.get(), prefix + ".scale", 4, shape.data()));
       graph.weights.emplace(
           prefix + ".shift",
-          newF32Tensor(graph.weightsCtx.get(), prefix + ".shift", 4, shape));
+          newF32Tensor(
+              graph.weightsCtx.get(), prefix + ".shift", 4, shape.data()));
     };
 
     auto addConvBn = [&](const std::string& convPrefix,
@@ -972,8 +989,8 @@ cv::Mat StepDoctrRecognitionGGML::runSingleInference(const cv::Mat& image) {
 
   std::vector<float> features = impl_->runFeatureExtractor(inputBuffer_);
   logitsBuffer_ = impl_->runLstmLinear(features);
-  const int sizes[3] = {1, kSequenceLength, kVocabSize};
-  return {3, sizes, CV_32F, logitsBuffer_.data()};
+  const std::array<int, 3> sizes = {1, kSequenceLength, kVocabSize};
+  return {3, sizes.data(), CV_32F, logitsBuffer_.data()};
 }
 
 StepDoctrRecognitionGGML::SoftmaxResult StepDoctrRecognitionGGML::softmaxArgmax(
@@ -1102,3 +1119,5 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
 }
 
 } // namespace doctr::ggml::pipeline
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)

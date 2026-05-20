@@ -33,6 +33,11 @@
 #include "model-interface/easyocr/craft.hpp"
 #include "model-interface/easyocr/craft_weights.hpp"
 #include "model-interface/easyocr/gguf_loader.hpp"
+
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// DSP / inference inner loops use raw pointer arithmetic on cv::Mat planes
+// and ggml buffers; bounds invariants are established by the surrounding
+// loop bounds.
 #include "qlog.hpp"
 
 namespace easyocr::ggml::pipeline {
@@ -112,17 +117,17 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
 
   // Pre-compute normalization constants:
   //   result = (pixel - mean*255) * (1 / (var*255))
-  const float meanVals[3] = {
+  const std::array<float, 3> meanVals = {
       static_cast<float>(DEFAULT_MEAN[0] * PIXEL_INTENSITY_MAX),
       static_cast<float>(DEFAULT_MEAN[1] * PIXEL_INTENSITY_MAX),
       static_cast<float>(DEFAULT_MEAN[2] * PIXEL_INTENSITY_MAX)};
-  const float invVarVals[3] = {
+  const std::array<float, 3> invVarVals = {
       static_cast<float>(1.0 / (DEFAULT_VARIANCE[0] * PIXEL_INTENSITY_MAX)),
       static_cast<float>(1.0 / (DEFAULT_VARIANCE[1] * PIXEL_INTENSITY_MAX)),
       static_cast<float>(1.0 / (DEFAULT_VARIANCE[2] * PIXEL_INTENSITY_MAX))};
 
   cv::Mat chwBlob(numChannels, static_cast<int>(totalPixels), CV_32F);
-  float* planes[3] = {
+  const std::array<float*, 3> planes = {
       chwBlob.ptr<float>(0), chwBlob.ptr<float>(1), chwBlob.ptr<float>(2)};
 
   if (img.depth() == CV_8U) {
@@ -464,3 +469,5 @@ StepDetectionInference::process(const StepDetectionInference::Input& input) {
 }
 
 } // namespace easyocr::ggml::pipeline
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)

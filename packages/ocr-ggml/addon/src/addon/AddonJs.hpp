@@ -53,7 +53,9 @@ js_value_t* outputToJs(
     js_env_t* env,
     const OcrModel::Output& inferredTextList) {
   const size_t n = inferredTextList.size();
-  auto jsInferredTextListElements = std::make_unique<js_value_t*[]>(n);
+  auto jsInferredTextListElements =
+      std::make_unique<js_value_t*[]>( // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays) - std::make_unique<T[]> idiom
+          n);
 
   for (size_t i = 0; i < n; ++i) {
     constexpr size_t kBoxLen = 4;

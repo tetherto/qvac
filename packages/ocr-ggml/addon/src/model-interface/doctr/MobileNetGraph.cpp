@@ -18,6 +18,10 @@
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
+// MobileNet weight loaders and graph builders pass ggml tensor `ne[]`
+// dimension arrays and raw float buffers via pointer arithmetic.
+
 namespace qvac_lib_infer_ggml_classification::graph {
 
 namespace {
@@ -76,8 +80,11 @@ struct ggml_tensor* cloneRaw(
   if (src == nullptr) {
     raise(std::string("Cannot resolve tensor from ggml ctx: ") + name);
   }
-  struct ggml_tensor* dst =
-      ggml_new_tensor(bundleCtx, src->type, ggml_n_dims(src), src->ne);
+  struct ggml_tensor* dst = ggml_new_tensor(
+      bundleCtx,
+      src->type,
+      ggml_n_dims(src),
+      src->ne); // NOLINT(hicpp-no-array-decay) - ggml struct member is C array
   ggml_set_name(dst, name);
   return dst;
 }
@@ -605,11 +612,11 @@ WeightsBundle loadWeights(
   // Fold BN params into scale[1,1,C,1] and shift[1,1,C,1] at load time, which
   // avoids per-inference sqrt and four-op chains per BN (~34 layers).
   auto addFoldedBn = [&](const std::string& bnPrefix, int channels) {
-    const int64_t shape4d[4] = {1, 1, channels, 1};
+    const std::array<int64_t, 4> shape4d = {1, 1, channels, 1};
     struct ggml_tensor* scale = cloneAsFp32(
-        bundle.ctx.get(), (bnPrefix + ".scale").c_str(), 4, shape4d);
+        bundle.ctx.get(), (bnPrefix + ".scale").c_str(), 4, shape4d.data());
     struct ggml_tensor* shift = cloneAsFp32(
-        bundle.ctx.get(), (bnPrefix + ".shift").c_str(), 4, shape4d);
+        bundle.ctx.get(), (bnPrefix + ".shift").c_str(), 4, shape4d.data());
     logTensorLoad(bnPrefix + ".scale", scale);
     tensors.emplace(bnPrefix + ".scale", scale);
     logTensorLoad(bnPrefix + ".shift", shift);
@@ -619,17 +626,17 @@ WeightsBundle loadWeights(
   // Classifier linear weights kept as F16 for numerical stability of the tiny
   // 3-element logits tail.
   auto addFcWeightFp16 = [&](const std::string& name, int in, int out) {
-    const int64_t shape[2] = {in, out};
+    const std::array<int64_t, 2> shape = {in, out};
     struct ggml_tensor* t =
-        cloneAsFp16(bundle.ctx.get(), name.c_str(), 2, shape);
+        cloneAsFp16(bundle.ctx.get(), name.c_str(), 2, shape.data());
     logTensorLoad(name, t);
     tensors.emplace(name, t);
   };
 
   auto addFcBiasFp16 = [&](const std::string& name, int out) {
-    const int64_t shape[1] = {out};
+    const std::array<int64_t, 1> shape = {out};
     struct ggml_tensor* t =
-        cloneAsFp16(bundle.ctx.get(), name.c_str(), 1, shape);
+        cloneAsFp16(bundle.ctx.get(), name.c_str(), 1, shape.data());
     logTensorLoad(name, t);
     tensors.emplace(name, t);
   };
@@ -1022,3 +1029,5 @@ ComputeGraph buildGraph(
 }
 
 } // namespace qvac_lib_infer_ggml_classification::graph
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
