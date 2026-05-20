@@ -855,7 +855,8 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(it);
   }
 
-#if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+#if defined(__ANDROID__) ||                                                    \
+    (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
   if (splitMode != LLAMA_SPLIT_MODE_NONE ||
       configFilemap.count("main-gpu") > 0 ||
       configFilemap.count("main_gpu") > 0 ||
