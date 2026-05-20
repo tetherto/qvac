@@ -8,8 +8,12 @@ library grows.
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
-(Metal on macOS/iOS, Vulkan on Linux/Windows/Android, CUDA when built)
-is enabled by default; falls back to CPU if no GPU backend is available.
+(Metal on macOS/iOS, Vulkan / OpenCL on Linux/Windows)
+is **opt-in** via `config: { useGPU: true }`; the default is CPU.  On
+Android the GPU paths are temporarily pinned off in the C++ layer
+until upstream Vulkan-on-Mali and OpenCL-on-Adreno crashes stabilize,
+so `useGPU` is effectively ignored there (see
+[Backends & GPU acceleration](#backends--gpu-acceleration)).
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
 
@@ -23,8 +27,14 @@ is enabled by default; falls back to CPU if no GPU backend is available.
   S3Gen+HiFT output; sub-second first-audio-out inside a single
   utterance.
 - **Voice cloning** from a reference wav (or a pre-baked profile dir).
-- **CPU by default**, GPU (Metal / Vulkan / CUDA / OpenCL) opt-in via
-  `config.useGPU: true` on GPU-capable hosts.
+- **CPU by default**, GPU (Metal / Vulkan / OpenCL) opt-in via
+  `config.useGPU: true` on GPU-capable hosts.  Android currently pins
+  the engine to CPU regardless — see
+  [Backends & GPU acceleration](#backends--gpu-acceleration).
+- **Dynamic backend loading on Android** — per-arch CPU + Vulkan +
+  OpenCL `.so` files ship under `prebuilds/<bare-target>/qvac__tts-ggml/`
+  and are picked up at runtime via the new `backendsDir` option (see
+  [Backends & GPU acceleration](#backends--gpu-acceleration)).
 - **Cancellation** via `model.cancel()` — stops T3 decode on the next
   token; in-flight S3Gen chunk runs to completion.
 
@@ -191,6 +201,35 @@ new TTSGgml({
 When both are supplied, missing tensors in `voiceDir` are backfilled
 from `referenceAudio`.
 
+## Backends & GPU acceleration
+
+The addon delegates backend selection to `tts-cpp`'s registry-only
+init path.  At `load()` time the engine walks the ggml-backend registry
+once and picks the first available accelerator that matches the
+host's policy:
+
+| Platform                | Default backend when `useGPU: true`          |
+|-------------------------|----------------------------------------------|
+| macOS / iOS             | Metal                                        |
+| Linux / Windows         | Vulkan                                       |
+| Android — Adreno 700+   | OpenCL                                       |
+| Android — Mali / others | Vulkan                                       |
+| Everything else / CPU-only build | CPU                                 |
+
+### Android: dynamic backend loading
+
+Android prebuilds enable `GGML_BACKEND_DL=ON` and ship per-arch
+backend `.so` files under
+`prebuilds/<bare-target>/qvac__tts-ggml/`.
+
+The engine `dlopen()`s the highest-tier CPU variant the device's
+HWCAPs support and one of the GPU `.so` files based on the policy
+table above.  Hosts must pass `backendsDir: path.join(__dirname,
+'prebuilds')` (or rely on the default fallback the package ships)
+so the runtime knows where to look.  `openclCacheDir` is also
+Android-specific; setting it to a writable path lets the OpenCL
+backend persist its compiled program cache across launches.
+
 ## API overview
 
 ### Constructor — `new TTSGgml(options)`
@@ -203,15 +242,17 @@ from `referenceAudio`.
 | `referenceAudio`          | string     | —          | Mono wav ≥ 5 s for voice cloning |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
-| `nGpuLayers`              | number     | 0 / auto   | Layers offloaded to GPU |
+| `nGpuLayers`              | number     | 0          | Layers offloaded to GPU (mirrors `useGPU`; pass `99` to offload all) |
 | `threads`                 | number     | hw.concurrency capped at 4 | |
 | `streamChunkTokens`       | number     | 0          | **>0 enables native chunk streaming** |
 | `streamFirstChunkTokens`  | number     | = streamChunkTokens | Smaller first chunk for low first-audio-out |
 | `cfmSteps`                | number     | 2          | 1 = faster (halved CFM cost) |
-| `config.language`         | string     | `"en"`     | Only English today |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available |
+| `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
+| `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
+| `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / OpenCL if available.  Ignored on Android (forced to CPU at the C++ engine boundary); rejected by Supertonic at construction time (engine is CPU-only today) |
 | `config.outputSampleRate` | number     | 24000      | Resample native 24 kHz output |
-| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF etc. |
+| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 3=Vulkan, 4=OpenCL, 99=other) etc. |
 | `opts.exclusiveRun`       | boolean    | `false`    | Serialize overlapping streaming runs |
 
 ### Methods
@@ -320,8 +361,14 @@ The vcpkg port is hosted in
 baseline commit.
 
 GPU backends are controlled by the `tts-cpp` port's vcpkg features:
-`metal` (default on osx/ios), `vulkan` (default on linux/windows/android).
-CUDA is opt-in at port-build time.
+`metal` (default on osx/ios), `vulkan` (default on
+linux/windows/android), `opencl` (default on android).
+On Android the port is configured with
+`GGML_BACKEND_DL=ON` + `GGML_CPU_ALL_VARIANTS=ON`, so the build
+produces per-arch CPU + Vulkan + OpenCL `.so` files alongside the
+`.bare` module instead of statically linking; the resulting prebuilds
+layout is what the `backendsDir` option expects (see
+[Backends & GPU acceleration](#backends--gpu-acceleration)).
 
 [registry]: https://github.com/tetherto/qvac-registry-vcpkg
 
@@ -341,11 +388,22 @@ assertion** — you're running on a build *before* the `s3gen_unload()`
 teardown fix; bump the `tts-cpp` port to `>= 2026-04-21` port-version.
 
 **Slower-than-expected RTF on darwin** — set `config: { useGPU: true }`
-(the default is now CPU; see "Configuration knobs" above) and confirm
-the port was built with the `metal` feature.  Also confirm your reference wav's mel
-was baked (`Using C++ VoiceEncoder` / `C++ S3TokenizerV2` messages in
-the log) — if voice conditioning falls back to CPU, a chunk of the
-first-call overhead is visible in RTF.
+(the default is now CPU; see [Constructor](#constructor--new-ttsggmloptions)
++ [Backends & GPU acceleration](#backends--gpu-acceleration)) and
+confirm the port was built with the `metal` feature.  Also confirm
+your reference wav's mel was baked (`Using C++ VoiceEncoder` /
+`C++ S3TokenizerV2` messages in the log) — if voice conditioning
+falls back to CPU, a chunk of the first-call overhead is visible in
+RTF.
+
+**Slow-but-otherwise-fine RTF on Android** — expected: GPU is forced
+off on Android until the upstream Vulkan/Mali + OpenCL/Adreno crashes
+stabilize (see [Backends & GPU acceleration](#backends--gpu-acceleration)).
+`useGPU: true` is honoured with a `WARNING` log line and silently
+re-routed to CPU.  If you've verified your device is stable against
+those backends and want to opt out of the override, you'll need to
+patch out the `#ifdef __ANDROID__` block in
+`addon/src/model-interface/chatterbox/ChatterboxModel.cpp`.
 
 ## License
 
