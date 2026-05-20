@@ -5929,6 +5929,58 @@
     ]
   },
   {
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.1 text-to-video diffusion model",
+    "notes": "Repackaged from https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B for ComfyUI",
+    "licenseId": "Apache-2.0",
+    "quantization": "fp16",
+    "params": "1.3B",
+    "tags": [
+      "generation",
+      "diffusion",
+      "video",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/city96/Wan2.1-T2V-14B-gguf/resolve/511cbce9f475a6ca0269be901d23b125f44f5c0d/wan2.1-t2v-14b-Q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.1 text-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Wan-AI/Wan2.1-T2V-14B",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q8_0",
+    "params": "14B",
+    "tags": [
+      "generation",
+      "diffusion",
+      "video",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/vae/wan_2.1_vae.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.1 Variational Autoencoder",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "vae",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/text_encoders/umt5_xxl_fp16.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "UMT5-XXL text encoder for Wan 2.1",
+    "notes": "Repackaged from https://huggingface.co/google/umt5-xxl",
+    "licenseId": "Apache-2.0",
+    "quantization": "fp16",
+    "tags": [
+      "text-encoder",
+      "wan"
+    ]
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/gpt-oss-120b-GGUF/blob/main/Q4_K_M/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
