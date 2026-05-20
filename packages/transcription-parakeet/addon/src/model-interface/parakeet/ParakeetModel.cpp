@@ -221,6 +221,17 @@ void ParakeetModel::cleanupTempFile_() {
 void ParakeetModel::load() {
   if (is_loaded_) return;
 
+  // Force useGPU to false in Android until Vulkan and OpenCL are stabilized
+#ifdef __ANDROID__
+  if (cfg_.useGPU) {
+    QLOG(logger::Priority::WARNING,
+         "Parakeet: useGPU=true is currently ignored on Android "
+         "(GPU backends disabled at engine boundary pending Vulkan/Mali "
+         "and OpenCL/Adreno driver fixes); falling back to CPU.");
+    cfg_.useGPU = false;
+  }
+#endif
+
   QLOG(logger::Priority::INFO,
        "Loading Parakeet GGUF (modelType hint: " +
            std::to_string(static_cast<int>(cfg_.modelType)) + ")");
