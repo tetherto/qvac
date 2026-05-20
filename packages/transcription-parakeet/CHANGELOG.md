@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+In this release we reestablish the GGML implementation from `0.4.0` with extra additions. The main features are exposing the v2.1 streaming Sortformer model with NeMo-port AOSC (Audio-Online Speaker Cache) through the addon's public API and overhaul the Android prebuild to ship the ggml backends as separately-loadable MODULE `.so` files. v2.1 becomes the recommended streaming Sortformer model; v1 stays the offline-batch default. On the Android side, Vulkan and OpenCL ship as runtime-discovered `.so` files (qvac-ext-ggml@speech's `GGML_BACKEND_DL=ON`), alongside per-arch CPU variants (`libqvac-speech-ggml-cpu-android_armv{8.0,8.2,8.6,9.0,9.2}_*.so`); inference still runs on CPU there pending Vulkan/Mali + OpenCL/Adreno driver fixes (`useGPU` is overridden at the engine boundary), but the GPU `.so` files are in place for when the override is lifted.
+
+### Added
+- **AOSC config knobs.** `ParakeetConfig` gains six optional fields — `streamingSpkCacheEnable` (default `true`), `streamingSpkCacheLen` (188), `streamingFifoLen` (188), `streamingChunkLeftContextMs` (80), `streamingChunkRightContextMs` (560), `streamingSpkCacheUpdatePeriod` (144) — forwarded into `parakeet::SortformerStreamingOptions` for both the in-process Mode-3 streaming path (`ParakeetModel::runStreamingProcess_`) and the duplex `runStreaming()` processor (`ParakeetStreamingProcessor`). Mirrored as per-call overrides on `StreamingRunConfig` (`spkCacheEnable`, `spkCacheLen`, `fifoLen`, `chunkLeftContextMs`, `chunkRightContextMs`, `spkCacheUpdatePeriod`). parakeet-cpp ignores these on v1 / v2 Sortformer GGUFs and on non-Sortformer engines, so always-forward is safe.
+- **v2.1 Sortformer auto-detection.** When a `diar_streaming_sortformer_4spk-v2.1.*` GGUF is loaded, parakeet-cpp's engine recognises it from the GGUF metadata tag `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"` and enables AOSC by default. Setting `streamingSpkCacheEnable: false` forces the v1 sliding-window code path on a v2.1 model (A/B comparison).
+- **`examples/live-mic-diarized-aosc.js`** — v2.1-focused dual-stream live mic example mirroring `live-mic-diarized.js`'s ASR + Sortformer pattern, with CLI flags for every AOSC knob (`--spk-cache-enable`, `--spk-cache-len`, `--fifo-len`, `--chunk-left-context-ms`, `--chunk-right-context-ms`, `--spk-cache-update-period`).
+- **`test/integration/sortformer-aosc-streaming.test.js`** — covers default-AOSC streaming and `streamingSpkCacheEnable=false` fallback. The full AOSC slot-stability contract (same physical speaker → same `Speaker N` tag across non-contiguous re-entries) is verified at C++ level in `parakeet-cpp/test/test_sortformer_aosc_speakers.cpp`; this JS-level test focuses on wiring correctness — that the override actually reaches the engine and the engine emits well-formed segments in both modes.
+- **`MODEL_CONFIGS.sortformerStreaming`** entry in `test/integration/helpers.js` pointing at `diar_streaming_sortformer_4spk-v2.1.q8_0.gguf`. Tests skip cleanly when the GGUF isn't staged via `npm run setup-models` / `QVAC_TEST_GGUF_*`.
+- **`backendsDir` ParakeetConfig field.** Directory the native addon scans for dynamically-loaded ggml backend libraries (`libqvac-speech-ggml-vulkan.so`, `libqvac-speech-ggml-opencl.so`, per-arch `libqvac-speech-ggml-cpu-android_armv*_*.so`).
+- **`openclCacheDir` ParakeetConfig field.** Persistent directory for ggml-opencl's `clCreateProgramWithBinary` cache.
+- **CMake install plumbing for dynamic ggml backends.** Two complementary install paths cover the full backend set that the `ggml-speech` vcpkg port emits on Android.
+- **`BACKENDS_SUBDIR` compile define** on the addon target. Derived from cmake-bare's `bare_target()` + `bare_module_target()` so the addon can join `<bare-target>/<module-name>` onto the host-provided `backendsDir` root without the host needing to know the per-target shape.
+- **Mobile dynamic-backend coverage.** `test/mobile/integration-runtime.cjs` now sets `NO_GPU=false` so Device Farm runs `gpu-smoke` and `mobile-perf-*-gpu` tests that exercise backend dlopen / discovery (Vulkan, OpenCL, and per-arch CPU `.so` loading). On Android, inference still runs on CPU (`useGPU` is overridden at the engine boundary and gpu-smoke passes early); iOS may engage Metal when `useGPU: true`.
+
+### Changed
+- **parakeet-cpp dep bumped** to `version>= 2026-05-20#2` (was `2026-05-05#1`) across all three platform branches in `vcpkg.json`. The new port (qvac-registry-vcpkg PR #156 + the `ggml-speech#3` follow-up) pulls in PRs #22 + #24 of `qvac-ext-lib-whisper.cpp`, which introduce the v2.1 Sortformer support, AOSC engine implementation, strict variant detection via the `parakeet.model_variant` GGUF tag, and review-fixup cleanups (magic-number elimination, dead-code removal, test utility consolidation, Windows `<algorithm>` include), and tightens the `ggml-speech` constraint to the per-arch Android CPU build (`GGML_CPU_ALL_VARIANTS=ON`).
+- **`index.js::_buildConfigurationParams()`** now forwards the 6 new AOSC fields (and explicit defaults for unset values) into `createInstance` / `reload`. Without this, JSDoc + native plumbing would exist but JS-layer overrides would never reach C++.
+- **`examples/live-mic-diarized.js`** header: recommends the v2.1 GGUF as `--diar-model` and notes that `streamingHistoryMs` is superseded by AOSC on v2.1 models (kept for v1 back-compat). Points to the new `live-mic-diarized-aosc.js` for explicit knob control.
+- **`examples/diarized-transcribe.js`** header: notes v1 remains the recommended OFFLINE diarization model — AOSC's slot-stability benefit only applies to continuous streaming and is wasted in batch mode.
+- **`README.md`** — extended Model Variants table with v1 (offline default) and v2.1 + AOSC (streaming default) rows; new `streamingSpkCache*` rows in the ParakeetConfig table; dedicated "Sortformer Streaming Diarization (v2.1 + AOSC)" section explaining the v1-drift problem AOSC solves, the model-variant auto-detection, and when to leave the defaults alone.
+
+## [0.5.0]
+
+- Temporarily reverted back to ONNX implementation of `0.3.3` to ensure stability in SDK `0.11.*`.
+- Bumped `inference-addon-cpp` dependency version to `1.1.7#1`.
+- Bumped `onnx` dependency version to `0.15.0`.
+
 ## [0.4.0]
 
 In this release, we have replaced the onnxruntime backend with a pure C++/ggml engine, added a duplex-streaming entry point that bypasses the framework's batch-then-process lifecycle for live use cases, and surfaced two new per-segment signals (`isEndOfTurn`, `startsWord`) so consumers can build cleaner live transcripts. The release also exposes per-engine backend stats (`backendDevice`, `backendId`) so callers can verify the GPU path actually engaged, and consolidates the examples / docs / mock fixtures into a single duplex-aware surface.

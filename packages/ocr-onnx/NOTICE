@@ -66,7 +66,6 @@ JavaScript Dependencies
   @qvac/error@0.1.1
   @qvac/infer-base@0.1.1
   @qvac/logging@0.1.0
-  @qvac/response@0.1.2
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
   b4a@1.7.3
