@@ -36,6 +36,8 @@ import {
 } from "@/server/bare/runtime";
 import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 import { getServerLogger } from "@/logging";
+import { isMobile } from "@/server/bare/registry/runtime-context-registry";
+import { stripMultiGpuKeys } from "@/server/bare/plugins/utils/multi-gpu-mobile";
 
 
 function createLlmModel(
@@ -47,6 +49,17 @@ function createLlmModel(
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion);
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
+
+  // Device patterns can't override user input; multi-GPU causes Adreno OpenCL SIGABRT on mobile.
+  if (isMobile()) {
+    const stripped = stripMultiGpuKeys(llmConfigStrings);
+    if (stripped.length > 0) {
+      getServerLogger().warn(
+        `[${ModelType.llamacppCompletion}:${modelId}] Multi-GPU parameters (${stripped.join(", ")}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`,
+      );
+    }
+  }
+
   const modelFiles = expandGGUFIntoShards(modelPath);
 
   const model = new LlmLlamacpp({
