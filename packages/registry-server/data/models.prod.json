@@ -5636,7 +5636,6 @@
       "ggml",
       "en"
     ],
-    "deprecated": false,
     "notes": "F16 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
@@ -5656,7 +5655,6 @@
       "ggml",
       "en"
     ],
-    "deprecated": false,
     "notes": "Q8_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
@@ -5676,7 +5674,6 @@
       "ggml",
       "en"
     ],
-    "deprecated": false,
     "notes": "Q4_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
