@@ -11,7 +11,7 @@ import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { getMDXComponents } from '@/mdx-components';
 import { resolveIcon } from "@/lib/resolveIcon";
 import { cloneElement, isValidElement } from "react";
-import { LLMCopyButton, ViewOptions, VersionSelector } from '@/components/page-actions';
+import { CopyPageButton, ViewOptions, VersionSelector } from '@/components/page-actions';
 import {
   buildCanonicalDocsUrl,
   buildPageCanonicalUrl,
@@ -67,6 +67,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
   const isHomePage = !params.slug || params.slug.length === 0;
   const jsonLdBlocks = buildDocsJsonLd(page, params.slug ?? [], isHomePage);
   const versionSelectorProps = getVersionSelectorProps(params.slug ?? []);
+  const pageMarkdownUrl = page.url === '/' ? '/index.md' : `${page.url}.md`;
 
   return (
     <>
@@ -95,10 +96,8 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       <DocsDescription>{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6 -mt-6">
         {versionSelectorProps && <VersionSelector {...versionSelectorProps} />}
-        <LLMCopyButton markdownUrl={`/llms-full.txt`} />
-        <ViewOptions
-          markdownUrl={`/llms-full.txt`}
-        />
+        <CopyPageButton markdownUrl={pageMarkdownUrl} />
+        <ViewOptions markdownUrl={pageMarkdownUrl} />
       </div>
       <DocsBody>
         <MDXContent
