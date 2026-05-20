@@ -31,9 +31,23 @@
       "dependencies": [
         {
           "name": "qvac-fabric",
+          "version>=": "8189.0.2",
           "features": [
             "force-profiler"
           ]
+        }
+      ]
+    },
+    "kleidiai": {
+      "description": "Enable ARM KleidiAI optimized kernels for Android ARM64",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "version>=": "8189.0.2",
+          "features": [
+            "kleidiai"
+          ],
+          "platform": "android"
         }
       ]
     }
