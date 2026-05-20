@@ -800,9 +800,6 @@ export class CancellationExecutor extends AbstractModelExecutor<
     }
   }
 
-  // Shared transcribe-cancel flow. Subclasses resolve `audioPath` per
-  // platform (FS path on desktop, bundled-asset URI on mobile) and delegate
-  // here for the actual cancel + assertion logic.
   protected async transcribeWithCancel(
     audioPath: string,
     cancelForm: CancelForm,
