@@ -15,7 +15,7 @@ Update Android prebuild to ship Vulkan and OpenCL as separately-loadable MODULE 
 - **`openclCacheDir` ParakeetConfig field.** Persistent directory for ggml-opencl's `clCreateProgramWithBinary` cache. 
 - **CMake install plumbing for dynamic ggml backends.** Two complementary install paths cover the full backend set that the `ggml-speech` vcpkg port emits on Android.
 - **`BACKENDS_SUBDIR` compile define** on the addon target. Derived from cmake-bare's `bare_target()` + `bare_module_target()` so the addon can join `<bare-target>/<module-name>` onto the host-provided `backendsDir` root without the host needing to know the per-target shape.
-- **Mobile GPU smoke coverage.** `test/mobile/integration-runtime.cjs` now flips `NO_GPU=false` so the integration suite exercises the GPU path on Device Farm (previously force-CPU).
+- **Mobile dynamic-backend coverage.** `test/mobile/integration-runtime.cjs` now sets `NO_GPU=false` so Device Farm runs `gpu-smoke` and `mobile-perf-*-gpu` tests that exercise backend dlopen / discovery (Vulkan, OpenCL, and per-arch CPU `.so` loading). On Android, inference still runs on CPU (`useGPU` is overridden at the engine boundary and gpu-smoke passes early); iOS may engage Metal when `useGPU: true`.
 
 ## [0.4.0]
 

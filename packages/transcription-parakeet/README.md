@@ -214,6 +214,8 @@ Most users interact with the package through `index.js`. From that entrypoint we
 | | `streamingEnergyVad` | CTC/TDT energy-VAD events (default: `false`) |
 | | `streamingLeftContextMs` | ASR encoder left-context window in ms; `-1` keeps parakeet-cpp's default of 10000. ASR sessions only (Sortformer ignores it). |
 | | `streamingRightLookaheadMs` | ASR encoder right-lookahead window in ms; `-1` keeps parakeet-cpp's default of 2000. Adds directly to the per-segment latency floor (`chunk_ms + right_lookahead_ms`). ASR sessions only. |
+| | `backendsDir` | Root directory for dynamically-loaded ggml backend `.so` files (Vulkan, OpenCL, per-arch CPU variants on Android). Defaults to the package's `prebuilds/` folder; the native addon appends `<bare-target>/<module-name>` before scanning. Pass an explicit path when prebuilds live elsewhere — e.g. Android `ApplicationInfo.nativeLibraryDir` when backend libs ship inside the APK. No-op on Apple (statically linked). |
+| | `openclCacheDir` | Persistent directory for ggml-opencl's compiled program-binary cache (`$GGML_OPENCL_CACHE_DIR`). Android-only; pass the host app's cache directory (e.g. `Context.getCacheDir()`) to skip cold `clBuildProgram` on every process start. Ignored on other platforms. |
 
 The model type (CTC / TDT / EOU / Sortformer) is **auto-detected from the GGUF metadata**, so callers don't need to pass `modelType`. Other knobs (`captionEnabled`, `timestampsEnabled`, `seed`, `sampleRate`, `channels`) keep sensible defaults.
 

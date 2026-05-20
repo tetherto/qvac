@@ -59,14 +59,17 @@ class ParakeetInterface {
    *   left context (parakeet default 10000 ms; -1 keeps the engine default).
    * @param {number} [configurationParams.streamingRightLookaheadMs] - ASR encoder
    *   right lookahead (parakeet default 2000 ms; -1 keeps the engine default).
-   * @param {string} [configurationParams.backendsDir] - directory the
-   *   addon scans for dynamically-loaded ggml backends
+   * @param {string} [configurationParams.backendsDir] - root directory
+   *   for dynamically-loaded ggml backends. JS defaults to
+   *   `<package_dir>/prebuilds`; the native addon appends
+   *   `<bare-target>/<module-name>` (via the `BACKENDS_SUBDIR` compile
+   *   define) before calling `ggml_backend_load_all_from_path()`, which
+   *   is where cmake-bare installs the `.so` files
    *   (`libqvac-speech-ggml-vulkan.so`, `libqvac-speech-ggml-opencl.so`,
-   *   per-arch `libqvac-speech-ggml-cpu-android_armv*_*.so`). Defaults to
-   *   `<package_dir>/prebuilds/<bare-target>/qvac__transcription-parakeet`
-   *   on Android / Linux, which is where cmake-bare installs the .so
-   *   files for the embedded host build. Apple targets ship a single
-   *   static libparakeet, so the default is a no-op there.
+   *   per-arch `libqvac-speech-ggml-cpu-android_armv*_*.so`). Pass an
+   *   explicit path when the host bundles prebuilds elsewhere (e.g. an
+   *   Android APK's `nativeLibraryDir`). No-op on Apple targets
+   *   (statically linked ggml core).
    * @param {string} [configurationParams.openclCacheDir] - directory where
    *   ggml-opencl persists its compiled program-binary cache (sets
    *   `$GGML_OPENCL_CACHE_DIR`). Only honoured on Android; empty
