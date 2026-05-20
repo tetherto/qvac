@@ -1898,7 +1898,7 @@ jobs:
           if-no-files-found: ignore
 
 # QVAC-17830: the per-run joint perf reporter that used to live here
-# has moved to the umbrella workflow (`on-pr-qvac-lib-infer-llamacpp-llm.yml`)
+# has moved to the umbrella workflow (`on-pr-llm-llamacpp.yml`)
 # so it can wait for BOTH the mobile and the desktop reusable workflows.
 # Keeping it here only waited for `build-and-test` (mobile), so a slow
 # desktop job (e.g. test-darwin-x64 at ~1h) could finish AFTER the

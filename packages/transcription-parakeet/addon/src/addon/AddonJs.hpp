@@ -132,7 +132,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 // ─── Duplex streaming entry points ────────────────────────────────────────
-// Mirrors qvac-lib-infer-whispercpp's StreamingProcessor wiring. Each
+// Mirrors transcription-whispercpp's StreamingProcessor wiring. Each
 // addon instance can host at most one active streaming session at a
 // time. Audio appended via appendStreamingAudio() bypasses the
 // framework's append() -> runJob() -> process() lifecycle entirely;
