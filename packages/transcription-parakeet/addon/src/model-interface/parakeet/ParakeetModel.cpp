@@ -221,6 +221,18 @@ void ParakeetModel::cleanupTempFile_() {
 void ParakeetModel::load() {
   if (is_loaded_) return;
 
+  // Force useGPU to false in Android until Vulkan and OpenCL are stabilized
+#ifdef __ANDROID__
+  if (cfg_.useGPU) {
+    QLOG(
+        logger::Priority::WARNING,
+        "Parakeet: useGPU=true is currently ignored on Android "
+        "(GPU backends disabled at engine boundary pending Vulkan/Mali "
+        "and OpenCL/Adreno driver fixes); falling back to CPU.");
+    cfg_.useGPU = false;
+  }
+#endif
+
   QLOG(logger::Priority::INFO,
        "Loading Parakeet GGUF (modelType hint: " +
            std::to_string(static_cast<int>(cfg_.modelType)) + ")");
@@ -261,6 +273,31 @@ void ParakeetModel::load() {
     // legacy CPU-only path and bump only when cfg_.useGPU is true.
     eopts.n_gpu_layers    = cfg_.useGPU ? 999 : 0;
     eopts.verbose         = false;
+    // Compose the actual backends-scan directory from the host-
+    // provided prebuilds root plus the cmake-bare per-target subdir
+    // (BACKENDS_SUBDIR, e.g. `android-arm64/qvac__transcription-parakeet`).
+    // Mirrors the exact shape qvac/packages/llm-llamacpp uses in
+    // addon/src/model-interface/LlamaLazyInitializeBackend.cpp so a
+    // host that already passes `path.join(__dirname, 'prebuilds')`
+    // gets the same resolution semantics across both addons. Empty
+    // backendsDir -> leave eopts.backends_dir empty so parakeet-cpp
+    // falls back to ggml's compile-time default search path
+    // (`ggml_backend_load_all()` rather than `..._from_path()`).
+    if (!cfg_.backendsDir.empty()) {
+      fs::path backendsDirPath(cfg_.backendsDir);
+#ifdef BACKENDS_SUBDIR
+      backendsDirPath =
+          (backendsDirPath / fs::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+      eopts.backends_dir = backendsDirPath.string();
+    }
+    // Forwarded as-is. Empty string -> leave $GGML_OPENCL_CACHE_DIR
+    // alone (the env-set-by-host path still wins). Only consumed on
+    // Android by parakeet::set_opencl_cache_dir(); other platforms
+    // ignore it. Process-singleton scoped: a second Engine ctor with
+    // a different value is silently ignored on the parakeet-cpp side
+    // because ggml-opencl only reads the env var once at first init.
+    eopts.opencl_cache_dir = cfg_.openclCacheDir;
 
     {
       std::lock_guard<std::mutex> lk(engine_mutex_);
