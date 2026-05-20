@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- chore: introduce `IVlaModel` interface + GGUF `general.architecture`-keyed
+  model factory (no behaviour change for SmolVLA). The addon now dispatches
+  to either the existing SmolVLA implementation or a Phase 1 stub for π₀.₅
+  based on the GGUF `general.architecture` string key (defaults to
+  `"smolvla"` when missing, so v0.1.0 weights keep loading). `getVlaHparams`
+  surfaces two new fields — `numCameras` and `stateInputMode` — and
+  `runtimeStats()` adds architecture-neutral `prefill_compute_ms` /
+  `prefill_total_ms` keys alongside the legacy `smollm2_*` aliases.
+
 ## 0.1.0
 
 - Initial release of `@qvac/vla-ggml`. Ports the SmolVLA vision-language-action
