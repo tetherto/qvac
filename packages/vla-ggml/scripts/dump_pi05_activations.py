@@ -360,14 +360,13 @@ def install_vlm_hooks(policy_model, store: ActivationStore) -> list:
 
         handles.append(o_proj.register_forward_hook(make_o_hook(blk_idx)))
 
-    # Final hidden state — VLM model returns BaseModelOutputWithPast.
-    # We hook the model itself; ``out.last_hidden_state`` is what we want.
-    def vlm_out_hook(_module, _inp, out):
-        # ``out`` is a BaseModelOutputWithPast.
-        last = out.last_hidden_state if hasattr(out, "last_hidden_state") else out
-        store.put("vlm.final_out", last[0])
-
-    handles.append(vlm.register_forward_hook(vlm_out_hook))
+    # NB: we deliberately do not register a forward hook for ``vlm.final_out``
+    # here. PaligemmaWithExpertModel.forward() calls
+    # ``self.paligemma.model.language_model.forward(...)`` *directly* (see
+    # modeling_pi05.py:464 in lerobot 0.5.x), which bypasses hooks — PyTorch
+    # only fires forward hooks through ``__call__`` / ``_call_impl``. The
+    # value we want is already returned by ``pawe.forward(...)`` as
+    # ``prefix_output``, so the caller stores it directly after the call.
 
     return handles
 
@@ -576,6 +575,12 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
     )
     for h in vlm_hooks:
         h.remove()
+
+    # vlm.final_out: prefix_output from pawe is exactly the post-final-norm
+    # hidden state of the language model. Captured here rather than via a
+    # forward hook because pawe invokes language_model.forward() directly,
+    # bypassing PyTorch's hook plumbing.
+    store.put("vlm.final_out", prefix_out[0])
 
     # vlm.final_out should now be populated; also dump the KV cache.
     # past_key_values is a DynamicCache; access .layers[i].keys / .values.

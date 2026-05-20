@@ -9,10 +9,10 @@
 # oracle_fixtures.json). Bump as a single transaction — the oracle file must
 # be regenerated whenever any of these change, since drift here invalidates
 # the parity contract.
-lerobot==0.5.1
+lerobot==0.5.2
 torch==2.10.0
 transformers==5.3.0
 safetensors==0.7.0
-huggingface_hub==1.12.0
+huggingface_hub==1.10.1
 numpy==2.2.6
 accelerate==1.13.0
