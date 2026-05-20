@@ -184,8 +184,11 @@ std::tuple<double, double, double> contrastGrey(const cv::Mat& img) {
   } else {
     for (int i = 0; i < img.rows; i++) {
       pixels.insert(
-          pixels.end(), img.ptr<uchar>(i), img.ptr<uchar>(i) + img.cols); /* NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-                                                                           */
+          pixels.end(),
+          img.ptr<uchar>(i),
+          img.ptr<uchar>(i) +
+              img.cols); /* NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+                          */
     }
   }
   std::sort(pixels.begin(), pixels.end());

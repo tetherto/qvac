@@ -257,8 +257,9 @@ StepBoundingBox::getBoxFromComponent(Input& input, int component) {
   cv::findNonZero(segmap, nonZeroPoints);
   cv::RotatedRect rectangle = cv::minAreaRect(nonZeroPoints);
   std::array<cv::Point2f, 4> box;
-  cv::Point2f tmp[4]; /* NOLINT(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays)
-                       */
+  cv::Point2f tmp
+      [4]; /* NOLINT(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays)
+            */
   rectangle.points(tmp); /* NOLINT(hicpp-no-array-decay) */
   std::copy(std::begin(tmp), std::end(tmp), box.begin());
 
