@@ -1,0 +1,20 @@
+name: 'Close stale issues and PRs'
+on:
+  schedule:
+    - cron: '30 12 * * *'
+permissions:
+  actions: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v10
+        with:
+          stale-pr-message: 'This PR is stale because it has been open 21 days with no activity. It is flagged for removal. Remove stale label or set the PR to Draft or this will be closed in one day.'
+          close-pr-message: 'This PR was closed because it has been stalled for 22 days with no activity. You can reopen this PR later if it is still necessary.'
+          days-before-pr-stale: 21
+          days-before-pr-close: 1
+          exempt-pr-labels: wip, do-not-close
+          exempt-draft-pr: true
