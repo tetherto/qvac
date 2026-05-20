@@ -516,13 +516,13 @@ If a package can't be resolved:
 
 | Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
 |--------------|-------------------|---------------|-----------------|
-| `llm-llamacpp` | qvac-fabric, inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
-| `embed-llamacpp` | qvac-fabric, inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
-| `ocr-onnx` | onnxruntime (platform EPs), opencv4, inference-addon-cpp, qvac-lint-cpp | None | Release-only |
-| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |
+| `llm-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
+| `embed-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
+| `ocr-onnx` | onnxruntime (platform EPs), opencv4, inference-addon-cpp, lint-cpp | None | Release-only |
+| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, inference-addon-cpp, lint-cpp | None | Release-only (macOS/iOS) |
 | `transcription-parakeet` | onnxruntime, inference-addon-cpp | None | Release-only |
-| `onnx` | onnxruntime (platform EPs), inference-addon-cpp, qvac-lint-cpp | None | None |
-| `transcription-whispercpp` | whisper-cpp, inference-addon-cpp, qvac-lint-cpp | None | None |
-| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, inference-addon-cpp, qvac-lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
+| `onnx` | onnxruntime (platform EPs), inference-addon-cpp, lint-cpp | None | None |
+| `transcription-whispercpp` | whisper-cpp, inference-addon-cpp, lint-cpp | None | None |
+| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, inference-addon-cpp, lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
 | `inference-addon-cpp` | lint-cpp | None | None |
 | `lint-cpp` | (none — self-contained) | None | None |
