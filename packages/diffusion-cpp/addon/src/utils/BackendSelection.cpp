@@ -243,8 +243,7 @@ std::string expectedEsrganBackendDeviceForConfig(const std::string& device) {
     return "cpu";
   case ConfigDevice::Auto:
   case ConfigDevice::Gpu: {
-    const BackendDevice effective =
-        resolveBackendForDevice(BackendDevice::GPU);
+    const BackendDevice effective = resolveBackendForDevice(BackendDevice::GPU);
     return effective == BackendDevice::CPU ? "cpu" : "gpu";
   }
   }
