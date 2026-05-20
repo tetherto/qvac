@@ -1,8 +1,8 @@
 import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
-import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
-import { getProjectRootFromBaseConfig } from "./get-project-root";
+import { resolveSDKPackageDir } from "@/expo/plugins/resolve-sdk-package-dir";
+import { getProjectRootFromBaseConfig } from "@/expo/plugins/get-project-root";
 
 let didRun = false;
 
