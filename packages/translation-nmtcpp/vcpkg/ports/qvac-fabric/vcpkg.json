@@ -31,8 +31,8 @@
       "description": "Build the GPU backends ggml ships per platform: Metal on Apple, Vulkan on Linux/Windows/Android, plus the Android backend-DL hybrid mode and OpenCL. Default-on so existing consumers (llamacpp-llm, llamacpp-embed, nmtcpp, diffusion-cpp) keep their current behaviour with default features. Disable to produce a CPU-only ggml build (useful for consumers like @qvac/classification-ggml that don't need GPU paths and want to skip the vulkan-sdk / metal / opencl build cost). Orthogonal to the 'llama' feature."
     },
     "kleidiai": {
-      "description": "Enable ARM KleidiAI optimized kernels for Android ARM64.",
-      "supports": "android"
+      "description": "Enable ARM KleidiAI optimized kernels for ARM64.",
+      "supports": "arm64"
     },
     "llama": {
       "description": "Build llama components."

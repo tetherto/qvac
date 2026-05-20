@@ -17,6 +17,7 @@
       "version>=": "1.4.4#3"
     }
   ],
+  "default-features": ["kleidiai"],  
   "features": {
     "tests": {
       "description": "Build and run unit tests",
@@ -45,7 +46,7 @@
           "features": [
             "kleidiai"
           ],
-          "platform": "android"
+          "platform": "arm64"
         }
       ]
     }

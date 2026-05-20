@@ -20,6 +20,7 @@
       ]
     }
   ],
+  "default-features": ["kleidiai"],  
   "features": {
     "tests": {
       "description": "Build tests",
@@ -36,7 +37,7 @@
           "features": [
             "kleidiai"
           ],
-          "platform": "android"
+          "platform": "arm64"
         }
       ]
     }
