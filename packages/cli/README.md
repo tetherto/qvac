@@ -374,13 +374,35 @@ qvac doctor
 **Prerequisites:**
 
 - Node.js >= 18.0.0
-- npm or bun
+- npm
+
+**Link a local `@qvac/sdk` build** (while SDK changes are not yet published):
+
+```bash
+# Build SDK first (from packages/sdk in the main qvac checkout)
+cd /path/to/qvac/packages/sdk && bun run build
+
+# Link CLI to that build
+cd packages/cli
+npm run dev:link
+
+# Sanity check: path should be inside .../qvac/packages/sdk/dist/commands/
+node -e "console.log(require.resolve('@qvac/sdk/commands'))"
+```
+
+Before committing, restore the registry pin:
+
+```bash
+npm run dev:unlink
+```
+
+Never commit `package.json` with a `file:` URL for `@qvac/sdk`.
 
 **Run locally:**
 
 ```bash
 # From packages/cli after a build
-bun run build
+npm run build
 node ./dist/index.js bundle sdk
 
 # Or link globally for testing
