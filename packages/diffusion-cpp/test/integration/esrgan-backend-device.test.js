@@ -13,11 +13,6 @@ const { ensureModel, setupJsLogger } = require('./utils')
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const isAndroid = os.platform() === 'android'
 
-// Android ESRGAN GPU/OpenCL path is unstable: Mali falls back to CPU, Adreno
-// crashes in ggml backend compute. Covered by CPU mobile test + desktop GPU test;
-// Android GPU follow-up needed.
-const skipAndroidGpuSubtest = isAndroid
-
 const ESRGAN_MODEL = {
   name: 'RealESRGAN_x4plus_anime_6B.pth',
   url: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
@@ -127,7 +122,7 @@ test(
 
 test(
   'ESRGAN standalone — config.device gpu reports policy-aligned backendDevice in RuntimeStats',
-  { timeout: JOB_TIMEOUT_MS, skip: noGpu || skipAndroidGpuSubtest },
+  { timeout: JOB_TIMEOUT_MS, skip: noGpu },
   async t => {
     const configDevice = 'gpu'
     setupJsLogger(binding)
@@ -170,7 +165,9 @@ test(
         actual,
         expected,
         expected === 'cpu'
-          ? 'Adreno 600/700 policy: config gpu may run on CPU backend'
+          ? (isAndroid
+              ? 'Android ESRGAN: config gpu intentionally runs on CPU backend'
+              : 'Adreno 600/700 policy: config gpu may run on CPU backend')
           : 'GPU policy: expect accelerated backend (OpenCL on Adreno 800+, Vulkan elsewhere)'
       )
     } finally {

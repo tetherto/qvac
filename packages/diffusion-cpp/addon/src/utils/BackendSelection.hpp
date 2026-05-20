@@ -63,9 +63,18 @@ sd_backend_preference_t
 preferredGpuBackendForConfigDevice(const std::string& device);
 
 /**
+ * ESRGAN-only stable-diffusion.cpp backend preference.
+ * On Android, config gpu/auto always use CPU (native ESRGAN GPU/OpenCL is unstable).
+ * Stable Diffusion uses preferredGpuBackendForConfigDevice() instead.
+ */
+sd_backend_preference_t
+preferredEsrganBackendForConfigDevice(const std::string& device);
+
+/**
  * Expected EsrganRuntimeStats.backendDevice ("cpu" or "gpu") after ESRGAN load
- * when config.device is @p device. Mirrors resolveBackendForDevice() policy:
- * Adreno 600/700 + config gpu -> "cpu"; Adreno 800+ and other GPUs -> "gpu".
+ * when config.device is @p device. On Android, gpu/auto always expect "cpu".
+ * Elsewhere mirrors resolveBackendForDevice(): Adreno 600/700 + gpu -> "cpu";
+ * Adreno 800+ and other GPUs -> "gpu".
  */
 std::string expectedEsrganBackendDeviceForConfig(const std::string& device);
 
