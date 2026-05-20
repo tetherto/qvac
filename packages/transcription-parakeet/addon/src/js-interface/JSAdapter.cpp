@@ -107,6 +107,73 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
         streamingRightLookaheadMsOpt.value().as<int32_t>(env);
   }
 
+  // AOSC (v2.1+ Sortformer only). All optional; unspecified values keep
+  // ParakeetConfig's defaults. Forwarded into
+  // parakeet::SortformerStreamingOptions by ParakeetModel /
+  // ParakeetStreamingProcessor; ignored for v1/v2/non-Sortformer.
+  auto streamingSpkCacheEnableOpt =
+      jsObject.getOptionalProperty<js::Boolean>(env, "streamingSpkCacheEnable");
+  if (streamingSpkCacheEnableOpt.has_value()) {
+    config.streamingSpkCacheEnable =
+        streamingSpkCacheEnableOpt.value().as<bool>(env);
+  }
+
+  auto streamingSpkCacheLenOpt =
+      jsObject.getOptionalProperty<js::Number>(env, "streamingSpkCacheLen");
+  if (streamingSpkCacheLenOpt.has_value()) {
+    config.streamingSpkCacheLen =
+        streamingSpkCacheLenOpt.value().as<int32_t>(env);
+  }
+
+  auto streamingFifoLenOpt =
+      jsObject.getOptionalProperty<js::Number>(env, "streamingFifoLen");
+  if (streamingFifoLenOpt.has_value()) {
+    config.streamingFifoLen = streamingFifoLenOpt.value().as<int32_t>(env);
+  }
+
+  auto streamingChunkLeftContextMsOpt =
+      jsObject.getOptionalProperty<js::Number>(
+          env, "streamingChunkLeftContextMs");
+  if (streamingChunkLeftContextMsOpt.has_value()) {
+    config.streamingChunkLeftContextMs =
+        streamingChunkLeftContextMsOpt.value().as<int32_t>(env);
+  }
+
+  auto streamingChunkRightContextMsOpt =
+      jsObject.getOptionalProperty<js::Number>(
+          env, "streamingChunkRightContextMs");
+  if (streamingChunkRightContextMsOpt.has_value()) {
+    config.streamingChunkRightContextMs =
+        streamingChunkRightContextMsOpt.value().as<int32_t>(env);
+  }
+
+  auto streamingSpkCacheUpdatePeriodOpt =
+      jsObject.getOptionalProperty<js::Number>(
+          env, "streamingSpkCacheUpdatePeriod");
+  if (streamingSpkCacheUpdatePeriodOpt.has_value()) {
+    config.streamingSpkCacheUpdatePeriod =
+        streamingSpkCacheUpdatePeriodOpt.value().as<int32_t>(env);
+  }
+
+  // Dynamic-backend loading knobs. Both forwarded to
+  // parakeet::EngineOptions and consumed once per-process on the
+  // first Engine construction (the ggml-backend registry + the
+  // ggml-opencl program-binary cache are both process singletons --
+  // see parakeet::set_backends_directory / set_opencl_cache_dir for
+  // the detailed lifetime contract). Empty -> leave the existing
+  // setting alone.
+  auto backendsDirOpt =
+      jsObject.getOptionalProperty<js::String>(env, "backendsDir");
+  if (backendsDirOpt.has_value()) {
+    config.backendsDir = backendsDirOpt.value().as<std::string>(env);
+  }
+
+  auto openclCacheDirOpt =
+      jsObject.getOptionalProperty<js::String>(env, "openclCacheDir");
+  if (openclCacheDirOpt.has_value()) {
+    config.openclCacheDir = openclCacheDirOpt.value().as<std::string>(env);
+  }
+
   auto innerConfigOpt = jsObject.getOptionalProperty<js::Object>(env, "config");
   if (innerConfigOpt.has_value()) {
     loadModelParams(innerConfigOpt.value(), env, config);

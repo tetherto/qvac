@@ -189,6 +189,49 @@ function setupCli (): void {
       }
     })
 
+  const openaiCmd = program
+    .command('openai')
+    .description('OpenAI adapter introspection')
+
+  openaiCmd
+    .command('coverage')
+    .description('Show OpenAI endpoint coverage for qvac serve openai')
+    .option('--json', 'Output JSON report')
+    .option('--unsupported', 'List only unsupported endpoints')
+    .option('--unknown', 'List only uncategorized (unknown) endpoints')
+    .option(
+      '--primary-ai',
+      'Restrict to spec-derived primary AI inference surface (Chat, Audio, Images, …)'
+    )
+    .option(
+      '--consumer-primary',
+      'Restrict to consumer-demanded primary AI surface'
+    )
+    .option('--offline', 'Use cached OpenAPI spec (~/.cache/qvac/openai-spec.yaml)')
+    .action(async (options: {
+      json?: boolean
+      unsupported?: boolean
+      unknown?: boolean
+      primaryAi?: boolean
+      consumerPrimary?: boolean
+      offline?: boolean
+    }) => {
+      try {
+        const { runOpenAiCoverage } = await import('./openai/coverage.js')
+        const covOpts: Parameters<typeof runOpenAiCoverage>[0] = {}
+        if (options.json) covOpts.json = true
+        if (options.unsupported) covOpts.unsupported = true
+        if (options.unknown) covOpts.unknown = true
+        if (options.primaryAi) covOpts.primaryAi = true
+        if (options.consumerPrimary) covOpts.consumerPrimary = true
+        if (options.offline) covOpts.offline = true
+        await runOpenAiCoverage(covOpts)
+      } catch (error: unknown) {
+        handleError(error)
+        process.exit(1)
+      }
+    })
+
   const serveCmd = program
     .command('serve')
     .description('Start an API server backed by QVAC')
@@ -202,6 +245,7 @@ function setupCli (): void {
     .option('--model <alias>', 'Model alias to preload (repeatable, must be in config)', collect, [])
     .option('--api-key <key>', 'Require Bearer token authentication')
     .option('--cors', 'Enable CORS headers')
+    .option('--public-base-url <url>', 'Externally reachable origin (required for image response_format=url)')
     .option('-v, --verbose', 'Detailed output')
     .action(async (options: {
       config?: string
@@ -210,6 +254,7 @@ function setupCli (): void {
       model: string[]
       apiKey?: string
       cors?: boolean
+      publicBaseUrl?: string
       verbose?: boolean
     }) => {
       try {
@@ -222,6 +267,7 @@ function setupCli (): void {
           model: options.model.length > 0 ? options.model : undefined,
           apiKey: options.apiKey,
           cors: options.cors,
+          publicBaseUrl: options.publicBaseUrl,
           verbose: options.verbose
         })
       } catch (error: unknown) {

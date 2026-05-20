@@ -173,12 +173,12 @@ export class TtsReferenceAudioRequiredError extends QvacErrorBase {
   }
 }
 
-export class LegacyParakeetModelDeprecatedError extends QvacErrorBase {
-  constructor(legacyFields: readonly string[], cause?: unknown) {
+export class ParakeetArtifactsRequiredError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
     super(
       createErrorOptions(
-        SDK_SERVER_ERROR_CODES.LEGACY_PARAKEET_MODEL_DEPRECATED,
-        [legacyFields.join(", ")],
+        SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED,
+        details ? [details] : undefined,
         cause,
       ),
     );
@@ -298,6 +298,8 @@ export class CancelFailedError extends QvacErrorBase {
 }
 
 export class RequestIdConflictError extends QvacErrorBase {
+  readonly requestId: string;
+
   constructor(requestId: string, cause?: unknown) {
     super(
       createErrorOptions(
@@ -306,10 +308,24 @@ export class RequestIdConflictError extends QvacErrorBase {
         cause,
       ),
     );
+    this.requestId = requestId;
+  }
+
+  /**
+   * Surface typed fields on the RPC error envelope so the client-side
+   * reconstructor in `client/rpc/rpc-error.ts` can rebuild this exact
+   * class on the consumer side. Without this, `err instanceof
+   * RequestIdConflictError` would always be `false` after the error
+   * crosses the worker boundary.
+   */
+  toErrorResponseFields(): Record<string, unknown> {
+    return { requestId: this.requestId };
   }
 }
 
 export class RequestNotFoundError extends QvacErrorBase {
+  readonly requestId: string;
+
   constructor(requestId: string, cause?: unknown) {
     super(
       createErrorOptions(
@@ -318,6 +334,11 @@ export class RequestNotFoundError extends QvacErrorBase {
         cause,
       ),
     );
+    this.requestId = requestId;
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { requestId: this.requestId };
   }
 }
 
@@ -351,6 +372,15 @@ export class RequestRejectedByPolicyError extends QvacErrorBase {
     this.kind = kind;
     this.modelId = modelId;
     this.reason = reason;
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return {
+      requestId: this.requestId,
+      kind: this.kind,
+      modelId: this.modelId,
+      reason: this.reason,
+    };
   }
 }
 

@@ -132,7 +132,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 // ─── Duplex streaming entry points ────────────────────────────────────────
-// Mirrors qvac-lib-infer-whispercpp's StreamingProcessor wiring. Each
+// Mirrors transcription-whispercpp's StreamingProcessor wiring. Each
 // addon instance can host at most one active streaming session at a
 // time. Audio appended via appendStreamingAudio() bypasses the
 // framework's append() -> runJob() -> process() lifecycle entirely;
@@ -163,6 +163,14 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
       parakeetModel.getDiarMinDurationOn() * 1000.0F);
   config.leftContextMs      = parakeetModel.getStreamingLeftContextMs();
   config.rightLookaheadMs   = parakeetModel.getStreamingRightLookaheadMs();
+  // AOSC defaults sourced from the model's load-time ParakeetConfig.
+  config.spkCacheEnable = parakeetModel.getStreamingSpkCacheEnable();
+  config.spkCacheLen = parakeetModel.getStreamingSpkCacheLen();
+  config.fifoLen = parakeetModel.getStreamingFifoLen();
+  config.chunkLeftContextMs = parakeetModel.getStreamingChunkLeftContextMs();
+  config.chunkRightContextMs = parakeetModel.getStreamingChunkRightContextMs();
+  config.spkCacheUpdatePeriod =
+      parakeetModel.getStreamingSpkCacheUpdatePeriod();
 
   if (auto chunkMs =
           configObj.getOptionalProperty<js::Number>(env, "chunkMs");
@@ -197,6 +205,48 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
           configObj.getOptionalProperty<js::Boolean>(env, "emitEnergyVad");
       emitEnergyVad.has_value()) {
     config.emitEnergyVad = emitEnergyVad.value().as<bool>(env);
+  }
+  // AOSC per-call overrides (v2.1+ Sortformer only).
+  if (auto spkCacheEnable =
+          configObj.getOptionalProperty<js::Boolean>(env, "spkCacheEnable");
+      spkCacheEnable.has_value()) {
+    config.spkCacheEnable = spkCacheEnable.value().as<bool>(env);
+  }
+  if (auto spkCacheLen =
+          configObj.getOptionalProperty<js::Number>(env, "spkCacheLen");
+      spkCacheLen.has_value()) {
+    const auto v = static_cast<int>(spkCacheLen.value().as<double>(env));
+    if (v > 0)
+      config.spkCacheLen = v;
+  }
+  if (auto fifoLen = configObj.getOptionalProperty<js::Number>(env, "fifoLen");
+      fifoLen.has_value()) {
+    const auto v = static_cast<int>(fifoLen.value().as<double>(env));
+    if (v > 0)
+      config.fifoLen = v;
+  }
+  if (auto chunkLeftContextMs =
+          configObj.getOptionalProperty<js::Number>(env, "chunkLeftContextMs");
+      chunkLeftContextMs.has_value()) {
+    const auto v = static_cast<int>(chunkLeftContextMs.value().as<double>(env));
+    if (v >= 0)
+      config.chunkLeftContextMs = v;
+  }
+  if (auto chunkRightContextMs =
+          configObj.getOptionalProperty<js::Number>(env, "chunkRightContextMs");
+      chunkRightContextMs.has_value()) {
+    const auto v =
+        static_cast<int>(chunkRightContextMs.value().as<double>(env));
+    if (v >= 0)
+      config.chunkRightContextMs = v;
+  }
+  if (auto spkCacheUpdatePeriod = configObj.getOptionalProperty<js::Number>(
+          env, "spkCacheUpdatePeriod");
+      spkCacheUpdatePeriod.has_value()) {
+    const auto v =
+        static_cast<int>(spkCacheUpdatePeriod.value().as<double>(env));
+    if (v > 0)
+      config.spkCacheUpdatePeriod = v;
   }
 
   {

@@ -46,26 +46,29 @@ try {
   let progressCount = 0;
   let cancelled = false;
 
+  // Capture the decorated promise so we can cancel by `requestId` (the
+  // primary cancel path). For a "cancel everything RAG on this model"
+  // sweep, use `cancel({ modelId, kind: "rag" })` instead.
+  const ingest = ragIngest({
+    modelId,
+    workspace: WORKSPACE,
+    documents,
+    progressInterval: 50,
+    onProgress: (stage, current, total) => {
+      progressCount++;
+      const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+      console.log(`   [${stage}] ${current}/${total} (${pct}%)`);
+
+      if (!cancelled && stage === "embedding" && current > 10) {
+        console.log("\n🛑 Triggering cancellation...\n");
+        cancelled = true;
+        void cancel({ requestId: ingest.requestId });
+      }
+    },
+  });
+
   try {
-    await ragIngest({
-      modelId,
-      workspace: WORKSPACE,
-      documents,
-      progressInterval: 50,
-      onProgress: (stage, current, total) => {
-        progressCount++;
-        const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-        console.log(`   [${stage}] ${current}/${total} (${pct}%)`);
-
-        // Cancel during embedding stage after a few updates
-        if (!cancelled && stage === "embedding" && current > 10) {
-          console.log("\n🛑 Triggering cancellation...\n");
-          cancelled = true;
-          void cancel({ operation: "rag", workspace: WORKSPACE });
-        }
-      },
-    });
-
+    await ingest;
     console.log(
       "\n⚠️  Ingest completed (cancellation didn't interrupt in time)",
     );

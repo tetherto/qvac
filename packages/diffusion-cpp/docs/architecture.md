@@ -53,7 +53,7 @@
 - **Progress tracking**: Step-by-step generation progress callbacks
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF, safetensors, checkpoint formats
-- **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein]
+- **Diffusion models**: SD2.x, SDXL, SD3, FLUX.2 [klein]
 - **Generation modes**: txt2img, img2img
 
 ## Target Platforms
@@ -460,7 +460,7 @@ sequenceDiagram
 ### Context
 
 Need high-performance, cross-platform diffusion model inference for resource-constrained environments (laptops, mobile devices) with support for:
-- Various model architectures (SD1.x, SD2.x, SDXL, SD3, FLUX, Wan, etc.)
+- Various model architectures (SD2.x, SDXL, SD3, FLUX, Wan, etc.)
 - Quantization for reduced memory footprint
 - GPU acceleration on diverse hardware
 - Both image and video generation
@@ -479,10 +479,10 @@ Use stable-diffusion.cpp as the core inference engine instead of Python diffuser
 
 **Model Support:**
 - Comprehensive support for diffusion models:
-  - SD1.x, SD2.x, SD-Turbo
+  - SD2.x, SD-Turbo
   - SDXL, SDXL-Turbo
   - SD3/SD3.5
-  - FLUX.1-dev/schnell, FLUX.2-dev/klein
+  - FLUX.2-dev/klein
   - Wan2.1/Wan2.2 (video generation)
   - Qwen Image, Z-Image
 - LoRA, ControlNet support
@@ -572,7 +572,7 @@ Require all model files to be present on disk before `load()` is called. The con
 **Split-model support:**
 - Diffusion models may have multiple components (diffusion GGUF, CLIP-L, CLIP-G, T5-XXL, LLM encoder, VAE, optional ESRGAN upscaler)
 - The caller supplies each component as an absolute path on `files`
-- Split vs all-in-one layout is detected via heuristic in `_load()` (`isSplitLayout = !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG`). Any caller-supplied separate encoder implies the primary file is the standalone diffusion model rather than an all-in-one checkpoint, so FLUX.1 (`{ model, clipL, clipG, vae }` without `t5Xxl`) is also routed correctly.
+- Split vs all-in-one layout is detected via heuristic in `_load()` (`isSplitLayout = !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG`). Any caller-supplied separate encoder implies the primary file is the standalone diffusion model rather than an all-in-one checkpoint.
 
 ### Trade-offs
 - ✅ Simple, no abstraction overhead
@@ -608,7 +608,7 @@ Pass absolute file paths directly to stable-diffusion.cpp rather than using buff
 - No JavaScript reference lifecycle concerns
 
 **Split-model routing:**
-- All-in-one checkpoints (SD1.x, SD2.x, SDXL) → `model_path`
+- All-in-one checkpoints (SD2.x, SDXL) → `model_path`
 - Standalone diffusion GGUFs (FLUX.2, SD3 split) → `diffusion_model_path`
 - Separate encoders → `clipLPath`, `clipGPath`, `t5XxlPath`, `llmPath`
 - VAE → `vaePath`
@@ -670,7 +670,7 @@ interface GenerationParams {
   width?: number;             // default: 512
   height?: number;            // default: 512
   steps?: number;             // default: 20
-  cfg_scale?: number;         // CFG scale (SD1/SD2/SDXL/SD3)
+  cfg_scale?: number;         // CFG scale (SD2/SDXL/SD3)
   guidance?: number;          // Distilled guidance (FLUX.2)
   sampling_method?: string;   // 'euler' | 'euler_a' | 'dpm++_2m' | etc.
   scheduler?: string;         // 'default' | 'karras' | 'exponential' | etc.

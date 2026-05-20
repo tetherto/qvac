@@ -29,7 +29,7 @@ Owns CI/CD pipelines (GitHub Actions workflows + composite actions), repo-wide a
 | `.cursor/rules/devops/secrets-and-credentials.mdc` | `.github/**`, `scripts/**` | Anything that can read, derive, or transmit a secret |
 | `.cursor/rules/devops/agentic-automation.mdc` | `.cursor/skills/**`, `.cursor/rules/**`, `.cursor/hooks/**`, `.github/workflows/**`, `.github/scripts/**`, `scripts/**` | Authoring skills, hooks, MCP integrations, or any AI-driven DevOps workflow |
 
-Commit message and PR title format guidance lives in the [`devops-pr-create`](../../skills/devops-pr-create/SKILL.md) skill — invoke it explicitly rather than autoloading a rule for it (skill-only on purpose, to keep the format spec out of the always-on context window).
+Commit message and PR title format guidance lives in the [`qv-devops-pr-create`](../../skills/qv-devops-pr-create/SKILL.md) skill — invoke it explicitly rather than autoloading a rule for it (skill-only on purpose, to keep the format spec out of the always-on context window).
 
 ## Quick rules — surface-level reminders
 
@@ -82,4 +82,4 @@ These are the bar; the deep-dive lives in the topic files above.
 
 ## Commit messages and PR titles
 
-The full format spec, allowed prefixes, allowed tags, validation regex, and quality guidelines live in the [`devops-pr-create`](../../skills/devops-pr-create/SKILL.md) skill. Invoke `/devops-pr-create` rather than relying on this rule — kept out of the auto-load context window on purpose.
+The full format spec, allowed prefixes, allowed tags, validation regex, and quality guidelines live in the [`qv-devops-pr-create`](../../skills/qv-devops-pr-create/SKILL.md) skill. Invoke `/qv-devops-pr-create` rather than relying on this rule — kept out of the auto-load context window on purpose.

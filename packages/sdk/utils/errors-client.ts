@@ -287,6 +287,18 @@ export class PearWorkerEntryRequiredError extends QvacErrorBase {
   }
 }
 
+export class BundleVerificationFailedError extends QvacErrorBase {
+  constructor(bundlePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED,
+        [bundlePath],
+        cause,
+      ),
+    );
+  }
+}
+
 export class ConfigFileNotFoundError extends QvacErrorBase {
   constructor(searchPaths: string, cause?: unknown) {
     super(

@@ -1,0 +1,166 @@
+name: Mobile Test — Setup
+description: |
+  Phase 1 of the mobile integration test pipeline.
+
+  Frees up disk space (Linux runners), checks out the qvac-test-addon-mobile
+  framework into ./test-framework, sets up Node.js, installs the Expo CLI,
+  resolves the addon's prebuilds (PR artifacts -> npm fallback -> committed),
+  and prunes desktop prebuilds to keep the runner from running out of disk.
+
+  Pre-condition: the consumer has already checked out the addon repository
+  at ./addon/. We do NOT check the addon out here so the consumer can run
+  addon-specific pre-steps between checkout and this phase (NMT model URLs,
+  OCR S3 fetches, etc.).
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  addon-workdir:
+    description: "Relative path to the addon package within the addon checkout"
+    required: true
+  addon-npm-name:
+    description: "NPM package name (used for npm fallback prebuild download)"
+    required: true
+  prebuild-artifact-prefix:
+    description: "Prefix used for prebuild artifact names (empty if none)"
+    required: false
+    default: ""
+  pat-token:
+    description: "GitHub PAT used to clone qvac-test-addon-mobile"
+    required: true
+  test-framework-ref:
+    description: "Branch/tag of qvac-test-addon-mobile to check out"
+    required: false
+    default: "main"
+  package-version:
+    description: |
+      NPM dist-tag or version pulled when the consumer triggers via
+      workflow_dispatch (e.g. "1.4.0", "@my-tag", "latest"). Defaults to
+      "latest" when empty. Whisper / TTS / Parakeet wire their dispatch
+      `version` (or `package_spec`) input through here so manual runs can
+      pin a specific published version.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Free up disk space (Android, github-hosted only)
+      if: inputs.platform == 'Android' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        echo "Disk space before cleanup:"
+        df -h
+        sudo rm -rf /usr/share/dotnet || true
+        sudo rm -rf /opt/ghc || true
+        sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+        sudo rm -rf /opt/hostedtoolcache/go || true
+        sudo rm -rf /opt/hostedtoolcache/Python || true
+        sudo rm -rf /opt/hostedtoolcache/Ruby || true
+        sudo rm -rf /usr/local/lib/android/sdk/ndk || true
+        sudo rm -rf /usr/local/share/boost || true
+        sudo rm -rf /usr/share/swift || true
+        sudo docker image prune --all --force || true
+        sudo apt-get clean || true
+        echo "Disk space after cleanup:"
+        df -h
+
+    - name: Checkout mobile test framework
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      with:
+        repository: tetherto/qvac-test-addon-mobile
+        ref: ${{ inputs.test-framework-ref }}
+        token: ${{ inputs.pat-token }}
+        path: test-framework
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: lts/*
+
+    - name: Install global dependencies
+      shell: bash
+      run: |
+        echo "Installing global dependencies..."
+        npm install -g --force @expo/cli@latest
+
+    - name: Download Android prebuilds (from artifacts)
+      if: inputs.platform == 'Android' && github.event_name != 'workflow_dispatch'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+        pattern: ${{ inputs.prebuild-artifact-prefix }}android-*
+        merge-multiple: true
+      continue-on-error: true
+
+    - name: Download iOS prebuilds (from artifacts)
+      if: inputs.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+        pattern: ${{ inputs.prebuild-artifact-prefix }}ios-*
+        merge-multiple: true
+      continue-on-error: true
+
+    - name: Download prebuilds (from npm - workflow_dispatch)
+      if: github.event_name == 'workflow_dispatch'
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      env:
+        ADDON_NPM_NAME: ${{ inputs.addon-npm-name }}
+        PACKAGE_VERSION: ${{ inputs.package-version }}
+      run: |
+        VERSION="${PACKAGE_VERSION:-latest}"
+        echo "Downloading $ADDON_NPM_NAME@$VERSION from npm for manual trigger..."
+        if ! npm pack "$ADDON_NPM_NAME@$VERSION"; then
+          echo "ERROR: Failed to download version $VERSION from npm"
+          echo "Please check that the version exists at https://www.npmjs.com/package/$ADDON_NPM_NAME"
+          exit 1
+        fi
+        tar -xzf *.tgz
+        if [ ! -d "package/prebuilds" ]; then
+          echo "ERROR: No prebuilds directory found in package"
+          exit 1
+        fi
+        mv package/prebuilds ./prebuilds
+        rm -rf package *.tgz
+        echo "Prebuilds downloaded from npm:"
+        ls -la prebuilds/
+
+    - name: Verify and prepare prebuilds
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        echo "Checking for prebuilds..."
+        if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
+          echo "Prebuilds found:"
+          ls -la prebuilds/
+        else
+          echo "ERROR: No prebuilds found! Run prebuild job first or commit prebuilds."
+          exit 1
+        fi
+
+        echo "Preparing mobile prebuilds for all architectures..."
+        if [ -d "prebuilds/android-arm64" ]; then
+          cp -r prebuilds/android-arm64 prebuilds/android-ia32 2>/dev/null || true
+          cp -r prebuilds/android-arm64 prebuilds/android-arm   2>/dev/null || true
+          cp -r prebuilds/android-arm64 prebuilds/android-x64   2>/dev/null || true
+        fi
+        if [ -d "prebuilds/ios-arm64" ]; then
+          cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || true
+          cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator   2>/dev/null || true
+        fi
+        echo "Mobile prebuilds prepared"
+        ls -la prebuilds/
+
+    - name: Remove desktop prebuilds to save disk space
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        echo "Removing desktop prebuilds (keeping Android + iOS)..."
+        rm -rf prebuilds/darwin-* prebuilds/win32-* prebuilds/linux-* 2>/dev/null || true
+        echo "After cleanup:"
+        du -sh prebuilds/* 2>/dev/null || true
+        df -h

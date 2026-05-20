@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const os = require('bare-os')
 
 const platform = os.platform()
@@ -121,7 +120,7 @@ function expectedSlides (nPredict, nDiscarded) {
 }
 
 // n_discarded=32, n_predict=SLIDE_PREDICT
-test('Basic generation sliding', {
+safeTest('Basic generation sliding', {
   timeout: 900_000,
   skip
 }, async t => {
@@ -142,7 +141,7 @@ test('Basic generation sliding', {
 })
 
 // n_discarded=0, n_predict=SLIDE_PREDICT
-test('Generation fails with context overflow when sliding disabled', {
+safeTest('Generation fails with context overflow when sliding disabled', {
   timeout: 900_000,
   skip
 }, async t => {
@@ -167,7 +166,7 @@ test('Generation fails with context overflow when sliding disabled', {
 })
 
 // n_discarded=16, n_predict=MANY_SLIDES_PREDICT
-test('Many slides with small n_discarded', {
+safeTest('Many slides with small n_discarded', {
   timeout: 900_000,
   skip
 }, async t => {
@@ -188,7 +187,7 @@ test('Many slides with small n_discarded', {
 })
 
 // n_discarded=99999, clamped to FREE_SLOTS - 1
-test('Large n_discarded is clamped to fit available context space', {
+safeTest('Large n_discarded is clamped to fit available context space', {
   timeout: 900_000,
   skip
 }, async t => {
@@ -209,7 +208,7 @@ test('Large n_discarded is clamped to fit available context space', {
 })
 
 // n_discarded=1, n_predict=SLIDE_PREDICT
-test('Sliding context works with minimal n_discarded of 1', {
+safeTest('Sliding context works with minimal n_discarded of 1', {
   timeout: 900_000,
   skip
 }, async t => {
@@ -238,7 +237,7 @@ test('Sliding context works with minimal n_discarded of 1', {
 // :> discards n_discarded (64) tokens after first message
 // Second run uses predict=10 via generationParams so generation can't
 // reach the context limit — any contextSlides must come from prefill.
-test('Cached follow-up discards middle tokens to fit new message', {
+safeTest('Cached follow-up discards middle tokens to fit new message', {
   timeout: 900_000,
   skip
 }, async t => {
@@ -279,7 +278,7 @@ test('Cached follow-up discards middle tokens to fit new message', {
 //   n_discarded = 447 > 0
 // :> removes all middle tokens from pos 64 to 494
 // Second run uses predict=10 so generation can't cause slides.
-test('Cached follow-up clears all middle tokens when discard window is exhausted', {
+safeTest('Cached follow-up clears all middle tokens when discard window is exhausted', {
   timeout: 900_000,
   skip
 }, async t => {
@@ -320,7 +319,7 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
 //   normal discard: discard > 0 fails
 //   full middle discard: leftTokens >= 0 (first condition fails)
 // :> no recovery possible, throws ContextOverflow
-test('Cached follow-up overflows when sliding is disabled and context is full', {
+safeTest('Cached follow-up overflows when sliding is disabled and context is full', {
   timeout: 900_000,
   skip
 }, async t => {

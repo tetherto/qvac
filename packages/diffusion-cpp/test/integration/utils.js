@@ -49,93 +49,175 @@ class GeneratedImageSaver {
   }
 }
 
-async function downloadFile (url, dest) {
+const TRANSIENT_ERROR_CODES = new Set([
+  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
+  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+])
+
+function isTransientError (err) {
+  if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
+  if (err.statusCode === 408 || err.statusCode === 429) return true
+  if (err.statusCode >= 500) return true
+  return false
+}
+
+function urlHost (url) {
+  try { return new URL(url).host } catch (_) { return url }
+}
+
+async function downloadFileOnce (url, dest, opts) {
+  opts = opts || {}
+  const maxRedirects = opts.maxRedirects != null ? opts.maxRedirects : 10
+  const timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : 30000
+  const idleTimeoutMs = opts.idleTimeoutMs != null ? opts.idleTimeoutMs : 30000
+
   return new Promise((resolve, reject) => {
-    let resolved = false
-    const safeResolve = () => {
-      if (!resolved) {
-        resolved = true
-        resolve()
-      }
-    }
-    const safeReject = (err) => {
-      if (!resolved) {
-        resolved = true
-        reject(err)
-      }
+    let settled = false
+    let reqTimer = null
+    let idleTimer = null
+
+    function done (err) {
+      if (settled) return
+      settled = true
+      clearTimeout(reqTimer)
+      clearTimeout(idleTimer)
+      if (err) reject(err)
+      else resolve()
     }
 
     const file = fs.createWriteStream(dest)
-
     file.on('error', (err) => {
       file.destroy()
-      fs.unlink(dest, () => safeReject(err))
+      done(err)
     })
 
-    const req = https.request(url, response => {
-      // Handle redirects (added 307, 308 for Windows model download)
-      if ([301, 302, 307, 308].includes(response.statusCode)) {
-        file.destroy()
-        // Wait for unlink to complete before recursive call (fixes Windows race condition)
-        fs.unlink(dest, (unlinkErr) => {
-          // Ignore ENOENT - file may not exist yet
-          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-            return safeReject(unlinkErr)
+    function makeRequest (reqUrl, redirectsLeft) {
+      const req = https.request(reqUrl, (response) => {
+        clearTimeout(reqTimer)
+
+        if ([301, 302, 307, 308].includes(response.statusCode)) {
+          if (redirectsLeft <= 0) {
+            file.destroy()
+            return done(new Error(`Too many redirects downloading ${urlHost(reqUrl)}`))
           }
+          const location = new URL(response.headers.location, reqUrl).href
+          makeRequest(location, redirectsLeft - 1)
+          return
+        }
 
-          const redirectUrl = new URL(response.headers.location, url).href
+        if (response.statusCode !== 200) {
+          file.destroy()
+          const err = new Error(`Download failed: HTTP ${response.statusCode} from ${urlHost(reqUrl)}`)
+          err.statusCode = response.statusCode
+          return done(err)
+        }
 
-          downloadFile(redirectUrl, dest)
-            .then(safeResolve)
-            .catch(safeReject)
+        function resetIdleTimer () {
+          clearTimeout(idleTimer)
+          idleTimer = setTimeout(() => {
+            response.destroy(Object.assign(new Error(`Idle timeout downloading ${urlHost(reqUrl)}`), { code: 'ETIMEDOUT' }))
+          }, idleTimeoutMs)
+        }
+
+        resetIdleTimer()
+
+        response.on('data', () => resetIdleTimer())
+
+        response.on('error', (err) => {
+          file.destroy()
+          done(err)
         })
-        return
-      }
 
-      if (response.statusCode !== 200) {
-        file.destroy()
-        fs.unlink(dest, () => safeReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`)))
-        return
-      }
+        response.pipe(file)
 
-      response.on('error', (err) => {
-        file.destroy()
-        fs.unlink(dest, () => safeReject(err))
+        file.on('close', () => {
+          clearTimeout(idleTimer)
+          done(null)
+        })
       })
 
-      response.pipe(file)
+      reqTimer = setTimeout(() => {
+        req.destroy(Object.assign(new Error(`Request timeout downloading ${urlHost(reqUrl)}`), { code: 'ETIMEDOUT' }))
+      }, timeoutMs)
 
-      // Wait for 'close' event to ensure data is fully flushed to disk (important on Windows)
-      file.on('close', () => {
-        safeResolve()
+      req.on('error', (err) => {
+        clearTimeout(reqTimer)
+        file.destroy()
+        done(err)
       })
-    })
 
-    req.on('error', err => {
-      file.destroy()
-      fs.unlink(dest, () => safeReject(err))
-    })
+      req.end()
+    }
 
-    req.end()
+    makeRequest(url, maxRedirects)
   })
+}
+
+async function downloadFileWithRetries (urls, dest, opts) {
+  opts = opts || {}
+  const retries = opts.retries != null ? opts.retries : 3
+  const minBytes = opts.minBytes != null ? opts.minBytes : 1
+  const urlList = Array.isArray(urls) ? urls : [urls]
+  const partPath = dest + '.part'
+
+  let lastErr = null
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30000)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+
+    const url = urlList[attempt % urlList.length]
+
+    try {
+      await downloadFileOnce(url, partPath, opts)
+
+      const stats = fs.statSync(partPath)
+      if (stats.size < minBytes) {
+        throw Object.assign(new Error(`Downloaded file too small: ${stats.size} bytes from ${urlHost(url)}`), { code: 'ESIZE' })
+      }
+
+      fs.renameSync(partPath, dest)
+      return
+    } catch (err) {
+      lastErr = err
+      try { fs.unlinkSync(partPath) } catch (_) {}
+
+      const attemptsLeft = retries - attempt
+      if (attemptsLeft > 0 && isTransientError(err)) {
+        console.log(`[download] Attempt ${attempt + 1} failed (${err.message}), retrying (${attemptsLeft} left)...`)
+      } else {
+        break
+      }
+    }
+  }
+
+  console.log(`[download] All attempts failed: ${lastErr && lastErr.message}`)
+  throw lastErr
 }
 
 async function ensureModel ({ modelName, downloadUrl }) {
   const modelDir = path.resolve(__dirname, '../model')
-
   const modelPath = path.join(modelDir, modelName)
 
   if (fs.existsSync(modelPath)) {
-    return [modelName, modelDir]
+    const stats = fs.statSync(modelPath)
+    if (stats.size === 0) {
+      console.log(`[download] Removing zero-byte cached file: ${modelName}`)
+      fs.unlinkSync(modelPath)
+    } else {
+      return [modelName, modelDir]
+    }
   }
 
   fs.mkdirSync(modelDir, { recursive: true })
-  console.log(`Downloading test model ${modelName}...`)
+  console.log(`[download] Downloading test model ${modelName}...`)
 
-  await downloadFile(downloadUrl, modelPath)
+  await downloadFileWithRetries(downloadUrl, modelPath)
 
   const stats = fs.statSync(modelPath)
-  console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+  console.log(`[download] Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
   return [modelName, modelDir]
 }
 
@@ -228,6 +310,19 @@ function isPng (buf) {
   )
 }
 
+const test = require('brittle')
+
+function safeTest (name, opts, fn) {
+  test(name, opts, async (t) => {
+    try {
+      await fn(t)
+    } catch (err) {
+      console.error(err)
+      t.fail(`${name}: ${err.message}`)
+    }
+  })
+}
+
 module.exports = {
   GeneratedImageSaver,
   ensureModel,
@@ -236,5 +331,6 @@ module.exports = {
   makeOutputCollector,
   detectPlatform,
   setupJsLogger,
-  isPng
+  isPng,
+  safeTest
 }
