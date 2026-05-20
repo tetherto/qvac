@@ -129,6 +129,119 @@ function loadArtifactRecords (inputDir) {
   return records
 }
 
+function mean (values) {
+  const nums = values.filter((value) => Number.isFinite(value))
+  if (nums.length === 0) return NaN
+  return nums.reduce((sum, value) => sum + value, 0) / nums.length
+}
+
+function percentile (values, p) {
+  const nums = values
+    .filter((value) => Number.isFinite(value))
+    .slice()
+    .sort((a, b) => a - b)
+  if (nums.length === 0) return NaN
+  const idx = Math.min(nums.length - 1, Math.max(0, Math.ceil((p / 100) * nums.length) - 1))
+  return nums[idx]
+}
+
+function humanizeSourceFile (sourceFile) {
+  if (!sourceFile) return 'unknown'
+  return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
+}
+
+function isMobilePerformanceReport (report) {
+  return Boolean(
+    report &&
+    report.addon === 'whisper' &&
+    report.addon_type === 'whisper' &&
+    report.device &&
+    Array.isArray(report.results)
+  )
+}
+
+function mobileExecutionProvider (result) {
+  const explicit = String(result.execution_provider || '').toLowerCase()
+  if (explicit === 'gpu' || explicit === 'cpu') return explicit
+
+  const testName = String(result.test || '').toLowerCase()
+  if (testName.includes('[gpu]')) return 'gpu'
+  if (testName.includes('[cpu]')) return 'cpu'
+  return 'cpu'
+}
+
+function mobileModelTag (result) {
+  const testName = String(result.test || '')
+  // Test names look like '[ggml-tiny] [CPU] mobile-perf run 1' — pull the
+  // first bracketed token that isn't a [CPU]/[GPU] execution-provider tag.
+  const matches = testName.match(/\[([^\]]+)\]/g) || []
+  for (const raw of matches) {
+    const value = raw.slice(1, -1)
+    const lower = value.toLowerCase()
+    if (lower === 'cpu' || lower === 'gpu') continue
+    return value.replace(/^ggml-/, '')
+  }
+  return 'unknown'
+}
+
+function normalizeMobileRecords (report, sourceFile) {
+  const byModelAndProvider = new Map()
+  const device = report.device || {}
+  const platformFamily = String(device.platform || '').toLowerCase()
+  const notes = path.basename(path.dirname(sourceFile))
+
+  for (const result of report.results || []) {
+    const provider = mobileExecutionProvider(result)
+    const modelTag = mobileModelTag(result)
+    const metrics = result.metrics || {}
+    const key = `${modelTag}|${provider}`
+    if (!byModelAndProvider.has(key)) {
+      byModelAndProvider.set(key, {
+        modelTag,
+        provider,
+        rtf: [],
+        wallMs: []
+      })
+    }
+    const group = byModelAndProvider.get(key)
+    if (typeof metrics.real_time_factor === 'number') group.rtf.push(metrics.real_time_factor)
+    if (typeof metrics.wall_time_ms === 'number') group.wallMs.push(metrics.wall_time_ms)
+  }
+
+  const records = []
+  for (const values of byModelAndProvider.values()) {
+    const useGPU = values.provider === 'gpu'
+    records.push({
+      source: 'mobile-ci',
+      device: device.name || humanizeSourceFile(sourceFile),
+      platform: device.platform || 'unknown',
+      platformFamily: platformFamily || 'unknown',
+      model: values.modelTag,
+      gpu: values.provider,
+      backend: normalizeBackend(platformFamily, useGPU),
+      meanRtf: mean(values.rtf),
+      p50: percentile(values.rtf, 50),
+      p95: percentile(values.rtf, 95),
+      wallMs: mean(values.wallMs),
+      notes
+    })
+  }
+
+  return records
+}
+
+function loadMobilePerformanceRecords (inputDir) {
+  const records = []
+  const files = walkFiles(inputDir).filter((file) => path.basename(file) === 'performance-report.json')
+  for (const file of files) {
+    const report = JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (isMobilePerformanceReport(report)) {
+      records.push(...normalizeMobileRecords(report, file))
+    }
+  }
+  return records
+}
+
 function loadManualRecords (manualDir) {
   const records = []
   if (!fs.existsSync(manualDir)) return records
@@ -201,7 +314,9 @@ function main () {
   const manualDir = path.resolve(args.manualDir)
 
   const records = sortRecords(
-    loadArtifactRecords(inputDir).concat(loadManualRecords(manualDir))
+    loadArtifactRecords(inputDir)
+      .concat(loadMobilePerformanceRecords(inputDir))
+      .concat(loadManualRecords(manualDir))
   )
   const markdown = renderMarkdown(records)
 
