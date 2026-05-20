@@ -11,3 +11,9 @@ export type {
   VerifyBundleResult,
   VerifyBundleIssue,
 } from "@/commands/verify/index";
+export {
+  CONFIG_CANDIDATES,
+  findBundleConfigFile,
+  loadBundleConfig,
+} from "@/commands/config";
+export { DEFAULT_HOSTS, DEFAULT_SDK_NAME } from "@/commands/bundle/constants";
