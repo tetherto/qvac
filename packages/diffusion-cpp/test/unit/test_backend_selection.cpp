@@ -87,13 +87,13 @@ TEST_F(SdBackendSelectionTest, ParseConfigDeviceEmptyIsAuto) {
 }
 
 TEST_F(SdBackendSelectionTest, PreferredGpuBackendInvalidDeviceThrows) {
-  EXPECT_THROW(preferredGpuBackendForConfigDevice("bogus"),
-               qvac_errors::StatusError);
-  EXPECT_THROW(preferredGpuBackendForConfigDevice("cuda"),
-               qvac_errors::StatusError);
+  EXPECT_THROW(
+      preferredGpuBackendForConfigDevice("bogus"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      preferredGpuBackendForConfigDevice("cuda"), qvac_errors::StatusError);
 }
 
 TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendInvalidDeviceThrows) {
-  EXPECT_THROW(expectedEsrganBackendDeviceForConfig("bogus"),
-               qvac_errors::StatusError);
+  EXPECT_THROW(
+      expectedEsrganBackendDeviceForConfig("bogus"), qvac_errors::StatusError);
 }

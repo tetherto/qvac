@@ -14,8 +14,8 @@ enum class BackendDevice : uint8_t { CPU, GPU };
 enum class ConfigDevice : uint8_t { Cpu, Gpu, Auto };
 
 /**
- * Parse config.device. Accepts `cpu`, `gpu`, `auto`, and `""` (treated as auto).
- * Throws StatusError on any other value.
+ * Parse config.device. Accepts `cpu`, `gpu`, `auto`, and `""` (treated as
+ * auto). Throws StatusError on any other value.
  */
 ConfigDevice parseConfigDeviceString(const std::string& device);
 

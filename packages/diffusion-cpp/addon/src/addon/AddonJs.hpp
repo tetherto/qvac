@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include <picojson/picojson.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -15,6 +14,7 @@
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <picojson/picojson.h>
 
 #include "handlers/SdCtxHandlers.hpp"
 #include "model-interface/EsrganUpscalerModel.hpp"
@@ -328,8 +328,7 @@ getExpectedEsrganBackendDevice(js_env_t* env, js_callback_info_t* info) try {
         "getExpectedEsrganBackendDevice: device argument is required");
   }
 
-  const std::string device =
-      js::String{env, argv[0]}.as<std::string>(env);
+  const std::string device = js::String{env, argv[0]}.as<std::string>(env);
   std::string backendsDir;
   if (argv.size() > 1 && !js::is<js::Undefined>(env, argv[1]) &&
       !js::is<js::Null>(env, argv[1])) {
