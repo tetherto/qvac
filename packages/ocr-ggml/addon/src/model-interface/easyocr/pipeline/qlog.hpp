@@ -11,13 +11,17 @@
 // Both expand to a no-op here.  If you want to see the original log lines
 // while debugging, change the macro bodies to forward to std::cerr.
 
+#include <cstdint>
 #include <string>
 
-namespace qvac_lib_inference_addon_cpp {
-namespace logger {
-enum Priority { DEBUG, INFO, WARN, ERROR_ }; // ERROR clashes with windows.h
-} // namespace logger
-} // namespace qvac_lib_inference_addon_cpp
+namespace qvac_lib_inference_addon_cpp::logger {
+enum Priority : std::uint8_t {
+  DEBUG,
+  INFO,
+  WARN,
+  ERROR_
+}; // ERROR clashes with windows.h
+} // namespace qvac_lib_inference_addon_cpp::logger
 
 #define QLOG(_prio, _msg) ((void)(_prio), (void)(_msg))
 #define ALOG_DEBUG(_msg) ((void)(_msg))

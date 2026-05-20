@@ -29,7 +29,7 @@
 #include "easyocr/pipeline/step_recognize_text.hpp"
 #include "easyocr/pipeline/steps.hpp"
 
-typedef struct ggml_backend* ggml_backend_t;
+using ggml_backend_t = struct ggml_backend*;
 
 namespace qvac_lib_infer_ocr_ggml {
 

@@ -73,6 +73,7 @@ constexpr int kLstmGateCount = 4;
 constexpr float kBatchNormEps = 1e-5F;
 constexpr double kPixelMax = 255.0;
 
+// NOLINTNEXTLINE(modernize-use-std-numbers) - dataset-derived RGB normalization
 const cv::Scalar DOCTR_RECO_MEAN(0.694, 0.695, 0.693);
 const cv::Scalar DOCTR_RECO_STD(0.299, 0.296, 0.301);
 
@@ -89,17 +90,105 @@ struct BlockConfig {
 };
 
 constexpr std::array<BlockConfig, 11> kBlocks{{
-    {1, 16, 16, 16, 3, true, false, 2, 2},
-    {2, 16, 24, 72, 3, false, false, 1, 2},
-    {3, 24, 24, 88, 3, false, false, 1, 1},
-    {4, 24, 40, 96, 5, true, true, 1, 2},
-    {5, 40, 40, 240, 5, true, true, 1, 1},
-    {6, 40, 40, 240, 5, true, true, 1, 1},
-    {7, 40, 48, 120, 5, true, true, 1, 1},
-    {8, 48, 48, 144, 5, true, true, 1, 1},
-    {9, 48, 96, 288, 5, true, true, 1, 2},
-    {10, 96, 96, 576, 5, true, true, 1, 1},
-    {11, 96, 96, 576, 5, true, true, 1, 1},
+    {.featureIndex = 1,
+     .inputChannels = 16,
+     .outputChannels = 16,
+     .expansionChannels = 16,
+     .kernel = 3,
+     .useSe = true,
+     .useHardswish = false,
+     .strideW = 2,
+     .strideH = 2},
+    {.featureIndex = 2,
+     .inputChannels = 16,
+     .outputChannels = 24,
+     .expansionChannels = 72,
+     .kernel = 3,
+     .useSe = false,
+     .useHardswish = false,
+     .strideW = 1,
+     .strideH = 2},
+    {.featureIndex = 3,
+     .inputChannels = 24,
+     .outputChannels = 24,
+     .expansionChannels = 88,
+     .kernel = 3,
+     .useSe = false,
+     .useHardswish = false,
+     .strideW = 1,
+     .strideH = 1},
+    {.featureIndex = 4,
+     .inputChannels = 24,
+     .outputChannels = 40,
+     .expansionChannels = 96,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 2},
+    {.featureIndex = 5,
+     .inputChannels = 40,
+     .outputChannels = 40,
+     .expansionChannels = 240,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 1},
+    {.featureIndex = 6,
+     .inputChannels = 40,
+     .outputChannels = 40,
+     .expansionChannels = 240,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 1},
+    {.featureIndex = 7,
+     .inputChannels = 40,
+     .outputChannels = 48,
+     .expansionChannels = 120,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 1},
+    {.featureIndex = 8,
+     .inputChannels = 48,
+     .outputChannels = 48,
+     .expansionChannels = 144,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 1},
+    {.featureIndex = 9,
+     .inputChannels = 48,
+     .outputChannels = 96,
+     .expansionChannels = 288,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 2},
+    {.featureIndex = 10,
+     .inputChannels = 96,
+     .outputChannels = 96,
+     .expansionChannels = 576,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 1},
+    {.featureIndex = 11,
+     .inputChannels = 96,
+     .outputChannels = 96,
+     .expansionChannels = 576,
+     .kernel = 5,
+     .useSe = true,
+     .useHardswish = true,
+     .strideW = 1,
+     .strideH = 1},
 }};
 
 std::vector<std::string> parseVocabToChars(const std::string& vocab) {
@@ -237,7 +326,7 @@ struct GraphBuilder {
   struct ggml_context* ctx;
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
 
-  struct ggml_tensor* t(const std::string& name) const {
+  [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
     auto it = w.find(name);
     if (it == w.end()) {
       raise("missing graph tensor: " + name);
@@ -398,7 +487,7 @@ struct StepDoctrRecognitionGGML::Impl {
     }
 
     struct ggml_context* ggufGgmlCtx = nullptr;
-    gguf_init_params params{/*no_alloc=*/false, &ggufGgmlCtx};
+    gguf_init_params params{.no_alloc = false, .ctx = &ggufGgmlCtx};
     gguf_context* gguf = gguf_init_from_file(pathRecognizer.c_str(), params);
     if (gguf == nullptr) {
       raise("failed to open GGUF file: " + pathRecognizer);
@@ -432,7 +521,7 @@ struct StepDoctrRecognitionGGML::Impl {
     return features;
   }
 
-  std::vector<float>
+  [[nodiscard]] std::vector<float>
   runLstmLinear(const std::vector<float>& featureWhcn) const {
     std::vector<float> layerInput(kSequenceLength * kFeatureChannels);
     for (int t = 0; t < kSequenceLength; ++t) {
@@ -529,7 +618,9 @@ private:
     graph.weightsCtx =
         std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
             ggml_init(
-                {ggml_tensor_overhead() * 2048, nullptr, /*no_alloc=*/true}),
+                {.mem_size = ggml_tensor_overhead() * 2048,
+                 .mem_buffer = nullptr,
+                 .no_alloc = true}),
             ggml_free);
     if (!graph.weightsCtx) {
       raise("failed to allocate GGML weights context");
@@ -760,9 +851,10 @@ private:
   void buildGraph() {
     graph.graphCtx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
         ggml_init(
-            {ggml_tensor_overhead() * 4096 + ggml_graph_overhead(),
-             nullptr,
-             /*no_alloc=*/true}),
+            {.mem_size =
+                 ggml_tensor_overhead() * 4096 + ggml_graph_overhead(),
+             .mem_buffer = nullptr,
+             .no_alloc = true}),
         ggml_free);
     if (!graph.graphCtx) {
       raise("failed to allocate GGML graph context");
@@ -897,7 +989,7 @@ StepDoctrRecognitionGGML::SoftmaxResult StepDoctrRecognitionGGML::softmaxArgmax(
       bestIdx = v;
     }
   }
-  return {bestIdx, bestExp / sumExp};
+  return {.bestIdx = bestIdx, .bestProb = bestExp / sumExp};
 }
 
 std::pair<std::string, float>

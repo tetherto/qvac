@@ -40,24 +40,27 @@ public:
   GgufLoader& operator=(GgufLoader&&) = delete;
 
   // True iff the file was opened and parsed successfully.
-  bool ok() const noexcept { return gguf_ != nullptr; }
+  [[nodiscard]] bool ok() const noexcept { return gguf_ != nullptr; }
 
   // The path the loader was constructed with (for error reporting).
-  const std::string& path() const noexcept { return path_; }
+  [[nodiscard]] const std::string& path() const noexcept { return path_; }
 
-  int64_t n_tensors() const noexcept;
-  int64_t n_kv() const noexcept;
+  [[nodiscard]] int64_t n_tensors() const noexcept;
+  [[nodiscard]] int64_t n_kv() const noexcept;
 
   // Tensor data lookup by name. Returns nullptr if the tensor is absent or
   // the loader is not ok().
-  ::ggml_tensor* get_tensor(const std::string& name) const noexcept;
+  [[nodiscard]] ::ggml_tensor*
+  get_tensor(const std::string& name) const noexcept;
 
   // Metadata accessors. Each returns std::nullopt if the key is absent or
   // the on-disk type does not match the accessor (no implicit conversion).
-  std::optional<std::string_view>
+  [[nodiscard]] std::optional<std::string_view>
   get_string(const std::string& key) const noexcept;
-  std::optional<uint32_t> get_u32(const std::string& key) const noexcept;
-  std::optional<uint64_t> get_u64(const std::string& key) const noexcept;
+  [[nodiscard]] std::optional<uint32_t>
+  get_u32(const std::string& key) const noexcept;
+  [[nodiscard]] std::optional<uint64_t>
+  get_u64(const std::string& key) const noexcept;
 
 private:
   std::string path_;

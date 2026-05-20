@@ -140,7 +140,7 @@ struct GraphBuilder {
   struct ggml_context* ctx;
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
 
-  struct ggml_tensor* t(const std::string& name) const {
+  [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
     auto it = w.find(name);
     if (it == w.end()) {
       raise("Missing weight tensor at graph build time: " + name);
@@ -475,7 +475,7 @@ WeightsBundle loadWeights(
   // Load the GGUF into a private ggml ctx so the inspected tensors stay
   // accessible long enough to copy their bytes into our backend buffer.
   struct ggml_context* ggmlCtx = nullptr;
-  gguf_init_params params{/*no_alloc=*/false, &ggmlCtx};
+  gguf_init_params params{.no_alloc = false, .ctx = &ggmlCtx};
   gguf_context* gguf = gguf_init_from_file(ggufPath.c_str(), params);
   if (gguf == nullptr) {
     raiseInvalid("Failed to open GGUF file: " + ggufPath);
@@ -501,7 +501,9 @@ WeightsBundle loadWeights(
   WeightsBundle bundle;
   const size_t ctxSize = ggml_tensor_overhead() * 4096;
   bundle.ctx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
-      ggml_init({ctxSize, nullptr, /*no_alloc=*/true}), ggml_free);
+      ggml_init(
+          {.mem_size = ctxSize, .mem_buffer = nullptr, .no_alloc = true}),
+      ggml_free);
   if (!bundle.ctx) {
     raise("Failed to allocate weights ggml context");
   }
@@ -916,7 +918,9 @@ ComputeGraph buildGraph(
   ComputeGraph cg;
   const size_t ctxSize = ggml_tensor_overhead() * 4096 + ggml_graph_overhead();
   cg.ctx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
-      ggml_init({ctxSize, nullptr, /*no_alloc=*/true}), ggml_free);
+      ggml_init(
+          {.mem_size = ctxSize, .mem_buffer = nullptr, .no_alloc = true}),
+      ggml_free);
   if (!cg.ctx) {
     raise("Failed to allocate graph ggml context");
   }
@@ -926,7 +930,7 @@ ComputeGraph buildGraph(
   cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kInputHw, kInputHw, 3, 1);
   ggml_set_name(cg.input, "input");
 
-  GraphBuilder gb{ctx, weights.tensors};
+  GraphBuilder gb{.ctx = ctx, .w = weights.tensors};
 
   // Stem.
   struct ggml_tensor* x = gb.convBnAct(

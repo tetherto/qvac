@@ -36,7 +36,7 @@
 
 #include "steps.hpp"
 
-typedef struct ggml_backend* ggml_backend_t;
+using ggml_backend_t = struct ggml_backend*;
 
 namespace easyocr::ggml {
 
@@ -72,7 +72,7 @@ struct RecognitionStageTimings {
   int numBatches = 0;
   int numContrastRetryBatches = 0;
 
-  double totalMs() const {
+  [[nodiscard]] double totalMs() const {
     return populateMs + batchPrepMs + inferenceMs + ctcDecodeMs + paragraphMs;
   }
 };
@@ -125,7 +125,9 @@ public:
 
   // Wall-clock timings from the most recent process() call.  Stable
   // between calls; reset on every process().
-  const RecognitionStageTimings& lastTimings() const { return lastTimings_; }
+  [[nodiscard]] const RecognitionStageTimings& lastTimings() const {
+    return lastTimings_;
+  }
 
 private:
   Config config_;

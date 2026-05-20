@@ -21,7 +21,7 @@
 
 #include "steps.hpp"
 
-typedef struct ggml_backend* ggml_backend_t;
+using ggml_backend_t = struct ggml_backend*;
 
 namespace easyocr::ggml {
 
@@ -46,8 +46,10 @@ struct DetectionStageTimings {
   double tensorGetMs = 0.0;
   double deinterleaveMs = 0.0;
 
-  double outputCopyMs() const { return tensorGetMs + deinterleaveMs; }
-  double totalMs() const {
+  [[nodiscard]] double outputCopyMs() const {
+    return tensorGetMs + deinterleaveMs;
+  }
+  [[nodiscard]] double totalMs() const {
     return preprocessMs + graphBuildMs + graphAllocMs + graphComputeMs +
            outputCopyMs();
   }
@@ -112,7 +114,9 @@ public:
 
   // Wall-clock timings from the most recent process() call.  Stable
   // between calls; reset on every process().
-  const DetectionStageTimings& lastTimings() const { return lastTimings_; }
+  [[nodiscard]] const DetectionStageTimings& lastTimings() const {
+    return lastTimings_;
+  }
 
   // Run one forward pass per requested tap, with per-tap warmup and
   // multiple measured samples, and return the median cumulative

@@ -95,14 +95,15 @@ class OcrOutputHandler
 public:
   void setEnv(js_env_t* env) override { env_ = env; }
 
-  js_value_t* handleOutput(const std::any& output) const override {
+  [[nodiscard]] js_value_t*
+  handleOutput(const std::any& output) const override {
     if (output.type() != typeid(OcrModel::Output)) {
       throw std::runtime_error("OcrOutputHandler: unexpected data type");
     }
     return outputToJs(env_, std::any_cast<const OcrModel::Output&>(output));
   }
 
-  bool canHandle(const std::any& input) const override {
+  [[nodiscard]] bool canHandle(const std::any& input) const override {
     return input.type() == typeid(OcrModel::Output);
   }
 

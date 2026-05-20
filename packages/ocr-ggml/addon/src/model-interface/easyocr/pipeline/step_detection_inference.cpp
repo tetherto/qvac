@@ -223,9 +223,9 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
       ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead();
   std::vector<uint8_t> graph_buf(graph_ctx_size);
   ggml_init_params init{
-      /* .mem_size   = */ graph_ctx_size,
-      /* .mem_buffer = */ graph_buf.data(),
-      /* .no_alloc   = */ true,
+      .mem_size = graph_ctx_size,
+      .mem_buffer = graph_buf.data(),
+      .no_alloc = true,
   };
   ggml_context* gctx = ggml_init(init);
 
@@ -337,9 +337,9 @@ std::vector<BlockTiming> StepDetectionInference::profileBlocks(
         ggml_graph_overhead();
     std::vector<uint8_t> graph_buf(graph_ctx_size);
     ggml_init_params init{
-        /* .mem_size   = */ graph_ctx_size,
-        /* .mem_buffer = */ graph_buf.data(),
-        /* .no_alloc   = */ true,
+        .mem_size = graph_ctx_size,
+        .mem_buffer = graph_buf.data(),
+        .no_alloc = true,
     };
     ggml_context* gctx = ggml_init(init);
 
@@ -403,7 +403,10 @@ std::vector<BlockTiming> StepDetectionInference::profileBlocks(
         minSample = s;
     }
 
-    out.push_back({tapName, minSample, std::move(samples)});
+    out.push_back(
+        {.tapName = tapName,
+         .cumulativeMs = minSample,
+         .samplesMs = std::move(samples)});
 
     ggml_gallocr_free(gallocr);
     ggml_free(gctx);
@@ -455,7 +458,11 @@ StepDetectionInference::process(const StepDetectionInference::Input& input) {
           ", scoreLink=" + std::to_string(scoreLink.cols) + "x" +
           std::to_string(scoreLink.rows));
 
-  return {input, scoreText, scoreLink, RATIO_DETECTOR_NET / imgResizeRatio};
+  return {
+      .context = input,
+      .textMap = scoreText,
+      .linkMap = scoreLink,
+      .imgResizeRatio = RATIO_DETECTOR_NET / imgResizeRatio};
 }
 
 } // namespace easyocr::ggml::pipeline

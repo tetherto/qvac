@@ -39,6 +39,8 @@ struct LangGroupInfo {
 using LangToLangGroupInfoMap = std::map<std::string_view, LangGroupInfo, std::less<>>;
 using GenToModelCharacteristicsMap = std::map<std::string_view, LangToLangGroupInfoMap, std::less<>>;
 
+// NOLINTBEGIN(modernize-use-designated-initializers) - dense data tables
+// lifted verbatim from upstream; positional init preserves the source layout.
 const GenToModelCharacteristicsMap RECOGNITION_MODELS = {
     {"gen1",
      {
@@ -525,6 +527,7 @@ const GenToModelCharacteristicsMap RECOGNITION_MODELS = {
            "ћЌќЎўЏџҐґҒғҚқҮүҲҳҶҷӀӏӢӣӨөӮӯ",
            U"0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~ €₽"}},
      }}};
+// NOLINTEND(modernize-use-designated-initializers)
 
 const std::map<std::string_view, std::u32string_view> LANG_TO_CHARS_MAP = {
     {"ab", U"АБВГӶҔДЕЖЗӠИКҚҞЛМНОПԤҦРСТҬУФХҲЦҴЧҶҼҾШЫҨЏЬӘабвгӷҕдежзӡикқҟлмнопԥҧрстҭуфхҳцҵчҷҽҿшыҩџьә"},

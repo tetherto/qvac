@@ -1004,9 +1004,9 @@ cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
                                 ggml_graph_overhead_custom(graph_size, false);
   std::vector<uint8_t> graph_buf(graph_ctx_size);
   ggml_init_params init{
-      /* .mem_size   = */ graph_ctx_size,
-      /* .mem_buffer = */ graph_buf.data(),
-      /* .no_alloc   = */ true,
+      .mem_size = graph_ctx_size,
+      .mem_buffer = graph_buf.data(),
+      .no_alloc = true,
   };
   ggml_context* gctx = ggml_init(init);
   auto* x = ggml_new_tensor_4d(gctx, GGML_TYPE_F32, width, height, 1, 1);
@@ -1189,7 +1189,7 @@ StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
   for (size_t listIdx = 0; listIdx < imgListOfLists_.size(); listIdx++) {
     auto& imgList = imgListOfLists_[listIdx];
     for (size_t imgIdx = 0; imgIdx < imgList.size(); imgIdx++) {
-      allIndices.push_back({listIdx, imgIdx});
+      allIndices.push_back({.listIdx = listIdx, .imgIdx = imgIdx});
     }
   }
 

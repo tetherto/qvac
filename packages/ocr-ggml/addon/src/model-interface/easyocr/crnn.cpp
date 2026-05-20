@@ -115,7 +115,7 @@ LstmStep lstm_cell_step(
       ctx, ggml_mul(ctx, f_gate, c_prev), ggml_mul(ctx, i_gate, g_gate));
   // h = o * tanh(c)
   auto* h = ggml_mul(ctx, o_gate, ggml_tanh(ctx, c));
-  return {h, c};
+  return {.h = h, .c = c};
 }
 
 // Run one direction (forward or reverse) of LSTM over the whole [hidden, T]

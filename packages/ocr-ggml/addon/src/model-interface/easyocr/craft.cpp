@@ -8,9 +8,6 @@ namespace easyocr::ggml {
 
 namespace {
 
-using ::ggml_context;
-using ::ggml_tensor;
-
 inline ::ggml_tensor* relu(::ggml_context* ctx, ::ggml_tensor* x) {
   return ggml_relu(ctx, x);
 }

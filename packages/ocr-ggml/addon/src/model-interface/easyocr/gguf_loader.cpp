@@ -8,8 +8,8 @@ namespace easyocr::ggml {
 GgufLoader::GgufLoader(const std::string& path, bool load_tensor_data)
     : path_(path) {
   gguf_init_params params{
-      /* .no_alloc = */ !load_tensor_data,
-      /* .ctx      = */ &meta_ctx_,
+      .no_alloc = !load_tensor_data,
+      .ctx = &meta_ctx_,
   };
   gguf_ = gguf_init_from_file(path_.c_str(), params);
   if (gguf_ == nullptr && meta_ctx_ != nullptr) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <vector>
 
 #include <opencv2/core.hpp>
@@ -13,7 +14,7 @@ using easyocr::ggml::pipeline::fourPointTransform;
 using easyocr::ggml::pipeline::InferredText;
 using easyocr::ggml::pipeline::PipelineContext;
 
-enum class DecodingMethod { CTC, ATTENTION };
+enum class DecodingMethod : std::uint8_t { CTC, ATTENTION };
 
 struct StepDoctrDetectionOutput {
   PipelineContext context;

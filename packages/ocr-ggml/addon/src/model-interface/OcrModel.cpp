@@ -120,11 +120,11 @@ OcrModel::Output OcrModel::processImage(const Input& input) {
   cv::Mat img = decodeOrWrapImage(input);
 
   easyocr::ggml::pipeline::PipelineContext ctx{
-      /*origImg=*/img,
-      /*paragraph=*/input.paragraph,
-      /*rotationAngles=*/input.rotationAngles,
-      /*boxMarginMultiplier=*/input.boxMarginMultiplier,
-      /*initialResizeRatio=*/1.0F,
+      .origImg = img,
+      .paragraph = input.paragraph,
+      .rotationAngles = input.rotationAngles,
+      .boxMarginMultiplier = input.boxMarginMultiplier,
+      .initialResizeRatio = 1.0F,
   };
 
   auto tDetectStart = std::chrono::steady_clock::now();

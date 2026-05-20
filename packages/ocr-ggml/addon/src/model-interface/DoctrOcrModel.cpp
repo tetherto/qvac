@@ -82,11 +82,11 @@ DoctrOcrModel::Output DoctrOcrModel::processImage(const Input& input) {
     cv::Mat img = decodeOrWrapImageDoctr(input);
 
     doctr::ggml::pipeline::PipelineContext ctx{
-        /*origImg=*/img,
-        /*paragraph=*/false,
-        /*rotationAngles=*/std::nullopt,
-        /*boxMarginMultiplier=*/input.boxMarginMultiplier,
-        /*initialResizeRatio=*/1.0F,
+        .origImg = img,
+        .paragraph = false,
+        .rotationAngles = std::nullopt,
+        .boxMarginMultiplier = input.boxMarginMultiplier,
+        .initialResizeRatio = 1.0F,
     };
 
     const auto tDetectStart = std::chrono::steady_clock::now();

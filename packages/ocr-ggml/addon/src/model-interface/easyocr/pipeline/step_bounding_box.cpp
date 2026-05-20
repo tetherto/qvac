@@ -182,7 +182,7 @@ StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
           std::to_string(input.linkMap.rows));
 
   // Single-pass max-per-label: O(pixels) instead of O(N × pixels)
-  std::vector<float> maxPerLabel(nLabels_, 0.0f);
+  std::vector<float> maxPerLabel(nLabels_, 0.0F);
   {
     const int* labelsPtr = labels_.ptr<int>();
     const float* textPtr = input.textMap.ptr<float>();
@@ -246,7 +246,10 @@ StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
           " unaligned (imgResizeRatio=" + std::to_string(input.imgResizeRatio) +
           ")");
 
-  return {input.context, outputAlignedBoxes, outputUnalignedBoxes};
+  return {
+      .context = input.context,
+      .alignedBoxes = outputAlignedBoxes,
+      .unalignedBoxes = outputUnalignedBoxes};
 }
 
 std::array<cv::Point2f, 4>

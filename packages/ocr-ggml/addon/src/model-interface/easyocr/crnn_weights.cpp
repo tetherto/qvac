@@ -244,13 +244,13 @@ const std::vector<ConvSpec>& gen2_convs() {
   static const auto p = [] {
     const std::string base = "FeatureExtraction.ConvNet.";
     return std::vector<ConvSpec>{
-        {base + "0", ""},
-        {base + "3", ""},
-        {base + "6", ""},
-        {base + "8", ""},
-        {base + "11", base + "12"},
-        {base + "14", base + "15"},
-        {base + "18", ""},
+        {.conv_path = base + "0", .bn_path = ""},
+        {.conv_path = base + "3", .bn_path = ""},
+        {.conv_path = base + "6", .bn_path = ""},
+        {.conv_path = base + "8", .bn_path = ""},
+        {.conv_path = base + "11", .bn_path = base + "12"},
+        {.conv_path = base + "14", .bn_path = base + "15"},
+        {.conv_path = base + "18", .bn_path = ""},
     };
   }();
   return p;
@@ -312,9 +312,9 @@ void build_crnn_weights_impl(
 
   const size_t n_dst_estimate = convs.size() * 2 + verbatim.size() + 16;
   ggml_init_params ctx_params{
-      /* .mem_size   = */ ggml_tensor_overhead() * n_dst_estimate,
-      /* .mem_buffer = */ nullptr,
-      /* .no_alloc   = */ true,
+      .mem_size = ggml_tensor_overhead() * n_dst_estimate,
+      .mem_buffer = nullptr,
+      .no_alloc = true,
   };
   ctx_ = ggml_init(ctx_params);
   if (ctx_ == nullptr) {

@@ -28,39 +28,39 @@ struct ConvDef {
 
 constexpr ConvDef kConvInventory[] = {
     // basenet.slice1: 4 conv-BN pairs (idx 0+1, 3+4, 7+8, 10+11)
-    {"basenet.slice1.0", "basenet.slice1.1"},
-    {"basenet.slice1.3", "basenet.slice1.4"},
-    {"basenet.slice1.7", "basenet.slice1.8"},
-    {"basenet.slice1.10", "basenet.slice1.11"},
+    {.conv = "basenet.slice1.0", .bn = "basenet.slice1.1"},
+    {.conv = "basenet.slice1.3", .bn = "basenet.slice1.4"},
+    {.conv = "basenet.slice1.7", .bn = "basenet.slice1.8"},
+    {.conv = "basenet.slice1.10", .bn = "basenet.slice1.11"},
     // basenet.slice2: 2 conv-BN pairs
-    {"basenet.slice2.14", "basenet.slice2.15"},
-    {"basenet.slice2.17", "basenet.slice2.18"},
+    {.conv = "basenet.slice2.14", .bn = "basenet.slice2.15"},
+    {.conv = "basenet.slice2.17", .bn = "basenet.slice2.18"},
     // basenet.slice3: 3 conv-BN pairs
-    {"basenet.slice3.20", "basenet.slice3.21"},
-    {"basenet.slice3.24", "basenet.slice3.25"},
-    {"basenet.slice3.27", "basenet.slice3.28"},
+    {.conv = "basenet.slice3.20", .bn = "basenet.slice3.21"},
+    {.conv = "basenet.slice3.24", .bn = "basenet.slice3.25"},
+    {.conv = "basenet.slice3.27", .bn = "basenet.slice3.28"},
     // basenet.slice4: 3 conv-BN pairs
-    {"basenet.slice4.30", "basenet.slice4.31"},
-    {"basenet.slice4.34", "basenet.slice4.35"},
-    {"basenet.slice4.37", "basenet.slice4.38"},
+    {.conv = "basenet.slice4.30", .bn = "basenet.slice4.31"},
+    {.conv = "basenet.slice4.34", .bn = "basenet.slice4.35"},
+    {.conv = "basenet.slice4.37", .bn = "basenet.slice4.38"},
     // basenet.slice5: NO BN (raw fc6/fc7-as-conv)
-    {"basenet.slice5.1", ""},
-    {"basenet.slice5.2", ""},
+    {.conv = "basenet.slice5.1", .bn = ""},
+    {.conv = "basenet.slice5.2", .bn = ""},
     // upconv1..4: each double_conv has a 1x1 conv-BN and a 3x3 conv-BN
-    {"upconv1.conv.0", "upconv1.conv.1"},
-    {"upconv1.conv.3", "upconv1.conv.4"},
-    {"upconv2.conv.0", "upconv2.conv.1"},
-    {"upconv2.conv.3", "upconv2.conv.4"},
-    {"upconv3.conv.0", "upconv3.conv.1"},
-    {"upconv3.conv.3", "upconv3.conv.4"},
-    {"upconv4.conv.0", "upconv4.conv.1"},
-    {"upconv4.conv.3", "upconv4.conv.4"},
+    {.conv = "upconv1.conv.0", .bn = "upconv1.conv.1"},
+    {.conv = "upconv1.conv.3", .bn = "upconv1.conv.4"},
+    {.conv = "upconv2.conv.0", .bn = "upconv2.conv.1"},
+    {.conv = "upconv2.conv.3", .bn = "upconv2.conv.4"},
+    {.conv = "upconv3.conv.0", .bn = "upconv3.conv.1"},
+    {.conv = "upconv3.conv.3", .bn = "upconv3.conv.4"},
+    {.conv = "upconv4.conv.0", .bn = "upconv4.conv.1"},
+    {.conv = "upconv4.conv.3", .bn = "upconv4.conv.4"},
     // conv_cls: NO BN (5 raw convs interleaved with ReLU)
-    {"conv_cls.0", ""},
-    {"conv_cls.2", ""},
-    {"conv_cls.4", ""},
-    {"conv_cls.6", ""},
-    {"conv_cls.8", ""},
+    {.conv = "conv_cls.0", .bn = ""},
+    {.conv = "conv_cls.2", .bn = ""},
+    {.conv = "conv_cls.4", .bn = ""},
+    {.conv = "conv_cls.6", .bn = ""},
+    {.conv = "conv_cls.8", .bn = ""},
 };
 
 constexpr size_t kNumConvs = sizeof(kConvInventory) / sizeof(kConvInventory[0]);
@@ -128,9 +128,9 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
   // --- Step 1: declare every destination tensor in our own ctx --------------
   // We need 2 tensors per conv (W + b) and a small headroom margin.
   ggml_init_params ctx_params{
-      /* .mem_size   = */ ggml_tensor_overhead() * (kNumConvs * 2 + 16),
-      /* .mem_buffer = */ nullptr,
-      /* .no_alloc   = */ true,
+      .mem_size = ggml_tensor_overhead() * (kNumConvs * 2 + 16),
+      .mem_buffer = nullptr,
+      .no_alloc = true,
   };
   ctx_ = ggml_init(ctx_params);
   if (ctx_ == nullptr) {

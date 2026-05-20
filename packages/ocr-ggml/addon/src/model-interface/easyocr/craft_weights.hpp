@@ -36,8 +36,8 @@
 
 struct ggml_context;
 struct ggml_tensor;
-typedef struct ggml_backend* ggml_backend_t;
-typedef struct ggml_backend_buffer* ggml_backend_buffer_t;
+using ggml_backend_t = struct ggml_backend*;
+using ggml_backend_buffer_t = struct ggml_backend_buffer*;
 
 namespace easyocr::ggml {
 
@@ -57,18 +57,18 @@ public:
   CraftWeights(const CraftWeights&) = delete;
   CraftWeights& operator=(const CraftWeights&) = delete;
 
-  bool ok() const noexcept { return err_.empty(); }
-  const std::string& err() const noexcept { return err_; }
+  [[nodiscard]] bool ok() const noexcept { return err_.empty(); }
+  [[nodiscard]] const std::string& err() const noexcept { return err_; }
 
   // Returns the (folded) kernel tensor for the conv at `path`, or nullptr
   // if absent. `path` must NOT include a trailing ".weight" suffix.
-  ::ggml_tensor* w(const std::string& path) const noexcept;
+  [[nodiscard]] ::ggml_tensor* w(const std::string& path) const noexcept;
 
   // Returns the (folded) bias tensor for the conv at `path`, or nullptr.
-  ::ggml_tensor* b(const std::string& path) const noexcept;
+  [[nodiscard]] ::ggml_tensor* b(const std::string& path) const noexcept;
 
   // Diagnostic accessors.
-  int n_loaded() const noexcept;
+  [[nodiscard]] int n_loaded() const noexcept;
 
 private:
   void build_(const GgufLoader& loader, ggml_backend_t backend);
