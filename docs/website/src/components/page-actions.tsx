@@ -169,19 +169,13 @@ export function ViewOptions({
    */
   markdownUrl: string;
 }) {
-<<<<<<< HEAD
-  const items = useMemo(() => {
-    const fullMarkdownUrl =
-      typeof window !== 'undefined' ? new URL(markdownUrl, window.location.origin) : 'loading';
-    const q = `Read ${fullMarkdownUrl}, I want to ask questions about it.`;
-=======
-  const askAI = useAskAI();
-  // Same prompt used by the in-site assistant, ChatGPT and Claude entries so
-  // every "Ask AI" surface is seeded with the page's Markdown URL.
+  // Seeds the ChatGPT / Claude entries with the page's Markdown URL so the
+  // external assistants can read the current page directly. The in-site
+  // assistant (Inkeep) opens via `data-inkeep-modal-trigger="chat"` and does
+  // not currently support programmatic prompt seeding.
   const fullMarkdownUrl =
     typeof window !== 'undefined' ? new URL(markdownUrl, window.location.origin) : 'loading';
   const q = `Read ${fullMarkdownUrl}, I want to ask questions about it.`;
->>>>>>> 1ff70ca80 (doc: implement page actions bar)
 
   const items = useMemo(() => {
     return [
@@ -228,7 +222,7 @@ export function ViewOptions({
       <button
         type="button"
         aria-label="Ask our AI assistant"
-        onClick={() => askAI.openWith(q)}
+        data-inkeep-modal-trigger="chat"
         className={cn(
           buttonVariants({
             color: 'secondary',
@@ -238,20 +232,7 @@ export function ViewOptions({
         )}
       >
         <Sparkles className="size-3.5 text-fd-muted-foreground" />
-<<<<<<< HEAD
-        <span className="sr-only">Open</span>
-        <ChevronDown className="size-3.5 text-fd-muted-foreground" />
-      </PopoverTrigger>
-      <PopoverContent className="flex flex-col">
-        <PopoverClose asChild>
-          <button type="button" data-inkeep-modal-trigger="chat" className={cn(optionVariants())}>
-            <MessageSquare className="text-fd-muted-foreground" />
-            Ask our AI assistant
-          </button>
-        </PopoverClose>
-=======
       </button>
->>>>>>> 1ff70ca80 (doc: implement page actions bar)
 
       <Popover>
         <PopoverTrigger
@@ -270,7 +251,7 @@ export function ViewOptions({
           <PopoverClose asChild>
             <button
               type="button"
-              onClick={() => askAI.openWith(q)}
+              data-inkeep-modal-trigger="chat"
               className={cn(optionVariants())}
             >
               <MessageSquare className="text-fd-muted-foreground" />
