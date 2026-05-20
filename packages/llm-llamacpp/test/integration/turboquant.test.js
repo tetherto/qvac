@@ -7,19 +7,29 @@ const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
-// TurboQuant / PolarQuant KV-cache quantization) ships Vulkan
-// kernels only on the GPU side. Skip on Metal (darwin/iOS) and on platforms
-// where CI's GPU backend is OpenCL or LLVMpipe software Vulkan.
+// TurboQuant / PolarQuant KV-cache quantization (PR #133) ships Vulkan +
+// CPU kernels only. On Metal and OpenCL the addon now rejects TBQ cache
+// types at model-load time with a clean InvalidArgument (see
+// LlamaModel::tuneConfigMap in addon/src/model-interface/LlamaModel.cpp).
+// This test covers both legs:
+//   - Vulkan-capable host: inference must succeed end-to-end and the
+//     answer must mention Paris.
+//   - Metal-only host: model.load() must throw the addon's
+//     backend-not-supported error.
+// linux-arm64 in CI runs on LLVMpipe software Vulkan, which is neither
+// the Vulkan happy path (too slow / partial feature coverage) nor the
+// Metal/OpenCL reject path — skip it entirely.
 const platform = os.platform()
 const arch = os.arch()
-const isVulkanPlatform =
+const isVulkanHappyPath =
   (platform === 'linux' && arch === 'x64') ||
   (platform === 'android' && arch === 'arm64') ||
   platform === 'win32'
+const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
 
-const skipReason = isVulkanPlatform
+const skipReason = (isVulkanHappyPath || isMetalRejectPath)
   ? false
-  : `Vulkan-only test; ${platform}-${arch} uses Metal/OpenCL/LLVMpipe`
+  : `no clear TBQ assertion on ${platform}-${arch} (LLVMpipe Vulkan or unsupported)`
 
 const MODEL = {
   name: 'Qwen3-0.6B-Q8_0.gguf',
@@ -39,7 +49,11 @@ test('Qwen3-0.6B runs inference with tbq4_0 / pq4_0 KV cache', { timeout: 600_00
       device: 'gpu',
       gpu_layers: '999',
       ctx_size: '1024',
-      n_predict: '32',
+      // 512 is enough headroom for Qwen3's <think> CoT preamble plus the
+      // short factual answer. On Mali Vulkan with TBQ KV-cache the model
+      // produces a longer <think> opener, so a tight 32-token budget gets
+      // the model stuck mid-reasoning.
+      n_predict: '512',
       temp: '0',
       seed: '42',
       'cache-type-k': 'tbq4_0',
@@ -56,10 +70,23 @@ test('Qwen3-0.6B runs inference with tbq4_0 / pq4_0 KV cache', { timeout: 600_00
     specLogger.release()
   })
 
+  if (isMetalRejectPath) {
+    // The addon should refuse TBQ cache types on Metal before sched_reserve
+    // gets a chance to abort. We assert the rejection happens at load time
+    // with a recognizable message that mentions the cache-type and the
+    // offending backend.
+    await t.exception(
+      () => model.load(),
+      /(cache-type|TurboQuant|PolarQuant).*(Metal|not supported)/i,
+      'model.load() rejects tbq4_0/pq4_0 on Metal with a clear backend-not-supported error'
+    )
+    return
+  }
+
   await model.load()
 
   const response = await model.run([
-    { role: 'system', content: 'You are a geography tutor. Answer in one short sentence. /no_think' },
+    { role: 'system', content: 'You are a geography tutor. Answer briefly.' },
     { role: 'user', content: 'What is the capital of France?' }
   ])
 

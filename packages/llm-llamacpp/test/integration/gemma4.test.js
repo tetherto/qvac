@@ -230,6 +230,7 @@ test('Gemma 4 can describe an image', {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
     ctx_size: '8192',
+    'ubatch-size': '320',
     temp: '0',
     seed: '42',
     'reasoning-budget': '0',
