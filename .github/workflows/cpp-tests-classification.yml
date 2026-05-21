@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-build-host@2125b47a89f802cd2be028ba4265675f35705330
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -68,12 +68,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2125b47a89f802cd2be028ba4265675f35705330
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@2125b47a89f802cd2be028ba4265675f35705330
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -87,11 +87,11 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@2125b47a89f802cd2be028ba4265675f35705330
 
       - name: Setup Apple Clang
         if: ${{ matrix.platform == 'darwin' }}
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@2125b47a89f802cd2be028ba4265675f35705330
 
       - name: Install npm dependencies
         working-directory: ${{ env.WORKDIR }}

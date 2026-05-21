@@ -169,7 +169,7 @@ jobs:
 
       - name: Setup build host (Linux arm and macOS)
         if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
-        uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
+        uses: tetherto/qvac/.github/actions/setup-build-host@2125b47a89f802cd2be028ba4265675f35705330
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -177,7 +177,7 @@ jobs:
 
       - name: Setup LLVM (Linux arm and macOS)
         if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+        uses: tetherto/qvac/.github/actions/setup-llvm@2125b47a89f802cd2be028ba4265675f35705330
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
@@ -191,7 +191,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2125b47a89f802cd2be028ba4265675f35705330
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
@@ -200,7 +200,7 @@ jobs:
         run: echo "VCPKG_INSTALLATION_ROOT=$HOME\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@2125b47a89f802cd2be028ba4265675f35705330
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -214,14 +214,14 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@2125b47a89f802cd2be028ba4265675f35705330
 
       - name: Setup Apple Clang
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@2125b47a89f802cd2be028ba4265675f35705330
 
       - if: ${{ inputs.include-vulkan-sdk && (matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
         name: Setup Vulkan SDK (Linux ARM and MacOS)
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@2125b47a89f802cd2be028ba4265675f35705330
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -257,7 +257,7 @@ jobs:
 
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
-        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
+        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@2125b47a89f802cd2be028ba4265675f35705330
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -372,12 +372,12 @@ jobs:
           find prebuilds -maxdepth 1 -type d -print || true
 
       - name: Strip debug symbols
-        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@2125b47a89f802cd2be028ba4265675f35705330
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -395,7 +395,7 @@ jobs:
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: prebuilds
           path: prebuilds

@@ -136,7 +136,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -360,7 +360,7 @@ jobs:
           aws --version
 
       - name: Configure AWS credentials for S3 presign
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # 6.1.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -541,7 +541,7 @@ jobs:
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # 4.0.1
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
@@ -834,7 +834,7 @@ jobs:
           fi
 
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # 6.1.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -1403,7 +1403,7 @@ jobs:
 
       - name: Refresh AWS credentials for log download
         if: always() && steps.schedule_run.outputs.run_arn
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # 6.1.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -1533,7 +1533,7 @@ jobs:
 
       - name: Upload Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_arn
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: devicefarm-logs-vla-${{ matrix.platform }}
           path: devicefarm-logs/
@@ -1587,7 +1587,7 @@ jobs:
 
       - name: Upload mobile perf-report
         if: always() && steps.schedule_run.outputs.run_arn
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: vla-perf-mobile-${{ matrix.platform }}
           path: mobile-perf/

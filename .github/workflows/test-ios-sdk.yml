@@ -140,7 +140,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -430,7 +430,7 @@ jobs:
           fi
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: consumer-ipa-ios
           path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
@@ -459,7 +459,7 @@ jobs:
           path: ./ipa
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # 6.1.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -615,7 +615,7 @@ jobs:
           echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload run ARN
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: device-farm-arn-ios-${{ needs.build.outputs.runId }}-${{ steps.save-arn.outputs.safe-name }}
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
@@ -642,7 +642,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -761,7 +761,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: results-ios
           path: ${{ inputs.working-directory }}/reports/
@@ -769,7 +769,7 @@ jobs:
 
       - name: Download baseline (best-effort)
         if: always() && github.event.pull_request.base.ref != ''
-        uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
         continue-on-error: true
         with:
           workflow: test-ios-sdk.yml
@@ -835,7 +835,7 @@ jobs:
 
       - name: Upload report section
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: report-section-ios
           path: |
@@ -846,7 +846,7 @@ jobs:
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: baseline-ios
           path: ${{ inputs.working-directory }}/reports/results-*.json
@@ -862,7 +862,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # 6.1.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -933,7 +933,7 @@ jobs:
 
       - name: Upload Device Farm logs
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: device-farm-logs-ios-${{ needs.build.outputs.runId }}
           path: ./device-farm-logs/
