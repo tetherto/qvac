@@ -51,6 +51,7 @@ test("sdcppConfigSchema: accepts valid full config", (t) => {
     vae_on_cpu: false,
     vae_tiling: true,
     flash_attn: true,
+    diffusion_fa: true,
     upscaler: {
       type: "esrgan",
       tile_size: 128,
@@ -77,6 +78,22 @@ test("sdcppConfigSchema: rejects invalid device", (t) => {
 test("sdcppConfigSchema: rejects invalid prediction type", (t) => {
   const result = sdcppConfigSchema.safeParse({ prediction: "unknown" });
   t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: rejects removed flux_flow prediction value", (t) => {
+  const result = sdcppConfigSchema.safeParse({ prediction: "flux_flow" });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: rejects non-boolean diffusion_fa", (t) => {
+  const result = sdcppConfigSchema.safeParse({ diffusion_fa: "yes" });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: preserves diffusion_fa: false through parsing", (t) => {
+  const result = sdcppConfigSchema.safeParse({ diffusion_fa: false });
+  t.is(result.success, true);
+  t.is(result.data?.diffusion_fa, false);
 });
 
 test("sdcppConfigSchema: rejects invalid type", (t) => {

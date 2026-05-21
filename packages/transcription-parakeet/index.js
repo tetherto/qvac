@@ -48,7 +48,21 @@ class TranscriptionParakeet {
    * @param {number} [opts.config.parakeetConfig.streamingRightLookaheadMs] - Future
    *   audio the encoder waits for before emitting each chunk (default 2000 --
    *   parakeet-cpp's own). Adds directly to per-segment latency floor.
-   *   ASR sessions only; Sortformer ignores it.
+   * @param {string} [opts.config.parakeetConfig.backendsDir] - Directory the
+   *   native addon scans for dynamically-loaded ggml backend libraries
+   *   (`libqvac-speech-ggml-{vulkan,opencl,cpu-*}.so`). Defaults to
+   *   the package's own `prebuilds/` folder, which is where cmake-bare
+   *   installs the backend .so files alongside the .bare module on
+   *   Android / Linux. Pass an explicit value when the host bundles
+   *   the prebuilds elsewhere (e.g. an Android APK's `nativeLibraryDir`).
+   *   No-op on Apple targets (statically linked).
+   * @param {string} [opts.config.parakeetConfig.openclCacheDir] - Persistent
+   *   directory for ggml-opencl's `clCreateProgramWithBinary` cache.
+   *   Sets `$GGML_OPENCL_CACHE_DIR` before the first backend init so
+   *   subsequent process starts skip the cold `clBuildProgram` cost.
+   *   Android-only; ignored on every other platform. Strongly
+   *   recommended in production -- pass the host app's cache dir
+   *   (e.g. Android `Context.getCacheDir()`).
    * @param {Object} [opts.logger=null] - Optional structured logger
    * @param {boolean} [opts.exclusiveRun=true] - Whether to run exclusively
    */
@@ -111,7 +125,27 @@ class TranscriptionParakeet {
       streamingEmitPartials: this.params.streamingEmitPartials !== false,
       streamingEnergyVad: this.params.streamingEnergyVad === true,
       streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
-      streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1
+      streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1,
+      // AOSC (v2.1+ Sortformer only). parakeet-cpp ignores these on
+      // non-Sortformer engines and on v1/v2 GGUFs. Defaults mirror the
+      // C++ ParakeetConfig defaults; passing the field explicitly (vs
+      // letting C++ pick its own default) ensures user overrides at
+      // the JS layer reach the native engine instead of being silently
+      // discarded by _buildConfigurationParams.
+      streamingSpkCacheEnable: this.params.streamingSpkCacheEnable !== false,
+      streamingSpkCacheLen: this.params.streamingSpkCacheLen ?? 188,
+      streamingFifoLen: this.params.streamingFifoLen ?? 188,
+      streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs ?? 80,
+      streamingChunkRightContextMs: this.params.streamingChunkRightContextMs ?? 560,
+      streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod ?? 144,
+      // Forwarded as-is; ParakeetInterface fills in a per-package
+      // default for `backendsDir` (`path.join(__dirname, 'prebuilds')`)
+      // when the host doesn't pass one, so explicit `undefined`
+      // values here are intentional (they keep the default-resolution
+      // path on the JS side). `openclCacheDir` has no JS-side default;
+      // the addon is a no-op when it's empty.
+      backendsDir: this.params.backendsDir,
+      openclCacheDir: this.params.openclCacheDir
     }
   }
 

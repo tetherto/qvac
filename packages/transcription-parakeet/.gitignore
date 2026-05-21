@@ -1,5 +1,6 @@
 // Create a .gitignore file
 models/
+models
 build/
 prebuilds/
 node_modules/

@@ -802,6 +802,19 @@ const MODEL_CONFIGS = {
     mobileFile: 'sortformer-4spk-v1.q4_0.gguf',
     minSize: 50 * 1024 * 1024,
     url: null
+  },
+  // Streaming-default Sortformer (v2.1 + NeMo-port AOSC). The AOSC
+  // speaker cache anchors slot identity across silence and re-entry,
+  // fixing the per-chunk drift v1 shows when two voices have been seen
+  // in the rolling-history window. Auto-enabled by parakeet-cpp when the
+  // GGUF carries `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"`.
+  // The GGUF needs to be staged (npm run setup-models / QVAC_TEST_GGUF_DIR)
+  // before sortformer-streaming tests can run; otherwise they skip.
+  sortformerStreaming: {
+    file: 'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
+    mobileFile: 'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf',
+    minSize: 50 * 1024 * 1024,
+    url: null
   }
 }
 
