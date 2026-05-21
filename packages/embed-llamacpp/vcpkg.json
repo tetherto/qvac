@@ -17,6 +17,7 @@
       "version>=": "1.4.4#3"
     }
   ],
+  "default-features": ["kleidiai"],  
   "features": {
     "tests": {
       "description": "Build and run unit tests",
@@ -33,6 +34,19 @@
           "features": [
             "force-profiler"
           ]
+        }
+      ]
+    },
+    "kleidiai": {
+      "description": "Enable ARM KleidiAI optimized kernels for Android ARM64",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "version>=": "8189.0.2#1",
+          "features": [
+            "kleidiai"
+          ],
+          "platform": "android & arm64"
         }
       ]
     }
