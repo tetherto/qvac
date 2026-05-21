@@ -1,11 +1,4 @@
 {
-  "perf_tests": [
-    "runImageElephantTest",
-    "runImageFruitPlateTest",
-    "runImageHighResAuroraTest",
-    "runBitnetTest",
-    "runToolCallingTest"
-  ],
   "ios": {
     "heavy1": ["runFinetuningPauseResumeTest"],
     "heavy2": ["runToolCallingTest"],

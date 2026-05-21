@@ -113,6 +113,10 @@ inputs:
     description: "Restrict to perf tests only"
     required: false
     default: "false"
+  perf-test-regex:
+    description: "ERE regex matching perf-emitting test names (used with qvac-perf-only). Groups with no matches are skipped."
+    required: false
+    default: ""
 
   # Custom artifact pulls
   after-hook-pulls:
@@ -289,6 +293,7 @@ runs:
         QVAC_PERF_RUNS: ${{ inputs.qvac-perf-runs }}
         QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac-perf-warmup-runs }}
         QVAC_PERF_ONLY: ${{ inputs.qvac-perf-only }}
+        PERF_TEST_REGEX_INPUT: ${{ inputs.perf-test-regex }}
         AFTER_PULLS: ${{ inputs.after-hook-pulls }}
         AFTER_SNIPPET: ${{ inputs.wdio-after-snippet }}
         EXTRA_PRE_TEST: ${{ inputs.extra-pre-test-commands }}
@@ -383,22 +388,12 @@ runs:
           echo "Encoded perf-extract.js ($(wc -c < "$PERF_EXTRACT_PATH" | tr -d ' ')b)"
         fi
 
-        # perf-only filter: when QVAC_PERF_ONLY=true, read the
-        # "perf_tests" array from test-groups.json (if present) and
-        # intersect each group's grep with it. Groups whose
-        # intersection is empty are skipped entirely.
         PERF_TEST_REGEX=""
-        if [ "$QVAC_PERF_ONLY" = "true" ]; then
-          GROUPS_FILE="addon/${ADDON_WORKDIR}/test/mobile/test-groups.json"
-          if [ -f "$GROUPS_FILE" ]; then
-            PERF_TESTS=$(jq -r '.perf_tests // [] | join("|")' "$GROUPS_FILE")
-            if [ -n "$PERF_TESTS" ]; then
-              PERF_TEST_REGEX="^(${PERF_TESTS})$"
-              echo "perf-only mode: filtering groups with regex from test-groups.json perf_tests: $PERF_TEST_REGEX"
-            else
-              echo "::warning::qvac_perf_only=true but test-groups.json has no perf_tests array — running all tests"
-            fi
-          fi
+        if [ "$QVAC_PERF_ONLY" = "true" ] && [ -n "$PERF_TEST_REGEX_INPUT" ]; then
+          PERF_TEST_REGEX="$PERF_TEST_REGEX_INPUT"
+          echo "perf-only mode: filtering groups with regex: $PERF_TEST_REGEX"
+        elif [ "$QVAC_PERF_ONLY" = "true" ]; then
+          echo "::warning::qvac_perf_only=true but no perf-test-regex supplied — running all tests"
         fi
 
         filter_perf() {
