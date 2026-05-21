@@ -17,7 +17,6 @@ export interface ResolveBareRuntimeOptions {
   projectRoot: string;
   explicitVersion?: string;
   explicitSource?: "flag" | "config";
-  explicitConfigPath?: string;
 }
 
 export type BareRuntimeResolution =
@@ -58,49 +57,30 @@ export interface CheckAbiOptions {
   runtime: BareRuntimeResolution;
 }
 
-const RUNTIME_PACKAGE_LOOKUP: Array<{
+const RUNTIME_PACKAGES: Array<{
   source: BareRuntime["source"];
   packageName: string;
-  fields: string[];
 }> = [
-  {
-    source: "bare-runtime",
-    packageName: "bare-runtime",
-    fields: ["version"],
-  },
-  {
-    source: "bare",
-    packageName: "bare",
-    fields: ["version"],
-  },
+  { source: "bare-runtime", packageName: "bare-runtime" },
+  { source: "bare", packageName: "bare" },
 ];
 
 export async function resolveBareRuntime(
   options: ResolveBareRuntimeOptions,
 ): Promise<BareRuntimeResolution> {
   if (options.explicitVersion) {
-    const cleaned = normalizeVersion(options.explicitVersion);
-    if (cleaned) {
-      return {
-        resolved: true,
-        runtime: { version: cleaned, source: options.explicitSource ?? "flag" },
-      };
-    }
-    const sourceLabel =
-      options.explicitSource === "config"
-        ? `\`bareRuntimeVersion\` in ${formatConfigLabel(options.projectRoot, options.explicitConfigPath)}`
-        : "--bare-runtime-version";
+    // Caller (verifyBundle) pre-validates explicitVersion via normalizeVersion.
     return {
-      resolved: false,
-      error: {
-        reason: `${sourceLabel} "${options.explicitVersion}" is not a valid semver`,
-        triedPaths: [],
+      resolved: true,
+      runtime: {
+        version: normalizeVersion(options.explicitVersion)!,
+        source: options.explicitSource ?? "flag",
       },
     };
   }
 
   const tried: string[] = [];
-  for (const candidate of RUNTIME_PACKAGE_LOOKUP) {
+  for (const candidate of RUNTIME_PACKAGES) {
     const pkgJsonPath = path.join(
       options.projectRoot,
       "node_modules",
@@ -108,7 +88,7 @@ export async function resolveBareRuntime(
       "package.json",
     );
     tried.push(pkgJsonPath);
-    const version = await tryReadRuntimeVersion(pkgJsonPath, candidate.fields);
+    const version = await tryReadRuntimeVersion(pkgJsonPath);
     if (version) {
       return {
         resolved: true,
@@ -128,7 +108,6 @@ export async function resolveBareRuntime(
 
 async function tryReadRuntimeVersion(
   pkgJsonPath: string,
-  fields: string[],
 ): Promise<string | null> {
   let raw: string;
   try {
@@ -145,15 +124,8 @@ async function tryReadRuntimeVersion(
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return null;
   }
-  const record = parsed as Record<string, unknown>;
-  for (const field of fields) {
-    const value = record[field];
-    if (typeof value === "string") {
-      const cleaned = normalizeVersion(value);
-      if (cleaned) return cleaned;
-    }
-  }
-  return null;
+  const version = (parsed as Record<string, unknown>)["version"];
+  return typeof version === "string" ? normalizeVersion(version) : null;
 }
 
 export function normalizeVersion(value: string): string | null {
@@ -209,7 +181,7 @@ export function checkAbi(options: CheckAbiOptions): AbiIssue[] {
       message:
         `${runtime.error.reason}. ABI checks skipped for ${checkable.length} ` +
         `addon${checkable.length === 1 ? "" : "s"}. ` +
-        "Pass --bare-runtime-version <semver> to enable strict ABI verification.",
+        "Pass bareRuntimeVersion to enable strict ABI verification.",
       triedPaths: runtime.error.triedPaths,
     });
     return issues;

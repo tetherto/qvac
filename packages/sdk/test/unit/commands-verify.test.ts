@@ -536,7 +536,7 @@ describe('checkPrebuilds', () => {
 })
 
 describe('resolveBareRuntime', () => {
-  it('uses the explicit --bare-runtime-version when provided', async () => {
+  it('uses the explicit bareRuntimeVersion when provided', async () => {
     await withTempDir(async (dir) => {
       const result = await resolveBareRuntime({
         projectRoot: dir,
@@ -547,16 +547,6 @@ describe('resolveBareRuntime', () => {
         assert.equal(result.runtime.version, '1.15.2')
         assert.equal(result.runtime.source, 'flag')
       }
-    })
-  })
-
-  it('rejects a malformed explicit version', async () => {
-    await withTempDir(async (dir) => {
-      const result = await resolveBareRuntime({
-        projectRoot: dir,
-        explicitVersion: 'not-a-version'
-      })
-      assert.equal(result.resolved, false)
     })
   })
 
@@ -906,7 +896,7 @@ describe('verifyBundle orchestrator', () => {
     })
   })
 
-  it('invalid --bare-runtime-version does not short-circuit prebuild checks', async () => {
+  it('invalid bareRuntimeVersion does not short-circuit prebuild checks', async () => {
     await withTempDir(async (dir) => {
       writePackageJson(dir, 'node_modules/bare-os', {
         name: 'bare-os',
@@ -927,7 +917,7 @@ describe('verifyBundle orchestrator', () => {
       assert.equal(
         result.issues.some((i) => i.code === 'missing-prebuild'),
         true,
-        'prebuild walk must still surface missing prebuilds when --bare-runtime-version is malformed'
+        'prebuild walk must still surface missing prebuilds when bareRuntimeVersion is malformed'
       )
       assert.equal(result.runtime, null)
     })
@@ -981,7 +971,7 @@ describe('verifyBundle config source', () => {
     })
   })
 
-  it('--bare-runtime-version overrides config bareRuntimeVersion', async () => {
+  it('explicit bareRuntimeVersion overrides config bareRuntimeVersion', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
         name: 'bare-os',
@@ -1005,7 +995,7 @@ describe('verifyBundle config source', () => {
     })
   })
 
-  it('--config <path> loads a non-default config location', async () => {
+  it('configPath option loads a non-default config location', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
         name: 'bare-os',
@@ -1055,7 +1045,7 @@ describe('verifyBundle config source', () => {
     })
   })
 
-  it('includes the explicit --config path in invalid-runtime-version messages', async () => {
+  it('includes the explicit configPath in invalid-runtime-version messages', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
         name: 'bare-os',

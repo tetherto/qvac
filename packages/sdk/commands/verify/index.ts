@@ -295,9 +295,6 @@ export async function verifyBundle (
     } else if (configRuntimeVersion !== undefined) {
       runtimeOptions.explicitVersion = configRuntimeVersion
       runtimeOptions.explicitSource = 'config'
-      if (resolvedConfigPath !== null) {
-        runtimeOptions.explicitConfigPath = resolvedConfigPath
-      }
     }
     runtime = await resolveBareRuntime(runtimeOptions)
     issues.push(...checkAbi({ addons, runtime }))
