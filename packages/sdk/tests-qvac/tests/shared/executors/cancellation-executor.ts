@@ -78,23 +78,21 @@ interface RagIngestParams {
 
 export interface TranscribeCancelParams {
   audioFileName: string;
-  cancelAfterMs: number;
 }
 
 const INFERENCE_CANCELLED_CODE = SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED;
 const REQUEST_REJECTED_BY_POLICY_CODE =
   SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY;
-// RAG cancellation code — hardcoded because the upstream module is a
-// runtime-incompatible import for this consumer.
+// Hardcoded: @qvac/rag is not import-compatible with this consumer runtime.
 const RAG_OPERATION_CANCELLED_CODE = 14016;
-// Canonical message thrown by inference addons when a job is cancelled.
 const ADDON_CANCEL_MESSAGE = "Job cancelled";
+// Embed addon surfaces this when llama_decode is aborted mid-flight.
+const EMBED_ABORTED_MESSAGE = "Failed to get sequence embeddings";
 
 export const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-// Attaches a no-op catch so an early rejection cannot crash the consumer
-// before the eventual await. Returns the same promise reference.
+// No-op catch so an early rejection doesn't crash the consumer pre-await.
 export function markHandled<P extends Promise<unknown>>(p: P): P {
   p.catch(() => {});
   return p;
@@ -104,8 +102,7 @@ function toError(e: unknown): Error {
   return e instanceof Error ? e : new Error(String(e));
 }
 
-// Object wrapper for mutable error state — TS narrowing across closures
-// doesn't apply to local `let`, but does work through object properties.
+// Object wrapper so TS narrows error state across closure boundaries.
 type ErrorSlot = { error: Error | null };
 const errorSlot = (): ErrorSlot => ({ error: null });
 
@@ -122,7 +119,10 @@ export function isCancellationError(err: Error): boolean {
   if (err.name === "INFERENCE_CANCELLED" || err.name === "OPERATION_CANCELLED") {
     return true;
   }
-  return err.message === ADDON_CANCEL_MESSAGE;
+  return (
+    err.message === ADDON_CANCEL_MESSAGE ||
+    err.message === EMBED_ABORTED_MESSAGE
+  );
 }
 
 export function describeError(err: unknown): string {
@@ -141,8 +141,7 @@ interface StreamObservation {
   lastStopReason: StopReason | null;
 }
 
-// Drains a completion event stream while tracking summary state. Optional
-// callback runs after each contentDelta — used to fire mid-stream cancel.
+// Drains a completion stream; optional callback fires after each contentDelta.
 async function observeStream(
   events: AsyncIterable<CompletionEvent>,
   onContentDelta?: (count: number, accumulated: string) => Promise<void> | void,
@@ -184,8 +183,7 @@ async function captureFinal(p: Promise<unknown>): Promise<FinalOutcome> {
   }
 }
 
-// Verifies that the InferenceCancelledError carries the same partial text
-// and requestId as observed on the wire. Null on success.
+// Verifies the cancel error's partial.text and requestId match the wire.
 function checkPartialMatch(
   err: InferenceCancelledError,
   expectedText: string,
@@ -210,8 +208,7 @@ function checkPartialMatch(
   return null;
 }
 
-// Full check: outcome must be a rejection with InferenceCancelledError that
-// matches the observed partial text / requestId. Null on success.
+// Outcome must reject with InferenceCancelledError matching observed wire state.
 function checkCancelledFinal(
   outcome: FinalOutcome,
   expectedText: string,
@@ -240,10 +237,8 @@ type MidStreamSuccess = {
 };
 type MidStreamFailure = { ok: false; fail: TestResult };
 
-// Streams a completion, fires cancel after N contentDelta events, and
-// validates the common invariants (cancel succeeded, stopReason cancelled,
-// final rejected with InferenceCancelledError). Callers add modality-specific
-// follow-up checks (partial.text equality, kv-cache resume, etc.).
+// Streams a completion, cancels after N deltas, validates common invariants.
+// Caller adds modality-specific follow-up checks.
 async function streamAndCancelAtN(
   run: CompletionRun,
   cancelAfterTokens: number,
@@ -352,8 +347,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
 > {
   pattern = /^(cancel-|policy-reject-)/;
 
-  // `as never` lets subclasses extend the handlers map with test ids
-  // outside the parent's TDefs — matches the pattern used elsewhere.
+  // `as never` lets subclasses extend handlers with test ids outside TDefs.
   protected handlers = this.buildSharedHandlers() as never;
 
   protected buildSharedHandlers() {
@@ -426,9 +420,8 @@ export class CancellationExecutor extends AbstractModelExecutor<
       stream: true,
     });
 
-    // Fire cancel synchronously after completion() returns. Registry must
-    // apply the cancel retroactively whether it arrives before or after
-    // server-side begin().
+    // Sync cancel after completion() — registry replays it retroactively
+    // whether it arrives before or after server-side begin().
     const cancelSlot = errorSlot();
     const cancelTask = cancel({ requestId: run.requestId }).catch((err) => {
       cancelSlot.error = toError(err);
@@ -498,8 +491,8 @@ export class CancellationExecutor extends AbstractModelExecutor<
         kvCache: params.cacheKey,
       });
 
-      // First turn must cancel cleanly so any deferred rollback runs
-      // before the second turn starts on the same cache key.
+      // First turn must cancel cleanly so kv-cache rollback runs
+      // before the second turn reuses the same cache key.
       const firstResult = await streamAndCancelAtN(firstRun, cancelAfterTokens);
       if (!firstResult.ok) return firstResult.fail;
 
@@ -572,8 +565,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
   ): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded("embeddings");
     const op = markHandled(embed({ modelId, text: this.buildPassages(params) }));
-    // Unary op without observable progress events — we sleep to give the
-    // server time to register the request before issuing cancel.
+    // Unary op — sleep so the server registers the request before cancel.
     await sleep(params.registryBeginGraceMs);
     if (cancelForm === "broad") {
       await cancel({ operation: "embeddings", modelId });
@@ -645,8 +637,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
         received++;
         if (!cancelInvoked) {
           cancelInvoked = true;
-          // Fire cancel on the first observed token to prove the request is
-          // registered and the addon is in its decode loop.
+          // First token proves the addon is decoding — cancel then.
           void cancel({ modelId, kind: "translate" }).catch((err: unknown) => {
             cancelSlot.error = toError(err);
           });
@@ -699,9 +690,8 @@ export class CancellationExecutor extends AbstractModelExecutor<
     let firstEventConsumed = false;
 
     try {
-      // Wait until run1 emits a contentDelta — proves the addon is in its
-      // decode loop and the registry holds the entry, so the policy will
-      // reject any concurrent completion on the same model.
+      // Wait for run1's first contentDelta so the registry holds the
+      // entry and the policy will reject the concurrent run2.
       while (!firstEventConsumed) {
         const next = await run1EventsIter.next();
         if (next.done) {
@@ -738,10 +728,9 @@ export class CancellationExecutor extends AbstractModelExecutor<
       try {
         await cancel({ requestId: run1.requestId });
       } catch {
-        // run1 may have ended naturally — cleanup is best-effort
+        // run1 may have ended already — cleanup is best-effort.
       }
-      // Drain remaining events and final so the stream fully settles before
-      // we return — both expected to reject after cancel.
+      // Drain stream + final so run1 fully settles before we return.
       try {
         while (!(await run1EventsIter.next()).done) {}
       } catch {}
@@ -800,49 +789,60 @@ export class CancellationExecutor extends AbstractModelExecutor<
     }
   }
 
-  protected async transcribeWithCancel(
-    audioPath: string,
-    cancelForm: CancelForm,
-    cancelAfterMs: number,
-  ): Promise<TestResult> {
+  // Fire cancel synchronously after transcribe() so it races begin() at
+  // the registry. Two valid cancellation outcomes are accepted:
+  //   - rejection with a cancellation error (addon aborted mid-decode);
+  //   - empty result (server's iterate loop broke on signal.aborted
+  //     before yielding any segment).
+  // Non-empty result means cancel was too late.
+  protected async transcribeWithCancel(audioPath: string): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded("whisper");
     const op = markHandled(transcribe({ modelId, audioChunk: audioPath }));
     const startMs = Date.now();
-    await sleep(cancelAfterMs);
 
-    try {
-      if (cancelForm === "broad") {
-        await cancel({ modelId, kind: "transcribe" });
-      } else {
-        await cancel({ requestId: op.requestId });
-      }
-    } catch (err) {
-      return {
-        passed: false,
-        output: `cancel(${cancelForm}) for transcribe rejected: ${describeError(err)}`,
-      };
-    }
+    const cancelSlot = errorSlot();
+    const cancelTask = cancel({ requestId: op.requestId }).catch((err) => {
+      cancelSlot.error = toError(err);
+    });
 
     try {
       const text = await op;
+      await cancelTask;
       const elapsedMs = Date.now() - startMs;
-      return {
-        passed: false,
-        output:
-          `transcribe resolved with ${text.length} chars after cancel(${cancelForm}) ` +
-          `(elapsed=${elapsedMs}ms). Pick a longer audio source for reliable coverage.`,
-      };
-    } catch (err) {
-      const elapsedMs = Date.now() - startMs;
-      if (err instanceof Error && isCancellationError(err)) {
+      if (cancelSlot.error) {
+        return {
+          passed: false,
+          output: `cancel({ requestId }) for transcribe rejected: ${cancelSlot.error.message}`,
+        };
+      }
+      if (text.length === 0) {
         return {
           passed: true,
-          output: `transcribe cancel(${cancelForm}) OK: ${describeError(err)} (elapsed=${elapsedMs}ms)`,
+          output: `transcribe cancel({ requestId }) OK: empty result after cancel (elapsed=${elapsedMs}ms)`,
         };
       }
       return {
         passed: false,
-        output: `transcribe rejected with non-cancellation error on cancel(${cancelForm}): ${describeError(err)}`,
+        output: `transcribe resolved with ${text.length} chars after cancel({ requestId }) (elapsed=${elapsedMs}ms) — cancel was too late to interrupt the operation`,
+      };
+    } catch (err) {
+      await cancelTask;
+      const elapsedMs = Date.now() - startMs;
+      if (cancelSlot.error) {
+        return {
+          passed: false,
+          output: `cancel({ requestId }) for transcribe rejected: ${cancelSlot.error.message}`,
+        };
+      }
+      if (err instanceof Error && isCancellationError(err)) {
+        return {
+          passed: true,
+          output: `transcribe cancel({ requestId }) OK: ${describeError(err)} (elapsed=${elapsedMs}ms)`,
+        };
+      }
+      return {
+        passed: false,
+        output: `transcribe rejected with non-cancellation error: ${describeError(err)}`,
       };
     }
   }

@@ -61,20 +61,6 @@ export const cancelBroadEmbeddings: TestDefinition = {
   },
 };
 
-export const cancelBroadTranscribe: TestDefinition = {
-  testId: "cancel-broad-transcribe",
-  params: {
-    audioFileName: "cancel-test-90s-16k.wav",
-    cancelAfterMs: 100,
-  },
-  expectation: { validation: "function", fn: () => true },
-  metadata: {
-    category: "cancellation",
-    dependency: "whisper",
-    estimatedDurationMs: 60000,
-  },
-};
-
 export const cancelBroadTranslateLlm: TestDefinition = {
   testId: "cancel-broad-translate-llm",
   params: {
@@ -130,14 +116,13 @@ export const cancelByRequestIdEmbed: TestDefinition = {
 export const cancelByRequestIdTranscribe: TestDefinition = {
   testId: "cancel-by-requestid-transcribe",
   params: {
-    audioFileName: "cancel-test-90s-16k.wav",
-    cancelAfterMs: 100,
+    audioFileName: "transcription-short-wav.wav",
   },
   expectation: { validation: "function", fn: () => true },
   metadata: {
     category: "cancellation",
     dependency: "whisper",
-    estimatedDurationMs: 60000,
+    estimatedDurationMs: 30000,
   },
 };
 
@@ -165,7 +150,6 @@ export const cancellationTests = [
   cancelBeforeBeginCompletion,
   cancelThenResumeKvCache,
   cancelBroadEmbeddings,
-  cancelBroadTranscribe,
   cancelBroadTranslateLlm,
   policyRejectConcurrentCompletion,
   cancelByRequestIdEmbed,

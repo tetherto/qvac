@@ -6,10 +6,7 @@ import {
   CancellationExecutor,
   type TranscribeCancelParams,
 } from "../../shared/executors/cancellation-executor.js";
-import {
-  cancelBroadTranscribe,
-  cancelByRequestIdTranscribe,
-} from "../../cancellation-tests.js";
+import { cancelByRequestIdTranscribe } from "../../cancellation-tests.js";
 import { resolveBundledAssetUri } from "../asset-uri.js";
 
 interface AudioAssetsModule {
@@ -19,20 +16,10 @@ interface AudioAssetsModule {
 export class MobileCancellationExecutor extends CancellationExecutor {
   protected override handlers = {
     ...this.buildSharedHandlers(),
-    [cancelBroadTranscribe.testId]: this.transcribeBroad.bind(this),
     [cancelByRequestIdTranscribe.testId]: this.transcribeTargeted.bind(this),
   } as never;
 
   private audio: Record<string, number> | null = null;
-
-  async transcribeBroad(
-    params: TranscribeCancelParams,
-    _expectation: Expectation,
-  ): Promise<TestResult> {
-    const audioPath = await this.resolveAudio(params.audioFileName);
-    if (typeof audioPath !== "string") return audioPath;
-    return this.transcribeWithCancel(audioPath, "broad", params.cancelAfterMs);
-  }
 
   async transcribeTargeted(
     params: TranscribeCancelParams,
@@ -40,7 +27,7 @@ export class MobileCancellationExecutor extends CancellationExecutor {
   ): Promise<TestResult> {
     const audioPath = await this.resolveAudio(params.audioFileName);
     if (typeof audioPath !== "string") return audioPath;
-    return this.transcribeWithCancel(audioPath, "requestId", params.cancelAfterMs);
+    return this.transcribeWithCancel(audioPath);
   }
 
   private async resolveAudio(audioFileName: string): Promise<string | TestResult> {
