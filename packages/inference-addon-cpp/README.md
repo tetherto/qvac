@@ -354,3 +354,5 @@ Production addons built on this library:
 This project is licensed under the Apache-2.0 License – see the [LICENSE](LICENSE) file for details.
 
 *For questions or issues, please open an issue on the GitHub repository.*
+
+<!-- qvac-19143: throwaway test commit to validate the verified-only label gate. Will be reverted. -->
