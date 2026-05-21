@@ -81,9 +81,11 @@ test('FLUX2-klein img2img — generates 1024×1024 output on GPU without OOM', {
       threads: 4,
       device: 'gpu',
       prediction: 'flux2_flow',
-      diffusion_fa: true
+      diffusion_fa: true,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   const images = []

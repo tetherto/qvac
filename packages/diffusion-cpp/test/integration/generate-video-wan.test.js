@@ -141,9 +141,11 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
         device: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
         diffusion_fa: true,
         offload_to_cpu: true,
-        vae_tiling: true
+        vae_tiling: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     let avi = null
