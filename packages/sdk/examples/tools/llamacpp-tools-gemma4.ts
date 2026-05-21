@@ -19,16 +19,12 @@ import {
   completion,
   loadModel,
   unloadModel,
+  GEMMA4_2B_MULTIMODAL_Q4_K_M,
   type ToolCall,
 } from "@qvac/sdk";
 import { tools, mockExecute } from "./shared";
 
-// bartowski's pack tags <eos> as the EOG token (matching the base tokenizer),
-// ensuring generation stops correctly; unsloth's variant maps it differently.
-const GEMMA4_HF =
-  "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf";
-
-const modelSrc = process.argv[2] ?? GEMMA4_HF;
+const modelSrc = process.argv[2] ?? GEMMA4_2B_MULTIMODAL_Q4_K_M;
 
 let modelId: string | undefined;
 try {

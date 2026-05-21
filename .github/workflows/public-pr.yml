@@ -51,9 +51,9 @@ jobs:
         run: |
           failed=0
           echo "Labels: ${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-          if [[ ! " ${{ join(github.event.pull_request.labels.*.name, ' ') }} " =~ " verify " ]]; then
-            echo "::error title=PR is not verified::This PR needs the 'verify' label to be merged"
-            echo "Warning:Label 'verify' must be present on the PR to run the full suite of checks"
+          if [[ ! " ${{ join(github.event.pull_request.labels.*.name, ' ') }} " =~ " verified " ]]; then
+            echo "::error title=PR is not verified::This PR needs the 'verified' label to be merged"
+            echo "Warning:Label 'verified' must be present on the PR to run the full suite of checks"
             failed=1
           fi
           if [[ "${{ inputs.sanity-checks-status }}" != "" && "${{ inputs.sanity-checks-status }}" != "true" ]]; then

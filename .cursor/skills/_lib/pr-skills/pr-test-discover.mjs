@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// Discovery helper for /pr-test.
+// Discovery helper for /qv-pr-test.
 //
 // Usage:
 //   node pr-test-discover.mjs <PR-URL> --worktree <WORKTREE_PATH> \
@@ -9,7 +9,7 @@
 // The file list and per-file status come from committed PR state only:
 // `/tmp/pr-<num>.json` (`gh pr view --json files`) plus the patch emitted by
 // worktree-prepare.mjs. This helper never uses git diff/status against the
-// worktree, which may contain untracked build artifacts from /pr-test.
+// worktree, which may contain untracked build artifacts from /qv-pr-test.
 
 import { readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
