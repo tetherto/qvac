@@ -4,34 +4,99 @@ import { buildUnaryResult } from "@/profiling/model-execution";
 import {
   EmbedNoEmbeddingsError,
   EmbedFailedError,
+  InferenceCancelledError,
 } from "@/utils/errors-server";
 import { nowMs } from "@/profiling";
 import type { EmbedResponse } from "@/server/bare/types/addon-responses";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+import { getServerLogger } from "@/logging";
 
 export interface EmbedResult {
   embedding: number[] | number[][];
   stats?: EmbedStats;
 }
 
-
 // Overloaded functions for embedding
-export async function embed(params: {
-  modelId: string;
-  text: string;
-}): Promise<EmbedResult>;
-export async function embed(params: {
-  modelId: string;
-  text: string[];
-}): Promise<EmbedResult>;
-export async function embed(params: EmbedParams): Promise<EmbedResult>;
+export async function embed(
+  params: { modelId: string; text: string },
+  requestId?: string,
+): Promise<EmbedResult>;
+export async function embed(
+  params: { modelId: string; text: string[] },
+  requestId?: string,
+): Promise<EmbedResult>;
+export async function embed(
+  params: EmbedParams,
+  requestId?: string,
+): Promise<EmbedResult>;
 
-export async function embed(params: EmbedParams): Promise<EmbedResult> {
+export async function embed(
+  params: EmbedParams,
+  requestId?: string,
+): Promise<EmbedResult> {
   const { modelId, text } = embedParamsSchema.parse(params);
+
+  // Open a request-scoped lifecycle. The registry routes
+  // `cancel({ requestId })` and broad `cancel({ modelId, kind: "embeddings" })`
+  // straight to this context's signal. Falls back to a server-generated
+  // id if the client didn't send one (older releases).
+  await using ctx = getRequestRegistry().begin({
+    requestId: requestId ?? generateServerRequestId(),
+    kind: "embeddings",
+    modelId,
+  });
+  // `requestLogger` is intentionally referenced once so the
+  // request-scoped logger is built at handler entry per the canonical
+  // shape, even when this op has no per-step emits beyond the
+  // registry's own lifecycle lines. Future addon-level warns inside
+  // this body should route through `requestLogger`.
+  const requestLogger = withRequestContext(getServerLogger(), ctx);
+
   const model = getModel(modelId);
+
+  // Hard-cancel wiring: llamacpp-embedding declares
+  // `cancel: { scope: "model", hard: true }`. The signal listener
+  // forwards an abort to the addon so C++ work stops as soon as the
+  // user cancels — mirrors the canonical handler shape documented in
+  // `request-lifecycle-primitives.mdc`. The post-await
+  // `signal.aborted` checks below are the soft-cancel safety net for
+  // the case where the abort fires between `model.run(...)` returning
+  // and `response.await()` resolving (both can take seconds on large
+  // batches).
+  const onAbort = () => {
+    const addon = model.addon;
+    if (addon?.cancel) {
+      addon.cancel.call(addon).catch((err: unknown) => {
+        requestLogger.warn(
+          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    }
+  };
+  ctx.signal.addEventListener("abort", onAbort, { once: true });
+  // `{ once: true }` does not fire if the signal is already aborted at
+  // register time. The registry may abort synchronously when a
+  // cancel-before-begin race resolves or the parent signal was pre-
+  // aborted — re-use `onAbort` so the listener body is the single
+  // source of truth for "what cancel does."
+  if (ctx.signal.aborted) onAbort();
+  ctx.scope.defer(() => {
+    ctx.signal.removeEventListener("abort", onAbort);
+  });
 
   const modelStart = nowMs();
   const response = (await model.run(text)) as unknown as EmbedResponse;
+  if (ctx.signal.aborted) {
+    throw new InferenceCancelledError(ctx.requestId);
+  }
   const rawEmbeddings = await response.await();
+  if (ctx.signal.aborted) {
+    throw new InferenceCancelledError(ctx.requestId);
+  }
   const modelExecutionMs = nowMs() - modelStart;
 
   const stats: EmbedStats = {

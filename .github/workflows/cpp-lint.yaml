@@ -26,7 +26,7 @@ on:
 
 jobs:
   cpp-lint:
-    runs-on: ubuntu-22.04
+    runs-on: qvac-ubuntu2204-x64
     environment: release
     permissions:
       contents: read
@@ -62,14 +62,17 @@ jobs:
           echo "  HEAD_REPO=$HEAD_REPO"
           echo "  HEAD_REF=$HEAD_REF"
 
-      - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
-        with:
-          platform: linux
-          arch: x64
+      # - name: Setup build host
+      #   uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
+      #   with:
+      #     platform: linux
+      #     arch: x64
 
-      - name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+      # - name: Setup LLVM
+      #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -93,19 +96,36 @@ jobs:
           platform: linux
           arch: x64
 
-      - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      # - if: ${{ inputs.include-vulkan-sdk }}
+      #   name: Setup Vulkan SDK
+      #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+      #   env:
+      #     MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      #   with:
+      #     platform: linux
+      #     arch: x64
+      #     aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+      #     aws-region: eu-central-1
 
       - if: ${{ inputs.include-vulkan-sdk }}
-        name: Setup Vulkan SDK
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        with:
-          platform: linux
-          arch: x64
-          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
+        name: Set Vulkan SDK path in Linux x64
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
 
       - name: Install npm dependencies
         shell: bash

@@ -43,12 +43,11 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: ubuntu-22.04
-            no_gpu: 'true'
+            runner: qvac-ubuntu2204-x64-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: ai-run-linux-gpu
+            runner: qvac-ubuntu2404-x64-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -68,10 +67,10 @@ jobs:
             arch: x64
             runner: macos-15-large
             no_gpu: 'true'
-          - os: windows-11
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64-gpu
             timeout: 1800
 
     steps:
@@ -80,13 +79,16 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Windows - enable git long paths
+      - name: Windows - configure git credentials
         if: ${{ matrix.platform == 'win32' }}
         run: |
-          git config --system core.longpaths true
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
         shell: powershell
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -164,7 +166,9 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          npm install -g bare bare-make bare-runtime bare-https brittle
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
 
       - run: mkdir -p ${{ runner.temp }}/qvac-diffusion-cpp
       - run: mkdir -p ${{ env.WORKDIR }}/prebuilds
@@ -177,11 +181,10 @@ jobs:
           merge-multiple: true
 
       - if: ${{ !inputs.prebuild_package }}
-        run: cp -r ${{ runner.temp }}/qvac-diffusion-cpp/* ${{ env.WORKDIR }}/prebuilds
+        run: cp -r ${{ runner.temp }}/qvac-diffusion-cpp/* ${{ env.WORKDIR }}/prebuilds/
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
-        working-directory: ${{ runner.temp }}/qvac-diffusion-cpp
         shell: bash
         run: |
           PACKAGE="${{ inputs.prebuild_package }}"
@@ -201,14 +204,13 @@ jobs:
             exit 1
           fi
 
-          cp -r ./package/prebuilds/* ${{ env.WORKDIR }}/prebuilds
+          cp -r ./package/prebuilds/* ${{ env.WORKDIR }}/prebuilds/
 
           echo "Prebuilds downloaded from npm successfully"
           ls -la ${{ env.WORKDIR }}/prebuilds/
 
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
-        working-directory: ${{ runner.temp }}/qvac-diffusion-cpp
         shell: powershell
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"
@@ -243,7 +245,7 @@ jobs:
           Get-ChildItem ${{ env.WORKDIR }}/prebuilds
 
       - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 

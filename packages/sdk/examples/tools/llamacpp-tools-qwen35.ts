@@ -15,14 +15,12 @@ import {
   completion,
   loadModel,
   unloadModel,
+  QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   type ToolCall,
 } from "@qvac/sdk";
 import { tools, mockExecute } from "./shared";
 
-const QWEN35_HF =
-  "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf";
-
-const modelSrc = process.argv[2] ?? QWEN35_HF;
+const modelSrc = process.argv[2] ?? QWEN3_5_0_8B_MULTIMODAL_Q8_0;
 
 let modelId: string | undefined;
 try {

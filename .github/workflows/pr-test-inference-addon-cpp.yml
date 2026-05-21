@@ -10,7 +10,6 @@ on:
       - "packages/inference-addon-cpp/**"
       - ".github/workflows/pr-test-inference-addon-cpp-js.yml"
       - ".github/workflows/pr-test-inference-addon-cpp.yml"
-      - ".github/workflows/pr-test-inference-addon-cpp-verify.yml"
   workflow_dispatch:
 
 env:
@@ -31,34 +30,30 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
-          LABEL_NAME: ${{ github.event.label.name }}
-          HAS_VERIFY_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          HAS_VERIFIED_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verified') }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ "$ACTION" = "synchronize" ]; then
-            echo "::notice::New commits pushed; re-apply the verify label after review to run native tests."
+          # Fork sync: deny pending re-review. label-gate (in sibling pull_request_target
+          # workflows) will strip 'verified' shortly anyway; this just makes the native
+          # matrix skip immediately rather than racing the strip.
+          if [ "$IS_FORK" = "true" ] && [ "$ACTION" = "synchronize" ]; then
+            echo "::notice::Fork PR synchronize: native tests skipped pending re-application of 'verified'."
             echo "allowed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ "$ACTION" != "labeled" ] || [ "$LABEL_NAME" != "verify" ]; then
-            echo "::notice::Native tests run only when the verify label is freshly applied."
-            echo "allowed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ "$HAS_VERIFY_LABEL" = "true" ]; then
+          if [ "$HAS_VERIFIED_LABEL" = "true" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "::error::Native tests require the verify label."
+          echo "::notice::Native tests require the 'verified' label. A trusted reviewer must apply it after reviewing the diff."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
-          exit 1
 
   run-unit-tests:
     if: needs.authorize.outputs.allowed == 'true'
@@ -70,10 +65,12 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-22.04
             platform: android
             arch: arm64
             flags: -D ANDROID_STL=c++_shared
+            runner: qvac-ubuntu2204-x64
           - os: macos-14
             platform: ios
             arch: arm64
@@ -85,14 +82,19 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -117,7 +119,7 @@ jobs:
           sudo apt update
           sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: setup cmake windows
         run: |
           cd ..
@@ -138,10 +140,6 @@ jobs:
           cat $GITHUB_PATH >> temp
           mv temp $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Longpaths on windows
-        run: git config --system core.longpaths true
-
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg in macos
         run: |
@@ -156,21 +154,25 @@ jobs:
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure vcpkg in windows
         run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'windows-2025' }}
+        name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure cmake generator in windows
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+      - if: ${{ matrix.os == 'windows-2025' && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.os == 'windows-2025' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
       - if: ${{ matrix.platform == 'android' }}

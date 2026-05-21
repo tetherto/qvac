@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Internal RTF + streaming benchmark suite for Chatterbox and Supertonic, runnable via the `Benchmark RTF (ONNX TTS)` GitHub Actions workflow. CI-only; not shipped with the npm package.
+
 ## [0.9.0]
 
 ### Fixed
@@ -42,10 +48,10 @@ Performance improvements for the Chatterbox TTS pipeline: reference-audio encodi
 - **Chatterbox CFG multilingual path** now runs conditional and unconditional branches as a single batched ONNX session call (`[2N, ...]` batch) with one shared KV cache, replacing the previous pair of separate session calls and two KV caches. `generateSpeechTokensWithCfg`, `runInitialCfgStep`, `runCfgGenerationLoop`, and `initEmptyKvCache` were refactored accordingly. Pure performance change — math and output are bit-identical to the pre-batched path.
 - **`prepareCfgEmbeddings`** now prepends audio features via `reserve` + single-pass build instead of `std::vector::insert(begin, ...)`, eliminating O(n) element shifting for every embedding vector built per CFG step.
 - **`trimPromptFromWaveform`** uses `std::move` + `resize` instead of `std::vector::erase(begin, begin + N)`, avoiding an unnecessary copy of the full waveform on every `synthesize()`.
-- Fixed bug when using multilingual model for English inference, bypassing model configuration and allowing input tokens to leak into the output
 
 ### Fixed
 
+- Fixed bug when using multilingual model for English inference, bypassing model configuration and allowing input tokens to leak into the output
 - Preserve UTF-8 text correctly at the Chatterbox addon boundary so Portuguese diacritics like `á`, `ã`, `ç`, `é`, and `í` reach tokenization intact.
 
 ## [0.8.4]

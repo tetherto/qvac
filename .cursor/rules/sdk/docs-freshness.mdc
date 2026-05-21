@@ -37,7 +37,7 @@ This rule monitors two packages that have dedicated knowledge-base documentation
 
 | Source area | Documentation |
 |---|---|
-| `lib/registry-service.js`, `scripts/build-db-spec.js`, `shared/spec/` | `.cursor/skills/registry-autobase-patterns/` |
+| `lib/registry-service.js`, `scripts/build-db-spec.js`, `shared/spec/` | `.cursor/skills/qv-registry-autobase-patterns/` |
 
 ## What to do
 

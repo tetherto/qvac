@@ -1,0 +1,44 @@
+# Build-only workflow. Publishing lives in on-merge-classification-ggml.yml.
+name: Prebuilds (GGML Classification)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/classification-ggml"
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/classification-ggml"
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: classification-ggml-
+    secrets: inherit

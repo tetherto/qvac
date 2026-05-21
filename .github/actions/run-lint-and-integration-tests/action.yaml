@@ -1,5 +1,5 @@
 name: Run lint & integration tests
-description: "Run linting and integration tests when verify label is present"
+description: "Run linting and integration tests when the 'verified' label is present"
 
 inputs:
   npm-token:
@@ -66,7 +66,7 @@ runs:
       run: npm run lint
     - name: Install bare globally
       shell: bash
-      run: npm install -g bare
+      run: npm install -g --force bare
     - name: Run integration tests
       shell: bash
       working-directory: ${{ inputs.workdir }}

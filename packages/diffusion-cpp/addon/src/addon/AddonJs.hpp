@@ -66,15 +66,20 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   // -- Step 1: Extract model file paths from JS args[1] --------------------
   // index.js selects which field to populate based on model family:
-  //   "path"               -> model_path          (SD1.x / SDXL all-in-one
+  //   "path"               -> model_path          (SD2.x / SDXL all-in-one
   //   checkpoint) "diffusionModelPath" -> diffusion_model_path (FLUX.2 [klein]
-  //   standalone GGUF)
-  // Exactly one of the two will be non-empty; SdModel::load() passes both to
-  // sd_ctx_params_t and the library uses whichever is set.
+  //   standalone GGUF; Wan 2.1 single expert; Wan 2.2 low-noise expert)
+  //   "highNoiseDiffusionModelPath" -> high_noise_diffusion_model_path (Wan
+  //   2.2 high-noise expert; empty for Wan 2.1 and all non-Wan models)
+  // Exactly one of model_path / diffusion_model_path must be non-empty;
+  // SdModel::load() passes all paths to sd_ctx_params_t and the library
+  // uses whichever are set.
   SdCtxConfig config{};
 
   config.modelPath = args.getMapEntry(1, "path");
   config.diffusionModelPath = args.getMapEntry(1, "diffusionModelPath");
+  config.highNoiseDiffusionModelPath =
+      args.getMapEntry(1, "highNoiseDiffusionModelPath");
   config.clipLPath = args.getMapEntry(1, "clipLPath");
   config.clipGPath = args.getMapEntry(1, "clipGPath");
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");
@@ -180,6 +185,34 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     for (uint32_t i = 0; i < n; ++i) {
       auto elem = arr.get<js::TypedArray<uint8_t>>(env, i);
       job.initImagesBytes.emplace_back(elem.as<std::vector<uint8_t>>(env));
+    }
+  }
+
+  // -- Video-specific inputs ------------------------------------------------
+  // `endImageBuffer`       -- last frame bytes for Wan flf2vid
+  //                           (first-last-frame interpolation). Mutually
+  //                           exclusive with all non-flf2vid video modes;
+  //                           rejected by SdModel::processVideo() if supplied
+  //                           alongside mode="txt2vid" or "img2vid".
+  // `controlFramesBuffers` -- VACE control-frame sequence (one PNG/JPEG
+  //                           buffer per frame). Optional on every video
+  //                           mode; `vace_strength` controls guidance.
+  auto endBuf =
+      inputObj
+          .getOptionalPropertyAs<js::TypedArray<uint8_t>, std::vector<uint8_t>>(
+              env, "endImageBuffer");
+  if (endBuf.has_value())
+    job.endImageBytes = std::move(endBuf.value());
+
+  auto controlBufs =
+      inputObj.getOptionalProperty<js::Array>(env, "controlFramesBuffers");
+  if (controlBufs.has_value()) {
+    auto arr = controlBufs.value();
+    const uint32_t n = arr.size(env);
+    job.controlFramesBytes.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      auto elem = arr.get<js::TypedArray<uint8_t>>(env, i);
+      job.controlFramesBytes.emplace_back(elem.as<std::vector<uint8_t>>(env));
     }
   }
 

@@ -82,13 +82,13 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: ubuntu-22.04
+            runner: qvac-ubuntu2204-x64
             no_gpu: 'true'
             label: linux-x64-cpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: ai-run-linux-gpu
+            runner: qvac-ubuntu2404-x64-gpu
             timeout_minutes: 480
             label: linux-x64-gpu
           - os: ubuntu-24.04-arm
@@ -113,10 +113,10 @@ jobs:
             arch: x64
             runner: macos-15-large
             label: darwin-x64
-          - os: windows-11
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64-gpu
             label: win32-x64
 
     steps:
@@ -125,13 +125,17 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Windows - enable git long paths
+      - name: Windows - configure git
         if: ${{ matrix.platform == 'win32' }}
         run: |
-          git config --system core.longpaths true
+          # git config --system core.longpaths true
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
         shell: powershell
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -150,7 +154,9 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          npm install -g bare bare-make bare-runtime bare-https brittle
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
@@ -227,7 +233,7 @@ jobs:
           Get-ChildItem prebuilds/
 
       - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 

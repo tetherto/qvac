@@ -25,9 +25,6 @@ async function ensureModelsDownloaded () {
  * Works on both mobile and desktop - just tests constructor validation
  */
 test('Should throw error when files.model is not provided', { timeout: 60000 }, async (t) => {
-  // Restore any stubs from other tests
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
-
   const args = {}
   const config = {
     whisperConfig: {
@@ -54,9 +51,6 @@ test('Should throw error when files.model is not provided', { timeout: 60000 }, 
  * Works on both mobile and desktop
  */
 test('Should throw error when model file does not exist', { timeout: 60000 }, async (t) => {
-  // Restore any stubs from other tests
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
-
   const nonexistent = path.join(tmpDir, 'qvac-test-models', 'non-existent-model.bin')
   const args = {
     files: {
@@ -89,9 +83,6 @@ test('Should throw error when model file does not exist', { timeout: 60000 }, as
  * Works on both mobile and desktop
  */
 test('Should throw error when VAD model file does not exist', { timeout: 180000 }, async (t) => {
-  // Restore any stubs from other tests
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
-
   // Ensure model is downloaded
   await ensureModelsDownloaded()
 
@@ -127,9 +118,6 @@ test('Should throw error when VAD model file does not exist', { timeout: 180000 
  * Works on both mobile and desktop
  */
 test('Should not throw error when model file exists and VAD is not specified', { timeout: 180000 }, async (t) => {
-  // Restore any stubs from other tests
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
-
   // Ensure model is downloaded
   await ensureModelsDownloaded()
 
@@ -165,9 +153,6 @@ test('Should not throw error when model file exists and VAD is not specified', {
  * Works on both mobile and desktop
  */
 test('Should not throw error when both model and VAD model files exist', { timeout: 180000 }, async (t) => {
-  // Restore any stubs from other tests
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
-
   // Ensure models are downloaded
   await ensureModelsDownloaded()
 

@@ -7,6 +7,7 @@ import { embeddingTests } from "./embedding-tests.js";
 import { ragTests } from "./rag-tests.js";
 import { translationIndicTransTests } from "./translation-indictrans-tests.js";
 import { translationBergamotTests } from "./translation-bergamot-tests.js";
+import { translationBergamotCacheTests } from "./translation-bergamot-cache-tests.js";
 import { translationLlmTests } from "./translation-llm-tests.js";
 import { translationSalamandraTests } from "./translation-salamandra-tests.js";
 import { translationAfriquegemmaTests } from "./translation-afriquegemma-tests.js";
@@ -32,6 +33,7 @@ import { configTests } from "./config-tests.js";
 import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
 import { multiGpuTests } from "./multi-gpu-tests.js";
+import { cancellationTests } from "./cancellation-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -210,6 +212,9 @@ export const tests = [
   // Translation: Bergamot (EN→FR, EN→ES)
   ...translationBergamotTests,
 
+  // Translation: Bergamot cache reload regression
+  ...translationBergamotCacheTests,
+
   // Translation: LLM (open-vocabulary via from/to)
   ...translationLlmTests,
 
@@ -281,6 +286,9 @@ export const tests = [
 
   // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
   ...multiGpuTests,
+
+  // Typed cancel outcomes + KvCacheSession rollback e2e
+  ...cancellationTests,
 
   // Additional model tests
   modelSwitchLlm,

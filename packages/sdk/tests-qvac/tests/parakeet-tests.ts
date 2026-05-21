@@ -145,6 +145,16 @@ export const parakeetSortformerTwoSpeakers = createParakeetTest(
   180000,
 );
 
+export const parakeetMetadataRejected: TestDefinition = {
+  testId: "parakeet-tdt-metadata-rejected",
+  params: { audioFileName: "transcription-short-wav.wav", metadata: true },
+  expectation: {
+    validation: "throws-error",
+    errorContains: "does not support metadata",
+  },
+  metadata: { category: "parakeet", dependency: "parakeet-tdt", estimatedDurationMs: 30000 },
+};
+
 export const parakeetTdtTests = [
   parakeetTdtWav,
   parakeetTdtMp3,
@@ -153,6 +163,7 @@ export const parakeetTdtTests = [
   parakeetTdtMultiSegment,
   parakeetTdtMusic,
   parakeetTdtCorruptedWav,
+  parakeetMetadataRejected,
 ];
 
 export const parakeetCtcTests = [

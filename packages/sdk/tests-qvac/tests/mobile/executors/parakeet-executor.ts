@@ -41,7 +41,7 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<
     params: unknown,
     expectation: unknown,
   ): Promise<TestResult> {
-    const p = params as { audioFileName: string };
+    const p = params as { audioFileName: string; metadata?: boolean };
     const exp = expectation as Expectation;
 
     const resourceKey = this.resolveResource(testId);
@@ -55,10 +55,13 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<
 
     try {
       const audioUri = await this.resolveAsset(assetModule);
-      const text = await transcribe({
-        modelId,
-        audioChunk: audioUri,
-      });
+
+      if (p.metadata === true) {
+        await transcribe({ modelId, audioChunk: audioUri, metadata: true });
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+
+      const text = await transcribe({ modelId, audioChunk: audioUri });
       const trimmedText = text.trim();
 
       if (exp.validation === "throws-error") {

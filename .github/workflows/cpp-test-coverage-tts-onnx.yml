@@ -40,7 +40,7 @@ env:
 
 jobs:
   cpp-tests:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     permissions:
@@ -55,6 +55,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
             coverage: true
 
     env:
@@ -62,14 +63,10 @@ jobs:
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-onnx' }}
 
     steps:
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Maximize build space
-        run: |
-          sudo docker image prune --all --force
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/share/dotnet
-
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -84,19 +81,23 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Setup LLVM
-        if: matrix.platform == 'linux'
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          npm install -g bare bare-make
 
       - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
       - name: Generate and build unit tests
         working-directory: ${{ env.WORKDIR }}

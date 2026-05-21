@@ -2,7 +2,7 @@
 
 // GPU smoke tests for both tts-ggml engines (chatterbox + supertonic).
 //
-// Mirrors qvac-lib-infer-parakeet/test/integration/gpu-smoke.test.js's
+// Mirrors transcription-parakeet/test/integration/gpu-smoke.test.js's
 // strict-on-CPU policy: a useGPU=true request that resolves to the CPU
 // backend on a GPU-capable platform is treated as a regression because
 // it usually means a build / linkage / kernel-init drift that CI must
@@ -28,7 +28,7 @@ const path = require('bare-path')
 const proc = require('bare-process')
 const test = require('brittle')
 
-const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
+const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
 
@@ -123,6 +123,10 @@ function assertCpuBackend (t, engineTag, stats) {
 }
 
 test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  if (platform === 'android') {
+    t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes')
+    return
+  }
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
 
@@ -132,7 +136,8 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     return
   }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: see multiple-runs.test.js for rationale.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) {
     t.pass('Skipped: reference audio missing')
     return
@@ -198,7 +203,8 @@ test('Chatterbox CPU smoke - useGPU=false must run on the CPU backend', { timeou
     return
   }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: see multiple-runs.test.js for rationale.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) {
     t.pass('Skipped: reference audio missing')
     return

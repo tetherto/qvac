@@ -12,9 +12,10 @@ import { SmartAnchor } from '@/components/mdx-smart-card';
 import { resolveIcon } from "@/lib/resolveIcon";
 import { cloneElement, isValidElement } from "react";
 import type { AnchorHTMLAttributes } from "react";
-import { LLMCopyButton, ViewOptions, VersionSelector } from '@/components/page-actions';
+import { CopyPageButton, ViewOptions, VersionSelector } from '@/components/page-actions';
 import {
   buildCanonicalDocsUrl,
+  buildPageCanonicalUrl,
   isArchivedVersionSlug,
 } from '@/lib/docs-open-graph';
 import { buildDocsJsonLd } from '@/lib/docs-json-ld';
@@ -67,6 +68,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
   const isHomePage = !params.slug || params.slug.length === 0;
   const jsonLdBlocks = buildDocsJsonLd(page, params.slug ?? [], isHomePage);
   const versionSelectorProps = getVersionSelectorProps(params.slug ?? []);
+  const pageMarkdownUrl = page.url === '/' ? '/index.md' : `${page.url}.md`;
 
   return (
     <>
@@ -95,10 +97,8 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       <DocsDescription>{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6 -mt-6">
         {versionSelectorProps && <VersionSelector {...versionSelectorProps} />}
-        <LLMCopyButton markdownUrl={`/llms-full.txt`} />
-        <ViewOptions
-          markdownUrl={`/llms-full.txt`}
-        />
+        <CopyPageButton markdownUrl={pageMarkdownUrl} />
+        <ViewOptions markdownUrl={pageMarkdownUrl} />
       </div>
       <DocsBody>
         <MDXContent
@@ -139,13 +139,22 @@ export async function generateMetadata(
   const isHomePage = !params.slug || params.slug.length === 0;
 
   const { title, description } = page.data;
-  const canonicalUrl = buildCanonicalDocsUrl(params.slug);
+  // Self-URL of the page. Used for Open Graph / Twitter so shared links to a
+  // back-version (e.g. /reference/api/v0.7.0) still render a card that
+  // represents v0.7.0 specifically, not the latest.
+  const selfUrl = buildCanonicalDocsUrl(params.slug);
+  // SEO canonical. For archived pages in sections whose back-versions are
+  // hidden from indexing (API summary), this points to the section's latest
+  // (`/reference/api`) so search engines consolidate authority on the
+  // canonical page. For every other page — including indexable archived
+  // release-notes — this equals `selfUrl`.
+  const linkCanonicalUrl = buildPageCanonicalUrl(params.slug);
   const ogImage = getPageImage(page);
-  // Non-canonical bundles (dev + vX.Y.Z) are hidden from search engines and
-  // LLM training channels via per-page noindex. Canonical/OG/Twitter stay
-  // intact so shared links still render a rich social card; `noindex` makes
-  // the canonical pointer inert for Google even when its target was removed
-  // in latest (e.g., `ping` existed in v0.7.0 but not in v0.8.0+).
+  // Archived back-versions in `SECTIONS_HIDDEN_FROM_INDEXING` are hidden from
+  // search engines and LLM training channels via per-page `noindex`. Combined
+  // with `linkCanonicalUrl` pointing to the section's latest, this is the
+  // textbook "this is a near-duplicate, prefer the canonical" signal. OG and
+  // Twitter still carry the self-URL so social previews remain version-accurate.
   const isArchived = isArchivedVersionSlug(params.slug);
 
   return {
@@ -153,12 +162,12 @@ export async function generateMetadata(
     description,
     ...(isArchived && { robots: { index: false, follow: true } }),
     alternates: {
-      canonical: canonicalUrl,
+      canonical: linkCanonicalUrl,
     },
     openGraph: {
       title,
       description: description ?? undefined,
-      url: canonicalUrl,
+      url: selfUrl,
       siteName: 'QVAC',
       locale: 'en_US',
       type: isHomePage ? 'website' : 'article',

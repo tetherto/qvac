@@ -12,7 +12,6 @@ const {
 
 test('Should accept empty files map without throwing', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   try {
     const model = new TranscriptionParakeet({ files: {} })
@@ -25,7 +24,6 @@ test('Should accept empty files map without throwing', { timeout: 60000 }, async
 
 test('Non-existent model path produces warning but does not throw', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   try {
     const model = new TranscriptionParakeet({
@@ -40,7 +38,6 @@ test('Non-existent model path produces warning but does not throw', { timeout: 6
 
 test('Should accept a valid GGUF path and pass validation', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   const ggufPath = await loadGgufOrSkip(t, 'tdt')
   if (!ggufPath) return
@@ -56,7 +53,6 @@ test('Should accept a valid GGUF path and pass validation', { timeout: 60000 }, 
 
 test('Validation runs in the constructor (no async load required)', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   try {
     const model = new TranscriptionParakeet({ files: {} })

@@ -4,14 +4,14 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const proc = require('bare-process')
-const test = require('brittle')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
   ensureModel,
   detectPlatform,
   setupJsLogger,
-  isPng
+  isPng,
+  safeTest
 } = require('./utils')
 
 const platform = detectPlatform()
@@ -27,40 +27,42 @@ const DEFAULT_MODEL = {
   url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
 }
 
-test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip }, async (t) => {
+safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip }, async (t) => {
   setupJsLogger(binding)
 
-  const [downloadedModelName, modelDir] = await ensureModel({
-    modelName: DEFAULT_MODEL.name,
-    downloadUrl: DEFAULT_MODEL.url
-  })
-
-  console.log('\n' + '='.repeat(60))
-  console.log('STABLE DIFFUSION 2.1 — INTEGRATION TEST')
-  console.log('='.repeat(60))
-  console.log(` Platform  : ${platform}`)
-  console.log(` Model     : ${downloadedModelName}`)
-  console.log(` Models dir: ${modelDir}`)
-
-  const modelPath = path.join(modelDir, downloadedModelName)
-  t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
-
-  const model = new ImgStableDiffusion({
-    files: {
-      model: path.join(modelDir, downloadedModelName)
-    },
-    config: {
-      threads: 4,
-      device: useCpu ? 'cpu' : 'gpu',
-      prediction: 'v' // SD2.1 uses v-prediction
-    },
-    logger: console
-  })
-
-  const images = []
-  const progressTicks = []
-
+  let model = null
   try {
+    const [downloadedModelName, modelDir] = await ensureModel({
+      modelName: DEFAULT_MODEL.name,
+      downloadUrl: DEFAULT_MODEL.url
+    })
+
+    console.log('\n' + '='.repeat(60))
+    console.log('STABLE DIFFUSION 2.1 — INTEGRATION TEST')
+    console.log('='.repeat(60))
+    console.log(` Platform  : ${platform}`)
+    console.log(` Model     : ${downloadedModelName}`)
+    console.log(` Models dir: ${modelDir}`)
+
+    const modelPath = path.join(modelDir, downloadedModelName)
+    t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
+
+    model = new ImgStableDiffusion({
+      files: {
+        model: path.join(modelDir, downloadedModelName)
+      },
+      config: {
+        threads: 4,
+        device: useCpu ? 'cpu' : 'gpu',
+        prediction: 'v', // SD2.1 uses v-prediction
+        diffusion_fa: true
+      },
+      logger: console
+    })
+
+    const images = []
+    const progressTicks = []
+
     // ── Load ─────────────────────────────────────────────────────────────────
     console.log('\n=== Loading model ===')
     const tLoad = Date.now()
@@ -130,7 +132,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip },
     console.log('='.repeat(60))
   } finally {
     console.log('\n=== Cleanup ===')
-    await model.unload()
+    if (model) await model.unload().catch(() => {})
     try {
       binding.releaseLogger()
     } catch (_) {}

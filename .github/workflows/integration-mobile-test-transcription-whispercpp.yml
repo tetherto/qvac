@@ -43,7 +43,7 @@ env:
 jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     timeout-minutes: 120
     permissions:
@@ -57,34 +57,15 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: ai-run-linux  # Self-hosted runner to avoid Maven Central 403 issues
+            runner: qvac-ubuntu2404-x64  # Self-hosted runner to avoid Maven Central 403 issues
           - platform: iOS
             os: macos-14
-            runner: macos-14
 
     steps:
-      # Free up disk space on Ubuntu runner to prevent "No space left on device" errors
-      - name: Free up disk space
-        if: matrix.platform == 'Android'
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          # Remove unnecessary software to free up disk space (|| true to handle self-hosted runners)
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          sudo rm -rf /opt/hostedtoolcache/go || true
-          sudo rm -rf /opt/hostedtoolcache/Python || true
-          sudo rm -rf /opt/hostedtoolcache/Ruby || true
-          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
-          sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf /usr/share/swift || true
-          sudo docker image prune --all --force || true
-          # Clean APT cache
-          sudo apt-get clean || true
-          echo "Disk space after cleanup:"
-          df -h
-
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -111,7 +92,7 @@ jobs:
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
-          npm install -g @expo/cli@latest
+          npm install -g --force @expo/cli@latest
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
