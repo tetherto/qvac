@@ -70,6 +70,8 @@ export const sdcppConfigSchema = z
     clip_on_cpu: z.boolean().optional().describe("Force CLIP text encoder to run on CPU"),
     vae_on_cpu: z.boolean().optional().describe("Force VAE decoder to run on CPU"),
     vae_tiling: z.boolean().optional().describe("Enable VAE tiling for large images on limited VRAM"),
+    offload_to_cpu: z.boolean().optional()
+      .describe("Keep model weights in CPU memory and offload them during GPU compute"),
     flash_attn: z.boolean().optional().describe("Enable flash attention to reduce memory usage"),
     diffusion_fa: z.boolean().optional().describe("Enable flash attention for the diffusion transformer only"),
     lora_apply_mode: z.enum(["auto", "immediately", "at_runtime"]).optional()
