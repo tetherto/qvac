@@ -60,7 +60,7 @@ const baseClasses =
 
 const variantClasses: Record<AskAIButtonVariant, string> = {
   header:
-    'h-9 gap-2 border bg-fd-secondary px-3 text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground',
+    'h-9 gap-2 border bg-fd-secondary/50 px-3 text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground',
   // Compact icon-only header trigger. Useful in surfaces too narrow
   // for a labelled pill - matches Search's h-9 / rounded-lg / border
   // so the two read as siblings, with a subtle primary-tinted
