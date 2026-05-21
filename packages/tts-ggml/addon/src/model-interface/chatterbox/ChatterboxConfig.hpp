@@ -55,6 +55,13 @@ struct ChatterboxConfig {
   std::optional<int> streamFirstChunkTokens;
   /** CFM Euler steps for streaming chunks.  0 = library default (2). */
   std::optional<int> streamCfmSteps;
+
+  /**
+   * Forwarded to `tts_cpp::chatterbox::EngineOptions::backends_dir` /
+   * `opencl_cache_dir`.
+   */
+  std::string backendsDir;
+  std::string openclCacheDir;
 };
 
 } // namespace qvac::ttsggml::chatterbox

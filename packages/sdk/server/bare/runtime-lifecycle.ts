@@ -117,21 +117,12 @@ export async function suspendRuntime(): Promise<void> {
   state = "suspending";
 
   logger.info(
-    `⏸️ Suspending runtime (${swarms.size} swarms, ${stores.size} stores)`,
+    `⏸️ Suspending runtime (${stores.size} stores, ${swarms.size} swarms)`,
   );
 
   transitionPromise = (async () => {
     const swarmSnapshot = Array.from(swarms.entries());
     const storeSnapshot = Array.from(stores.entries());
-
-    await runPhase(
-      swarmSnapshot,
-      swarms,
-      async (swarm) => {
-        if (!swarm.suspended) await swarm.suspend();
-      },
-      "suspend-swarm",
-    );
 
     await runPhase(
       storeSnapshot,
@@ -140,6 +131,15 @@ export async function suspendRuntime(): Promise<void> {
         await store.suspend();
       },
       "suspend-store",
+    );
+
+    await runPhase(
+      swarmSnapshot,
+      swarms,
+      async (swarm) => {
+        if (!swarm.suspended) await swarm.suspend();
+      },
+      "suspend-swarm",
     );
   })()
     .then(() => {
@@ -173,21 +173,12 @@ export async function resumeRuntime(): Promise<void> {
   state = "resuming";
 
   logger.info(
-    `▶️ Resuming runtime (${stores.size} stores, ${swarms.size} swarms)`,
+    `▶️ Resuming runtime (${swarms.size} swarms, ${stores.size} stores)`,
   );
 
   transitionPromise = (async () => {
-    const storeSnapshot = Array.from(stores.entries());
     const swarmSnapshot = Array.from(swarms.entries());
-
-    await runPhase(
-      storeSnapshot,
-      stores,
-      async (store) => {
-        await store.resume();
-      },
-      "resume-store",
-    );
+    const storeSnapshot = Array.from(stores.entries());
 
     await runPhase(
       swarmSnapshot,
@@ -196,6 +187,15 @@ export async function resumeRuntime(): Promise<void> {
         await swarm.resume();
       },
       "resume-swarm",
+    );
+
+    await runPhase(
+      storeSnapshot,
+      stores,
+      async (store) => {
+        await store.resume();
+      },
+      "resume-store",
     );
   })()
     .then(() => {

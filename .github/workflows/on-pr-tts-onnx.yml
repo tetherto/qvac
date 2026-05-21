@@ -20,7 +20,7 @@ on:
         required: false
         type: string
       run_verify:
-        description: "Treat this run like a 'verify' run (prebuild + integration)."
+        description: "Treat this run like a 'verified' run (prebuild + integration)."
         required: false
         type: boolean
         default: true

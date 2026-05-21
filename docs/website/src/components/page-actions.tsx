@@ -1,101 +1,126 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Copy, ExternalLinkIcon, MessageSquare, Sparkles, Tag } from 'lucide-react';
+
+import { Check, ChevronDown, ExternalLinkIcon, MessageSquare, Sparkles, Tag } from 'lucide-react';
 import { cn } from '../lib/cn';
-import { useCopyButton } from 'fumadocs-ui/utils/use-copy-button';
 import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cva } from 'class-variance-authority';
 import type { VersionSelectorProps } from '@/lib/versions';
 
+// Cache fetched Markdown bodies in-memory so repeat clicks on the same page
+// reuse a single network round-trip across both "Copy page" and the
+// "Copy page as Markdown" dropdown action.
 const cache = new Map<string, string>();
 
-export function LLMCopyButton({
+const optionVariants = cva(
+  'text-sm p-2 rounded-lg inline-flex items-center gap-2 hover:text-fd-accent-foreground hover:bg-fd-accent [&_svg]:size-4',
+);
+
+// Canonical Markdown brand mark (https://github.com/dcurtis/markdown-mark).
+// Kept inline alongside the OpenAI / Anthropic marks below so every brand
+// glyph in this file lives in one place.
+function MarkdownIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      role="img"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <title>Markdown</title>
+      <path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731zM5.769 15.923v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.461v7.846zm15.462-3.923h-2.308V8.077h-2.307V12h-2.308l3.461 4.039z" />
+    </svg>
+  );
+}
+
+type CopyState = 'idle' | 'copying' | 'copied' | 'failed';
+
+const COPY_LABELS: Record<CopyState, string> = {
+  idle: 'Copy page',
+  copying: 'Copying…',
+  copied: 'Copied',
+  failed: 'Copy failed',
+};
+
+// Time the transient `copied` / `failed` label stays visible before the
+// button returns to the idle "Copy page" state.
+const COPY_RESET_MS = 2000;
+
+export function CopyPageButton({
   /**
-   * A URL to fetch the raw Markdown/MDX content of page
+   * URL of the page's raw Markdown file (e.g. `/quickstart.md`). Fetched on
+   * click and copied to the clipboard; also opened in a new tab from the
+   * "View page as Markdown" dropdown entry.
    */
   markdownUrl,
 }: {
   markdownUrl: string;
 }) {
-  const [isLoading, setLoading] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const toastTimeoutRef = useRef<number | null>(null);
-
-  const fileLabel = useMemo(() => {
-    const parts = markdownUrl.split('/').filter(Boolean);
-    return parts[parts.length - 1] ?? markdownUrl;
-  }, [markdownUrl]);
+  const [state, setState] = useState<CopyState>('idle');
+  const resetTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
-      if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
+      if (resetTimeoutRef.current) window.clearTimeout(resetTimeoutRef.current);
     };
   }, []);
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = window.setTimeout(() => setToastMessage(null), 2200);
-  };
+  function scheduleReset() {
+    if (resetTimeoutRef.current) window.clearTimeout(resetTimeoutRef.current);
+    resetTimeoutRef.current = window.setTimeout(() => {
+      setState('idle');
+      resetTimeoutRef.current = null;
+    }, COPY_RESET_MS);
+  }
 
-  const [checked, onCopy] = useCopyButton(async () => {
-    const cached = cache.get(markdownUrl);
-    if (cached) {
-      await navigator.clipboard.writeText(cached);
-      showToast(`Copied ${fileLabel} to clipboard`);
-      return;
-    }
-
-    setLoading(true);
-
+  async function copy() {
+    setState('copying');
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/plain': fetch(markdownUrl).then(async (res) => {
-            const content = await res.text();
-            cache.set(markdownUrl, content);
-
-            return content;
-          }),
-        }),
-      ]);
-      showToast(`Copied ${fileLabel} to clipboard`);
+      let text = cache.get(markdownUrl);
+      if (text === undefined) {
+        const res = await fetch(markdownUrl);
+        if (!res.ok) throw new Error(`Failed to fetch ${markdownUrl}: ${res.status}`);
+        text = await res.text();
+        cache.set(markdownUrl, text);
+      }
+      await navigator.clipboard.writeText(text);
+      setState('copied');
+    } catch {
+      setState('failed');
     } finally {
-      setLoading(false);
+      scheduleReset();
     }
-  });
+  }
+
+  const label = COPY_LABELS[state];
+  const isBusy = state === 'copying';
 
   return (
     <div className="relative inline-flex">
-      {toastMessage ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-xl border bg-fd-popover/60 backdrop-blur-lg px-3 py-2 text-sm text-fd-popover-foreground shadow-lg"
-        >
-          {toastMessage}
-        </div>
-      ) : null}
-
       <button
         type="button"
-        aria-label={`Open ${fileLabel}`}
+        aria-label="Copy page as Markdown"
+        disabled={isBusy}
+        onClick={copy}
         className={cn(
           buttonVariants({
             color: 'secondary',
             size: 'sm',
-            className: 'rounded-r-none border-r-0 font-mono',
+            className: 'rounded-r-none border-r-0 gap-1.5 font-normal',
           }),
         )}
-        onClick={() => window.open(markdownUrl, '_blank', 'noopener,noreferrer')}
       >
-        Export for LLMs
+        <MarkdownIcon className="size-3.5 text-fd-muted-foreground" />
+        <span className="font-normal" aria-live="polite">
+          {label}
+        </span>
       </button>
 
       <Popover>
         <PopoverTrigger
-          aria-label={`${fileLabel} actions`}
+          aria-label="Copy page actions"
           className={cn(
             buttonVariants({
               color: 'secondary',
@@ -111,24 +136,24 @@ export function LLMCopyButton({
           <PopoverClose asChild>
             <button
               type="button"
+              disabled={isBusy}
+              onClick={copy}
               className={cn(optionVariants())}
-              onClick={() => window.open(markdownUrl, '_blank', 'noopener,noreferrer')}
             >
-              <ExternalLinkIcon className="text-fd-muted-foreground" />
-              Open {fileLabel}
-              <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
+              <MarkdownIcon className="text-fd-muted-foreground" />
+              Copy page as Markdown
             </button>
           </PopoverClose>
 
           <PopoverClose asChild>
             <button
               type="button"
-              disabled={isLoading}
-              onClick={onCopy}
+              onClick={() => window.open(markdownUrl, '_blank', 'noopener,noreferrer')}
               className={cn(optionVariants())}
             >
-              {checked ? <Check /> : <Copy />}
-              Copy {fileLabel}
+              <ExternalLinkIcon className="text-fd-muted-foreground" />
+              View page as Markdown
+              <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
             </button>
           </PopoverClose>
         </PopoverContent>
@@ -136,10 +161,6 @@ export function LLMCopyButton({
     </div>
   );
 }
-
-const optionVariants = cva(
-  'text-sm p-2 rounded-lg inline-flex items-center gap-2 hover:text-fd-accent-foreground hover:bg-fd-accent [&_svg]:size-4',
-);
 
 export function ViewOptions({
   markdownUrl,
@@ -149,11 +170,15 @@ export function ViewOptions({
    */
   markdownUrl: string;
 }) {
-  const items = useMemo(() => {
-    const fullMarkdownUrl =
-      typeof window !== 'undefined' ? new URL(markdownUrl, window.location.origin) : 'loading';
-    const q = `Read ${fullMarkdownUrl}, I want to ask questions about it.`;
+  // Seeds the ChatGPT / Claude entries with the page's Markdown URL so the
+  // external assistants can read the current page directly. The in-site
+  // assistant (Inkeep) opens via `data-inkeep-modal-trigger="chat"` and does
+  // not currently support programmatic prompt seeding.
+  const fullMarkdownUrl =
+    typeof window !== 'undefined' ? new URL(markdownUrl, window.location.origin) : 'loading';
+  const q = `Read ${fullMarkdownUrl}, I want to ask questions about it.`;
 
+  const items = useMemo(() => {
     return [
       {
         title: 'Open in ChatGPT',
@@ -191,47 +216,71 @@ export function ViewOptions({
         ),
       },
     ];
-  }, [markdownUrl]);
+  }, [q]);
 
   return (
-    <Popover>
-      <PopoverTrigger
+    <div className="relative inline-flex">
+      <button
+        type="button"
         aria-label="Ask our AI assistant"
+        data-inkeep-modal-trigger="chat"
         className={cn(
           buttonVariants({
             color: 'secondary',
             size: 'sm',
-            className: 'gap-2',
+            className: 'rounded-r-none border-r-0',
           }),
         )}
       >
-        <Sparkles className="size-3.5 text-fd-muted-foreground" />
-        <span className="sr-only">Open</span>
-        <ChevronDown className="size-3.5 text-fd-muted-foreground" />
-      </PopoverTrigger>
-      <PopoverContent className="flex flex-col">
-        <PopoverClose asChild>
-          <button type="button" data-inkeep-modal-trigger="chat" className={cn(optionVariants())}>
-            <MessageSquare className="text-fd-muted-foreground" />
-            Ask our AI assistant
-          </button>
-        </PopoverClose>
+        {/* `pointer-events-none` ensures `event.target === <button>`. Inkeep
+            CXKit matches `data-inkeep-modal-trigger` against the exact event
+            target (not via `closest()`), so clicks that land on the inner SVG
+            would otherwise be silently ignored. */}
+        <Sparkles className="size-3.5 text-fd-muted-foreground pointer-events-none" />
+      </button>
 
-        {items.map((item) => (
-          <a
-            key={item.href}
-            href={item.href}
-            rel="noreferrer noopener"
-            target="_blank"
-            className={cn(optionVariants())}
-          >
-            {item.icon}
-            {item.title}
-            <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
-          </a>
-        ))}
-      </PopoverContent>
-    </Popover>
+      <Popover>
+        <PopoverTrigger
+          aria-label="Ask AI options"
+          className={cn(
+            buttonVariants({
+              color: 'secondary',
+              size: 'sm',
+              className: 'rounded-l-none px-2',
+            }),
+          )}
+        >
+          <ChevronDown className="size-3.5 text-fd-muted-foreground" />
+        </PopoverTrigger>
+        <PopoverContent className="flex flex-col">
+          <PopoverClose asChild>
+            <button
+              type="button"
+              data-inkeep-modal-trigger="chat"
+              className={cn(optionVariants())}
+            >
+              {/* See Sparkles note above — same Inkeep strict-target gotcha. */}
+              <MessageSquare className="text-fd-muted-foreground pointer-events-none" />
+              Ask our AI assistant
+            </button>
+          </PopoverClose>
+
+          {items.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              rel="noreferrer noopener"
+              target="_blank"
+              className={cn(optionVariants())}
+            >
+              {item.icon}
+              {item.title}
+              <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
+            </a>
+          ))}
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
