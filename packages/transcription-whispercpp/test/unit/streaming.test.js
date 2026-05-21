@@ -6,13 +6,11 @@ const MockedBinding = require('../mocks/MockedBinding.js')
 const { transitionCb, wait } = require('../mocks/utils.js')
 const { WhisperInterface } = require('../../whisper')
 
-const process = require('process')
+const process = require('bare-process')
 global.process = process
-const sinon = require('sinon')
 
 function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) {
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
-  const validateStub = sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
+  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
 
   const args = {
     files: {
@@ -34,7 +32,7 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   }
   const model = new TranscriptionWhispercpp(args, config)
 
-  sinon.stub(model, '_createAddon').callsFake(configurationParams => {
+  model._createAddon = configurationParams => {
     const _binding = binding || new MockedBinding()
     const addon = new WhisperInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
       onOutput(addon, event, jobId, output, error)
@@ -42,9 +40,8 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
     }, transitionCb)
 
     return addon
-  })
+  }
 
-  model._validateStub = validateStub
   return model
 }
 

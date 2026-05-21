@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -33,42 +32,44 @@ function containsEmoji (text) {
   return /\u{1F600}/u.test(text)
 }
 
-test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async t => {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: MODEL.name,
-    downloadUrl: MODEL.url
-  })
-
-  const modelPath = path.join(dirPath, modelName)
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
+safeTest('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async t => {
+  let model = null
+  let specLogger = null
   let loggerReleased = false
   const releaseLogger = () => {
     if (loggerReleased) return
     loggerReleased = true
-    specLogger.release()
+    if (specLogger) specLogger.release()
   }
-
-  const config = {
-    device: useCpu ? 'cpu' : 'gpu',
-    gpu_layers: '999',
-    ctx_size: '1024',
-    temp: '0',
-    top_p: '0.8',
-    top_k: '30',
-    n_predict: '8',
-    seed: '42',
-    verbosity: '2'
-  }
-
-  const model = new LlmLlamacpp({
-    files: { model: [modelPath] },
-    config,
-    logger: console,
-    opts: { stats: true }
-  })
-
-  let output = ''
   try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: MODEL.name,
+      downloadUrl: MODEL.url
+    })
+
+    const modelPath = path.join(dirPath, modelName)
+    specLogger = attachSpecLogger({ forwardToConsole: true })
+
+    const config = {
+      device: useCpu ? 'cpu' : 'gpu',
+      gpu_layers: '999',
+      ctx_size: '1024',
+      temp: '0',
+      top_p: '0.8',
+      top_k: '30',
+      n_predict: '8',
+      seed: '42',
+      verbosity: '2'
+    }
+
+    model = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config,
+      logger: console,
+      opts: { stats: true }
+    })
+
+    let output = ''
     await model.load()
     const response = await model.run(UTF8_PROMPT)
     await response
@@ -84,7 +85,7 @@ test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async
     t.is(normalized, '😀', 'model respected exact emoji instruction')
     t.ok(response.stats.generatedTokens > 0, 'token stats recorded')
   } finally {
-    await model.unload().catch(() => {})
+    if (model) await model.unload().catch(() => {})
     releaseLogger()
   }
 })

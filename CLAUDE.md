@@ -125,7 +125,7 @@ qvac/
 │   └── settings.json          # [GENERATED] from packages/ocr-onnx/.agent/settings.json
 ├── .cursor/                   # Cursor config
 │   ├── skills/setup/          # Bootstrap skill (tracked in git)
-│   ├── skills/                # Existing skills (addon-changelog, sdk-*, etc.)
+│   ├── skills/                # Custom skills (qv-addon-*, qv-sdk-*, qv-pr-*, etc.)
 │   ├── commands/              # Existing commands
 │   └── rules/                 # .mdc files with Cursor-specific rules
 │   ├── sdk/              # Main SDK entry point

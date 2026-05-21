@@ -21,9 +21,9 @@ Rules governing agent-driven automation in DevOps surfaces — Cursor skills, ho
 ## Read-only default
 
 - **Skills default to read-only.** Mutations to the local repo, the remote (GitHub state, releases, branch protection), or external systems (cloud, k8s, Slack, Asana) require explicit user opt-in per call.
-- **The `pr-review` pattern is the reference**: print the exact command, wait for user confirmation, then execute. Never auto-execute.
+- **The `qv-pr-review` pattern is the reference**: print the exact command, wait for user confirmation, then execute. Never auto-execute.
 - **No silent file mutations** to the user's working tree. If a skill writes outside `/tmp/` or its own `_lib/` cache, it announces what and why first.
-- **No silent git mutations**: forbidden without explicit user instruction — `git switch`, `git checkout` (any ref/file), `git reset`, `git restore`, `git stash`, `git pull`, `git merge`, `git rebase`, `git cherry-pick`, `git clean`, `gh pr checkout`. (See `.cursor/skills/pr-review/SKILL.md` "Safety rules" section for the canonical wording.)
+- **No silent git mutations**: forbidden without explicit user instruction — `git switch`, `git checkout` (any ref/file), `git reset`, `git restore`, `git stash`, `git pull`, `git merge`, `git rebase`, `git cherry-pick`, `git clean`, `gh pr checkout`. (See `.cursor/skills/qv-pr-review/SKILL.md` "Safety rules" section for the canonical wording.)
 
 ## Plan-then-apply for state changes
 
@@ -44,7 +44,7 @@ Rules governing agent-driven automation in DevOps surfaces — Cursor skills, ho
 ## Idempotency
 
 - **Skills must be idempotent.** Re-running with identical inputs produces the same effect, or reports "already applied" without making changes.
-- **Generated artifacts (NOTICE files, changelog entries, generated docs) sort deterministically** so re-runs produce byte-identical output and clean diffs (the `notice-generate` skill is the reference).
+- **Generated artifacts (NOTICE files, changelog entries, generated docs) sort deterministically** so re-runs produce byte-identical output and clean diffs (the `qv-notice-generate` skill is the reference).
 - **Network-dependent skills** cache responses where reasonable (`/tmp/<skill>-<id>.json`) and document staleness.
 
 ## Validation before success
@@ -78,7 +78,7 @@ Rules governing agent-driven automation in DevOps surfaces — Cursor skills, ho
 
 ## Bounded resource use
 
-- **Bound shell-call count per skill.** State an explicit budget in the skill's "Efficiency rules" section (the `pr-review` skill caps at ~5–8 calls; treat that as the ceiling unless justified).
+- **Bound shell-call count per skill.** State an explicit budget in the skill's "Efficiency rules" section (the `qv-pr-review` skill caps at ~5–8 calls; treat that as the ceiling unless justified).
 - **Cache fetched data once per session** (`/tmp/<skill>-<id>.json`). Never re-fetch the same PR/run/file in one session.
 - **Use dedicated tools, not shell.** `Read` instead of `cat`/`head`/`tail`, `Grep` instead of `grep`/`rg`, `Glob` instead of `find`, `Write`/`StrReplace` instead of `echo >` / heredoc.
 - **Prefer scripts in `_lib/<domain>/`** over inline shell pipelines. Scripts are testable, deterministic, and share-able across skills.
@@ -86,7 +86,7 @@ Rules governing agent-driven automation in DevOps surfaces — Cursor skills, ho
 ## Skill authoring conventions
 
 - **One skill = one capability.** Don't compose unrelated workflows in a single skill.
-- **Naming**: kebab-case, prefix-grouped (`devops-*`, `sdk-*`, `addon-*`, `pr-*`).
+- **Naming**: kebab-case, all custom repo skills use the `qv-` prefix, then pod or domain segment (`qv-devops-*`, `qv-sdk-*`, `qv-addon-*`, `qv-pr-*`).
 - **`SKILL.md` body ≤ 500 lines.** Push detail to `references/*.md` and link one level deep.
 - **Slash-command discoverability**: include `/<skill-name>` in the description.
 - **Auto-invoke vs explicit**: `disable-model-invocation: true` for any skill that mutates state, posts publicly, or runs slow / expensive tooling. Auto-invoke only for read-only, fast, contextually obvious helpers.

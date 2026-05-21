@@ -71,6 +71,51 @@ declare interface ParakeetConfig {
    * (2000 ms). ASR sessions only.
    */
   streamingRightLookaheadMs?: number
+
+  /**
+   * AOSC (Audio-Online Speaker Cache): enable v2.1 Sortformer's
+   * speaker-cache streaming. Ignored on v1/v2 Sortformer GGUFs and on
+   * non-Sortformer models. Set false to force a v2.1 model onto the
+   * v1 sliding-window path (e.g. for A/B comparison). Default: true.
+   *
+   * The cache anchors each speaker to a stable slot across silence and
+   * re-entry, fixing the per-chunk permutation-invariance drift that v1
+   * suffers from when two voices have been seen in the rolling window.
+   * v2.1 is auto-detected from the GGUF metadata tag
+   * `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"`.
+   */
+  streamingSpkCacheEnable?: boolean
+  /** AOSC: long-term speaker-cache rows (~15 s of encoder frames). Default: 188. */
+  streamingSpkCacheLen?: number
+  /** AOSC: FIFO warmup buffer rows. Default: 188. */
+  streamingFifoLen?: number
+  /** AOSC: encoder left-context window (ms; ~1 encoder frame). Default: 80. */
+  streamingChunkLeftContextMs?: number
+  /** AOSC: encoder right-context window (ms; ~7 encoder frames). Default: 560. */
+  streamingChunkRightContextMs?: number
+  /** AOSC: FIFO-overflow pop-out count. Default: 144. */
+  streamingSpkCacheUpdatePeriod?: number
+  /**
+   * Directory the native addon scans for dynamically-loaded ggml
+   * backend libraries (`libqvac-speech-ggml-vulkan.so`,
+   * `libqvac-speech-ggml-opencl.so`, per-arch
+   * `libqvac-speech-ggml-cpu-android_armv*_*.so`). Defaults to the
+   * package's own `prebuilds/` folder where cmake-bare installs them
+   * next to the `.bare` module on Android / Linux. Pass an explicit
+   * path when the host bundles the prebuilds elsewhere (e.g. an
+   * Android APK's `nativeLibraryDir`). No-op on Apple targets
+   * (statically linked ggml core; no .so backends to discover).
+   */
+  backendsDir?: string
+  /**
+   * Persistent directory for ggml-opencl's `clCreateProgramWithBinary`
+   * cache. Sets `$GGML_OPENCL_CACHE_DIR` before the first backend
+   * init so subsequent process starts skip the cold `clBuildProgram`
+   * cost (which dominates first-utterance latency on Adreno).
+   * Android-only; ignored on every other platform. Pass the host
+   * app's cache directory (e.g. Android `Context.getCacheDir()`).
+   */
+  openclCacheDir?: string
 }
 
 /**
@@ -175,6 +220,18 @@ declare interface StreamingRunConfig {
   emitPartials?: boolean
   /** CTC/TDT-only energy-VAD events. */
   emitEnergyVad?: boolean
+  /** AOSC: enable/disable v2.1 speaker cache (overrides `streamingSpkCacheEnable`). */
+  spkCacheEnable?: boolean
+  /** AOSC: long-term speaker-cache rows (overrides `streamingSpkCacheLen`). */
+  spkCacheLen?: number
+  /** AOSC: FIFO warmup buffer rows (overrides `streamingFifoLen`). */
+  fifoLen?: number
+  /** AOSC: encoder left-context window in ms (overrides `streamingChunkLeftContextMs`). */
+  chunkLeftContextMs?: number
+  /** AOSC: encoder right-context window in ms (overrides `streamingChunkRightContextMs`). */
+  chunkRightContextMs?: number
+  /** AOSC: FIFO-overflow pop-out count (overrides `streamingSpkCacheUpdatePeriod`). */
+  spkCacheUpdatePeriod?: number
 }
 
 /**
