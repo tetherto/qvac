@@ -5,6 +5,7 @@ import {
   type VideoStats,
 } from "@/schemas";
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
+import { generateClientRequestId } from "@/client/api/client-request-id";
 import { decodeBase64, encodeBase64 } from "@/utils/encoding";
 
 export interface VideoProgressTick {
@@ -13,7 +14,8 @@ export interface VideoProgressTick {
   elapsedMs: number;
 }
 
-interface VideoResult {
+export interface VideoResult {
+  requestId: string;
   progressStream: AsyncGenerator<VideoProgressTick>;
   outputs: Promise<Uint8Array[]>;
   stats: Promise<VideoStats | undefined>;
@@ -26,6 +28,7 @@ export function video(params: VideoClientParams): VideoResult {
     control_frames,
     ...rest
   } = params;
+  const requestId = generateClientRequestId();
 
   const request: VideoStreamRequest = {
     ...rest,
@@ -35,6 +38,7 @@ export function video(params: VideoClientParams): VideoResult {
       control_frames: control_frames.map(encodeBase64),
     }),
     type: "videoStream",
+    requestId,
   };
 
   let statsResolver: (value: VideoStats | undefined) => void = () => {};
@@ -121,6 +125,7 @@ export function video(params: VideoClientParams): VideoResult {
   })();
 
   return {
+    requestId,
     progressStream,
     outputs: outputsPromise,
     stats: statsPromise,
