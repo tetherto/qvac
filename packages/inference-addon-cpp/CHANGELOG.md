@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.1] - 2026-05-20
+
+### Fixed
+- `~OutputCallBackJs()` now releases JS references synchronously before scheduling `uv_close`, instead of doing it inside the close-callback lambda. The previous ordering deferred `js_delete_reference()` into a libuv close-phase callback that could run after the host worklet `js_env_t*` had already been invalidated (iOS bare-kit teardown after `unload()`), producing `EXC_BAD_ACCESS` / PAC failures inside `js_delete_reference` / `js_open_handle_scope`. The close-callback now only frees the `uv_async_t` handle and the `State`, neither of which touches the JS env, so it is safe regardless of when libuv runs it.
+
 ## [1.1.5] - 2026-04-30
 
 ### Fixed
