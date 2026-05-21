@@ -142,18 +142,43 @@ process.on('exit', () => {
   }
 })
 
-// Tri-state asset detection:
-//   - HAVE: all three env vars are set AND the files exist → run the
-//           test against the real artefacts.
-//   - SKIP: env vars are unset → local dev convenience, skip cleanly.
+// Tri-state asset detection (+ mobile fast path):
+//   - HAVE_DESKTOP: all three env vars are set AND the files exist →
+//           run against the safetensors artefacts on local disk.
+//   - HAVE_MOBILE:  on iOS/Android with the small JSON fixtures + the
+//           presigned-URL config bundled in testAssets/ → download the
+//           GGUF at runtime, load inputs from the small JSONs.
+//   - SKIP: env vars are unset *and* no mobile assets → local dev
+//           convenience, skip cleanly.
 //   - FAIL: env vars are set but a file is missing → loud failure.
-//           CI sets the env vars unconditionally; a silent skip would
-//           hide a broken S3 download or a stale asset path.
+//           CI sets the env vars unconditionally on desktop; a silent
+//           skip would hide a broken S3 download or a stale asset path.
+function _hasMobileAssetsBundle () {
+  if (!_isMobile) return false
+  if (typeof global === 'undefined' || !global.assetPaths) return false
+  // We only need to confirm presence of the URL JSON here — the
+  // fixture / actions-ref JSONs are verified when _loadMobileFixtureJson
+  // actually reads them.
+  const candidates = [
+    '../../testAssets/pi05-urls.json',
+    '../mobile/testAssets/pi05-urls.json',
+    'testAssets/pi05-urls.json',
+    '../testAssets/pi05-urls.json'
+  ]
+  for (const c of candidates) {
+    if (global.assetPaths[c]) return true
+  }
+  return false
+}
+
 const _assetsState = (function detectAssets () {
   const keys = ['PI05_TEST_GGUF', 'PI05_TEST_FIXTURE', 'PI05_TEST_ACTIVATIONS']
   const values = keys.map((k) => process.env[k])
   const allUnset = values.every((v) => !v)
-  if (allUnset) return { state: 'SKIP' }
+  if (allUnset) {
+    if (_hasMobileAssetsBundle()) return { state: 'HAVE_MOBILE' }
+    return { state: 'SKIP' }
+  }
   const missing = keys.filter((k, i) => !values[i] || !fs.existsSync(values[i]))
   if (missing.length > 0) {
     return {
@@ -162,11 +187,12 @@ const _assetsState = (function detectAssets () {
         missing.map((k) => `${k}=${process.env[k] || '<unset>'}`).join(', ')
     }
   }
-  return { state: 'HAVE' }
+  return { state: 'HAVE_DESKTOP' }
 })()
 
 const SKIP_REASON =
-  'set PI05_TEST_GGUF / PI05_TEST_FIXTURE / PI05_TEST_ACTIVATIONS env vars to run'
+  'desktop: set PI05_TEST_GGUF / PI05_TEST_FIXTURE / PI05_TEST_ACTIVATIONS env vars; ' +
+  'mobile: bundle pi05-urls.json + pi05-fixture.json + pi05-actions-ref.json in testAssets/'
 
 // ── Inline safetensors v1 parser ──────────────────────────────────────────
 // Header: 8-byte LE uint64 = JSON header byte length, then the JSON header,
@@ -239,7 +265,295 @@ function maxAbs (a) {
   return m
 }
 
-test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 300000 }, async (t) => {
+// ── Mobile asset loading & GGUF download ──────────────────────────────────
+// On AWS Device Farm the addon runs inside the test-addon-mobile APK, so we
+// can't bake a ~4 GB GGUF into it. The mobile workflow bundles a presigned
+// URL JSON into testAssets/ and we stream-download to writable storage on
+// first run. Mirrors the pattern in addon.test.js (kept inline rather than
+// shared to avoid a refactor across both tests in this change — follow-up
+// could extract into test/integration/_mobile-fetch.js).
+
+function _loadMobileUrlsConfig () {
+  if (typeof global === 'undefined' || !global.assetPaths) return null
+  const candidates = [
+    '../../testAssets/pi05-urls.json',
+    '../mobile/testAssets/pi05-urls.json',
+    'testAssets/pi05-urls.json',
+    '../testAssets/pi05-urls.json'
+  ]
+  for (const candidate of candidates) {
+    const p = global.assetPaths[candidate]
+    if (!p) continue
+    try {
+      const raw = fs.readFileSync(p.replace('file://', ''), 'utf8')
+      return JSON.parse(raw)
+    } catch (err) {
+      console.log(`[pi05-mobile] failed to read ${candidate}: ${err && err.message}`)
+    }
+  }
+  return null
+}
+
+function _loadMobileFixtureJson () {
+  if (typeof global === 'undefined' || !global.assetPaths) return null
+  const fixCandidates = [
+    '../../testAssets/pi05-fixture.json',
+    '../mobile/testAssets/pi05-fixture.json',
+    'testAssets/pi05-fixture.json',
+    '../testAssets/pi05-fixture.json'
+  ]
+  const refCandidates = [
+    '../../testAssets/pi05-actions-ref.json',
+    '../mobile/testAssets/pi05-actions-ref.json',
+    'testAssets/pi05-actions-ref.json',
+    '../testAssets/pi05-actions-ref.json'
+  ]
+  function _readFirst (candidates, label) {
+    for (const c of candidates) {
+      const p = global.assetPaths[c]
+      if (!p) continue
+      try {
+        return JSON.parse(fs.readFileSync(p.replace('file://', ''), 'utf8'))
+      } catch (err) {
+        console.log(`[pi05-mobile] failed to read ${label} ${c}: ${err && err.message}`)
+      }
+    }
+    return null
+  }
+  const fixture = _readFirst(fixCandidates, 'fixture')
+  const ref = _readFirst(refCandidates, 'actions-ref')
+  if (!fixture || !ref) return null
+
+  // Decode the base64-packed images_chw_f32 back into a Float32Array.
+  // 3 cams × 3*224*224 = 451584 floats per camera; total payload is
+  // 3 * 3*224*224 * 4 = 1806336 raw bytes (≈ 2.4 MB base64-encoded).
+  if (!fixture.images_chw_f32_b64) {
+    throw new Error('pi05-fixture.json missing images_chw_f32_b64')
+  }
+  const imageBytes = Buffer.from(fixture.images_chw_f32_b64, 'base64')
+  const images = new Float32Array(
+    imageBytes.buffer, imageBytes.byteOffset, imageBytes.byteLength / 4
+  )
+  const tokens = Int32Array.from(fixture.tokens)
+  const mask = Uint8Array.from(fixture.mask)
+  const noise = Float32Array.from(fixture.noise)
+
+  const refRows = ref['ode.actions_final']
+  if (!Array.isArray(refRows) || refRows.length !== 50) {
+    throw new Error('pi05-actions-ref.json: bad ode.actions_final shape')
+  }
+  const expected = new Float32Array(50 * 32)
+  for (let i = 0; i < 50; i++) {
+    for (let j = 0; j < 32; j++) expected[i * 32 + j] = refRows[i][j]
+  }
+  return { images, tokens, mask, noise, expected }
+}
+
+function _streamDownload (url, destPath, maxRedirects = 5) {
+  const https = require('bare-https')
+  return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
+    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+    console.log(`[pi05-mobile] downloading: ${url.substring(0, 60)}...`)
+    const file = fs.createWriteStream(destPath)
+    file.on('error', (err) => {
+      file.destroy()
+      try { fs.unlinkSync(destPath) } catch (_) {}
+      safeReject(err)
+    })
+    const req = https.request(url, (res) => {
+      if ([301, 302, 307, 308].includes(res.statusCode)) {
+        if (typeof res.resume === 'function') res.resume()
+        file.destroy()
+        try { fs.unlinkSync(destPath) } catch (_) {}
+        const location = res.headers.location
+        if (location && maxRedirects > 0) {
+          _streamDownload(location, destPath, maxRedirects - 1).then(safeResolve, safeReject)
+          return
+        }
+        safeReject(new Error(`HTTP ${res.statusCode}: redirect not followed`))
+        return
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        if (typeof res.resume === 'function') res.resume()
+        file.destroy()
+        try { fs.unlinkSync(destPath) } catch (_) {}
+        safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
+        return
+      }
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+      const LOG_INTERVAL_BYTES = 50 * 1024 * 1024
+      let downloadedBytes = 0
+      let nextLogBytes = LOG_INTERVAL_BYTES
+      res.on('data', (chunk) => {
+        downloadedBytes += chunk.length
+        if (downloadedBytes >= nextLogBytes) {
+          const mb = downloadedBytes / (1024 * 1024)
+          const pct = contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
+          console.log(`[pi05-mobile] progress: ${mb.toFixed(0)}MB${pct}`)
+          nextLogBytes += LOG_INTERVAL_BYTES
+        }
+      })
+      res.on('error', (err) => {
+        file.destroy()
+        try { fs.unlinkSync(destPath) } catch (_) {}
+        safeReject(err)
+      })
+      res.pipe(file)
+      file.on('close', () => {
+        const mb = downloadedBytes / (1024 * 1024)
+        console.log(`[pi05-mobile] downloaded: ${path.basename(destPath)} (${mb.toFixed(1)}MB)`)
+        safeResolve()
+      })
+    })
+    req.on('error', (err) => {
+      file.destroy()
+      try { fs.unlinkSync(destPath) } catch (_) {}
+      safeReject(err)
+    })
+    req.end()
+  })
+}
+
+async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
+  let lastErr = null
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoffMs = 500 * (2 ** (attempt - 1))
+      console.log(`[pi05-mobile] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`)
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
+    }
+    try {
+      await _streamDownload(url, destPath, maxRedirects)
+      return
+    } catch (err) {
+      lastErr = err
+      if (err && /HTTP \d{3}/.test(err.message || '')) throw err
+      try { fs.unlinkSync(destPath) } catch (_) {}
+    }
+  }
+  throw new Error(`[pi05-mobile] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
+}
+
+async function _sha256File (filePath) {
+  let crypto
+  try { crypto = require('bare-crypto') } catch (_) { return null }
+  return await new Promise((resolve, reject) => {
+    let hash
+    try { hash = crypto.createHash('sha256') } catch (_) { return resolve(null) }
+    const stream = fs.createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
+  })
+}
+
+async function _verifyCachedModel (filePath, urlConfig) {
+  const stat = fs.statSync(filePath)
+  if (urlConfig && Number.isInteger(urlConfig.sizeBytes)) {
+    if (stat.size !== urlConfig.sizeBytes) {
+      return { ok: false, reason: `size ${stat.size} != expected ${urlConfig.sizeBytes}` }
+    }
+  } else {
+    const cachedMB = stat.size / (1024 * 1024)
+    if (cachedMB < 100) {
+      return { ok: false, reason: `size ${cachedMB.toFixed(2)}MB < 100MB floor` }
+    }
+  }
+  if (urlConfig && typeof urlConfig.sha256 === 'string' && urlConfig.sha256.length === 64) {
+    const got = await _sha256File(filePath)
+    if (got && got !== urlConfig.sha256.toLowerCase()) {
+      return { ok: false, reason: `sha256 ${got} != expected ${urlConfig.sha256}` }
+    }
+    if (got) console.log(`[pi05-mobile] sha256 verified: ${got.slice(0, 12)}…`)
+  }
+  return { ok: true }
+}
+
+async function _ensureMobilePi05Model () {
+  const modelFilename = 'pi05-base-q-aggressive.gguf'
+  const writableRoot = global.testDir || '/tmp'
+  const modelsDir = path.join(writableRoot, 'vla-models')
+  try { fs.mkdirSync(modelsDir, { recursive: true }) } catch (_) {}
+  const destPath = path.join(modelsDir, modelFilename)
+
+  const urlConfig = _loadMobileUrlsConfig()
+  if (!urlConfig || !urlConfig.modelUrl) {
+    throw new Error('pi05-urls.json not found in testAssets — cannot download GGUF on mobile')
+  }
+
+  if (fs.existsSync(destPath)) {
+    const verdict = await _verifyCachedModel(destPath, urlConfig)
+    if (verdict.ok) {
+      const mb = fs.statSync(destPath).size / (1024 * 1024)
+      console.log(`[pi05-mobile] reusing cached GGUF: ${destPath} (${mb.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`[pi05-mobile] cached GGUF rejected (${verdict.reason}) — re-downloading`)
+    try { fs.unlinkSync(destPath) } catch (_) {}
+  }
+
+  await _downloadFile(urlConfig.modelUrl, destPath)
+  const verdict = await _verifyCachedModel(destPath, urlConfig)
+  if (!verdict.ok) {
+    throw new Error(`downloaded pi05 GGUF failed verification: ${verdict.reason}`)
+  }
+  return destPath
+}
+
+// Unified input loader. Returns the same { ggufPath, images[3], tokens,
+// mask, noise, expected } shape regardless of which side has assets, so
+// the test body doesn't have to branch on platform.
+async function _loadTestInputs () {
+  const perCam = 3 * 224 * 224
+  if (_assetsState.state === 'HAVE_DESKTOP') {
+    const fixture = loadSafetensors(process.env.PI05_TEST_FIXTURE)
+    const activations = loadSafetensors(process.env.PI05_TEST_ACTIVATIONS)
+    const allImages = fixture.get('fixture.images')
+    if (allImages.length !== 3 * perCam) {
+      throw new Error(`fixture.images length ${allImages.length} != 3*${perCam}`)
+    }
+    return {
+      ggufPath: process.env.PI05_TEST_GGUF,
+      images: [
+        allImages.subarray(0, perCam),
+        allImages.subarray(perCam, 2 * perCam),
+        allImages.subarray(2 * perCam, 3 * perCam)
+      ],
+      tokens: fixture.get('fixture.tokens'),
+      mask: fixture.get('fixture.mask'),
+      noise: fixture.get('fixture.noise'),
+      expected: activations.get('ode.actions_final')
+    }
+  }
+  if (_assetsState.state === 'HAVE_MOBILE') {
+    const mobile = _loadMobileFixtureJson()
+    if (!mobile) {
+      throw new Error('mobile fixture/actions-ref JSON not found in testAssets')
+    }
+    const ggufPath = await _ensureMobilePi05Model()
+    const allImages = mobile.images
+    if (allImages.length !== 3 * perCam) {
+      throw new Error(`mobile images length ${allImages.length} != 3*${perCam}`)
+    }
+    return {
+      ggufPath,
+      images: [
+        allImages.subarray(0, perCam),
+        allImages.subarray(perCam, 2 * perCam),
+        allImages.subarray(2 * perCam, 3 * perCam)
+      ],
+      tokens: mobile.tokens,
+      mask: mobile.mask,
+      noise: mobile.noise,
+      expected: mobile.expected
+    }
+  }
+  return null
+}
+
+test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 600000 }, async (t) => {
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
@@ -249,26 +563,24 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
     return
   }
 
-  // ── Load fixture inputs + expected outputs ──────────────────────────────
-  const fixture = loadSafetensors(process.env.PI05_TEST_FIXTURE)
-  const activations = loadSafetensors(process.env.PI05_TEST_ACTIVATIONS)
+  // ── Load inputs + expected (desktop safetensors OR mobile JSON) ────────
+  const inputs = await _loadTestInputs()
+  if (!inputs) {
+    // Should be unreachable given the SKIP/FAIL handling above, but
+    // belt-and-suspenders for the test logic.
+    t.fail('_loadTestInputs returned null despite asset state ' + _assetsState.state)
+    return
+  }
+  const { ggufPath, images, tokens, mask, noise, expected } = inputs
 
   // fixture.images is shape (3, 3, 224, 224) F32. Each per-camera slice is
   // 3*224*224 = 150528 floats, contiguous CHW. That's exactly the layout
   // VlaModel.run() expects per `input.images[i]`.
-  const allImages = fixture.get('fixture.images')
   const perCam = 3 * 224 * 224
-  t.is(allImages.length, 3 * perCam, 'fixture.images length')
-  const images = [
-    allImages.subarray(0, perCam),
-    allImages.subarray(perCam, 2 * perCam),
-    allImages.subarray(2 * perCam, 3 * perCam)
-  ]
-
-  const tokens = fixture.get('fixture.tokens') // Int32Array(200)
-  const mask = fixture.get('fixture.mask') // Uint8Array(200) (bool-packed)
-  const noise = fixture.get('fixture.noise') // Float32Array(50*32)
-  const expected = activations.get('ode.actions_final') // Float32Array(50*32)
+  t.is(images.length, 3, 'three camera buffers')
+  t.is(images[0].length, perCam, 'camera 0 length')
+  t.is(images[1].length, perCam, 'camera 1 length')
+  t.is(images[2].length, perCam, 'camera 2 length')
 
   t.is(tokens.length, 200, 'tokens length')
   t.is(mask.length, 200, 'mask length')
@@ -277,7 +589,7 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
 
   // ── Load Pi05Model via the public VlaModel surface ─────────────────────
   const model = new VlaModel({
-    files: { model: [process.env.PI05_TEST_GGUF] },
+    files: { model: [ggufPath] },
     config: { verbosity: 1 } // WARNING — quiet but surface errors
   })
   await model.load({ backend: 'cpu' })
@@ -424,7 +736,7 @@ test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
   t.ok(err, 'expected an error for missing GGUF')
 })
 
-test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 300000 }, async (t) => {
+test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000 }, async (t) => {
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
@@ -434,8 +746,14 @@ test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usab
     return
   }
 
+  const inputs = await _loadTestInputs()
+  if (!inputs) {
+    t.fail('_loadTestInputs returned null despite asset state ' + _assetsState.state)
+    return
+  }
+
   const model = new VlaModel({
-    files: { model: [path.resolve(process.env.PI05_TEST_GGUF)] },
+    files: { model: [path.resolve(inputs.ggufPath)] },
     config: { verbosity: 1 }
   })
   try {
@@ -475,21 +793,14 @@ test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usab
     // had wedged `_hasActiveResponse`, the next run() would immediately
     // throw JOB_ALREADY_RUNNING — same regression smolvla's equivalent
     // test guards against.
-    const fixture = loadSafetensors(process.env.PI05_TEST_FIXTURE)
-    const allImages = fixture.get('fixture.images')
-    const perCam = 3 * 224 * 224
     const goodInput = {
-      images: [
-        allImages.subarray(0, perCam),
-        allImages.subarray(perCam, 2 * perCam),
-        allImages.subarray(2 * perCam, 3 * perCam)
-      ],
+      images: inputs.images,
       imgWidth: 224,
       imgHeight: 224,
       state: new Float32Array(0),
-      tokens: fixture.get('fixture.tokens'),
-      mask: fixture.get('fixture.mask'),
-      noise: fixture.get('fixture.noise')
+      tokens: inputs.tokens,
+      mask: inputs.mask,
+      noise: inputs.noise
     }
     const response = await model.run(goodInput)
     const { actions } = await response.await()
