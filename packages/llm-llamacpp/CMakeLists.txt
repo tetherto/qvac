@@ -90,6 +90,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/VisionPrefixCache.cpp
   )
 
   target_sources(
@@ -111,6 +112,7 @@ endif()
       llama::common
       llama::mtmd
       nlohmann_json::nlohmann_json
+      OpenSSL::Crypto
   )
 
 
@@ -140,6 +142,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/VisionPrefixCache.cpp
   )
 
   target_include_directories(
@@ -158,6 +161,7 @@ if(BUILD_CLI)
           llama::common
           llama::mtmd
           nlohmann_json::nlohmann_json
+          OpenSSL::Crypto
   )
   find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})

@@ -6,6 +6,7 @@
 #include <llama/mtmd/mtmd.h>
 
 #include "../utils/UTF8TokenBuffer.hpp"
+#include "../utils/VisionPrefixCache.hpp"
 #include "LlmContext.hpp"
 #include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -213,6 +214,11 @@ private:
   std::vector<llama_token> antipromptTokens_;
 
   mtmd::bitmaps bitmaps_;
+  // QVAC-19118 A2: post-projection vision embedding cache. Populated as
+  // images are encoded (cache miss) and consulted before encoding on repeat
+  // queries (cache hit). Capacity is intentionally small (5) — entries are
+  // multi-MB and the cache is process-local.
+  qvac_lib_inference_addon_llama::VisionPrefixCache visionPrefixCache_;
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
