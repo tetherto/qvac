@@ -17,11 +17,8 @@
 //   WAN_MODELS_DIR  - override the default ../models lookup
 //   WAN_DEVICE      - 'gpu' (default) or 'cpu'
 //
-// The Wan ops (IM2COL_3D, PAD-left) require the ggml fork built via the
-// vcpkg overlay at vcpkg/ports/ggml/ — see build.md "Wan video models and
-// the local ggml overlay" for details. With the upstream/registry ggml
-// this test will hard-abort the process via ggml_abort() rather than fail
-// gracefully.
+// The Wan ops (IM2COL_3D, PAD-left) require the ggml fork pinned through the
+// qvac vcpkg registry.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
