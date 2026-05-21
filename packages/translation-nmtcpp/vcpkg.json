@@ -19,7 +19,7 @@
         "gpu-backends"
       ]
     }
-  ], 
+  ],
   "features": {
     "tests": {
       "description": "Build tests",
