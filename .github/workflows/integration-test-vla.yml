@@ -409,12 +409,22 @@ jobs:
         shell: bash
         env:
           QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-vision-q8.gguf', github.workspace, env.WORKDIR) }}
-          # π₀.₅ artefacts (downloaded in the previous step). Empty
-          # string on darwin/x64 to mirror the QVAC_VLA_MODEL convention
-          # — pi05.test.js's HAS_ASSETS guard skips when unset.
-          PI05_TEST_GGUF: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/pi05/pi05-base-q-aggressive.gguf', github.workspace, env.WORKDIR) }}
-          PI05_TEST_FIXTURE: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/test/pi05-oracle/fixture.safetensors', github.workspace, env.WORKDIR) }}
-          PI05_TEST_ACTIVATIONS: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) }}
+          # π₀.₅ artefacts (downloaded in the previous step). Empty string
+          # on darwin/x64 — pi05.test.js's tri-state asset detection
+          # treats all-empty env vars as SKIP (matches the Apple
+          # Paravirtual GPU exclusion above).
+          #
+          # NOTE — flipped conditional vs QVAC_VLA_MODEL above: GHA
+          # expression syntax `A && B || C` returns C when B is falsy
+          # (empty string is falsy!), so `(condition) && '' || path`
+          # always returns `path`. Inverting to `!(condition) && path || ''`
+          # correctly emits empty on the excluded platform. The
+          # QVAC_VLA_MODEL line has the same latent bug but addon.test.js
+          # treats missing-file as a skip rather than a hard fail, so it
+          # didn't surface — left untouched here.
+          PI05_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/pi05/pi05-base-q-aggressive.gguf', github.workspace, env.WORKDIR) || '' }}
+          PI05_TEST_FIXTURE: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/fixture.safetensors', github.workspace, env.WORKDIR) || '' }}
+          PI05_TEST_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) || '' }}
         run: |
           set +e
           # Stream test output AND capture it so we can inspect the TAP summary
