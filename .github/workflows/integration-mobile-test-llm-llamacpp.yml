@@ -165,7 +165,6 @@ jobs:
           qvac-perf-runs: ${{ inputs.qvac_perf_runs }}
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
-          perf-test-regex: '^(runImageElephantTest|runImageFruitPlateTest|runImageHighResAuroraTest|runBitnetTest|runToolCallingTest)$'
 
       - name: Schedule Device Farm test runs
         id: schedule

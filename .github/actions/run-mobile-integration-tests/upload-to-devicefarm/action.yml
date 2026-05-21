@@ -113,10 +113,6 @@ inputs:
     description: "Restrict to perf tests only"
     required: false
     default: "false"
-  perf-test-regex:
-    description: "ERE regex matching perf-emitting test names (used with qvac-perf-only). Groups with no matches are skipped."
-    required: false
-    default: ""
 
   # Custom artifact pulls
   after-hook-pulls:
@@ -293,7 +289,6 @@ runs:
         QVAC_PERF_RUNS: ${{ inputs.qvac-perf-runs }}
         QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac-perf-warmup-runs }}
         QVAC_PERF_ONLY: ${{ inputs.qvac-perf-only }}
-        PERF_TEST_REGEX_INPUT: ${{ inputs.perf-test-regex }}
         AFTER_PULLS: ${{ inputs.after-hook-pulls }}
         AFTER_SNIPPET: ${{ inputs.wdio-after-snippet }}
         EXTRA_PRE_TEST: ${{ inputs.extra-pre-test-commands }}
@@ -389,11 +384,18 @@ runs:
         fi
 
         PERF_TEST_REGEX=""
-        if [ "$QVAC_PERF_ONLY" = "true" ] && [ -n "$PERF_TEST_REGEX_INPUT" ]; then
-          PERF_TEST_REGEX="$PERF_TEST_REGEX_INPUT"
-          echo "perf-only mode: filtering groups with regex: $PERF_TEST_REGEX"
-        elif [ "$QVAC_PERF_ONLY" = "true" ]; then
-          echo "::warning::qvac_perf_only=true but no perf-test-regex supplied — running all tests"
+        if [ "$QVAC_PERF_ONLY" = "true" ]; then
+          PERF_FILE="addon/${ADDON_WORKDIR}/test/mobile/perf-tests.json"
+          if [ -f "$PERF_FILE" ]; then
+            PERF_TESTS=$(jq -r 'join("|")' "$PERF_FILE")
+            if [ -n "$PERF_TESTS" ]; then
+              PERF_TEST_REGEX="^(${PERF_TESTS})$"
+              echo "perf-only mode: filtering with $(jq length "$PERF_FILE") tests from $PERF_FILE"
+            fi
+          fi
+          if [ -z "$PERF_TEST_REGEX" ]; then
+            echo "::warning::qvac_perf_only=true but no perf-tests.json found at $PERF_FILE — running all tests"
+          fi
         fi
 
         filter_perf() {
