@@ -47,7 +47,7 @@ export const cancelThenResumeKvCache: TestDefinition = {
 export const cancelBroadEmbeddings: TestDefinition = {
   testId: "cancel-broad-embeddings",
   params: {
-    passageCount: 256,
+    passageCount: 64,
     passageFiller:
       "machine learning natural language processing transformer architecture attention mechanism gradient descent ",
     passageFillerRepeats: 16,
@@ -64,8 +64,8 @@ export const cancelBroadEmbeddings: TestDefinition = {
 export const cancelBroadTranscribe: TestDefinition = {
   testId: "cancel-broad-transcribe",
   params: {
-    audioFileName: "transcription-short-wav.wav",
-    cancelAfterMs: 0,
+    audioFileName: "cancel-test-90s-16k.wav",
+    cancelAfterMs: 100,
   },
   expectation: { validation: "function", fn: () => true },
   metadata: {
@@ -113,7 +113,7 @@ export const policyRejectConcurrentCompletion: TestDefinition = {
 export const cancelByRequestIdEmbed: TestDefinition = {
   testId: "cancel-by-requestid-embed",
   params: {
-    passageCount: 256,
+    passageCount: 64,
     passageFiller:
       "machine learning natural language processing transformer architecture attention mechanism gradient descent ",
     passageFillerRepeats: 16,
@@ -130,8 +130,8 @@ export const cancelByRequestIdEmbed: TestDefinition = {
 export const cancelByRequestIdTranscribe: TestDefinition = {
   testId: "cancel-by-requestid-transcribe",
   params: {
-    audioFileName: "transcription-short-wav.wav",
-    cancelAfterMs: 0,
+    audioFileName: "cancel-test-90s-16k.wav",
+    cancelAfterMs: 100,
   },
   expectation: { validation: "function", fn: () => true },
   metadata: {
