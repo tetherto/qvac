@@ -66,13 +66,16 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp#readme",
   "devDependencies": {
+    "@qvac/decoder-audio": "^0.3.3",
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.0",
     "@types/node": "^22",
     "bare-buffer": "^3.4.2",
-    "bare-fs": "^4.5.1",
+    "bare-ffmpeg": "^1.0.0-32",
+    "bare-fs": "^4.7.1",
+    "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
-    "bare-tty": "^5.0.3",
+    "bare-stream": "^2.7.0",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -80,16 +83,9 @@
     "standard": "^17.1.2"
   },
   "dependencies": {
-    "@qvac/decoder-audio": "^0.3.3",
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
-    "@qvac/logging": "^0.1.0",
-    "bare-channel": "^5.2.2",
-    "bare-ffmpeg": "^1.0.0-32",
-    "bare-node-worker-threads": "^1.0.0",
-    "bare-path": "^3.0.0",
-    "bare-stream": "^2.7.0",
-    "bare-worker": "^4.1.0"
+    "@qvac/logging": "^0.1.0"
   },
   "exports": {
     "./package": "./package.json",
