@@ -57,7 +57,7 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
           - platform: iOS
             os: macos-14
             runner: macos-14
@@ -84,6 +84,10 @@ jobs:
           sudo apt-get clean || true
           echo "Disk space after cleanup:"
           df -h
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout monorepo (addon package lives under workdir)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -111,7 +115,7 @@ jobs:
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
-          npm install -g @expo/cli@latest
+          npm install -g --force @expo/cli@latest
 
       - name: Verify test files exist
         env:

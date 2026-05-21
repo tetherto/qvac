@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const os = require('bare-os')
 
 const platform = os.platform()
@@ -72,199 +71,206 @@ async function collectResponse (response) {
   return chunks.join('').trim()
 }
 
-test('Two instances can run inference simultaneously', {
+safeTest('Two instances can run inference simultaneously', {
   timeout: 900_000,
   skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: DEFAULT_MODEL.name,
-    downloadUrl: DEFAULT_MODEL.url
-  })
-
-  const { addon: addon1 } = await createInstance(modelName, dirPath)
-  const { addon: addon2 } = await createInstance(modelName, dirPath)
-
-  t.teardown(async () => {
-    await addon1.unload().catch(() => {})
-    await addon2.unload().catch(() => {})
-  })
-
-  await addon1.load()
-  await addon2.load()
-
-  const response1 = await addon1.run(BASE_PROMPT)
-  const response2 = await addon2.run(BASE_PROMPT)
-
-  const [output1, output2] = await Promise.all([
-    collectResponse(response1),
-    collectResponse(response2)
-  ])
-
-  t.ok(output1.length > 0, 'first instance produced output')
-  t.ok(output2.length > 0, 'second instance produced output')
-})
-
-test('Repeated load/unload cycles should remain stable', {
-  timeout: 900_000,
-  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
-}, async t => {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: DEFAULT_MODEL.name,
-    downloadUrl: DEFAULT_MODEL.url
-  })
-
-  const NUM_CYCLES = 6
-
-  for (let i = 0; i < NUM_CYCLES; i++) {
-    const { addon } = await createInstance(modelName, dirPath)
-
-    await addon.load()
-    const response = await addon.run(BASE_PROMPT)
-    const output = await collectResponse(response)
-
-    t.ok(output.length > 0, `cycle ${i + 1}: produced output`)
-
-    await addon.unload()
-
-    t.pass(`cycle ${i + 1}: load/unload completed`)
-  }
-
-  t.pass(`all ${NUM_CYCLES} load/unload cycles completed successfully`)
-})
-
-test('Unloading one instance does not affect another generating instance', {
-  timeout: 900_000,
-  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
-}, async t => {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: DEFAULT_MODEL.name,
-    downloadUrl: DEFAULT_MODEL.url
-  })
-
-  const { addon: addon1 } = await createInstance(modelName, dirPath, {
-    n_predict: '256'
-  })
-  const { addon: addon2 } = await createInstance(modelName, dirPath)
-
-  t.teardown(async () => {
-    await addon1.unload().catch(() => {})
-    await addon2.unload().catch(() => {})
-  })
-
-  await addon1.load()
-  await addon2.load()
-
-  const response1 = await addon1.run(LONG_PROMPT)
-  const chunks = []
-  let unloadedInstance2 = false
-  let resolveAfterTokens
-  let thresholdReached = false
-  const afterTokens = new Promise(resolve => { resolveAfterTokens = resolve })
-
-  const responsePromise = response1
-    .onUpdate(data => {
-      chunks.push(data)
-      if (resolveAfterTokens && chunks.length >= 3) {
-        thresholdReached = true
-        resolveAfterTokens()
-        resolveAfterTokens = null
-      }
-    })
-    .await()
-    .finally(() => {
-      if (resolveAfterTokens) {
-        resolveAfterTokens()
-        resolveAfterTokens = null
-      }
+  let addon1 = null
+  let addon2 = null
+  try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: DEFAULT_MODEL.name,
+      downloadUrl: DEFAULT_MODEL.url
     })
 
-  await afterTokens
-  t.ok(thresholdReached, 'instance 1 produced enough tokens before unloading instance 2')
-  if (!unloadedInstance2) {
-    unloadedInstance2 = true
-    await addon2.unload()
-    t.pass('unloaded instance 2 while instance 1 is generating')
-  }
+    ;({ addon: addon1 } = await createInstance(modelName, dirPath))
+    ;({ addon: addon2 } = await createInstance(modelName, dirPath))
 
-  await responsePromise
-
-  const output1 = chunks.join('').trim()
-  t.ok(output1.length > 0, 'instance 1 completed generation after instance 2 was unloaded')
-  t.ok(unloadedInstance2, 'instance 2 was unloaded during instance 1 generation')
-})
-
-test('Multiple load/unload cycles on one instance while another generates', {
-  timeout: 900_000,
-  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
-}, async t => {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: DEFAULT_MODEL.name,
-    downloadUrl: DEFAULT_MODEL.url
-  })
-
-  const { addon: addon1 } = await createInstance(modelName, dirPath, {
-    n_predict: '512'
-  })
-
-  t.teardown(async () => {
-    await addon1.unload().catch(() => {})
-  })
-
-  await addon1.load()
-
-  const response1 = await addon1.run(LONG_PROMPT)
-  const chunks = []
-  let cyclesCompleted = 0
-  const NUM_CYCLES = 3
-  const TOKENS_PER_CYCLE = 10
-  let resolveTokenTarget = null
-  let tokenTarget = 0
-
-  const waitForTokens = async (count) => {
-    if (chunks.length >= count) return
-    await new Promise(resolve => {
-      tokenTarget = count
-      resolveTokenTarget = resolve
-    })
-  }
-
-  const responsePromise = response1
-    .onUpdate(data => {
-      chunks.push(data)
-      if (resolveTokenTarget && chunks.length >= tokenTarget) {
-        const resolve = resolveTokenTarget
-        resolveTokenTarget = null
-        resolve()
-      }
-    })
-    .await()
-    .finally(() => {
-      if (resolveTokenTarget) {
-        const resolve = resolveTokenTarget
-        resolveTokenTarget = null
-        resolve()
-      }
-    })
-
-  for (let i = 0; i < NUM_CYCLES; i++) {
-    const target = (i + 1) * TOKENS_PER_CYCLE
-    await waitForTokens(target)
-    if (chunks.length < target) {
-      break
-    }
-    cyclesCompleted++
-    const cycleNum = cyclesCompleted
-    const { addon: addon2 } = await createInstance(modelName, dirPath)
+    await addon1.load()
     await addon2.load()
-    await addon2.unload()
-    t.pass(`load/unload cycle ${cycleNum} completed while instance 1 generates`)
+
+    const response1 = await addon1.run(BASE_PROMPT)
+    const response2 = await addon2.run(BASE_PROMPT)
+
+    const [output1, output2] = await Promise.all([
+      collectResponse(response1),
+      collectResponse(response2)
+    ])
+
+    t.ok(output1.length > 0, 'first instance produced output')
+    t.ok(output2.length > 0, 'second instance produced output')
+  } finally {
+    if (addon1) await addon1.unload().catch(() => {})
+    if (addon2) await addon2.unload().catch(() => {})
   }
+})
 
-  await responsePromise
+safeTest('Repeated load/unload cycles should remain stable', {
+  timeout: 900_000,
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+}, async t => {
+  let currentAddon = null
+  try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: DEFAULT_MODEL.name,
+      downloadUrl: DEFAULT_MODEL.url
+    })
 
-  const output1 = chunks.join('').trim()
-  t.ok(output1.length > 0, 'instance 1 completed generation')
-  t.ok(cyclesCompleted > 0, `completed ${cyclesCompleted} load/unload cycles during generation`)
+    const NUM_CYCLES = 6
+
+    for (let i = 0; i < NUM_CYCLES; i++) {
+      const { addon } = await createInstance(modelName, dirPath)
+      currentAddon = addon
+
+      await addon.load()
+      const response = await addon.run(BASE_PROMPT)
+      const output = await collectResponse(response)
+
+      t.ok(output.length > 0, `cycle ${i + 1}: produced output`)
+
+      await addon.unload()
+      currentAddon = null
+
+      t.pass(`cycle ${i + 1}: load/unload completed`)
+    }
+
+    t.pass(`all ${NUM_CYCLES} load/unload cycles completed successfully`)
+  } finally {
+    if (currentAddon) await currentAddon.unload().catch(() => {})
+  }
+})
+
+safeTest('Unloading one instance does not affect another generating instance', {
+  timeout: 900_000,
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+}, async t => {
+  let addon1 = null
+  let addon2 = null
+  try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: DEFAULT_MODEL.name,
+      downloadUrl: DEFAULT_MODEL.url
+    })
+
+    ;({ addon: addon1 } = await createInstance(modelName, dirPath, { n_predict: '256' }))
+    ;({ addon: addon2 } = await createInstance(modelName, dirPath))
+
+    await addon1.load()
+    await addon2.load()
+
+    const response1 = await addon1.run(LONG_PROMPT)
+    const chunks = []
+    let unloadedInstance2 = false
+    let resolveAfterTokens
+    let thresholdReached = false
+    const afterTokens = new Promise(resolve => { resolveAfterTokens = resolve })
+
+    const responsePromise = response1
+      .onUpdate(data => {
+        chunks.push(data)
+        if (resolveAfterTokens && chunks.length >= 3) {
+          thresholdReached = true
+          resolveAfterTokens()
+          resolveAfterTokens = null
+        }
+      })
+      .await()
+      .finally(() => {
+        if (resolveAfterTokens) {
+          resolveAfterTokens()
+          resolveAfterTokens = null
+        }
+      })
+
+    await afterTokens
+    t.ok(thresholdReached, 'instance 1 produced enough tokens before unloading instance 2')
+    if (!unloadedInstance2) {
+      unloadedInstance2 = true
+      await addon2.unload()
+      addon2 = null
+      t.pass('unloaded instance 2 while instance 1 is generating')
+    }
+
+    await responsePromise
+
+    const output1 = chunks.join('').trim()
+    t.ok(output1.length > 0, 'instance 1 completed generation after instance 2 was unloaded')
+    t.ok(unloadedInstance2, 'instance 2 was unloaded during instance 1 generation')
+  } finally {
+    if (addon1) await addon1.unload().catch(() => {})
+    if (addon2) await addon2.unload().catch(() => {})
+  }
+})
+
+safeTest('Multiple load/unload cycles on one instance while another generates', {
+  timeout: 900_000,
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+}, async t => {
+  let addon1 = null
+  try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: DEFAULT_MODEL.name,
+      downloadUrl: DEFAULT_MODEL.url
+    })
+
+    ;({ addon: addon1 } = await createInstance(modelName, dirPath, { n_predict: '512' }))
+
+    await addon1.load()
+
+    const response1 = await addon1.run(LONG_PROMPT)
+    const chunks = []
+    let cyclesCompleted = 0
+    const NUM_CYCLES = 3
+    const TOKENS_PER_CYCLE = 10
+    let resolveTokenTarget = null
+    let tokenTarget = 0
+
+    const waitForTokens = async (count) => {
+      if (chunks.length >= count) return
+      await new Promise(resolve => {
+        tokenTarget = count
+        resolveTokenTarget = resolve
+      })
+    }
+
+    const responsePromise = response1
+      .onUpdate(data => {
+        chunks.push(data)
+        if (resolveTokenTarget && chunks.length >= tokenTarget) {
+          const resolve = resolveTokenTarget
+          resolveTokenTarget = null
+          resolve()
+        }
+      })
+      .await()
+      .finally(() => {
+        if (resolveTokenTarget) {
+          const resolve = resolveTokenTarget
+          resolveTokenTarget = null
+          resolve()
+        }
+      })
+
+    for (let i = 0; i < NUM_CYCLES; i++) {
+      const target = (i + 1) * TOKENS_PER_CYCLE
+      await waitForTokens(target)
+      if (chunks.length < target) break
+      cyclesCompleted++
+      const cycleNum = cyclesCompleted
+      const { addon: addon2 } = await createInstance(modelName, dirPath)
+      await addon2.load()
+      await addon2.unload()
+      t.pass(`load/unload cycle ${cycleNum} completed while instance 1 generates`)
+    }
+
+    await responsePromise
+
+    const output1 = chunks.join('').trim()
+    t.ok(output1.length > 0, 'instance 1 completed generation')
+    t.ok(cyclesCompleted > 0, `completed ${cyclesCompleted} load/unload cycles during generation`)
+  } finally {
+    if (addon1) await addon1.unload().catch(() => {})
+  }
 })
 
 setImmediate(() => {

@@ -51,8 +51,28 @@ permissions:
   contents: read
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   benchmark-supertonic:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'onnx-tts-v'))
+    if: needs.label-gate.outputs.authorised == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'onnx-tts-v')))
     runs-on: macos-14-xlarge
     environment: release
     timeout-minutes: 180
@@ -81,8 +101,8 @@ jobs:
 
       - name: Install Bare runtime
         run: |
-          npm install -g bare-dev
-          npm install -g bare bare-make
+          npm install -g --force bare-dev
+          npm install -g --force bare bare-make
 
       - name: Determine addon version
         id: version
@@ -225,3 +245,5 @@ jobs:
           name: supertonic-benchmark-results-v${{ steps.version.outputs.version }}
           path: packages/tts-onnx/benchmarks/results/
           retention-days: 30
+    needs:
+      - label-gate

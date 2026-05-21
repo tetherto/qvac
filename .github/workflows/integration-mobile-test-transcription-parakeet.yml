@@ -86,31 +86,16 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: ai-run-linux
+            runner: qvac-ubuntu2404-x64
           - platform: iOS
             os: macos-14
             runner: macos-14
 
     steps:
-      - name: Free up disk space
-        if: matrix.platform == 'Android'
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          sudo rm -rf /opt/hostedtoolcache/go || true
-          sudo rm -rf /opt/hostedtoolcache/Python || true
-          sudo rm -rf /opt/hostedtoolcache/Ruby || true
-          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
-          sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf /usr/share/swift || true
-          sudo docker image prune --all --force || true
-          sudo apt-get clean || true
-          echo "Disk space after cleanup:"
-          df -h
-
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -137,12 +122,12 @@ jobs:
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
-          npm install -g @expo/cli@latest
+          npm install -g --force @expo/cli@latest
 
       # Prebuild source selection.
       #
       # When invoked via workflow_call from on-pr-transcription-parakeet (the
-      # normal PR / verify path), the parent workflow runs prebuilds-...yml
+      # normal PR / verified path), the parent workflow runs prebuilds-...yml
       # first and uploads `parakeet-{android,ios}-*` artifacts. Calling the
       # mobile workflow without setting `package_spec` falls into the artifact
       # branch below.
@@ -329,6 +314,7 @@ jobs:
         continue-on-error: true
 
       - name: Setup Python (.nemo -> .gguf conversion)
+        if: matrix.platform == 'iOS'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'

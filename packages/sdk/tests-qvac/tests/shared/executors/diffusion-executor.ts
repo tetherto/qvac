@@ -35,6 +35,12 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     if (testId === "diffusion-stats-present") {
       return await this.statsPresent(params, expectation);
     }
+    if (testId === "diffusion-fa-loads-and-runs") {
+      return await this.diffusionFaAccepted(params, expectation);
+    }
+    if (testId === "diffusion-fa-disabled-loads-and-runs") {
+      return await this.diffusionFaDisabledAccepted(params, expectation);
+    }
     if (testId === "diffusion-fusion-flux2-basic") {
       return await this.fusionFlux2Basic(params, expectation);
     }
@@ -225,6 +231,36 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Stats test failed: ${errorMsg}` };
+    }
+  }
+
+  async diffusionFaAccepted(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = await this.resolveParams(params as Record<string, unknown>);
+    const modelId = await this.resources.ensureLoaded("diffusion-fa");
+
+    try {
+      const genParams = this.buildParams(modelId, p);
+      const { outputs } = diffusion(genParams);
+      const buffers = await outputs;
+      return ValidationHelpers.validate(buffers, expectation as Expectation);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `diffusion_fa test failed: ${errorMsg}` };
+    }
+  }
+
+  async diffusionFaDisabledAccepted(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = await this.resolveParams(params as Record<string, unknown>);
+    const modelId = await this.resources.ensureLoaded("diffusion-fa-disabled");
+
+    try {
+      const genParams = this.buildParams(modelId, p);
+      const { outputs } = diffusion(genParams);
+      const buffers = await outputs;
+      return ValidationHelpers.validate(buffers, expectation as Expectation);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `diffusion_fa disabled test failed: ${errorMsg}` };
     }
   }
 

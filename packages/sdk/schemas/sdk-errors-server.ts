@@ -18,7 +18,7 @@ export const SDK_SERVER_ERROR_CODES = {
   VAD_MODEL_REQUIRED: 52205,
   TTS_ARTIFACTS_REQUIRED: 52208,
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
-  LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
+  PARAKEET_ARTIFACTS_REQUIRED: 52210,
 
   // Model Operations (52,400-52,799)
   MODEL_UNLOAD_FAILED: 52400,
@@ -41,6 +41,7 @@ export const SDK_SERVER_ERROR_CODES = {
   REQUEST_ID_CONFLICT: 52417,
   REQUEST_NOT_FOUND: 52418,
   INFERENCE_CANCELLED: 52419,
+  REQUEST_REJECTED_BY_POLICY: 52420,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -186,18 +187,12 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message:
       "TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning)",
   },
-  [SDK_SERVER_ERROR_CODES.LEGACY_PARAKEET_MODEL_DEPRECATED]: {
-    name: "LEGACY_PARAKEET_MODEL_DEPRECATED",
-    message: (legacyFields: string) =>
-      `Legacy parakeet ONNX modelConfig fields are no longer supported (found: ${legacyFields}). ` +
-      `As of @qvac/transcription-parakeet 0.4.0 the addon ships as a single GGUF that auto-detects ` +
-      `TDT / CTC / EOU / Sortformer from GGUF metadata. Remove these fields from modelConfig and ` +
-      `pass the GGUF via the top-level modelSrc, e.g.: ` +
-      `loadModel({ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" }). ` +
-      `The legacy ONNX constants (PARAKEET_TDT_ENCODER_INT8, PARAKEET_CTC_FP32, PARAKEET_SORTFORMER_FP32, ` +
-      `etc.) remain exported for one minor cycle for codemod migrations only and will be removed in a ` +
-      `future release.`,
+  [SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED]: {
+    name: "PARAKEET_ARTIFACTS_REQUIRED",
+    message:
+      "Parakeet model sources are missing. TDT requires parakeetEncoderSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc. CTC requires parakeetCtcModelSrc, parakeetTokenizerSrc. Sortformer requires parakeetSortformerSrc.",
   },
+
   // Model Operations (52,400-52,799)
   [SDK_SERVER_ERROR_CODES.MODEL_UNLOAD_FAILED]: {
     name: "MODEL_UNLOAD_FAILED",
@@ -308,6 +303,16 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "INFERENCE_CANCELLED",
     message: (requestId: string) =>
       `Inference request "${requestId}" was cancelled before it could complete`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY]: {
+    name: "REQUEST_REJECTED_BY_POLICY",
+    message: (
+      requestId: string,
+      kind: string,
+      modelId: string,
+      reason: string,
+    ) =>
+      `Request "${requestId}" (kind: ${kind}, modelId: ${modelId}) was rejected by registry concurrency policy: ${reason}`,
   },
 
   // RAG Operations (52,800-52,999)

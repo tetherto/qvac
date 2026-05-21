@@ -88,20 +88,20 @@ export class ConfigExecutor extends BaseExecutor<typeof configTests> {
     let progressEvents = 0;
     const startTime = Date.now();
 
-    const result = await downloadAsset({
+    const op = downloadAsset({
       assetSrc: OCR_CYRILLIC_RECOGNIZER,
       onProgress: (p: { downloadKey?: string; percentage: number }) => {
         progressEvents++;
-        if (!cancelTriggered && p.downloadKey && p.percentage >= 1) {
+        if (!cancelTriggered && p.percentage >= 1) {
           cancelTriggered = true;
           void cancel({
-            operation: "downloadAsset",
-            downloadKey: p.downloadKey,
+            requestId: op.requestId,
             clearCache: true,
           });
         }
       },
-    }).then(
+    });
+    const result = await op.then(
       (id: string) => ({ status: "ok" as const, id }),
       (err: unknown) => ({
         status: "fail" as const,

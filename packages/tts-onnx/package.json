@@ -18,6 +18,9 @@
     "test:integration": "brittle-bare test/integration/addon.test.js",
     "test:integration:medium": "INPUT_SENTENCES=medium brittle-bare test/integration/addon.test.js",
     "test:integration:long": "INPUT_SENTENCES=long brittle-bare test/integration/addon.test.js",
+    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
+    "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
+    "test:benchmark:streaming": "brittle-bare test/benchmark/streaming-benchmark.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
@@ -87,15 +90,8 @@
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "fflate": "^0.8.2",
-    "fs": "npm:bare-fs",
     "husky": "^9.1.7",
-    "os": "npm:bare-os@^3.6.2",
-    "process": "npm:bare-process",
-    "sinon": "^21.0.0",
-    "standard": "^17.0.0",
-    "stream": "npm:bare-node-stream",
-    "tty": "npm:bare-node-tty",
-    "util": "npm:bare-utils@^1.5.1"
+    "standard": "^17.0.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",

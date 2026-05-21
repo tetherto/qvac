@@ -11,8 +11,7 @@ const test = require('brittle')
 const TTSGgml = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const MockedBinding = require('../mock/MockedBinding.js')
-const sinon = require('sinon')
-const process = require('process')
+const process = require('bare-process')
 
 global.process = process
 
@@ -35,14 +34,14 @@ function createMockedSupertonicMtlModel ({
     ...extra
   })
 
-  sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
+  model._createAddon = (configurationParams, outputCb) => {
     const _binding = binding || new MockedBinding()
     const addon = new TTSInterface(_binding, configurationParams, outputCb)
     if (_binding.setBaseInferenceCallback) {
       _binding.setBaseInferenceCallback(onOutput)
     }
     return addon
-  })
+  }
   return model
 }
 

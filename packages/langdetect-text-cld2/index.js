@@ -1,4 +1,4 @@
-import { createRequire } from 'module'
+import { createRequire } from 'bare-module'
 const require = createRequire(import.meta.url)
 const cld = require('cld')
 const tags = require('language-tags')

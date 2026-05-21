@@ -16,7 +16,11 @@ export type {
   CancelByModelId,
   CancelByRequestId,
   CancelTarget,
+  ConcurrencyPolicy,
   ManagedRequestContext,
   RequestOutcome,
   RequestRegistry,
 } from "@/server/bare/runtime/request-registry";
+
+export { withRequestContext } from "@/server/bare/runtime/with-request-context";
+export type { RequestLogContext } from "@/server/bare/runtime/with-request-context";

@@ -148,7 +148,11 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
 
   await inference.load()
 
-  return { inference }
+  // Follow-up to QVAC-17830: surface the loaded model id so perf rows
+  // can label which weights produced the numbers. Strip the .gguf
+  // extension so the rendered Model column reads e.g.
+  // "SmolVLM2-500M-Video-Instruct-Q8_0" instead of full filename noise.
+  return { inference, modelName: modelName.replace(/\.gguf$/i, '') }
 }
 
 async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
@@ -274,7 +278,7 @@ function runImageRecognitionTest (testCase, deviceConfig) {
   const testName = `llama addon can recognize ${testCase.name} in an image [${backendTag}]`
 
   test(testName, { timeout: PERF_TEST_TIMEOUT }, async t => {
-    const { inference } = await setupMultimodalInference(t, deviceConfig.device)
+    const { inference, modelName } = await setupMultimodalInference(t, deviceConfig.device)
 
     const imageFilePath = getMediaPath(testCase.imageFile)
     t.ok(fs.existsSync(imageFilePath), `${label} ${testCase.imageFile} image file should exist`)
@@ -365,7 +369,8 @@ function runImageRecognitionTest (testCase, deviceConfig) {
         _output: generatedText,
         stats,
         deviceId: deviceConfig.device,
-        scenario: 'image'
+        scenario: 'image',
+        model: modelName
       }))
     }
 

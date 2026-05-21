@@ -12,6 +12,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
   - [`verify bundle`](#verify-bundle)
+  - [`serve openai`](#serve-openai)
 - [Configuration](#configuration)
 - [System Requirements](#system-requirements)
 - [Development](#development)
@@ -296,6 +297,16 @@ on-device runtime version from a mobile dependency tree. **Pass
 `--bare-runtime-version <semver>` explicitly in mobile CI** to guarantee
 strict ABI verification; otherwise mobile bundles will emit
 `unknown-runtime-version` and skip the ABI check pass.
+
+### `serve openai`
+
+Run an **OpenAI-compatible HTTP server** backed by locally configured QVAC models (`serve.models` in `qvac.config.*`).
+
+```bash
+qvac serve openai [options]
+```
+
+See **[docs/serve-openai.md](./docs/serve-openai.md)** for supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS, `wav` + `pcm` only, with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias).
 
 ## Configuration
 

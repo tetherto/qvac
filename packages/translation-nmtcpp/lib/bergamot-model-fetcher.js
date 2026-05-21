@@ -25,6 +25,17 @@ const FIREFOX_ATTACHMENT_BASE =
 // Helpers
 // ============================================================================
 
+// Firefox Remote Settings uses BCP 47 language tags (`zh-Hans`) while QVAC
+// and Mozilla's `firefox-translations-models` repo use ISO 639-1 short codes
+// (`zh`). Without normalization, the record filter below silently fails for
+// Chinese pairs: the only mismatch in the current catalog. Keep the mapping
+// narrow — add entries only when a concrete Firefox record requires it.
+const BCP47_LANG_ALIASES = Object.freeze({ zh: 'zh-Hans' })
+
+function normalizeBcp47Lang (lang) {
+  return BCP47_LANG_ALIASES[lang] || lang
+}
+
 /**
  * Returns expected Bergamot model filenames for a language pair.
  * CJK target languages (zh, ja, ko) use separate src/trg vocabs.
@@ -114,8 +125,11 @@ async function downloadBergamotFromFirefox (srcLang, dstLang, destDir) {
   const body = await res.json()
   const records = body.data || []
 
+  const fromLangMatch = normalizeBcp47Lang(srcLang)
+  const toLangMatch = normalizeBcp47Lang(dstLang)
+
   const pairRecords = records.filter(
-    r => r.fromLang === srcLang && r.toLang === dstLang && r.attachment
+    r => r.fromLang === fromLangMatch && r.toLang === toLangMatch && r.attachment
   )
 
   if (pairRecords.length === 0) {
@@ -197,5 +211,6 @@ module.exports = {
   getBergamotFileNames,
   hasBergamotModelFiles,
   ensureBergamotModelFiles,
-  downloadBergamotFromFirefox
+  downloadBergamotFromFirefox,
+  normalizeBcp47Lang
 }

@@ -4,7 +4,10 @@ import {
   createRequestRegistry,
   __requestRegistryTestHooks,
 } from "@/server/bare/runtime/request-registry";
-import { RequestIdConflictError } from "@/utils/errors-server";
+import {
+  RequestIdConflictError,
+  RequestRejectedByPolicyError,
+} from "@/utils/errors-server";
 
 // -----------------------------------------------------------------------------
 // RequestRegistry unit tests.
@@ -435,4 +438,185 @@ test("registry: derived terminal state is 'cancelled' if signal aborted, 'comple
   }
   const happy = await happyRun();
   t.is(happy.state, "completed");
+});
+
+// -----------------------------------------------------------------------------
+// Concurrency policy (Deliverable 2)
+//
+// Pins the `oneAtATimePerModel` admission rule registered via
+// `registry.policy(...)`. The shared singleton wires this for the
+// `completion` kind so two concurrent `completionStream` requests on
+// the same model can't interleave on the llama.cpp KV-cache; these
+// tests use an isolated registry instance so each policy variant can
+// be exercised without contaminating the worker-wide one.
+// -----------------------------------------------------------------------------
+
+test("policy: oneAtATimePerModel rejects a second begin on the same (kind, modelId)", async (t: T) => {
+  const r = createRequestRegistry();
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+
+  await using first = r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(first.requestId, "r-1");
+
+  // Throws the dedicated policy class so handler / RPC code can
+  // `instanceof` narrow without parsing the error message.
+  await t.exception(() => {
+    r.begin({
+      requestId: "r-2",
+      kind: "completion",
+      modelId: "m1",
+    });
+  }, RequestRejectedByPolicyError);
+
+  // The rejected begin must not leave a slot behind — the registry's
+  // in-flight set still only carries the first request.
+  t.is(r.list().length, 1);
+  t.is(r.get("r-2"), null);
+});
+
+test("policy: oneAtATimePerModel scopes admission per (kind, modelId), not globally", async (t: T) => {
+  const r = createRequestRegistry();
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+
+  // Same kind, different model — allowed.
+  await using a = r.begin({
+    requestId: "r-a",
+    kind: "completion",
+    modelId: "m1",
+  });
+  await using b = r.begin({
+    requestId: "r-b",
+    kind: "completion",
+    modelId: "m2",
+  });
+  t.is(a.modelId, "m1");
+  t.is(b.modelId, "m2");
+
+  // Different kind, same model — allowed because the policy is keyed
+  // by `kind`. (Today only `completion` carries a policy; an
+  // embeddings request piggy-backing on the same model is fine.)
+  await using c = r.begin({
+    requestId: "r-c",
+    kind: "embeddings",
+    modelId: "m1",
+  });
+  t.is(c.kind, "embeddings");
+
+  t.is(r.list().length, 3);
+});
+
+test("policy: oneAtATimePerModel ignores requests without modelId", async (t: T) => {
+  const r = createRequestRegistry();
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+
+  // Both have no modelId — policy has no key to match against, so
+  // both are admitted. This is the documented behaviour for
+  // model-less requests (e.g. handlers that don't yet attach a
+  // modelId to their `begin(...)` call).
+  await using a = r.begin({ requestId: "r-a", kind: "completion" });
+  await using b = r.begin({ requestId: "r-b", kind: "completion" });
+  t.is(a.modelId, undefined);
+  t.is(b.modelId, undefined);
+  t.is(r.list().length, 2);
+});
+
+test("policy: disposing the holder releases admission for the next request", async (t: T) => {
+  const r = createRequestRegistry();
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+
+  async function runFirstThenSecond() {
+    {
+      await using first = r.begin({
+        requestId: "r-1",
+        kind: "completion",
+        modelId: "m1",
+      });
+      t.is(first.requestId, "r-1");
+    }
+    // Once the await-using block above unwinds, the slot is released.
+    await using second = r.begin({
+      requestId: "r-2",
+      kind: "completion",
+      modelId: "m1",
+    });
+    t.is(second.requestId, "r-2");
+  }
+  await runFirstThenSecond();
+});
+
+test("policy: cancel without dispose does NOT release admission", async (t: T) => {
+  // The slot is held until the handler scope unwinds, not when the
+  // request is cancelled — the addon's KV-cache / decode loop is
+  // still owned by the cancelled request as it drains. A future
+  // contributor reading the brief criterion alone might assume
+  // `cancel()` clears admission; this test pins the actual contract.
+  const r = createRequestRegistry();
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+
+  await using first = r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  r.cancel({ requestId: "r-1" });
+  t.is(first.signal.aborted, true);
+  t.is(first.state, "cancelling");
+
+  await t.exception(
+    () =>
+      r.begin({
+        requestId: "r-2",
+        kind: "completion",
+        modelId: "m1",
+      }),
+    RequestRejectedByPolicyError,
+  );
+  t.is(r.list().length, 1);
+});
+
+test("policy: registering a second time replaces the previous policy", async (t: T) => {
+  const r = createRequestRegistry();
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+  r.policy({ kind: "completion", oneAtATimePerModel: false });
+
+  // Disabling the rule re-opens admission — concurrent begins on the
+  // same `(kind, modelId)` are accepted again.
+  await using a = r.begin({
+    requestId: "r-a",
+    kind: "completion",
+    modelId: "m1",
+  });
+  await using b = r.begin({
+    requestId: "r-b",
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(r.list().length, 2);
+  t.is(a.modelId, "m1");
+  t.is(b.modelId, "m1");
+});
+
+test("policy: kinds without a registered policy are unconstrained", async (t: T) => {
+  const r = createRequestRegistry();
+  // No `r.policy(...)` call for `embeddings` — admission must stay
+  // open even though `completion` carries a strict rule.
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+
+  await using a = r.begin({
+    requestId: "r-a",
+    kind: "embeddings",
+    modelId: "m1",
+  });
+  await using b = r.begin({
+    requestId: "r-b",
+    kind: "embeddings",
+    modelId: "m1",
+  });
+  t.is(r.list().length, 2);
+  t.is(a.kind, "embeddings");
+  t.is(b.kind, "embeddings");
 });

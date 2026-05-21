@@ -134,6 +134,26 @@ permissions:
   contents: read
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   benchmark:
     runs-on: ai-run-linux-gpu
     environment: release
@@ -221,7 +241,7 @@ jobs:
           cache-dependency-path: ${{ env.WORKDIR }}/benchmarks/client/requirements.txt
 
       - name: Install bare runtime
-        run: npm install -g bare
+        run: npm install -g --force bare
 
       - name: Get vcpkg cache (monorepo)
         if: inputs.addon_version == ''
@@ -250,7 +270,7 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache/CodeQL /opt/ghc /usr/share/dotnet /usr/local/lib/android || true
           df -h
 
-          npm install -g bare-make
+          npm install -g --force bare-make
 
           # Configure vcpkg
           echo "VCPKG_INSTALLATION_ROOT=$VCPKG_INSTALLATION_ROOT"
@@ -267,6 +287,8 @@ jobs:
           fi
           echo "VCPKG_ROOT=$VCPKG_ROOT"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
           # Install system packages
           echo "Installing system dependencies..."
@@ -413,3 +435,6 @@ jobs:
             ${{ env.WORKDIR }}/benchmarks/server/server.log
             ${{ env.WORKDIR }}/logs/
           retention-days: 90
+    needs:
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true'

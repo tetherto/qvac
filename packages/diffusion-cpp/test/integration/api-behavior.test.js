@@ -1,6 +1,5 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const os = require('bare-os')
 const proc = require('bare-process')
@@ -9,7 +8,8 @@ const ImgStableDiffusion = require('../../index')
 const {
   ensureModel,
   GeneratedImageSaver,
-  setupJsLogger
+  setupJsLogger,
+  safeTest
 } = require('./utils')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
@@ -65,6 +65,7 @@ async function setupModel (t) {
       vae_on_cpu: isAndroid,
       threads: 4,
       prediction: 'v',
+      diffusion_fa: true,
       verbosity: '2'
     },
     logger: console
@@ -86,7 +87,7 @@ function saveGeneratedImages (modelDir, filenameSuffix, images) {
   }
 }
 
-test('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, async t => {
+safeTest('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
@@ -102,13 +103,13 @@ test('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, asyn
   saveGeneratedImages(modelDir, 'idle-run', images)
 })
 
-test('idle | cancel: allowed, no-op', { timeout: testTimeout }, async t => {
+safeTest('idle | cancel: allowed, no-op', { timeout: testTimeout }, async t => {
   const { model } = await setupModel(t)
   await model.cancel()
   t.pass('cancel when idle does not throw')
 })
 
-test('run | cancel: cancels current job', { timeout: testTimeout }, async t => {
+safeTest('run | cancel: cancels current job', { timeout: testTimeout }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(LONG_PARAMS)
 
@@ -131,7 +132,7 @@ test('run | cancel: cancels current job', { timeout: testTimeout }, async t => {
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | run: second run() throws busy error', { timeout: testTimeout }, async t => {
+safeTest('run | run: second run() throws busy error', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
   const firstResponse = await model.run(SHORT_PARAMS)
   let firstError = null
@@ -169,7 +170,7 @@ test('run | run: second run() throws busy error', { timeout: testTimeout }, asyn
   saveGeneratedImages(modelDir, 'run-run-first-response', images)
 })
 
-test('cancel | run: can run again after cancel', { timeout: testTimeout }, async t => {
+safeTest('cancel | run: can run again after cancel', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
 
   // Start a job and cancel after first progress tick
@@ -198,7 +199,7 @@ test('cancel | run: can run again after cancel', { timeout: testTimeout }, async
   saveGeneratedImages(modelDir, 'cancel-run-second-response', images)
 })
 
-test('run() before load() throws clear initialization error', { timeout: 60000 }, async t => {
+safeTest('run() before load() throws clear initialization error', { timeout: 60000 }, async t => {
   const [, modelDir] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -206,7 +207,11 @@ test('run() before load() throws clear initialization error', { timeout: 60000 }
 
   const model = new ImgStableDiffusion({
     files: { model: path.join(modelDir, MODEL.name) },
-    config: { device: useCpu ? 'cpu' : 'gpu', threads: 4 },
+    config: {
+      device: useCpu ? 'cpu' : 'gpu',
+      threads: 4,
+      diffusion_fa: true
+    },
     logger: console,
     opts: { stats: true }
   })

@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -62,7 +61,7 @@ async function collectResponse (response) {
   return chunks.join('')
 }
 
-test('generationParams | grammar constrains output to GBNF', { timeout: 600_000 }, async t => {
+safeTest('generationParams | grammar constrains output to GBNF', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { seed: '42' })
 
   const grammar = 'root ::= ("yes" | "no")'
@@ -78,7 +77,7 @@ test('generationParams | grammar constrains output to GBNF', { timeout: 600_000 
   )
 })
 
-test('generationParams | grammar is per-request, restored after run', { timeout: 600_000 }, async t => {
+safeTest('generationParams | grammar is per-request, restored after run', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { seed: '42' })
 
   const grammar = 'root ::= ("yes" | "no")'
@@ -111,7 +110,7 @@ test('generationParams | grammar is per-request, restored after run', { timeout:
   )
 })
 
-test('generationParams | grammar overrides load-time grammar', { timeout: 600_000 }, async t => {
+safeTest('generationParams | grammar overrides load-time grammar', { timeout: 600_000 }, async t => {
   const loadTimeGrammar = 'root ::= "loaded"'
   const { model } = await setupModel(t, {
     seed: '42',
@@ -145,7 +144,7 @@ const PERSON_PROMPT = [
   { role: 'user', content: "Hi, I'm Alice and I'm 30 years old." }
 ]
 
-test('generationParams | json_schema (object) constrains output to schema-valid JSON', { timeout: 600_000 }, async t => {
+safeTest('generationParams | json_schema (object) constrains output to schema-valid JSON', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { seed: '42' })
 
   const response = await model.run(PERSON_PROMPT, {
@@ -160,7 +159,7 @@ test('generationParams | json_schema (object) constrains output to schema-valid 
   t.is(Object.keys(parsed || {}).sort().join(','), 'age,name', 'no extra properties beyond schema')
 })
 
-test('generationParams | json_schema (string) is accepted', { timeout: 600_000 }, async t => {
+safeTest('generationParams | json_schema (string) is accepted', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { seed: '42' })
 
   const response = await model.run(PERSON_PROMPT, {
@@ -177,7 +176,7 @@ test('generationParams | json_schema (string) is accepted', { timeout: 600_000 }
   t.ok(parsed && typeof parsed.name === 'string' && Number.isInteger(parsed.age), 'matches schema shape')
 })
 
-test('generationParams | grammar + json_schema together throws', { timeout: 600_000 }, async t => {
+safeTest('generationParams | grammar + json_schema together throws', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { seed: '42' })
 
   // `normalizeGenerationParams` throws a `TypeError` for the mutually

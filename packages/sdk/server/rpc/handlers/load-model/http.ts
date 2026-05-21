@@ -539,6 +539,7 @@ export async function downloadModelFromHttp(
       }
     },
     progressCallback,
+    hooks?.requestBinding,
   );
 
   return applyJoinedDownloadStats(result, hooks);
@@ -685,6 +686,7 @@ async function downloadShardedModelFromHttp(
       }
     },
     progressCallback,
+    hooks?.requestBinding,
   );
 
   return applyJoinedDownloadStats(result, hooks);
@@ -840,6 +842,7 @@ async function downloadShardedModelFromArchive(
       }
     },
     progressCallback,
+    hooks?.requestBinding,
   );
 
   return applyJoinedDownloadStats(result, hooks);

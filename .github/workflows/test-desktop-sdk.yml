@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       platforms:
-        description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"])'
+        description: 'JSON array of runner labels (e.g., ["qvac-ubuntu2404-x64"] or ["qvac-ubuntu2404-x64-gpu", "mac-mini-m4-gpu"])'
         required: true
         type: string
       consumer-timeout:
@@ -136,6 +136,10 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.os, 'qvac-')
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -343,7 +347,18 @@ jobs:
 
           const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
           const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
-          const runId = `${platformShort}-${refPart}-${job.id}`;
+          // Base36-encode the numeric job.id so the literal decimal digits
+          // no longer appear in the runId. GitHub's secret masker does a
+          // substring match against masked secret values; if a short numeric
+          // secret (e.g. `secrets.MQTT_PORT`) happens to appear as a
+          // substring of the decimal job.id, the masker will both redact
+          // the runId in logs and silently drop the job-level output with a
+          // "Skip output 'runId' since it may contain secret." warning,
+          // breaking every downstream `needs.build.outputs.runId` consumer.
+          // Encoding job.id as base36 keeps the value unique and stable
+          // while structurally eliminating numeric-substring collisions.
+          const jobIdEncoded = BigInt(job.id).toString(36);
+          const runId = `${platformShort}-${refPart}-${jobIdEncoded}`;
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `platform=${platformShort}\n`, 'utf8');

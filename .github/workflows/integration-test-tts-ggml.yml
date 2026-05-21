@@ -49,11 +49,11 @@ jobs:
   # change merge-guard to require `success`) once the addon's flake
   # surface is small enough to make a hard gate cheap.
   run-integration-tests:
-    timeout-minutes: 60
+    timeout-minutes: 120
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '' || '-gpu' }}-integration-tests
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
@@ -64,13 +64,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ai-run-ubuntu-22.04
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
             no_gpu: 'true'
-          - os: ai-run-linux-gpu
+            runner: qvac-ubuntu2204-x64
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -83,21 +85,25 @@ jobs:
             platform: darwin
             arch: x64
             no_gpu: 'true'
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
             no_gpu: 'true'
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64-gpu
 
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
-        run: git config --system core.longpaths true
+        if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -110,7 +116,10 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/tts-ggml
         run: |
           npm install
-          npm install -g bare bare-make
+  
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
 
       - run: mkdir -p "${{ runner.temp }}/tts-ggml"
         shell: bash
@@ -150,7 +159,7 @@ jobs:
           done
 
       - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        if: matrix.arch == 'arm64' && (matrix.platform == 'linux' || matrix.platform == 'android')
         shell: bash
         run: |
           sudo apt-get update
@@ -171,12 +180,9 @@ jobs:
           #              useGPU=false when NO_GPU=true).
           sudo apt-get install -y libgomp1 libomp5 libblas3 mesa-vulkan-drivers
 
-      - name: Windows - install Vulkan runtime
-        if: matrix.platform == 'win32'
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       # Pin to 3.11 (not 3.12) because numba 0.65+ stopped shipping
       # darwin-x86_64 wheels for Python 3.12.  librosa pulls in numba
@@ -186,6 +192,7 @@ jobs:
       # wheels for the entire numba/llvmlite/librosa stack and is fine
       # for every other converter dependency we use.
       - name: Setup Python (HF -> .gguf conversion)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'

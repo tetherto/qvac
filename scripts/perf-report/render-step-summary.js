@@ -71,9 +71,21 @@ function fmtMetric (col, value) {
   return String(value)
 }
 
-function fmtQuality (value) {
+function fmtQuality (col, value) {
+  // Backward-compatible with the original `fmtQuality(value)` signature: if
+  // called with a single primitive argument, treat it as the value with no
+  // column metadata. New callers pass `(col, value)` to opt into raw / cos-sim
+  // formatting.
+  if (arguments.length < 2 && (col === null || typeof col !== 'object')) {
+    value = col
+    col = null
+  }
   if (value === null || value === undefined) return '-'
-  if (typeof value === 'number') return (value * 100).toFixed(1) + '%'
+  if (typeof value === 'number') {
+    if (col && col.unit === 'raw') return value.toFixed(4)
+    if (col && col.unit === 'cos-sim') return value.toFixed(8)
+    return (value * 100).toFixed(1) + '%'
+  }
   return String(value)
 }
 
@@ -89,8 +101,14 @@ function renderMarkdown (report, opts) {
   const qCols = QUALITY_COLUMNS[addonType] || []
 
   const title = (opts && opts.title) || `Performance: ${addon}`
+  // Follow-up to QVAC-17830 (Olya, 14 May): surface device.gpu when the
+  // reporter populated it. The data has been collected by _detectGpu()
+  // since the original PR; we just weren't rendering it in this
+  // per-job summary. Falls back to the legacy single-line subtitle when
+  // gpu is null (mobile Device Farm, headless Linux runners, etc.).
+  const gpuLabel = device && device.gpu ? ` | GPU: ${device.gpu}` : ''
   const subtitle = (opts && opts.subtitle) ||
-    `Device: **${device.name}** (${device.platform}/${device.arch}) | Run: ${runNumber} | ${timestamp}`
+    `Device: **${device.name}** (${device.platform}/${device.arch})${gpuLabel} | Run: ${runNumber} | ${timestamp}`
 
   const lines = []
   lines.push(`### ${title}`)
@@ -98,13 +116,23 @@ function renderMarkdown (report, opts) {
   lines.push(`> ${subtitle}`)
   lines.push('')
 
-  const header = ['Test', 'EP', ...cols.map(c => c.label)]
+  // Follow-up to QVAC-17830: include a Model column when any row in
+  // this report carries a model id so reviewers can tell which weights
+  // produced each row. Drop the column entirely when no row sets it so
+  // pre-existing reports keep their original layout.
+  const includeModel = results.some(r => r && r.model)
+  const baseHeader = ['Test']
+  if (includeModel) baseHeader.push('Model')
+  baseHeader.push('EP')
+  const header = [...baseHeader, ...cols.map(c => c.label)]
   lines.push('| ' + header.join(' | ') + ' |')
   lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
 
   for (const r of results) {
     const ep = r.execution_provider || '-'
-    const cells = [r.test || '-', ep]
+    const cells = [r.test || '-']
+    if (includeModel) cells.push(r.model || '-')
+    cells.push(ep)
     for (const c of cols) cells.push(fmtMetric(c, (r.metrics || {})[c.key]))
     lines.push('| ' + cells.join(' | ') + ' |')
   }
@@ -125,7 +153,7 @@ function renderMarkdown (report, opts) {
     lines.push('| ' + qHeader.map(() => '---').join(' | ') + ' |')
     for (const r of qualityResults) {
       const cells = [r.test || '-']
-      for (const c of uniqueQCols) cells.push(fmtQuality(r.quality[c.key]))
+      for (const c of uniqueQCols) cells.push(fmtQuality(c, r.quality[c.key]))
       lines.push('| ' + cells.join(' | ') + ' |')
     }
     lines.push('')

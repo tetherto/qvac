@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -83,26 +83,17 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-ggml#readme",
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
+    "@qvac/registry-client": "^0.4.0",
     "@qvac/transcription-whispercpp": "^0.5.5",
-    "bare-buffer": "^3.4.2",
-    "bare-node-stream": "^1.0.0",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^5.2.1",
-    "bare-tty": "^5.0.3",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "fflate": "^0.8.2",
-    "fs": "npm:bare-fs",
     "husky": "^9.1.7",
-    "os": "npm:bare-os@^3.6.2",
-    "process": "npm:bare-process",
-    "sinon": "^21.0.0",
     "standard": "^17.0.0",
-    "stream": "npm:bare-node-stream",
-    "tty": "npm:bare-node-tty",
-    "typescript": "^6.0.3",
-    "util": "npm:bare-utils@^1.5.1"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
