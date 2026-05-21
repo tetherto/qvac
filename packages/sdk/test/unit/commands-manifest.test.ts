@@ -59,17 +59,6 @@ describe('extractPackageNamesFromResolutions', () => {
       ['@qvac/sdk', 'bare-abort', 'bare-os', 'mqtt']
     )
   })
-
-  it('old regex (without /g) would miss nested packages', () => {
-    const oldRegex = /\/node_modules\/(@[^/]+\/[^/]+|[^/]+)\//
-    const key = '/node_modules/@qvac/sdk/node_modules/bare-abort/binding.js'
-
-    const oldMatch = key.match(oldRegex)
-    assert.equal(oldMatch?.[1], '@qvac/sdk')
-
-    const names = extractPackageNamesFromResolutions({ [key]: {} })
-    assert.ok(names.has('bare-abort'), 'new implementation must capture nested package')
-  })
 })
 
 describe('extractPackedString', () => {
