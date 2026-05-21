@@ -425,10 +425,15 @@ jobs:
           PI05_ORACLE_DIR: ${{ env.PI05_ORACLE_DIR }}
         run: |
           set -euo pipefail
-          python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet "safetensors>=0.4" "numpy>=1.24"
+          # `python3` rather than `python`: the self-hosted Android runner
+          # (qvac-ubuntu2204-x64) has python3 on PATH but no `python` alias,
+          # so the actions/setup-python install above doesn't get picked up
+          # by the bare `python` name. python3 works on both ubuntu and
+          # macos runners.
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet "safetensors>=0.4" "numpy>=1.24"
           mkdir -p test/mobile/testAssets
-          python scripts/extract-pi05-mobile-fixtures.py \
+          python3 scripts/extract-pi05-mobile-fixtures.py \
             --activations "${PI05_ORACLE_DIR}/activations.safetensors" \
             --fixture     "${PI05_ORACLE_DIR}/fixture.safetensors" \
             --out-dir     test/mobile/testAssets/

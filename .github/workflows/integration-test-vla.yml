@@ -485,11 +485,11 @@ jobs:
         run: |
           $reports = Get-ChildItem -Path 'test/results' -Filter 'performance-report*.json' -ErrorAction SilentlyContinue
           if (-not $reports) {
-            Write-Host "No perf-report*.json found under test/results — skipping Step Summary render"
+            Write-Host 'No perf-report*.json found under test/results - skipping Step Summary render'
             exit 0
           }
           foreach ($r in $reports) {
-            Write-Host "Rendering $($r.FullName) -> `$env:GITHUB_STEP_SUMMARY"
+            Write-Host ('Rendering ' + $r.FullName)
             & node "$env:GITHUB_WORKSPACE\scripts\perf-report\render-step-summary.js" $r.FullName $env:GITHUB_STEP_SUMMARY
           }
 

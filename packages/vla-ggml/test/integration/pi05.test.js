@@ -568,8 +568,10 @@ function _quantFromGgufPath (ggufPath) {
 }
 
 // One end-to-end pass: load on `backend`, run inference, compare against
-// PyTorch reference, record perf. Returns { cos, rel, stats } for the
-// caller. Throws on assertion failures via the `t` brittle context.
+// PyTorch reference, record perf. Returns the resolved backend name
+// (e.g. 'cpu', 'metal', 'vulkan') so the caller can dedupe when `auto`
+// falls through to cpu. Throws on assertion failures via the `t`
+// brittle context.
 async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
   const { images, tokens, mask, noise, expected } = inputs
   const tag = `pi05-${quant}/${backend}`
@@ -684,6 +686,8 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
         console.log('[perf-reporter] mobile incremental flush failed: ' + (err && err.message))
       }
     }
+
+    return model.backendName || null
   } finally {
     await model.unload().catch(() => {})
   }
@@ -724,10 +728,22 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
   // Run each backend in the same Bare process so the GGUF stays mmap'd
   // and the prebuilt addon only loads once. Mirrors the smolvla pattern
   // (addon.test.js loops auto + cpu). `auto` picks Metal/Vulkan/etc.
-  // when available; `cpu` forces the baseline. The dual perf-report
-  // rows let CI compare backends without scheduling two runs.
+  // when available; `cpu` forces the baseline.
+  //
+  // Note (2026-05-21): pi05.cpp::pi05_load_model hard-codes CPU
+  // regardless of the requested backend — GPU paths are a Phase-6
+  // follow-up (see plan §6). On runners where `auto` falls through to
+  // CPU we skip the explicit `cpu` iteration so the perf-report doesn't
+  // carry two identical rows. Once GPU lands, the loop will produce
+  // two distinct rows naturally.
+  let autoResolvedTo = null
   for (const backend of ['auto', 'cpu']) {
-    await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
+    if (backend === 'cpu' && autoResolvedTo === 'cpu') {
+      t.comment('skipping cpu iteration: auto already resolved to cpu ' +
+        '(pi05.cpp GPU backends not yet wired — plan §6)')
+      continue
+    }
+    autoResolvedTo = await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
   }
 })
 
