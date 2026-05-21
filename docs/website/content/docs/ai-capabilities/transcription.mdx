@@ -77,6 +77,10 @@ For model artifacts available as constants, see [SDK — Models](/introduction#m
 
 The `source` field on `endOfTurn` lets consumers narrow the union: whisper events always carry a numeric `silenceDurationMs`; parakeet events never do.
 
+<Callout type="info">
+**Wire compatibility:** post-0.6 servers emit `source` on every `endOfTurn` frame. SDK parsers still accept the legacy whisper wire shape `{ silenceDurationMs }` (no `source`) and normalize it to `source: "whisper"`. Upgrade client and server together when using parakeet `source: "parakeet"` events — older servers never emit that branch.
+</Callout>
+
 ### Parakeet duplex streaming
 
 Pass `parakeetStreamingConfig` to `transcribeStream()` to override per-call streaming knobs (each falls back to its `parakeetConfig.streaming*` load-time counterpart):

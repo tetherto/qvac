@@ -61,10 +61,33 @@ export const parakeetEndOfTurnEventSchema = z.object({
   source: z.literal("parakeet"),
 });
 
-export const endOfTurnEventSchema = z.discriminatedUnion("source", [
+const endOfTurnDiscriminatedSchema = z.discriminatedUnion("source", [
   whisperEndOfTurnEventSchema,
   parakeetEndOfTurnEventSchema,
 ]);
+
+/** Legacy whisper wire frames omitted `source` and only sent `silenceDurationMs`. */
+function normalizeEndOfTurnWire(value: unknown) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !("source" in value) &&
+    typeof (value as { silenceDurationMs?: unknown }).silenceDurationMs ===
+      "number"
+  ) {
+    return {
+      source: "whisper" as const,
+      silenceDurationMs: (value as { silenceDurationMs: number })
+        .silenceDurationMs,
+    };
+  }
+  return value;
+}
+
+export const endOfTurnEventSchema = z.preprocess(
+  normalizeEndOfTurnWire,
+  endOfTurnDiscriminatedSchema,
+);
 
 export const transcribeRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribe"),

@@ -78,3 +78,36 @@ import { downloadAsset, cancel } from "@qvac/sdk";
 
 ---
 
+## Parakeet 0.6.0 GGML + `transcribeStream` `endOfTurn` wire shape
+
+PR: [#2184](https://github.com/tetherto/qvac/pull/2184)
+
+**Parakeet load (breaking):**
+
+**BEFORE:**
+
+```typescript
+await loadModel({
+  modelType: "parakeet",
+  modelConfig: {
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR,
+  },
+});
+```
+
+**AFTER:**
+
+```typescript
+await loadModel({
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelType: "parakeet",
+});
+```
+
+**`endOfTurn` stream frames:** servers now emit `source: "whisper" | "parakeet"` on every `endOfTurn` RPC payload. Parsers accept the legacy whisper wire shape `{ silenceDurationMs }` (no `source`) and normalize it to `source: "whisper"`. Upgrade client and server together when relying on parakeet `source: "parakeet"` events.
+
+---
+

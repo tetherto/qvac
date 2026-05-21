@@ -200,7 +200,15 @@ export const whisperPlugin = definePlugin({
               };
               continue;
             }
-            if (value.type === "endOfTurn" && value.source === "whisper") {
+            if (value.type === "endOfTurn") {
+              // Whisper addon emits legacy `{ type, silenceDurationMs }` frames
+              // without `source`. Parakeet must never surface here.
+              if (value.source === "parakeet") {
+                continue;
+              }
+              if (typeof value.silenceDurationMs !== "number") {
+                continue;
+              }
               yield {
                 type: "transcribeStream" as const,
                 endOfTurn: {
