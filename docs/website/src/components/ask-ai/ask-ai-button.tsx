@@ -1,47 +1,36 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 import { useAskAI } from './ask-ai-provider';
 
 /**
- * Detects the macOS host once on the client. Used to print `⌘` instead
- * of `Ctrl` next to the keyboard hint so the displayed shortcut matches
- * what the user actually presses. Defaults to non-Mac so the SSR markup
- * never renders a Mac-specific glyph.
- */
-function useIsMac(): boolean {
-  const [isMac, setIsMac] = useState(false);
-  useEffect(() => {
-    if (typeof navigator === 'undefined') return;
-    const platform =
-      (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
-        ?.platform ?? navigator.platform;
-    setIsMac(/mac/i.test(platform));
-  }, []);
-  return isMac;
-}
-
-/**
- * The little `⌘I` / `Ctrl I` chip rendered next to the desktop header
- * trigger. Mirrors the keyboard shortcut surfaced by the
- * `AskAIProvider`.
+ * The `⌘ I` chip rendered next to the desktop header trigger.
+ * Mirrors Fumadocs's Search shortcut layout exactly: a wrapper span
+ * with two separate `<kbd>` boxes (one for `⌘`, one for `I`), so the
+ * Ask AI shortcut reads as a visual sibling to Search's `⌘ K`. We
+ * always render the `⌘` glyph regardless of host OS — Fumadocs does
+ * the same for `⌘ K`, treating the symbol as a universal "modifier"
+ * sigil rather than a platform-specific instruction. The actual key
+ * binding (`Ctrl/Cmd + I`) is wired in `AskAIProvider`.
  */
 export function AskAIShortcutHint({ className }: { className?: string }) {
-  const isMac = useIsMac();
   return (
-    <kbd
+    <span
       aria-hidden="true"
       className={cn(
-        'pointer-events-none ms-1 hidden items-center gap-0.5 rounded border bg-fd-muted/60 px-1.5 py-px font-mono text-[10px] font-medium text-fd-muted-foreground md:inline-flex',
+        'pointer-events-none hidden gap-0.5 md:inline-flex',
         className,
       )}
     >
-      <span>{isMac ? '⌘' : 'Ctrl'}</span>
-      <span>I</span>
-    </kbd>
+      <kbd className="rounded-md border bg-fd-background px-1.5 text-[11px] leading-5">
+        ⌘
+      </kbd>
+      <kbd className="rounded-md border bg-fd-background px-1.5 text-[11px] leading-5">
+        I
+      </kbd>
+    </span>
   );
 }
 
@@ -71,7 +60,7 @@ const baseClasses =
 
 const variantClasses: Record<AskAIButtonVariant, string> = {
   header:
-    'h-9 gap-2 border bg-fd-secondary px-3 text-fd-secondary-foreground hover:bg-fd-accent hover:text-fd-accent-foreground',
+    'h-9 gap-2 border bg-fd-secondary px-3 text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground',
   // Compact icon-only header trigger. Useful in surfaces too narrow
   // for a labelled pill - matches Search's h-9 / rounded-lg / border
   // so the two read as siblings, with a subtle primary-tinted
