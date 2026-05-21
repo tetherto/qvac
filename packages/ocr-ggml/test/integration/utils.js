@@ -630,6 +630,7 @@ async function runDoctrOCR (t, params, imagePath) {
     params: {
       langList: ['en'],
       pipelineType: 'doctr',
+      nThreads: 4,
       ...params
     },
     opts: { stats: true }

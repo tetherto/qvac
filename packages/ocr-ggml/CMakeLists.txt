@@ -5,6 +5,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/config.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/config.cmake)
 endif()
 
+option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
 # Off by default: Adreno 830 ggml-opencl M%4 assertion (mirrors translation-nmtcpp).
 option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
@@ -17,12 +18,6 @@ find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
-set(VCPKG_INSTALL_OPTIONS --clean-after-build)
-
-# Android STL configuration must be set before project()
-if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
-  set(ANDROID_STL c++_shared)
-endif()
 
 project(ocr-ggml
   LANGUAGES C CXX)
@@ -52,11 +47,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 message(STATUS ${CMAKE_CXX_COMPILER_ID})
 if(WIN32)
   add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNOGDI)
-endif()
-
-if(ANDROID)
-  set(ANDROID_TOOLCHAIN_ROOT "$ENV{ANDROID_TOOLCHAIN_ROOT}")
-  set(ANDROID_NATIVE_API_LEVEL "$ENV{ANDROID_NATIVE_API_LEVEL}")
 endif()
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/BlobsStream.hpp")
@@ -139,6 +129,13 @@ target_compile_definitions(
 )
 
 target_compile_definitions(${ocr-ggml} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+
+# Mirror vla-ggml: when ggml is built with GGML_BACKEND_DL=ON (Android),
+# propagate the flag so pipeline code calls ggml_backend_load_all_from_path
+# consistently with the bundled backend modules.
+if(GGML_BACKEND_DL)
+  target_compile_definitions(${ocr-ggml} PRIVATE GGML_BACKEND_DL)
+endif()
 
 if(USE_OPENCL)
   target_compile_definitions(
