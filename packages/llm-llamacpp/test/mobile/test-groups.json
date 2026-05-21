@@ -10,6 +10,7 @@
     "heavy8": ["runImageHighResAuroraTest"],
     "heavy9": ["runGemma4Test"],
     "heavy10": ["runOcrPaddleTest"],
+    "heavy11": ["runQuantizedKvcacheTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -51,7 +52,8 @@
       "runSlidingContextTest",
       "runToolCallingTest",
       "runTurboquantTest",
-      "runUtf8OutputTest"
+      "runUtf8OutputTest",
+      "runQuantizedKvcacheTest"
     ],
     "groupImagesPerf": [
       "runImageElephantTest",
