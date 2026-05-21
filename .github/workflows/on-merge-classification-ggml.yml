@@ -201,7 +201,7 @@ jobs:
       needs.release-merge-guard.result == 'success' &&
       needs.prebuild.result == 'success'
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
