@@ -12,6 +12,7 @@ import { callWhenAddonIdle } from "../../shared/utils/addon-idle.js";
 type VisionParams = {
   history: Array<{ role: string; content: string; attachments?: Array<{ path: string }> }>;
   stream?: boolean;
+  generationParams?: Record<string, unknown>;
 };
 
 export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
@@ -51,7 +52,7 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
 
     try {
       const text = await callWhenAddonIdle(() =>
-        completion({ modelId: visionModelId, history, stream: false }).text,
+        completion({ modelId: visionModelId, history, stream: false, ...(p.generationParams && { generationParams: p.generationParams }) } as never).text,
       );
       return ValidationHelpers.validate(text, expectation);
     } catch (error) {
@@ -70,7 +71,7 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
 
     try {
       const tokens = await callWhenAddonIdle(async () => {
-        const result = completion({ modelId: visionModelId, history, stream: true });
+        const result = completion({ modelId: visionModelId, history, stream: true, ...(p.generationParams && { generationParams: p.generationParams }) } as never);
         const acc: string[] = [];
         for await (const token of result.tokenStream) {
           acc.push(token);
@@ -101,7 +102,7 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
 
     try {
       const { text, stats } = await callWhenAddonIdle(async () => {
-        const result = completion({ modelId: visionModelId, history, stream: false });
+        const result = completion({ modelId: visionModelId, history, stream: false, ...(p.generationParams && { generationParams: p.generationParams }) } as never);
         return { text: await result.text, stats: await result.stats };
       });
 

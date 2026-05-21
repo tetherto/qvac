@@ -240,6 +240,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       secondUserMessage: string;
       expectedAnswerContains: string;
       cancelAfterTokens?: number;
+      generationParams?: Record<string, unknown>;
     },
     _expectation: Expectation,
   ): Promise<TestResult> {
@@ -314,7 +315,8 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         ],
         stream: true,
         kvCache: params.cacheKey,
-      });
+        ...(params.generationParams && { generationParams: params.generationParams }),
+      } as never);
 
       let secondText = "";
       for await (const token of secondRun.tokenStream) {
