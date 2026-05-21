@@ -3,14 +3,9 @@ name: Mobile Integration Tests (TTS GGML)
 # Migrated to .github/actions/run-mobile-integration-tests in
 # QVAC-18168 follow-up: rollout to remaining 9 mobile addons.
 #
-# TTS-GGML downloads a Hugging Face model and converts it to GGUF
-# format (Supertonic, English, q4_0 -> f16, ~125 MiB) before the
-# build phase, so the model gets bundled into the test app's
-# `test/mobile/testAssets/` directory. The Python venv + converted
-# .gguf are cached together; cache hit skips the HF download + conv.
-# Chatterbox GGUFs are intentionally NOT bundled — they exceed
-# Metro's 0x1fffffe8 (~512 MiB) per-asset string-read limit; mobile
-# Chatterbox tests degrade cleanly to a passing skip.
+# As of PR #2168 (Android dynamic ggml backends), TTS-GGML tests
+# download models at runtime via the registry, so the CI no longer
+# pre-converts or bundles GGUFs into the test app.
 
 on:
   workflow_call:
@@ -106,49 +101,6 @@ jobs:
           addon-npm-name: '@qvac/tts-ggml'
           prebuild-artifact-prefix: 'tts-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
-
-      # Supertonic GGUF provisioning. Cache hit (~99% of CI runs) skips
-      # the venv + HF download + conversion entirely. Runs between
-      # setup and build-mobile-app so the .gguf lands in
-      # test/mobile/testAssets/ before the test framework bundles
-      # assets into the app.
-      - name: Setup Python (HF -> .gguf conversion, iOS only)
-        if: matrix.platform == 'iOS' && runner.environment == 'github-hosted'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
-        with:
-          python-version: '3.12'
-
-      - name: Cache TTS GGML venv + Supertonic GGUF
-        id: cache-tts-ggml-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: |
-            addon/${{ inputs.workdir || 'packages/tts-ggml' }}/venv
-            addon/${{ inputs.workdir || 'packages/tts-ggml' }}/models/supertonic.gguf
-          key: tts-ggml-mobile-supertonic-en-q4-v2-${{ hashFiles(format('{0}/scripts/convert-models.sh', format('addon/{0}', inputs.workdir || 'packages/tts-ggml')), format('{0}/scripts/setup-venv.sh', format('addon/{0}', inputs.workdir || 'packages/tts-ggml')), format('{0}/scripts/requirements.txt', format('addon/{0}', inputs.workdir || 'packages/tts-ggml')), format('{0}/scripts/convert-supertonic2-to-gguf.py', format('addon/{0}', inputs.workdir || 'packages/tts-ggml'))) }}
-          restore-keys: |
-            tts-ggml-mobile-supertonic-en-q4-v2-
-
-      - name: Provision Supertonic GGUF (cache miss)
-        if: steps.cache-tts-ggml-models.outputs.cache-hit != 'true'
-        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
-        shell: bash
-        run: |
-          chmod +x scripts/provision-mobile-models.sh
-          scripts/provision-mobile-models.sh
-
-      # Cache-hit path still needs the bundled .gguf staged into
-      # testAssets — the cache restores models/supertonic.gguf but
-      # not the testAssets/ copy.
-      - name: Stage Supertonic GGUF into test/mobile/testAssets/ (cache hit)
-        if: steps.cache-tts-ggml-models.outputs.cache-hit == 'true'
-        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p test/mobile/testAssets
-          cp models/supertonic.gguf test/mobile/testAssets/
-          ls -lh test/mobile/testAssets/
 
       - name: Build mobile app
         id: build

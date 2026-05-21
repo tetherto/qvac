@@ -15,6 +15,7 @@
 #include "addon/TTSErrors.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac::ttsggml::supertonic {
 
@@ -24,6 +25,7 @@ using qvac_errors::createTTSError;
 using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
+namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) {
   tts_cpp::supertonic::EngineOptions opts;
@@ -40,6 +42,23 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
     opts.n_gpu_layers = *cfg.useGpu ? 99 : 0;
   }
   opts.noise_npy_path = cfg.noiseNpyPath;
+
+  // Mirrors ChatterboxModel::toEngineOptions; see that file for the
+  // detailed rationale. Compose `cfg.backendsDir / BACKENDS_SUBDIR`
+  // before forwarding so a host that already passes
+  // `path.join(__dirname, 'prebuilds')` (the qvac
+  // llm-llamacpp / transcription-parakeet convention) gets the
+  // expected `<bare-target>/qvac__tts-ggml/` scan dir without
+  // knowing the per-arch shape.
+  if (!cfg.backendsDir.empty()) {
+    std::filesystem::path backendsDirPath(cfg.backendsDir);
+#ifdef BACKENDS_SUBDIR
+    backendsDirPath =
+        (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+    opts.backends_dir = backendsDirPath.string();
+  }
+  opts.opencl_cache_dir = cfg.openclCacheDir;
   return opts;
 }
 
@@ -140,6 +159,25 @@ void SupertonicModel::reload() {
 
 void SupertonicModel::loadLocked() {
   if (engine_) return;
+
+  // Force useGPU to false on Android until Vulkan (Mali) and OpenCL (Adreno)
+  // stabilize for the Supertonic graph.
+#ifdef __ANDROID__
+  {
+    const bool wantsGpu =
+        cfg_.useGpu.value_or(false) ||
+        (cfg_.nGpuLayers.has_value() && *cfg_.nGpuLayers != 0);
+    if (wantsGpu) {
+      QLOG(logger::Priority::WARNING,
+           "Supertonic: useGPU=true is currently ignored on Android "
+           "(GPU backends disabled at engine boundary pending Vulkan/Mali "
+           "and OpenCL/Adreno driver fixes); falling back to CPU.");
+    }
+    cfg_.useGpu     = false;
+    cfg_.nGpuLayers = 0;
+  }
+#endif
+
   try {
     engine_ = std::make_shared<tts_cpp::supertonic::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {
