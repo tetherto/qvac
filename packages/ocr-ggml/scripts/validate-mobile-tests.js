@@ -12,6 +12,7 @@ const repoRoot = path.resolve(__dirname, '..')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const autoFile = path.join(mobileDir, 'integration.auto.cjs')
 const runtimeFile = path.join(mobileDir, 'integration-runtime.cjs')
+const testGroupsFile = path.join(mobileDir, 'test-groups.json')
 
 function main () {
   const errors = []
@@ -27,6 +28,10 @@ function main () {
 
   if (!fs.existsSync(runtimeFile)) {
     errors.push(`Runtime file not found: ${runtimeFile}`)
+  }
+
+  if (!fs.existsSync(testGroupsFile)) {
+    errors.push(`Test groups file not found: ${testGroupsFile}`)
   }
 
   if (errors.length > 0) {

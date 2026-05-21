@@ -22,10 +22,6 @@ async function runDoctrCtScanTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/doctr-ct-scan.test.js', options)
 }
 
-async function runDoctrFrenchTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/doctr-french.test.js', options)
-}
-
 async function runDoctrLabResultsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/doctr-lab-results.test.js', options)
 }

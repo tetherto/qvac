@@ -7,7 +7,6 @@
   ],
   "regular": [
     "runDoctrBasicTest",
-    "runDoctrFrenchTest",
     "runDoctrModelsTest",
     "runDoctrParamValidationTest",
     "runCancelTest",

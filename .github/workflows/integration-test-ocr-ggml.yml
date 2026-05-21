@@ -1,29 +1,5 @@
 name: Integration Tests (OCR-GGML)
 
-# Builds @qvac/ocr-ggml on the canonical CI matrix, pulls the pinned
-# EasyOCR + Doctr GGUF snapshots from S3, and runs the two integration
-# tests (`test/integration/easyocr.test.js` and
-# `test/integration/doctr.test.js`).
-#
-# Models are downloaded into `packages/ocr-ggml/models/` (one flat dir —
-# EasyOCR and Doctr filenames don't collide) and exposed to the tests
-# via these env vars:
-#
-#   EasyOCR pipeline:
-#     OCR_GGML_DETECTOR        models/craft_mlt_25k.gguf
-#     OCR_GGML_RECOGNIZER      models/latin_g2.gguf
-#                              (Latin-script CRNN — also handles English
-#                              glyphs; `english_g2.gguf` is downloaded
-#                              by the recursive `s3 cp` but not currently
-#                              exercised by any test case)
-#
-#   Doctr pipeline:
-#     OCR_GGML_DOCTR_DETECTOR    models/db_mobilenet_v3_large.gguf
-#     OCR_GGML_DOCTR_RECOGNIZER  models/crnn_mobilenet_v3_small.gguf
-#
-# When a new snapshot is published, bump the date segment in the two
-# `aws s3 cp` commands below.
-
 on:
   workflow_dispatch:
     inputs:

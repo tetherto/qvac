@@ -112,6 +112,15 @@ class OcrGgml {
       })
     }
 
+    const SUPPORTED_LANGUAGES = new Set(['en'])
+    const hasSupported = this.params.langList.some(l => SUPPORTED_LANGUAGES.has(l))
+    if (!hasSupported) {
+      throw new QvacErrorAddonOcrGgml({
+        code: ERR_CODES.UNSUPPORTED_LANGUAGE,
+        adds: `none of the requested languages are supported: ${this.params.langList.join(', ')}`
+      })
+    }
+
     const configurationParams = {
       pathDetector: this.params.pathDetector,
       pathRecognizer: this.params.pathRecognizer,

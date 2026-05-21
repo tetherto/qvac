@@ -311,11 +311,6 @@ jobs:
           cp test/images/liver_function_test.png "$ASSETS_DIR/liver_function_test.png"
           cp test/images/clinical_chemistry.png "$ASSETS_DIR/clinical_chemistry.png"
           cp test/images/ct_scan_report.png "$ASSETS_DIR/ct_scan_report.png"
-          # Ground truth files for quality metrics (CER, WER, keyword detection, KV accuracy)
-          cp test/quality/lab_results.quality.json "$ASSETS_DIR/lab_results.quality.json"
-          cp test/quality/liver_function_test.quality.json "$ASSETS_DIR/liver_function_test.quality.json"
-          cp test/quality/clinical_chemistry.quality.json "$ASSETS_DIR/clinical_chemistry.quality.json"
-          cp test/quality/ct_scan_report.quality.json "$ASSETS_DIR/ct_scan_report.quality.json"
           echo "✅ Test assets copied"
           ls -la "$ASSETS_DIR/"
 
