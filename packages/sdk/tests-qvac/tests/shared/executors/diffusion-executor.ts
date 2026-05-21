@@ -33,21 +33,16 @@ import {
   diffusionEmptyPrompt,
 } from "../../diffusion-tests.js";
 
-// Minimum byte-level divergence between an output and its same-seed/prompt
-// txt2img baseline. SDK output is bit-exact at fixed seed (see
-// seedReproducibility), so 1% is well above noise and catches a silent
-// fallback when init_image / init_images is dropped server-side.
+// Min byte divergence vs same-seed/prompt txt2img baseline. Output is
+// bit-exact at fixed seed (see seedReproducibility), so 1% is well above
+// noise and catches a silent fallback when init_image / init_images is
+// dropped server-side.
 const MIN_DIVERGENCE_RATIO = 0.01;
 
-// ---- typed param shapes ----
-
-// Loose superset of every diffusion test's params. Asset fields are a string
-// (filename) before resolveParams() and Uint8Array after — this is the rolling
-// shape that flows through resolveParams → buildParams → diffusion().
-//
-// Index signature is required so that test-specific param literals (each with
-// its own keys) are assignable to this type at the dispatch boundary, where
-// the framework hands us `params: any` from the test definition.
+// Rolling param shape across resolveParams → buildParams → diffusion().
+// Asset fields are a `string` filename before resolveParams() and `Uint8Array`
+// after. Index signature is required so test-specific param literals are
+// assignable at the framework dispatch boundary.
 export interface DiffusionParams {
   prompt: string;
   negative_prompt?: string;
@@ -77,13 +72,9 @@ export interface DiffusionParams {
 export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTests> {
   pattern = /^diffusion-/;
 
-  // Explicit testId → handler map. Handlers receive `params: DiffusionParams`
-  // (TS-narrowed from `any`) so each method can use real fields without casts.
-  // Several tests share `runBasic`; comparative/streaming tests have dedicated
-  // methods because their assertions are not "schema-validate the outputs".
-  //
-  // The `Required<...>`-mapped annotation makes this an exhaustive map: adding
-  // a new test to `diffusionTests` without wiring a handler is a compile error.
+  // Exhaustive testId → handler map. Most tests share `runBasic`; comparative
+  // and streaming cases have dedicated methods. The `Required<...>` annotation
+  // turns "missing handler" into a TS compile error.
   protected handlers: Required<{
     [K in (typeof diffusionTests)[number]["testId"]]: HandlerFn<
       ExtractTest<typeof diffusionTests, K>
@@ -113,9 +104,8 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     [diffusionStandaloneUpscalerX4.testId]: this.standaloneUpscalerX4.bind(this),
   };
 
-  // Mobile and desktop subclasses override this to map asset filenames
-  // (init_image / init_images / image) to Uint8Array contents using their
-  // platform's filesystem or asset registry.
+  // Subclasses override this to resolve string filenames in init_image /
+  // init_images / image to Uint8Array bytes via their platform's filesystem.
   protected async resolveParams(p: DiffusionParams): Promise<DiffusionParams> {
     return p;
   }
@@ -361,11 +351,10 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
         };
       }
 
-      // Guard against silent dimension mismatch: caller asks for one size but
-      // a backend bug returns another (regression: SD on mobile output 64x64
-      // when init_image was 64x64 despite width/height=256). PNG file size
-      // already differs by content/compression, so length-eq is unreliable;
-      // IHDR is the only invariant here.
+      // Guard against silent dimension mismatch (e.g. backend honoring
+      // init_image dims instead of requested width/height). PNG byte length
+      // varies by content/compression, so IHDR width/height is the only
+      // reliable invariant for cross-output comparison.
       const dimErr = this.assertEqualPngDimensions(variant[0]!, baseline[0]!);
       if (dimErr) return dimErr;
 

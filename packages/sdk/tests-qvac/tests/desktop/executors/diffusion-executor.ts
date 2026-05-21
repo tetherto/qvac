@@ -12,11 +12,7 @@ function readImageBytes(name: string): Uint8Array {
 }
 
 export class DesktopDiffusionExecutor extends SharedDiffusionExecutor {
-  // Resolve string filenames in init_image / init_images / image to the
-  // Uint8Array bytes that buildParams / diffusion() expect. Tests always
-  // declare these as filenames so the same definition runs on mobile, where
-  // assets are bundled differently — see MobileDiffusionExecutor (when
-  // diffusion is re-enabled on mobile).
+  // Resolve string filenames declared in test params to bytes via Node fs.
   protected override async resolveParams(
     p: DiffusionParams,
   ): Promise<DiffusionParams> {
