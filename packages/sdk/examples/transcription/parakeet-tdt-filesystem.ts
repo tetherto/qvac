@@ -1,3 +1,15 @@
+/**
+ * Parakeet TDT transcription from a WAV file.
+ *
+ * Usage:
+ *   bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file> [parakeet-tdt-gguf]
+ *
+ * Loads a single GGUF checkpoint (`PARAKEET_TDT_0_6B_V3_Q8_0` by default) and
+ * transcribes the file with the batch `transcribe` API. Omit the model
+ * argument to use the registry constant.
+ *
+ * Audio should be 16 kHz mono PCM in a WAV container.
+ */
 import {
   loadModel,
   unloadModel,

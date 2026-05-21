@@ -1,12 +1,15 @@
 /**
- * Parakeet Sortformer diarization + TDT transcription example.
+ * Parakeet Sortformer diarization + TDT transcription pipeline.
  *
  * Usage:
- *   bun examples/transcription/parakeet-sortformer.ts [sortformer-gguf] [path-to-audio]
+ *   bun run examples/transcription/parakeet-sortformer.ts [sortformer-gguf] [wav-file]
  *
- * This example requires a test audio file (default: examples/audio/diarization-sample-16k.wav).
- * Sample audio files are available in the QVAC source repository, but not included in the published npm package.
- * Pass a custom audio path as the second argument, or download the default audio into examples/audio/:
+ * Two-step flow: Sortformer diarizes the audio, then TDT transcribes each
+ * speaker segment. Defaults to registry GGUFs and
+ * `examples/audio/diarization-sample-16k.wav`.
+ *
+ * Sample audio is in the QVAC source repo but not the published npm package.
+ * Download the default file into `examples/audio/`:
  *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav
  */
 import {

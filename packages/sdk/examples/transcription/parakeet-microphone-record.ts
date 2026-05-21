@@ -1,10 +1,11 @@
 /**
- * Microphone → Parakeet transcription using chunked `transcribe` calls.
+ * Microphone → Parakeet batch transcription (chunked `transcribe`).
  *
- * Usage: bun run examples/transcription/parakeet-microphone-record.ts
+ * Usage:
+ *   bun run examples/transcription/parakeet-microphone-record.ts
  *
- * Captures 3-second audio chunks from the microphone and sends each to the
- * batch `transcribe` API. Press Ctrl+C to quit.
+ * Captures 3 s s16le chunks from the microphone and sends each to `transcribe`
+ * with the TDT model. Press Ctrl+C to stop.
  *
  * Requirements: FFmpeg installed, microphone access.
  */

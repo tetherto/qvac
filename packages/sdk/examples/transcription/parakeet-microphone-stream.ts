@@ -1,32 +1,13 @@
 /**
- * Microphone → Parakeet duplex streaming transcription.
+ * Microphone → Parakeet duplex streaming (`transcribeStream`).
  *
- * Usage: bun run examples/transcription/parakeet-microphone-stream.ts
+ * Usage:
+ *   bun run examples/transcription/parakeet-microphone-stream.ts
  *
- * Demonstrates the duplex `transcribeStream` API on the Parakeet engine:
- *
- *   transcribeStream({
- *     modelId,
- *     parakeetStreamingConfig: { ... },
- *   })
- *
- * The session yields a discriminated union of events:
- *   - { type: "text", text }    transcript chunks
- *   - { type: "endOfTurn", source: "parakeet" }
- *                               EOU model turn boundary (token-driven;
- *                               `silenceDurationMs` is whisper-only and
- *                               absent on the parakeet branch of the
- *                               discriminated union)
- *
- * Notes:
- *   - This example uses the EOU (`<EOU>` token) Parakeet checkpoint, so
- *     you also see synthetic `endOfTurn` events when the engine detects
- *     a turn boundary. CTC / TDT checkpoints stream transcripts only
- *     (no `endOfTurn` events) — swap the model constant to try them.
- *   - Parakeet does NOT emit standalone `vad` events. The
- *     `parakeetStreamingConfig.emitEnergyVad` flag is purely an
- *     engine-internal hint that affects segmentation cadence; use
- *     whisper if you need explicit VAD `speaking`/`probability` events.
+ * Streams microphone audio through `transcribeStream` with
+ * `parakeetStreamingConfig`. Uses the EOU checkpoint so you may see
+ * `{ type: "endOfTurn", source: "parakeet" }` events; CTC/TDT models
+ * emit transcript text only. Parakeet does not yield standalone VAD events.
  *
  * Requirements: FFmpeg installed, microphone access.
  */

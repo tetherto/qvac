@@ -1,3 +1,15 @@
+/**
+ * Parakeet CTC transcription from a WAV file.
+ *
+ * Usage:
+ *   bun run examples/transcription/parakeet-ctc-filesystem.ts <wav-file> [parakeet-ctc-gguf]
+ *
+ * Loads a single GGUF checkpoint (`PARAKEET_CTC_0_6B_Q8_0` by default) and
+ * transcribes the file with the batch `transcribe` API. Omit the model
+ * argument to use the registry constant.
+ *
+ * Audio should be 16 kHz mono PCM in a WAV container.
+ */
 import {
   loadModel,
   unloadModel,

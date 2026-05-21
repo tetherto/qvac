@@ -1,3 +1,15 @@
+/**
+ * Parakeet Sortformer streaming diarization from a WAV file.
+ *
+ * Usage:
+ *   bun run examples/transcription/parakeet-sortformer-streaming.ts <wav-file> [sortformer-gguf]
+ *
+ * Loads the Sortformer GGUF with AOSC streaming options in `modelConfig` and
+ * runs batch `transcribe` over the file. Omit the model argument to use
+ * `PARAKEET_SORTFORMER_4SPK_V1_Q8_0`.
+ *
+ * Audio should be 16 kHz mono PCM in a WAV container.
+ */
 import {
   loadModel,
   unloadModel,
