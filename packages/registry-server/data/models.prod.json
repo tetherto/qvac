@@ -12313,7 +12313,7 @@
       "libero",
       "robotics"
     ],
-    "notes": "",
+    "notes": "Vision tower linear weights Q8_0; SmolLM2 / action expert / flow-matching projections F32. Converted from HuggingFaceVLA/smolvla_libero.",
     "link": "https://huggingface.co/HuggingFaceVLA/smolvla_libero"
   }
 ]
