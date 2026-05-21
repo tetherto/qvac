@@ -395,12 +395,16 @@ export function classifyTeamPRs(state) {
     (pr) => !isFullyApprovedInPod(pr, state.roles),
   );
   const reReviewPRs = needsAction.filter((pr) => needsMyReReview(pr, me));
-  const reReviewSet = new Set(reReviewPRs.map((pr) => pr.number));
+  // Key on pr.url, not pr.number: now that needsAction is multi-repo, two PRs
+  // from different repos can share a number (tetherto/qvac#159 vs
+  // tetherto/qvac-devops#159) and collide in this Set. pr.url is unique across
+  // repos by construction.
+  const reReviewSet = new Set(reReviewPRs.map((pr) => pr.url));
   const stalePRs = needsAction.filter(
-    (pr) => pr.stale && !reReviewSet.has(pr.number),
+    (pr) => pr.stale && !reReviewSet.has(pr.url),
   );
   const activePRs = needsAction.filter(
-    (pr) => !pr.stale && !reReviewSet.has(pr.number),
+    (pr) => !pr.stale && !reReviewSet.has(pr.url),
   );
   const conflictCount = needsAction.filter(
     (pr) => pr.mergeable === "CONFLICTING",
