@@ -123,6 +123,8 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   // conflicts, and toEngineOptions translates explicit-false into
   // n_gpu_layers=0 so CPU is actually forced.
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir    = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.openclCacheDir = readOptionalString(configurationParams, env, "openclCacheDir");
   return cfg;
 }
 
@@ -143,6 +145,8 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.outputSampleRate  = readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.useGpu            = readOptionalBool(configurationParams, env, "useGPU");
   cfg.noiseNpyPath      = readOptionalString(configurationParams, env, "noiseNpyPath");
+  cfg.backendsDir       = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
   return cfg;
 }
 

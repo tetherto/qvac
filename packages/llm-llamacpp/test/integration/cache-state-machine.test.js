@@ -1,10 +1,9 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -179,7 +178,7 @@ async function runWithTimeoutCancellationViaResponse (model, prompt, runOptions)
   return normalizeStats(response.stats, { _chunkCount: 0 })
 }
 
-test('CacheTokens remain zero without cacheKey', { timeout: 600_000 }, async t => {
+safeTest('CacheTokens remain zero without cacheKey', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
   const stats = await runAndCollectStats(model, buildPrompt())
   t.is(stats.CacheTokens, 0)
@@ -187,7 +186,7 @@ test('CacheTokens remain zero without cacheKey', { timeout: 600_000 }, async t =
   t.ok(stats.generatedTokens > 0, 'generated tokens tracked even without caching')
 })
 
-test('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 }, async t => {
+safeTest('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 }, async t => {
   const { model, config, dirPath } = await setupModel(t, { n_predict: '768', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'cache-basic.bin')
   const firstStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
@@ -204,7 +203,7 @@ test('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 }, a
   )
 })
 
-test('Cancelling after first token keeps cache growth bounded', { timeout: 600_000 }, async t => {
+safeTest('Cancelling after first token keeps cache growth bounded', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'cache-cancel.bin')
   const warmStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
@@ -222,7 +221,7 @@ test('Cancelling after first token keeps cache growth bounded', { timeout: 600_0
   t.ok(stats.ppTPS > 0, 'ppTPS is positive (prompt processing completes before first token)')
 })
 
-test('Cancelling after first token only stores one generation chunk', { timeout: 600_000 }, async t => {
+safeTest('Cancelling after first token only stores one generation chunk', { timeout: 600_000 }, async t => {
   // ctx_size must exceed prompt + n_predict so generation can start (no context overflow)
   const { model, config } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
   const noCachePrompt = [...STOP_PROMPT]
@@ -241,7 +240,7 @@ test('Cancelling after first token only stores one generation chunk', { timeout:
   )
 })
 
-test('Timeout cancellation before first token keeps cache/timing stats at zero (via model.cancel())', { timeout: 600_000 }, async t => {
+safeTest('Timeout cancellation before first token keeps cache/timing stats at zero (via model.cancel())', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'cache-preempt.bin')
   const stats = await runWithTimeoutCancellation(model, buildStoppingPrompt(), cacheOpts(sessionName))
@@ -251,7 +250,7 @@ test('Timeout cancellation before first token keeps cache/timing stats at zero (
   t.ok(stats.promptTokens < threshold)
 })
 
-test('Timeout cancellation before first token keeps cache/timing stats at zero (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
+safeTest('Timeout cancellation before first token keeps cache/timing stats at zero (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'cache-preempt-qvacresponse.bin')
   const stats = await runWithTimeoutCancellationViaResponse(
@@ -265,7 +264,7 @@ test('Timeout cancellation before first token keeps cache/timing stats at zero (
   t.ok(stats.promptTokens < threshold)
 })
 
-test('Cache cleared when prompt without cacheKey follows cached inference', { timeout: 600_000 }, async t => {
+safeTest('Cache cleared when prompt without cacheKey follows cached inference', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'cache-clear-test.bin')
 
@@ -285,7 +284,7 @@ test('Cache cleared when prompt without cacheKey follows cached inference', { ti
   t.ok(Math.abs(delta - expectedDelta) <= 1, `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`)
 })
 
-test('Cache cleared when switching to different cacheKey', { timeout: 600_000 }, async t => {
+safeTest('Cache cleared when switching to different cacheKey', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const session1 = path.join(dirPath, 'cache-switch-1.bin')
   const session2 = path.join(dirPath, 'cache-switch-2.bin')
@@ -304,7 +303,7 @@ test('Cache cleared when switching to different cacheKey', { timeout: 600_000 },
   t.ok(Math.abs(delta - expectedDelta) <= 1, `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`)
 })
 
-test('Single-shot inference resets cache tokens after each non-cached prompt', { timeout: 600_000 }, async t => {
+safeTest('Single-shot inference resets cache tokens after each non-cached prompt', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
 
   const stats1 = await runAndCollectStats(model, buildPrompt())
@@ -321,7 +320,7 @@ test('Single-shot inference resets cache tokens after each non-cached prompt', {
   t.is(stats3.CacheTokens, 0, 'third single-shot inference also has zero CacheTokens')
 })
 
-test('Cache to no-cache to cache transition works correctly', { timeout: 600_000 }, async t => {
+safeTest('Cache to no-cache to cache transition works correctly', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'cache-transition.bin')
 
@@ -339,7 +338,7 @@ test('Cache to no-cache to cache transition works correctly', { timeout: 600_000
   t.ok(Math.abs(delta - expectedDelta) <= 1, `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`)
 })
 
-test('Canceled runs produce smaller stats than full runs', { timeout: 600_000 }, async t => {
+safeTest('Canceled runs produce smaller stats than full runs', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
 
   // Use prompt without session so cache is not used and n_past starts from prompt only
@@ -401,7 +400,7 @@ test('Canceled runs produce smaller stats than full runs', { timeout: 600_000 },
   )
 })
 
-test('Options: cacheKey enables caching with non-zero CacheTokens', { timeout: 600_000 }, async t => {
+safeTest('Options: cacheKey enables caching with non-zero CacheTokens', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'opts-cache-basic.bin')
   const stats = await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: sessionName, saveCacheToDisk: true })
@@ -410,7 +409,7 @@ test('Options: cacheKey enables caching with non-zero CacheTokens', { timeout: 6
   t.ok(stats.generatedTokens > 0, 'generated tokens tracked')
 })
 
-test('Options: follow-up with same cacheKey reuses cache', { timeout: 600_000 }, async t => {
+safeTest('Options: follow-up with same cacheKey reuses cache', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'opts-cache-followup.bin')
 
@@ -423,7 +422,7 @@ test('Options: follow-up with same cacheKey reuses cache', { timeout: 600_000 },
   t.is(delta, expectedDelta, `cache delta (${delta}) equals follow-up tokens (${expectedDelta})`)
 })
 
-test('Options: switching cacheKey auto-saves previous session', { timeout: 600_000 }, async t => {
+safeTest('Options: switching cacheKey auto-saves previous session', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const session1 = path.join(dirPath, 'opts-switch-1.bin')
   const session2 = path.join(dirPath, 'opts-switch-2.bin')
@@ -438,7 +437,7 @@ test('Options: switching cacheKey auto-saves previous session', { timeout: 600_0
   t.ok(secondStats.CacheTokens > 0, 'second cache session has CacheTokens')
 })
 
-test('Validation: cacheKey must be a string', { timeout: 600_000 }, async t => {
+safeTest('Validation: cacheKey must be a string', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
   const cases = [123, true, []]
   for (const bad of cases) {
@@ -451,7 +450,7 @@ test('Validation: cacheKey must be a string', { timeout: 600_000 }, async t => {
   }
 })
 
-test('Validation: saveCacheToDisk must be a boolean', { timeout: 600_000 }, async t => {
+safeTest('Validation: saveCacheToDisk must be a boolean', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
   const cases = [123, 'path.bin', [], {}]
   for (const bad of cases) {
@@ -464,7 +463,7 @@ test('Validation: saveCacheToDisk must be a boolean', { timeout: 600_000 }, asyn
   }
 })
 
-test('Options: saveCacheToDisk false does not write to disk', { timeout: 600_000 }, async t => {
+safeTest('Options: saveCacheToDisk false does not write to disk', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'opts-saveCacheToDisk-false.bin')
 
@@ -473,13 +472,13 @@ test('Options: saveCacheToDisk false does not write to disk', { timeout: 600_000
   t.absent(fs.existsSync(sessionName), 'saveCacheToDisk: false does not write file')
 })
 
-test('Options: saveCacheToDisk true with no cacheKey is a no-op', { timeout: 600_000 }, async t => {
+safeTest('Options: saveCacheToDisk true with no cacheKey is a no-op', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
   const stats = await runAndCollectStats(model, [...BASE_PROMPT], { saveCacheToDisk: true })
   t.is(stats.CacheTokens, 0, 'no cacheKey means no cache even with saveCacheToDisk: true')
 })
 
-test('Options: prefill with saveCacheToDisk persists cache file', { timeout: 600_000 }, async t => {
+safeTest('Options: prefill with saveCacheToDisk persists cache file', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'opts-prefill-save.bin')
 
@@ -495,7 +494,7 @@ test('Options: prefill with saveCacheToDisk persists cache file', { timeout: 600
   t.ok(fs.statSync(sessionName).size > 0, 'persisted prefill cache file is non-empty')
 })
 
-test('Options: prefilled cache primes a follow-up conversation', { timeout: 600_000 }, async t => {
+safeTest('Options: prefilled cache primes a follow-up conversation', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'opts-prefill-followup.bin')
 

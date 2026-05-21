@@ -1,12 +1,11 @@
 'use strict'
 
 const test = require('brittle')
-const sinon = require('sinon')
 const ONNXTTS = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const MockedBinding = require('../mock/MockedBinding.js')
 const { QvacErrorAddonTTS, ERR_CODES } = require('../../lib/error.js')
-const process = require('process')
+const process = require('bare-process')
 
 global.process = process
 
@@ -16,9 +15,9 @@ function createStubbedModel () {
     engine: 'chatterbox',
     config: { language: 'en', useGPU: false }
   })
-  sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
+  model._createAddon = (configurationParams, outputCb) => {
     return new TTSInterface(new MockedBinding(), configurationParams, outputCb)
-  })
+  }
   return model
 }
 

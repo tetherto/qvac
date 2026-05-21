@@ -15,6 +15,7 @@
 #include "addon/TTSErrors.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac::ttsggml::chatterbox {
 
@@ -24,6 +25,7 @@ using qvac_errors::createTTSError;
 using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
+namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;
@@ -45,6 +47,33 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (cfg.streamChunkTokens.has_value())      opts.stream_chunk_tokens       = *cfg.streamChunkTokens;
   if (cfg.streamFirstChunkTokens.has_value()) opts.stream_first_chunk_tokens = *cfg.streamFirstChunkTokens;
   if (cfg.streamCfmSteps.has_value())         opts.stream_cfm_steps          = *cfg.streamCfmSteps;
+
+  // Compose the actual backends-scan directory from the host-provided
+  // prebuilds root plus the cmake-bare per-target subdir
+  // (BACKENDS_SUBDIR, e.g. `android-arm64/qvac__tts-ggml`). Mirrors
+  // the exact shape qvac/packages/transcription-parakeet uses in
+  // ParakeetModel.cpp + qvac/packages/llm-llamacpp uses in
+  // LlamaLazyInitializeBackend.cpp so a host that already passes
+  // `path.join(__dirname, 'prebuilds')` gets identical resolution
+  // semantics across the three addons. Empty `backendsDir` -> leave
+  // `opts.backends_dir` empty so tts-cpp falls back to ggml's
+  // compile-time default search path (`ggml_backend_load_all()`
+  // rather than `..._from_path()`).
+  if (!cfg.backendsDir.empty()) {
+    std::filesystem::path backendsDirPath(cfg.backendsDir);
+#ifdef BACKENDS_SUBDIR
+    backendsDirPath =
+        (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+    opts.backends_dir = backendsDirPath.string();
+  }
+  // Forwarded as-is. Empty -> leave $GGML_OPENCL_CACHE_DIR alone
+  // (the env-set-by-host path still wins). Only consumed on Android
+  // by `tts_cpp::detail::set_opencl_cache_dir()`; other platforms
+  // ignore it. Process-singleton scoped: a second Engine ctor with
+  // a different value is silently ignored on the tts-cpp side
+  // because ggml-opencl only reads the env var once at first init.
+  opts.opencl_cache_dir = cfg.openclCacheDir;
   return opts;
 }
 
@@ -153,6 +182,25 @@ void ChatterboxModel::reload() {
 
 void ChatterboxModel::loadLocked() {
   if (engine_) return;
+
+  // Force useGPU to false on Android until Vulkan (Mali) and OpenCL (Adreno)
+  // stabilize for the Chatterbox graph.
+#ifdef __ANDROID__
+  {
+    const bool wantsGpu =
+        cfg_.useGpu.value_or(false) ||
+        (cfg_.nGpuLayers.has_value() && *cfg_.nGpuLayers != 0);
+    if (wantsGpu) {
+      QLOG(logger::Priority::WARNING,
+           "Chatterbox: useGPU=true is currently ignored on Android "
+           "(GPU backends disabled at engine boundary pending Vulkan/Mali "
+           "and OpenCL/Adreno driver fixes); falling back to CPU.");
+    }
+    cfg_.useGpu     = false;
+    cfg_.nGpuLayers = 0;
+  }
+#endif
+
   try {
     engine_ = std::make_shared<tts_cpp::chatterbox::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {

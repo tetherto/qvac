@@ -357,39 +357,41 @@ async function runInferenceOrExpectFailure (t, addon, scenario, prompt) {
 }
 
 async function executeScenario (t, scenario) {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
-    downloadUrl: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
-  })
-
-  const modelPath = path.join(dirPath, modelName)
-
-  const baseConfig = {
-    device: useCpu ? 'cpu' : 'gpu',
-    gpu_layers: '999',
-    ctx_size: '1024',
-    n_predict: '32',
-    temp: '0.7',
-    top_p: '0.9',
-    top_k: '40',
-    repeat_penalty: '1.1',
-    seed: '1',
-    verbosity: '2'
-  }
-
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
-  const logs = specLogger.logs
-
-  const addon = new LlmLlamacpp({
-    files: { model: [modelPath] },
-    config: { ...baseConfig, ...scenario.overrides },
-    logger: createTestLogger(),
-    opts: { stats: true }
-  })
-
+  let specLogger = null
+  let addon = null
   let loadSucceeded = false
 
   try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
+      downloadUrl: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
+    })
+
+    const modelPath = path.join(dirPath, modelName)
+
+    const baseConfig = {
+      device: useCpu ? 'cpu' : 'gpu',
+      gpu_layers: '999',
+      ctx_size: '1024',
+      n_predict: '32',
+      temp: '0.7',
+      top_p: '0.9',
+      top_k: '40',
+      repeat_penalty: '1.1',
+      seed: '1',
+      verbosity: '2'
+    }
+
+    specLogger = attachSpecLogger({ forwardToConsole: true })
+    const logs = specLogger.logs
+
+    addon = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: { ...baseConfig, ...scenario.overrides },
+      logger: createTestLogger(),
+      opts: { stats: true }
+    })
+
     const loadResult = await loadAddonOrExpectFailure(t, addon, scenario)
     if (!loadResult) return
     loadSucceeded = true
@@ -427,10 +429,10 @@ async function executeScenario (t, scenario) {
     if (scenario.cleanupDelayMs) {
       await new Promise(resolve => setTimeout(resolve, scenario.cleanupDelayMs))
     }
-    if (loadSucceeded) {
+    if (loadSucceeded && addon) {
       await addon.unload().catch(() => {})
     }
-    specLogger.release()
+    if (specLogger) specLogger.release()
   }
 }
 
