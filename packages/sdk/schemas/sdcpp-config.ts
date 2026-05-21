@@ -639,7 +639,7 @@ export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>;
 
 type VideoClientParamsBase = Omit<
   VideoRequest,
-  "init_image" | "end_image" | "control_frames"
+  "requestId" | "init_image" | "end_image" | "control_frames"
 >;
 
 export type VideoClientParams = VideoClientParamsBase & {
