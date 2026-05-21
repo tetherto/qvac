@@ -413,6 +413,8 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
-          path: ${{ env.WORKDIR }}/test/results/performance-report.json
+          # Glob picks up both addon.test.js's `performance-report.json`
+          # (smolvla) and pi05.test.js's `performance-report-pi05.json`.
+          path: ${{ env.WORKDIR }}/test/results/performance-report*.json
           if-no-files-found: ignore
           retention-days: 14

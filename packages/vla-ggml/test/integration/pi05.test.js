@@ -19,9 +19,128 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+const os = require('bare-os')
 const path = require('bare-path')
 const process = require('bare-process')
 const { VlaModel, preprocessImage, padState } = require('../..')
+
+// ── Performance reporter ────────────────────────────────────────────────
+// Same shape as addon.test.js (smolvla) — a per-process singleton that
+// accumulates per-test timing + quality and flushes JSON on process exit.
+// Writes to a pi05-specific path so smolvla's report stays untouched; the
+// CI workflow's upload-artifact step globs `performance-report*.json`
+// to capture both.
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  // Mobile bundle — minimal inline reporter (same shape as addon.test.js).
+  const _platform = os.platform()
+  createPerformanceReporter = function (opts) {
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'unknown'
+    const _addonType = (opts && opts.addonType) || 'generic'
+    const _device = {
+      name: _platform,
+      platform: _platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: 'device-farm'
+    }
+    return {
+      record (testName, metrics, extra) {
+        _results.push({
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            total_time_ms: null,
+            vision_time_ms: null,
+            prefill_compute_time_ms: null,
+            prefill_total_time_ms: null,
+            ode_time_ms: null
+          }, metrics),
+          quality: (extra && extra.quality) || undefined,
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null
+        })
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
+      writeReport () {
+        const json = JSON.stringify(this.toJSON())
+        const dirs = []
+        if (global.testDir) dirs.push(global.testDir)
+        if (_platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
+        dirs.push('/tmp')
+        for (const d of dirs) {
+          try {
+            try { fs.mkdirSync(d, { recursive: true }) } catch (_) {}
+            const p = path.join(d, 'perf-report-pi05.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+          } catch (_) {}
+        }
+      },
+      writeStepSummary () {},
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          const CHUNK = 800
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
+        } catch (_) {}
+      },
+      get length () { return _results.length }
+    }
+  }
+}
+
+const _perfReporter = createPerformanceReporter({ addon: 'vla', addonType: 'pi05' })
+const _platform = os.platform()
+const _isMobile = _platform === 'ios' || _platform === 'android'
+const _reportPath = path.resolve('.', 'test/results/performance-report-pi05.json')
+
+// Desktop flush on process exit. Mobile flushes incrementally after each
+// record() (same rationale as addon.test.js — Device Farm tears down the
+// process before exit handlers fire).
+process.on('exit', () => {
+  if (_perfReporter.length === 0) return
+  try {
+    if (_isMobile) {
+      _perfReporter.writeReport()
+      _perfReporter.writeToConsole()
+    } else {
+      _perfReporter.writeReport(_reportPath)
+      _perfReporter.writeStepSummary()
+      _perfReporter.writeToConsole()
+    }
+  } catch (err) {
+    console.log('[perf-reporter] flush failed: ' + (err && err.message))
+  }
+})
 
 const HAS_ASSETS =
   process.env.PI05_TEST_GGUF &&
@@ -175,18 +294,80 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
   t.ok(result.actions instanceof Float32Array, 'actions is Float32Array')
   t.is(result.actions.length, 50 * 32, 'actions length')
 
+  // Per-component timings must be present and non-negative — same shape
+  // as smolvla's stats (`prefill_*` are the architecture-neutral names;
+  // the addon also back-fills the legacy `smollm2_*` aliases for old
+  // consumers, but pi05's surface uses the neutral names).
+  const stats = result.stats || {}
+  for (const key of ['vision_ms', 'prefill_compute_ms', 'prefill_total_ms', 'ode_ms', 'total_ms']) {
+    t.is(typeof stats[key], 'number', `stats.${key} is a number`)
+    t.ok(stats[key] >= 0, `stats.${key} >= 0`)
+  }
+  const tag = 'pi05/cpu'
+  console.log(
+    `[VLA TIMING ${tag}] vision=${stats.vision_ms.toFixed(0)}ms ` +
+    `prefill_compute=${stats.prefill_compute_ms.toFixed(0)}ms ` +
+    `prefill_total=${stats.prefill_total_ms.toFixed(0)}ms ` +
+    `ode=${stats.ode_ms.toFixed(0)}ms ` +
+    `total=${stats.total_ms.toFixed(0)}ms`
+  )
+
   // ── Compare against PyTorch ────────────────────────────────────────────
   const cos = cosineSim(result.actions, expected)
   const diff = maxAbsDiff(result.actions, expected)
   const max = maxAbs(expected)
   const rel = diff / Math.max(max, 1e-9)
-  t.comment(`actions: cos=${cos.toFixed(6)} max_abs_diff=${diff.toFixed(6)} rel_max=${rel.toFixed(6)} max_abs_expected=${max.toFixed(4)}`)
+  const quality = {
+    model: 'lerobot/pi05_base',
+    compared: expected.length,
+    action_max_abs_diff: diff,
+    action_mean_abs_diff: (() => {
+      let s = 0
+      for (let i = 0; i < expected.length; i++) s += Math.abs(result.actions[i] - expected[i])
+      return s / expected.length
+    })(),
+    action_cos_sim: cos
+  }
+  console.log(
+    `[VLA QUALITY ${tag}] vs ${quality.model}: ` +
+    `max|Δ|=${quality.action_max_abs_diff.toFixed(4)} ` +
+    `mean|Δ|=${quality.action_mean_abs_diff.toFixed(4)} ` +
+    `cos=${quality.action_cos_sim.toFixed(4)} ` +
+    `(${quality.compared} values)`
+  )
 
   // Plan §5 end-to-end CPU bar: cos > 0.999. Relaxed abs-diff bar (5 %
   // relative) tracks the same F16-noise-accumulation pattern the C++
   // integration test sees. Direction parity is the meaningful signal.
   t.ok(cos > 0.999, `cos sim ${cos} > 0.999`)
   t.ok(rel < 0.05, `rel max diff ${rel} < 0.05`)
+
+  const ep = model.backendName || null
+  console.log(`[VLA BACKEND ${tag}] execution_provider=${ep ?? 'unknown'}`)
+
+  _perfReporter.record(`end-to-end inference (${tag})`, {
+    total_time_ms: stats.total_ms,
+    vision_time_ms: stats.vision_ms,
+    prefill_compute_time_ms: stats.prefill_compute_ms,
+    prefill_total_time_ms: stats.prefill_total_ms,
+    ode_time_ms: stats.ode_ms
+  }, {
+    execution_provider: ep,
+    quality
+  })
+
+  // Mobile incremental flush — same rationale as addon.test.js: Device
+  // Farm tears down the BareKit process before exit handlers fire, so
+  // we write incrementally to make sure the perf-report markers reach
+  // logcat / iOS console.
+  if (_isMobile) {
+    try {
+      _perfReporter.writeReport()
+      _perfReporter.writeToConsole()
+    } catch (err) {
+      console.log('[perf-reporter] mobile incremental flush failed: ' + (err && err.message))
+    }
+  }
 
   await model.unload()
 })
