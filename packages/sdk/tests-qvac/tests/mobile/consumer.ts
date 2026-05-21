@@ -67,7 +67,6 @@ import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.j
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
-import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
@@ -322,17 +321,6 @@ resources.define("vision", {
   },
 });
 
-resources.define("diffusion", {
-  constant: SD_V2_1_1B_Q8_0,
-  type: "diffusion",
-  config: {
-    device: "gpu",
-    threads: 4,
-    prediction: "v",
-    vae_on_cpu: true,
-  },
-});
-
 function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
@@ -357,7 +345,7 @@ export const executor = createExecutor({
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
-    new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
+    new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)"),
     new SkipExecutor(
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
@@ -416,7 +404,6 @@ export const executor = createExecutor({
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new CancellationExecutor(resources),
