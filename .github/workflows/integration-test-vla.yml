@@ -361,9 +361,13 @@ jobs:
           echo "Downloading π₀.₅ test artefacts from S3..."
           mkdir -p model/vla/pi05 test/pi05-oracle
           S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/pi05-base/2026-05-21"
-          aws s3 cp "$S3_BASE/pi05_base.gguf"          model/vla/pi05/pi05_base.gguf
-          aws s3 cp "$S3_BASE/fixture.safetensors"     test/pi05-oracle/fixture.safetensors
-          aws s3 cp "$S3_BASE/activations.safetensors" test/pi05-oracle/activations.safetensors
+          # Filename encodes the quantization plan (vision tower linears
+          # are Q8_0; VLM/expert linears stay F16; norms / adaRMSNorm
+          # densities / projections stay F32). Same naming convention as
+          # smolvla's `smolvla-libero-vision-q8.gguf`.
+          aws s3 cp "$S3_BASE/pi05-base-vision-q8.gguf"  model/vla/pi05/pi05-base-vision-q8.gguf
+          aws s3 cp "$S3_BASE/fixture.safetensors"        test/pi05-oracle/fixture.safetensors
+          aws s3 cp "$S3_BASE/activations.safetensors"    test/pi05-oracle/activations.safetensors
           echo "π₀.₅ asset state after download:"
           ls -la model/vla/pi05/ test/pi05-oracle/
 
@@ -408,7 +412,7 @@ jobs:
           # π₀.₅ artefacts (downloaded in the previous step). Empty
           # string on darwin/x64 to mirror the QVAC_VLA_MODEL convention
           # — pi05.test.js's HAS_ASSETS guard skips when unset.
-          PI05_TEST_GGUF: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/pi05/pi05_base.gguf', github.workspace, env.WORKDIR) }}
+          PI05_TEST_GGUF: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/pi05/pi05-base-vision-q8.gguf', github.workspace, env.WORKDIR) }}
           PI05_TEST_FIXTURE: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/test/pi05-oracle/fixture.safetensors', github.workspace, env.WORKDIR) }}
           PI05_TEST_ACTIVATIONS: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) }}
         run: |
@@ -437,7 +441,7 @@ jobs:
         shell: powershell
         env:
           QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-vision-q8.gguf
-          PI05_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/pi05/pi05_base.gguf
+          PI05_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/pi05/pi05-base-vision-q8.gguf
           PI05_TEST_FIXTURE: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/fixture.safetensors
           PI05_TEST_ACTIVATIONS: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/activations.safetensors
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
