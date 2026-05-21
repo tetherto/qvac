@@ -383,11 +383,48 @@ runs:
           echo "Encoded perf-extract.js ($(wc -c < "$PERF_EXTRACT_PATH" | tr -d ' ')b)"
         fi
 
+        PERF_TEST_REGEX=""
+        if [ "$QVAC_PERF_ONLY" = "true" ]; then
+          PERF_FILE="addon/${ADDON_WORKDIR}/test/mobile/perf-tests.json"
+          if [ -f "$PERF_FILE" ]; then
+            PERF_TESTS=$(jq -r 'join("|")' "$PERF_FILE")
+            if [ -n "$PERF_TESTS" ]; then
+              PERF_TEST_REGEX="^(${PERF_TESTS})$"
+              echo "perf-only mode: filtering with $(jq length "$PERF_FILE") tests from $PERF_FILE"
+            fi
+          fi
+          if [ -z "$PERF_TEST_REGEX" ]; then
+            echo "::warning::qvac_perf_only=true but no perf-tests.json found at $PERF_FILE — running all tests"
+          fi
+        fi
+
+        filter_perf() {
+          local grep_pattern="$1"
+          if [ "$QVAC_PERF_ONLY" != "true" ] || [ -z "$PERF_TEST_REGEX" ]; then
+            echo "$grep_pattern"
+            return
+          fi
+          [ -z "$grep_pattern" ] && return
+          local matched
+          matched=$(echo "$grep_pattern" | tr '|' '\n' | grep -E "$PERF_TEST_REGEX" || true)
+          if [ -n "$matched" ]; then
+            echo "$matched" | tr '\n' '|' | sed 's/|$//'
+          fi
+        }
+
         TEST_SPECS_JSON='[]'
         GROUP_COUNT=$(echo "$GROUPS_JSON" | jq 'length')
         for IDX in $(seq 0 $((GROUP_COUNT - 1))); do
           GROUP_NAME=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].name")
-          GROUP_GREP=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].grep // \"\"")
+          RAW_GREP=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].grep // \"\"")
+          GROUP_GREP=$(filter_perf "$RAW_GREP")
+
+          if [ "$QVAC_PERF_ONLY" = "true" ] && [ -z "$GROUP_GREP" ]; then
+            echo ""
+            echo "── group $IDX: $GROUP_NAME ── SKIPPED (no perf-emitting tests)"
+            continue
+          fi
+
           # printf (not echo) so tr -c doesn't pick up echo's trailing newline
           # and tack on a stray underscore (e.g. "Perf_" instead of "Perf").
           SAFE_NAME=$(printf '%s' "$GROUP_NAME" | tr -c '[:alnum:]_-' '_')
