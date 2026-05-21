@@ -249,7 +249,8 @@ preferredEsrganBackendForConfigDevice(const std::string& device) {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
     QLOG_IF(
         Priority::INFO,
-        "Backend selection: Android ESRGAN gpu/auto -> CPU (unstable GPU/OpenCL "
+        "Backend selection: Android ESRGAN gpu/auto -> CPU (unstable "
+        "GPU/OpenCL "
         "path)");
     return SD_BACKEND_PREF_CPU;
   }

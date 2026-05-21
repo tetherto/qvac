@@ -129,7 +129,8 @@ upscaler_ctx_t* EsrganUpscaler::ensureContextLocked() {
   const int tileSize = std::max(1, config_.upscalerTileSize);
   const sd_upscaler_device_t sdDev = deviceStringToSd(config_.device);
   const sd_backend_preference_t backendPref =
-      sd_backend_selection::preferredEsrganBackendForConfigDevice(config_.device);
+      sd_backend_selection::preferredEsrganBackendForConfigDevice(
+          config_.device);
   upscaler_ctx_t* raw = new_upscaler_ctx_with_device(
       config_.esrganPath.c_str(),
       config_.upscalerOffloadParamsToCpu,

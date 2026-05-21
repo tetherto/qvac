@@ -64,8 +64,9 @@ preferredGpuBackendForConfigDevice(const std::string& device);
 
 /**
  * ESRGAN-only stable-diffusion.cpp backend preference.
- * On Android, config gpu/auto always use CPU (native ESRGAN GPU/OpenCL is unstable).
- * Stable Diffusion uses preferredGpuBackendForConfigDevice() instead.
+ * On Android, config gpu/auto always use CPU (native ESRGAN GPU/OpenCL is
+ * unstable). Stable Diffusion uses preferredGpuBackendForConfigDevice()
+ * instead.
  */
 sd_backend_preference_t
 preferredEsrganBackendForConfigDevice(const std::string& device);
