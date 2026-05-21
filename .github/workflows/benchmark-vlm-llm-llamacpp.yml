@@ -1,0 +1,257 @@
+name: Benchmark VLM (LLM)
+
+# Manually-triggered VLM benchmark. Runs
+# packages/llm-llamacpp/benchmarks/vlm-performance against Qwen3.5-VL
+# on a fixed object-listing task and uploads a consolidated report.
+#
+# First iteration scope:
+#   - Desktop: Windows + Linux on GitHub-hosted runners (CPU only).
+#   - Android: present as an input but currently a stub — the on-device
+#     test bundle integration for our benchmark is not yet wired. Once
+#     it is, the stub job will be replaced with a real Device Farm run.
+#   - Candidate only (no baseline diff). Baseline comparison wires in
+#     once we either auto-build the merge-base commit or cache its
+#     prebuilds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch / tag / SHA) to benchmark"
+        required: false
+        type: string
+      warmup_runs:
+        description: "Warmup iterations per cell (discarded)"
+        required: false
+        type: string
+        default: "1"
+      measured_runs:
+        description: "Measured iterations per cell (median reported)"
+        required: false
+        type: string
+        default: "3"
+      thinking:
+        description: "Qwen3.5 reasoning mode (off = faster, on = full <think> trace)"
+        required: false
+        type: choice
+        default: "off"
+        options:
+          - "off"
+          - "on"
+      run_windows:
+        description: "Run on Windows (windows-latest, CPU)"
+        required: false
+        type: boolean
+        default: true
+      run_linux:
+        description: "Run on Linux (ubuntu-latest, CPU)"
+        required: false
+        type: boolean
+        default: true
+      run_android:
+        description: "Run on Android (stub in this iteration)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  # ── Context ────────────────────────────────────────────────────────
+  # Resolves the repo + ref so downstream jobs check out the right
+  # commit even when the workflow_dispatch is invoked without `ref`.
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="$REPO"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  # ── Desktop benchmark matrix ───────────────────────────────────────
+  # Each leg is the same shape — pick the runner via matrix.runner.
+  # GitHub-hosted runners are CPU-only; GPU coverage moves to the
+  # self-hosted runners (qvac-win25-x64-gpu, ai-run-linux-gpu) in a
+  # later iteration.
+  desktop:
+    needs: context
+    name: vlm-${{ matrix.platform }}
+    if: |
+      (matrix.platform == 'windows-x64' && inputs.run_windows) ||
+      (matrix.platform == 'linux-x64' && inputs.run_linux)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-latest
+          - platform: linux-x64
+            runner: ubuntu-latest
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      WORKDIR: packages/llm-llamacpp/benchmarks/vlm-performance
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        with:
+          node-version: lts/*
+
+      - name: Install benchmark deps
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare models
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run prepare:models
+
+      - name: Run VLM benchmark
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run run:vlm-bench -- \
+            --skip-baseline \
+            --warmup-runs=${{ inputs.warmup_runs }} \
+            --measured-runs=${{ inputs.measured_runs }} \
+            --thinking=${{ inputs.thinking }}
+
+      - name: Upload per-platform results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-perf-${{ matrix.platform }}-${{ github.run_number }}
+          path: |
+            ${{ env.WORKDIR }}/results/vlm-perf-*.md
+            ${{ env.WORKDIR }}/results/vlm-perf-*.json
+            ${{ env.WORKDIR }}/results/cell-*-stderr.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  # ── Android (stub for first iteration) ─────────────────────────────
+  # Today our benchmark binary doesn't run on the Android Device Farm
+  # bundle — the test app would need to embed case-runner.js (or an
+  # equivalent on-device runner) the way the existing mobile image
+  # perf tests do. This job is left in place so the workflow shape is
+  # complete and you can flip it on once that wiring lands.
+  #
+  # If you need Android perf numbers right now, manually launch
+  # `Benchmark Performance (LLM)` (benchmark-performance-infer-llm-llamacpp.yml)
+  # with the same ref and read its mobile artifact.
+  android:
+    needs: context
+    name: vlm-android
+    if: inputs.run_android
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Stub notice
+        shell: bash
+        run: |
+          mkdir -p android-stub
+          cat > android-stub/README.txt <<'EOF'
+          Android VLM benchmark - placeholder
+          ===================================
+          Our benchmark is not yet bundled into the Android Device Farm
+          test app. The job is included so the workflow shape covers
+          Android; the actual on-device run is pending follow-up work
+          to wire packages/llm-llamacpp/benchmarks/vlm-performance into
+          the mobile test bundle.
+
+          For Android perf numbers in the meantime, run:
+            Actions -> Benchmark Performance (LLM) -> Run workflow
+          (workflow file: benchmark-performance-infer-llm-llamacpp.yml)
+          EOF
+          echo "Android benchmark is a stub in this iteration."
+          cat android-stub/README.txt
+      - name: Upload Android stub marker
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-perf-android-${{ github.run_number }}
+          path: android-stub/
+          retention-days: 14
+
+  # ── Summarize ──────────────────────────────────────────────────────
+  # Downloads every desktop artifact and renders a consolidated table.
+  # `if: always()` keeps the summary going when one matrix leg fails.
+  summarize:
+    needs:
+      - context
+      - desktop
+      - android
+    if: always() && needs.context.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/llm-llamacpp/benchmarks/vlm-performance/scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        with:
+          node-version: lts/*
+
+      - name: Download all per-platform artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: vlm-perf-*-${{ github.run_number }}
+          path: per-platform
+
+      - name: Aggregate into one report
+        shell: bash
+        run: |
+          mkdir -p consolidated
+          node packages/llm-llamacpp/benchmarks/vlm-performance/scripts/aggregate-platforms.js \
+            --inputs=per-platform \
+            --output-md=consolidated/vlm-perf-consolidated.md \
+            --output-json=consolidated/vlm-perf-consolidated.json
+
+      - name: Post step summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## VLM Benchmark - Consolidated"
+            echo ""
+            if [ -f consolidated/vlm-perf-consolidated.md ]; then
+              tail -n +2 consolidated/vlm-perf-consolidated.md
+            else
+              echo "No consolidated report generated."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-perf-consolidated-${{ github.run_number }}
+          path: consolidated/
+          retention-days: 30
+          if-no-files-found: warn

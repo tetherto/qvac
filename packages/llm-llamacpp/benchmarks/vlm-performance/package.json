@@ -1,0 +1,17 @@
+{
+  "name": "@qvac/llm-llamacpp-vlm-performance",
+  "private": true,
+  "description": "VLM benchmark runner for the LLM addon (V1 — Qwen3.5-VL × object listing).",
+  "scripts": {
+    "prepare:models": "node ./prepare-models.js",
+    "run:vlm-bench": "node ./run-vlm-bench.js"
+  },
+  "dependencies": {
+    "@qvac/llm-llamacpp": "latest",
+    "bare": "^1.28.5",
+    "bare-fs": "latest",
+    "bare-path": "latest",
+    "bare-process": "latest",
+    "bare-os": "latest"
+  }
+}
