@@ -91,6 +91,11 @@ async function runOcrPaddleTest (options = {}) { // eslint-disable-line no-unuse
   return runIntegrationModule('../integration/ocr-paddle.test.js', options)
 }
 
+async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQuantizedKvcacheTest')) return __FILTERED
+  return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
+}
+
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35Test')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5.test.js', options)
