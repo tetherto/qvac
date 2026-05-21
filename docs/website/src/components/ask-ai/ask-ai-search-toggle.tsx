@@ -86,10 +86,15 @@ export function AskAISearchToggleLarge() {
 
 /**
  * Drop-in replacement for the Fumadocs `searchToggle.components.sm`
- * slot used on the mobile top bar. Renders only the icon-only search
- * trigger; the Ask AI button has been temporarily removed from this
- * slot while we iterate on its placement in the notebook layout.
+ * slot used on the mobile top bar. Pairs the icon-only search button
+ * with an icon-only "Ask AI" button so the user has a tap target for
+ * either flow without sacrificing horizontal space.
  */
 export function AskAISearchToggleSmall() {
-  return <SmallSearchTrigger />;
+  return (
+    <div className="flex items-center gap-1">
+      <SmallSearchTrigger />
+      <AskAIButton variant="mobile-header" ariaLabel="Ask the AI assistant" />
+    </div>
+  );
 }
