@@ -48,8 +48,8 @@ test('Qwen3-0.6B runs inference with tbq4_0 / pq4_0 KV cache', { timeout: 600_00
     config: {
       device: 'gpu',
       gpu_layers: '999',
-      ctx_size: '2048',
-      n_predict: '1024',
+      ctx_size: '1024',
+      n_predict: '512',
       temp: '0',
       seed: '42',
       'cache-type-k': 'tbq4_0',
