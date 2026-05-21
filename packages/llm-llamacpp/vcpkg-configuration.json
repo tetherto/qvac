@@ -15,8 +15,5 @@
         "picojson"
       ]
     }
-  ],
-  "overlay-ports": [
-    "vcpkg/ports"
   ]
 }
