@@ -82,7 +82,13 @@ export class MobileParakeetStreamExecutor extends ModelAssetExecutor<
 
     if (testId === "parakeet-stream-iterator-throw") {
       const bytes = await this.loadAudioBytes(p.audioFileName);
-      return runParakeetStreamIteratorThrow(modelId, bytes, p);
+      // iOS Device Farm: JSI teardown after destroy() is slower than
+      // desktop; recovery opened too soon yields zero text events.
+      return runParakeetStreamIteratorThrow(modelId, bytes, {
+        ...p,
+        postTeardownSettleMs: 2000,
+        recoveryMaxAttempts: 4,
+      });
     }
 
     const bytes = await this.loadAudioBytes(p.audioFileName);

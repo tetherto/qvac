@@ -17,6 +17,13 @@ export interface ParakeetStreamParams {
   chunkMs?: number;
   emitPartials?: boolean;
   trailingSilenceMs?: number;
+  /**
+   * Bare-RN only: wait after `destroy()` before opening a follow-up
+   * `transcribeStream` on the same modelId (JSI teardown is async).
+   */
+  postTeardownSettleMs?: number;
+  /** Bare-RN only: retry recovery when the first session yields zero events. */
+  recoveryMaxAttempts?: number;
 }
 
 interface CollectedEvent {
@@ -406,27 +413,58 @@ export async function runParakeetStreamIteratorThrow(
     }
     throwingSession = null;
 
+    const settleMs = params.postTeardownSettleMs ?? 0;
+    const maxAttempts = Math.max(1, params.recoveryMaxAttempts ?? 1);
+    if (settleMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, settleMs));
+    }
+
     // Recover: a brand new session against the same model must
     // complete normally. If the addon were wedged after the
     // consumer-side throw, this would hang or fail to load.
-    recoverySession = await transcribeStream({
-      modelId,
-      parakeetStreamingConfig: {
-        chunkMs,
-        ...(params.emitPartials !== undefined && {
-          emitPartials: params.emitPartials,
-        }),
-      },
-    });
-    await writeInChunks(recoverySession, speech, chunkSize, chunkMs);
-    await writeInChunks(recoverySession, silence, chunkSize, chunkMs);
-    recoverySession.end();
+    let lastResult: TestResult = {
+      passed: false,
+      output: "recovery session was not attempted",
+    };
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) {
+        try {
+          recoverySession?.destroy();
+        } catch {
+          // prior attempt may already be torn down
+        }
+        recoverySession = null;
+        if (settleMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, settleMs));
+        }
+      }
 
-    const events: CollectedEvent[] = [];
-    for await (const event of recoverySession) {
-      events.push(event as CollectedEvent);
+      recoverySession = await transcribeStream({
+        modelId,
+        parakeetStreamingConfig: {
+          chunkMs,
+          ...(params.emitPartials !== undefined && {
+            emitPartials: params.emitPartials,
+          }),
+        },
+      });
+      await writeInChunks(recoverySession, speech, chunkSize, chunkMs);
+      await writeInChunks(recoverySession, silence, chunkSize, chunkMs);
+      recoverySession.end();
+
+      const events: CollectedEvent[] = [];
+      for await (const event of recoverySession) {
+        events.push(event as CollectedEvent);
+      }
+      lastResult = assertHappy(events);
+      if (lastResult.passed) {
+        return lastResult;
+      }
     }
-    return assertHappy(events);
+    return {
+      passed: false,
+      output: `recovery failed after ${maxAttempts} attempt(s): ${lastResult.output}`,
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     return {
