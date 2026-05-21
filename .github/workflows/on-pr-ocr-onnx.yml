@@ -125,8 +125,8 @@ jobs:
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
-      sha: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      sha: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/ocr-ggml
 
   ts-checks:
@@ -147,7 +147,7 @@ jobs:
 
       - name: Type declaration check
         working-directory: packages/llm-llamacpp
-        run: npm run test:dts
+        run: npm run test:dt
 
   prebuild:
     permissions:
