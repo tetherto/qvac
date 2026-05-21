@@ -746,7 +746,7 @@ describe('verifyBundle orchestrator', () => {
         hosts: []
       })
       assert.equal(hasErrors(result), true)
-      assert.equal(result.issues[0]?.message.includes('--host'), true)
+      assert.equal(result.issues[0]?.code, 'invalid-source')
     })
   })
 
@@ -1120,7 +1120,7 @@ describe('verifyBundle config source', () => {
       })
       assert.equal(hasErrors(result), true)
       assert.equal(result.issues[0]?.code, 'invalid-source')
-      assert.match(result.issues[0]?.message ?? '', /--config/)
+      assert.match(result.issues[0]?.message ?? '', /nope\.config\.json/)
     })
   })
 

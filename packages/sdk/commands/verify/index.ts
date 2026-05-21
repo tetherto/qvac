@@ -119,7 +119,7 @@ export async function verifyBundle (
           code: 'invalid-source',
           level: 'error',
           addonsSource,
-          message: 'At least one --host is required.'
+          message: 'At least one host is required.'
         }
       ]
     }
@@ -133,8 +133,8 @@ export async function verifyBundle (
       providedValue: bareRuntimeVersion,
       source: 'flag',
       message:
-        `--bare-runtime-version "${bareRuntimeVersion}" is not a valid semver. ` +
-        'Pass a version like 1.15.0 (with optional v-prefix and pre-release tag) or omit the flag to use auto-detection.'
+        `bareRuntimeVersion "${bareRuntimeVersion}" is not a valid semver. ` +
+        'Use a version like 1.15.0 (with optional v-prefix and pre-release tag) or omit it to use auto-detection.'
     }
   }
 
@@ -167,7 +167,7 @@ export async function verifyBundle (
             code: 'invalid-source',
             level: 'error',
             addonsSource,
-            message: `Failed to load --config: ${message}`
+            message: `Failed to load config from '${configPath}': ${message}`
           }
         ]
       }
@@ -181,7 +181,7 @@ export async function verifyBundle (
         message:
           `Found ${formatConfigLabel(projectRoot, resolvedConfigPath)} but failed to load it: ${message}. ` +
           'Falling back to auto-detection for Bare runtime; the project-pinned ' +
-          '`bareRuntimeVersion` is being ignored. Fix the config file or pass --config explicitly to surface it as an error.'
+          '`bareRuntimeVersion` is being ignored. Fix the config file or pass `configPath` explicitly to surface it as an error.'
       }
     }
   }

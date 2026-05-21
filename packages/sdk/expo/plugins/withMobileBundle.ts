@@ -3,17 +3,11 @@ import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
 import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from "@/commands";
+import { CONFIG_CANDIDATES } from "@/client/config-loader/resolve-config.node";
 import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
 import { BundleVerificationFailedError } from "@/utils/errors-client";
 
 const { withDangerousMod } = configPlugins;
-
-const CONFIG_CANDIDATES = [
-  "qvac.config.json",
-  "qvac.config.js",
-  "qvac.config.mjs",
-  "qvac.config.ts",
-];
 
 /** Modules to defer from mobile bundles (not available at bundle time) */
 const DEFERRED_MODULES = ["expo-file-system", "react-native-bare-kit"];
@@ -28,8 +22,7 @@ const MOBILE_HOSTS = [
 /**
  * Expo plugin: bundle, verify, then copy the mobile worker bundle.
  *
- * Flow: bundleSdk -> assert `qvac/worker.bundle.js` exists ->
- * verifyBundle -> copy to `<sdkPackageDir>/dist/worker.mobile.bundle.js`.
+ * Flow: bundleSdk -> verifyBundle -> copy to `<sdkPackageDir>/dist/worker.mobile.bundle.js`.
  * Uses `qvac.config.*` if present.
  */
 function withMobileBundle(config: ExpoConfig): ExpoConfig {
@@ -67,13 +60,6 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
     );
 
     const generatedBundle = path.join(projectRoot, "qvac", "worker.bundle.js");
-    if (!fs.existsSync(generatedBundle)) {
-      throw new Error(
-        `QVAC: Bundle generation failed — ${generatedBundle} not found. ` +
-          `Check bundle output above for errors.`,
-      );
-    }
-
     await runVerifier(projectRoot, generatedBundle, configPath);
 
     fs.copyFileSync(generatedBundle, outputPath);
