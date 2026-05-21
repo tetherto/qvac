@@ -1,0 +1,186 @@
+name: Mobile Test — Schedule Device Farm Run
+description: |
+  Phase 4 of the mobile integration test pipeline.
+
+  Three scheduling modes (selected automatically):
+
+  1. Sharded (test-specs has >1 entry):
+       Schedule one Device Farm run per spec, all against the addon's own
+       device pool (android-device-pool-arn / ios-device-pool-arn). Used by
+       LLM (10 iOS + 2 Android shards) and OCR (perf + regular).
+
+  2. Single-pool (test-specs has 1 entry AND scheduling-mode=single-pool):
+       Schedule one Device Farm run against the addon's pool. Used by Embed
+       to match its main behaviour (single-run on a chosen pool).
+
+  3. Dual-flagship (test-specs has 1 entry AND scheduling-mode=dual-flagship,
+     the default):
+       Schedule two parallel runs targeting flagship devices via filter:
+       Samsung S25 Ultra + Pixel 9 (Android), or ios-device-pool-arn pool +
+       iPhone 17 (iOS). Used by Whisper, NMT, TTS, Diffusion, Parakeet,
+       Decoder.
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  device-farm-project-arn:
+    description: "AWS Device Farm project ARN"
+    required: true
+  android-device-pool-arn:
+    description: "AWS Device Farm Android device pool ARN (sharded + single-pool modes)"
+    required: false
+    default: ""
+  ios-device-pool-arn:
+    description: "AWS Device Farm iOS device pool ARN (used by sharded, single-pool and the iOS branch of dual-flagship)"
+    required: false
+    default: ""
+  app-upload-arn:
+    description: "Device Farm upload ARN for the app"
+    required: true
+  test-package-upload-arn:
+    description: "Device Farm upload ARN for the Appium test package"
+    required: true
+  test-specs:
+    description: |
+      JSON array from upload-to-devicefarm: [{ "name", "grep", "arn" }].
+      Length 1 => default mode (single spec), length >1 => sharded mode.
+    required: true
+  scheduling-mode:
+    description: "dual-flagship | single-pool (only honored when test-specs has 1 entry)"
+    required: false
+    default: "dual-flagship"
+  job-timeout-minutes:
+    description: "Per-run jobTimeoutMinutes (NMT uses 120, others 60)"
+    required: false
+    default: "60"
+
+outputs:
+  run-arns:
+    description: "JSON array of scheduled run ARNs"
+    value: ${{ steps.schedule.outputs.run_arns }}
+  run-count:
+    description: "Number of scheduled runs"
+    value: ${{ steps.schedule.outputs.run_count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Schedule Device Farm Test Run
+      id: schedule
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        PROJECT_ARN: ${{ inputs.device-farm-project-arn }}
+        ANDROID_POOL_ARN: ${{ inputs.android-device-pool-arn }}
+        IOS_POOL_ARN: ${{ inputs.ios-device-pool-arn }}
+        APP_ARN: ${{ inputs.app-upload-arn }}
+        TEST_PACKAGE_ARN: ${{ inputs.test-package-upload-arn }}
+        TEST_SPECS_JSON: ${{ inputs.test-specs }}
+        SCHEDULING_MODE: ${{ inputs.scheduling-mode }}
+        JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          RUN_NAME_BASE="Manual-${{ github.run_number }}-${PLATFORM}"
+        else
+          RUN_NAME_BASE="PR-${{ github.event.pull_request.number || github.run_number }}-${PLATFORM}"
+        fi
+
+        schedule_run_with_pool() {
+          local pool_arn="$1"
+          local name="$2"
+          local spec_arn="$3"
+          aws devicefarm schedule-run \
+            --project-arn "$PROJECT_ARN" \
+            --device-pool-arn "$pool_arn" \
+            --app-arn "$APP_ARN" \
+            --name "$name" \
+            --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
+            --execution-configuration jobTimeoutMinutes="$JOB_TIMEOUT_MINUTES" \
+            --query 'run.arn' --output text
+        }
+
+        schedule_run_with_filter() {
+          local name="$1"
+          local filter="$2"
+          local spec_arn="$3"
+          aws devicefarm schedule-run \
+            --project-arn "$PROJECT_ARN" \
+            --device-selection-configuration "$filter" \
+            --app-arn "$APP_ARN" \
+            --name "$name" \
+            --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
+            --execution-configuration jobTimeoutMinutes="$JOB_TIMEOUT_MINUTES" \
+            --query 'run.arn' --output text
+        }
+
+        SPEC_COUNT=$(echo "$TEST_SPECS_JSON" | jq 'length')
+        echo "Test spec count: $SPEC_COUNT"
+        echo "Scheduling mode hint (used only for single-spec runs): $SCHEDULING_MODE"
+
+        RUN_ARNS_JSON='[]'
+
+        if [ "$SPEC_COUNT" -gt 1 ]; then
+          # Sharded mode: each group runs against the addon's pool.
+          if [ "$PLATFORM" = "Android" ]; then
+            POOL_ARN="$ANDROID_POOL_ARN"
+          else
+            POOL_ARN="$IOS_POOL_ARN"
+          fi
+          if [ -z "$POOL_ARN" ]; then
+            echo "ERROR: sharded mode requires android-device-pool-arn (Android) or ios-device-pool-arn (iOS)" >&2
+            exit 1
+          fi
+          echo "Sharded scheduling against pool: $POOL_ARN"
+          for IDX in $(seq 0 $((SPEC_COUNT - 1))); do
+            GROUP_NAME=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].name")
+            SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].arn")
+            RUN_NAME="${RUN_NAME_BASE}-${GROUP_NAME}"
+            RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$SPEC_ARN")
+            echo "  $RUN_NAME -> $RUN_ARN"
+            RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
+          done
+        elif [ "$SCHEDULING_MODE" = "single-pool" ]; then
+          # Embed-style: single run against a single pool (no Samsung+Pixel split).
+          if [ "$PLATFORM" = "Android" ]; then
+            POOL_ARN="$ANDROID_POOL_ARN"
+          else
+            POOL_ARN="$IOS_POOL_ARN"
+          fi
+          if [ -z "$POOL_ARN" ]; then
+            echo "ERROR: single-pool mode requires android-device-pool-arn or ios-device-pool-arn" >&2
+            exit 1
+          fi
+          SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
+          RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME_BASE" "$SPEC_ARN")
+          echo "  $RUN_NAME_BASE -> $RUN_ARN"
+          RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
+        else
+          # Default dual-flagship: same spec, two device targets.
+          SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
+          if [ "$PLATFORM" = "Android" ]; then
+            SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+            PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+            RUN_ARN_1=$(schedule_run_with_filter "${RUN_NAME_BASE}-Samsung" "$SAMSUNG_FILTER" "$SPEC_ARN")
+            RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-Pixel"   "$PIXEL_FILTER"   "$SPEC_ARN")
+          else
+            if [ -z "$IOS_POOL_ARN" ]; then
+              echo "ERROR: dual-flagship iOS requires ios-device-pool-arn" >&2
+              exit 1
+            fi
+            IPHONE17_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Apple"]},{"attribute":"MODEL","operator":"CONTAINS","values":["iPhone 17"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["IOS"]}],"maxDevices":1}'
+            RUN_ARN_1=$(schedule_run_with_pool   "$IOS_POOL_ARN"     "$RUN_NAME_BASE"           "$SPEC_ARN")
+            RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-iPhone17" "$IPHONE17_FILTER" "$SPEC_ARN")
+          fi
+          echo "  Run 1: $RUN_ARN_1"
+          echo "  Run 2: $RUN_ARN_2"
+          RUN_ARNS_JSON=$(jq -n --arg a "$RUN_ARN_1" --arg b "$RUN_ARN_2" '[$a,$b]')
+        fi
+
+        RUN_COUNT=$(echo "$RUN_ARNS_JSON" | jq 'length')
+        echo ""
+        echo "Scheduled $RUN_COUNT run(s):"
+        echo "$RUN_ARNS_JSON" | jq .
+
+        echo "run_arns=$(echo "$RUN_ARNS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
+        echo "run_count=$RUN_COUNT" >> "$GITHUB_OUTPUT"

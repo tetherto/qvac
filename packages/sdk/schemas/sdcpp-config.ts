@@ -20,7 +20,7 @@ export const sdcppConfigSchema = z
     threads: z.number().optional(),
     device: z.enum(["gpu", "cpu"]).optional(),
     prediction: z
-      .enum(["auto", "eps", "v", "edm_v", "flow", "flux_flow", "flux2_flow"])
+      .enum(["auto", "eps", "v", "edm_v", "flow", "flux2_flow"])
       .optional()
       .describe("Prediction type; auto-detected from model when omitted"),
     type: z
@@ -37,6 +37,7 @@ export const sdcppConfigSchema = z
     vae_on_cpu: z.boolean().optional().describe("Force VAE decoder to run on CPU"),
     vae_tiling: z.boolean().optional().describe("Enable VAE tiling for large images on limited VRAM"),
     flash_attn: z.boolean().optional().describe("Enable flash attention to reduce memory usage"),
+    diffusion_fa: z.boolean().optional().describe("Enable flash attention for the diffusion transformer only"),
     lora_apply_mode: z.enum(["auto", "immediately", "at_runtime"]).optional()
       .describe(
         "How LoRA adapters passed via diffusion({ lora }) are applied. " +

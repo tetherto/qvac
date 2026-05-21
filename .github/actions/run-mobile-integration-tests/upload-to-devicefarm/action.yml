@@ -1,0 +1,488 @@
+name: Mobile Test — Upload to Device Farm
+description: |
+  Phase 3 of the mobile integration test pipeline.
+
+  Configures AWS credentials via OIDC, uploads the built app + Appium test
+  package to AWS Device Farm, then renders one WDIO config per test group
+  (substituting platform tokens, mocha grep, perf knobs, crash-detection
+  toggles, and any consumer-supplied after-hook JS) and uploads each as a
+  separate APPIUM_NODE_TEST_SPEC.
+
+  Two modes:
+    * Default mode (test-groups input empty): a single test spec with the
+      consumer's mocha-grep, scheduled later against dual-flagship devices.
+    * Sharded mode (test-groups non-empty): N test specs, one per group,
+      scheduled later against the addon's own device pool. LLM uses 10 iOS +
+      2 Android groups; OCR uses 2 (perf + regular).
+
+  The WDIO config + post_test pulls live in wdio.template.js so we sidestep
+  GitHub Actions' 21,000-character template-expression limit.
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  app-path:
+    description: "Absolute path to the APK or IPA from the build phase"
+    required: true
+  app-type:
+    description: "ANDROID_APP | IOS_APP"
+    required: true
+  app-name:
+    description: "Friendly file name for the app artifact"
+    required: true
+
+  # AWS / Device Farm
+  aws-role-to-assume:
+    description: "AWS IAM role ARN for OIDC"
+    required: true
+  device-farm-project-arn:
+    description: "AWS Device Farm project ARN"
+    required: true
+
+  # WDIO + Mocha tunables
+  app-bundle-id:
+    description: "Mobile app bundle id"
+    required: false
+    default: "io.tether.test.qvac"
+  mocha-grep:
+    description: "Mocha --grep pattern (default mode only; ignored when test-groups is set)"
+    required: false
+    default: ""
+  mocha-timeout-ms:
+    description: "Mocha test timeout in ms"
+    required: false
+    default: "1800000"
+  wdio-waitfor-timeout-ms:
+    description: "WDIO waitforTimeout in ms"
+    required: false
+    default: "120000"
+
+  # Addon repo path inside the runner workspace, used to auto-detect a
+  # test-groups.json shard file co-located with the addon's mobile tests.
+  # The addon repository is checked out at `addon/` by the consumer
+  # workflow, so we look for `addon/<addon-workdir>/test/mobile/test-groups.json`.
+  addon-workdir:
+    description: "Relative path to the addon package inside the addon checkout"
+    required: false
+    default: ""
+
+  # Sharding
+  test-groups:
+    description: |
+      JSON array of {"name","grep"} entries. Explicit override; takes
+      precedence over the auto-detected test-groups.json file. Empty =>
+      auto-detect from `<addon-workdir>/test/mobile/test-groups.json`,
+      then fall back to a single default spec using `mocha-grep`.
+
+      An addon enables sharded mode by dropping a test-groups.json file
+      with the canonical shape:
+
+        {
+          "android": {
+            "GroupA": ["testFn1", "testFn2"],
+            "GroupB": ["testFn3"]
+          },
+          "ios": {
+            "Heavy1-Finetuning": ["runFinetuningPauseResumeTest"],
+            ...
+          }
+        }
+
+      The composite transforms each `{ groupName: [tests] }` entry into
+      `{ name: groupName, grep: tests.join("|") }` for the WDIO config.
+      Top-level keys other than `android`/`ios` are ignored (so addons
+      can co-locate addon-specific config like OCR's `perf_report_filter`).
+    required: false
+    default: ""
+
+  # Perf
+  enables-perf:
+    description: "true if the addon emits perf data"
+    required: false
+    default: "false"
+  qvac-perf-runs:
+    description: "Override QVAC_PERF_RUNS"
+    required: false
+    default: ""
+  qvac-perf-warmup-runs:
+    description: "Override QVAC_PERF_WARMUP_RUNS"
+    required: false
+    default: ""
+  qvac-perf-only:
+    description: "Restrict to perf tests only"
+    required: false
+    default: "false"
+
+  # Custom artifact pulls
+  after-hook-pulls:
+    description: "JSON array of {device_path, artifact_name} pairs (post_test on-device cp)"
+    required: false
+    default: "[]"
+
+  # Consumer extension points
+  wdio-after-snippet:
+    description: |
+      Extra JS spliced into the WDIO `after:` hook (after the bare_console.log
+      flush). Has access to browser, result, capabilities, specs. Wrap addon
+      code in try/catch so a failure here doesn't kill the test session.
+    required: false
+    default: ""
+  extra-pre-test-commands:
+    description: |
+      Newline-separated bash commands inserted into the testspec's `pre_test:`
+      phase, BEFORE Appium is started. Android logcat + app-data-dir defaults
+      are built into generate-testspec.sh; use this for addon-specific extras.
+    required: false
+    default: ""
+  extra-post-test-commands:
+    description: |
+      Newline-separated bash commands inserted into the testspec's `post_test:`
+      phase. Default log collection (logcat dump + ls) is built into
+      generate-testspec.sh; use this for addon-specific extras.
+    required: false
+    default: ""
+
+outputs:
+  app-upload-arn:
+    description: "Device Farm upload ARN for the app"
+    value: ${{ steps.upload_app.outputs.app_upload_arn }}
+  test-package-upload-arn:
+    description: "Device Farm upload ARN for the Appium test package"
+    value: ${{ steps.upload_test_package.outputs.test_package_upload_arn }}
+  test-specs:
+    description: |
+      JSON array describing each generated spec. Each entry has:
+        { "name": "<group name>", "grep": "<grep pattern>", "arn": "<spec ARN>" }
+      Default mode emits a single entry named "default".
+    value: ${{ steps.upload_test_spec.outputs.test_specs }}
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: us-west-2
+        role-duration-seconds: 7200
+
+    - name: Upload app to Device Farm
+      id: upload_app
+      shell: bash
+      env:
+        DEVICE_FARM_PROJECT_ARN: ${{ inputs.device-farm-project-arn }}
+        APP_PATH: ${{ inputs.app-path }}
+        APP_TYPE: ${{ inputs.app-type }}
+        APP_NAME: ${{ inputs.app-name }}
+      run: |
+        echo "Uploading app to Device Farm..."
+        UPLOAD_RESPONSE=$(aws devicefarm create-upload \
+          --project-arn "$DEVICE_FARM_PROJECT_ARN" \
+          --name "$APP_NAME" \
+          --type "$APP_TYPE" \
+          --output json)
+        APP_UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.upload.url')
+        APP_UPLOAD_ARN=$(echo "$UPLOAD_RESPONSE" | jq -r '.upload.arn')
+        echo "app_upload_arn=$APP_UPLOAD_ARN" >> "$GITHUB_OUTPUT"
+        echo "App upload ARN: $APP_UPLOAD_ARN"
+
+        curl -T "$APP_PATH" "$APP_UPLOAD_URL"
+
+        echo "Waiting for upload to be processed..."
+        MAX_ATTEMPTS=30
+        ATTEMPT=1
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+          STATUS=$(aws devicefarm get-upload --arn "$APP_UPLOAD_ARN" --query "upload.status" --output text)
+          echo "Status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+          if [ "$STATUS" = "SUCCEEDED" ]; then
+            echo "App upload OK"
+            break
+          fi
+          if [ "$STATUS" = "FAILED" ]; then
+            echo "ERROR: Upload failed"
+            aws devicefarm get-upload --arn "$APP_UPLOAD_ARN"
+            exit 1
+          fi
+          sleep 10
+          ATTEMPT=$((ATTEMPT + 1))
+        done
+
+    - name: Verify test package generation
+      shell: bash
+      working-directory: ./test-framework/e2e
+      run: |
+        if [ ! -f "package.json" ]; then
+          echo "ERROR: e2e/package.json not found"
+          exit 1
+        fi
+        if [ ! -f "tests/app.test.js" ]; then
+          echo "ERROR: e2e/tests/app.test.js not found"
+          exit 1
+        fi
+        echo "E2E test files OK"
+        ls -la
+
+    - name: Package and upload test package
+      id: upload_test_package
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        DEVICE_FARM_PROJECT_ARN: ${{ inputs.device-farm-project-arn }}
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        cd e2e
+        npm install
+        npm pack
+        ZIP_NAME="e2e-tests-${PLATFORM}.zip"
+        zip -r "$ZIP_NAME" package.json tests/ *.tgz
+
+        if [ ! -f "$ZIP_NAME" ]; then
+          echo "ERROR: Failed to create test package zip"
+          exit 1
+        fi
+        mv "$ZIP_NAME" "$GITHUB_WORKSPACE/"
+
+        echo "Uploading test package to Device Farm..."
+        UPLOAD_RESPONSE=$(aws devicefarm create-upload \
+          --project-arn "$DEVICE_FARM_PROJECT_ARN" \
+          --name "$ZIP_NAME" \
+          --type "APPIUM_NODE_TEST_PACKAGE" \
+          --output json)
+        TEST_UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.upload.url')
+        TEST_UPLOAD_ARN=$(echo "$UPLOAD_RESPONSE" | jq -r '.upload.arn')
+        echo "test_package_upload_arn=$TEST_UPLOAD_ARN" >> "$GITHUB_OUTPUT"
+
+        curl -T "$GITHUB_WORKSPACE/$ZIP_NAME" "$TEST_UPLOAD_URL"
+
+        MAX_ATTEMPTS=30
+        ATTEMPT=1
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+          STATUS=$(aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN" --query "upload.status" --output text)
+          echo "Test package status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+          if [ "$STATUS" = "SUCCEEDED" ]; then
+            echo "Test package upload OK"
+            break
+          fi
+          if [ "$STATUS" = "FAILED" ]; then
+            echo "ERROR: Test package upload failed"
+            aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN"
+            exit 1
+          fi
+          sleep 10
+          ATTEMPT=$((ATTEMPT + 1))
+        done
+
+    - name: Generate WDIO configs + test specs
+      id: upload_test_spec
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        DEVICE_FARM_PROJECT_ARN: ${{ inputs.device-farm-project-arn }}
+        APP_BUNDLE_ID: ${{ inputs.app-bundle-id }}
+        MOCHA_GREP: ${{ inputs.mocha-grep }}
+        MOCHA_TIMEOUT_MS: ${{ inputs.mocha-timeout-ms }}
+        WDIO_WAITFOR_TIMEOUT_MS: ${{ inputs.wdio-waitfor-timeout-ms }}
+        TEST_GROUPS: ${{ inputs.test-groups }}
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+        ENABLES_PERF: ${{ inputs.enables-perf }}
+        QVAC_PERF_RUNS: ${{ inputs.qvac-perf-runs }}
+        QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac-perf-warmup-runs }}
+        QVAC_PERF_ONLY: ${{ inputs.qvac-perf-only }}
+        AFTER_PULLS: ${{ inputs.after-hook-pulls }}
+        AFTER_SNIPPET: ${{ inputs.wdio-after-snippet }}
+        EXTRA_PRE_TEST: ${{ inputs.extra-pre-test-commands }}
+        EXTRA_POST_TEST: ${{ inputs.extra-post-test-commands }}
+        # github.action_path resolves to THIS sub-composite's directory, where
+        # wdio.template.js and perf-extract.js are committed alongside action.yml.
+        TEMPLATE_PATH: ${{ github.action_path }}/wdio.template.js
+        PERF_EXTRACT_PATH: ${{ github.action_path }}/perf-extract.js
+      run: |
+        echo "Generating test specs for $PLATFORM..."
+
+        # NOTE: these MUST be `export`ed so the python heredoc and
+        # generate-testspec.sh can read them. Plain bash assignment doesn't
+        # propagate to child processes.
+        if [ "$PLATFORM" = "Android" ]; then
+          export HOST_LINE="android_test_host: amazon_linux_2"
+          export AUTOMATION_NAME="UiAutomator2"
+          export INIT_PREDICATE="android=new UiSelector().textContains(\"INITIALIZED\")"
+          export RUN_BUTTON_PREDICATE="android=new UiSelector().textContains(\"Run Automated Tests\")"
+          export PLATFORM_CAPS='{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'"$APP_BUNDLE_ID"'","appium:appActivity":"'"$APP_BUNDLE_ID"'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}'
+        else
+          export HOST_LINE="ios_test_host: macos_sequoia"
+          export AUTOMATION_NAME="XCUITest"
+          export INIT_PREDICATE='-ios predicate string:label CONTAINS "INITIALIZED"'
+          export RUN_BUTTON_PREDICATE='-ios predicate string:label CONTAINS "Run Automated Tests"'
+          export PLATFORM_CAPS='{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'"$APP_BUNDLE_ID"'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}'
+        fi
+
+        # crashMonitor + flushBareLog universal per design doc decisions §3 + §6.
+        export ENABLE_FLUSH_BARE_LOG="true"
+        export ENABLE_CRASH_MONITOR="true"
+
+        # Resolve the per-group list, in priority order:
+        #   1. Explicit `test-groups` input (takes precedence — escape hatch)
+        #   2. Auto-detected `<addon-workdir>/test/mobile/test-groups.json`
+        #      file, transformed from `{ groupName: [tests] }` into the
+        #      canonical `[{name, grep}]` array
+        #   3. Single default group using `mocha-grep`
+        EFFECTIVE_GROUPS="$TEST_GROUPS"
+        if { [ -z "$EFFECTIVE_GROUPS" ] || [ "$EFFECTIVE_GROUPS" = "[]" ]; } && [ -n "$ADDON_WORKDIR" ]; then
+          GROUPS_FILE="addon/${ADDON_WORKDIR}/test/mobile/test-groups.json"
+          PLATFORM_LOWER=$(echo "$PLATFORM" | tr '[:upper:]' '[:lower:]')
+          if [ -f "$GROUPS_FILE" ]; then
+            echo "Auto-detecting shards from $GROUPS_FILE (platform=$PLATFORM_LOWER)"
+            # Only the platform's `{ groupName: [tests] }` map is consumed.
+            # Other top-level keys (e.g. OCR's perf_report_filter) are ignored.
+            EFFECTIVE_GROUPS=$(jq -c --arg p "$PLATFORM_LOWER" '
+              if (.[$p] // null) | type == "object" then
+                .[$p] | to_entries | map({
+                  name: .key,
+                  grep: (.value | join("|"))
+                })
+              else
+                []
+              end
+            ' "$GROUPS_FILE")
+          else
+            echo "No test-groups.json at $GROUPS_FILE — using default single-spec mode"
+          fi
+        fi
+
+        if [ -z "$EFFECTIVE_GROUPS" ] || [ "$EFFECTIVE_GROUPS" = "[]" ]; then
+          GROUPS_JSON='[{"name":"default","grep":"'"$MOCHA_GREP"'"}]'
+        else
+          GROUPS_JSON="$EFFECTIVE_GROUPS"
+        fi
+        echo "Resolved test groups:"
+        echo "$GROUPS_JSON" | jq .
+
+        # Persist post_test add-ons + after-snippet in temp files so the python
+        # heredoc and bash testspec generator can both read them without
+        # ordering / quoting problems.
+        # Use $RUNNER_TEMP rather than /tmp so we get a per-job
+        # current-user-owned directory — /tmp is shared and stable on
+        # persistent self-hosted runners (qvac-ubuntu*-x64), so a prior
+        # run's fixed-name files block a subsequent job's `>` with
+        # "Permission denied".
+        export AFTER_SNIPPET_PATH="${RUNNER_TEMP}/wdio-after-snippet.js"
+        export EXTRA_PRE_TEST_PATH="${RUNNER_TEMP}/extra-pre-test.sh"
+        export EXTRA_POST_TEST_PATH="${RUNNER_TEMP}/extra-post-test.sh"
+        export WDIO_CONFIG_PATH="${RUNNER_TEMP}/wdio.config.devicefarm.js"
+        printf '%s' "$AFTER_SNIPPET"  > "$AFTER_SNIPPET_PATH"
+        printf '%s' "$EXTRA_PRE_TEST"  > "$EXTRA_PRE_TEST_PATH"
+        printf '%s' "$EXTRA_POST_TEST" > "$EXTRA_POST_TEST_PATH"
+
+        # perf-extract.js is a companion module required by wdio.template.js.
+        # Unlike the WDIO config, it needs no token substitution — bundleId is
+        # passed as a function argument. Encode once, deploy per-group.
+        export PERF_EXTRACT_B64=""
+        if [ "$ENABLES_PERF" = "true" ] && [ -f "$PERF_EXTRACT_PATH" ]; then
+          PERF_EXTRACT_B64=$(base64 < "$PERF_EXTRACT_PATH" | tr -d '\n')
+          echo "Encoded perf-extract.js ($(wc -c < "$PERF_EXTRACT_PATH" | tr -d ' ')b)"
+        fi
+
+        TEST_SPECS_JSON='[]'
+        GROUP_COUNT=$(echo "$GROUPS_JSON" | jq 'length')
+        for IDX in $(seq 0 $((GROUP_COUNT - 1))); do
+          GROUP_NAME=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].name")
+          GROUP_GREP=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].grep // \"\"")
+          # printf (not echo) so tr -c doesn't pick up echo's trailing newline
+          # and tack on a stray underscore (e.g. "Perf_" instead of "Perf").
+          SAFE_NAME=$(printf '%s' "$GROUP_NAME" | tr -c '[:alnum:]_-' '_')
+          echo ""
+          echo "── group $IDX: $GROUP_NAME ──"
+          echo "  grep: $GROUP_GREP"
+
+          export GROUP_GREP_OUT="$GROUP_GREP"
+
+          # Python rather than sed because PLATFORM_CAPS contains characters that
+          # are awkward to escape in sed substitution syntax (newlines, &, |, /).
+          python3 - <<'PY' > "$WDIO_CONFIG_PATH"
+        import os
+        with open(os.environ["TEMPLATE_PATH"]) as f:
+            tpl = f.read()
+        with open(os.environ["AFTER_SNIPPET_PATH"]) as f:
+            after_snippet = f.read()
+        repl = {
+            "__PLATFORM_CAPABILITIES__": os.environ["PLATFORM_CAPS"],
+            "__BUNDLE_ID__": os.environ["APP_BUNDLE_ID"],
+            "__MOCHA_GREP__": os.environ.get("GROUP_GREP_OUT", ""),
+            "__MOCHA_TIMEOUT_MS__": os.environ["MOCHA_TIMEOUT_MS"],
+            "__WDIO_WAITFOR_TIMEOUT_MS__": os.environ["WDIO_WAITFOR_TIMEOUT_MS"],
+            "__INIT_PREDICATE__": os.environ["INIT_PREDICATE"],
+            "__RUN_BUTTON_PREDICATE__": os.environ["RUN_BUTTON_PREDICATE"],
+            "__ENABLE_FLUSH_BARE_LOG__": os.environ["ENABLE_FLUSH_BARE_LOG"],
+            "__ENABLE_CRASH_MONITOR__": os.environ["ENABLE_CRASH_MONITOR"],
+            "__QVAC_PERF_RUNS__": os.environ.get("QVAC_PERF_RUNS", ""),
+            "__QVAC_PERF_WARMUP_RUNS__": os.environ.get("QVAC_PERF_WARMUP_RUNS", ""),
+            "__ENABLES_PERF__": os.environ.get("ENABLES_PERF", "false"),
+            "__AFTER_HOOK_EXTRA__": after_snippet,
+        }
+        for k, v in repl.items():
+            tpl = tpl.replace(k, v)
+        print(tpl)
+        PY
+
+          if [ "$IDX" = "0" ]; then
+            echo "WDIO config preview (first 80 lines):"
+            head -80 "$WDIO_CONFIG_PATH"
+          fi
+
+          export WDIO_CONFIG_B64=$(base64 < "$WDIO_CONFIG_PATH" | tr -d '\n')
+          SPEC_FILE="testspec-${SAFE_NAME}.yml"
+
+          # generate-testspec.sh reads the env vars already exported above
+          # and the temp files at $EXTRA_{PRE,POST}_TEST_PATH (under
+          # $RUNNER_TEMP), then writes the complete Device Farm testspec
+          # YAML to $SPEC_FILE.
+          GENERATE_SCRIPT="${{ github.action_path }}/generate-testspec.sh"
+          bash "$GENERATE_SCRIPT" "$SPEC_FILE"
+
+          if [ "$IDX" = "0" ]; then
+            echo "Generated test spec preview ($SPEC_FILE):"
+            cat "$SPEC_FILE"
+          fi
+
+          echo "Uploading $SPEC_FILE to Device Farm..."
+          SPEC_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "$DEVICE_FARM_PROJECT_ARN" \
+            --name "$SPEC_FILE" \
+            --type "APPIUM_NODE_TEST_SPEC" \
+            --output json)
+          SPEC_UPLOAD_URL=$(echo "$SPEC_RESPONSE" | jq -r '.upload.url')
+          SPEC_UPLOAD_ARN=$(echo "$SPEC_RESPONSE" | jq -r '.upload.arn')
+          curl -T "$SPEC_FILE" "$SPEC_UPLOAD_URL"
+
+          MAX_ATTEMPTS=20
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            STATUS=$(aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" --query "upload.status" --output text)
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "  $GROUP_NAME spec OK: $SPEC_UPLOAD_ARN"
+              break
+            fi
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "ERROR: $GROUP_NAME spec upload failed"
+              aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN"
+              exit 1
+            fi
+            sleep 5
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          TEST_SPECS_JSON=$(echo "$TEST_SPECS_JSON" | jq \
+            --arg name "$GROUP_NAME" \
+            --arg grep "$GROUP_GREP" \
+            --arg arn "$SPEC_UPLOAD_ARN" \
+            '. + [{"name":$name,"grep":$grep,"arn":$arn}]')
+        done
+
+        echo ""
+        echo "All test specs uploaded:"
+        echo "$TEST_SPECS_JSON" | jq .
+
+        # Compress to single line for the GITHUB_OUTPUT line-based protocol.
+        TEST_SPECS_LINE=$(echo "$TEST_SPECS_JSON" | jq -c .)
+        echo "test_specs=$TEST_SPECS_LINE" >> "$GITHUB_OUTPUT"

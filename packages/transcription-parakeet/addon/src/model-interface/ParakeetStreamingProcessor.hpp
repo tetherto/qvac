@@ -54,6 +54,18 @@ public:
     // parakeet engine default in place" (10000 / 2000 ms respectively).
     int  leftContextMs      = -1;
     int  rightLookaheadMs   = -1;
+    // === AOSC (v2.1+ Sortformer only) ====================================
+    // Forwarded into parakeet::SortformerStreamingOptions when the loaded
+    // model is a v2.1 Sortformer GGUF (auto-detected from the GGUF's
+    // `parakeet.model_variant` metadata tag). parakeet-cpp ignores these
+    // fields on v1/v2 GGUFs and on non-Sortformer engines, so they are
+    // always safe to forward.
+    bool spkCacheEnable = true;
+    int spkCacheLen = 188;
+    int fifoLen = 188;
+    int chunkLeftContextMs = 80;
+    int chunkRightContextMs = 560;
+    int spkCacheUpdatePeriod = 144;
   };
 
   ParakeetStreamingProcessor(
