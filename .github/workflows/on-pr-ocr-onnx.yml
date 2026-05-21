@@ -142,12 +142,12 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: packages/llm-llamacpp
+        working-directory: packages/ocr-ggml
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/llm-llamacpp
-        run: npm run test:dt
+        working-directory: packages/ocr-ggml
+        run: npm run test:dts
 
   prebuild:
     permissions:

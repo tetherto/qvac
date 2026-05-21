@@ -88,7 +88,7 @@ async function main () {
       : 0
 
     const output = {
-      boxes: boxes,
+      boxes,
       text: texts.join(' '),
       confidence: avgConfidence
     }

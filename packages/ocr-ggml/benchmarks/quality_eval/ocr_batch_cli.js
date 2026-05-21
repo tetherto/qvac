@@ -84,7 +84,7 @@ async function processImage (model, imagePath) {
 
     return {
       path: imagePath,
-      boxes: boxes,
+      boxes,
       text: texts.join(' '),
       confidence: avgConfidence,
       time_ms: elapsed

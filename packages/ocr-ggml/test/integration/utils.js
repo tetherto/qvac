@@ -36,7 +36,7 @@ try {
 
     return {
       record (testName, metrics, extra) {
-        var entry = {
+        const entry = {
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
           metrics: Object.assign({
@@ -63,9 +63,9 @@ try {
         }
       },
       writeReport () {
-        var json = JSON.stringify(this.toJSON())
-        var written = false
-        var dirs = []
+        const json = JSON.stringify(this.toJSON())
+        let written = false
+        const dirs = []
         if (global.testDir) dirs.push(global.testDir)
         if (platform === 'android') {
           dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
@@ -73,10 +73,10 @@ try {
           dirs.push('/data/local/tmp')
         }
         dirs.push('/tmp')
-        for (var di = 0; di < dirs.length; di++) {
+        for (let di = 0; di < dirs.length; di++) {
           try {
             try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
-            var p = path.join(dirs[di], 'perf-report.json')
+            const p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
             written = true
@@ -91,26 +91,26 @@ try {
       writeStepSummary () {},
       writeToConsole (opts) {
         try {
-          var data = this.toJSON()
-          var lightweight = opts && opts.lightweight
+          const data = this.toJSON()
+          const lightweight = opts && opts.lightweight
           data.results = data.results.map(function (r) {
-            var q = r.quality
+            let q = r.quality
             if (lightweight && q) {
               q = { cer: q.cer, wer: q.wer, word_recognition_rate: q.word_recognition_rate, keyword_detection_rate: q.keyword_detection_rate, key_value_accuracy: q.key_value_accuracy }
             }
             return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: q, image_path: r.image_path || null }
           })
-          var json = JSON.stringify(data)
+          const json = JSON.stringify(data)
           // Android logcat has per-entry size limits that vary by device.
           // Use a conservative chunk size so header + content stays well
           // under any limit, even with the ReactNativeJS wrapper overhead.
-          var CHUNK = 800
+          const CHUNK = 800
           if (json.length <= CHUNK) {
             console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
           } else {
-            var id = Date.now().toString(36)
-            var n = Math.ceil(json.length / CHUNK)
-            for (var i = 0; i < n; i++) {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
               console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
             }
           }
@@ -132,21 +132,21 @@ try {
   }
 
   function _levenshtein (a, b) {
-    var m = a.length
-    var n = b.length
+    const m = a.length
+    const n = b.length
     if (m === 0) return n
     if (n === 0) return m
-    var prev = new Array(n + 1)
-    var curr = new Array(n + 1)
-    var j, i
+    let prev = new Array(n + 1)
+    let curr = new Array(n + 1)
+    let j, i
     for (j = 0; j <= n; j++) prev[j] = j
     for (i = 1; i <= m; i++) {
       curr[0] = i
       for (j = 1; j <= n; j++) {
-        var cost = a[i - 1] === b[j - 1] ? 0 : 1
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1
         curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
       }
-      var tmp = prev; prev = curr; curr = tmp
+      const tmp = prev; prev = curr; curr = tmp
     }
     return prev[n]
   }
@@ -155,26 +155,26 @@ try {
 
   evaluateQuality = function (ocrTexts, groundTruth) {
     if (!groundTruth) return null
-    var texts = Array.isArray(ocrTexts) ? ocrTexts : [String(ocrTexts)]
-    var joined = texts.join(' ')
-    var gt = groundTruth
-    var result = { ground_truth_id: gt.id || null, description: gt.description || null }
+    const texts = Array.isArray(ocrTexts) ? ocrTexts : [String(ocrTexts)]
+    const joined = texts.join(' ')
+    const gt = groundTruth
+    const result = { ground_truth_id: gt.id || null, description: gt.description || null }
 
     if (gt.reference_text) {
-      var hTokens = _tokenize(joined).sort()
-      var rTokens = _tokenize(gt.reference_text).sort()
-      var h = hTokens.join(' ')
-      var r = rTokens.join(' ')
+      const hTokens = _tokenize(joined).sort()
+      const rTokens = _tokenize(gt.reference_text).sort()
+      const h = hTokens.join(' ')
+      const r = rTokens.join(' ')
       result.cer = _round4(r.length === 0 ? (h.length === 0 ? 0 : 1) : _levenshtein(h, r) / r.length)
       result.wer = _round4(rTokens.length === 0 ? (hTokens.length === 0 ? 0 : 1) : _levenshtein(hTokens, rTokens) / rTokens.length)
 
-      var ocrLower = joined.toLowerCase()
-      var uniqueRef = {}
-      for (var ri = 0; ri < rTokens.length; ri++) { uniqueRef[rTokens[ri]] = true }
-      var refList = Object.keys(uniqueRef)
-      var wrrMatched = 0
-      var wrrMissed = []
-      for (var wri = 0; wri < refList.length; wri++) {
+      const ocrLower = joined.toLowerCase()
+      const uniqueRef = {}
+      for (let ri = 0; ri < rTokens.length; ri++) { uniqueRef[rTokens[ri]] = true }
+      const refList = Object.keys(uniqueRef)
+      let wrrMatched = 0
+      const wrrMissed = []
+      for (let wri = 0; wri < refList.length; wri++) {
         if (ocrLower.indexOf(refList[wri]) >= 0) wrrMatched++
         else wrrMissed.push(refList[wri])
       }
@@ -185,19 +185,19 @@ try {
     }
 
     if (gt.required_keywords && gt.required_keywords.length > 0) {
-      var lower = joined.toLowerCase()
-      var wordSet = {}
-      var _words = lower.split(/\s+/)
-      for (var wi = 0; wi < _words.length; wi++) { if (_words[wi]) wordSet[_words[wi]] = true }
-      var found = []
-      var missing = []
-      for (var ki = 0; ki < gt.required_keywords.length; ki++) {
-        var kwTarget = gt.required_keywords[ki].toLowerCase()
-        var kwMatch = lower.includes(kwTarget)
+      const lower = joined.toLowerCase()
+      const wordSet = {}
+      const _words = lower.split(/\s+/)
+      for (let wi = 0; wi < _words.length; wi++) { if (_words[wi]) wordSet[_words[wi]] = true }
+      const found = []
+      const missing = []
+      for (let ki = 0; ki < gt.required_keywords.length; ki++) {
+        const kwTarget = gt.required_keywords[ki].toLowerCase()
+        let kwMatch = lower.includes(kwTarget)
         if (!kwMatch) {
-          var kwParts = kwTarget.split(/\s+/)
+          const kwParts = kwTarget.split(/\s+/)
           kwMatch = true
-          for (var kp = 0; kp < kwParts.length; kp++) {
+          for (let kp = 0; kp < kwParts.length; kp++) {
             if (kwParts[kp] && !wordSet[kwParts[kp]]) { kwMatch = false; break }
           }
         }
@@ -211,24 +211,24 @@ try {
     }
 
     if (gt.key_values && gt.key_values.length > 0) {
-      var lowerKV = joined.toLowerCase()
-      var kvWordSet = {}
-      var _kvWords = lowerKV.split(/\s+/)
-      for (var wj = 0; wj < _kvWords.length; wj++) { if (_kvWords[wj]) kvWordSet[_kvWords[wj]] = true }
-      var matched = []
-      var unmatched = []
-      for (var vi = 0; vi < gt.key_values.length; vi++) {
-        var pair = gt.key_values[vi]
-        var kvKeyLower = pair.key.toLowerCase()
-        var keyFound = lowerKV.includes(kvKeyLower)
+      const lowerKV = joined.toLowerCase()
+      const kvWordSet = {}
+      const _kvWords = lowerKV.split(/\s+/)
+      for (let wj = 0; wj < _kvWords.length; wj++) { if (_kvWords[wj]) kvWordSet[_kvWords[wj]] = true }
+      const matched = []
+      const unmatched = []
+      for (let vi = 0; vi < gt.key_values.length; vi++) {
+        const pair = gt.key_values[vi]
+        const kvKeyLower = pair.key.toLowerCase()
+        let keyFound = lowerKV.includes(kvKeyLower)
         if (!keyFound) {
-          var keyParts = kvKeyLower.split(/\s+/)
+          const keyParts = kvKeyLower.split(/\s+/)
           keyFound = true
-          for (var kpi = 0; kpi < keyParts.length; kpi++) {
+          for (let kpi = 0; kpi < keyParts.length; kpi++) {
             if (keyParts[kpi] && !kvWordSet[keyParts[kpi]]) { keyFound = false; break }
           }
         }
-        var valueFound = lowerKV.includes(String(pair.value).toLowerCase())
+        const valueFound = lowerKV.includes(String(pair.value).toLowerCase())
         if (keyFound && valueFound) matched.push(pair)
         else unmatched.push({ key: pair.key, value: pair.value, key_found: keyFound, value_found: valueFound })
       }
@@ -242,16 +242,16 @@ try {
   }
 
   findGroundTruth = function (imagePath) {
-    var base = path.basename(imagePath).replace(/\.[^.]+$/, '')
-    var gtFilename = base + '.quality.json'
+    const base = path.basename(imagePath).replace(/\.[^.]+$/, '')
+    const gtFilename = base + '.quality.json'
 
     // On mobile, look for ground truth in global.assetPaths
     if (global.assetPaths) {
-      var assetKey = '../../testAssets/' + gtFilename
-      var gtPath = global.assetPaths[assetKey]
+      const assetKey = '../../testAssets/' + gtFilename
+      const gtPath = global.assetPaths[assetKey]
       if (gtPath) {
         try {
-          var raw = fs.readFileSync(gtPath.replace('file://', ''), 'utf-8')
+          const raw = fs.readFileSync(gtPath.replace('file://', ''), 'utf-8')
           return JSON.parse(raw)
         } catch (e) {
           console.log('[quality] failed to load mobile ground truth: ' + e.message)
@@ -260,18 +260,18 @@ try {
     }
 
     // Fallback: look relative to imagePath (same logic as desktop)
-    var dir = path.dirname(imagePath)
-    var candidates = [
+    const dir = path.dirname(imagePath)
+    const candidates = [
       path.join(dir, gtFilename),
       path.join(dir, '..', 'quality', gtFilename),
       path.join(dir, 'quality', gtFilename)
     ]
-    for (var ci = 0; ci < candidates.length; ci++) {
+    for (let ci = 0; ci < candidates.length; ci++) {
       try {
-        var exists = false
+        let exists = false
         try { fs.statSync(candidates[ci]); exists = true } catch (_) {}
         if (exists) {
-          var data = fs.readFileSync(candidates[ci], 'utf-8')
+          const data = fs.readFileSync(candidates[ci], 'utf-8')
           return JSON.parse(data)
         }
       } catch (_) {}
