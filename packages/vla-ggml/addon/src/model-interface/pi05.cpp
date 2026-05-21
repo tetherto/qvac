@@ -4,7 +4,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -830,9 +832,21 @@ struct pi05_model {
   bool has_gpu = false;
   std::string backend_name = "none";
 
+  // Backend buffer(s) that own the weight tensor storage. Populated by
+  // load_weights_alloc_copy after the backends are initialised; freed
+  // before ctx_w in the destructor so any tensors they reference stay
+  // valid through the free callback.
+  std::vector<ggml_backend_buffer_t> bufs_w;
+
   ~pi05_model() {
-    // gguf_free first — the GGUF context owns the tensor data buffer
-    // backing ctx_w, so free in reverse-construction order.
+    // Free weight buffers FIRST — they reference ctx_w's tensors.
+    for (ggml_backend_buffer_t buf : bufs_w) {
+      if (buf != nullptr) {
+        ggml_backend_buffer_free(buf);
+      }
+    }
+    bufs_w.clear();
+    // gguf next — owns the tensor metadata.
     if (gguf != nullptr) {
       gguf_free(gguf);
       gguf = nullptr;
@@ -943,6 +957,92 @@ std::string gguf_get_str_or(
   return std::string(gguf_get_val_str(g, idx));
 }
 
+// alloc+copy weight loader. Allocates a backend buffer of the right
+// type for every tensor metadata in ctx_w, then reads each tensor's
+// bytes from the GGUF file and copies into the buffer via
+// ggml_backend_tensor_set. Direct port of smolvla.cpp's
+// load_weights_alloc_copy, scoped to pi05's model struct.
+//
+// On CPU backends this still works (ggml_backend_alloc_ctx_tensors_from_buft
+// produces a host-side buffer). On GPU backends (Vulkan / Metal / OpenCL)
+// the buffer lives in device memory so the scheduler can run weighted
+// ops directly without per-op host→device copies.
+static bool pi05_load_weights_alloc_copy(
+    pi05_model& m, const char* path, gguf_context* gguf,
+    ggml_backend_buffer_type_t buft, size_t data_offset,
+    int64_t n_tensors_in_gguf) {
+  size_t total_size = 0;
+  for (struct ggml_tensor* t = ggml_get_first_tensor(m.ctx_w); t != nullptr;
+       t = ggml_get_next_tensor(m.ctx_w, t)) {
+    total_size += ggml_nbytes(t);
+  }
+  QLOG_IF(
+      Priority::INFO,
+      "pi05_load_model: alloc+copy path, total weights " +
+          std::to_string((int)(total_size / (1024 * 1024))) + " MB");
+
+  ggml_backend_buffer_t buf =
+      ggml_backend_alloc_ctx_tensors_from_buft(m.ctx_w, buft);
+  if (buf == nullptr) {
+    const char* bname = ggml_backend_name(m.backend);
+    QLOG_IF(
+        Priority::ERROR,
+        std::string(
+            "pi05_load_model: ggml_backend_alloc_ctx_tensors_from_buft "
+            "FAILED for ") +
+            std::to_string((int)(total_size / (1024 * 1024))) +
+            " MB on backend '" + (bname != nullptr ? bname : "?") + "'");
+    return false;
+  }
+  ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+  m.bufs_w.push_back(buf);
+
+  FILE* f = std::fopen(path, "rb");
+  if (f == nullptr) {
+    QLOG_IF(
+        Priority::ERROR,
+        std::string("pi05_load_model: fopen failed for '") + path + "'");
+    return false;
+  }
+  std::vector<uint8_t> read_buf;
+  int n_copied = 0;
+  for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+    const char* name = gguf_get_tensor_name(gguf, i);
+    struct ggml_tensor* t = ggml_get_tensor(m.ctx_w, name);
+    if (t == nullptr) {
+      continue;
+    }
+    size_t off = data_offset + gguf_get_tensor_offset(gguf, i);
+    size_t nbytes = ggml_nbytes(t);
+    if (read_buf.size() < nbytes) {
+      read_buf.resize(nbytes);
+    }
+#ifdef _WIN32
+    int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
+#else
+    int seek_err = std::fseek(f, (long)off, SEEK_SET);
+#endif
+    if (seek_err != 0 || std::fread(read_buf.data(), 1, nbytes, f) != nbytes) {
+      QLOG_IF(
+          Priority::ERROR,
+          std::string("pi05_load_model: failed to read tensor '") + name +
+              "' at offset " + std::to_string(off));
+      std::fclose(f);
+      return false;
+    }
+    ggml_backend_tensor_set(t, read_buf.data(), 0, nbytes);
+    n_copied++;
+  }
+  std::fclose(f);
+  const char* bname = ggml_backend_name(m.backend);
+  QLOG_IF(
+      Priority::INFO,
+      "pi05_load_model: alloc+copy buffer ready, " +
+          std::to_string(n_copied) + " tensors, backend='" +
+          (bname != nullptr ? bname : "?") + "'");
+  return true;
+}
+
 } // namespace
 
 // pi05_load_model — opens the GGUF, allocates backends, populates the
@@ -1005,8 +1105,15 @@ static std::unique_ptr<pi05_model> pi05_load_model(
         "pi05_load_model: forceCpu=true — skipping GPU selection");
   }
 
+  // Open GGUF with no_alloc=true — creates a ggml_context with tensor
+  // metadata only (data pointers stay NULL). Tensor data is allocated
+  // on the chosen backend below via pi05_load_weights_alloc_copy. This
+  // is what makes GPU compute work: weights live in the backend's
+  // buffer (Vulkan / Metal / OpenCL device memory) rather than CPU
+  // heap, so the scheduler doesn't have to copy them per-op. Mirrors
+  // smolvla.cpp's load flow.
   struct gguf_init_params gp{};
-  gp.no_alloc = false;
+  gp.no_alloc = true;
   gp.ctx = &m->ctx_w;
   m->gguf = gguf_init_from_file(ggufPath.c_str(), gp);
   if (m->gguf == nullptr) {
@@ -1128,6 +1235,24 @@ static std::unique_ptr<pi05_model> pi05_load_model(
   m->time_mlp_in_b = must_get("proj.time_mlp_in.bias");
   m->time_mlp_out_w = must_get("proj.time_mlp_out.weight");
   m->time_mlp_out_b = must_get("proj.time_mlp_out.bias");
+
+  // Allocate a backend buffer for the weight tensors and copy data
+  // from the GGUF file into it. This is REQUIRED for GPU compute —
+  // without it the tensors' `data` pointers stay NULL (no_alloc=true)
+  // and graph_compute on the GPU backend segfaults the moment a kernel
+  // tries to read a weight. Goes through the alloc+copy path
+  // (skipping smolvla's mmap+host_ptr fast path; that's an optimisation
+  // for a follow-up). Works for both CPU and GPU buffer types.
+  ggml_backend_buffer_type_t buft =
+      ggml_backend_get_default_buffer_type(m->backend);
+  const size_t data_offset = gguf_get_data_offset(m->gguf);
+  const int64_t n_tensors_in_gguf = gguf_get_n_tensors(m->gguf);
+  if (!pi05_load_weights_alloc_copy(
+          *m, ggufPath.c_str(), m->gguf, buft, data_offset,
+          n_tensors_in_gguf)) {
+    throw std::runtime_error(
+        "pi05_load_model: failed to load weights into backend buffer");
+  }
 
   return m;
 }
