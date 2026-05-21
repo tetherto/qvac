@@ -12,8 +12,10 @@ Initial release.
   CRAFT detector + CRNN gen-2 recognizer pipeline.
 - `OcrGgml` JS class with the same surface as `@qvac/ocr-onnx`:
   `load() / run() / unload() / destroy() / getState()`.
-- C++ `EasyOcrModel` `IModel` adapter (composes
-  `StepDetectionInference`, `StepBoundingBox`, `StepRecognizeText`).
+- C++ `Pipeline` `IModel` adapter (composes EasyOCR steps
+  `StepDetectionInference`, `StepBoundingBox`, `StepRecognizeText`, or
+  DocTR steps `StepDoctrDetectionGGML`, `StepDoctrRecognitionGGML`,
+  selected at load time via `OcrConfig::mode` / `PipelineMode`).
 - Single bare module that ships `ggml::ggml` plus every dynamic ggml
   backend exported by `qvac-fabric` (CPU + GPU backend `.so` files
   installed under `prebuilds/`).

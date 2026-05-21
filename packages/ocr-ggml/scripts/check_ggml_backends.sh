@@ -21,7 +21,7 @@
 #   - llamafile/tinyBLAS is ENGAGED iff `llamafile_sgemm` appears in section 3.
 #   - External BLAS is REGISTERED iff `libggml-blas.so` is shipped in section 1
 #     AND `cblas_sgemm` appears in section 3. Whether it is *actually used* at
-#     runtime depends on whether EasyOcrModel routes through the scheduler API,
+#     runtime depends on whether Pipeline routes through the scheduler API,
 #     which (today, mirroring upstream) it does not — so external BLAS is
 #     usually REGISTERED but UNUSED.
 #   - Vulkan / OpenCL are AVAILABLE iff the corresponding `libggml-vulkan.so`

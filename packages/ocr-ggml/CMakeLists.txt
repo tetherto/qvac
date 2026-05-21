@@ -90,7 +90,7 @@ endif()
 # Source files
 # ------------------------------------------------------------------
 # Source layout under addon/src/:
-#   - model-interface/          IModel adapter (EasyOcrModel, DoctrOcrModel)
+#   - model-interface/          unified Pipeline IModel adapter (EasyOCR + DocTR via mode)
 #   - model-interface/doctr/    DocTR GGML detector + recognizer steps
 #   - model-interface/easyocr/  GGUF loader, ops, CRAFT, CRNN weights+inference
 #   - model-interface/easyocr/pipeline/  OCR pipeline steps
@@ -99,8 +99,7 @@ target_sources(
   ${ocr-ggml}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/EasyOcrModel.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DoctrOcrModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Pipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/gguf_loader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/ops.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/craft_weights.cpp

@@ -25,7 +25,7 @@ Sections it prints:
 3. **Compile-time markers (`strings`)** — checks for canonical symbols:
    - `llamafile_sgemm` → tinyBLAS fast-path baked in
    - `cblas_sgemm` → external BLAS registered (often present but unused
-     unless `EasyOcrModel` is routed through the scheduler API)
+     unless `Pipeline` is routed through the scheduler API)
    - `vkCreateInstance` / `clCreateContext` / `cudaMalloc` /
      `MTLCreateSystemDefaultDevice` → presence of each GPU backend
 4. **vcpkg port summary** — declared `qvac-fabric` version + a hint at

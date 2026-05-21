@@ -4,7 +4,10 @@
 //
 //   - `createInstance(jsHandle, configurationParams, outputCallback)`
 //       Parses the `params` object (pathDetector, pathRecognizer, langList,
-//       optional config knobs) and constructs an `EasyOcrModel`. Wires up a
+//       optional config knobs) and constructs a `Pipeline`. The `params
+//       .pipelineType` string ('easyocr' | 'doctr') maps to
+//       `OcrConfig::mode`, which selects the EasyOCR or DocTR step
+//       sequence inside the unified `Pipeline` class. Wires up a
 //       `PipelineOutputHandler` so the C++ `std::vector<InferredText>` is
 //       converted to a JS array of `[box, text, confidence]` triples
 //       (same shape as @qvac/ocr-onnx).
@@ -28,9 +31,8 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
-#include "model-interface/DoctrOcrModel.hpp"
-#include "model-interface/EasyOcrModel.hpp"
 #include "model-interface/OcrTypes.hpp"
+#include "model-interface/Pipeline.hpp"
 #include "model-interface/easyocr/pipeline/steps.hpp"
 
 // NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
@@ -57,7 +59,7 @@ createArrayFromElements(js_env_t* env, std::span<js_value_t*> elements) {
 // Mirrors @qvac/ocr-onnx's `getJsArrayFromOutput`. Output schema for each
 // inferred text: [ [[x,y]*4], text, confidence ].
 js_value_t*
-outputToJs(js_env_t* env, const EasyOcrModel::Output& inferredTextList) {
+outputToJs(js_env_t* env, const Pipeline::Output& inferredTextList) {
   const size_t n = inferredTextList.size();
   auto jsInferredTextListElements = std::make_unique<
       js_value_t*[]>( // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
@@ -104,15 +106,14 @@ public:
 
   [[nodiscard]] js_value_t*
   handleOutput(const std::any& output) const override {
-    if (output.type() != typeid(EasyOcrModel::Output)) {
+    if (output.type() != typeid(Pipeline::Output)) {
       throw std::runtime_error("OcrOutputHandler: unexpected data type");
     }
-    return outputToJs(
-        env_, std::any_cast<const EasyOcrModel::Output&>(output));
+    return outputToJs(env_, std::any_cast<const Pipeline::Output&>(output));
   }
 
   [[nodiscard]] bool canHandle(const std::any& input) const override {
-    return input.type() == typeid(EasyOcrModel::Output);
+    return input.type() == typeid(Pipeline::Output);
   }
 
 private:
@@ -191,26 +192,29 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   }
 
   // Default matches the JS / TS / CLI / README contract: EasyOCR is the
-  // primary pipeline; callers opt in to Doctr explicitly via
-  // `params.pipelineType: 'doctr'`.
-  std::string pipelineType = "easyocr";
+  // primary pipeline; callers opt in to DocTR explicitly via
+  // `params.pipelineType: 'doctr'`. `config.mode` defaults to
+  // `PipelineMode::EASYOCR` in OcrTypes.hpp.
   if (auto optPipeline =
           args1.getOptionalProperty<js::String>(env, "pipelineType");
       optPipeline) {
-    pipelineType = optPipeline->as<std::string>(env);
+    const auto pipelineType = optPipeline->as<std::string>(env);
+    if (pipelineType == "doctr") {
+      config.mode = PipelineMode::DOCTR;
+    } else if (pipelineType == "easyocr") {
+      config.mode = PipelineMode::EASYOCR;
+    } else {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "pipelineType must be 'easyocr' or 'doctr'"};
+    }
   }
 
-  std::unique_ptr<qvac_lib_inference_addon_cpp::model::IModel> model;
-  if (pipelineType == "doctr") {
-    model =
-        std::make_unique<DoctrOcrModel>(pathDetector, pathRecognizer, config);
-  } else {
-    model = std::make_unique<EasyOcrModel>(
-        pathDetector,
-        pathRecognizer,
-        std::span<const std::string>(langList),
-        config);
-  }
+  auto model = std::make_unique<Pipeline>(
+      pathDetector,
+      pathRecognizer,
+      std::span<const std::string>(langList),
+      config);
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(std::make_shared<OcrOutputHandler>());
