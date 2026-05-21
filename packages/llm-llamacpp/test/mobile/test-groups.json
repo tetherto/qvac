@@ -33,7 +33,6 @@
     "groupA": [
       "runApiBehaviorTest",
       "runBitnetTest",
-      "runCacheStateMachineTest",
       "runConfigParametersTest",
       "runFinetuningPauseResumeTest",
       "runGenerationParamsTest",
@@ -43,17 +42,18 @@
       "runQwen35Test",
       "runReasoningTest",
       "runToolsCompactTest",
-      "runTurboquantTest",
-      "runUtf8OutputTest"
+      "runTurboquantTest"
     ],
     "groupB": [
+      "runCacheStateMachineTest",
       "runGemma4Test",
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runOcrLightonTest",
       "runOcrPaddleTest",
       "runSlidingContextTest",
-      "runToolCallingTest"
+      "runToolCallingTest",
+      "runUtf8OutputTest"
     ],
     "groupImagesPerf": [
       "runImageElephantTest",
