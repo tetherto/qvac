@@ -169,7 +169,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
