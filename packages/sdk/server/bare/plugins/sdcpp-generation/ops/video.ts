@@ -1,9 +1,16 @@
-import { getModel } from "@/server/bare/registry/model-registry";
+import { getServerLogger } from "@/logging";
+import { getModel, type AnyModel } from "@/server/bare/registry/model-registry";
+import { getRequestRegistry, withRequestContext } from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 import type {
   VideoRequest,
   VideoStreamResponse,
   VideoStats,
 } from "@/schemas/sdcpp-config";
+
+interface CancellableVideoModel extends AnyModel {
+  cancel(): Promise<void>;
+}
 
 interface ResponseWithStats {
   stats?: VideoStats;
@@ -12,7 +19,26 @@ interface ResponseWithStats {
 export async function* video(
   request: VideoRequest,
 ): AsyncGenerator<VideoStreamResponse> {
-  const model = getModel(request.modelId);
+  await using ctx = getRequestRegistry().begin({
+    requestId: request.requestId ?? generateServerRequestId(),
+    kind: "diffusion",
+    modelId: request.modelId,
+  });
+  const requestLogger = withRequestContext(getServerLogger(), ctx);
+  const model = getModel(request.modelId) as CancellableVideoModel;
+
+  const onAbort = () => {
+    model.cancel().catch((err: unknown) => {
+      requestLogger.warn(
+        `[cancel] model.cancel() rejected during abort for modelId=${request.modelId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+  };
+  ctx.signal.addEventListener("abort", onAbort, { once: true });
+  if (ctx.signal.aborted) onAbort();
+  ctx.scope.defer(() => {
+    ctx.signal.removeEventListener("abort", onAbort);
+  });
 
   const init_image = request.init_image
     ? Buffer.from(request.init_image, "base64")
@@ -62,6 +88,7 @@ export async function* video(
   let outputIndex = 0;
 
   for await (const chunk of response.iterate()) {
+    if (ctx.signal.aborted) break;
     if (chunk instanceof Uint8Array) {
       yield {
         type: "videoStream",

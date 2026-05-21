@@ -437,6 +437,13 @@ export const videoRequestSchema = z.object({
   modelId: z
     .string()
     .describe("The identifier of the loaded video model to use for generation."),
+  requestId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+    ),
   mode: z
     .enum(["txt2vid", "img2vid", "flf2vid"])
     .describe("Video generation mode."),
