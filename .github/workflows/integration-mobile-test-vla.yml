@@ -398,15 +398,21 @@ jobs:
           # The mobile APK can't carry the full 138 MB activations.safetensors,
           # so we download the parity dump here and use extract-pi05-mobile-fixtures.py
           # to lower it into two tiny JSON files (~35 KB + ~2.4 MB).
+          # Use ${RUNNER_TEMP} (GHA-managed, always writable for the job)
+          # rather than /tmp — self-hosted Android runner has restrictive
+          # /tmp permissions from cross-job leftover dirs.
           echo "📥 Downloading pi05 parity dump for fixture extraction..."
           PI05_BASE_PATH="qvac_models_compiled/vla/pi05-base"
           LATEST_DATE=$(aws s3 ls "s3://${MODEL_S3_BUCKET}/${PI05_BASE_PATH}/" --region "$AWS_REGION" \
             | grep "PRE" | awk '{print $2}' | sed 's/\///' | sort | tail -1)
           echo "   Using date: $LATEST_DATE"
-          mkdir -p /tmp/pi05-oracle
-          aws s3 cp "s3://${MODEL_S3_BUCKET}/${PI05_BASE_PATH}/${LATEST_DATE}/fixture.safetensors"      /tmp/pi05-oracle/fixture.safetensors      --region "$AWS_REGION"
-          aws s3 cp "s3://${MODEL_S3_BUCKET}/${PI05_BASE_PATH}/${LATEST_DATE}/activations.safetensors"  /tmp/pi05-oracle/activations.safetensors  --region "$AWS_REGION"
-          ls -la /tmp/pi05-oracle/
+          ORACLE_DIR="${RUNNER_TEMP}/pi05-oracle"
+          mkdir -p "$ORACLE_DIR"
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/${PI05_BASE_PATH}/${LATEST_DATE}/fixture.safetensors"      "$ORACLE_DIR/fixture.safetensors"      --region "$AWS_REGION"
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/${PI05_BASE_PATH}/${LATEST_DATE}/activations.safetensors"  "$ORACLE_DIR/activations.safetensors"  --region "$AWS_REGION"
+          ls -la "$ORACLE_DIR"
+          # Stash for the next step.
+          echo "PI05_ORACLE_DIR=$ORACLE_DIR" >> "$GITHUB_ENV"
 
       - name: Set up Python for pi05 fixture extraction
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # 5.6.0
@@ -415,14 +421,16 @@ jobs:
 
       - name: Extract pi05 mobile fixtures (decimate 138 MB → ~2.5 MB)
         working-directory: ${{ env.ADDON_DIR }}
+        env:
+          PI05_ORACLE_DIR: ${{ env.PI05_ORACLE_DIR }}
         run: |
           set -euo pipefail
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet "safetensors>=0.4" "numpy>=1.24"
           mkdir -p test/mobile/testAssets
           python scripts/extract-pi05-mobile-fixtures.py \
-            --activations /tmp/pi05-oracle/activations.safetensors \
-            --fixture     /tmp/pi05-oracle/fixture.safetensors \
+            --activations "${PI05_ORACLE_DIR}/activations.safetensors" \
+            --fixture     "${PI05_ORACLE_DIR}/fixture.safetensors" \
             --out-dir     test/mobile/testAssets/
           echo "Mobile pi05 fixtures:"
           ls -la test/mobile/testAssets/pi05-actions-ref.json test/mobile/testAssets/pi05-fixture.json
