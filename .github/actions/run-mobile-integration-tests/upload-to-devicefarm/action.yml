@@ -383,11 +383,51 @@ runs:
           echo "Encoded perf-extract.js ($(wc -c < "$PERF_EXTRACT_PATH" | tr -d ' ')b)"
         fi
 
+        # perf-only filter: when QVAC_PERF_ONLY=true, read the
+        # "perf_tests" array from test-groups.json (if present) and
+        # intersect each group's grep with it. Groups whose
+        # intersection is empty are skipped entirely.
+        PERF_TEST_REGEX=""
+        if [ "$QVAC_PERF_ONLY" = "true" ]; then
+          GROUPS_FILE="addon/${ADDON_WORKDIR}/test/mobile/test-groups.json"
+          if [ -f "$GROUPS_FILE" ]; then
+            PERF_TESTS=$(jq -r '.perf_tests // [] | join("|")' "$GROUPS_FILE")
+            if [ -n "$PERF_TESTS" ]; then
+              PERF_TEST_REGEX="^(${PERF_TESTS})$"
+              echo "perf-only mode: filtering groups with regex from test-groups.json perf_tests: $PERF_TEST_REGEX"
+            else
+              echo "::warning::qvac_perf_only=true but test-groups.json has no perf_tests array — running all tests"
+            fi
+          fi
+        fi
+
+        filter_perf() {
+          local grep_pattern="$1"
+          if [ "$QVAC_PERF_ONLY" != "true" ] || [ -z "$PERF_TEST_REGEX" ]; then
+            echo "$grep_pattern"
+            return
+          fi
+          [ -z "$grep_pattern" ] && return
+          local matched
+          matched=$(echo "$grep_pattern" | tr '|' '\n' | grep -E "$PERF_TEST_REGEX" || true)
+          if [ -n "$matched" ]; then
+            echo "$matched" | tr '\n' '|' | sed 's/|$//'
+          fi
+        }
+
         TEST_SPECS_JSON='[]'
         GROUP_COUNT=$(echo "$GROUPS_JSON" | jq 'length')
         for IDX in $(seq 0 $((GROUP_COUNT - 1))); do
           GROUP_NAME=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].name")
-          GROUP_GREP=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].grep // \"\"")
+          RAW_GREP=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].grep // \"\"")
+          GROUP_GREP=$(filter_perf "$RAW_GREP")
+
+          if [ "$QVAC_PERF_ONLY" = "true" ] && [ -z "$GROUP_GREP" ]; then
+            echo ""
+            echo "── group $IDX: $GROUP_NAME ── SKIPPED (no perf-emitting tests)"
+            continue
+          fi
+
           # printf (not echo) so tr -c doesn't pick up echo's trailing newline
           # and tack on a stray underscore (e.g. "Perf_" instead of "Perf").
           SAFE_NAME=$(printf '%s' "$GROUP_NAME" | tr -c '[:alnum:]_-' '_')
