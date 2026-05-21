@@ -27,9 +27,9 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 
 | Mode | Pod scope | What it shows | Used by |
 |---|---|---|---|
-| `team` | required (`--pod`) | All open PRs touching the pod's `ownedPaths` that still need reviews. Three sections: needs-your-re-review, stale (>3d), needs-review. PRs with `mergeable: CONFLICTING` are flagged with `⚠️ MERGE CONFLICTS!`. Pass `--authors pod` to additionally scope the dashboard to PRs authored by pod-roster members; non-roster authors touching pod paths are surfaced in a separate "Excluded" section. | `<pod>-pr-status` |
-| `review` | required (`--pod`) | The current user's personal review queue: PRs needing their first review, plus PRs where their review was dismissed. | (currently unused; available for a future skill) |
-| `my` | optional (`--pod`); cross-pod by default | The current user's own open PRs grouped by merge readiness. Per-PR pod resolution drives ping logic. Emits copy-paste Slack ping messages for missing reviewers. | `qv-pr-mine` |
+| `team` | required (`--pod`) | All open PRs touching the pod's `ownedPaths` in the primary repo that still need reviews, **plus** every open PR in any repo declared under `extraRepos` (entire repo treated as owned). Three sections: needs-your-re-review, stale (>3d), needs-review. PRs with `mergeable: CONFLICTING` are flagged with `⚠️ MERGE CONFLICTS!`. Pass `--authors pod` to additionally scope the dashboard to PRs authored by pod-roster members; non-roster authors touching pod paths (or in extra repos) are surfaced in a separate "Excluded" section. PRs from `extraRepos` render as `owner/repo#<num>` so they're distinguishable from primary-repo PRs. | `<pod>-pr-status` |
+| `review` | required (`--pod`) | The current user's personal review queue: PRs needing their first review, plus PRs where their review was dismissed. Single-repo (primary). | (currently unused; available for a future skill) |
+| `my` | optional (`--pod`); cross-pod by default | The current user's own open PRs grouped by merge readiness. Per-PR pod resolution drives ping logic. Emits copy-paste Slack ping messages for missing reviewers. Single-repo (primary). | `qv-pr-mine` |
 
 ## CLI
 
@@ -69,11 +69,21 @@ from the local `upstream` remote.
      "name": "<Display Name>",
      "leads": ["<github-login>", "..."],
      "members": ["<github-login>", "..."],
-     "ownedPaths": ["packages/<pkg-a>/", "packages/<pkg-b>/"]
+     "ownedPaths": ["packages/<pkg-a>/", "packages/<pkg-b>/"],
+     "extraRepos": [
+       { "match": "tetherto/<prefix>-*" },
+       { "repo": "tetherto/<exact-repo>" }
+     ]
    }
    ```
 
-   `ownedPaths` are prefix-matched against changed-file paths to decide whether a PR is "owned" by this pod. Use trailing slashes.
+   `ownedPaths` are prefix-matched against changed-file paths to decide whether a PR is "owned" by this pod **in the primary repo**. Use trailing slashes.
+
+   `extraRepos` (optional) broadens the `--mode team` dashboard to additional repos that the pod owns in full. Each entry is exactly one of:
+   - `{"repo": "owner/name"}` — explicit repo.
+   - `{"match": "owner/name-glob"}` — `*` wildcard supported in the name segment. Resolved per-run via `gh repo list <owner>`; archived repos and the primary repo are excluded automatically.
+
+   For PRs in any `extraRepos`-resolved repo, `ownedPaths` is **not** applied — every open PR there is in-scope. `extraRepos` is honored only by `--mode team`; `--mode review` and `--mode my` stay single-repo. Repos the script cannot read are skipped with a one-line warning on stderr (rather than aborting the whole run).
 
 2. Create the per-pod dashboard skill by copying `.cursor/skills/qv-sdk-pr-status/` to `.cursor/skills/qv-<pod>-pr-status/`. Inside the copy, update the SKILL.md frontmatter (`name:`, `description:`) and the script invocation in the `## Usage` block to swap `--pod sdk` for `--pod <pod>`. No other changes required.
 

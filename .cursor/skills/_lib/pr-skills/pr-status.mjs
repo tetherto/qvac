@@ -81,10 +81,17 @@ function formatTarget(target) {
     : slackHandle(target.login);
 }
 
+function prRef(pr) {
+  // Show the repo prefix for PRs from non-primary repos so the dashboard
+  // stays readable when the same #<num> exists in several repos. PRs from
+  // the configured monorepo keep the original bare-`#<num>` form.
+  return pr.sourceIsExtra ? `${pr.sourceRepo}#${pr.number}` : `#${pr.number}`;
+}
+
 function renderPRLine(pr, podRoles = state.roles, extras = []) {
   const extraList = Array.isArray(extras) ? extras : extras ? [extras] : [];
   const lines = [
-    `#${pr.number} ${pr.title}`,
+    `${prRef(pr)} ${pr.title}`,
     pr.url,
     `by ${pr.author.name || pr.author.login} · ${formatAge(pr.ready)} old`,
   ];
@@ -134,16 +141,18 @@ function jsonPRs(prs) {
 
 function renderExcludedLine(pr) {
   const author = pr.author.name || pr.author.login;
-  return `  #${pr.number} — ${pr.title}\n    ${pr.url}\n    by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`;
+  return `  ${prRef(pr)} — ${pr.title}\n    ${pr.url}\n    by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`;
 }
 
 function modeTeam() {
   const groups = classifyTeamPRs(state);
   const excludedPRs = state.excludedPRs ?? [];
+  const extraRepos = state.extraRepos ?? [];
   if (jsonOutput) {
     console.log(JSON.stringify({
       mode,
       repo: state.repo,
+      extraRepos,
       currentUser: state.currentUser,
       staleDays: state.staleDays,
       authorScope: state.authorScope,
@@ -170,6 +179,11 @@ function modeTeam() {
   const scopeNote = state.authorScope === "pod"
     ? ` (scoped to pod-roster authors${excludedPRs.length ? `; ${excludedPRs.length} excluded` : ""})`
     : "";
+  if (extraRepos.length > 0) {
+    console.log(
+      `Repos: ${state.repo} (primary) + ${extraRepos.length} extra · ${extraRepos.join(", ")}\n`,
+    );
+  }
   console.log(
     `${groups.needsAction.length} PRs need attention · ${groups.skipped} fully approved (hidden) · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}${scopeNote}\n`,
   );

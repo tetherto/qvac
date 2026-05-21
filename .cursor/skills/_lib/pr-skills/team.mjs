@@ -34,6 +34,36 @@ function assertStringArray(value, fieldName, file) {
   }
 }
 
+function parseExtraRepos(value, file) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new Error(`${file}: extraRepos must be an array`);
+  }
+  return value.map((entry, idx) => {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`${file}: extraRepos[${idx}] must be an object`);
+    }
+    const hasRepo = typeof entry.repo === "string" && entry.repo.length > 0;
+    const hasMatch = typeof entry.match === "string" && entry.match.length > 0;
+    if (hasRepo === hasMatch) {
+      throw new Error(
+        `${file}: extraRepos[${idx}] must set exactly one of "repo" (owner/name) or "match" (owner/name-glob)`,
+      );
+    }
+    if (hasRepo && !/^[^/]+\/[^/]+$/.test(entry.repo)) {
+      throw new Error(
+        `${file}: extraRepos[${idx}].repo must be "owner/name" (got "${entry.repo}")`,
+      );
+    }
+    if (hasMatch && !/^[^/]+\/[^/]+$/.test(entry.match)) {
+      throw new Error(
+        `${file}: extraRepos[${idx}].match must be "owner/name-glob" (got "${entry.match}")`,
+      );
+    }
+    return hasRepo ? { repo: entry.repo } : { match: entry.match };
+  });
+}
+
 export function loadTeam(pod) {
   if (!pod || typeof pod !== "string") {
     throw new Error("loadTeam(pod): pod must be a non-empty string");
@@ -53,12 +83,14 @@ export function loadTeam(pod) {
   if (parsed.leads.length === 0 && parsed.members.length === 0) {
     console.error(`Warning: ${teamFile} has no leads or members`);
   }
+  const extraRepos = parseExtraRepos(parsed.extraRepos, teamFile);
   return {
     pod,
     name: typeof parsed.name === "string" ? parsed.name : pod,
     leads: parsed.leads,
     members: parsed.members,
     ownedPaths: parsed.ownedPaths,
+    extraRepos,
     teamFile,
   };
 }

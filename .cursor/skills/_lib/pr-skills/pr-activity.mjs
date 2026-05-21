@@ -169,7 +169,18 @@ export function fetchOpenPRs(repoConfig) {
   let cursor = null;
   let pageNum = 0;
   while (true) {
-    const page = fetchPRPage(repoConfig, cursor);
+    let page;
+    try {
+      page = fetchPRPage(repoConfig, cursor);
+    } catch (err) {
+      // Best-effort across many repos: 404/permission errors should skip this
+      // repo with a warning rather than abort the whole dashboard. The repo
+      // string is included so the user can spot what was missed.
+      console.error(
+        `Warning: failed to fetch PRs from ${repoConfig.repo}: ${err.message?.split("\n")[0] || err}`,
+      );
+      break;
+    }
     if (!page) break;
     allPRs.push(...page.nodes);
     pageNum++;
@@ -177,6 +188,74 @@ export function fetchOpenPRs(repoConfig) {
     cursor = page.pageInfo.endCursor;
   }
   return { allPRs, pageNum };
+}
+
+// Cache the per-org repo listing across calls so a single dashboard run only
+// hits `gh repo list` once per org, even when several pods declare extraRepos
+// in the same org.
+const orgRepoCache = new Map();
+
+function listOrgRepos(owner) {
+  if (orgRepoCache.has(owner)) return orgRepoCache.get(owner);
+  let names = [];
+  try {
+    const raw = gh([
+      "repo",
+      "list",
+      owner,
+      "--limit",
+      "500",
+      "--json",
+      "name,isArchived",
+    ]);
+    const parsed = raw ? JSON.parse(raw) : [];
+    names = parsed.filter((r) => !r.isArchived).map((r) => r.name);
+  } catch (err) {
+    console.error(
+      `Warning: failed to enumerate ${owner} repos for extraRepos glob match: ${err.message?.split("\n")[0] || err}`,
+    );
+  }
+  orgRepoCache.set(owner, names);
+  return names;
+}
+
+function globToRegex(glob) {
+  // Conservative: only `*` is treated as a wildcard. Everything else is
+  // escaped, including `?` and `[`. Anchored.
+  const escaped = glob.replace(/[.+^${}()|[\]\\?]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
+// Resolve extraRepos entries to a deduped list of "owner/name" strings.
+// - `{repo: "owner/name"}` entries are passed through unchanged.
+// - `{match: "owner/name-glob"}` entries enumerate `gh repo list <owner>` and
+//   filter by the glob. Archived repos are excluded.
+// Primary repo is filtered out so it is never counted twice.
+export function resolveExtraRepos(extraRepos, primaryRepo = null) {
+  const seen = new Set();
+  const out = [];
+  for (const entry of extraRepos || []) {
+    if (entry.repo) {
+      if (entry.repo === primaryRepo) continue;
+      if (seen.has(entry.repo)) continue;
+      seen.add(entry.repo);
+      out.push(entry.repo);
+      continue;
+    }
+    if (entry.match) {
+      const [owner, namePattern] = entry.match.split("/", 2);
+      const regex = globToRegex(namePattern);
+      for (const name of listOrgRepos(owner)) {
+        const full = `${owner}/${name}`;
+        if (!regex.test(name)) continue;
+        if (full === primaryRepo) continue;
+        if (seen.has(full)) continue;
+        seen.add(full);
+        out.push(full);
+      }
+    }
+  }
+  return out;
 }
 
 function loadPods(mode, pod) {
@@ -195,6 +274,7 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   }
   const config = loadConfig();
   const repoConfig = splitRepo(config.github.repo);
+  const primaryRepo = repoConfig.repo;
   const staleDays = config.github.staleDays || 3;
   const staleMs = staleDays * 24 * 60 * 60 * 1000;
   const now = Date.now();
@@ -202,6 +282,17 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   const pods = loadPods(mode, pod);
   if (pods.length === 0) throw new Error("No pods discovered under .github/teams/.");
   const ownedPaths = [...new Set(pods.flatMap((p) => p.ownedPaths))];
+  // Extra repos broaden the dashboard beyond the configured monorepo. They are
+  // only honored in --mode team today (the only mode wired through a
+  // multi-repo workflow); --mode my and --mode review keep their single-repo
+  // behavior so existing skills don't change semantics.
+  const useExtraRepos = mode === "team";
+  const extraRepoSpecs = useExtraRepos
+    ? [...new Set(pods.flatMap((p) => p.extraRepos || []).map(JSON.stringify))].map(
+        (s) => JSON.parse(s),
+      )
+    : [];
+  const extraRepos = useExtraRepos ? resolveExtraRepos(extraRepoSpecs, primaryRepo) : [];
   const globalPodRoles =
     pods.length === 1 ? rolesForPod(pods[0], currentUser) : null;
   const roles = globalPodRoles || {
@@ -220,7 +311,34 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   const rosterLogins = enforceAuthorScope
     ? new Set(pods.flatMap((p) => [...p.leads, ...p.members]))
     : null;
-  const { allPRs, pageNum } = fetchOpenPRs(repoConfig);
+
+  // Fetch primary repo + each extra repo. For extra repos we tag each PR with
+  // its source so downstream code knows to skip the ownedPaths filter and to
+  // render the repo prefix in the dashboard.
+  const fetchResults = [];
+  {
+    const { allPRs: primaryAll, pageNum: primaryPages } = fetchOpenPRs(repoConfig);
+    fetchResults.push({
+      repo: primaryRepo,
+      isExtra: false,
+      allPRs: primaryAll,
+      pageNum: primaryPages,
+    });
+  }
+  for (const fullRepo of extraRepos) {
+    const cfg = splitRepo(fullRepo);
+    const { allPRs: extraAll, pageNum: extraPages } = fetchOpenPRs(cfg);
+    fetchResults.push({
+      repo: fullRepo,
+      isExtra: true,
+      allPRs: extraAll,
+      pageNum: extraPages,
+    });
+  }
+  const allPRs = fetchResults.flatMap((r) =>
+    r.allPRs.map((pr) => ({ ...pr, sourceRepo: r.repo, sourceIsExtra: r.isExtra })),
+  );
+  const pageNum = fetchResults.reduce((sum, r) => sum + r.pageNum, 0);
   const isCrossPodMy = mode === "my" && pod === null;
   const relevantPRs = [];
   const excludedPRs = [];
@@ -230,7 +348,10 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
     if (!pr.author?.login) continue;
     if (mode === "my" && pr.author.login !== currentUser) continue;
     const files = pr.files?.nodes || [];
-    if (!isCrossPodMy && !touchesOwnedPaths(files, ownedPaths)) continue;
+    // ownedPaths only constrain the primary monorepo. Extra repos are owned
+    // in full by the pod, so every PR there is in-scope regardless of paths.
+    const requiresOwnedPaths = !isCrossPodMy && !pr.sourceIsExtra;
+    if (requiresOwnedPaths && !touchesOwnedPaths(files, ownedPaths)) continue;
     const reviews = pr.reviews?.nodes || [];
     const reviewState = getReviewState(reviews);
     const ready = readySince(pr);
@@ -252,7 +373,9 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
 
   return {
     config,
-    repo: repoConfig.repo,
+    repo: primaryRepo,
+    primaryRepo,
+    extraRepos,
     staleDays,
     currentUser,
     pods,
@@ -367,6 +490,8 @@ export function toJsonablePR(pr) {
     number: pr.number,
     title: pr.title,
     url: pr.url,
+    repo: pr.sourceRepo || null,
+    isExtraRepo: Boolean(pr.sourceIsExtra),
     author: pr.author,
     ready: pr.ready,
     stale: pr.stale,

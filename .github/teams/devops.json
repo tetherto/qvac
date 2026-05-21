@@ -13,5 +13,10 @@
     ".github/actions/",
     ".github/scripts/",
     "scripts/"
+  ],
+  "extraRepos": [
+    { "match": "tetherto/qvac-*" },
+    { "repo": "tetherto/github-ops" },
+    { "repo": "tetherto/oss-actions" }
   ]
 }
