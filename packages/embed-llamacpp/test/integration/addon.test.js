@@ -19,8 +19,7 @@ const platform = os.platform()
 
 const isDarwinX64 = platform === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = platform === 'linux' && os.arch() === 'arm64'
-const isIos = platform === 'ios'
-const isMobile = isIos || platform === 'android'
+const isMobile = platform === 'ios' || platform === 'android'
 
 // Test constants
 const TEST_TIMEOUT = 600_000
@@ -53,13 +52,7 @@ function cosineSimilarity (a, b) {
 
 const DEFAULT_BATCH_SIZE = '1024'
 const DEVICES = (isDarwinX64 || isLinuxArm64) ? ['cpu'] : ['cpu', 'gpu'] // Devices to test on
-// iOS apps are capped at ~3.3 GB per-process by jetsam, and KV+scratch
-// buffers for a 4096-token batch push the test over that limit, so the OS
-// kills the process before the addon can surface "Failed to get sequence
-// embeddings". Halving the batch keeps the stress-test intent without tripping
-// the OOM killer.
-const STRESS_BATCH_SIZE = isIos ? '2048' : '4096'
-const STRESS_LARGE_BATCH_QUERY_LENGTH = isIos ? 16 : 60
+const STRESS_BATCH_SIZE = '4096'
 const STRESS_NUM_SEQUENCES = isMobile ? 32 : 256
 
 /**
@@ -456,7 +449,7 @@ createDeviceModelTest(`Stress: inference with large batch size ${STRESS_BATCH_SI
   )
 
   const sentence = 'This is a stress test sentence for large batch size configuration.'.repeat(5)
-  const query = Array(STRESS_LARGE_BATCH_QUERY_LENGTH).fill(sentence)
+  const query = Array(60).fill(sentence)
 
   try {
     const response = await inference.run(query)
