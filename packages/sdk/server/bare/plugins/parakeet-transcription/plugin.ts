@@ -47,6 +47,21 @@ type ParakeetModelConfig = {
   parakeetTokenizerSrc?: ModelSrcInput;
   // Sortformer
   parakeetSortformerSrc?: ModelSrcInput;
+  // Streaming session (forwarded to the addon's ParakeetConfig).
+  streaming?: boolean;
+  streamingChunkMs?: number;
+  streamingHistoryMs?: number;
+  streamingEmitPartials?: boolean;
+  streamingEnergyVad?: boolean;
+  streamingLeftContextMs?: number;
+  streamingRightLookaheadMs?: number;
+  // AOSC (Sortformer v2.1 only; ignored by other engines).
+  streamingSpkCacheEnable?: boolean;
+  streamingSpkCacheLen?: number;
+  streamingFifoLen?: number;
+  streamingChunkLeftContextMs?: number;
+  streamingChunkRightContextMs?: number;
+  streamingSpkCacheUpdatePeriod?: number;
 };
 
 
@@ -186,6 +201,22 @@ function createParakeetModel(
       channels: config.channels,
       captionEnabled: config.captionEnabled,
       timestampsEnabled: config.timestampsEnabled,
+      // Streaming session knobs — forwarded only if set; the addon falls back
+      // to its own defaults when undefined.
+      streaming: config.streaming,
+      streamingChunkMs: config.streamingChunkMs,
+      streamingHistoryMs: config.streamingHistoryMs,
+      streamingEmitPartials: config.streamingEmitPartials,
+      streamingEnergyVad: config.streamingEnergyVad,
+      streamingLeftContextMs: config.streamingLeftContextMs,
+      streamingRightLookaheadMs: config.streamingRightLookaheadMs,
+      // AOSC (Sortformer v2.1 only; ignored by other engines).
+      streamingSpkCacheEnable: config.streamingSpkCacheEnable,
+      streamingSpkCacheLen: config.streamingSpkCacheLen,
+      streamingFifoLen: config.streamingFifoLen,
+      streamingChunkLeftContextMs: config.streamingChunkLeftContextMs,
+      streamingChunkRightContextMs: config.streamingChunkRightContextMs,
+      streamingSpkCacheUpdatePeriod: config.streamingSpkCacheUpdatePeriod,
     } as ParakeetConfig,
   };
 

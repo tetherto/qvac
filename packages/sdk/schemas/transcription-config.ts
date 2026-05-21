@@ -92,6 +92,39 @@ export const parakeetRuntimeConfigSchema = z.object({
   channels: z.number().int().optional(),
   captionEnabled: z.boolean().optional(),
   timestampsEnabled: z.boolean().optional(),
+
+  // Streaming session. When true, opens a long-lived StreamSession
+  // (ASR) or SortformerStreamSession (diarization) at model load so
+  // cross-chunk state (speaker IDs, EOU window, KV cache) is preserved
+  // within a single run() call. Required for v2.1 Sortformer AOSC.
+  streaming: z.boolean().optional(),
+  streamingChunkMs: z.number().int().positive().optional(),
+  /** Sortformer rolling-history window (ms). Ignored by v2.1 AOSC sessions. */
+  streamingHistoryMs: z.number().int().positive().optional(),
+  streamingEmitPartials: z.boolean().optional(),
+  /** CTC/TDT-only energy-VAD events. */
+  streamingEnergyVad: z.boolean().optional(),
+  /** ASR encoder left-context window (ms). Sortformer ignores this. */
+  streamingLeftContextMs: z.number().int().optional(),
+  /** ASR encoder right-lookahead window (ms). Sortformer ignores this. */
+  streamingRightLookaheadMs: z.number().int().optional(),
+
+  // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) =========
+  // Auto-enabled when the loaded GGUF carries
+  // `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"`. Ignored
+  // by v1/v2 Sortformer and by non-Sortformer engines.
+  /** Disable to force v2.1 onto the v1 sliding-window path (A/B test). Default: true. */
+  streamingSpkCacheEnable: z.boolean().optional(),
+  /** Long-term speaker-cache rows (~15 s of encoder frames). Default: 188. */
+  streamingSpkCacheLen: z.number().int().positive().optional(),
+  /** FIFO warmup buffer rows. Default: 188. */
+  streamingFifoLen: z.number().int().positive().optional(),
+  /** Encoder left-context window (ms; ~1 encoder frame). Default: 80. */
+  streamingChunkLeftContextMs: z.number().int().nonnegative().optional(),
+  /** Encoder right-context window (ms; ~7 encoder frames). Default: 560. */
+  streamingChunkRightContextMs: z.number().int().nonnegative().optional(),
+  /** FIFO-overflow pop-out count. Default: 144. */
+  streamingSpkCacheUpdatePeriod: z.number().int().positive().optional(),
 });
 
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({

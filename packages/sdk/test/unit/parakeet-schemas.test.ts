@@ -50,3 +50,30 @@ test("parakeetConfigSchema: Sortformer config", (t) => {
   });
   t.is(result.modelType, "sortformer");
 });
+
+test("parakeetConfigSchema: Sortformer streaming + AOSC config", (t) => {
+  const result = parakeetConfigSchema.parse({
+    modelType: "sortformer",
+    parakeetSortformerSrc: "pear://abc/sortformer.gguf",
+    streaming: true,
+    streamingChunkMs: 2000,
+    streamingChunkLeftContextMs: 80,
+    streamingChunkRightContextMs: 560,
+    streamingSpkCacheEnable: true,
+    streamingSpkCacheLen: 188,
+    streamingFifoLen: 188,
+    streamingSpkCacheUpdatePeriod: 144,
+  });
+  t.is(result.modelType, "sortformer");
+  t.is(result.streaming, true);
+  t.is(result.streamingSpkCacheLen, 188);
+});
+
+test("parakeetConfigSchema: rejects negative AOSC cache len", (t) => {
+  t.exception(() =>
+    parakeetConfigSchema.parse({
+      modelType: "sortformer",
+      streamingSpkCacheLen: -1,
+    }),
+  );
+});
