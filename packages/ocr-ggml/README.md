@@ -304,7 +304,8 @@ packages/ocr-ggml/
     ├── js-interface/binding.cpp                  # BARE_MODULE entry
     ├── addon/AddonJs.hpp                         # createInstance / runJob / output handler
     ├── model-interface/
-    │   ├── OcrModel.{hpp,cpp}                    # EasyOCR IModel adapter
+    │   ├── OcrTypes.hpp                          # shared OcrInput/OcrConfig structs
+    │   ├── EasyOcrModel.{hpp,cpp}                # EasyOCR IModel adapter
     │   └── DoctrOcrModel.{hpp,cpp}               # Doctr IModel adapter
     ├── ggml/                                     # gguf_loader, ops, craft, crnn, weights (lifted)
     ├── pipeline/                                 # lang, steps, step_* (EasyOCR; lifted)

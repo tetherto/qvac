@@ -1,4 +1,4 @@
-#include "OcrModel.hpp"
+#include "EasyOcrModel.hpp"
 
 #include <chrono>
 #include <stdexcept>
@@ -12,7 +12,7 @@
 #include "ggml.h"
 
 // NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
-// OcrModel mirrors @qvac/ocr-onnx's OcrModel.cpp; identifiers preserved
+// EasyOcrModel mirrors @qvac/ocr-onnx's OcrModel.cpp; identifiers preserved
 // for upstream diffability.
 
 namespace qvac_lib_infer_ocr_ggml {
@@ -68,7 +68,7 @@ double elapsedMs(std::chrono::steady_clock::time_point start) {
 // TODO(clang-tidy): consider wrapping the two model paths in a small
 // `OcrModelPaths { std::string detector; std::string recognizer; }` struct
 // to make them un-swappable at the call site.
-OcrModel::OcrModel(
+EasyOcrModel::EasyOcrModel(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, OcrConfig config)
@@ -112,7 +112,7 @@ OcrModel::OcrModel(
       pathRecognizer, langList, recognizerBackend_, recogConfig);
 }
 
-OcrModel::~OcrModel() {
+EasyOcrModel::~EasyOcrModel() {
   // Destroy steps first; their tensors live in buffers owned by backends. The
   // detector frees its own backend; we own the recognizer's.
   recognizer_.reset();
@@ -125,14 +125,14 @@ OcrModel::~OcrModel() {
   }
 }
 
-std::any OcrModel::process(const std::any& input) {
+std::any EasyOcrModel::process(const std::any& input) {
   if (const auto* asInput = std::any_cast<OcrInput>(&input)) {
     return processImage(*asInput);
   }
   throw std::runtime_error("ocr-ggml: invalid input type (expected OcrInput)");
 }
 
-OcrModel::Output OcrModel::processImage(const Input& input) {
+EasyOcrModel::Output EasyOcrModel::processImage(const Input& input) {
   cancelFlag_.store(false, std::memory_order_relaxed);
 
   auto t0 = std::chrono::steady_clock::now();
@@ -171,7 +171,7 @@ OcrModel::Output OcrModel::processImage(const Input& input) {
   return texts;
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats OcrModel::runtimeStats() const {
+qvac_lib_inference_addon_cpp::RuntimeStats EasyOcrModel::runtimeStats() const {
   // Seconds (totalTime/decodeTime/encodeTime) and milliseconds (TTFT) — same
   // unit convention as TranslationModel so JS-side stats objects remain
   // comparable across qvac inference addons.

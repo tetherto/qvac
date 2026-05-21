@@ -1,7 +1,7 @@
 #pragma once
 
-// OcrModel — the `qvac_lib_inference_addon_cpp::model::IModel` adapter that
-// composes the three EasyOcr-ggml pipeline steps (CRAFT detection,
+// EasyOcrModel — the `qvac_lib_inference_addon_cpp::model::IModel` adapter
+// that composes the three EasyOcr-ggml pipeline steps (CRAFT detection,
 // bounding-box extraction, CRNN gen-2 recognition) into a single addon
 // model with the same input/output contract as @qvac/ocr-onnx's
 // `Pipeline`.
@@ -16,7 +16,6 @@
 #include <any>
 #include <atomic>
 #include <memory>
-#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -24,6 +23,7 @@
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
+#include "OcrTypes.hpp"
 #include "easyocr/pipeline/step_bounding_box.hpp"
 #include "easyocr/pipeline/step_detection_inference.hpp"
 #include "easyocr/pipeline/step_recognize_text.hpp"
@@ -32,65 +32,31 @@
 using ggml_backend_t = struct ggml_backend*;
 
 // NOLINTBEGIN(readability-identifier-naming)
-// OcrInput / OcrConfig field names follow the @qvac/ocr-onnx JS API
-// surface; constructor parameter pairs (pathDetector/pathRecognizer) and
-// (imageWidth/imageHeight) are documented at the call site.
+// Constructor parameter pairs (pathDetector/pathRecognizer) follow the
+// @qvac/ocr-onnx JS API surface and are documented at the call site.
 
 namespace qvac_lib_infer_ocr_ggml {
 
-// Mirrors @qvac/ocr-onnx's PipelineInput so the JS side can interchangeably
-// drive both addons. Either pass an encoded JPEG/PNG byte buffer (set
-// `isEncoded`) or a raw RGB image with explicit width/height.
-struct OcrInput {
-  int imageWidth{};
-  int imageHeight{};
-  std::vector<uint8_t> data;
-  bool isEncoded{false};
-  bool paragraph{false};
-  std::optional<std::vector<int>> rotationAngles;
-  // TODO(clang-tidy): extract OcrInput / OcrConfig defaults as named
-  // constants (kDefaultBoxMargin, kDefaultMagRatio, kDefaultRotationAngles,
-  // kDefaultLowConfidenceThreshold, kDefaultRecognizerBatchSize).
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-  float boxMarginMultiplier{0.1F};
-};
-
-// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-struct OcrConfig {
-  float magRatio{1.5F};
-  std::vector<int> defaultRotationAngles{90, 270};
-  bool contrastRetry{false};
-  float lowConfidenceThreshold{0.4F};
-  int recognizerBatchSize{32};
-  // <0 leave GGML default, 0 auto-detect physical cores, >0 explicit override.
-  int nThreads{0};
-  // Directory that holds dynamic ggml backend shared libraries (libggml-*.so).
-  // Default empty -> ggml_backend_load_all() picks up backends via env / dl
-  // path.
-  std::string backendsDir;
-};
-// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-
-class OcrModel : public qvac_lib_inference_addon_cpp::model::IModel,
-                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
+class EasyOcrModel : public qvac_lib_inference_addon_cpp::model::IModel,
+                     public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   using Input = OcrInput;
   using Output = std::vector<easyocr::ggml::pipeline::InferredText>;
 
-  OcrModel(
+  EasyOcrModel(
       const std::string& pathDetector, const std::string& pathRecognizer,
       std::span<const std::string> langList, OcrConfig config);
 
-  ~OcrModel() override;
+  ~EasyOcrModel() override;
 
-  OcrModel(const OcrModel&) = delete;
-  OcrModel& operator=(const OcrModel&) = delete;
-  OcrModel(OcrModel&&) = delete;
-  OcrModel& operator=(OcrModel&&) = delete;
+  EasyOcrModel(const EasyOcrModel&) = delete;
+  EasyOcrModel& operator=(const EasyOcrModel&) = delete;
+  EasyOcrModel(EasyOcrModel&&) = delete;
+  EasyOcrModel& operator=(EasyOcrModel&&) = delete;
 
   std::any process(const std::any& input) override;
 
-  [[nodiscard]] std::string getName() const override { return "OcrGgml"; }
+  [[nodiscard]] std::string getName() const override { return "EasyOcrGgml"; }
 
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const override;

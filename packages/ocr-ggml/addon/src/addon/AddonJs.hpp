@@ -4,7 +4,7 @@
 //
 //   - `createInstance(jsHandle, configurationParams, outputCallback)`
 //       Parses the `params` object (pathDetector, pathRecognizer, langList,
-//       optional config knobs) and constructs an `OcrModel`. Wires up a
+//       optional config knobs) and constructs an `EasyOcrModel`. Wires up a
 //       `PipelineOutputHandler` so the C++ `std::vector<InferredText>` is
 //       converted to a JS array of `[box, text, confidence]` triples
 //       (same shape as @qvac/ocr-onnx).
@@ -29,7 +29,8 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/DoctrOcrModel.hpp"
-#include "model-interface/OcrModel.hpp"
+#include "model-interface/EasyOcrModel.hpp"
+#include "model-interface/OcrTypes.hpp"
 #include "model-interface/easyocr/pipeline/steps.hpp"
 
 // NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
@@ -56,7 +57,7 @@ createArrayFromElements(js_env_t* env, std::span<js_value_t*> elements) {
 // Mirrors @qvac/ocr-onnx's `getJsArrayFromOutput`. Output schema for each
 // inferred text: [ [[x,y]*4], text, confidence ].
 js_value_t*
-outputToJs(js_env_t* env, const OcrModel::Output& inferredTextList) {
+outputToJs(js_env_t* env, const EasyOcrModel::Output& inferredTextList) {
   const size_t n = inferredTextList.size();
   auto jsInferredTextListElements = std::make_unique<
       js_value_t*[]>( // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
@@ -103,14 +104,15 @@ public:
 
   [[nodiscard]] js_value_t*
   handleOutput(const std::any& output) const override {
-    if (output.type() != typeid(OcrModel::Output)) {
+    if (output.type() != typeid(EasyOcrModel::Output)) {
       throw std::runtime_error("OcrOutputHandler: unexpected data type");
     }
-    return outputToJs(env_, std::any_cast<const OcrModel::Output&>(output));
+    return outputToJs(
+        env_, std::any_cast<const EasyOcrModel::Output&>(output));
   }
 
   [[nodiscard]] bool canHandle(const std::any& input) const override {
-    return input.type() == typeid(OcrModel::Output);
+    return input.type() == typeid(EasyOcrModel::Output);
   }
 
 private:
@@ -203,7 +205,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model =
         std::make_unique<DoctrOcrModel>(pathDetector, pathRecognizer, config);
   } else {
-    model = std::make_unique<OcrModel>(
+    model = std::make_unique<EasyOcrModel>(
         pathDetector,
         pathRecognizer,
         std::span<const std::string>(langList),
