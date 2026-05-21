@@ -956,13 +956,12 @@ jobs:
           echo "Perf test pattern: $PERF_PATTERN"
           echo "Regular test pattern: $REGULAR_PATTERN"
 
-          # Mocha grep MUST be "." (match-all) — the grep patterns are function names
-          # from test-groups.json, NOT WDIO spec test titles. A non-matching grep
-          # causes WDIO to skip its spec tests and exit immediately without waiting
-          # for the app to finish, producing incomplete perf reports.
-          # Test-level filtering is done post-extraction via --filter in extract-from-log.js.
-          WDIO_CONFIG_PERF_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#.#" | sed "s#__TEST_FILTER__#$PERF_PATTERN#" | base64 | tr -d '\n')
-          WDIO_CONFIG_REGULAR_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#.#" | sed "s#__TEST_FILTER__#$REGULAR_PATTERN#" | base64 | tr -d '\n')
+          # Set Mocha grep to the same pattern as TEST_FILTER so WDIO only waits
+          # for the it() cases that actually run on the device. Using "." (match-all)
+          # causes WDIO to wait for all 17 tests including those filtered out on the
+          # device, and the run times out waiting for results that never appear.
+          WDIO_CONFIG_PERF_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$PERF_PATTERN#" | sed "s#__TEST_FILTER__#$PERF_PATTERN#" | base64 | tr -d '\n')
+          WDIO_CONFIG_REGULAR_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$REGULAR_PATTERN#" | sed "s#__TEST_FILTER__#$REGULAR_PATTERN#" | base64 | tr -d '\n')
 
           # Function to generate a testspec YAML given a base64-encoded WDIO config
           generate_testspec() {
