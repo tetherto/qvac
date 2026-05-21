@@ -22215,6 +22215,25 @@ export const models = [
     quantization: "",
     params: "",
   },
+  {
+    name: "SMOLVLA_LIBERO_VISION_Q8",
+    registryPath:
+      "qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blobBlockOffset: 2108394,
+    blobBlockLength: 30229,
+    blobByteOffset: 138159705570,
+    modelId: "smolvla-libero-vision-q8.gguf",
+    addon: "vla",
+    expectedSize: 1981051936,
+    sha256Checksum:
+      "565766363e681cc4446a0147a379bb73164bb7b8fa4071aa717a2d2039c4f007",
+    engine: "ggml-vla",
+    quantization: "q8_0",
+    params: "smolvla-libero",
+  },
 ] as const satisfies readonly RegistryItem[];
 
 // Individual model constants for direct import/use with loadModel
@@ -28805,6 +28824,24 @@ export const WHISPER_Q8_0_1 = {
   engine: models[708].engine,
   quantization: models[708].quantization,
   params: models[708].params,
+} as const;
+
+export const SMOLVLA_LIBERO_VISION_Q8 = {
+  name: "SMOLVLA_LIBERO_VISION_Q8",
+  src: `registry://${models[709].registrySource}/${models[709].registryPath}`,
+  registryPath: models[709].registryPath,
+  registrySource: models[709].registrySource,
+  blobCoreKey: models[709].blobCoreKey,
+  blobBlockOffset: models[709].blobBlockOffset,
+  blobBlockLength: models[709].blobBlockLength,
+  blobByteOffset: models[709].blobByteOffset,
+  modelId: models[709].modelId,
+  expectedSize: models[709].expectedSize,
+  sha256Checksum: models[709].sha256Checksum,
+  addon: models[709].addon,
+  engine: models[709].engine,
+  quantization: models[709].quantization,
+  params: models[709].params,
 } as const;
 
 /**

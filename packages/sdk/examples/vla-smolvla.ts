@@ -6,16 +6,16 @@
  * zero noise), and prints the produced action chunk + per-stage timings.
  *
  * Usage:
- *   bun examples/vla-smolvla.ts <path-to-smolvla.gguf>
+ *   bun examples/vla-smolvla.ts [path-to-smolvla.gguf]
  *
- * The model file is not bundled with the SDK; download the GGUF from
- * https://huggingface.co/HuggingFaceVLA/smolvla_libero (or the QVAC
- * registry once a VLA entry is registered) and pass the absolute path on
- * the command line.
+ * By default the example pulls the registry-baked SmolVLA-LIBERO GGUF
+ * (~1.9 GB) on first run and caches it locally. Pass an absolute path on
+ * the command line to override and load a local GGUF instead.
  */
 import {
   close,
   loadModel,
+  SMOLVLA_LIBERO_VISION_Q8,
   unloadModel,
   vla,
   vlaHparams,
@@ -23,22 +23,21 @@ import {
   vlaPreprocessImage,
 } from "@qvac/sdk";
 
-const modelPath = process.argv[2];
-if (!modelPath) {
-  console.error(
-    "Usage: bun examples/vla-smolvla.ts <path-to-smolvla.gguf>\n" +
-      "Download from https://huggingface.co/HuggingFaceVLA/smolvla_libero",
-  );
-  process.exit(1);
-}
+const modelSrcOverride = process.argv[2];
+const modelSrc = modelSrcOverride ?? SMOLVLA_LIBERO_VISION_Q8;
 
 try {
   console.log("Loading SmolVLA model...");
   const modelId = await loadModel({
-    modelSrc: modelPath,
+    modelSrc,
     modelType: "vla",
     modelConfig: { backend: "cpu" },
+    onProgress: (p) =>
+      typeof modelSrc === "string"
+        ? undefined
+        : process.stdout.write(`\rDownloading: ${p.percentage.toFixed(1)}%`),
   });
+  if (typeof modelSrc !== "string") process.stdout.write("\n");
   console.log(`Model loaded: ${modelId}`);
 
   const { hparams, backendName } = await vlaHparams({ modelId });
