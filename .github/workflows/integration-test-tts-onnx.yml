@@ -128,8 +128,43 @@ on:
         type: boolean
 
 jobs:
+  build-mecab-dict:
+    if: ${{ inputs.run_integration_tests != false }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: ${{ inputs.workdir }}/scripts/build_mecab_dict.py
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install ipadic
+        run: pip install ipadic
+
+      - name: Materialize MeCab dict
+        working-directory: ${{ inputs.workdir }}
+        run: python3 scripts/build_mecab_dict.py mecab-ipadic
+
+      - name: Upload MeCab dict artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: mecab-ipadic
+          path: ${{ inputs.workdir }}/mecab-ipadic
+          retention-days: 1
+
   run-integration-tests:
     if: ${{ inputs.run_integration_tests != false }}
+    needs: build-mecab-dict
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -188,6 +223,7 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
+          pattern: onnx-tts-*
           path: ${{ inputs.workdir }}/prebuilds
           merge-multiple: true
 
@@ -208,21 +244,15 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      - name: Setup Python for MeCab dict
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+      - name: Download MeCab dict artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          python-version: '3.12'
+          name: mecab-ipadic
+          path: ${{ runner.temp }}/mecab-ipadic
 
-      - name: Install ipadic
+      - name: Export MeCab dict path
         shell: bash
-        run: pip install ipadic
-
-      - name: Materialize MeCab dict
-        working-directory: ${{ inputs.workdir }}
-        shell: bash
-        run: |
-          python3 scripts/build_mecab_dict.py "${RUNNER_TEMP}/mecab-ipadic"
-          echo "QVAC_MECAB_DICT_DIR=${RUNNER_TEMP}" >> "$GITHUB_ENV"
+        run: echo "QVAC_MECAB_DICT_DIR=${RUNNER_TEMP}" >> "$GITHUB_ENV"
 
       - name: Run integration test
         working-directory: ${{ inputs.workdir }}
