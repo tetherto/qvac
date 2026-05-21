@@ -200,10 +200,13 @@ export const whisperPlugin = definePlugin({
               };
               continue;
             }
-            if (value.type === "endOfTurn") {
+            if (value.type === "endOfTurn" && value.source === "whisper") {
               yield {
                 type: "transcribeStream" as const,
-                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+                endOfTurn: {
+                  source: "whisper" as const,
+                  silenceDurationMs: value.silenceDurationMs,
+                },
               };
               continue;
             }

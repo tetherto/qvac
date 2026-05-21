@@ -18,6 +18,7 @@ interface CollectedEvent {
   text?: string;
   speaking?: boolean;
   probability?: number;
+  source?: "whisper" | "parakeet";
   silenceDurationMs?: number;
 }
 
