@@ -7,10 +7,11 @@ import {
 } from 'fumadocs-ui/page';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { getMDXComponents } from '@/mdx-components';
+import { SmartAnchor } from '@/components/mdx-smart-card';
 import { resolveIcon } from "@/lib/resolveIcon";
 import { cloneElement, isValidElement } from "react";
+import type { AnchorHTMLAttributes } from "react";
 import { CopyPageButton, ViewOptions, VersionSelector } from '@/components/page-actions';
 import {
   buildCanonicalDocsUrl,
@@ -102,8 +103,21 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       <DocsBody>
         <MDXContent
           components={getMDXComponents({
-            // this allows you to link to other pages with relative file paths
-            a: createRelativeLink(source, page),
+            // Resolve relative markdown hrefs (e.g. `./foo.mdx`) to
+            // their absolute docs URL server-side, then hand off to
+            // `SmartAnchor` (a client component) which renders the
+            // standard link OUTSIDE a Card and degrades to a styled
+            // span INSIDE a Card to avoid nested `<a>` (which would
+            // hydrate-mismatch the page). We do the resolution here
+            // — not inside `mdx-components.tsx` — because crossing
+            // the function as a prop into a client component is
+            // forbidden by React Server Components.
+            a: ({ href, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => (
+              <SmartAnchor
+                href={href ? source.resolveHref(href, page) : href}
+                {...rest}
+              />
+            ),
           })}
         />
       </DocsBody>
