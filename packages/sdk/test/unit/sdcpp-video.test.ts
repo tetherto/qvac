@@ -27,6 +27,7 @@ const JPEG_B64 = "/9j/4AAQSkZJRgABAQEASABIAAA=";
 test("sdcppConfigSchema: accepts mode: 'video' and highNoiseDiffusionModelSrc", (t: BrittleT) => {
   const result = sdcppConfigSchema.safeParse({
     mode: "video",
+    offload_to_cpu: true,
     t5XxlModelSrc: "umt5_xxl_fp16.safetensors",
     vaeModelSrc: "wan_2.1_vae.safetensors",
     highNoiseDiffusionModelSrc: "wan2.2_high_noise_fp16.safetensors",
