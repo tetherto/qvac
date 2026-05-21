@@ -2,11 +2,10 @@ export {
   AskAIProvider,
   useAskAI,
   type AskAIContextValue,
-  type AskAIDesktopState,
-  type AskAISurface,
+  type AskAIModalState,
 } from './ask-ai-provider';
 export { AskAIShell } from './ask-ai-shell';
-export { AskAIDesktopShell } from './ask-ai-desktop-shell';
+export { AskAIChatShell } from './ask-ai-chat-shell';
 export { AskAIButton, AskAIShortcutHint, type AskAIButtonVariant } from './ask-ai-button';
 export { AskAITextSelection } from './ask-ai-text-selection';
 export { AskAICodeBlock } from './ask-ai-code-block';

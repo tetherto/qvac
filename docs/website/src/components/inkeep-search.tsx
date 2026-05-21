@@ -11,12 +11,9 @@ import { useAskAI } from '@/components/ask-ai';
 
 /**
  * Fumadocs's `RootProvider` mounts this as the `Cmd/Ctrl+K` search
- * dialog. On every breakpoint it stays a search-first modal, but on
- * desktop we hijack the in-modal "Ask AI" tab and forward to the
- * persistent sidebar so the docs site has exactly one chat
- * conversation surface, matching Mintlify's behavior. On mobile the
- * tab toggle is allowed to flip the modal into chat view normally,
- * because the sidebar is not available there.
+ * dialog. It stays a search-first modal on every breakpoint; the
+ * in-modal "Ask AI" tab is hijacked and forwarded to our own chat
+ * shell so the docs site has exactly one chat conversation surface.
  */
 export default function CustomDialog(props: SharedProps) {
   const askAI = useAskAI();
@@ -63,12 +60,8 @@ export default function CustomDialog(props: SharedProps) {
       // search should be left to the modal.
       if (view !== 'chat') return;
 
-      // On desktop, route every chat into the centered AskAI modal so
-      // the user keeps a single conversation across surfaces. On mobile
-      // we let the in-modal chat experience take over (no separate
-      // desktop modal exists there).
-      if (askAI.surface !== 'desktop') return;
-
+      // Route into our own chat shell so the conversation lives in
+      // one place no matter how the user got there.
       onOpenChange(false);
       const trimmed = query?.trim();
       if (trimmed && autoSubmit !== false) {

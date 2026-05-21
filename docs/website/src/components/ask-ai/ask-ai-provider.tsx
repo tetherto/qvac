@@ -15,77 +15,67 @@ import { useSearchParams } from 'next/navigation';
 import type { AskAIContextSnippet } from './types';
 
 /**
- * Tailwind `md` breakpoint. Mirrors `md:` used in the rest of the app so
- * the JS-side switch lines up with the CSS-side hide/show on the desktop
- * shell vs mobile `InkeepModalSearchAndChat`. Hardcoding the value here
- * keeps the provider free of any Tailwind config dependency.
- */
-const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
-
-export type AskAISurface = 'desktop' | 'mobile';
-
-/**
- * Desktop chat surface state machine:
+ * Chat-modal state machine. Same surface on every breakpoint - the
+ * shell responds to its container size, not to viewport detection.
  *
- *  - `closed`   - only the bottom-anchored bar is showing. The user can
- *                 type a question into the bar's input, which submits
- *                 and transitions to `open`.
+ *  - `closed`   - only the bottom-anchored bar is visible. Typing in
+ *                 the bar + submitting transitions to `open`.
  *  - `open`     - bar morphs into a modal with the chat history above
- *                 the input. Modal width matches the docs body column;
- *                 the input stays in the same screen position so the
- *                 transition reads as the bar growing.
- *  - `expanded` - same modal, expanded to fill the viewport.
+ *                 the input. Modal width matches the docs body column
+ *                 on desktop and goes near-full-screen on mobile via
+ *                 responsive CSS. The bottom-anchored input stays in
+ *                 the same visual position.
+ *  - `expanded` - same modal expanded to fill the viewport (desktop
+ *                 expand toggle; on mobile the modal is already at
+ *                 max size so the toggle is hidden).
  *
- * The conversation is preserved across `open` <-> `closed` because the
- * `InkeepEmbeddedChat` instance inside the shell stays mounted; only
- * the wrapper's CSS state changes.
+ * Conversation state lives in the chat hook inside the shell, which
+ * stays mounted across these transitions - so collapsing to the bar
+ * never loses messages.
  */
-export type AskAIDesktopState = 'closed' | 'open' | 'expanded';
+export type AskAIModalState = 'closed' | 'open' | 'expanded';
 
 export interface AskAIContextValue {
-  /** True once the provider has run on the client; before that, do not
-   *  read viewport-dependent fields, they are deliberately defaults. */
+  /** True once the provider has run on the client; before that, do
+   *  not read viewport-dependent fields, they are deliberately
+   *  defaults. Kept here even though the shell is no longer
+   *  viewport-branched - other consumers can still gate on it. */
   isReady: boolean;
 
-  /** Which surface the provider is currently routing triggers to. */
-  surface: AskAISurface;
-
-  /** Desktop chat surface state. */
-  desktopState: AskAIDesktopState;
-  /** Open the desktop modal in body-width state. No-op on mobile. */
+  /** Chat modal state, identical on desktop and mobile. */
+  modalState: AskAIModalState;
+  /** Open the modal in body-width state. No-op if already open. */
   openModal: () => void;
-  /** Collapse the desktop modal back to the bar. No-op on mobile. */
+  /** Close the modal back to the bar. No-op if already closed. */
   closeModal: () => void;
-  /** Toggle between `open` and `expanded`. Only meaningful when the
-   *  desktop modal is already open. */
+  /** Toggle between `open` and `expanded`. From `closed` this is a
+   *  no-op (the user must first open the modal). */
   toggleExpand: () => void;
 
-  /** Whether the mobile chat-first modal is currently open. */
-  mobileModalOpen: boolean;
-  setMobileModalOpen: (open: boolean) => void;
-
-  /** Queued prompt that should be auto-submitted as soon as the active
-   *  surface is mounted and ready. Drained by the shell. */
+  /** Queued prompt that should be auto-submitted as soon as the chat
+   *  shell mounts / the chat hook is ready. Drained by the shell. */
   pendingPrompt: string | null;
-  /** Queued context (selected text or code snippet) to prepend to the
-   *  next user input. Drained by the shell. */
+  /** Queued context (selected text or code snippet) to prepend to
+   *  the next user input. Drained by the shell. */
   pendingContext: AskAIContextSnippet | null;
 
-  /** Open the assistant on whichever surface the viewport calls for.
-   *  Desktop -> `openModal()`; mobile -> `setMobileModalOpen(true)`. */
+  /** Open the assistant. Alias for `openModal()` kept for the
+   *  triggers that already call `open()`. */
   open: () => void;
-  /** Close every assistant surface. */
+  /** Close the assistant. Alias for `closeModal()`. */
   close: () => void;
-  /** Toggle the active surface open/closed (between `closed` and `open`
-   *  on desktop; never targets `expanded`). */
+  /** Toggle between `closed` and `open` (never targets `expanded`). */
   toggle: () => void;
   /** Open the assistant and queue `prompt` to be auto-submitted. */
   openWith: (prompt: string) => void;
-  /** Open the assistant and queue `snippet` to be prepended to the input. */
+  /** Open the assistant and queue `snippet` to be prepended to the
+   *  input. Used by the code-block "Ask AI" button and the text-
+   *  selection "Add to assistant" popup. */
   addContext: (snippet: AskAIContextSnippet) => void;
 
-  /** Clear the queued prompt and/or context. The shell calls this once
-   *  after consuming the values from `pendingPrompt` / `pendingContext`. */
+  /** Clear the queued prompt and/or context. The shell calls this
+   *  once after consuming the values from `pendingPrompt` /
+   *  `pendingContext`. */
   clearPending: () => void;
 }
 
@@ -93,13 +83,10 @@ const noop = () => {};
 
 const defaultValue: AskAIContextValue = {
   isReady: false,
-  surface: 'desktop',
-  desktopState: 'closed',
+  modalState: 'closed',
   openModal: noop,
   closeModal: noop,
   toggleExpand: noop,
-  mobileModalOpen: false,
-  setMobileModalOpen: noop,
   pendingPrompt: null,
   pendingContext: null,
   open: noop,
@@ -120,24 +107,10 @@ export function useAskAI(): AskAIContextValue {
   return useContext(AskAIContext);
 }
 
-function useIsDesktop(): { isReady: boolean; isDesktop: boolean } {
-  const [state, setState] = useState({ isReady: false, isDesktop: true });
-
-  useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_MEDIA_QUERY);
-    const handler = () => setState({ isReady: true, isDesktop: mq.matches });
-    handler();
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  return state;
-}
-
 /**
  * Returns true when the user is currently typing into a regular form
- * field. Used to gate keyboard shortcuts so we never steal `Cmd+I` from
- * an editor or search input the user is interacting with.
+ * field. Used to gate keyboard shortcuts so we never steal `Cmd+I`
+ * from an editor or search input the user is interacting with.
  */
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -151,109 +124,98 @@ interface AskAIProviderInnerProps {
 }
 
 function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
-  const { isReady, isDesktop } = useIsDesktop();
-  const [desktopState, setDesktopState] = useState<AskAIDesktopState>('closed');
-  const [mobileModalOpen, setMobileModalOpen] = useState(false);
+  const [modalState, setModalState] = useState<AskAIModalState>('closed');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [pendingContext, setPendingContext] = useState<AskAIContextSnippet | null>(null);
+  // We expose `isReady` for forward-compat; mark it true after the
+  // first commit so legacy gates clear without ever blocking.
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => {
+    setIsReady(true);
+  }, []);
 
-  const surface: AskAISurface = isDesktop ? 'desktop' : 'mobile';
-
-  // Refs let `open`/`close`/`toggle` stay stable across re-renders while
-  // still reading the freshest viewport / open-state values. Without
-  // this, every viewport resize would invalidate every memoised trigger
-  // (which there are many of: header button, bottom bar, hotkey listener,
-  // URL handler, code block, text-selection popup).
-  const isDesktopRef = useRef(isDesktop);
-  const desktopStateRef = useRef(desktopState);
-  const mobileModalOpenRef = useRef(mobileModalOpen);
-  isDesktopRef.current = isDesktop;
-  desktopStateRef.current = desktopState;
-  mobileModalOpenRef.current = mobileModalOpen;
-
-  // ---------------------------------------------------------------------------
-  // Desktop-specific actions
-  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // Modal actions
+  // ---------------------------------------------------------------
   const openModal = useCallback(() => {
-    // Always open into 'open' state (body-width). Per the agreed UX,
-    // triggers never jump straight to 'expanded'; the user opts in via
-    // the expand affordance inside the modal.
-    setDesktopState((current) => (current === 'expanded' ? current : 'open'));
+    setModalState((current) => (current === 'expanded' ? current : 'open'));
   }, []);
 
   const closeModal = useCallback(() => {
-    setDesktopState('closed');
+    setModalState('closed');
   }, []);
 
   const toggleExpand = useCallback(() => {
-    setDesktopState((current) => {
+    setModalState((current) => {
       if (current === 'open') return 'expanded';
       if (current === 'expanded') return 'open';
-      // From 'closed': open into expanded would surprise users; ignore.
+      // From 'closed': jumping straight to 'expanded' would surprise
+      // users; ignore.
       return current;
     });
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Cross-surface convenience helpers used by triggers that don't care
-  // which viewport is active (header button, hotkey, deep link, code
-  // block, text selection, page-actions popover).
-  // ---------------------------------------------------------------------------
-  const open = useCallback(() => {
-    if (isDesktopRef.current) {
-      // Same logic as openModal but inline to avoid a callback dep.
-      setDesktopState((current) => (current === 'expanded' ? current : 'open'));
-    } else {
-      setMobileModalOpen(true);
-    }
-  }, []);
-
-  const close = useCallback(() => {
-    setDesktopState('closed');
-    setMobileModalOpen(false);
-  }, []);
+  // ---------------------------------------------------------------
+  // Cross-cutting helpers (back-compat with existing trigger call
+  // sites: header button, hotkey, deep link, code block, text
+  // selection, page-actions popover).
+  // ---------------------------------------------------------------
+  const open = openModal;
+  const close = closeModal;
 
   const toggle = useCallback(() => {
-    if (isDesktopRef.current) {
-      setDesktopState((current) => (current === 'closed' ? 'open' : 'closed'));
-    } else {
-      setMobileModalOpen((v) => !v);
-    }
+    setModalState((current) => (current === 'closed' ? 'open' : 'closed'));
   }, []);
 
   const openWith = useCallback(
     (prompt: string) => {
       const trimmed = prompt.trim();
       if (trimmed.length > 0) setPendingPrompt(trimmed);
-      open();
+      openModal();
     },
-    [open],
+    [openModal],
   );
 
   const addContext = useCallback(
     (snippet: AskAIContextSnippet) => {
       setPendingContext(snippet);
-      open();
+      openModal();
     },
-    [open],
+    [openModal],
   );
 
-  // The shell consumes `pendingPrompt` / `pendingContext` directly from
-  // the context (they're already in the render closure), then calls
-  // `clearPending` to drain the queue. We deliberately do NOT use the
-  // "read+clear in a single call" pattern here: in React 19 concurrent
-  // mode the functional state setter's updater runs on the NEXT render
-  // pass, not synchronously, so any value captured inside the updater
-  // is unavailable to the caller.
+  // The shell consumes `pendingPrompt` / `pendingContext` directly
+  // from the context (they're already in the render closure), then
+  // calls `clearPending` to drain the queue. We deliberately do NOT
+  // use the "read+clear in a single call" pattern here: in React 19
+  // concurrent mode the functional state setter's updater runs on
+  // the NEXT render pass, not synchronously, so any value captured
+  // inside the updater is unavailable to the caller.
   const clearPending = useCallback(() => {
     setPendingPrompt(null);
     setPendingContext(null);
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Cmd/Ctrl+I global hotkey. Toggles the assistant between `closed` and
-  // `open` (never targets `expanded`).
-  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // Body-scroll lock. Page must NOT scroll behind the open modal
+  // (per the review). We lock `documentElement` rather than `body`
+  // because Fumadocs's layout sets its own overflow on `body`.
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (modalState === 'closed') return;
+    const root = document.documentElement;
+    const previousOverflow = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = previousOverflow;
+    };
+  }, [modalState]);
+
+  // ---------------------------------------------------------------
+  // Cmd/Ctrl+I global hotkey. Toggles `closed <-> open` (never
+  // targets `expanded`).
+  // ---------------------------------------------------------------
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (!(event.metaKey || event.ctrlKey)) return;
@@ -266,49 +228,42 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [toggle]);
 
-  // ---------------------------------------------------------------------------
-  // `?assistant=open` and `?assistant=<query>` deep links. We strip the
-  // param from the URL once consumed so reloading the page does not re-
-  // open the assistant unexpectedly. The handler runs once per distinct
-  // search-string instance, not per render.
-  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // `?assistant=open` and `?assistant=<query>` deep links. We strip
+  // the param from the URL once consumed so reloading the page does
+  // not re-open the assistant unexpectedly.
+  // ---------------------------------------------------------------
   const searchParams = useSearchParams();
   const lastConsumedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!searchParams) return;
     const value = searchParams.get('assistant');
     if (value === null) return;
-    // The same `useSearchParams()` instance object can fire multiple
-    // effects; gate on the actual string to dedupe.
     const fingerprint = `${value}::${searchParams.toString()}`;
     if (lastConsumedRef.current === fingerprint) return;
     lastConsumedRef.current = fingerprint;
 
     const trimmed = value.trim();
     if (trimmed === '' || trimmed === 'open' || trimmed === 'true' || trimmed === '1') {
-      open();
+      openModal();
     } else {
       openWith(trimmed);
     }
 
-    // Strip the param from the URL bar without triggering a navigation.
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('assistant');
       window.history.replaceState(window.history.state, '', url.toString());
     }
-  }, [searchParams, open, openWith]);
+  }, [searchParams, openModal, openWith]);
 
   const value = useMemo<AskAIContextValue>(
     () => ({
       isReady,
-      surface,
-      desktopState,
+      modalState,
       openModal,
       closeModal,
       toggleExpand,
-      mobileModalOpen,
-      setMobileModalOpen,
       pendingPrompt,
       pendingContext,
       open,
@@ -320,12 +275,10 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
     }),
     [
       isReady,
-      surface,
-      desktopState,
+      modalState,
       openModal,
       closeModal,
       toggleExpand,
-      mobileModalOpen,
       pendingPrompt,
       pendingContext,
       open,
@@ -341,9 +294,10 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
 }
 
 /**
- * Provides the assistant state to the entire docs site. Wraps the inner
- * implementation in a Suspense boundary because `useSearchParams` requires
- * one when the app is statically exported (`output: 'export'`).
+ * Provides the assistant state to the entire docs site. Wraps the
+ * inner implementation in a Suspense boundary because
+ * `useSearchParams` requires one when the app is statically exported
+ * (`output: 'export'`).
  */
 export function AskAIProvider({ children }: { children: React.ReactNode }) {
   return (

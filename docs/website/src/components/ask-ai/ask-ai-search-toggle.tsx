@@ -68,15 +68,17 @@ function SmallSearchTrigger({ className }: { className?: string }) {
 
 /**
  * Drop-in replacement for the Fumadocs `searchToggle.components.lg`
- * slot. Renders the search input alongside an "Ask AI" button so the
- * docs header pairs search and chat in the same row, mirroring the way
- * Mintlify-built docs sites surface both.
+ * slot. Stacks the Search pill and the Ask AI pill vertically so both
+ * controls get the full sidebar column width - no cramping, no
+ * two-line wrap of "Ask AI". The Ask AI pill carries its label, a
+ * `Ctrl I` keyboard hint that mirrors Search's `Ctrl K`, and a
+ * primary-tinted surface so it stays visually distinct.
  */
 export function AskAISearchToggleLarge() {
   return (
-    <div className="flex w-full items-center gap-2">
+    <div className="flex w-full flex-col gap-2">
       <LargeSearchTrigger />
-      <AskAIButton variant="header" hideShortcut />
+      <AskAIButton variant="sidebar-full" ariaLabel="Ask the AI assistant" />
     </div>
   );
 }
