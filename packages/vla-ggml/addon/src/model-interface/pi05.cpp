@@ -16,6 +16,13 @@
 #include <ggml-cpu.h>
 #include <gguf.h>
 
+#include "utils/BackendSelection.hpp"
+#include "utils/LoggingMacros.hpp"
+
+// Short alias so the QLOG_IF priorities read the same here as in
+// smolvla.cpp / BackendSelection.cpp.
+using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+
 namespace qvac_lib_infer_vla_ggml {
 
 // Cast a tensor to F32 if it isn't already. ggml's CPU backend rejects
@@ -846,6 +853,67 @@ struct pi05_model {
 
 namespace {
 
+// ── Multi-backend graph scheduler helpers ─────────────────────────────────
+// Cloned from smolvla.cpp's staged_graph pattern. The scheduler routes
+// each op to the first backend that supports it — ops the GPU rejects
+// (typically Conv2d on Adreno OpenCL / older Vulkan) auto-fall-back to
+// CPU. On CPU-only configs we use the simpler gallocr path to avoid
+// scheduler overhead.
+
+struct pi05_staged_graph {
+  struct ggml_context* ctx = nullptr;
+  struct ggml_cgraph* gf = nullptr;
+  ggml_gallocr_t allocr = nullptr;
+  ggml_backend_sched_t sched = nullptr;
+};
+
+static pi05_staged_graph pi05_build_staged(size_t ctx_bytes, int max_nodes) {
+  pi05_staged_graph sg{};
+  struct ggml_init_params params{ctx_bytes, nullptr, /*no_alloc=*/true};
+  sg.ctx = ggml_init(params);
+  if (sg.ctx == nullptr) return sg;
+  sg.gf = ggml_new_graph_custom(sg.ctx, max_nodes, false);
+  return sg;
+}
+
+static bool pi05_alloc_staged_simple(
+    pi05_staged_graph& sg, ggml_backend_t backend) {
+  sg.allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
+  if (sg.allocr == nullptr) return false;
+  return ggml_gallocr_alloc_graph(sg.allocr, sg.gf);
+}
+
+static bool pi05_alloc_staged_sched(
+    pi05_staged_graph& sg, ggml_backend_t gpu, ggml_backend_t cpu) {
+  ggml_backend_t backends[] = {gpu, cpu};
+  sg.sched = ggml_backend_sched_new(
+      backends, nullptr, 2, GGML_DEFAULT_GRAPH_SIZE, false, true);
+  if (sg.sched == nullptr) return false;
+  return ggml_backend_sched_alloc_graph(sg.sched, sg.gf);
+}
+
+static bool pi05_compute_staged(
+    pi05_staged_graph& sg, ggml_backend_t backend) {
+  if (sg.sched != nullptr) {
+    return ggml_backend_sched_graph_compute(sg.sched, sg.gf) ==
+           GGML_STATUS_SUCCESS;
+  }
+  return ggml_backend_graph_compute(backend, sg.gf) == GGML_STATUS_SUCCESS;
+}
+
+static void pi05_free_staged(pi05_staged_graph& sg) {
+  if (sg.sched != nullptr) ggml_backend_sched_free(sg.sched);
+  if (sg.allocr != nullptr) ggml_gallocr_free(sg.allocr);
+  if (sg.ctx != nullptr) ggml_free(sg.ctx);
+  sg = {};
+}
+
+// RAII wrapper so the four graph-compute sites stay readable.
+struct pi05_staged_guard {
+  pi05_staged_graph sg;
+  ~pi05_staged_guard() { pi05_free_staged(sg); }
+};
+
 void load_backends_once(const std::string& backends_dir) {
   static std::once_flag s_flag;
   std::call_once(s_flag, [&backends_dir]() {
@@ -898,7 +966,44 @@ static std::unique_ptr<pi05_model> pi05_load_model(
   m->backend = m->backend_cpu;
   m->backend_name = "cpu";
   m->has_gpu = false;
-  (void)forceCpu; // GPU selection is a Phase-6 follow-up.
+
+  // Try to upgrade to a GPU device unless the caller forced CPU.
+  // Failure here is non-fatal — we keep the CPU backend already wired
+  // above. Adreno GPUs are filtered out by
+  // vla_backend_selection::pickBestGpuDevice() so older Snapdragon
+  // devices fall through to CPU rather than crash on
+  // ggml_backend_dev_init. Mirrors smolvla.cpp::try_init_gpu_backend.
+  if (!forceCpu) {
+    ggml_backend_dev_t gpu = vla_backend_selection::pickBestGpuDevice();
+    if (gpu != nullptr) {
+      ggml_backend_t gpu_backend = ggml_backend_dev_init(gpu, nullptr);
+      if (gpu_backend != nullptr) {
+        m->backend = gpu_backend;
+        m->has_gpu = true;
+        const char* bname = ggml_backend_name(gpu_backend);
+        const char* ddesc = ggml_backend_dev_description(gpu);
+        m->backend_name = bname != nullptr ? bname : "gpu";
+        QLOG_IF(
+            Priority::INFO,
+            std::string("pi05_load_model: using GPU backend: ") +
+                (bname != nullptr ? bname : "?") + " (" +
+                (ddesc != nullptr ? ddesc : "?") + ")");
+      } else {
+        QLOG_IF(
+            Priority::WARNING,
+            "pi05_load_model: ggml_backend_dev_init returned null; "
+            "staying on CPU");
+      }
+    } else {
+      QLOG_IF(
+          Priority::INFO,
+          "pi05_load_model: no GPU device picked; using CPU");
+    }
+  } else {
+    QLOG_IF(
+        Priority::INFO,
+        "pi05_load_model: forceCpu=true — skipping GPU selection");
+  }
 
   struct gguf_init_params gp{};
   gp.no_alloc = false;
@@ -1079,15 +1184,13 @@ static bool pi05_inference(
       }
     }
 
-    const size_t ctx_mem = size_t{32} * 1024 * 1024;
-    std::vector<uint8_t> mem_buf(ctx_mem);
-    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
-    struct ggml_context* ctx_g = ggml_init(gp);
-    if (ctx_g == nullptr) {
+    pi05_staged_guard vg;
+    vg.sg = pi05_build_staged(size_t{32} * 1024 * 1024, 8192);
+    if (vg.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* pixels =
-        ggml_new_tensor_4d(ctx_g, GGML_TYPE_F32, H, H, 3, 1);
+        ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, H, H, 3, 1);
 
     Pi05VisionTowerWeights tw{};
     tw.patch_embed_w = m.vision_patch_embed_w;
@@ -1100,37 +1203,32 @@ static bool pi05_inference(
     tw.head_b = m.vision_head_b;
 
     auto outs = pi05_build_siglip_tower_graph(
-        ctx_g, pixels, tw, m.vision_n_patches, m.vision_hidden,
+        vg.sg.ctx, pixels, tw, m.vision_n_patches, m.vision_hidden,
         m.vision_proj_dim, m.vision_n_heads, m.vision_patch_size,
         m.vision_layer_norm_eps);
     if (outs.head_out == nullptr) {
-      ggml_free(ctx_g);
       return false;
     }
-    struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 8192, false);
-    ggml_build_forward_expand(gf, outs.head_out);
+    ggml_build_forward_expand(vg.sg.gf, outs.head_out);
 
-    ggml_gallocr_t allocr = ggml_gallocr_new(
-        ggml_backend_get_default_buffer_type(m.backend));
-    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
-      if (allocr != nullptr) {
-        ggml_gallocr_free(allocr);
-      }
-      ggml_free(ctx_g);
+    // Vision tower has Conv2d in patch embed — that's the op that may
+    // need to fall back to CPU on some GPU backends (Adreno OpenCL,
+    // older Vulkan). The scheduler routes Conv2d to CPU if the GPU
+    // doesn't support it; rest of the SigLIP tower stays on GPU.
+    const bool ok = m.has_gpu
+        ? pi05_alloc_staged_sched(vg.sg, m.backend, m.backend_cpu)
+        : pi05_alloc_staged_simple(vg.sg, m.backend_cpu);
+    if (!ok) {
       return false;
     }
     ggml_backend_tensor_set(pixels, permuted.data(), 0,
                             permuted.size() * sizeof(float));
-    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
-      ggml_gallocr_free(allocr);
-      ggml_free(ctx_g);
+    if (!pi05_compute_staged(vg.sg, m.backend)) {
       return false;
     }
     image_features[cam].resize(per_image_out);
     ggml_backend_tensor_get(outs.head_out, image_features[cam].data(), 0,
                             per_image_out * sizeof(float));
-    ggml_gallocr_free(allocr);
-    ggml_free(ctx_g);
   }
   const auto t_vis_end = std::chrono::steady_clock::now();
 
@@ -1138,44 +1236,34 @@ static bool pi05_inference(
   std::vector<float> lang_embeds(
       static_cast<size_t>(valid_lang) * m.vlm_hidden);
   {
-    const size_t ctx_mem = size_t{32} * 1024 * 1024;
-    std::vector<uint8_t> mem_buf(ctx_mem);
-    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
-    struct ggml_context* ctx_g = ggml_init(gp);
-    if (ctx_g == nullptr) {
+    pi05_staged_guard eg;
+    eg.sg = pi05_build_staged(size_t{32} * 1024 * 1024,
+                              GGML_DEFAULT_GRAPH_SIZE);
+    if (eg.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* tok =
-        ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, valid_lang);
+        ggml_new_tensor_1d(eg.sg.ctx, GGML_TYPE_I32, valid_lang);
     struct ggml_tensor* emb = pi05_build_vlm_embed_graph(
-        ctx_g, tok, m.vlm_embed_tokens, m.vlm_hidden);
+        eg.sg.ctx, tok, m.vlm_embed_tokens, m.vlm_hidden);
     if (emb == nullptr) {
-      ggml_free(ctx_g);
       return false;
     }
-    struct ggml_cgraph* gf = ggml_new_graph(ctx_g);
-    ggml_build_forward_expand(gf, emb);
-    ggml_gallocr_t allocr = ggml_gallocr_new(
-        ggml_backend_get_default_buffer_type(m.backend));
-    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
-      if (allocr != nullptr) {
-        ggml_gallocr_free(allocr);
-      }
-      ggml_free(ctx_g);
+    ggml_build_forward_expand(eg.sg.gf, emb);
+    const bool ok = m.has_gpu
+        ? pi05_alloc_staged_sched(eg.sg, m.backend, m.backend_cpu)
+        : pi05_alloc_staged_simple(eg.sg, m.backend_cpu);
+    if (!ok) {
       return false;
     }
     ggml_backend_tensor_set(tok, lang_tokens, 0,
                             static_cast<size_t>(valid_lang) *
                                 sizeof(int32_t));
-    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
-      ggml_gallocr_free(allocr);
-      ggml_free(ctx_g);
+    if (!pi05_compute_staged(eg.sg, m.backend)) {
       return false;
     }
     ggml_backend_tensor_get(emb, lang_embeds.data(), 0,
                             lang_embeds.size() * sizeof(float));
-    ggml_gallocr_free(allocr);
-    ggml_free(ctx_g);
   }
 
   // ── Concat prefix (images + lang) ──────────────────────────────────
@@ -1203,44 +1291,37 @@ static bool pi05_inference(
     v_cache[L].resize(per_layer_kv);
   }
   {
-    const size_t ctx_mem = size_t{64} * 1024 * 1024;
-    std::vector<uint8_t> mem_buf(ctx_mem);
-    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
-    struct ggml_context* ctx_g = ggml_init(gp);
-    if (ctx_g == nullptr) {
+    pi05_staged_guard pg;
+    pg.sg = pi05_build_staged(size_t{64} * 1024 * 1024, 65536);
+    if (pg.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* x = ggml_new_tensor_2d(
-        ctx_g, GGML_TYPE_F32, m.vlm_hidden, prefix_len);
+        pg.sg.ctx, GGML_TYPE_F32, m.vlm_hidden, prefix_len);
     struct ggml_tensor* pos =
-        ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, prefix_len);
+        ggml_new_tensor_1d(pg.sg.ctx, GGML_TYPE_I32, prefix_len);
 
     std::vector<struct ggml_tensor*> out_keys;
     std::vector<struct ggml_tensor*> out_values;
     struct ggml_tensor* final_out = pi05_build_vlm_prefill_graph(
-        ctx_g, x, pos, /*attn_mask=*/nullptr, m.vlm_blocks,
+        pg.sg.ctx, x, pos, /*attn_mask=*/nullptr, m.vlm_blocks,
         m.vlm_final_norm_w, m.vlm_hidden, m.vlm_n_heads,
         m.vlm_n_kv_heads, m.vlm_head_dim, prefix_len, m.rms_norm_eps,
         m.rope_freq_base, &out_keys, &out_values);
     if (final_out == nullptr) {
-      ggml_free(ctx_g);
       return false;
     }
-    struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 65536, false);
-    ggml_build_forward_expand(gf, final_out);
+    ggml_build_forward_expand(pg.sg.gf, final_out);
     for (auto* k_t : out_keys) {
-      ggml_build_forward_expand(gf, k_t);
+      ggml_build_forward_expand(pg.sg.gf, k_t);
     }
     for (auto* v_t : out_values) {
-      ggml_build_forward_expand(gf, v_t);
+      ggml_build_forward_expand(pg.sg.gf, v_t);
     }
-    ggml_gallocr_t allocr = ggml_gallocr_new(
-        ggml_backend_get_default_buffer_type(m.backend));
-    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
-      if (allocr != nullptr) {
-        ggml_gallocr_free(allocr);
-      }
-      ggml_free(ctx_g);
+    const bool ok = m.has_gpu
+        ? pi05_alloc_staged_sched(pg.sg, m.backend, m.backend_cpu)
+        : pi05_alloc_staged_simple(pg.sg, m.backend_cpu);
+    if (!ok) {
       return false;
     }
     std::vector<int32_t> pos_data(prefix_len);
@@ -1251,9 +1332,7 @@ static bool pi05_inference(
                             prefix.size() * sizeof(float));
     ggml_backend_tensor_set(pos, pos_data.data(), 0,
                             pos_data.size() * sizeof(int32_t));
-    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
-      ggml_gallocr_free(allocr);
-      ggml_free(ctx_g);
+    if (!pi05_compute_staged(pg.sg, m.backend)) {
       return false;
     }
     for (int L = 0; L < m.vlm_n_layers; ++L) {
@@ -1262,8 +1341,6 @@ static bool pi05_inference(
       ggml_backend_tensor_get(out_values[L], v_cache[L].data(), 0,
                               per_layer_kv * sizeof(float));
     }
-    ggml_gallocr_free(allocr);
-    ggml_free(ctx_g);
   }
   const auto t_prefill_end = std::chrono::steady_clock::now();
 
@@ -1285,62 +1362,56 @@ static bool pi05_inference(
     pi05_compute_time_sincos(t, m.cond_dim, m.min_period, m.max_period,
                              sincos_buf.data());
 
-    const size_t ctx_mem = size_t{96} * 1024 * 1024;
-    std::vector<uint8_t> mem_buf(ctx_mem);
-    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
-    struct ggml_context* ctx_g = ggml_init(gp);
-    if (ctx_g == nullptr) {
+    pi05_staged_guard og;
+    og.sg = pi05_build_staged(size_t{96} * 1024 * 1024, 32768);
+    if (og.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* x_t_t = ggml_new_tensor_2d(
-        ctx_g, GGML_TYPE_F32, m.action_dim, m.action_horizon);
+        og.sg.ctx, GGML_TYPE_F32, m.action_dim, m.action_horizon);
     struct ggml_tensor* sincos_t =
-        ggml_new_tensor_1d(ctx_g, GGML_TYPE_F32, m.cond_dim);
+        ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, m.cond_dim);
     struct ggml_tensor* act_pos_t =
-        ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, m.action_horizon);
+        ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_I32, m.action_horizon);
     std::vector<struct ggml_tensor*> cached_k_t(m.expert_n_layers);
     std::vector<struct ggml_tensor*> cached_v_t(m.expert_n_layers);
     for (int L = 0; L < m.expert_n_layers; ++L) {
       cached_k_t[L] = ggml_new_tensor_3d(
-          ctx_g, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
+          og.sg.ctx, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
           m.expert_n_kv_heads);
       cached_v_t[L] = ggml_new_tensor_3d(
-          ctx_g, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
+          og.sg.ctx, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
           m.expert_n_kv_heads);
     }
 
     struct ggml_tensor* cond = pi05_build_time_mlp_graph(
-        ctx_g, sincos_t, m.time_mlp_in_w, m.time_mlp_in_b,
+        og.sg.ctx, sincos_t, m.time_mlp_in_w, m.time_mlp_in_b,
         m.time_mlp_out_w, m.time_mlp_out_b);
 
     struct ggml_tensor* x_exp_t =
-        ggml_mul_mat(ctx_g, m.action_in_w, x_t_t);
+        ggml_mul_mat(og.sg.ctx, m.action_in_w, x_t_t);
     x_exp_t = ggml_add(
-        ctx_g, x_exp_t, ggml_cast(ctx_g, m.action_in_b, GGML_TYPE_F32));
+        og.sg.ctx, x_exp_t,
+        ggml_cast(og.sg.ctx, m.action_in_b, GGML_TYPE_F32));
 
     auto outs = pi05_build_expert_ode_step_graph(
-        ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
+        og.sg.ctx, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
         m.expert_blocks, m.expert_final_norm_ada_w,
         m.expert_final_norm_ada_b, m.action_out_w, m.action_out_b,
         m.expert_hidden, m.expert_n_heads, m.expert_n_kv_heads,
         m.expert_head_dim, prefix_len, m.action_horizon,
         m.rms_norm_eps, m.rope_freq_base);
     if (outs.v_t == nullptr) {
-      ggml_free(ctx_g);
       return false;
     }
     struct ggml_tensor* x_next =
-        pi05_build_euler_step_graph(ctx_g, x_t_t, outs.v_t, dt);
-    struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 32768, false);
-    ggml_build_forward_expand(gf, x_next);
+        pi05_build_euler_step_graph(og.sg.ctx, x_t_t, outs.v_t, dt);
+    ggml_build_forward_expand(og.sg.gf, x_next);
 
-    ggml_gallocr_t allocr = ggml_gallocr_new(
-        ggml_backend_get_default_buffer_type(m.backend));
-    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
-      if (allocr != nullptr) {
-        ggml_gallocr_free(allocr);
-      }
-      ggml_free(ctx_g);
+    const bool ok = m.has_gpu
+        ? pi05_alloc_staged_sched(og.sg, m.backend, m.backend_cpu)
+        : pi05_alloc_staged_simple(og.sg, m.backend_cpu);
+    if (!ok) {
       return false;
     }
     ggml_backend_tensor_set(x_t_t, x_t.data(), 0,
@@ -1355,16 +1426,12 @@ static bool pi05_inference(
       ggml_backend_tensor_set(cached_v_t[L], v_cache[L].data(), 0,
                               v_cache[L].size() * sizeof(float));
     }
-    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
-      ggml_gallocr_free(allocr);
-      ggml_free(ctx_g);
+    if (!pi05_compute_staged(og.sg, m.backend)) {
       return false;
     }
     ggml_backend_tensor_get(x_next, x_next_buf.data(), 0,
                             x_next_buf.size() * sizeof(float));
     std::swap(x_t, x_next_buf);
-    ggml_gallocr_free(allocr);
-    ggml_free(ctx_g);
   }
   const auto t_ode_end = std::chrono::steady_clock::now();
 

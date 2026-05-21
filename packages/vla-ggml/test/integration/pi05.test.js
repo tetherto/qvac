@@ -728,22 +728,14 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
   // Run each backend in the same Bare process so the GGUF stays mmap'd
   // and the prebuilt addon only loads once. Mirrors the smolvla pattern
   // (addon.test.js loops auto + cpu). `auto` picks Metal/Vulkan/etc.
-  // when available; `cpu` forces the baseline.
+  // when available; `cpu` forces the baseline. The dual perf-report
+  // rows let CI compare backends without scheduling two runs.
   //
-  // Note (2026-05-21): pi05.cpp::pi05_load_model hard-codes CPU
-  // regardless of the requested backend — GPU paths are a Phase-6
-  // follow-up (see plan §6). On runners where `auto` falls through to
-  // CPU we skip the explicit `cpu` iteration so the perf-report doesn't
-  // carry two identical rows. Once GPU lands, the loop will produce
-  // two distinct rows naturally.
-  let autoResolvedTo = null
+  // On runners with no GPU device, `auto` falls through to cpu and the
+  // two rows naturally collapse (same numbers) — we still emit both for
+  // schema consistency.
   for (const backend of ['auto', 'cpu']) {
-    if (backend === 'cpu' && autoResolvedTo === 'cpu') {
-      t.comment('skipping cpu iteration: auto already resolved to cpu ' +
-        '(pi05.cpp GPU backends not yet wired — plan §6)')
-      continue
-    }
-    autoResolvedTo = await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
+    await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
   }
 })
 
