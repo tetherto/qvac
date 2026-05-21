@@ -699,6 +699,21 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
 }
 
 test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 1200000 }, async (t) => {
+  // Mobile is skipped pending Phase-6 follow-up. Today the pi05 GGUF is
+  // ~3.9 GB (q_aggressive) and the only backend on Android (Adreno
+  // filtered) / iOS-cellular profile is CPU — that combination exceeds
+  // the WebDriverIO test-app's ~30-min PASS/FAIL polling window. Even
+  // smolvla loses its PASS report when this test runs alongside it
+  // (single shared APK; the test driver's "no such element" loop fires
+  // for both tests once the bare process gets wedged on the pi05 path).
+  // Bringing pi05 to mobile needs: (a) a smaller mobile-specific quant
+  // variant uploaded to S3, and (b) a higher wdio timeout in the test
+  // framework. Both are non-trivial; tracking as a Phase-6 item.
+  if (_isMobile) {
+    t.comment('skipping pi05 mobile test — Phase-6 follow-up ' +
+      '(needs smaller mobile quant + wdio timeout bump)')
+    return
+  }
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
@@ -778,6 +793,10 @@ test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
 })
 
 test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000 }, async (t) => {
+  if (_isMobile) {
+    t.comment('skipping pi05 mobile test — Phase-6 follow-up (see above)')
+    return
+  }
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
