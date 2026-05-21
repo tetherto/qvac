@@ -157,18 +157,6 @@ export function extractBarePackHeader(packed: string): BarePackHeader {
 
 const NODE_MODULES_RE = /\/node_modules\/(@[^/]+\/[^/]+|[^/]+)(?=\/)/g;
 
-export function extractPackageNamesFromResolutions(
-  resolutions: Record<string, unknown>,
-): Set<string> {
-  const names = new Set<string>();
-  for (const key of Object.keys(resolutions)) {
-    for (const match of key.matchAll(NODE_MODULES_RE)) {
-      if (match[1]) names.add(match[1]);
-    }
-  }
-  return names;
-}
-
 export function buildNestedPathIndex(
   resolutions: Record<string, unknown>,
   projectRoot: string,
@@ -209,16 +197,10 @@ export async function generateAddonsManifest(
   const header = extractBarePackHeader(packed);
   const resolutions = header.resolutions ?? {};
 
-  const packageNames = extractPackageNamesFromResolutions(resolutions);
-  const nestedPaths = buildNestedPathIndex(resolutions, projectRoot);
+  const pathsByPackage = buildNestedPathIndex(resolutions, projectRoot);
 
   const addons: string[] = [];
-  for (const pkgName of packageNames) {
-    const candidates = [
-      path.join(projectRoot, "node_modules", pkgName, "package.json"),
-      ...(nestedPaths.get(pkgName) ?? []),
-    ];
-
+  for (const [pkgName, candidates] of pathsByPackage) {
     let pkgJson: { addon?: boolean } | null = null;
     for (const candidate of candidates) {
       try {
@@ -255,7 +237,7 @@ export async function generateAddonsManifest(
   const manifestPath = path.join(outputDir, "addons.manifest.json");
   await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 
-  logger.info(`   Found ${packageNames.size} packages in bundle graph`);
+  logger.info(`   Found ${pathsByPackage.size} packages in bundle graph`);
   logger.info(
     `   Identified ${addons.length} native addons: ${addons.join(", ") || "(none)"}`,
   );

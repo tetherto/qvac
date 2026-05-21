@@ -4,62 +4,8 @@ import path from 'node:path'
 import {
   buildNestedPathIndex,
   extractPackedString,
-  extractBarePackHeader,
-  extractPackageNamesFromResolutions
+  extractBarePackHeader
 } from "@/commands/bundle/manifest";
-
-describe('extractPackageNamesFromResolutions', () => {
-  it('captures both parent and nested packages', () => {
-    const names = extractPackageNamesFromResolutions({
-      '/node_modules/@qvac/sdk/node_modules/bare-abort/binding.js': {}
-    })
-    assert.ok(names.has('@qvac/sdk'))
-    assert.ok(names.has('bare-abort'))
-    assert.equal(names.size, 2)
-  })
-
-  it('captures scoped nested packages', () => {
-    const names = extractPackageNamesFromResolutions({
-      '/node_modules/@qvac/sdk/node_modules/@qvac/llm-llamacpp/index.js': {}
-    })
-    assert.deepEqual([...names].sort(), ['@qvac/llm-llamacpp', '@qvac/sdk'])
-  })
-
-  it('captures single-level packages', () => {
-    const names = extractPackageNamesFromResolutions({
-      '/node_modules/mqtt/dist/mqtt.js': {}
-    })
-    assert.deepEqual([...names], ['mqtt'])
-  })
-
-  it('captures three-level nesting', () => {
-    const names = extractPackageNamesFromResolutions({
-      '/node_modules/@qvac/sdk/node_modules/bare-fs/node_modules/bare-stream/index.js': {}
-    })
-    assert.deepEqual([...names].sort(), ['@qvac/sdk', 'bare-fs', 'bare-stream'])
-  })
-
-  it('ignores paths without node_modules', () => {
-    const names = extractPackageNamesFromResolutions({
-      '/src/utils/helper.js': {}
-    })
-    assert.equal(names.size, 0)
-  })
-
-  it('deduplicates across multiple resolution keys', () => {
-    const names = extractPackageNamesFromResolutions({
-      '/node_modules/@qvac/sdk/node_modules/bare-abort/binding.js': {},
-      '/node_modules/@qvac/sdk/node_modules/bare-abort/index.js': {},
-      '/node_modules/@qvac/sdk/node_modules/bare-os/binding.js': {},
-      '/node_modules/@qvac/sdk/dist/constants/audio.js': {},
-      '/node_modules/mqtt/dist/mqtt.js': {}
-    })
-    assert.deepEqual(
-      [...names].sort(),
-      ['@qvac/sdk', 'bare-abort', 'bare-os', 'mqtt']
-    )
-  })
-})
 
 describe('extractPackedString', () => {
   it('extracts double-quoted string', () => {
