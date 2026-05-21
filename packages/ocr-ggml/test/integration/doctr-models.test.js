@@ -130,4 +130,3 @@ test('DocTR recognizerBatchSize - batch=1 vs batch=16 both produce valid output'
   assertExpectedWords(t, textsBatch16, ENGLISH_EXPECTED_WORDS, '[batch=16]')
   t.pass('recognizerBatchSize does not affect output accuracy')
 })
-
