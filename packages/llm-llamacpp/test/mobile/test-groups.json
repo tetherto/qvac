@@ -35,25 +35,25 @@
       "runBitnetTest",
       "runCacheStateMachineTest",
       "runConfigParametersTest",
-      "runToolsCompactTest",
       "runFinetuningPauseResumeTest",
       "runGenerationParamsTest",
-      "runGrammarTest"
+      "runGrammarTest",
+      "runMultiInstanceTest",
+      "runQuantizedKvcacheTest",
+      "runQwen35Test",
+      "runReasoningTest",
+      "runToolsCompactTest",
+      "runTurboquantTest",
+      "runUtf8OutputTest"
     ],
     "groupB": [
-      "runQwen35Test",
       "runGemma4Test",
       "runModelLoadingTest",
       "runMultiGpuTest",
-      "runMultiInstanceTest",
       "runOcrLightonTest",
       "runOcrPaddleTest",
-      "runReasoningTest",
       "runSlidingContextTest",
-      "runToolCallingTest",
-      "runTurboquantTest",
-      "runUtf8OutputTest",
-      "runQuantizedKvcacheTest"
+      "runToolCallingTest"
     ],
     "groupImagesPerf": [
       "runImageElephantTest",
