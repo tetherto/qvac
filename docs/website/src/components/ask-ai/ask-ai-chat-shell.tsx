@@ -179,12 +179,14 @@ export function AskAIChatShell() {
   return (
     <>
       {/* Backdrop. Blocks page interaction whenever the modal is
-          open. Clicking it closes the modal. */}
+          open. Clicking it closes the modal. A very light blur +
+          subtle fill is enough to telegraph "modal is active"
+          without smearing the underlying page content. */}
       <div
         data-ask-ai-backdrop=""
         aria-hidden="true"
         className={cn(
-          'fixed inset-0 z-40 bg-fd-background/50 backdrop-blur-sm transition-opacity duration-200',
+          'fixed inset-0 z-40 bg-fd-background/35 backdrop-blur-[1.5px] transition-opacity duration-300',
           isModalOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
         onClick={askAI.closeModal}
@@ -192,7 +194,16 @@ export function AskAIChatShell() {
 
       {/* The shell container. Same DOM node across all three states;
           only the geometry / chrome visibility changes. Input is the
-          LAST child so its vertical position never shifts. */}
+          LAST child so its vertical position never shifts.
+          IMPORTANT: closed state uses a DEFINITE height (`h-14`,
+          matching the form row) - NOT `h-auto`. CSS cannot
+          interpolate between `auto` and a fixed length, so an
+          `auto -> fixed` transition would make the shell snap to
+          full size and only the inner header would animate, giving
+          a top-down "content appearing" feel. With both ends
+          definite the shell smoothly grows from `h-14` upward
+          (bottom-anchored at `bottom-3`), so the panel reads as
+          rolling up from the bottom edge. */}
       <div
         data-ask-ai-shell=""
         data-modal-state={askAI.modalState}
@@ -203,7 +214,7 @@ export function AskAIChatShell() {
         inert={!isModalOpen && barChromeHidden ? true : undefined}
         className={cn(
           'fixed z-50 flex flex-col overflow-hidden rounded-2xl border bg-fd-popover text-fd-popover-foreground shadow-2xl',
-          'transition-[height,inset,opacity,transform] duration-200 ease-out',
+          'transition-[height,inset,opacity,transform] duration-300 ease-out',
           // Geometry per state. Width is the same in `closed` and
           // `open` (the bar and modal align edge-to-edge - that's
           // the "bottom bar same width as modal" rule). `expanded`
@@ -216,7 +227,7 @@ export function AskAIChatShell() {
                 'w-[calc(100%-1rem)] sm:w-[min(100%-1.5rem,var(--fd-page-width,900px))]',
                 askAI.modalState === 'open'
                   ? 'h-[min(85vh,720px)] max-md:h-[calc(100vh-1rem)] max-md:inset-x-2 max-md:bottom-2 max-md:top-2 max-md:w-auto'
-                  : 'h-auto',
+                  : 'h-14',
               ),
           // Fade-out for page bottom (closed state only). The modal
           // open path always has full opacity.
@@ -227,10 +238,11 @@ export function AskAIChatShell() {
       >
         {/* Header. Visible only when the modal is open or expanded.
             Sized 0 in `closed` so the container collapses to just
-            the input row without animating a jump. */}
+            the input row without animating a jump. Duration synced
+            to the shell so the upward "roll" reads as one motion. */}
         <header
           className={cn(
-            'flex items-center justify-between border-b border-fd-border bg-fd-popover px-3 py-2 transition-[height,opacity,padding] duration-200',
+            'flex items-center justify-between border-b border-fd-border bg-fd-popover px-3 py-2 transition-[height,opacity,padding] duration-300',
             isModalOpen
               ? 'h-10 opacity-100'
               : 'h-0 overflow-hidden border-b-0 p-0 opacity-0',
@@ -290,7 +302,7 @@ export function AskAIChatShell() {
             of scrolling. */}
         <div
           className={cn(
-            'flex min-h-0 flex-col transition-[flex,opacity] duration-200',
+            'flex min-h-0 flex-col transition-[flex,opacity] duration-300',
             isModalOpen ? 'flex-1 opacity-100' : 'h-0 flex-none overflow-hidden opacity-0',
           )}
         >
