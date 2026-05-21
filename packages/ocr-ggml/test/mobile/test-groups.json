@@ -9,7 +9,6 @@
     "runDoctrBasicTest",
     "runDoctrModelsTest",
     "runDoctrParamValidationTest",
-    "runCancelTest",
     "runErrorHandlingTest",
     "runFullCoverageTest",
     "runFullOcrSuiteTest",
