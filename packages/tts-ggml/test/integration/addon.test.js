@@ -5,7 +5,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const fs = require('bare-fs')
 
-const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit, runChatterboxStreaming } = require('../utils/runChatterboxTTS')
+const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit, runChatterboxStreaming, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxModels, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 
@@ -201,11 +201,15 @@ test('Chatterbox TTS (ggml): outputSampleRate option is accepted (pass-through f
 
   // Native output is always 24 kHz for Chatterbox; outputSampleRate resampling
   // is reserved for the persistent-engine milestone.  This test just verifies
-  // the option flows end-to-end without errors.
+  // the option flows end-to-end without errors.  Reference audio routed
+  // through `resolveRefWavPath` so the mobile-asset path (stage-copied
+  // into `Library/Caches/jfk.wav` by the test runner) is preferred over
+  // the in-bundle `test/reference-audio/jfk.wav` that `__dirname` would
+  // resolve to (the latter is not readable from native code on iOS).
   const TTSGgml = require('@qvac/tts-ggml')
   const model = new TTSGgml({
     files: { modelDir: download.targetDir },
-    referenceAudio: path.join(__dirname, '..', 'reference-audio', 'jfk.wav'),
+    referenceAudio: resolveRefWavPath({}),
     config: { language: 'en', outputSampleRate: 16000, ...(forceNoGpu ? { useGPU: false } : {}) },
     opts: { stats: true }
   })
@@ -241,11 +245,13 @@ test('Chatterbox TTS (ggml): native C++ chunk streaming via streamChunkTokens', 
   // streamChunkTokens > 0 activates the native Engine chunked S3Gen+HiFT
   // loop.  The addon publishes each chunk's PCM via the outputQueue so
   // every `onUpdate` carries a distinct chunk of audio rather than one
-  // concatenated final result.
+  // concatenated final result.  Reference audio via `resolveRefWavPath`
+  // (see the outputSampleRate test above for the mobile-asset
+  // rationale).
   const TTSGgml = require('@qvac/tts-ggml')
   const model = new TTSGgml({
     files: { modelDir: download.targetDir },
-    referenceAudio: path.join(__dirname, '..', 'reference-audio', 'jfk.wav'),
+    referenceAudio: resolveRefWavPath({}),
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
