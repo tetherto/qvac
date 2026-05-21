@@ -79,7 +79,7 @@ export function AskAISearchToggleLarge() {
   return (
     <div className="flex w-full items-center gap-2">
       <LargeSearchTrigger />
-      <AskAIButton variant="header" hideShortcut className="font-normal" />
+      <AskAIButton variant="header" className="font-normal" />
     </div>
   );
 }
