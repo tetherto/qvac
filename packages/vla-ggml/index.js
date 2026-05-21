@@ -187,6 +187,12 @@ class VlaModel {
     this._connectNativeLogger()
     const ggufPath = pickPrimaryGgufPath(this._files)
     if (!fs.existsSync(ggufPath)) {
+      // _connectNativeLogger has already registered a JS callback with
+      // the native side; without unregistering, that callback pins the
+      // Bare event loop and prevents the process from exiting. Release
+      // before throwing so a `new VlaModel(...).load()` against a
+      // non-existent file leaves no event-loop references behind.
+      this._releaseNativeLogger()
       throw new QvacErrorAddonVla({ code: ERR_CODES.MODEL_NOT_FOUND, adds: ggufPath })
     }
     try {
@@ -214,6 +220,8 @@ class VlaModel {
         try { binding.destroyInstance(this._handle) } catch (_) {}
         this._handle = null
       }
+      // Same logger-leak guard as the missing-file path above.
+      this._releaseNativeLogger()
       throw new QvacErrorAddonVla({ code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS, adds: loadError.message, cause: loadError })
     }
     this.logger.info('Model load completed successfully')

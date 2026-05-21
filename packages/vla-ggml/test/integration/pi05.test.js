@@ -127,10 +127,10 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
     allImages.subarray(2 * perCam, 3 * perCam)
   ]
 
-  const tokens = fixture.get('fixture.tokens')           // Int32Array(200)
-  const mask = fixture.get('fixture.mask')               // Uint8Array(200) (bool-packed)
-  const noise = fixture.get('fixture.noise')             // Float32Array(50*32)
-  const expected = activations.get('ode.actions_final')  // Float32Array(50*32)
+  const tokens = fixture.get('fixture.tokens') // Int32Array(200)
+  const mask = fixture.get('fixture.mask') // Uint8Array(200) (bool-packed)
+  const noise = fixture.get('fixture.noise') // Float32Array(50*32)
+  const expected = activations.get('ode.actions_final') // Float32Array(50*32)
 
   t.is(tokens.length, 200, 'tokens length')
   t.is(mask.length, 200, 'mask length')
