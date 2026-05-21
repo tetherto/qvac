@@ -190,6 +190,7 @@
     "@qvac/transcription-whispercpp": "^0.7.0",
     "@qvac/translation-nmtcpp": "^3.0.0",
     "@qvac/tts-onnx": "^0.9.0",
+    "bare-pack": "^2.0.1",
     "fast-safe-stringify": "2.1.1",
     "semver": "^7.8.0",
     "tar-stream": "^3.1.8",
@@ -233,7 +234,6 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "bare-pack": "^2.0.1",
     "bare-abort-controller": "^1.0.0",
     "bare-buffer": "^3.4.2",
     "bare-crypto": "^1.13.4",
@@ -264,9 +264,6 @@
     "react-native-bare-kit": "^0.14.0"
   },
   "peerDependenciesMeta": {
-    "bare-pack": {
-      "optional": true
-    },
     "@modelcontextprotocol/sdk": {
       "optional": true
     },
