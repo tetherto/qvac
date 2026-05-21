@@ -123,7 +123,7 @@ export async function* textToSpeechStream(
 
   if (!hasRunStreaming(model)) {
     throw new TextToSpeechStreamFailedError(
-      "textToSpeechStream requires an ONNX TTS model with runStreaming",
+      "textToSpeechStream requires a TTS model with runStreaming (ggml-tts engine)",
     );
   }
 

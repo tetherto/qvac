@@ -5,9 +5,6 @@
  * 1. Generate `qvac/worker.pear.entry.mjs` with selected plugins
  * 2. Persist `pear.stage.entrypoints` to package.json for routing
  *
- * Note: `qvac verify bundle` is not wired here yet — run it manually
- * (locally and/or in CI) before `pear stage` / `pear run`.
- *
  * @example package.json configuration
  * ```json
  * {
@@ -55,7 +52,7 @@ const BUILTIN_PLUGINS = [
   "@qvac/sdk/llamacpp-embedding/plugin",
   "@qvac/sdk/whispercpp-transcription/plugin",
   "@qvac/sdk/nmtcpp-translation/plugin",
-  "@qvac/sdk/onnx-tts/plugin",
+  "@qvac/sdk/ggml-tts/plugin",
   "@qvac/sdk/onnx-ocr/plugin",
   "@qvac/sdk/sdcpp-generation/plugin",
 ];
@@ -65,7 +62,7 @@ const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   "llamacpp-embedding": "embeddingsPlugin",
   "whispercpp-transcription": "whisperPlugin",
   "nmtcpp-translation": "nmtPlugin",
-  "onnx-tts": "ttsPlugin",
+  "ggml-tts": "ttsPlugin",
   "onnx-ocr": "ocrPlugin",
   "sdcpp-generation": "diffusionPlugin",
 };

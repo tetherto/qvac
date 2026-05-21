@@ -1,6 +1,5 @@
-import path from "bare-path";
-import ttsAddonLogging from "@qvac/tts-onnx/addonLogging";
-import ONNXTTS from "@qvac/tts-onnx";
+import ttsAddonLogging from "@qvac/tts-ggml/addonLogging";
+import TTSGgml from "@qvac/tts-ggml";
 import {
   definePlugin,
   defineHandler,
@@ -22,71 +21,74 @@ import {
   type TtsRuntimeConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import {
-  TtsArtifactsRequiredError,
-  TtsReferenceAudioRequiredError,
-} from "@/utils/errors-server";
-import { textToSpeech } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech";
-import { textToSpeechStream } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech-stream";
+import { TtsArtifactsRequiredError } from "@/utils/errors-server";
+import { textToSpeech } from "@/server/bare/plugins/ggml-tts/ops/text-to-speech";
+import { textToSpeechStream } from "@/server/bare/plugins/ggml-tts/ops/text-to-speech-stream";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
-import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-helper";
+
+async function resolveOptionalSrc(
+  ctx: ResolveContext,
+  src: unknown,
+): Promise<string | undefined> {
+  if (src == null) return undefined;
+  return ctx.resolveModelPath(src as Parameters<typeof ctx.resolveModelPath>[0]);
+}
 
 async function resolveChatterboxConfig(
   config: TtsChatterboxConfig,
   ctx: ResolveContext,
 ) {
   const {
-    ttsTokenizerSrc,
-    ttsSpeechEncoderSrc,
-    ttsEmbedTokensSrc,
-    ttsConditionalDecoderSrc,
-    ttsLanguageModelSrc,
+    ttsModelDirSrc,
+    ttsT3ModelSrc,
+    ttsS3genModelSrc,
     referenceAudioSrc,
+    voicesDirSrc,
     language,
+    nGpuLayers,
+    useGPU,
+    seed,
+    streamChunkTokens,
+    streamFirstChunkTokens,
+    cfmSteps,
+    outputSampleRate,
   } = config;
 
-  if (
-    !ttsTokenizerSrc ||
-    !ttsSpeechEncoderSrc ||
-    !ttsEmbedTokensSrc ||
-    !ttsConditionalDecoderSrc ||
-    !ttsLanguageModelSrc
-  ) {
+  // Either a `modelDir` containing the GGUFs, or both `t3Model` + `s3gen` are
+  // required. The native engine derives turbo vs MTL from the file names
+  // present inside `modelDir`.
+  const hasExplicit = ttsT3ModelSrc != null && ttsS3genModelSrc != null;
+  if (!ttsModelDirSrc && !hasExplicit) {
     throw new TtsArtifactsRequiredError();
   }
-  if (!referenceAudioSrc) {
-    throw new TtsReferenceAudioRequiredError();
-  }
 
-  const resolve = ctx.resolveModelPath;
-  const [
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
-    referenceAudioPath,
-  ] = await Promise.all([
-    resolve(ttsTokenizerSrc),
-    resolve(ttsSpeechEncoderSrc),
-    resolve(ttsEmbedTokensSrc),
-    resolve(ttsConditionalDecoderSrc),
-    resolve(ttsLanguageModelSrc),
-    resolve(referenceAudioSrc),
-  ]);
+  const [modelDirPath, t3ModelPath, s3genModelPath, referenceAudioPath, voicesDirPath] =
+    await Promise.all([
+      resolveOptionalSrc(ctx, ttsModelDirSrc),
+      resolveOptionalSrc(ctx, ttsT3ModelSrc),
+      resolveOptionalSrc(ctx, ttsS3genModelSrc),
+      resolveOptionalSrc(ctx, referenceAudioSrc),
+      resolveOptionalSrc(ctx, voicesDirSrc),
+    ]);
 
   return {
     config: {
       ttsEngine: "chatterbox",
       language,
+      ...(nGpuLayers !== undefined ? { nGpuLayers } : {}),
+      ...(useGPU !== undefined ? { useGPU } : {}),
+      ...(seed !== undefined ? { seed } : {}),
+      ...(streamChunkTokens !== undefined ? { streamChunkTokens } : {}),
+      ...(streamFirstChunkTokens !== undefined ? { streamFirstChunkTokens } : {}),
+      ...(cfmSteps !== undefined ? { cfmSteps } : {}),
+      ...(outputSampleRate !== undefined ? { outputSampleRate } : {}),
     } as TtsChatterboxRuntimeConfig,
     artifacts: {
-      tokenizerPath,
-      speechEncoderPath,
-      embedTokensPath,
-      conditionalDecoderPath,
-      languageModelPath,
-      referenceAudioPath,
+      ...(modelDirPath ? { modelDirPath } : {}),
+      ...(t3ModelPath ? { t3ModelPath } : {}),
+      ...(s3genModelPath ? { s3genModelPath } : {}),
+      ...(referenceAudioPath ? { referenceAudioPath } : {}),
+      ...(voicesDirPath ? { voicesDirPath } : {}),
     },
   };
 }
@@ -96,66 +98,38 @@ async function resolveSupertonicConfig(
   ctx: ResolveContext,
 ) {
   const {
-    ttsTextEncoderSrc,
-    ttsDurationPredictorSrc,
-    ttsVectorEstimatorSrc,
-    ttsVocoderSrc,
-    ttsUnicodeIndexerSrc,
-    ttsTtsConfigSrc,
-    ttsVoiceStyleSrc,
+    ttsModelDirSrc,
+    ttsSupertonicModelSrc,
+    voiceName,
     ttsSpeed,
     ttsNumInferenceSteps,
-    ttsSupertonicMultilingual,
+    seed,
+    outputSampleRate,
     language,
   } = config;
 
-  if (
-    !ttsTextEncoderSrc ||
-    !ttsDurationPredictorSrc ||
-    !ttsVectorEstimatorSrc ||
-    !ttsVocoderSrc ||
-    !ttsUnicodeIndexerSrc ||
-    !ttsTtsConfigSrc ||
-    !ttsVoiceStyleSrc
-  ) {
+  if (!ttsModelDirSrc && !ttsSupertonicModelSrc) {
     throw new TtsArtifactsRequiredError();
   }
 
-  const resolve = ctx.resolveModelPath;
-  const [
-    textEncoderPath,
-    durationPredictorPath,
-    vectorEstimatorPath,
-    vocoderPath,
-    unicodeIndexerPath,
-    ttsConfigPath,
-    voiceStylePath,
-  ] = await Promise.all([
-    resolve(ttsTextEncoderSrc),
-    resolve(ttsDurationPredictorSrc),
-    resolve(ttsVectorEstimatorSrc),
-    resolve(ttsVocoderSrc),
-    resolve(ttsUnicodeIndexerSrc),
-    resolve(ttsTtsConfigSrc),
-    resolve(ttsVoiceStyleSrc),
+  const [modelDirPath, supertonicModelPath] = await Promise.all([
+    resolveOptionalSrc(ctx, ttsModelDirSrc),
+    resolveOptionalSrc(ctx, ttsSupertonicModelSrc),
   ]);
 
   return {
     config: {
       ttsEngine: "supertonic",
       language,
-      ttsSpeed,
-      ttsNumInferenceSteps,
-      ttsSupertonicMultilingual,
+      ...(ttsSpeed !== undefined ? { ttsSpeed } : {}),
+      ...(ttsNumInferenceSteps !== undefined ? { ttsNumInferenceSteps } : {}),
+      ...(voiceName !== undefined ? { voiceName } : {}),
+      ...(seed !== undefined ? { seed } : {}),
+      ...(outputSampleRate !== undefined ? { outputSampleRate } : {}),
     } as TtsSupertonicRuntimeConfig,
     artifacts: {
-      textEncoderPath,
-      durationPredictorPath,
-      vectorEstimatorPath,
-      vocoderPath,
-      unicodeIndexerPath,
-      ttsConfigPath,
-      voiceStylePath,
+      ...(modelDirPath ? { modelDirPath } : {}),
+      ...(supertonicModelPath ? { supertonicModelPath } : {}),
     },
   };
 }
@@ -165,44 +139,48 @@ function createChatterboxModel(
   config: TtsChatterboxRuntimeConfig,
   artifacts: Record<string, string | undefined>,
 ): PluginModelResult {
-  const tokenizerPath = artifacts["tokenizerPath"];
-  const speechEncoderPath = artifacts["speechEncoderPath"];
-  const embedTokensPath = artifacts["embedTokensPath"];
-  const conditionalDecoderPath = artifacts["conditionalDecoderPath"];
-  const languageModelPath = artifacts["languageModelPath"];
+  const modelDirPath = artifacts["modelDirPath"];
+  const t3ModelPath = artifacts["t3ModelPath"];
+  const s3genModelPath = artifacts["s3genModelPath"];
   const referenceAudioPath = artifacts["referenceAudioPath"];
+  const voicesDirPath = artifacts["voicesDirPath"];
 
-  if (
-    !tokenizerPath ||
-    !speechEncoderPath ||
-    !embedTokensPath ||
-    !conditionalDecoderPath ||
-    !languageModelPath
-  ) {
+  if (!modelDirPath && !(t3ModelPath && s3genModelPath)) {
     throw new TtsArtifactsRequiredError();
   }
-  if (!referenceAudioPath) {
-    throw new TtsReferenceAudioRequiredError();
-  }
 
-  const logger = createStreamLogger(modelId, ModelType.onnxTts);
-  registerAddonLogger(modelId, ModelType.onnxTts, logger);
-  const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
-  const model = new ONNXTTS({
+  const logger = createStreamLogger(modelId, ModelType.ggmlTts);
+  registerAddonLogger(modelId, ModelType.ggmlTts, logger);
+
+  const model = new TTSGgml({
     files: {
-      tokenizerPath,
-      speechEncoderPath,
-      embedTokensPath,
-      conditionalDecoderPath,
-      languageModelPath,
+      ...(modelDirPath ? { modelDir: modelDirPath } : {}),
+      ...(t3ModelPath ? { t3Model: t3ModelPath } : {}),
+      ...(s3genModelPath ? { s3genModel: s3genModelPath } : {}),
+      ...(voicesDirPath ? { voicesDir: voicesDirPath } : {}),
     },
     engine: "chatterbox",
-    config: { language: config.language ?? "en", useGPU: false },
-    referenceAudio,
+    config: {
+      language: config.language ?? "en",
+      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.outputSampleRate !== undefined
+        ? { outputSampleRate: config.outputSampleRate }
+        : {}),
+    },
+    ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
+    ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
+    ...(config.streamChunkTokens !== undefined
+      ? { streamChunkTokens: config.streamChunkTokens }
+      : {}),
+    ...(config.streamFirstChunkTokens !== undefined
+      ? { streamFirstChunkTokens: config.streamFirstChunkTokens }
+      : {}),
+    ...(config.cfmSteps !== undefined ? { cfmSteps: config.cfmSteps } : {}),
     logger,
     opts: { stats: true },
     exclusiveRun: true,
-  } as never);
+  });
   return { model };
 }
 
@@ -211,55 +189,45 @@ function createSupertonicModel(
   config: TtsSupertonicRuntimeConfig,
   artifacts: Record<string, string | undefined>,
 ): PluginModelResult {
-  const textEncoderPath = artifacts["textEncoderPath"];
-  const durationPredictorPath = artifacts["durationPredictorPath"];
-  const vectorEstimatorPath = artifacts["vectorEstimatorPath"];
-  const vocoderPath = artifacts["vocoderPath"];
-  const unicodeIndexerPath = artifacts["unicodeIndexerPath"];
-  const ttsConfigPath = artifacts["ttsConfigPath"];
-  const voiceStylePath = artifacts["voiceStylePath"];
+  const modelDirPath = artifacts["modelDirPath"];
+  const supertonicModelPath = artifacts["supertonicModelPath"];
 
-  if (
-    !textEncoderPath ||
-    !durationPredictorPath ||
-    !vectorEstimatorPath ||
-    !vocoderPath ||
-    !unicodeIndexerPath ||
-    !ttsConfigPath ||
-    !voiceStylePath
-  ) {
+  if (!modelDirPath && !supertonicModelPath) {
     throw new TtsArtifactsRequiredError();
   }
 
-  const logger = createStreamLogger(modelId, ModelType.onnxTts);
-  registerAddonLogger(modelId, ModelType.onnxTts, logger);
-  const voiceName = path.basename(voiceStylePath).replace(/\.json$/i, "") || "F1";
-  const model = new ONNXTTS({
+  const logger = createStreamLogger(modelId, ModelType.ggmlTts);
+  registerAddonLogger(modelId, ModelType.ggmlTts, logger);
+
+  const model = new TTSGgml({
     files: {
-      textEncoderPath,
-      durationPredictorPath,
-      vectorEstimatorPath,
-      vocoderPath,
-      unicodeIndexerPath,
-      ttsConfigPath,
-      voiceStyleJsonPath: voiceStylePath,
+      ...(modelDirPath ? { modelDir: modelDirPath } : {}),
+      ...(supertonicModelPath ? { supertonicModel: supertonicModelPath } : {}),
     },
     engine: "supertonic",
-    voiceName,
-    speed: config.ttsSpeed ?? 1,
-    numInferenceSteps: config.ttsNumInferenceSteps ?? 5,
-    supertonicMultilingual: config.ttsSupertonicMultilingual !== false,
-    config: { language: config.language ?? "en" },
+    config: {
+      language: config.language ?? "en",
+      useGPU: false,
+      ...(config.outputSampleRate !== undefined
+        ? { outputSampleRate: config.outputSampleRate }
+        : {}),
+    },
+    ...(config.voiceName !== undefined ? { voiceName: config.voiceName } : {}),
+    ...(config.ttsNumInferenceSteps !== undefined
+      ? { numInferenceSteps: config.ttsNumInferenceSteps }
+      : {}),
+    ...(config.ttsSpeed !== undefined ? { speed: config.ttsSpeed } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
     logger,
     opts: { stats: true },
     exclusiveRun: true,
-  } as never);
+  });
   return { model };
 }
 
 export const ttsPlugin = definePlugin({
-  modelType: ModelType.onnxTts,
-  displayName: "TTS (ONNX)",
+  modelType: ModelType.ggmlTts,
+  displayName: "TTS (GGML)",
   addonPackage: ADDON_TTS,
   loadConfigSchema: ttsConfigSchema,
   skipPrimaryModelPathValidation: true,
@@ -292,9 +260,6 @@ export const ttsPlugin = definePlugin({
       requestSchema: ttsRequestSchema,
       responseSchema: ttsResponseSchema,
       streaming: true,
-      // ONNX TTS does not expose a cancel surface — SDK falls back
-      // to soft-cancel.
-      cancel: { scope: "none" },
 
       handler: async function* (request) {
         const stream = textToSpeech(request);
@@ -335,9 +300,6 @@ export const ttsPlugin = definePlugin({
       responseSchema: textToSpeechStreamResponseSchema,
       streaming: true,
       duplex: true,
-      // ONNX TTS does not expose a cancel surface — SDK falls back
-      // to soft-cancel.
-      cancel: { scope: "none" },
 
       handler: async function* (request, inputStream) {
         const stream = textToSpeechStream(request, inputStream);
@@ -379,6 +341,6 @@ export const ttsPlugin = definePlugin({
 
   logging: {
     module: ttsAddonLogging,
-    namespace: ModelType.onnxTts,
+    namespace: ModelType.ggmlTts,
   },
 });

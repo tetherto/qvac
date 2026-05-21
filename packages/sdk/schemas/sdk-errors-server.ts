@@ -180,7 +180,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.TTS_ARTIFACTS_REQUIRED]: {
     name: "TTS_ARTIFACTS_REQUIRED",
     message:
-      "TTS (Chatterbox) requires ttsTokenizerSrc, ttsSpeechEncoderSrc, ttsEmbedTokensSrc, ttsConditionalDecoderSrc, and ttsLanguageModelSrc",
+      "TTS requires either ttsModelDirSrc or, for Chatterbox, both ttsT3ModelSrc and ttsS3genModelSrc, or, for Supertonic, ttsSupertonicModelSrc",
   },
   [SDK_SERVER_ERROR_CODES.TTS_REFERENCE_AUDIO_REQUIRED]: {
     name: "TTS_REFERENCE_AUDIO_REQUIRED",

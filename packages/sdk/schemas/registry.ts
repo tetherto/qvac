@@ -20,23 +20,30 @@ const modelRegistryEntryAddonSchema = z.enum([
 // Values reference ModelType.* directly to avoid string duplication.
 // The SDK resolves legacy engine names (e.g. @qvac/* package names) to canonical
 // form via schemas/engine-addon-map.ts.
+//
+// `"onnx-tts"` is the prior-canonical literal for TTS, kept here so registry
+// entries whose `registryPath` is still an ONNX `.onnx`/`_data` file remain
+// schema-valid. It is intentionally NOT aliased to `ggml-tts`: routing those
+// constants to the new GGML plugin would silently fail at native load (the
+// addon only consumes GGUF). Consumers who pick those constants get an
+// explicit "unknown engine"/"model type required" error instead of an opaque
+// C++ parse failure, which is what migration hygiene wants.
 export const modelRegistryEngineSchema = z.enum([
   ModelType.llamacppCompletion,
   ModelType.whispercppTranscription,
   ModelType.llamacppEmbedding,
   ModelType.nmtcppTranslation,
-  ModelType.onnxTts,
+  ModelType.ggmlTts,
   ModelType.onnxOcr,
   ModelType.parakeetTranscription,
   ModelType.sdcppGeneration,
   "onnx-vad",
+  "onnx-tts",
 ]);
 
 export const modelRegistryEntrySchema = z.object({
   name: z.string().describe("Catalog name of the model entry."),
-  registryPath: z
-    .string()
-    .describe("Registry-relative path to the model."),
+  registryPath: z.string().describe("Registry-relative path to the model."),
   registrySource: z
     .string()
     .describe("Registry source identifier, e.g. `huggingface`."),
@@ -67,9 +74,7 @@ export const modelRegistryEntrySchema = z.object({
   engine: modelRegistryEngineSchema.describe(
     "Canonical inference engine identifier.",
   ),
-  quantization: z
-    .string()
-    .describe("Quantization identifier, e.g. `Q4_K_M`."),
+  quantization: z.string().describe("Quantization identifier, e.g. `Q4_K_M`."),
   params: z
     .string()
     .describe("Parameter-count label for the model, e.g. `7B`."),

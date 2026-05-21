@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-Text-to-Speech uses [ONNX runtime](https://onnxruntime.ai) as inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio.
+Text-to-Speech uses the [GGML / `tts-cpp`](https://github.com/ggml-org/ggml) backend as inference engine, shipped via the `@qvac/tts-ggml` addon. Load any supported model using `modelType: "tts"` (alias for the canonical `"ggml-tts"`). Then, provide `text` as input (with `inputType: "text"`) to generate speech audio.
 
 `textToSpeech()` returns an object containing `buffer` and, when streaming is enabled, a `bufferStream` for incremental audio output.
 
@@ -21,7 +21,12 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ## Models
 
-You can load any [**Chatterbox**](https://www.resemble.ai/chatterbox/) or [**Supertonic**](https://supertonictts.com) model bundle compatible with ONNX Runtime. Required files: an `onnx/` directory with one or more `*.onnx` graphs (and optional `*.onnx_data`) plus the model assets required by the bundle (tokenizer/config files and voice assets such as `voices/*.bin` or a reference `*.wav`).
+You can load any [**Chatterbox**](https://www.resemble.ai/chatterbox/) or [**Supertonic**](https://supertonictts.com) model packaged as single-file GGUF for `tts-cpp`. The two supported engines have different `modelConfig` shapes:
+
+- **Chatterbox** (`ttsEngine: "chatterbox"`): provide a `ttsModelDirSrc` (a directory containing `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf`, or the multilingual `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` pair), or pass the two GGUFs explicitly via `ttsT3ModelSrc` + `ttsS3genModelSrc`. Optional: `referenceAudioSrc` (a path to a WAV for voice cloning), `voicesDirSrc` (baked voice tensors), `useGPU`, `nGpuLayers`, `seed`, `streamChunkTokens`, `streamFirstChunkTokens`, `cfmSteps`, `outputSampleRate`.
+- **Supertonic** (`ttsEngine: "supertonic"`): provide a `ttsModelDirSrc` (containing `supertonic.gguf`) or `ttsSupertonicModelSrc` (the single GGUF directly). Optional: `voiceName` (e.g. `"F1"`, `"M1"`), `ttsSpeed`, `ttsNumInferenceSteps`, `seed`, `outputSampleRate`. The Supertonic engine is CPU-only — `useGPU` / `nGpuLayers` are rejected at construction time.
+
+Native sentence streaming (`run({ streamOutput: true })` / `runStreaming(...)`) works for both engines; sub-sentence native chunking is Chatterbox-only.
 
 For models available as constants, see [SDK — Models](/introduction#models).
 

@@ -80,11 +80,10 @@ export interface DuplexPluginHandlerDefinition<
  * Built-in artifact keys:
  * - `projectionModelPath` - LLM multimodal projection model
  * - `vadModelPath` - Whisper voice activity detection model
- * - `tokenizerPath`, `speechEncoderPath`, `embedTokensPath`, `conditionalDecoderPath`, `languageModelPath` - TTS (Chatterbox) model files
- * - `referenceAudioPath` - TTS (Chatterbox) path to reference WAV file for voice cloning
- * - `tokenizerPath`, `textEncoderPath`, `latentDenoiserPath`, `voiceDecoderPath` - TTS (Supertonic) model files
- * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
- * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
+ * - `modelDirPath`, `t3ModelPath`, `s3genModelPath` - TTS (Chatterbox, GGML) GGUF model files
+ * - `referenceAudioPath` - TTS (Chatterbox, GGML) optional path to reference WAV for voice cloning
+ * - `voicesDirPath` - TTS (Chatterbox, GGML) optional directory of baked voice profiles
+ * - `supertonicModelPath` - TTS (Supertonic, GGML) GGUF model file
  * - `detectorModelPath` - OCR detector model
  *
  * Custom plugins can define their own artifact keys.
@@ -365,7 +364,7 @@ export const PLUGIN_NMT = "@qvac/sdk/nmtcpp-translation/plugin" as const;
  * Text-to-speech synthesis plugin (ONNX).
  * Provides: speech synthesis from text.
  */
-export const PLUGIN_TTS = "@qvac/sdk/onnx-tts/plugin" as const;
+export const PLUGIN_TTS = "@qvac/sdk/ggml-tts/plugin" as const;
 
 /**
  * Optical character recognition plugin (ONNX).
@@ -422,7 +421,7 @@ export const ADDON_PARAKEET = "@qvac/transcription-parakeet" as const;
 export const ADDON_NMT = "@qvac/translation-nmtcpp" as const;
 
 /** Native addon package for TTS (ONNX) */
-export const ADDON_TTS = "@qvac/tts-onnx" as const;
+export const ADDON_TTS = "@qvac/tts-ggml" as const;
 
 /** Native addon package for OCR (ONNX) */
 export const ADDON_OCR = "@qvac/ocr-onnx" as const;

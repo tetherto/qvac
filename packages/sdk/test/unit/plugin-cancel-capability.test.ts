@@ -175,7 +175,7 @@ bareTest(
       import("@/server/bare/plugins/whispercpp-transcription/plugin"),
       import("@/server/bare/plugins/parakeet-transcription/plugin"),
       import("@/server/bare/plugins/nmtcpp-translation/plugin"),
-      import("@/server/bare/plugins/onnx-tts/plugin"),
+      import("@/server/bare/plugins/ggml-tts/plugin"),
       import("@/server/bare/plugins/onnx-ocr/plugin"),
       import("@/server/bare/plugins/sdcpp-generation/plugin"),
     ]);

@@ -397,7 +397,7 @@ async function collectTtsBuffer(
 
 /**
  * Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
- * Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+ * Buffer should be a complete UTF-8 fragment. The worker forwards them to the TTS engine's `runStreaming`
  * (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
  * lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
  */

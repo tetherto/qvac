@@ -20,7 +20,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.whispercppTranscription]: "whisper",
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.nmtcppTranslation]: "nmt",
-  [ModelType.onnxTts]: "tts",
+  [ModelType.ggmlTts]: "tts",
   [ModelType.onnxOcr]: "ocr",
   [ModelType.sdcppGeneration]: "diffusion",
 };

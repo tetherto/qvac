@@ -31,16 +31,44 @@ export function extractModelName(registryPath: string): string {
   );
 }
 
+// Keeps the prior `tts` entries discoverable on the public surface even though
+// the new GGML plugin can't load them. Stamping them with `onnx-tts` (already
+// in `modelRegistryEngineSchema`) means consumers picking these constants see
+// an explicit "modelType invalid" error from `loadModel` schema validation
+// rather than an opaque C++ parse failure inside the GGML addon.
+function isDeadOnnxTtsEntry(
+  rawEngine: string,
+  canonicalEngine: string,
+  registryPath: string,
+): boolean {
+  if (canonicalEngine !== "ggml-tts") return false;
+  // Anything from the prior `tts-onnx` namespace is suspect; the new addon
+  // only knows how to load `.gguf` files.
+  const wasTtsLabel =
+    rawEngine === "@qvac/tts-onnx" ||
+    rawEngine === "@qvac/tts" ||
+    rawEngine === "tts" ||
+    rawEngine === "onnx-tts" ||
+    rawEngine === "ggml-tts" ||
+    rawEngine === "@qvac/tts-ggml";
+  if (!wasTtsLabel) return false;
+  return !registryPath.toLowerCase().endsWith(".gguf");
+}
+
 export function processRegistryModel(
   model: QVACModelEntry,
 ): ProcessedModel | null {
-  const engine = resolveCanonicalEngine(model.engine);
-  if (!engine) {
+  const resolved = resolveCanonicalEngine(model.engine);
+  if (!resolved) {
     console.warn(
       `⚠️  Skipping model with unknown engine "${model.engine}": ${model.path}`,
     );
     return null;
   }
+
+  const engine = isDeadOnnxTtsEntry(model.engine, resolved, model.path)
+    ? "onnx-tts"
+    : resolved;
 
   const filename = model.path.split("/").pop() || model.path;
   const blobBinding = model.blobBinding;
