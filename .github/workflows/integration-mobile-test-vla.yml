@@ -86,17 +86,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 2 platforms × 2 test groups = 4 jobs. Each (platform, test_group)
-        # row gets its own Device Farm session with its own ~30-min Mocha
-        # timeout. With smolvla GGUF ~1.9 GB and pi05 GGUF ~3.9 GB on the
-        # cross-region (eu-central-1 → us-west-2) download path, the
-        # combined-session timeout from before was getting blown past on
-        # smolvla alone. Same split pattern as llm-llamacpp's mobile
-        # workflow (packages/llm-llamacpp/.../test/mobile/test-groups.json).
+        # Matrix split by (platform × test_group) — each row gets its
+        # own Device Farm session with its own ~30-min Mocha timeout.
+        # Smaller in YAML than the llm-llamacpp in-job multi-spec
+        # pattern but more expensive in CI (each row rebuilds the APK).
+        # Refactor to in-job multi-spec is a follow-up; this matrix
+        # was the minimal-diff path to splitting smolvla's and pi05's
+        # download budgets onto separate sessions.
         #
-        # `test_pattern` is the regex pushed to the device's testFilter.txt;
-        # integration-runtime.cjs's __shouldRunTest() reads it and skips
-        # any run*Test wrapper whose name doesn't match.
+        # `test_pattern` is the regex pushed to the device's
+        # testFilter.txt; integration-runtime.cjs's __shouldRunTest()
+        # reads it and skips any run*Test wrapper whose name doesn't
+        # match.
         include:
           - platform: Android
             test_group: smolvla

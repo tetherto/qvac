@@ -110,7 +110,16 @@ def main() -> int:
         ).decode("ascii"),
         "tokens": np.asarray(fx["fixture.tokens"], dtype=np.int32).tolist(),
         "mask":   np.asarray(fx["fixture.mask"],   dtype=np.uint8).tolist(),
-        "noise":  np.asarray(fx["fixture.noise"],  dtype=np.float32).tolist(),
+        # noise is shape (50, 32) in the safetensors fixture — flatten
+        # to a 1-D 1600-element list so Float32Array.from(fixture.noise)
+        # in the JS loader produces the expected length. Without the
+        # reshape, .tolist() preserves the 2-D nesting; Float32Array
+        # then treats each inner row as a scalar coercion and yields 50
+        # NaNs, tripping the noise.length === 50*32 assertion in
+        # pi05.test.js (caught on the Android Device Farm run
+        # 26242250852 — Manual-69 logcat shows "actual: 50,
+        # expected: 1600").
+        "noise":  np.asarray(fx["fixture.noise"],  dtype=np.float32).reshape(-1).tolist(),
         # State exists in the fixture but pi05 ignores it (state is
         # tokenised into the prompt). Don't include it.
     }))
