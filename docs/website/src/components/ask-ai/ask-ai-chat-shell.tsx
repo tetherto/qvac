@@ -129,13 +129,19 @@ export function AskAIChatShell() {
 
   // -------------------------------------------------------------
   // Focus the input whenever the modal opens (from any trigger) so
-  // the user can type immediately.
+  // the user can type immediately. `preventScroll: true` is critical:
+  // without it the browser may scroll the document to bring the
+  // focused input into view, which - combined with the page-scroll
+  // lock - manifests as a one-frame visual jump of the input field
+  // mid-open animation.
   // -------------------------------------------------------------
   useEffect(() => {
     if (askAI.modalState === 'closed') return;
     // requestAnimationFrame so the transition has started and the
     // input is interactable.
-    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    const id = requestAnimationFrame(() =>
+      inputRef.current?.focus({ preventScroll: true }),
+    );
     return () => cancelAnimationFrame(id);
   }, [askAI.modalState]);
 
@@ -237,15 +243,20 @@ export function AskAIChatShell() {
         )}
       >
         {/* Header. Visible only when the modal is open or expanded.
-            Sized 0 in `closed` so the container collapses to just
-            the input row without animating a jump. Duration synced
-            to the shell so the upward "roll" reads as one motion. */}
+            Collapses to `h-0` when closed so the shell's `h-14`
+            geometry can fit the form alone (the form is anchored
+            with `mt-auto` below; the messages wrapper - always
+            `flex-1` - absorbs whatever space is left between the
+            header and the form). Both the header height and the
+            shell height animate over the same 300ms so the upward
+            roll-out reads as one motion, while the form's viewport
+            position stays invariant the whole time. */}
         <header
           className={cn(
-            'flex items-center justify-between border-b border-fd-border bg-fd-popover px-3 py-2 transition-[height,opacity,padding] duration-300',
+            'flex flex-none items-center justify-between border-b border-fd-border bg-fd-popover px-3 py-2 transition-[height,opacity,padding] duration-300',
             isModalOpen
               ? 'h-10 opacity-100'
-              : 'h-0 overflow-hidden border-b-0 p-0 opacity-0',
+              : 'pointer-events-none h-0 overflow-hidden border-b-0 p-0 opacity-0',
           )}
         >
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -292,34 +303,39 @@ export function AskAIChatShell() {
         </header>
 
         {/* Messages list. Owns its own scroll so the page behind the
-            modal never moves. Sized 0 when closed so the container
-            collapses cleanly to just the input row.
-            NOTE: This wrapper MUST be `flex flex-col` so the inner
-            `AskAIChatMessages` `flex-1 overflow-y-auto` actually
-            picks up a definite height to scroll within. Without
-            `flex flex-col` here the inner `flex-1` resolves to
-            content height and the list overflows the modal instead
-            of scrolling. */}
+            modal never moves. Always `flex-1` so it greedily takes
+            every pixel of vertical space the shell has left after
+            the header (above) and the form (below, `mt-auto`).
+            Only `opacity` is animated - the actual size change is
+            implicit: the shell's `h-14 -> h-[720]` height transition
+            grows the available space, and `flex-1` follows.
+            Toggling `flex-none -> flex-1` (the previous approach)
+            caused a one-frame layout reflow that visibly nudged the
+            form mid-animation. NOTE: This wrapper MUST be
+            `flex flex-col` so the inner `AskAIChatMessages`
+            `flex-1 overflow-y-auto` picks up a definite height. */}
         <div
           className={cn(
-            'flex min-h-0 flex-col transition-[flex,opacity] duration-300',
-            isModalOpen ? 'flex-1 opacity-100' : 'h-0 flex-none overflow-hidden opacity-0',
+            'flex min-h-0 flex-1 flex-col transition-opacity duration-300',
+            isModalOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
         >
           <AskAIChatMessages messages={chat.messages} isStreaming={chat.isStreaming} />
         </div>
 
         {/* Input row. ALWAYS the last child of the container, in
-            every state, so it sits at the same vertical position
-            on screen whether the modal is open or closed. The
-            field itself is wrapped in a pill so it reads as a
-            proper text input rather than naked text on the popover
+            every state. `mt-auto` + `flex-none` pin it to the
+            shell's bottom edge so its viewport position is
+            invariant across all three states - the shell may grow
+            or shrink upward, but the form never moves. The field
+            itself is wrapped in a pill so it reads as a proper
+            text input rather than naked text on the popover
             surface. */}
         <form
           onSubmit={handleSubmit}
           role="search"
           className={cn(
-            'flex items-center gap-2 px-3 py-2.5',
+            'mt-auto flex flex-none items-center gap-2 px-3 py-2.5',
             // When modal is open we add a top border so the input
             // visually separates from the messages above. When
             // closed there's nothing above, so no border.
