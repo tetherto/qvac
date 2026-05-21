@@ -11,6 +11,7 @@ function parseArgs (argv) {
     input: '',
     output: '',
     jsonOutput: '',
+    htmlOutput: '',
     manualDir: path.resolve('packages/transcription-whispercpp/benchmarks/manual-results')
   }
 
@@ -26,6 +27,9 @@ function parseArgs (argv) {
     } else if ((arg === '--json-output' || arg === '--output-json') && next) {
       args.jsonOutput = next
       i++
+    } else if (arg === '--output-html' && next) {
+      args.htmlOutput = next
+      i++
     } else if (arg === '--manual-dir' && next) {
       args.manualDir = next
       i++
@@ -37,6 +41,15 @@ function parseArgs (argv) {
   }
 
   return args
+}
+
+function escapeHtml (value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function walkFiles (dir) {
@@ -276,14 +289,53 @@ function sortRecords (records) {
   })
 }
 
-function renderMarkdown (records) {
+function scoreRecord (record) {
+  let score = 0
+  if (Number.isFinite(record.meanRtf)) score += 8
+  if (Number.isFinite(record.p50)) score += 4
+  if (Number.isFinite(record.p95)) score += 4
+  if (Number.isFinite(record.wallMs)) score += 2
+  if (record.device && record.device !== 'unknown') score += 1
+  if (record.notes) score += 1
+  return score
+}
+
+function dedupeRecords (records) {
+  const byKey = new Map()
+  for (const record of records) {
+    const key = [
+      record.source,
+      record.platform,
+      record.platformFamily,
+      record.model,
+      record.gpu,
+      record.backend,
+      record.device
+    ].join('|')
+    const existing = byKey.get(key)
+    if (!existing || scoreRecord(record) > scoreRecord(existing)) {
+      byKey.set(key, record)
+    }
+  }
+  return [...byKey.values()]
+}
+
+function buildCoverage (records) {
   const gpuCoverage = new Set(
     records
       .filter((record) => record.gpu === 'gpu')
       .map((record) => record.backend)
       .filter(Boolean)
   )
-  const missingBackends = SUPPORTED_GPU_BACKENDS.filter((backend) => !gpuCoverage.has(backend))
+  return {
+    rowCount: records.length,
+    gpuBackendsCovered: Array.from(gpuCoverage).sort(),
+    missingBackends: SUPPORTED_GPU_BACKENDS.filter((backend) => !gpuCoverage.has(backend))
+  }
+}
+
+function renderMarkdown (records) {
+  const coverage = buildCoverage(records)
 
   const lines = [
     '## Whisper Performance Findings',
@@ -301,11 +353,81 @@ function renderMarkdown (records) {
   lines.push('')
   lines.push('### Coverage')
   lines.push('')
-  lines.push(`- Rows aggregated: ${records.length}`)
-  lines.push(`- GPU backends covered: ${Array.from(gpuCoverage).sort().join(', ') || 'none'}`)
-  lines.push(`- GPU backends still missing: ${missingBackends.join(', ') || 'none'}`)
+  lines.push(`- Rows aggregated: ${coverage.rowCount}`)
+  lines.push(`- GPU backends covered: ${coverage.gpuBackendsCovered.join(', ') || 'none'}`)
+  lines.push(`- GPU backends still missing: ${coverage.missingBackends.join(', ') || 'none'}`)
 
   return lines.join('\n') + '\n'
+}
+
+function renderHtml (records) {
+  const coverage = buildCoverage(records)
+  const rows = records.map((record) => {
+    return [
+      record.source,
+      record.device,
+      record.platform,
+      record.model,
+      record.gpu,
+      record.backend,
+      formatNumber(record.meanRtf),
+      formatNumber(record.p50),
+      formatNumber(record.p95),
+      formatMaybeInteger(record.wallMs),
+      record.notes || ''
+    ].map((value) => `<td>${escapeHtml(value)}</td>`).join('')
+  }).map((cells) => `<tr>${cells}</tr>`).join('\n')
+
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+    '  <title>Whisper Performance Findings</title>',
+    '  <style>',
+    '    body { font-family: Arial, sans-serif; margin: 24px; color: #1f2937; }',
+    '    h1, h2 { margin-bottom: 12px; }',
+    '    table { border-collapse: collapse; width: 100%; margin-top: 16px; }',
+    '    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }',
+    '    th { background: #f3f4f6; }',
+    '    tr:nth-child(even) td { background: #f9fafb; }',
+    '    ul { margin-top: 0; }',
+    '    code { font-family: Menlo, Consolas, monospace; }',
+    '  </style>',
+    '</head>',
+    '<body>',
+    '  <h1>Whisper Performance Findings</h1>',
+    '  <table>',
+    '    <thead>',
+    '      <tr>',
+    '        <th>Source</th>',
+    '        <th>Device</th>',
+    '        <th>Platform</th>',
+    '        <th>Model</th>',
+    '        <th>GPU</th>',
+    '        <th>Backend</th>',
+    '        <th>Mean RTF</th>',
+    '        <th>P50</th>',
+    '        <th>P95</th>',
+    '        <th>Mean Wall (ms)</th>',
+    '        <th>Notes</th>',
+    '      </tr>',
+    '    </thead>',
+    '    <tbody>',
+    rows,
+    '    </tbody>',
+    '  </table>',
+    '  <h2>Coverage</h2>',
+    '  <ul>',
+    `    <li>Rows aggregated: <code>${escapeHtml(String(coverage.rowCount))}</code></li>`,
+    `    <li>GPU backends covered: <code>${escapeHtml(coverage.gpuBackendsCovered.join(', ') || 'none')}</code></li>`,
+    `    <li>GPU backends still missing: <code>${escapeHtml(coverage.missingBackends.join(', ') || 'none')}</code></li>`,
+    '  </ul>',
+    '</body>',
+    '</html>',
+    ''
+  ].join('\n')
 }
 
 function main () {
@@ -314,11 +436,14 @@ function main () {
   const manualDir = path.resolve(args.manualDir)
 
   const records = sortRecords(
-    loadArtifactRecords(inputDir)
-      .concat(loadMobilePerformanceRecords(inputDir))
-      .concat(loadManualRecords(manualDir))
+    dedupeRecords(
+      loadArtifactRecords(inputDir)
+        .concat(loadMobilePerformanceRecords(inputDir))
+        .concat(loadManualRecords(manualDir))
+    )
   )
   const markdown = renderMarkdown(records)
+  const html = renderHtml(records)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -329,7 +454,13 @@ function main () {
   if (args.jsonOutput) {
     const jsonOutputPath = path.resolve(args.jsonOutput)
     ensureParentDir(jsonOutputPath)
-    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records }, null, 2) + '\n', 'utf8')
+    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, coverage: buildCoverage(records) }, null, 2) + '\n', 'utf8')
+  }
+
+  if (args.htmlOutput) {
+    const htmlOutputPath = path.resolve(args.htmlOutput)
+    ensureParentDir(htmlOutputPath)
+    fs.writeFileSync(htmlOutputPath, html, 'utf8')
   }
 
   process.stdout.write(markdown)
