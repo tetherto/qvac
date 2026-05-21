@@ -1,0 +1,138 @@
+name: Combine perf reports across platforms
+description: >
+  Downloads per-platform perf-report artifacts from the current run,
+  generates a combined HTML/MD report, produces per-device HTML reports,
+  uploads both as artifacts, and writes a rich GitHub Step Summary.
+  Prereqs: the caller must have already checked out the repo (so
+  scripts/perf-report/aggregate.js is on disk) and set up Node.js.
+
+inputs:
+  artifact-pattern:
+    description: 'Download-artifact pattern (e.g. perf-report-qvac-ocr-onnx-*)'
+    required: true
+  report-title:
+    description: 'Heading for the GitHub Step Summary (e.g. "OCR Performance Report (All Platforms)")'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download perf report artifacts
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        pattern: ${{ inputs.artifact-pattern }}
+        path: combined-reports
+      continue-on-error: true
+
+    - name: Fix desktop device names
+      shell: bash
+      run: |
+        for dir in combined-reports/*/; do
+          [ -d "$dir" ] || continue
+          base=$(basename "$dir")
+          # Mobile artifacts have real Device Farm device names — skip them.
+          case "$base" in *-Android-*|*-iOS-*) continue ;; esac
+          # Desktop: strip everything up to and including the addon slug,
+          # and the trailing run-number, to recover the platform tag
+          # (e.g. "macos-14-arm64", "ubuntu-22.04-x64").
+          platform=$(echo "$base" | sed "s/-${{ github.run_number }}$//" \
+            | sed 's/^perf-report-[^-]*-[^-]*-[^-]*-//')
+          [ -z "$platform" ] && continue
+          for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
+            existing=$(jq -r '.device.name // ""' "$json" 2>/dev/null)
+            if [ -z "$existing" ] || [ "$existing" = "null" ]; then
+              jq --arg name "$platform" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
+              echo "Patched device name in $json → $platform"
+            fi
+          done
+        done
+
+    - name: Generate combined report
+      shell: bash
+      run: |
+        if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
+          echo "No performance reports found."
+          exit 0
+        fi
+        mkdir -p combined-output
+        node scripts/perf-report/aggregate.js \
+          --dir combined-reports \
+          --output-html combined-output/performance-report-combined.html \
+          --output-json combined-output/performance-summary-combined.json \
+          --output combined-output/performance-report-combined.md
+
+    - name: Generate per-device HTML reports
+      if: always()
+      shell: bash
+      run: |
+        mkdir -p per-device-reports
+        for json in $(find combined-reports -name "performance-report.json" -type f 2>/dev/null); do
+          device_name=$(node -e "const d=JSON.parse(require('fs').readFileSync('$json','utf8'));console.log((d.device&&d.device.name)||'Unknown')" 2>/dev/null)
+          [ -z "$device_name" ] || [ "$device_name" = "Unknown" ] && continue
+          safe_name=$(echo "$device_name" | tr ' ' '-')
+          tmp_dir=$(mktemp -d)
+          mkdir -p "$tmp_dir/device"
+          cp "$json" "$tmp_dir/device/performance-report.json"
+          node scripts/perf-report/aggregate.js \
+            --dir "$tmp_dir" \
+            --output-html "per-device-reports/HTML-Report-${safe_name}.html" \
+            2>/dev/null || true
+          rm -rf "$tmp_dir"
+        done
+        ls -la per-device-reports/ 2>/dev/null || echo "No per-device reports"
+
+    - name: Upload combined HTML report
+      if: always()
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+      with:
+        name: HTML-Report-All-Platforms-${{ github.run_number }}
+        path: combined-output/performance-report-combined.html
+        retention-days: 90
+        if-no-files-found: ignore
+
+    - name: Upload per-device HTML reports
+      if: always()
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+      with:
+        name: HTML-Reports-Per-Device-${{ github.run_number }}
+        path: per-device-reports/
+        retention-days: 90
+        if-no-files-found: ignore
+
+    - name: Write combined summary to GitHub Step Summary
+      if: always()
+      shell: bash
+      env:
+        TITLE: ${{ inputs.report-title }}
+      run: |
+        set +e
+        MD_FILE="combined-output/performance-report-combined.md"
+        echo "## ${TITLE}" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        if [ -f "$MD_FILE" ]; then
+          cat "$MD_FILE" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "No combined performance report available." >> "$GITHUB_STEP_SUMMARY"
+        fi
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "---" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "### Downloadable HTML Reports" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        if [ -f "combined-output/performance-report-combined.html" ]; then
+          echo "> **Full Combined Report (all platforms)**: download artifact \`HTML-Report-All-Platforms-${{ github.run_number }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        HAS_DEVICES=0
+        for html in per-device-reports/HTML-Report-*.html; do
+          [ -f "$html" ] || continue
+          if [ "$HAS_DEVICES" -eq 0 ]; then
+            echo "> **Individual Device Reports**: download artifact \`HTML-Reports-Per-Device-${{ github.run_number }}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo ">" >> "$GITHUB_STEP_SUMMARY"
+            echo "> Includes:" >> "$GITHUB_STEP_SUMMARY"
+            HAS_DEVICES=1
+          fi
+          device=$(basename "$html" .html | sed 's/^HTML-Report-//' | tr '-' ' ')
+          echo "> - ${device}" >> "$GITHUB_STEP_SUMMARY"
+        done
+        echo "" >> "$GITHUB_STEP_SUMMARY"
