@@ -720,6 +720,15 @@ void ParakeetModel::openStreamingSession_() {
     opts.threshold      = diarConfig_.onset;
     opts.min_segment_ms = static_cast<int>(diarConfig_.minDurationOn * 1000.0f);
     opts.emit_partials  = cfg_.streamingEmitPartials;
+    // AOSC (v2.1+ Sortformer only; ignored for v1/v2 GGUFs). The engine
+    // detects v2.1 via the GGUF metadata tag `parakeet.model_variant` and
+    // only consults these fields then -- safe to forward unconditionally.
+    opts.spkcache_enable = cfg_.streamingSpkCacheEnable;
+    opts.spkcache_len = cfg_.streamingSpkCacheLen;
+    opts.fifo_len = cfg_.streamingFifoLen;
+    opts.chunk_left_context_ms = cfg_.streamingChunkLeftContextMs;
+    opts.chunk_right_context_ms = cfg_.streamingChunkRightContextMs;
+    opts.spkcache_update_period = cfg_.streamingSpkCacheUpdatePeriod;
 
     auto session = engine->diarize_start(
         opts, [this](const parakeet::StreamingDiarizationSegment& seg) {
