@@ -3,52 +3,44 @@ set -euo pipefail
 
 # Wan 2.1 Image-to-Video (I2V) Models — 14B dedicated I2V checkpoint
 #
-# Source: Comfy-Org/Wan_2.1_ComfyUI_repackaged
-#         Official Wan 2.1 I2V checkpoints repackaged for ComfyUI.
-#
-# Unlike download-model-wan.sh (which pulls the 1.3B *T2V* model that the
-# examples reuse as a stand-in for img2vid), this script grabs the proper
-# 14B I2V checkpoint that Wan 2.1 ships specifically for img2vid / flf2vid
-# style generation.
+# stable-diffusion.cpp natively supports GGUF quantisation (Q4_K_M, Q8_0,
+# etc.).  The fp8_scaled safetensors format is a ComfyUI-only variant that
+# requires per-tensor scale application during inference; the C++ library
+# ignores those scale tensors and produces near-zero velocity predictions,
+# making GGUF the correct format for this project.
 #
 # Variants (override via env vars; defaults shown):
 #
-#   WAN_I2V_RESOLUTION   480p | 720p                       (default: 480p)
-#   WAN_I2V_PRECISION    fp16 | bf16 | fp8_e4m3fn | fp8_scaled
-#                                                          (default: fp8_scaled)
+#   WAN_I2V_RESOLUTION   480p | 720p          (default: 480p)
+#   WAN_I2V_QUANT        Q4_K_M | Q8_0 | F16  (default: Q4_K_M)
+#   WAN_I2V_FORMAT       gguf | safetensors    (default: gguf)
 #
-# Diffusion model size by precision:
-#   fp16          32.8 GB    highest quality, very large
-#   bf16          32.8 GB    same size as fp16
-#   fp8_e4m3fn    16.4 GB    simple fp8 quantization
-#   fp8_scaled    16.4 GB    scaled fp8 — best quality/size tradeoff (default)
+# When FORMAT=gguf (default):
+#   Source: city96/Wan2.1-I2V-14B-480P-gguf (or 720P variant)
+#   Q4_K_M   11.3 GB  — recommended, good quality/size tradeoff
+#   Q8_0     15.8 GB  — near-lossless
+#   F16      28.7 GB  — full precision (large)
+#
+# When FORMAT=safetensors (legacy, NOT recommended):
+#   Source: Comfy-Org/Wan_2.1_ComfyUI_repackaged
+#   fp8_scaled 16.4 GB — note: scale factors ignored by stable-diffusion.cpp
 #
 # Always-downloaded companions (shared with the t2v script):
 #   wan_2.1_vae.safetensors          1.2 GB   video VAE encoder/decoder
 #   umt5_xxl_fp16.safetensors        4.6 GB   UMT5-XXL text encoder
+#   clip_vision_h.safetensors        ~0.6 GB  OpenCLIP ViT-H/14 (I2V only)
 #
-# Defaults: 480p + fp8_scaled
-#   Disk:   ~22 GB total
-#   RAM:    ~20-24 GB at runtime with Metal GPU acceleration
-#   Min recommended: 32 GB unified memory
-#
-# Image-to-video command example:
-#   ./sd-cli -M vid_gen \
-#     --diffusion-model models/wan2.1_i2v_480p_14B_fp8_scaled.safetensors \
-#     --vae models/wan_2.1_vae.safetensors \
-#     --t5xxl models/umt5_xxl_fp16.safetensors \
-#     -i input.png \
-#     -p "your prompt here" \
-#     -o output.mp4
+# Defaults: 480p Q4_K_M GGUF — ~17.2 GB total disk
 #
 # Examples:
-#   ./download-model-wan-i2v.sh                                # 480p fp8_scaled (default)
-#   WAN_I2V_PRECISION=fp16 ./download-model-wan-i2v.sh         # 480p fp16
-#   WAN_I2V_RESOLUTION=720p ./download-model-wan-i2v.sh        # 720p fp8_scaled
-#   WAN_I2V_RESOLUTION=720p WAN_I2V_PRECISION=fp16 ./download-model-wan-i2v.sh
+#   ./download-model-wan-i2v.sh                                # 480p Q4_K_M (default)
+#   WAN_I2V_QUANT=Q8_0 ./download-model-wan-i2v.sh             # 480p Q8_0
+#   WAN_I2V_RESOLUTION=720p ./download-model-wan-i2v.sh        # 720p Q4_K_M
+#   WAN_I2V_FORMAT=safetensors ./download-model-wan-i2v.sh     # legacy fp8_scaled
 
 RESOLUTION="${WAN_I2V_RESOLUTION:-480p}"
-PRECISION="${WAN_I2V_PRECISION:-fp8_scaled}"
+QUANT="${WAN_I2V_QUANT:-Q4_K_M}"
+FORMAT="${WAN_I2V_FORMAT:-gguf}"
 
 case "$RESOLUTION" in
   480p|720p) ;;
@@ -58,10 +50,10 @@ case "$RESOLUTION" in
     ;;
 esac
 
-case "$PRECISION" in
-  fp16|bf16|fp8_e4m3fn|fp8_scaled) ;;
+case "$FORMAT" in
+  gguf|safetensors) ;;
   *)
-    echo "error: WAN_I2V_PRECISION must be one of: fp16, bf16, fp8_e4m3fn, fp8_scaled (got: '$PRECISION')" >&2
+    echo "error: WAN_I2V_FORMAT must be 'gguf' or 'safetensors' (got: '$FORMAT')" >&2
     exit 2
     ;;
 esac
@@ -69,28 +61,49 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$(cd "$SCRIPT_DIR/.." && pwd)/models"
 HF="https://huggingface.co"
-REPO="Comfy-Org/Wan_2.1_ComfyUI_repackaged"
-
-DIFFUSION_FILE="wan2.1_i2v_${RESOLUTION}_14B_${PRECISION}.safetensors"
 
 mkdir -p "$OUT"
 
 source "$SCRIPT_DIR/dl-functions.sh"
 
-echo "Wan 2.1 I2V — resolution=$RESOLUTION precision=$PRECISION"
-echo "  diffusion model → $DIFFUSION_FILE"
-echo
+if [ "$FORMAT" = "gguf" ]; then
+  RES_UPPER="$(echo "$RESOLUTION" | tr '[:lower:]' '[:upper:]')"
+  RES_LOWER="$(echo "$RESOLUTION" | tr '[:upper:]' '[:lower:]')"
+  GGUF_REPO="city96/Wan2.1-I2V-14B-${RES_UPPER}-gguf"
+  DIFFUSION_FILE="wan2.1-i2v-14b-${RES_LOWER}-${QUANT}.gguf"
 
-# I2V diffusion model (14B, dedicated img2vid checkpoint)
-dl "$HF/$REPO/resolve/main/split_files/diffusion_models/$DIFFUSION_FILE" \
-   "$OUT/$DIFFUSION_FILE"
+  echo "Wan 2.1 I2V — resolution=$RESOLUTION format=gguf quant=$QUANT"
+  echo "  diffusion model → $DIFFUSION_FILE (from $GGUF_REPO)"
+  echo
+
+  dl "$HF/$GGUF_REPO/resolve/main/$DIFFUSION_FILE" \
+     "$OUT/$DIFFUSION_FILE"
+else
+  # Legacy safetensors path (fp8_scaled)
+  PRECISION="${WAN_I2V_PRECISION:-fp8_scaled}"
+  COMFY_REPO="Comfy-Org/Wan_2.1_ComfyUI_repackaged"
+  DIFFUSION_FILE="wan2.1_i2v_${RESOLUTION}_14B_${PRECISION}.safetensors"
+
+  echo "Wan 2.1 I2V — resolution=$RESOLUTION format=safetensors precision=$PRECISION"
+  echo "  WARNING: fp8_scaled scale factors are ignored by stable-diffusion.cpp"
+  echo "  diffusion model → $DIFFUSION_FILE"
+  echo
+
+  dl "$HF/$COMFY_REPO/resolve/main/split_files/diffusion_models/$DIFFUSION_FILE" \
+     "$OUT/$DIFFUSION_FILE"
+fi
 
 # VAE for video encoding/decoding (shared with t2v)
-dl "$HF/$REPO/resolve/main/split_files/vae/wan_2.1_vae.safetensors" \
+dl "$HF/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors" \
    "$OUT/wan_2.1_vae.safetensors"
 
 # Text encoder for prompt understanding (shared with t2v)
-dl "$HF/$REPO/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors" \
+dl "$HF/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors" \
    "$OUT/umt5_xxl_fp16.safetensors"
 
+# CLIP vision encoder — required for I2V image conditioning (OpenCLIP ViT-H/14)
+dl "$HF/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors" \
+   "$OUT/clip_vision_h.safetensors"
+
 echo "done → $OUT"
+echo "  diffusion model: $DIFFUSION_FILE"

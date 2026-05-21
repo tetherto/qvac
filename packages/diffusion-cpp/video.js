@@ -5,7 +5,7 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'esrgan']
+const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'clipVision', 'esrgan']
 
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid', 'flf2vid'])
 
@@ -68,6 +68,9 @@ class VideoStableDiffusion {
    *        encoder (Wan uses the `t5xxl_path` slot for UMT5). Absolute path.
    * @param {string} [args.files.vae]                     - Absolute path to
    *        the Wan VAE.
+   * @param {string} [args.files.clipVision]              - Absolute path to
+   *        clip_vision_h.safetensors (OpenCLIP ViT-H/14). Required for
+   *        img2vid and flf2vid; omit for txt2vid.
    * @param {string} [args.files.esrgan]                  - Optional; forwarded
    *        to the native ctx as `esrganPath` (empty string when unset). Video
    *        generation does not use ESRGAN — same binding shape as image mode.
@@ -139,6 +142,7 @@ class VideoStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: '',
       vaePath: this._files.vae || '',
+      clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
       config: this._config
     }
@@ -393,6 +397,19 @@ class VideoStableDiffusion {
       this.logger.warn(
         'vace_strength was set but control_frames is not provided — ' +
         'vace_strength will have no effect.'
+      )
+    }
+
+    // ── Wan 2.1 I2V / FLF2V CLIP vision sanity check ────────────────────
+    // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
+    // conditioning in Wan 2.1 I2V and FLF2V. Without it the C++ layer
+    // cannot build the img_emb projection and will produce garbage or crash.
+    if ((mode === 'img2vid' || mode === 'flf2vid') && !this._files.clipVision) {
+      this.logger.warn(
+        `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
+        'Download clip_vision_h.safetensors from ' +
+        'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +
+        'files.clipVision. Generation will likely fail or produce incorrect output.'
       )
     }
 

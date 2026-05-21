@@ -1,0 +1,34 @@
+From: qvac
+Subject: [PATCH] Fix Wan 2.1 I2V: bypass spatial VAE tiling for video encode/decode
+
+When vae_tiling is enabled, vae_encode() and decode_first_stage() use a 2D
+spatial tiling path that is incompatible with the 4D video tensors produced
+by the Wan video VAE.
+
+ENCODE: vae_encode() pre-allocates its result as [W/8, H/8, z_dim, batch].
+For Wan 2.1 I2V the WanVAE encoder produces [W/8, H/8, t_latent, z_dim].
+Passing encode_video=false (the default) hits the tiling branch and produces
+a transposed tensor [62, 78, 16, 3] instead of [62, 78, 9, 16].
+process_latent_in() then asserts ne[3]==16 but finds 3, crashing:
+  GGML_ASSERT(latent->ne[channel_dim] == 16 || ...) failed
+
+DECODE: decode_first_stage() checks vae_tiling_params.enabled without a
+!decode_video guard. The Wan video latent [W/8, H/8, t_latent, z_dim] is
+fed through the 2D tiling path, which produces all-black (zero) output
+frames because the temporal/channel dimensions are misinterpreted.
+
+Fix: add encode_video=true to the Wan 2.1 I2V concat-latent encode call,
+and add !decode_video guard to the tiling branch in decode_first_stage().
+
+--- a/src/stable-diffusion.cpp
++++ b/src/stable-diffusion.cpp
+@@ -4098,7 +4098,7 @@ SDCPP_API sd_video_t* generate_video(sd_ctx_t* sd_ctx,
+         });
+ 
+-        concat_latent = sd_ctx->sd->encode_first_stage(work_ctx, image);
++        concat_latent = sd_ctx->sd->encode_first_stage(work_ctx, image, true);  // encode_video=true bypasses spatial tiling
+ 
+@@ -2805,7 +2805,7 @@ SDCPP_API sd_video_t* generate_video(sd_ctx_t* sd_ctx,
+             process_latent_out(x);
+-            if (vae_tiling_params.enabled) {
++            if (vae_tiling_params.enabled && !decode_video) {

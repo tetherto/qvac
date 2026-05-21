@@ -33,24 +33,35 @@ void saveAvi(const std::string& path, const std::vector<uint8_t>& avi_bytes) {
 int main(int argc, char* argv[]) {
   try {
     // ── Paths ─────────────────────────────────────────────────────────────
+    // Download all required files with:
+    //   scripts/download-model-wan-i2v.sh
     std::string models_dir = "../models";
     std::string assets_dir = "../assets";
     std::string output_dir = "../output";
 
-    std::string diffusion_model = models_dir + "/wan2.1_t2v_1.3B_fp16.safetensors";
-    std::string vae_model = models_dir + "/wan_2.1_vae.safetensors";
-    std::string t5xxl_model = models_dir + "/umt5_xxl_fp16.safetensors";
+    // Wan 2.1 I2V 14B 480p — dedicated image-to-video checkpoint.
+    // The I2V model uses OpenCLIP ViT-H/14 (clip_vision_h.safetensors) to
+    // encode the init_image and condition generation on it. Without
+    // clipVisionPath this model will fail to build the img_emb projection.
+    std::string diffusion_model =
+        models_dir + "/wan2.1_i2v_480p_14B_fp8_scaled.safetensors";
+    std::string vae_model       = models_dir + "/wan_2.1_vae.safetensors";
+    std::string t5xxl_model     = models_dir + "/umt5_xxl_fp16.safetensors";
+    std::string clip_vision     = models_dir + "/clip_vision_h.safetensors";
     std::string init_image_path = assets_dir + "/von-neumann.jpg";
 
     // ── Generation params ──────────────────────────────────────────────────
+    // Wan 2.1 I2V 14B 480p native portrait resolution. Width x Height must
+    // match the init_image after any resize; both must be multiples of 8.
     const int width = 480;
-    const int height = 608;
-    const int video_frames = 33;
+    const int height = 832;
+    const int video_frames = 33;  // (4*k+1): 5, 9, 13, ..., 33, ..., 81
     const int fps = 16;
     const int steps = 30;
     const float cfg_scale = 6.0f;
+    // flow_shift 3.0 is the sweet spot for Wan 2.1 I2V: higher values
+    // compress the rectified-flow trajectory and produce near-static output.
     const float flow_shift = 3.0f;
-    const float strength = 0.8f;
     const int seed = 42;
 
     const std::string prompt =
@@ -60,36 +71,45 @@ int main(int argc, char* argv[]) {
         "blurry, distorted, low quality, jittery, static, frozen, "
         "watermark, double face, extra limbs";
 
-    std::cout << "Wan 2.1 T2V 1.3B — image-to-video inference (C++ standalone)\n";
-    std::cout << "===========================================================\n";
-    std::cout << "Model      : " << diffusion_model << "\n";
-    std::cout << "Init image : " << init_image_path << "\n";
-    std::cout << "Prompt     : " << prompt << "\n";
-    std::cout << "Size       : " << width << "x" << height << "\n";
-    std::cout << "Frames     : " << video_frames << " (@" << fps << " fps → "
+    std::cout << "Wan 2.1 I2V 14B — image-to-video inference (C++ standalone)\n";
+    std::cout << "=============================================================\n";
+    std::cout << "Model       : " << diffusion_model << "\n";
+    std::cout << "CLIP vision : " << clip_vision << "\n";
+    std::cout << "Init image  : " << init_image_path << "\n";
+    std::cout << "Prompt      : " << prompt << "\n";
+    std::cout << "Size        : " << width << "x" << height << "\n";
+    std::cout << "Frames      : " << video_frames << " (@" << fps << " fps → "
               << (video_frames / (float)fps) << "s)\n";
-    std::cout << "Steps      : " << steps << "\n";
-    std::cout << "Strength   : " << strength << "\n";
-    std::cout << "Seed       : " << seed << "\n\n";
+    std::cout << "Steps       : " << steps << "\n";
+    std::cout << "Flow shift  : " << flow_shift << "\n";
+    std::cout << "Seed        : " << seed << "\n\n";
 
     // ── Load init image ────────────────────────────────────────────────────
+    // The init_image is decoded inside SdModel::processVideo(). Its
+    // dimensions are used to derive the VAE latent; width/height in the
+    // params must match the decoded image dimensions.
     auto init_image_bytes = loadImageFile(init_image_path);
     std::cout << "Loaded init image: " << init_image_bytes.size() << " bytes\n\n";
 
     // ── Create model ───────────────────────────────────────────────────────
-    std::cout << "Creating Wan video model...\n";
+    std::cout << "Creating Wan 2.1 I2V 14B video model...\n";
     qvac_lib_inference_addon_cpp::SdCtxConfig config;
     config.diffusionModelPath = diffusion_model;
     config.vaePath = vae_model;
     config.t5XxlPath = t5xxl_model;
+    // clipVisionPath is required for Wan 2.1 I2V and FLF2V. It loads
+    // clip_vision_h.safetensors (OpenCLIP ViT-H/14) at context init and
+    // wires it into generate_video() via the init_image conditioning path.
+    config.clipVisionPath = clip_vision;
     config.nThreads = 4;
     config.device = "gpu";
     config.diffusionFlashAttn = true;
     config.offloadToCpu = true;
+    config.flowShift = flow_shift;
 
     auto model = std::make_unique<qvac_lib_inference_addon_cpp::SdModel>(config);
 
-    std::cout << "Loading Wan 2.1 T2V 1.3B weights...\n";
+    std::cout << "Loading Wan 2.1 I2V 14B weights (this may take ~1–2 min)...\n";
     model->load();
     std::cout << "Model loaded.\n\n";
 
@@ -114,8 +134,6 @@ int main(int argc, char* argv[]) {
                              std::to_string(cfg_scale) + R"(,
       "flow_shift": )" +
                              std::to_string(flow_shift) + R"(,
-      "strength": )" +
-                             std::to_string(strength) + R"(,
       "seed": )" +
                              std::to_string(seed) + R"(
     })";
@@ -164,7 +182,7 @@ int main(int argc, char* argv[]) {
     // ── Save output ────────────────────────────────────────────────────────
     if (!avi_output.empty()) {
       std::string out_path =
-          output_dir + "/wan_img2vid_cpp_seed" + std::to_string(seed) + ".avi";
+          output_dir + "/wan_i2v_cpp_seed" + std::to_string(seed) + ".avi";
       saveAvi(out_path, avi_output);
     } else {
       std::cerr << "ERROR: No AVI output received!\n";

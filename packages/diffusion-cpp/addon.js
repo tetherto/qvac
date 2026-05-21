@@ -248,11 +248,14 @@ class SdInterface {
     const dims = readImageDimensions(buf)
     if (!dims) return
 
+    // Use 16 as the snap multiple: Wan video requires spatial_multiple=16
+    // (vae_scale_factor 8 × diffusion_down_factor 2). This is also safe for
+    // all other supported models (any multiple of 16 is a multiple of 8).
     if (!params.width) {
-      params.width = Math.ceil(dims.width / 8) * 8
+      params.width = Math.ceil(dims.width / 16) * 16
     }
     if (!params.height) {
-      params.height = Math.ceil(dims.height / 8) * 8
+      params.height = Math.ceil(dims.height / 16) * 16
     }
   }
 

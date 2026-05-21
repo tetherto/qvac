@@ -25,6 +25,17 @@ export interface VideoDiffusionFiles {
   /** Absolute path to the Wan VAE. */
   vae?: string
   /**
+   * Absolute path to the OpenCLIP ViT-H/14 vision encoder weights
+   * (`clip_vision_h.safetensors`). **Required for `img2vid` and `flf2vid`.**
+   * The Wan 2.1 I2V / FLF2V model uses this encoder to condition generation
+   * on the input image; omitting it will produce incorrect output or crash.
+   * Not used for `txt2vid` — safe to omit when only doing text-to-video.
+   *
+   * Download: `Comfy-Org/Wan_2.1_ComfyUI_repackaged`
+   *   → `split_files/clip_vision/clip_vision_h.safetensors`
+   */
+  clipVision?: string
+  /**
    * Optional ESRGAN weights path for native ctx parity; video jobs do not apply
    * ESRGAN. Omit and the addon passes an empty string.
    */

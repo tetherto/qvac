@@ -199,6 +199,7 @@ void SdModel::load() {
   params.t5xxl_path = optPath(config_.t5XxlPath);
   params.llm_path = optPath(config_.llmPath);
   params.vae_path = optPath(config_.vaePath);
+  params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
 
   // -- Compute ----------------------------------------------------------------
@@ -849,21 +850,24 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
     // dimension check so a mismatch can't leak the buffer. Mirrors the
     // control_frames pattern below.
     initData.reset(initImg.data);
-    // Dimension parity: vid.width / vid.height drive both latent stride
-    // (frame data layout in generate_video) and the AVI muxer's frame
-    // header. If init_image disagrees, generate_video receives mismatched
-    // stride for the first frame and the VAE either segfaults or silently
-    // produces garbage. Catch it here, consistent with the end_image /
-    // control_frames checks just below.
+    // Auto-resize init_image to the target video dimensions when they differ.
+    // stable-diffusion.cpp's sd_image_to_tensor resizes internally too, but
+    // the VAE latent stride is computed from vid.width/vid.height, so we
+    // resize here to guarantee the pixel buffer layout matches exactly.
     if (static_cast<int>(initImg.width) != vid.width ||
-        static_cast<int>(initImg.height) != vid.height)
-      throw StatusError(
-          general_error::InvalidArgument,
-          "processVideo: init_image dimensions " +
-              std::to_string(initImg.width) + "x" +
-              std::to_string(initImg.height) +
-              " do not match video dimensions " + std::to_string(vid.width) +
-              "x" + std::to_string(vid.height));
+        static_cast<int>(initImg.height) != vid.height) {
+      sd_image_t resized =
+          image_utils::resizeSdImage(initImg, vid.width, vid.height);
+      if (!resized.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: failed to resize init_image from " +
+                std::to_string(initImg.width) + "x" +
+                std::to_string(initImg.height) + " to " +
+                std::to_string(vid.width) + "x" + std::to_string(vid.height));
+      initData.reset(resized.data);
+      initImg = resized;
+    }
   }
 
   if (!job.endImageBytes.empty()) {
@@ -875,13 +879,19 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           "format; supported: PNG, JPEG)");
     endData.reset(endImg.data);
     if (static_cast<int>(endImg.width) != vid.width ||
-        static_cast<int>(endImg.height) != vid.height)
-      throw StatusError(
-          general_error::InvalidArgument,
-          "processVideo: end_image dimensions " + std::to_string(endImg.width) +
-              "x" + std::to_string(endImg.height) +
-              " do not match video dimensions " + std::to_string(vid.width) +
-              "x" + std::to_string(vid.height));
+        static_cast<int>(endImg.height) != vid.height) {
+      sd_image_t resized =
+          image_utils::resizeSdImage(endImg, vid.width, vid.height);
+      if (!resized.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: failed to resize end_image from " +
+                std::to_string(endImg.width) + "x" +
+                std::to_string(endImg.height) + " to " +
+                std::to_string(vid.width) + "x" + std::to_string(vid.height));
+      endData.reset(resized.data);
+      endImg = resized;
+    }
   }
 
   if (!job.controlFramesBytes.empty()) {
@@ -895,18 +905,22 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
             "processVideo: failed to decode control_frames[" +
                 std::to_string(i) +
                 "] (corrupt or unsupported format; supported: PNG, JPEG)");
-      // Take ownership *before* the dimension check so a mismatch can't leak
-      // the freshly-decoded pixel buffer.
+      // Take ownership *before* the resize so a failure can't leak the buffer.
       PixelBuffer owned(decoded.data);
       if (static_cast<int>(decoded.width) != vid.width ||
           static_cast<int>(decoded.height) != vid.height) {
-        throw StatusError(
-            general_error::InvalidArgument,
-            "processVideo: control_frames[" + std::to_string(i) +
-                "] dimensions " + std::to_string(decoded.width) + "x" +
-                std::to_string(decoded.height) +
-                " do not match video dimensions " + std::to_string(vid.width) +
-                "x" + std::to_string(vid.height));
+        sd_image_t resized =
+            image_utils::resizeSdImage(decoded, vid.width, vid.height);
+        if (!resized.data)
+          throw StatusError(
+              general_error::InvalidArgument,
+              "processVideo: failed to resize control_frames[" +
+                  std::to_string(i) + "] from " +
+                  std::to_string(decoded.width) + "x" +
+                  std::to_string(decoded.height) + " to " +
+                  std::to_string(vid.width) + "x" + std::to_string(vid.height));
+        owned.reset(resized.data);
+        decoded = resized;
       }
       controlData.push_back(std::move(owned));
       controlFrames.push_back(decoded);
