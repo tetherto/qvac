@@ -342,6 +342,31 @@ jobs:
           echo "SmolVLA model files:"
           ls -la model/vla/
 
+      # π₀.₅ test artefacts (gguf + parity-oracle fixture + activations).
+      # Same Apple-Paravirtual exclusion as smolvla — pi05_base.gguf is
+      # 6.3 GB at F16/Q8 mix and the model needs ~12 GB RAM to run in
+      # float32; the macOS-13 intel runners can't host either.
+      #
+      # No `|| true`. If any of the three artefacts is missing the
+      # download step fails loudly and the integration-tests job goes
+      # red. A skipped pi05 e2e test under a green CI is a false-
+      # positive pass — we'd rather see the workflow fail when the
+      # assets are out of sync.
+      - name: Download π₀.₅ test artefacts from S3
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Downloading π₀.₅ test artefacts from S3..."
+          mkdir -p model/vla/pi05 test/pi05-oracle
+          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/pi05-base/2026-05-21"
+          aws s3 cp "$S3_BASE/pi05_base.gguf"          model/vla/pi05/pi05_base.gguf
+          aws s3 cp "$S3_BASE/fixture.safetensors"     test/pi05-oracle/fixture.safetensors
+          aws s3 cp "$S3_BASE/activations.safetensors" test/pi05-oracle/activations.safetensors
+          echo "π₀.₅ asset state after download:"
+          ls -la model/vla/pi05/ test/pi05-oracle/
+
       # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
       # depends on the Vulkan loader (vulkan-1.dll). The qvac-win25-x64-gpu
       # self-hosted runner has the Vulkan SDK preinstalled at C:\VulkanSDK
@@ -380,6 +405,12 @@ jobs:
         shell: bash
         env:
           QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-vision-q8.gguf', github.workspace, env.WORKDIR) }}
+          # π₀.₅ artefacts (downloaded in the previous step). Empty
+          # string on darwin/x64 to mirror the QVAC_VLA_MODEL convention
+          # — pi05.test.js's HAS_ASSETS guard skips when unset.
+          PI05_TEST_GGUF: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/pi05/pi05_base.gguf', github.workspace, env.WORKDIR) }}
+          PI05_TEST_FIXTURE: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/test/pi05-oracle/fixture.safetensors', github.workspace, env.WORKDIR) }}
+          PI05_TEST_ACTIVATIONS: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) }}
         run: |
           set +e
           # Stream test output AND capture it so we can inspect the TAP summary
@@ -406,6 +437,9 @@ jobs:
         shell: powershell
         env:
           QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-vision-q8.gguf
+          PI05_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/pi05/pi05_base.gguf
+          PI05_TEST_FIXTURE: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/fixture.safetensors
+          PI05_TEST_ACTIVATIONS: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/activations.safetensors
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Upload performance report

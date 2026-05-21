@@ -142,13 +142,28 @@ process.on('exit', () => {
   }
 })
 
-const HAS_ASSETS =
-  process.env.PI05_TEST_GGUF &&
-  process.env.PI05_TEST_FIXTURE &&
-  process.env.PI05_TEST_ACTIVATIONS &&
-  fs.existsSync(process.env.PI05_TEST_GGUF) &&
-  fs.existsSync(process.env.PI05_TEST_FIXTURE) &&
-  fs.existsSync(process.env.PI05_TEST_ACTIVATIONS)
+// Tri-state asset detection:
+//   - HAVE: all three env vars are set AND the files exist → run the
+//           test against the real artefacts.
+//   - SKIP: env vars are unset → local dev convenience, skip cleanly.
+//   - FAIL: env vars are set but a file is missing → loud failure.
+//           CI sets the env vars unconditionally; a silent skip would
+//           hide a broken S3 download or a stale asset path.
+const _assetsState = (function detectAssets () {
+  const keys = ['PI05_TEST_GGUF', 'PI05_TEST_FIXTURE', 'PI05_TEST_ACTIVATIONS']
+  const values = keys.map((k) => process.env[k])
+  const allUnset = values.every((v) => !v)
+  if (allUnset) return { state: 'SKIP' }
+  const missing = keys.filter((k, i) => !values[i] || !fs.existsSync(values[i]))
+  if (missing.length > 0) {
+    return {
+      state: 'FAIL',
+      reason: 'Some PI05_TEST_* env vars point at missing files: ' +
+        missing.map((k) => `${k}=${process.env[k] || '<unset>'}`).join(', ')
+    }
+  }
+  return { state: 'HAVE' }
+})()
 
 const SKIP_REASON =
   'set PI05_TEST_GGUF / PI05_TEST_FIXTURE / PI05_TEST_ACTIVATIONS env vars to run'
@@ -225,8 +240,12 @@ function maxAbs (a) {
 }
 
 test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 300000 }, async (t) => {
-  if (!HAS_ASSETS) {
+  if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
+    return
+  }
+  if (_assetsState.state === 'FAIL') {
+    t.fail(_assetsState.reason)
     return
   }
 
@@ -406,8 +425,12 @@ test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
 })
 
 test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 300000 }, async (t) => {
-  if (!HAS_ASSETS) {
+  if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
+    return
+  }
+  if (_assetsState.state === 'FAIL') {
+    t.fail(_assetsState.reason)
     return
   }
 
