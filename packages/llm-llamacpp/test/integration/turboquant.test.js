@@ -7,15 +7,21 @@ const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
-// TurboQuant / PolarQuant KV-cache quantization (PR #133) ships Vulkan +
-// CPU kernels only. On Metal and OpenCL the addon now rejects TBQ cache
-// types at model-load time with a clean InvalidArgument (see
+// TurboQuant / PolarQuant KV-cache quantization (PR #133 / qvac PR #1564)
+// ships Vulkan + CPU kernels only. On Metal and OpenCL the addon rejects
+// TBQ cache types at model-load time with a clean InvalidArgument (see
 // LlamaModel::tuneConfigMap in addon/src/model-interface/LlamaModel.cpp).
-// This test covers both legs:
-//   - Vulkan-capable host: inference must succeed end-to-end and the
-//     answer must mention Paris.
-//   - Metal-only host: model.load() must throw the addon's
-//     backend-not-supported error.
+//
+// This file has two parallel concerns:
+//   1. Metal/iOS reject path (single test): model.load() must throw the
+//      addon's backend-not-supported error with a recognizable message,
+//      regardless of which TBQ KV-type the user requested.
+//   2. Vulkan happy path (parameterized over MODELS x KV_COMBOS): the
+//      model must load and produce a topically coherent answer for every
+//      supported (K, V) cache-type pair. Llama-3.2-3B exercises the
+//      head_dim=128 path; Llama-3.2-1B exercises head_dim=64, which on
+//      the runtime maps to the internal `_64` TBQ types.
+//
 // linux-arm64 in CI runs on LLVMpipe software Vulkan, which is neither
 // the Vulkan happy path (too slow / partial feature coverage) nor the
 // Metal/OpenCL reject path — skip it entirely.
@@ -26,73 +32,166 @@ const isVulkanHappyPath =
   (platform === 'android' && arch === 'arm64') ||
   platform === 'win32'
 const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
+const isAndroid = platform === 'android'
 
 const skipReason = (isVulkanHappyPath || isMetalRejectPath)
   ? false
   : `no clear TBQ assertion on ${platform}-${arch} (LLVMpipe Vulkan or unsupported)`
 
-const MODEL = {
-  name: 'Qwen3-0.6B-Q8_0.gguf',
-  url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf'
+// Two-model sweep. The 3B variant has head_dim=128 (native TBQ block);
+// the 1B variant has head_dim=64 and lets us exercise the _64 internal
+// TBQ types that the KV-cache auto-selects under the hood.
+const MODELS = [
+  {
+    id: 'Llama-3.2-3B',
+    name: 'llama-3.2-3b-instruct-q4_0.gguf',
+    url: 'https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/main/llama-3.2-3b-instruct-q4_0.gguf',
+    headDim: 128
+  },
+  {
+    id: 'Llama-3.2-1B',
+    name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
+    url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
+    headDim: 64
+  }
+]
+
+// (K, V) combinations to sweep. Covers the four homogeneous TBQ/PQ
+// configurations plus three mixed pairings (TBQ on K + a different
+// quant on V) so the codepath for "K and V cache-types differ" gets
+// exercised too.
+const KV_COMBOS = [
+  { k: 'tbq3_0', v: 'pq3_0' },
+  { k: 'pq3_0', v: 'pq3_0' },
+  { k: 'pq4_0', v: 'pq4_0' },
+  { k: 'tbq4_0', v: 'pq4_0' },
+  { k: 'tbq4_0', v: 'pq3_0' },
+  { k: 'tbq4_0', v: 'q4_0' },
+  { k: 'tbq3_0', v: 'q4_0' }
+]
+
+const PROMPT = [
+  { role: 'system', content: 'You are a geography tutor. Answer briefly.' },
+  { role: 'user', content: 'What is the capital of France?' }
+]
+
+function makeConfig (kv) {
+  return {
+    device: 'gpu',
+    gpu_layers: '999',
+    // ctx_size=512 / n_predict=128 keeps the Mali-G715 (Pixel 9 Pro)
+    // Vulkan compute buffer under the threshold where the driver
+    // returns ErrorDeviceLost mid-inference. Larger budgets crashed the
+    // GPU in prior runs.
+    ctx_size: '512',
+    n_predict: '128',
+    temp: '0',
+    seed: '42',
+    'cache-type-k': kv.k,
+    'cache-type-v': kv.v,
+    'flash-attn': 'on',
+    verbosity: '2'
+  }
 }
 
-test('Qwen3-0.6B runs inference with tbq4_0 / pq4_0 KV cache', { timeout: 600_000, skip: skipReason }, async t => {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: MODEL.name,
-    downloadUrl: MODEL.url
-  })
+async function collectResponse (response) {
+  const chunks = []
+  await response.onUpdate(data => { chunks.push(data) }).await()
+  return chunks.join('').trim()
+}
 
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
-  const model = new LlmLlamacpp({
-    files: { model: [path.join(dirPath, modelName)] },
-    config: {
-      device: 'gpu',
-      gpu_layers: '999',
-      ctx_size: '1024',
-      n_predict: '512',
-      temp: '0',
-      seed: '42',
-      'cache-type-k': 'tbq4_0',
-      'cache-type-v': 'pq4_0',
-      'flash-attn': 'on',
-      verbosity: '2'
-    },
-    logger: console,
-    opts: { stats: true }
-  })
+// Metal / iOS reject path — single test, uses the first KV combo since
+// the addon guard is independent of which TBQ KV-type was requested.
+test(
+  'Metal/iOS rejects TBQ cache types at model.load()',
+  { skip: !isMetalRejectPath, timeout: 60_000 },
+  async t => {
+    const kv = KV_COMBOS[0]
+    const [modelName, dirPath] = await ensureModel({
+      modelName: MODELS[0].name,
+      downloadUrl: MODELS[0].url
+    })
 
-  t.teardown(async () => {
-    await model.unload().catch(() => {})
-    specLogger.release()
-  })
+    const specLogger = attachSpecLogger({ forwardToConsole: true })
+    const model = new LlmLlamacpp({
+      files: { model: [path.join(dirPath, modelName)] },
+      config: makeConfig(kv),
+      logger: console,
+      opts: { stats: true }
+    })
 
-  if (isMetalRejectPath) {
-    // The addon should refuse TBQ cache types on Metal before sched_reserve
-    // gets a chance to abort. We assert the rejection happens at load time
-    // with a recognizable message that mentions the cache-type and the
-    // offending backend.
+    t.teardown(async () => {
+      await model.unload().catch(() => {})
+      specLogger.release()
+    })
+
     await t.exception(
       () => model.load(),
       /(cache-type|TurboQuant|PolarQuant).*(Metal|not supported)/i,
-      'model.load() rejects tbq4_0/pq4_0 on Metal with a clear backend-not-supported error'
+      'model.load() rejects TBQ on Metal with a clear backend-not-supported error'
     )
-    return
   }
+)
 
-  await model.load()
+// Vulkan / Android GPU happy path — parameterized over MODELS x KV_COMBOS.
+for (const model of MODELS) {
+  for (const kv of KV_COMBOS) {
+    const label = `TBQ inference: ${model.id} (head_dim=${model.headDim}) K=${kv.k} V=${kv.v}`
 
-  const response = await model.run([
-    { role: 'system', content: 'You are a geography tutor. Answer briefly.' },
-    { role: 'user', content: 'What is the capital of France?' }
-  ])
+    test(
+      label,
+      { skip: skipReason || isMetalRejectPath, timeout: 600_000 },
+      async t => {
+        const [modelName, dirPath] = await ensureModel({
+          modelName: model.name,
+          downloadUrl: model.url
+        })
 
-  const chunks = []
-  await response.onUpdate(data => { chunks.push(data) }).await()
-  const output = chunks.join('').trim()
-  const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
+        const specLogger = attachSpecLogger({ forwardToConsole: true })
+        const llm = new LlmLlamacpp({
+          files: { model: [path.join(dirPath, modelName)] },
+          config: makeConfig(kv),
+          logger: console,
+          opts: { stats: true }
+        })
 
-  t.comment(`output: ${JSON.stringify(output)}`)
-  t.ok(output.length > 0, `output non-empty (${output.length} chars)`)
-  t.ok(generatedTokens > 0, `generated tokens > 0 (got ${generatedTokens})`)
-  t.ok(/paris|france/i.test(output), `output mentions "Paris" or "France" (got ${JSON.stringify(output)})`)
-})
+        t.teardown(async () => {
+          await llm.unload().catch(() => {})
+          specLogger.release()
+        })
+
+        try {
+          await llm.load()
+        } catch (err) {
+          // Android GPU drivers that don't expose Vulkan as the chosen
+          // backend (e.g. Adreno 830 preferring OpenCL) will hit the
+          // addon's TBQ guard. Treat that as a clean skip rather than
+          // a test failure — the guard itself is exercised on the
+          // Metal/iOS path above.
+          if (isAndroid && /TurboQuant.*not supported/i.test(err.message)) {
+            t.comment(`Android backend does not support TBQ: ${err.message}`)
+            t.pass('addon rejected TBQ on this Android backend (likely OpenCL)')
+            return
+          }
+          t.fail(`unexpected load error: ${err.message}`)
+          return
+        }
+
+        const response = await llm.run(PROMPT)
+        const output = await collectResponse(response)
+        const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
+
+        t.comment(`output: ${JSON.stringify(output.slice(0, 200))}`)
+        t.ok(output.length > 0, `output non-empty (${output.length} chars)`)
+        t.ok(generatedTokens > 0, `generated tokens > 0 (got ${generatedTokens})`)
+        // Llama 3.2 Instruct does not enter a <think> CoT preamble like
+        // Qwen3, but the relaxed regex still tolerates models that say
+        // "France" repeatedly before converging on "Paris".
+        t.ok(
+          /paris|france/i.test(output),
+          `output mentions "Paris" or "France" (got ${JSON.stringify(output.slice(0, 200))})`
+        )
+      }
+    )
+  }
+}
