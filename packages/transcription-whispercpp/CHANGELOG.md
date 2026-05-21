@@ -9,11 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - Reverted the whisper-local `WhisperOutputCallBackJs` workaround introduced in `0.7.0`:
-  - Deleted `addon/src/addon/WhisperOutputCallbackJs.hpp` and its `#include` from `addon/src/addon/AddonJs.hpp`.
-  - `createInstance` in `addon/src/addon/AddonJs.hpp` now constructs the upstream `qvac_lib_inference_addon_cpp::OutputCallBackJs` directly.
-  - Removed the two `setImmediate` defense-in-depth yields (and their explanatory comment) from `WhisperInterface.destroyInstance()` in `whisper.js`.
-- Rationale: the underlying iOS bare-kit `transcribe()`-after-`unload()` race (Mach exception 309 / EXC_BAD_ACCESS / PAC failure inside `js_delete_reference` / `js_open_handle_scope`) is now fixed upstream in `qvac-lib-inference-addon-cpp@1.2.0`, which `transcription-whispercpp` already depends on (`vcpkg.json` requires `>=1.2.0`). The upstream `~OutputCallBackJs()` deletes the JS references synchronously before scheduling `uv_close`, so the close-callback never touches `js_env_t*` and the local subclass is redundant.
-- Verified by rebuilding `transcription-whispercpp` for `ios-arm64` against `qvac-lib-inference-addon-cpp@1.2.0` from the registry and running the full `tests-qvac` transcription suite on a physical iPhone (20/20 passed, including all streaming and `transcribeStream` event tests).
+- Deleted `addon/src/addon/WhisperOutputCallbackJs.hpp` and its `#include` from `addon/src/addon/AddonJs.hpp`.
+- `createInstance` in `addon/src/addon/AddonJs.hpp` now constructs the upstream `qvac_lib_inference_addon_cpp::OutputCallBackJs` directly.
+- Removed the two `setImmediate` defense-in-depth yields (and their explanatory comment) from `WhisperInterface.destroyInstance()` in `whisper.js`.
 
 ## [0.7.0]
 
