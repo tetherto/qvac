@@ -5,14 +5,28 @@ const https = require('bare-https')
 const os = require('bare-os')
 const process = require('bare-process')
 
-async function downloadFile (url, dest) {
+const TRANSIENT_ERROR_CODES = new Set([
+  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
+  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+])
+
+function isTransientError (err) {
+  if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
+  if (err.statusCode) {
+    const s = err.statusCode
+    return s === 408 || s === 429 || s >= 500
+  }
+  return false
+}
+
+function urlHost (url) {
+  try { return new URL(url).host } catch (_) { return url }
+}
+
+async function downloadFileOnce (url, dest, opts = {}) {
+  const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let settled = false
-    // Once a redirect has handed off `dest` to a recursive call, this call
-    // must not touch the file again: late error events from the outer
-    // writestream would otherwise unlink the freshly-downloaded file written
-    // by the recursive call, leaving a "successful" promise but an empty
-    // disk path.
     let handedOff = false
 
     const safeResolve = () => {
@@ -25,8 +39,6 @@ async function downloadFile (url, dest) {
       settled = true
       reject(err)
     }
-    // Unlink only when this call still owns `dest`. Skip if a redirect already
-    // delegated ownership to a recursive call.
     const cleanupAndReject = (err) => {
       if (settled || handedOff) {
         if (!settled) safeReject(err)
@@ -36,27 +48,29 @@ async function downloadFile (url, dest) {
     }
 
     const file = fs.createWriteStream(dest)
-
     file.on('error', (err) => {
       file.destroy()
       cleanupAndReject(err)
     })
 
+    const reqTimer = setTimeout(() => {
+      req.destroy(Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), { code: 'ETIMEDOUT' }))
+    }, timeoutMs)
+
     const req = https.request(url, response => {
-      // Handle redirects (added 307, 308 for Windows model download)
+      clearTimeout(reqTimer)
+
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
-        // Wait for unlink to complete before recursive call (fixes Windows race condition)
+        if (_redirectCount >= maxRedirects) {
+          fs.unlink(dest, () => safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`)))
+          return
+        }
         fs.unlink(dest, (unlinkErr) => {
-          // Ignore ENOENT - file may not exist yet
-          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-            return safeReject(unlinkErr)
-          }
-
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') return safeReject(unlinkErr)
           const redirectUrl = new URL(response.headers.location, url).href
           handedOff = true
-
-          downloadFile(redirectUrl, dest)
+          downloadFileOnce(redirectUrl, dest, { ...opts, _redirectCount: _redirectCount + 1 })
             .then(safeResolve)
             .catch(safeReject)
         })
@@ -64,49 +78,97 @@ async function downloadFile (url, dest) {
       }
 
       if (response.statusCode !== 200) {
+        const err = Object.assign(
+          new Error(`Download failed: HTTP ${response.statusCode} from ${urlHost(url)}`),
+          { statusCode: response.statusCode }
+        )
         file.destroy()
-        cleanupAndReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`))
+        cleanupAndReject(err)
         return
       }
 
+      let idleTimer = null
+      const resetIdle = () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        idleTimer = setTimeout(() => {
+          response.destroy(Object.assign(
+            new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
+            { code: 'ETIMEDOUT' }
+          ))
+        }, idleTimeoutMs)
+      }
+      resetIdle()
+      response.on('data', resetIdle)
       response.on('error', (err) => {
+        if (idleTimer) clearTimeout(idleTimer)
         file.destroy()
         cleanupAndReject(err)
       })
 
       response.pipe(file)
-
-      // Wait for 'close' event to ensure data is fully flushed to disk (important on Windows)
-      file.on('close', () => {
-        safeResolve()
-      })
+      file.on('close', () => { if (idleTimer) clearTimeout(idleTimer); safeResolve() })
     })
 
-    req.on('error', err => {
-      file.destroy()
-      cleanupAndReject(err)
-    })
-
+    req.on('error', err => { clearTimeout(reqTimer); file.destroy(); cleanupAndReject(err) })
     req.end()
   })
 }
 
+async function downloadFileWithRetries (urls, dest, opts = {}) {
+  const { retries = 3, minBytes = 1, ...downloadOpts } = opts
+  const urlList = Array.isArray(urls) ? urls : [urls]
+  const partPath = dest + '.part'
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const url = urlList[attempt % urlList.length]
+    const host = urlHost(url)
+    try {
+      await downloadFileOnce(url, partPath, downloadOpts)
+
+      const stat = fs.statSync(partPath)
+      if (stat.size < minBytes) {
+        fs.unlinkSync(partPath)
+        throw Object.assign(new Error(`Downloaded file is empty from ${host}`), { code: 'ESIZE' })
+      }
+
+      fs.renameSync(partPath, dest)
+      return
+    } catch (err) {
+      try { fs.unlinkSync(partPath) } catch (_) {}
+
+      const attemptsLeft = retries - attempt
+      if (!isTransientError(err) || attemptsLeft === 0) {
+        console.error(`[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`)
+        throw err
+      }
+
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
+      console.log(`[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+}
+
 async function ensureModel ({ modelName, downloadUrl }) {
   const modelDir = path.resolve(__dirname, '../model')
-
   const modelPath = path.join(modelDir, modelName)
 
   if (fs.existsSync(modelPath)) {
-    return [modelName, modelDir]
+    const stat = fs.statSync(modelPath)
+    if (stat.size > 0) {
+      return [modelName, modelDir]
+    }
+    console.log(`[download] Removing zero-byte cached file: ${modelName}`)
+    fs.unlinkSync(modelPath)
   }
 
   fs.mkdirSync(modelDir, { recursive: true })
-  console.log(`Downloading test model ${modelName}...`)
+  console.log(`[download] Downloading test model ${modelName}...`)
 
-  await downloadFile(downloadUrl, modelPath)
+  await downloadFileWithRetries(downloadUrl, modelPath)
 
-  const stats = fs.statSync(modelPath)
-  console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+  const stat = fs.statSync(modelPath)
+  console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(1)}MB`)
   return [modelName, modelDir]
 }
 
@@ -474,6 +536,19 @@ async function verifyFinalStatus (t, model, result = null) {
   t.ok(result, 'Result must be provided')
 }
 
+const test = require('brittle')
+
+function safeTest (name, opts, fn) {
+  test(name, opts, async (t) => {
+    try {
+      await fn(t)
+    } catch (err) {
+      console.error(err)
+      t.fail(`${name}: ${err.message}`)
+    }
+  })
+}
+
 module.exports = {
   ensureModel,
   ensureModelPath,
@@ -493,5 +568,7 @@ module.exports = {
   setupParams,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
-  verifyFinalStatus
+  verifyFinalStatus,
+  safeTest,
+  downloadFileWithRetries
 }

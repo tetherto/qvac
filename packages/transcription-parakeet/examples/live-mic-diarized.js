@@ -10,16 +10,27 @@
  * Sortformer segment; the ASR side tags each printed transcript with
  * `lastSpeaker`. Press Ctrl-C to flush and exit.
  *
- * Diarization tagging is best-effort. Sortformer's streaming session
- * is permutation-invariant per chunk and prone to occasional
- * speaker-ID drift on continuous single-speaker stretches once two
- * voices have been seen in the rolling-history window. parakeet-cpp
- * documents this behaviour in
+ * Recommended `--diar-model`: the v2.1 Sortformer GGUF
+ * (`diar_streaming_sortformer_4spk-v2.1.q8_0.gguf`). parakeet-cpp
+ * detects v2.1 from the GGUF metadata tag
+ * `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"` and
+ * enables AOSC (Audio-Online Speaker Cache) automatically, which
+ * anchors speaker slots across silence and re-entry and largely
+ * removes the drift caveat described below.
+ *
+ * For an AOSC-aware variant that also exposes the speaker-cache
+ * tuning knobs from the CLI, see `examples/live-mic-diarized-aosc.js`.
+ *
+ * v1 caveat (kept for users running the older v1 GGUF): Sortformer's
+ * streaming session is permutation-invariant per chunk and prone to
+ * occasional speaker-ID drift on continuous single-speaker stretches
+ * once two voices have been seen in the rolling-history window.
+ * parakeet-cpp documents this behaviour in
  * `parakeet-cpp/include/parakeet/diarization.h:80-82`. Fixing it
- * properly requires per-segment voice embeddings (currently not
- * exposed by the engine) -- this example therefore renders the raw
- * Sortformer ID and accepts the occasional mis-tag rather than try
- * to second-guess the model in JS.
+ * properly required per-segment voice embeddings (now solved by v2.1's
+ * AOSC) -- this example therefore renders the raw Sortformer ID and
+ * accepts the occasional mis-tag rather than try to second-guess the
+ * model in JS.
  *
  * Usage:
  *   bare examples/live-mic-diarized.js \
@@ -98,9 +109,14 @@ function parseArgs () {
 }
 
 // Pin the Sortformer rolling-history window at parakeet-cpp's default
-// (30 s). Pushing past it puts the input outside the window the
-// underlying model was trained on, which empirically causes the engine
-// to collapse all voices onto sortformer_0.
+// (30 s). Pushing past it on a v1 GGUF puts the input outside the
+// window the underlying model was trained on, which empirically causes
+// the engine to collapse all voices onto sortformer_0.
+//
+// On a v2.1 GGUF, AOSC is auto-enabled and supersedes this rolling
+// window with a NeMo-port speaker cache. parakeet-cpp ignores
+// `history_ms` for v2.1 sessions, so this constant is harmless either
+// way and is kept for backwards compatibility with v1 GGUFs.
 const STREAMING_HISTORY_MS = 30000
 
 // Pull the Sortformer speaker_id out of the addon's segment text

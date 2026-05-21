@@ -11,16 +11,20 @@
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
-const proc = require('bare-process')
 const test = require('brittle')
 
 const TTSGgml = require('@qvac/tts-ggml')
 const { runTTS } = require('../utils/runTTS')
+const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxMtlModels } = require('../utils/downloadModel')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
+
+// Language coverage test, not a GPU policy test: rely on the package
+// default (`useGPU: false`) and the Android C++-side override in
+// ChatterboxModel::loadLocked rather than opting into GPU here.
+// Tests that *are* about GPU live in gpu-smoke.test.js.
 
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -36,7 +40,13 @@ const MTL_SENTENCES = [
 ]
 
 async function loadChatterboxMtlTTS (params) {
-  const refWavPath = params.refWavPath || path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Route through `resolveRefWavPath` so the mobile-asset path (staged
+  // into `Library/Caches/jfk.wav` via `global.assetPaths`) is preferred
+  // over the in-bundle `test/reference-audio/jfk.wav`; the bundled
+  // path is not readable from native code on iOS, which previously
+  // tripped `ChatterboxModel::validateConfig` with `ModelFileNotFound`
+  // the moment `model.load()` reached the C++ constructor.
+  const refWavPath = resolveRefWavPath(params)
   if (!fs.existsSync(refWavPath)) {
     throw new Error('[Chatterbox MTL] reference audio not found at ' + refWavPath)
   }
@@ -68,8 +78,7 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt with shared engi
 
   const model = await loadChatterboxMtlTTS({
     modelDir: download.targetDir,
-    language: MTL_SENTENCES[0].lang,
-    useGPU: !NO_GPU
+    language: MTL_SENTENCES[0].lang
   })
   try {
     for (let i = 0; i < MTL_SENTENCES.length; i++) {
@@ -105,8 +114,7 @@ test('Chatterbox MTL TTS (ggml): backendDevice + backendId surfaced in stats', {
 
   const model = await loadChatterboxMtlTTS({
     modelDir: download.targetDir,
-    language: 'es',
-    useGPU: !NO_GPU
+    language: 'es'
   })
   try {
     const result = await runTTS(
