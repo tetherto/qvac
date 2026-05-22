@@ -4,9 +4,10 @@
  * Usage:
  *   bun run examples/transcription/parakeet-sortformer.ts [sortformer-gguf] [wav-file]
  *
- * Two-step flow: Sortformer diarizes the audio, then TDT transcribes each
+ * Two-step flow: Sortformer v2.1 diarizes the audio, then TDT transcribes each
  * speaker segment. Defaults to registry GGUFs and
- * `examples/audio/diarization-sample-16k.wav`.
+ * `examples/audio/diarization-sample-16k.wav`. For live streaming + AOSC, see
+ * `parakeet-sortformer-streaming.ts`.
  *
  * Sample audio is in the QVAC source repo but not the published npm package.
  * Download the default file into `examples/audio/`:
@@ -17,7 +18,7 @@ import {
   unloadModel,
   transcribe,
   PARAKEET_TDT_0_6B_V3_Q8_0,
-  PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
 } from "@qvac/sdk";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -27,7 +28,7 @@ import { tmpdir } from "os";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
-const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_4SPK_V1_Q8_0;
+const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0;
 
 const defaultAudioPath = join(
   __dirname,

@@ -6,16 +6,15 @@
  *
  * Streams 16 kHz mono s16le audio in real-time-paced chunks (required for parakeet
  * duplex streaming). Loads v2.1 with AOSC knobs in `modelConfig`. Omit the model
- * argument to use `PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0`.
+ * argument to use `PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0`.
  *
- * For offline batch diarization on Sortformer v1, see `parakeet-sortformer.ts`.
+ * For offline batch diarization (Sortformer + TDT), see `parakeet-sortformer.ts`.
  */
 import {
   loadModel,
   unloadModel,
   transcribeStream,
-  PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0,
-  PARAKEET_SORTFORMER_V21_AOSC_LOAD_CONFIG,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   type LoadModelOptions,
 } from "@qvac/sdk";
 import { spawn } from "child_process";
@@ -24,6 +23,18 @@ const SAMPLE_RATE = 16000;
 const BYTES_PER_S16_SAMPLE = 2;
 const STREAM_CHUNK_MS = 2000;
 
+/** NeMo-port AOSC defaults for v2.1 Sortformer (`parakeet.model_variant` in GGUF). */
+const SORTFORMER_V21_AOSC_LOAD_CONFIG = {
+  streaming: true,
+  streamingChunkMs: 2000,
+  streamingChunkRightContextMs: 560,
+  streamingSpkCacheEnable: true,
+  streamingSpkCacheLen: 188,
+  streamingFifoLen: 188,
+  streamingChunkLeftContextMs: 80,
+  streamingSpkCacheUpdatePeriod: 144,
+} as const;
+
 const args = process.argv.slice(2);
 
 if (!args[0]) {
@@ -31,7 +42,7 @@ if (!args[0]) {
     "Usage: bun run examples/transcription/parakeet-sortformer-streaming.ts <wav-file-path> [sortformer-gguf]",
   );
   console.error(
-    "\nDefaults to the v2.1 q8_0 registry path (PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0).",
+    "\nDefaults to the v2.1 q8_0 registry model (PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0).",
   );
   process.exit(1);
 }
@@ -81,12 +92,12 @@ function readS16leFromWav(wavPath: string): Promise<Uint8Array> {
 }
 
 const loadOptions: LoadModelOptions = {
-  modelType: "parakeet",
-  modelConfig: { ...PARAKEET_SORTFORMER_V21_AOSC_LOAD_CONFIG },
+  modelType: "parakeet-transcription",
+  modelConfig: { ...SORTFORMER_V21_AOSC_LOAD_CONFIG },
   onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
   ...(sortformerOverride
     ? { modelSrc: sortformerOverride }
-    : { modelSrc: PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0 }),
+    : { modelSrc: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0 }),
 };
 
 try {

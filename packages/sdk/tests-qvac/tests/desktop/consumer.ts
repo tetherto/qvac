@@ -28,7 +28,7 @@ import {
   TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
-  PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -295,7 +295,7 @@ resources.define("parakeet-ctc", {
 });
 
 resources.define("parakeet-sortformer", {
-  constant: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   type: "parakeet",
   config: {},
 });
