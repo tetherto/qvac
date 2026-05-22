@@ -218,9 +218,17 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
       root.style.paddingRight = `${scrollbarWidth}px`;
     }
     root.style.overflow = 'hidden';
+    // Publish the gutter as a CSS custom property so any
+    // `position: fixed` element (e.g. `AskAIPill`) can reserve the
+    // same width and avoid being recentered when the scrollbar is
+    // removed from the ICB. Only fixed-positioned children need
+    // this; flow-positioned content already inherits the
+    // documentElement padding.
+    root.style.setProperty('--ask-ai-scrollbar-gutter', `${scrollbarWidth}px`);
     return () => {
       root.style.overflow = previousOverflow;
       root.style.paddingRight = previousPaddingRight;
+      root.style.removeProperty('--ask-ai-scrollbar-gutter');
     };
   }, [modalState]);
 
