@@ -206,17 +206,15 @@ This command runs the complete build sequence:
 2. `bare-make build` - Compiles the native C++ addon
 3. `bare-make install` - Installs the built addon
 
-#### Building with Vulkan GPU Acceleration
+#### GPU acceleration
 
-On Linux, Android, and Windows, Vulkan support can be enabled at build time. Ensure the [Vulkan SDK](#gpu-acceleration-optional) is installed, then pass `-D ENABLE_VULKAN=ON` during the generate step:
+GPU backends are selected automatically per platform via `vcpkg.json` features and the per-platform `whisper-cpp` feature deps:
 
-```bash
-bare-make generate -D ENABLE_VULKAN=ON
-bare-make build
-bare-make install
-```
+- **Linux / Windows** — Vulkan (requires the [Vulkan SDK](#gpu-acceleration-optional) on the host)
+- **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped alongside the addon prebuild
+- **macOS / iOS** — Metal (statically linked)
 
-CI prebuilds for Linux, Android, and Windows include Vulkan by default. macOS and iOS use Metal instead.
+No `bare-make generate` flag is required; just `npm run build`. CI prebuilds for every platform include the matching GPU backends.
 
 #### Running Tests
 
@@ -271,6 +269,7 @@ Most users interact with the addon exclusively through `index.js`. From that ent
 | `contextParams` | `model` | Absolute or relative path to the `.bin` whisper model |
 | | | *(all other context keys keep their defaults because changing them forces a full reload, see below)* |
 | `whisperConfig` | *(any `whisper_full_params` key)* | Forwarded untouched. We surface convenience defaults in `index.js`, but every whisper.cpp flag is accepted—see [Advanced configuration](#advanced-configuration). |
+| | `backendsDir` | Root directory for dynamically-loaded ggml backend `.so` files (Vulkan, OpenCL, per-arch CPU variants on Android). Defaults to the package's `prebuilds/` folder; the native addon appends `<bare-target>/<module-name>` before scanning. Pass an explicit path when prebuilds live elsewhere — e.g. Android `ApplicationInfo.nativeLibraryDir` when backend libs ship inside the APK. No-op on Apple (statically linked). |
 | `miscConfig` | `caption_enabled` | Formats segments with `<\|start\|>..<\|end\|>` markers |
 
 #### GPU acceleration is opt-in

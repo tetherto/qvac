@@ -43,8 +43,12 @@ safeTest('model loading - load and unload', { timeout: testTimeout }, async t =>
       files: {
         model: path.join(modelDir, downloadedModelName)
       },
-      config,
-      logger: console
+      config: {
+        ...config,
+        verbosity: 2
+      },
+      logger: console,
+      opts: { stats: true }
     })
 
     await addon.load()
