@@ -8,7 +8,7 @@ import { customTree } from '@/lib/custom-tree';
 import {
   AskAISearchToggleLarge,
   AskAISearchToggleSmall,
-  AskAITextSelection,
+  // AskAITextSelection,  // disabled while we sort out the legacy fallback
 } from '@/components/ask-ai';
 import { AskAILegacyShell, AskAIPill } from '@/components/ask-ai-legacy';
 
@@ -77,7 +77,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
        */}
       <AskAILegacyShell />
       <AskAIPill />
-      <AskAITextSelection />
+      {/* AskAITextSelection disabled — re-enable by uncommenting the import above and rendering <AskAITextSelection /> here. */}
     </>
   );
 }
