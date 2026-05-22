@@ -4,12 +4,18 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <mutex>
 #include <ranges>
 #include <thread>
 #include <utility>
+
+#if defined(__ANDROID__)
+#include <ggml-backend.h>
+#endif
 
 #include "WhisperConfig.hpp"
 #include "WhisperHandlers.hpp"
@@ -63,8 +69,48 @@ auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
                     std::to_string(static_cast<int>(transcript.end)) + "|>";
 }
 
+#if defined(__ANDROID__)
+namespace {
+// Android ships ggml with `GGML_BACKEND_DL=ON`, so no backend is
+// statically registered. dlopen the per-arch CPU + GPU `.so` modules
+// once per process; otherwise whisper_init aborts on a NULL CPU device.
+// Mirrors packages/{diffusion-cpp,llm-llamacpp,classification-ggml,…}.
+void ensureBackendsLoadedAndroid(const std::string& backendsDir) {
+  static std::once_flag flag;
+  std::call_once(flag, [&]() {
+    if (backendsDir.empty()) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "Android: configurationParams.backendsDir not set; falling back to "
+          "ggml_backend_load_all() (default search path). CPU/Vulkan/OpenCL "
+          "registration may fail inside an APK.");
+      ggml_backend_load_all();
+      return;
+    }
+#ifdef BACKENDS_SUBDIR
+    const std::filesystem::path variantsDir =
+        (std::filesystem::path(backendsDir) /
+         std::filesystem::path(BACKENDS_SUBDIR))
+            .lexically_normal();
+#else
+    const std::filesystem::path variantsDir = backendsDir;
+#endif
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        std::string("Android: loading ggml backends from: ") +
+            variantsDir.string());
+    ggml_backend_load_all_from_path(variantsDir.string().c_str());
+  });
+}
+} // namespace
+#endif // __ANDROID__
+
 void WhisperModel::load() {
   if (!ctx_) {
+
+#if defined(__ANDROID__)
+    ensureBackendsLoadedAndroid(cfg_.backendsDir);
+#endif
 
     whisper_context_params contextParams = toWhisperContextParams(cfg_);
 
