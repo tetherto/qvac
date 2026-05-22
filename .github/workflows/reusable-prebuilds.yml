@@ -215,6 +215,8 @@ jobs:
 
       - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        with:
+          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
