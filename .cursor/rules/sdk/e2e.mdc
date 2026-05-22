@@ -4,23 +4,23 @@ globs: packages/sdk/**
 alwaysApply: false
 ---
 
-# SDK e2e test suite (`packages/sdk/tests-qvac`)
+# SDK e2e test suite (`packages/sdk/e2e`)
 
-## When editing SDK source (`packages/sdk/**` outside `tests-qvac/`)
+## When editing SDK source (`packages/sdk/**` outside `e2e/`)
 
-- **Evaluate e2e impact before finishing.** Check whether existing definitions or executors under `packages/sdk/tests-qvac/tests/` need updates: new params, changed expectations, new `testId`s, suite tagging. Call it out in the PR description.
+- **Evaluate e2e impact before finishing.** Check whether existing definitions or executors under `packages/sdk/e2e/tests/` need updates: new params, changed expectations, new `testId`s, suite tagging. Call it out in the PR description.
 - **On SDK API surface or model constant changes:** rebuild the tests package to catch type breaks and
   import failures early. If you've already rebuilt the SDK, run `npm run install:build`; otherwise run
-  `npm run install:build:full` (rebuilds SDK and tests-qvac). Adapt existing tests or add new ones as
-  needed. See [tests-qvac/README.md](../../../packages/sdk/tests-qvac/README.md) "Rebuilding after changes"
+  `npm run install:build:full` (rebuilds SDK and e2e). Adapt existing tests or add new ones as
+  needed. See [e2e/README.md](../../../packages/sdk/e2e/README.md) "Rebuilding after changes"
   for the full decision table including mobile app rebuild rules.
 
 ## Adding new e2e tests
 
 ### Definitions
 
-- Live in `packages/sdk/tests-qvac/tests/<feature>-tests.ts`.
-- MUST be aggregated in `packages/sdk/tests-qvac/tests/test-definitions.ts`.
+- Live in `packages/sdk/e2e/tests/<feature>-tests.ts`.
+- MUST be aggregated in `packages/sdk/e2e/tests/test-definitions.ts`.
 
 ### Executor placement decision tree
 
@@ -40,7 +40,7 @@ Register new executors in the relevant consumer entry: `tests/desktop/consumer.t
 
 ### Assets
 
-New assets go under `tests-qvac/assets/`. Update `tests-qvac/qvac-test.config.js` `consumers.mobile.assets.patterns` if the new files aren't covered by existing globs.
+New assets go under `e2e/assets/`. Update `e2e/qvac-test.config.js` `consumers.mobile.assets.patterns` if the new files aren't covered by existing globs.
 
 ## Smoke suite policy
 
@@ -52,9 +52,9 @@ New assets go under `tests-qvac/assets/`. Update `tests-qvac/qvac-test.config.js
 ## Local iteration before pushing
 
 ```bash
-cd packages/sdk/tests-qvac
+cd packages/sdk/e2e
 npm run install:build
 npx qvac-test run:local:desktop --filter <prefix>
 ```
 
-See [tests-qvac/README.md](../../../packages/sdk/tests-qvac/README.md) for full local-run instructions and CI trigger labels.
+See [e2e/README.md](../../../packages/sdk/e2e/README.md) for full local-run instructions and CI trigger labels.

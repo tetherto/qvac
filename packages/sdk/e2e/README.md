@@ -7,7 +7,7 @@ A producer orchestrates a shared queue of tests over MQTT; a consumer runs them 
 ## Running locally
 
 ```bash
-cd packages/sdk/tests-qvac
+cd packages/sdk/e2e
 npm run install:build                # installs deps + builds tests
 cp .env.example .env                 # only needed if you want to point at a remote broker
 
@@ -36,8 +36,8 @@ Which rebuild command you run depends on what changed.
 
 | You changed                              | Command                         | Rebuild mobile app?                       |
 | ---------------------------------------- | ------------------------------- | ----------------------------------------- |
-| SDK source (`packages/sdk/` outside tests-qvac) | `npm run install:build:full`    | Yes — `--skip-build` will miss the change |
-| Test code or assets in `tests-qvac/`     | `npm run install:build`         | Yes when running on mobile                |
+| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full`    | Yes — `--skip-build` will miss the change |
+| Test code or assets in `e2e/`            | `npm run install:build`         | Yes when running on mobile                |
 | Only the producer side (filter, suite)   | none                            | No — use `--skip-build`                   |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
@@ -70,7 +70,7 @@ Non-obvious inputs:
 
 - **"Use workflow from" (GitHub's own selector) vs `test-version`** — these are independent. The selector
   picks the branch that supplies the *workflow YAML*; `test-version` is the git ref that gets checked out for
-  the *code under test* (and the tests-qvac package). Leave `test-version` blank to test the same branch the
+  the *code under test* (and the e2e package). Leave `test-version` blank to test the same branch the
   workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
 - `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
 - `desktop-platforms` — JSON array of runner labels; defaults to all three GPU runners. Narrow to one during
