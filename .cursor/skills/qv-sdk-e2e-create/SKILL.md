@@ -1,7 +1,7 @@
 ---
 name: qv-sdk-e2e-create
 description: >
-  Plans and scaffolds e2e tests in packages/sdk/tests-qvac for a new or changed public SDK API. Use when
+  Plans and scaffolds e2e tests in packages/sdk/e2e for a new or changed public SDK API. Use when
   adding or modifying SDK functionality that is exposed to consumers. Enforces happy / sad / error
   coverage, deterministic model-output assertions, mobile/desktop placement, smoke-suite selection, and
   local validation with run:local.
@@ -9,7 +9,7 @@ description: >
 
 # SDK e2e Test Creation
 
-Plan and scaffold e2e tests in `packages/sdk/tests-qvac` for a new or changed SDK feature exposed through
+Plan and scaffold e2e tests in `packages/sdk/e2e` for a new or changed SDK feature exposed through
 the public API.
 
 ## When to use this skill
@@ -26,7 +26,7 @@ Use when:
 Do NOT use for:
 
 - Internal refactors that don't change the public surface.
-- Unit tests inside `packages/sdk/` (this skill covers only the e2e suite under `packages/sdk/tests-qvac`).
+- Unit tests inside `packages/sdk/` (this skill covers only the e2e suite under `packages/sdk/e2e`).
 
 ## Approach
 
@@ -34,7 +34,7 @@ Investigate first, then propose a concrete plan. Only ask the user for informati
 recovered from code or context.
 
 1. **Read the feature.** Identify the new/changed exports, inputs, return type, model dependencies, and
-   any existing examples under `packages/sdk/examples/` or tests under `packages/sdk/tests-qvac/tests/`.
+   any existing examples under `packages/sdk/examples/` or tests under `packages/sdk/e2e/tests/`.
 2. **Find comparable tests.** Look for an analogous existing feature in `tests/test-definitions.ts` and
    its executor. Mirror its style unless there's reason to deviate.
 3. **Determine model-output testability** (see §"Model-output strategy"). Propose a specific validator
@@ -87,7 +87,7 @@ More cases are encouraged for multi-branch features.
 
 ## Placement and mobile constraints
 
-Executor placement (from [`.cursor/rules/sdk/tests-qvac.mdc`](../../rules/sdk/tests-qvac.mdc)):
+Executor placement (from [`.cursor/rules/sdk/e2e.mdc`](../../rules/sdk/e2e.mdc)):
 
 - Pure SDK API, no Node stdlib, no RN APIs → `tests/shared/executors/`.
 - Needs `node:fs`, `node:path`, `process.cwd()`, or other Node-only APIs → `tests/desktop/executors/`.
@@ -170,7 +170,7 @@ After scaffolding, provide the user with the exact command to run on desktop. Do
 complete until the user confirms the tests pass locally.
 
 ```bash
-cd packages/sdk/tests-qvac
+cd packages/sdk/e2e
 
 # If SDK source changed
 npm run install:build:full
@@ -217,11 +217,11 @@ Before marking scaffolding complete:
 
 ## References
 
-- Executor placement, smoke policy, rebuild flow → `.cursor/rules/sdk/tests-qvac.mdc` and
-  `packages/sdk/tests-qvac/README.md`.
+- Executor placement, smoke policy, rebuild flow → `.cursor/rules/sdk/e2e.mdc` and
+  `packages/sdk/e2e/README.md`.
 - Expectation schema → `@tetherto/qvac-test-suite` `dist/schemas/expectations.js`.
 - Existing examples:
-  - Strong output assertion: `packages/sdk/tests-qvac/tests/translation-salamandra-tests.ts`
+  - Strong output assertion: `packages/sdk/e2e/tests/translation-salamandra-tests.ts`
     (`contains-any` over expected Spanish tokens).
-  - Error path: `packages/sdk/tests-qvac/tests/vision-tests.ts` (`throws-error` with `errorContains`).
-  - Shape fallback: `packages/sdk/tests-qvac/tests/completion-tests.ts` (`type: "string"`).
+  - Error path: `packages/sdk/e2e/tests/vision-tests.ts` (`throws-error` with `errorContains`).
+  - Shape fallback: `packages/sdk/e2e/tests/completion-tests.ts` (`type: "string"`).
