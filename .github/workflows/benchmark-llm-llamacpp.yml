@@ -172,6 +172,16 @@ jobs:
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
+          # Need full history so the baseline-resolve step can
+          # `git show <merge-base>:packages/llm-llamacpp/package.json`.
+          # A shallow clone (the default) fails with "exists on disk,
+          # but not in <sha>".
+          fetch-depth: 0
+
+      - name: Fetch main for merge-base lookups
+        if: inputs.compare_baseline
+        shell: bash
+        run: git fetch origin main --quiet
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
