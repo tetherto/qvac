@@ -159,7 +159,7 @@ export function AskAILegacyShell() {
       // toggled the view in the same session.
       forceDefaultView: true,
       aiChatSettings: {
-        aiAssistantAvatar: '/qvac-favicon.svg',
+        aiAssistantAvatar: '/qvac-icon.svg',
         exampleQuestions: [
           'What is QVAC?',
           'How do I run an LLM locally?',

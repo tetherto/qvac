@@ -60,7 +60,7 @@ export default function CustomDialog(props: SharedProps) {
     searchSettings: {},
     defaultView: 'search',
     aiChatSettings: {
-      aiAssistantAvatar: '/qvac-favicon.svg',
+      aiAssistantAvatar: '/qvac-icon.svg',
       exampleQuestions: [
         'What is QVAC?',
         'Why Tether built QVAC?',
