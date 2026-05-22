@@ -376,6 +376,14 @@ const METRIC_COLUMNS = {
     { key: 'decoder_time_ms', label: 'Decoder (ms)' },
     { key: 'audio_duration_ms', label: 'Audio (ms)' }
   ],
+  whisper: [
+    { key: 'real_time_factor', label: 'RTF' },
+    { key: 'wall_time_ms', label: 'Wall (ms)' },
+    { key: 'tps', label: 'Tokens/sec' },
+    { key: 'whisper_encode_time_ms', label: 'Encode (ms)' },
+    { key: 'whisper_decode_time_ms', label: 'Decode (ms)' },
+    { key: 'audio_duration_ms', label: 'Audio (ms)' }
+  ],
   // ONNX TTS RTF benchmark — one row per (engine, variant, backend, useGPU)
   // configuration. Mirrors the per-engine `aggregate-onnx-tts-rtf.js`
   // desktop aggregator's column set so the rendered Step Summary matches
