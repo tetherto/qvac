@@ -8,9 +8,9 @@ import { customTree } from '@/lib/custom-tree';
 import {
   AskAISearchToggleLarge,
   AskAISearchToggleSmall,
-  AskAIShell,
   AskAITextSelection,
 } from '@/components/ask-ai';
+import { AskAILegacyShell, AskAIPill } from '@/components/ask-ai-legacy';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   const linkItems: LinkItemType[] = [
@@ -65,12 +65,18 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         {children}
       </DocsLayout>
       {/*
-       * `AskAIShell` mounts the desktop bar/modal and the mobile
-       * full-screen chat. It's `position: fixed` so it doesn't need to
-       * be inside `<DocsLayout>` to position correctly. Keeping it as
-       * a sibling avoids any interaction with Fumadocs's grid template.
+       * Legacy fallback while the custom `AskAIChatShell` (composer +
+       * chat panel) is parked for bug fixes:
+       *  - `AskAILegacyShell` mounts a single Inkeep modal (chat-first)
+       *    controlled by the same `AskAIProvider` state every existing
+       *    trigger feeds.
+       *  - `AskAIPill` is the bottom click-to-open bar that replaces
+       *    the buggy composer.
+       * Both are `position: fixed`, so they sit as siblings of
+       * `<DocsLayout>` and don't interact with its grid template.
        */}
-      <AskAIShell />
+      <AskAILegacyShell />
+      <AskAIPill />
       <AskAITextSelection />
     </>
   );
