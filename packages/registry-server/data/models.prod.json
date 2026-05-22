@@ -12299,5 +12299,21 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "SmolVLA vision-language-action model fine-tuned on LIBERO. Single GGUF bundling SigLIP-B/16 vision tower (Q8_0), SmolLM2 language model, action expert, and flow-matching projections (~1.9 GB).",
+    "quantization": "q8_0",
+    "params": "smolvla-libero",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "vla",
+      "smolvla",
+      "libero",
+      "robotics"
+    ],
+    "notes": "Vision tower linear weights Q8_0; SmolLM2 / action expert / flow-matching projections F32. Converted from HuggingFaceVLA/smolvla_libero.",
+    "link": "https://huggingface.co/HuggingFaceVLA/smolvla_libero"
   }
 ]

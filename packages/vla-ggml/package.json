@@ -60,7 +60,7 @@
   "devDependencies": {
     "@types/node": "^24.2.1",
     "brittle": "^3.16.5",
-    "cmake-bare": "1.7.5",
+    "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "standard": "^17.0.0",
     "typescript": "^5.9.2"
