@@ -437,6 +437,17 @@ These tests help prevent regressions and ensure the library remains stable as co
 Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
 These tests validate the native implementation and help catch issues early in development.
 
+**C++ unit test models** live under `models/unit-test/` (resolved from the test binary via `../../../models/unit-test`). `npm run test:cpp:run` downloads missing files automatically (cross-platform Node script). To prefetch or refresh without running tests:
+
+```bash
+npm run test:cpp:models      # every fixture referenced by test/unit (includes
+                             # the optional 8-shard Llama set that CI skips)
+npm run test:cpp:models:ci   # exactly what .github/workflows/cpp-tests-llm.yml
+                             # downloads; matches what CI exercises
+```
+
+First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).
+
 ## Glossary
 
 • **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).
