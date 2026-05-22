@@ -24,8 +24,8 @@ public:
   MtmdLlmContext(
       common_params& commonParams, common_init_result_ptr llamaInit,
       ToolsCompactController& tools,
-      std::size_t visionCacheBudgetBytes =
-          qvac_lib_inference_addon_llama::VisionPrefixCache::kDefaultBudgetBytes);
+      std::size_t visionCacheBudgetBytes = qvac_lib_inference_addon_llama::
+          VisionPrefixCache::kDefaultBudgetBytes);
 
   /**
    * The destructor.

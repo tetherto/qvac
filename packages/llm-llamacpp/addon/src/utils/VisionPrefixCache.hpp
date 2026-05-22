@@ -56,8 +56,7 @@ class VisionPrefixCache {
 public:
   static constexpr std::size_t kDefaultBudgetBytes = 100ULL * 1024 * 1024;
 
-  explicit VisionPrefixCache(
-      std::size_t budgetBytes = kDefaultBudgetBytes);
+  explicit VisionPrefixCache(std::size_t budgetBytes = kDefaultBudgetBytes);
 
   // Look up a cached entry. Returns a copy of the entry (thread-safe — the
   // copy is made under the lock). Returns std::nullopt on miss.

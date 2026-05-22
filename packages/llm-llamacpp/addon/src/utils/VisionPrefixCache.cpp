@@ -11,8 +11,7 @@ namespace qvac_lib_inference_addon_llama {
 VisionPrefixCache::VisionPrefixCache(std::size_t budgetBytes)
     : budgetBytes_(budgetBytes) {}
 
-std::optional<VisionCacheEntry>
-VisionPrefixCache::get(const std::string& key) {
+std::optional<VisionCacheEntry> VisionPrefixCache::get(const std::string& key) {
   std::lock_guard<std::mutex> lock(mtx_);
   if (key.empty()) {
     ++misses_;
@@ -53,7 +52,8 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
       order_.pop_back();
       ++evictions_;
     }
-    if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
+    if (currentBytes_ > peakBytes_)
+      peakBytes_ = currentBytes_;
     return true;
   }
   while (currentBytes_ + entrySize > budgetBytes_ && !order_.empty()) {
@@ -68,7 +68,8 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
   }
   order_.push_front(key);
   currentBytes_ += entrySize;
-  if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
+  if (currentBytes_ > peakBytes_)
+    peakBytes_ = currentBytes_;
   entries_.emplace(
       std::move(key), std::make_pair(std::move(entry), order_.begin()));
   return true;
@@ -143,8 +144,15 @@ inline uint32_t rotr(uint32_t x, unsigned n) {
 }
 
 struct Sha256Ctx {
-  uint32_t state[8]{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+  uint32_t state[8]{
+      0x6a09e667,
+      0xbb67ae85,
+      0x3c6ef372,
+      0xa54ff53a,
+      0x510e527f,
+      0x9b05688c,
+      0x1f83d9ab,
+      0x5be0cd19};
   uint8_t block[64]{};
   std::size_t blockLen = 0;
   uint64_t totalLen = 0;
@@ -170,11 +178,23 @@ struct Sha256Ctx {
       uint32_t S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
       uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
       uint32_t temp2 = S0 + maj;
-      h = g; g = f; f = e; e = d + temp1;
-      d = c; c = b; b = a; a = temp1 + temp2;
+      h = g;
+      g = f;
+      f = e;
+      e = d + temp1;
+      d = c;
+      c = b;
+      b = a;
+      a = temp1 + temp2;
     }
-    state[0] += a; state[1] += b; state[2] += c; state[3] += d;
-    state[4] += e; state[5] += f; state[6] += g; state[7] += h;
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
+    state[5] += f;
+    state[6] += g;
+    state[7] += h;
   }
 
   void update(const uint8_t* data, std::size_t len) {
@@ -192,11 +212,13 @@ struct Sha256Ctx {
     uint64_t totalBits = totalLen + blockLen * 8;
     block[blockLen++] = 0x80;
     if (blockLen > 56) {
-      while (blockLen < 64) block[blockLen++] = 0;
+      while (blockLen < 64)
+        block[blockLen++] = 0;
       transform();
       blockLen = 0;
     }
-    while (blockLen < 56) block[blockLen++] = 0;
+    while (blockLen < 56)
+      block[blockLen++] = 0;
     for (int i = 7; i >= 0; --i) {
       block[blockLen++] = static_cast<uint8_t>(totalBits >> (i * 8));
     }
@@ -250,8 +272,9 @@ std::string sha256OfFile(const std::string& path) {
     Sha256Ctx ctx;
     std::array<char, 65536> buf{};
     while (fin.read(buf.data(), buf.size()) || fin.gcount() > 0) {
-      ctx.update(reinterpret_cast<const uint8_t*>(buf.data()),
-                 static_cast<std::size_t>(fin.gcount()));
+      ctx.update(
+          reinterpret_cast<const uint8_t*>(buf.data()),
+          static_cast<std::size_t>(fin.gcount()));
     }
     auto digest = ctx.finalize();
     return digestToHex(digest.data(), digest.size());

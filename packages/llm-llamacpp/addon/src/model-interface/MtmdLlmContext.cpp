@@ -5,9 +5,9 @@
 #include <string_view>
 
 #include <common/log.h>
+#include <inference-addon-cpp/Errors.hpp>
 #include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
-#include <inference-addon-cpp/Errors.hpp>
 
 #include "ContextSlider.hpp"
 #include "GenerationParamsApply.hpp"
@@ -351,7 +351,8 @@ bool MtmdLlmContext::evalMessageWithTools(
     const size_t nPastPostSlide = static_cast<size_t>(nPast_);
     size_t nPredict =
         params_.n_predict > 0 ? static_cast<size_t>(params_.n_predict) : 0;
-    if (nPredict > nCtx) nPredict = nCtx;
+    if (nPredict > nCtx)
+      nPredict = nCtx;
     constexpr size_t kSafetyMargin = 16;
     if (nPastPostSlide + nTokens + nPredict + kSafetyMargin > nCtx) {
       resetMedia();
@@ -445,8 +446,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       // mtmd_encode_chunk() call. Deep-copy NOW, before any further
       // encode runs (e.g. a second image chunk in this same loop).
       const float* embd = mtmd_get_output_embd(ctxVision_.get());
-      const std::size_t nTokensChunk =
-          mtmd_input_chunk_get_n_tokens(chunk);
+      const std::size_t nTokensChunk = mtmd_input_chunk_get_n_tokens(chunk);
       const std::size_t nEmbd =
           static_cast<std::size_t>(llama_model_n_embd(model_));
 
@@ -454,7 +454,10 @@ bool MtmdLlmContext::evalMessageWithTools(
         std::string errorMsg = string_format(
             "[MtmdLlm] encoder returned no output for image chunk %zu "
             "(embd=%p, nTokens=%zu, nEmbd=%zu)\n",
-            i, static_cast<const void*>(embd), nTokensChunk, nEmbd);
+            i,
+            static_cast<const void*>(embd),
+            nTokensChunk,
+            nEmbd);
         throw qvac_errors::StatusError(
             ADDON_ID, toString(EncoderFailed), errorMsg);
       }
@@ -462,7 +465,8 @@ bool MtmdLlmContext::evalMessageWithTools(
         std::string errorMsg = string_format(
             "[MtmdLlm] embedding size overflow: nTokens=%zu * nEmbd=%zu "
             "exceeds SIZE_MAX\n",
-            nTokensChunk, nEmbd);
+            nTokensChunk,
+            nEmbd);
         throw qvac_errors::StatusError(
             ADDON_ID, toString(EncoderFailed), errorMsg);
       }
@@ -471,8 +475,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       entry.embeddings.assign(embd, embd + nTokensChunk * nEmbd);
       entry.nTokens = nTokensChunk;
       entry.nPos = mtmd_input_chunk_get_n_pos(chunk);
-      if (const auto* imgTokens =
-              mtmd_input_chunk_get_tokens_image(chunk)) {
+      if (const auto* imgTokens = mtmd_input_chunk_get_tokens_image(chunk)) {
         entry.nx = mtmd_image_tokens_get_nx(imgTokens);
         entry.ny = mtmd_image_tokens_get_ny(imgTokens);
       }
