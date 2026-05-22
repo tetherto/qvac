@@ -10,6 +10,7 @@
  */
 
 const path = require('path')
+const fs = require('fs')
 const HyperDBBuilder = require('hyperdb/builder')
 const Hyperdispatch = require('hyperdispatch')
 const Hyperschema = require('hyperschema')
@@ -72,6 +73,7 @@ registryDB.indexes.register({
 })
 
 HyperDBBuilder.toDisk(db)
+removeUnusedRuntimeImport(path.join(DB_DIR, 'index.js'))
 
 const dispatch = Hyperdispatch.from(SCHEMA_DIR, DISPATCH_DIR)
 const namespace = dispatch.namespace(QVAC_MAIN_REGISTRY)
@@ -102,3 +104,15 @@ console.log('✓ Registry DB spec built successfully!')
 console.log(`  Schema output: ${SCHEMA_DIR}`)
 console.log(`  DB spec output: ${DB_DIR}`)
 console.log(`  Dispatch output: ${DISPATCH_DIR}`)
+
+function removeUnusedRuntimeImport (indexPath) {
+  const content = fs.readFileSync(indexPath, 'utf8')
+  const updated = content.replace(
+    "const { IndexEncoder, c, b4a } = require('hyperdb/runtime')",
+    "const { IndexEncoder, b4a } = require('hyperdb/runtime')"
+  )
+
+  if (updated !== content) {
+    fs.writeFileSync(indexPath, updated)
+  }
+}

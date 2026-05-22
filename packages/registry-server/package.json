@@ -56,7 +56,7 @@
     "@aws-sdk/client-s3": "^3.998.0",
     "@huggingface/gguf": "^0.3.3",
     "@huggingface/hub": "^2.11.0",
-    "@qvac/registry-schema": "^0.2.0",
+    "@qvac/registry-schema": "^0.1.2",
     "autobase": "^7.18.1",
     "b4a": "^1.6.7",
     "blind-peer": "^2.9.4",
@@ -67,7 +67,6 @@
     "hyperblobs": "^2.8.0",
     "hypercore-id-encoding": "^1.3.0",
     "hypercore-stats": "^2.4.0",
-    "hyperdb": "^6.7.0",
     "hyperdispatch": "^1.4.0",
     "hyperschema": "^1.13.0",
     "hyperswarm": "^4.10.5",
@@ -85,6 +84,7 @@
     "@qvac/error": "^0.1.1",
     "brittle": "^3.4.0",
     "dotenv": "^17.2.3",
+    "hyperdb": "^6.7.0",
     "standard": "^17.1.0"
   }
 }
