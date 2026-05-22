@@ -116,7 +116,6 @@ target_link_libraries(
     llama::common
     llama::mtmd
     nlohmann_json::nlohmann_json
-    OpenSSL::Crypto
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main

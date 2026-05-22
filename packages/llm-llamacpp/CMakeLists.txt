@@ -32,9 +32,9 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
 
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
-# OpenSSL::Crypto is required for SHA-256 in VisionPrefixCache; also needed
-# transitively by llama-targets.cmake (cpp-httplib).
-find_package(OpenSSL REQUIRED)
+# llama-targets.cmake may transitively require OpenSSL::SSL via cpp-httplib.
+# Make OpenSSL discoverable (optional) so the target chain resolves.
+find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 # Required to call llama.cpp's `json_schema_to_grammar()` for per-request
 # JSON-Schema → GBNF conversion. The function signature lives in libcommon
@@ -111,7 +111,6 @@ endif()
       llama::common
       llama::mtmd
       nlohmann_json::nlohmann_json
-      OpenSSL::Crypto
   )
 
 
@@ -160,8 +159,7 @@ if(BUILD_CLI)
           llama::common
           llama::mtmd
           nlohmann_json::nlohmann_json
-          OpenSSL::Crypto
-  )
+      )
   find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})
   # Set C++20 standard for std::views support
