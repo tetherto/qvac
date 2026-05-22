@@ -39,7 +39,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
   typeof modelLoadTests
 > {
   pattern = /^model-(?!info-)/;
-  private llmModelId: string | null = null;
 
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
@@ -65,7 +64,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
       modelType: "llm",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
-    this.llmModelId = modelId;
     this.resources.register("llm", modelId);
     return ValidationHelpers.validate(modelId, expectation);
   }
@@ -126,17 +124,19 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     params: typeof modelUnload.params,
     expectation: typeof modelUnload.expectation,
   ): Promise<TestResult> {
-    if (!this.llmModelId) {
+    const llmModelId = this.resources.getModelId("llm");
+    if (!llmModelId) {
       return { passed: false, output: "No model loaded to unload" };
     }
     await unloadModel({
-      modelId: this.llmModelId,
+      modelId: llmModelId,
       clearStorage: params.shouldClearStorage || false,
     });
-    this.resources.unregister(this.llmModelId);
-    const result = `Model ${this.llmModelId} unloaded successfully`;
-    this.llmModelId = null;
-    return ValidationHelpers.validate(result, expectation);
+    this.resources.unregister(llmModelId);
+    return ValidationHelpers.validate(
+      `Model ${llmModelId} unloaded successfully`,
+      expectation,
+    );
   }
 
   async loadConcurrent(
@@ -157,7 +157,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
           modelType: "llm",
           modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
         });
-        this.llmModelId = modelId;
         this.resources.register("llm", modelId);
       } else {
         modelId = await loadModel({
@@ -175,47 +174,49 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     params: typeof modelReloadLlm.params,
     expectation: typeof modelReloadLlm.expectation,
   ): Promise<TestResult> {
-    this.llmModelId = await loadModel({
+    const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: "llm",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
-    this.resources.register("llm", this.llmModelId);
-    return ValidationHelpers.validate(this.llmModelId, expectation);
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
   }
 
   async switchLlm(
     params: typeof modelSwitchLlm.params,
     expectation: typeof modelSwitchLlm.expectation,
   ): Promise<TestResult> {
-    if (this.llmModelId) {
-      await unloadModel({ modelId: this.llmModelId });
-      this.resources.unregister(this.llmModelId);
+    const existing = this.resources.getModelId("llm");
+    if (existing) {
+      await unloadModel({ modelId: existing });
+      this.resources.unregister(existing);
     }
-    this.llmModelId = await loadModel({
+    const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: "llm",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
-    this.resources.register("llm", this.llmModelId);
-    return ValidationHelpers.validate(this.llmModelId, expectation);
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
   }
 
   async reloadAfterError(
     params: typeof modelReloadAfterError.params,
     expectation: typeof modelReloadAfterError.expectation,
   ): Promise<TestResult> {
-    if (this.llmModelId) {
-      await unloadModel({ modelId: this.llmModelId });
-      this.resources.unregister(this.llmModelId);
+    const existing = this.resources.getModelId("llm");
+    if (existing) {
+      await unloadModel({ modelId: existing });
+      this.resources.unregister(existing);
     }
-    this.llmModelId = await loadModel({
+    const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: "llm",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
-    this.resources.register("llm", this.llmModelId);
-    return ValidationHelpers.validate(this.llmModelId, expectation);
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
   }
 
   async loadInferredType(
@@ -226,7 +227,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
-    this.llmModelId = modelId;
     this.resources.register("llm", modelId);
     return ValidationHelpers.validate(modelId, expectation);
   }
