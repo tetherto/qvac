@@ -43,9 +43,10 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
