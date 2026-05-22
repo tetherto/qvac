@@ -1,21 +1,28 @@
 /**
- * Parakeet Sortformer streaming diarization from a WAV file.
+ * Sortformer v2.1 streaming diarization via duplex `transcribeStream` + AOSC.
  *
  * Usage:
  *   bun run examples/transcription/parakeet-sortformer-streaming.ts <wav-file> [sortformer-gguf]
  *
- * Loads the Sortformer GGUF with AOSC streaming options in `modelConfig` and
- * runs batch `transcribe` over the file. Omit the model argument to use
- * `PARAKEET_SORTFORMER_4SPK_V1_Q8_0`.
+ * Streams 16 kHz mono s16le audio in real-time-paced chunks (required for parakeet
+ * duplex streaming). Loads v2.1 with AOSC knobs in `modelConfig`. Omit the model
+ * argument to use `PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0`.
  *
- * Audio should be 16 kHz mono PCM in a WAV container.
+ * For offline batch diarization on Sortformer v1, see `parakeet-sortformer.ts`.
  */
 import {
   loadModel,
   unloadModel,
-  transcribe,
-  PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  transcribeStream,
+  PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0,
+  PARAKEET_SORTFORMER_V21_AOSC_LOAD_CONFIG,
+  type LoadModelOptions,
 } from "@qvac/sdk";
+import { spawn } from "child_process";
+
+const SAMPLE_RATE = 16000;
+const BYTES_PER_S16_SAMPLE = 2;
+const STREAM_CHUNK_MS = 2000;
 
 const args = process.argv.slice(2);
 
@@ -23,38 +30,118 @@ if (!args[0]) {
   console.error(
     "Usage: bun run examples/transcription/parakeet-sortformer-streaming.ts <wav-file-path> [sortformer-gguf]",
   );
-  console.error("\nIf the model path is omitted, defaults to the registry model.");
+  console.error(
+    "\nDefaults to the v2.1 q8_0 registry path (PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0).",
+  );
   process.exit(1);
 }
 
 const audioFilePath = args[0];
-const sortformerSrc = args[1] ?? PARAKEET_SORTFORMER_4SPK_V1_Q8_0;
+const sortformerOverride = args[1];
+const chunkBytes =
+  Math.floor((STREAM_CHUNK_MS / 1000) * SAMPLE_RATE) * BYTES_PER_S16_SAMPLE;
+
+let modelId: string | null = null;
+
+async function cleanup() {
+  if (modelId) {
+    await unloadModel({ modelId });
+  }
+}
+
+function readS16leFromWav(wavPath: string): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const proc = spawn(
+      "ffmpeg",
+      [
+        "-i",
+        wavPath,
+        "-ar",
+        String(SAMPLE_RATE),
+        "-ac",
+        "1",
+        "-f",
+        "s16le",
+        "pipe:1",
+      ],
+      { stdio: ["ignore", "pipe", "ignore"] },
+    );
+    proc.stdout.on("data", (buf: Buffer) => chunks.push(buf));
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`ffmpeg exited with code ${code}`));
+        return;
+      }
+      const merged = Buffer.concat(chunks);
+      resolve(new Uint8Array(merged.buffer, merged.byteOffset, merged.byteLength));
+    });
+  });
+}
+
+const loadOptions: LoadModelOptions = {
+  modelType: "parakeet",
+  modelConfig: { ...PARAKEET_SORTFORMER_V21_AOSC_LOAD_CONFIG },
+  onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
+  ...(sortformerOverride
+    ? { modelSrc: sortformerOverride }
+    : { modelSrc: PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0 }),
+};
 
 try {
-  console.log("Loading Sortformer GGUF with streaming + AOSC defaults...");
-  const modelId = await loadModel({
-    modelSrc: sortformerSrc,
-    modelType: "parakeet",
-    modelConfig: {
-      streaming: true,
-      streamingChunkMs: 2000,
-      streamingChunkRightContextMs: 560,
-      streamingSpkCacheEnable: true,
-      streamingSpkCacheLen: 188,
-      streamingFifoLen: 188,
-      streamingChunkLeftContextMs: 80,
-      streamingSpkCacheUpdatePeriod: 144,
-    },
+  console.log("Loading Sortformer v2.1 with streaming + AOSC (load-time config)...");
+  modelId = await loadModel(loadOptions);
+  console.log(`Model loaded: ${modelId}\n`);
+
+  const session = await transcribeStream({
+    modelId,
+    parakeetStreamingConfig: { chunkMs: STREAM_CHUNK_MS },
   });
 
-  console.log(`Model loaded: ${modelId}`);
-  const text = await transcribe({ modelId, audioChunk: audioFilePath });
-  console.log("Diarization transcript:");
-  console.log(text);
+  console.log(
+    `Streaming ${audioFilePath} in ${STREAM_CHUNK_MS}ms chunks (wall-clock paced)...\n`,
+  );
 
-  await unloadModel({ modelId });
+  const pcm = await readS16leFromWav(audioFilePath);
+  const trailingSilenceMs = 1500;
+  const trailingBytes = new Uint8Array(
+    Math.floor((trailingSilenceMs / 1000) * SAMPLE_RATE) * BYTES_PER_S16_SAMPLE,
+  );
+
+  for (let offset = 0; offset < pcm.length; offset += chunkBytes) {
+    const end = Math.min(offset + chunkBytes, pcm.length);
+    session.write(pcm.subarray(offset, end));
+    if (end < pcm.length) {
+      await new Promise((resolve) => setTimeout(resolve, STREAM_CHUNK_MS));
+    }
+  }
+
+  for (let offset = 0; offset < trailingBytes.length; offset += chunkBytes) {
+    const end = Math.min(offset + chunkBytes, trailingBytes.length);
+    session.write(trailingBytes.subarray(offset, end));
+    if (end < trailingBytes.length) {
+      await new Promise((resolve) => setTimeout(resolve, STREAM_CHUNK_MS));
+    }
+  }
+
+  session.end();
+
+  const lines: string[] = [];
+  for await (const event of session) {
+    if (event.type === "text" && event.text.trim()) {
+      lines.push(event.text.trim());
+      console.log(event.text.trim());
+    }
+  }
+
+  console.log("\n=== Streaming diarization transcript ===");
+  console.log(lines.join("\n") || "(no speaker lines emitted)");
+
+  await cleanup();
   process.exit(0);
 } catch (error) {
   console.error("❌ Error:", error);
+  await cleanup();
   process.exit(1);
 }

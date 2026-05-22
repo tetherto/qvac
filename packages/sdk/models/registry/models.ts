@@ -22291,6 +22291,23 @@ export const models = [
     quantization: "",
     params: "",
   },
+  {
+    name: "PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0",
+    registryPath:
+      "qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "",
+    blobBlockOffset: 0,
+    blobBlockLength: 0,
+    blobByteOffset: 0,
+    modelId: "diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 140743475,
+    sha256Checksum: "",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
+    params: "123M",
+  },
 ] as const satisfies readonly RegistryItem[];
 
 // Individual model constants for direct import/use with loadModel
@@ -28953,6 +28970,36 @@ export const WHISPER_Q8_0_1 = {
   engine: models[712].engine,
   quantization: models[712].quantization,
   params: models[712].params,
+} as const;
+
+export const PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0 = {
+  name: "PARAKEET_SORTFORMER_STREAMING_4SPK_V2_1_Q8_0",
+  src: `registry://${models[713].registrySource}/${models[713].registryPath}`,
+  registryPath: models[713].registryPath,
+  registrySource: models[713].registrySource,
+  blobCoreKey: models[713].blobCoreKey,
+  blobBlockOffset: models[713].blobBlockOffset,
+  blobBlockLength: models[713].blobBlockLength,
+  blobByteOffset: models[713].blobByteOffset,
+  modelId: models[713].modelId,
+  expectedSize: models[713].expectedSize,
+  sha256Checksum: models[713].sha256Checksum,
+  addon: models[713].addon,
+  engine: models[713].engine,
+  quantization: models[713].quantization,
+  params: models[713].params,
+} as const;
+
+/** NeMo-port AOSC defaults for v2.1 Sortformer (`parakeet.model_variant` in GGUF). */
+export const PARAKEET_SORTFORMER_V21_AOSC_LOAD_CONFIG = {
+  streaming: true,
+  streamingChunkMs: 2000,
+  streamingChunkRightContextMs: 560,
+  streamingSpkCacheEnable: true,
+  streamingSpkCacheLen: 188,
+  streamingFifoLen: 188,
+  streamingChunkLeftContextMs: 80,
+  streamingSpkCacheUpdatePeriod: 144,
 } as const;
 
 /**
