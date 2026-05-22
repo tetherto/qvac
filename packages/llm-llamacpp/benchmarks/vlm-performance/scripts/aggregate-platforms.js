@@ -12,7 +12,15 @@
 
 const fs = require('fs')
 const path = require('path')
-const { pctDelta } = require('../math')
+
+// Inlined from ../math.js so this script stays self-contained — the
+// summarize job uses sparse-checkout that only pulls the scripts/
+// directory; reaching into the parent dir means widening the
+// sparse-checkout, which has its own breakage risk.
+function pctDelta (candidate, baseline) {
+  if (candidate == null || baseline == null || baseline === 0) return null
+  return ((candidate - baseline) / baseline) * 100
+}
 
 function parseArgs (argv) {
   const out = {}
