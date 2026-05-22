@@ -445,8 +445,8 @@ export const videoRequestSchema = z.object({
       "Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     ),
   mode: z
-    .enum(["txt2vid", "img2vid", "flf2vid"])
-    .describe("Video generation mode."),
+    .enum(["txt2vid"])
+    .describe("Video generation mode. Only `txt2vid` is supported today."),
   prompt: z.string().describe("Positive prompt describing the video to generate."),
   negative_prompt: z
     .string()
@@ -531,24 +531,12 @@ export const videoRequestSchema = z.object({
     .max(1)
     .optional()
     .describe("Wan 2.2 mixture-of-experts boundary in [0, 1]."),
-  strength: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .describe("img2vid / flf2vid denoising strength."),
   vace_strength: z
     .number()
     .min(0)
     .max(1)
     .optional()
     .describe("Control-frame guidance strength."),
-  init_image: base64StringSchema
-    .optional()
-    .describe("Base64-encoded first-frame image for img2vid / flf2vid."),
-  end_image: base64StringSchema
-    .optional()
-    .describe("Base64-encoded last-frame image for flf2vid."),
   control_frames: z.array(base64StringSchema)
     .min(1)
     .optional()
@@ -576,57 +564,6 @@ export const videoRequestSchema = z.object({
     .number()
     .optional()
     .describe("Direct cache reuse threshold override."),
-}).superRefine((value, ctx) => {
-  if (value.mode === "txt2vid") {
-    if (value.init_image !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["init_image"],
-        message: "txt2vid does not accept init_image",
-      });
-    }
-    if (value.end_image !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["end_image"],
-        message: "txt2vid does not accept end_image",
-      });
-    }
-    return;
-  }
-
-  if (value.mode === "img2vid") {
-    if (value.init_image === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["init_image"],
-        message: "img2vid requires init_image",
-      });
-    }
-    if (value.end_image !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["end_image"],
-        message: "img2vid does not accept end_image",
-      });
-    }
-    return;
-  }
-
-  if (value.init_image === undefined) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["init_image"],
-      message: "flf2vid requires init_image",
-    });
-  }
-  if (value.end_image === undefined) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["end_image"],
-      message: "flf2vid requires end_image",
-    });
-  }
 });
 
 export type VideoRequest = z.input<typeof videoRequestSchema>;
@@ -639,12 +576,10 @@ export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>;
 
 type VideoClientParamsBase = Omit<
   VideoRequest,
-  "requestId" | "init_image" | "end_image" | "control_frames"
+  "requestId" | "control_frames"
 >;
 
 export type VideoClientParams = VideoClientParamsBase & {
-  init_image?: Uint8Array;
-  end_image?: Uint8Array;
   control_frames?: Uint8Array[];
 };
 

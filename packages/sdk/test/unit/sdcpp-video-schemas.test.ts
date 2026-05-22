@@ -15,7 +15,6 @@ type BrittleT = {
 };
 
 const PNG_B64 = "iVBORw0KGgoAAAANSUhEUg==";
-const JPEG_B64 = "/9j/4AAQSkZJRgABAQEASABIAAA=";
 
 test("sdcppConfigSchema: accepts mode: 'video' and highNoiseDiffusionModelSrc", (t: BrittleT) => {
   const result = sdcppConfigSchema.safeParse({
@@ -70,69 +69,6 @@ test("videoRequestSchema: accepts optional requestId", (t: BrittleT) => {
   t.is(result.success, true);
 });
 
-test("videoRequestSchema: txt2vid rejects init_image and end_image", (t: BrittleT) => {
-  const result = videoRequestSchema.safeParse({
-    modelId: "model-1",
-    mode: "txt2vid",
-    prompt: "a running fox",
-    init_image: PNG_B64,
-    end_image: JPEG_B64,
-  });
-  t.is(result.success, false);
-  if (!result.success) {
-    const messages = result.error.issues
-      .map((issue) => issue.message)
-      .join(" | ");
-    t.ok(messages.includes("txt2vid does not accept init_image"));
-    t.ok(messages.includes("txt2vid does not accept end_image"));
-  }
-});
-
-test("videoRequestSchema: img2vid requires init_image and rejects end_image", (t: BrittleT) => {
-  const missingInit = videoRequestSchema.safeParse({
-    modelId: "model-1",
-    mode: "img2vid",
-    prompt: "animate this frame",
-  });
-  t.is(missingInit.success, false);
-
-  const withEndImage = videoRequestSchema.safeParse({
-    modelId: "model-1",
-    mode: "img2vid",
-    prompt: "animate this frame",
-    init_image: PNG_B64,
-    end_image: JPEG_B64,
-  });
-  t.is(withEndImage.success, false);
-});
-
-test("videoRequestSchema: flf2vid requires both init_image and end_image", (t: BrittleT) => {
-  const missingInit = videoRequestSchema.safeParse({
-    modelId: "model-1",
-    mode: "flf2vid",
-    prompt: "interpolate the scene",
-    end_image: JPEG_B64,
-  });
-  t.is(missingInit.success, false);
-
-  const missingEnd = videoRequestSchema.safeParse({
-    modelId: "model-1",
-    mode: "flf2vid",
-    prompt: "interpolate the scene",
-    init_image: PNG_B64,
-  });
-  t.is(missingEnd.success, false);
-
-  const valid = videoRequestSchema.safeParse({
-    modelId: "model-1",
-    mode: "flf2vid",
-    prompt: "interpolate the scene",
-    init_image: PNG_B64,
-    end_image: JPEG_B64,
-  });
-  t.is(valid.success, true);
-});
-
 test("videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 inputs", (t: BrittleT) => {
   t.is(
     videoRequestSchema.safeParse({
@@ -170,20 +106,19 @@ test("videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 
   t.is(
     videoRequestSchema.safeParse({
       modelId: "model-1",
-      mode: "img2vid",
+      mode: "txt2vid",
       prompt: "a fox",
-      init_image: "not valid base64!!!",
+      control_frames: ["not valid base64!!!"],
     }).success,
     false,
-    "init_image must be valid base64",
+    "control_frames entries must be valid base64",
   );
 
   t.is(
     videoRequestSchema.safeParse({
       modelId: "model-1",
-      mode: "img2vid",
+      mode: "txt2vid",
       prompt: "a fox",
-      init_image: PNG_B64,
       control_frames: [],
     }).success,
     false,
@@ -191,7 +126,7 @@ test("videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 
   );
 });
 
-test("videoStreamRequestSchema: preserves video-mode refinements", (t: BrittleT) => {
+test("videoStreamRequestSchema: rejects unsupported modes", (t: BrittleT) => {
   const result = videoStreamRequestSchema.safeParse({
     type: "videoStream",
     modelId: "model-1",

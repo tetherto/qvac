@@ -40,14 +40,6 @@ export async function* video(
     ctx.signal.removeEventListener("abort", onAbort);
   });
 
-  const init_image = request.init_image
-    ? Buffer.from(request.init_image, "base64")
-    : undefined;
-
-  const end_image = request.end_image
-    ? Buffer.from(request.end_image, "base64")
-    : undefined;
-
   const control_frames = request.control_frames
     ? request.control_frames.map((b64) => Buffer.from(b64, "base64"))
     : undefined;
@@ -72,10 +64,7 @@ export async function* video(
     high_noise_cfg_scale: request.high_noise_cfg_scale,
     high_noise_flow_shift: request.high_noise_flow_shift,
     moe_boundary: request.moe_boundary,
-    strength: request.strength,
     vace_strength: request.vace_strength,
-    init_image,
-    end_image,
     control_frames,
     vae_tiling: request.vae_tiling,
     vae_tile_size: request.vae_tile_size,
