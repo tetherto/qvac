@@ -63,9 +63,11 @@ safeTest('SD3 Medium img2img — transforms an input image', { timeout: 1800000,
         diffusion_fa: true,
         vae_on_cpu: true,
         prediction: 'flow',
-        flow_shift: '3.0'
+        flow_shift: '3.0',
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     const images = []

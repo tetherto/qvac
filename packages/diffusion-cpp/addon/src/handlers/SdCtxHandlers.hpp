@@ -103,8 +103,8 @@ struct SdCtxConfig {
   float flowShift = std::numeric_limits<float>::infinity();
 
   // -- Convolution kernel options --------------------------------------------
-  bool diffusionConvDirect = false; // ggml_conv2d_direct in diffusion model
-  bool vaeConvDirect = false;       // ggml_conv2d_direct in VAE
+  bool diffusionConvDirect = true; // ggml_conv2d_direct in diffusion model
+  bool vaeConvDirect = true;       // ggml_conv2d_direct in VAE
 
   // -- SDXL compatibility ----------------------------------------------------
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)

@@ -104,9 +104,9 @@ export interface SdConfig {
   prediction?: PredictionType
   /** Flow-matching guidance shift */
   flow_shift?: number
-  /** Use direct convolution in diffusion model */
+  /** Use direct convolution in diffusion model. Defaults to true; set false to force the generic conv path. */
   diffusion_conv_direct?: boolean
-  /** Use direct convolution in VAE */
+  /** Use direct convolution in VAE. Defaults to true; set false to force the generic conv path. */
   vae_conv_direct?: boolean
   /** Force SDXL VAE conv scale factor */
   force_sdxl_vae_conv_scale?: boolean
