@@ -18,6 +18,10 @@ inputs:
     description: "Number of scheduled runs (echoed for logging only)"
     required: false
     default: ""
+  max-wait-time-seconds:
+    description: "Polling-loop hard ceiling. Default 7200 (2h). Addons whose Device Farm runs exceed 2h pass a larger value here."
+    required: false
+    default: "7200"
 
 outputs:
   test-result:
@@ -50,6 +54,7 @@ runs:
       shell: bash
       env:
         RUN_ARNS_JSON: ${{ inputs.run-arns }}
+        MAX_WAIT_TIME_SECONDS: ${{ inputs.max-wait-time-seconds }}
       run: |
         # ── helpers ──────────────────────────────────────────────────
         # Bash 3.2 compat: no mapfile, no declare -A.
@@ -115,7 +120,7 @@ runs:
         echo ""
 
         # ── polling loop ─────────────────────────────────────────────
-        MAX_WAIT_TIME=7200
+        MAX_WAIT_TIME="${MAX_WAIT_TIME_SECONDS:-7200}"
         ELAPSED=0
         DONE_COUNT=0
         DONE=()
@@ -297,11 +302,28 @@ runs:
             JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
             CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
 
-            if [ "$JOB_RESULT" = "PASSED" ]; then
-              echo "   ✅ $DEVICE_NAME: PASSED"
+            JOB_COUNTERS=$(echo "$JOB_DETAILS" | jq -r '.job.counters // {}')
+            JOB_FAILED_COUNT=$(echo "$JOB_COUNTERS" | jq -r '.failed // 0')
+            JOB_ERRORED_COUNT=$(echo "$JOB_COUNTERS" | jq -r '.errored // 0')
+            JOB_TOTAL_COUNT=$(echo "$JOB_COUNTERS" | jq -r '.total // 0')
+            JOB_PASSED_COUNT=$(echo "$JOB_COUNTERS" | jq -r '.passed // 0')
+
+            if [ "$JOB_RESULT" = "PASSED" ] || [ "$JOB_RESULT" = "WARNED" ]; then
+              echo "   ✅ $DEVICE_NAME: $JOB_RESULT (${JOB_PASSED_COUNT}/${JOB_TOTAL_COUNT} passed)"
               USER_PASSED=$((USER_PASSED + 1))
+            elif [ "$JOB_RESULT" = "STOPPED" ]; then
+              if [ "$JOB_FAILED_COUNT" -eq 0 ] && [ "$JOB_ERRORED_COUNT" -eq 0 ] && [ "$JOB_PASSED_COUNT" -gt 0 ]; then
+                echo "   ⚠️  $DEVICE_NAME: STOPPED (Device Farm timeout) but all ${JOB_PASSED_COUNT}/${JOB_TOTAL_COUNT} tests passed — treating as success"
+                echo "   💡 Increase job-timeout-minutes if this recurs (device ran out of DF time during teardown, not during tests)"
+                USER_PASSED=$((USER_PASSED + 1))
+              else
+                echo "   ❌ $DEVICE_NAME: STOPPED with failures (${JOB_FAILED_COUNT}F/${JOB_ERRORED_COUNT}E of ${JOB_TOTAL_COUNT})"
+                USER_FAILED=$((USER_FAILED + 1))
+                FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: STOPPED (${JOB_FAILED_COUNT} failed, ${JOB_ERRORED_COUNT} errored)")
+                FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+              fi
             else
-              echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
+              echo "   ❌ $DEVICE_NAME: $JOB_RESULT (${JOB_FAILED_COUNT}F/${JOB_ERRORED_COUNT}E of ${JOB_TOTAL_COUNT})"
               USER_FAILED=$((USER_FAILED + 1))
               FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
               FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")

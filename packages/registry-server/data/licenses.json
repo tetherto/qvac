@@ -48,5 +48,10 @@
     "spdxId": "BSD-3-Clause",
     "name": "BSD 3-Clause License",
     "url": "https://opensource.org/licenses/BSD-3-Clause"
+  },
+  {
+    "spdxId": "nvidia-open-model-license",
+    "name": "NVIDIA Open Model License Agreement",
+    "url": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
   }
 ]

@@ -29,7 +29,19 @@ Where:
    npm view <npm-package-name> version
    ```
 3. If the local version is **not higher** than the npm version, stop and ask the user to bump the version first.
-4. Check that `packages/<package>/CHANGELOG.md` has a section matching the current version (`## [X.Y.Z]`). If missing, generate it first then continue:
+4. Verify the CHANGELOG heading format **exactly** matches what the publish-release workflow extracts. The workflow uses this awk regex: `^## \[<version>\]` — heading must be bracketed (Keep-a-Changelog style). Soft phrasing like "section for 0.1.0" is not enough; the heading line must literally be `## [0.1.0]`.
+
+   Run this exact check (mirrors the regex in `.github/workflows/create-github-release.yml`):
+   ```bash
+   version=$(node -p "require('./packages/<package>/package.json').version")
+   if ! grep -qE "^## \[${version}\]" "packages/<package>/CHANGELOG.md"; then
+     echo "FAIL: packages/<package>/CHANGELOG.md is missing a '## [${version}]' heading."
+     echo "      A heading like '## ${version}' (no brackets) will NOT match — publish-release will fail."
+     exit 1
+   fi
+   ```
+
+   If the check fails, fix the heading or generate the section first:
    - For addon packages (native C++): run `/qv-addon-changelog`
    - For SDK pod packages (TypeScript): run `/qv-sdk-changelog`
 
