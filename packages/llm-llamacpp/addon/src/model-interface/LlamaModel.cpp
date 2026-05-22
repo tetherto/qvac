@@ -711,6 +711,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       {"visionCacheHits", static_cast<int64_t>(vcStats.hits)},
       {"visionCacheMisses", static_cast<int64_t>(vcStats.misses)},
       {"visionCacheEvictions", static_cast<int64_t>(vcStats.evictions)},
+      {"visionCacheDistinctImages",
+       static_cast<int64_t>(vcStats.distinctImages)},
       {"visionCachePeakBytes", static_cast<int64_t>(vcStats.peakBytes)}};
 }
 

@@ -48,6 +48,7 @@ struct VisionCacheStats {
   std::size_t hits = 0;
   std::size_t misses = 0;
   std::size_t evictions = 0;
+  std::size_t distinctImages = 0;
   std::size_t currentBytes = 0;
   std::size_t peakBytes = 0;
 };
@@ -102,6 +103,7 @@ private:
   std::size_t hits_ = 0;
   std::size_t misses_ = 0;
   std::size_t evictions_ = 0;
+  std::size_t distinctImages_ = 0;
 };
 
 std::string sha256OfBytes(const std::uint8_t* data, std::size_t len);

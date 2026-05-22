@@ -151,6 +151,28 @@ TEST_F(VisionPrefixCacheTest, StatsCountHitsAndMisses) {
   EXPECT_EQ(s.misses, 1u);
 }
 
+TEST_F(VisionPrefixCacheTest, DistinctImagesTracked) {
+  VisionPrefixCache cache(k1MB);
+  cache.put("img1", makeEntry(64));
+  cache.put("img2", makeEntry(64));
+  cache.put("img1", makeEntry(64)); // update, not new distinct
+
+  EXPECT_EQ(cache.stats().distinctImages, 2u);
+}
+
+TEST_F(VisionPrefixCacheTest, DistinctImagesResetByClearStats) {
+  VisionPrefixCache cache(k1MB);
+  cache.put("img1", makeEntry(64));
+  cache.put("img2", makeEntry(64));
+  EXPECT_EQ(cache.stats().distinctImages, 2u);
+
+  cache.clearStats();
+  EXPECT_EQ(cache.stats().distinctImages, 0u);
+
+  cache.put("img3", makeEntry(64));
+  EXPECT_EQ(cache.stats().distinctImages, 1u);
+}
+
 TEST_F(VisionPrefixCacheTest, StatsCountEvictions) {
   const std::size_t budget = bytesOf(256);
   VisionPrefixCache cache(budget);

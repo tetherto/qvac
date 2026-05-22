@@ -72,6 +72,7 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
     peakBytes_ = currentBytes_;
   entries_.emplace(
       std::move(key), std::make_pair(std::move(entry), order_.begin()));
+  ++distinctImages_;
   return true;
 }
 
@@ -85,6 +86,7 @@ void VisionPrefixCache::clearStatsLocked() {
   hits_ = 0;
   misses_ = 0;
   evictions_ = 0;
+  distinctImages_ = 0;
 }
 
 void VisionPrefixCache::clearData() {
@@ -110,7 +112,8 @@ void VisionPrefixCache::onMemoryWarning() {
 
 VisionCacheStats VisionPrefixCache::stats() const {
   std::lock_guard<std::mutex> lock(mtx_);
-  return {hits_, misses_, evictions_, currentBytes_, peakBytes_};
+  return {
+      hits_, misses_, evictions_, distinctImages_, currentBytes_, peakBytes_};
 }
 
 void VisionPrefixCache::touch(std::list<std::string>::iterator it) {

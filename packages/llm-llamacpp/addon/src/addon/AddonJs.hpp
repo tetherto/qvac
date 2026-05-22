@@ -436,6 +436,24 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t*
+onMemoryWarning(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  LlamaModel* llamaModel = getLlamaModel(instance);
+
+  if (llamaModel) {
+    llamaModel->onMemoryWarning();
+  }
+
+  js_value_t* undefined;
+  js_get_undefined(env, &undefined);
+  return undefined;
+}
+JSCATCH
+
 inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
