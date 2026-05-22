@@ -59,7 +59,7 @@
     "@types/node": "^24.2.1",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
-    "cmake-bare": "1.7.5",
+    "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "standard": "^17.0.0",
     "typescript": "^5.9.2"
@@ -67,14 +67,13 @@
   "dependencies": {
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
+    "bare-env": "^3.0.0",
     "bare-fs": "^4.5.1",
-    "bare-path": "^3.0.0",
-    "bare-process": "^4.2.2"
+    "bare-path": "^3.0.0"
   },
   "engines": {
     "bare": ">=1.24.0"
   },
-  "peerDependencies": {},
   "exports": {
     "./package": "./package.json",
     ".": {
