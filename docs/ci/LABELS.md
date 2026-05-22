@@ -8,7 +8,7 @@ Single source of truth for every label that affects CI behaviour in this repo.
 
 ## `verified` — secret-bearing CI authorisation
 
-This is the label that gates every secret-bearing PR job in the repo.
+This is the **single** label that gates every privileged PR job in the repo. The legacy `verify` label has been retired — `verified` is now the only authorisation label CI reads.
 
 | | |
 |---|---|
@@ -40,7 +40,7 @@ The following labels are recognised by CI workflows but are not part of the `lab
 
 | Label | Purpose | Triggered by | Notes |
 |---|---|---|---|
-| `verified` (see `verify` deprecation note) | Canonical authorisation label — see the [`verified` section above](#verified--secret-bearing-ci-authorisation) for the full trust model. | `label-gate` composite action (108 secret-bearing workflows) | `verify` is a **deprecated** legacy alias for the same intent, still recognised by `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml`, and `pr-models-validation-registry-server.yml` pending migration to `verified`. Do not document `verify` as a recommended action in new tooling. |
+| `verified` | Canonical authorisation label — see the [`verified` section above](#verified--secret-bearing-ci-authorisation) for the full trust model. | `label-gate` composite action plus the `public-pr.yml`, `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml`, and `pr-models-validation-registry-server.yml` non-secret gates. | Replaces the legacy `verify` label, which was retired in favour of a single authorisation ceremony. |
 | `safe-to-test` | SDK pod security gate — reviewer has audited `packages/sdk/` package + workflow changes from a fork PR. | `pr-checks-sdk-pod.yml` | Org-wide secret authorisation is now handled by `verified`; `safe-to-test` remains in use for SDK pod check-running. |
 | `staging` | Deploys the PR to the staging environment for smoke testing. | Staging deploy workflows | Apply when a PR needs out-of-band testing on real infrastructure. |
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |
