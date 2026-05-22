@@ -62,12 +62,18 @@ permissions:
 jobs:
   # ── Context ────────────────────────────────────────────────────────
   # Resolves the repo + ref so downstream jobs check out the right
-  # commit even when the workflow_dispatch is invoked without `ref`.
+  # commit even when the workflow_dispatch is invoked without `ref`,
+  # and builds the desktop matrix from the per-platform input toggles.
+  # Matrix is computed here (instead of via job-level `if:`) because
+  # GitHub Actions doesn't allow `matrix.*` references in job-level
+  # conditions — they're evaluated before the matrix is expanded.
   context:
     runs-on: ubuntu-latest
     outputs:
       repository: ${{ steps.ctx.outputs.repository }}
       ref: ${{ steps.ctx.outputs.ref }}
+      desktop_matrix: ${{ steps.matrix.outputs.value }}
+      desktop_count: ${{ steps.matrix.outputs.count }}
     steps:
       - id: ctx
         shell: bash
@@ -80,28 +86,37 @@ jobs:
           ref="${INPUT_REF:-$REF_NAME}"
           echo "repository=$repo" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - id: matrix
+        shell: bash
+        run: |
+          entries='[]'
+          if [[ "${{ inputs.run_windows }}" == "true" ]]; then
+            entries=$(echo "$entries" | jq -c '. + [{"platform":"windows-x64","runner":"windows-latest"}]')
+          fi
+          if [[ "${{ inputs.run_linux }}" == "true" ]]; then
+            entries=$(echo "$entries" | jq -c '. + [{"platform":"linux-x64","runner":"ubuntu-latest"}]')
+          fi
+          count=$(echo "$entries" | jq 'length')
+          echo "value=$entries" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Desktop matrix: $entries (count=$count)"
 
   # ── Desktop benchmark matrix ───────────────────────────────────────
   # Each leg is the same shape — pick the runner via matrix.runner.
   # GitHub-hosted runners are CPU-only; GPU coverage moves to the
   # self-hosted runners (qvac-win25-x64-gpu, ai-run-linux-gpu) in a
-  # later iteration.
+  # later iteration. The matrix itself is built dynamically by the
+  # context job above based on run_windows / run_linux inputs.
   desktop:
     needs: context
+    if: needs.context.outputs.desktop_count != '0'
     name: vlm-${{ matrix.platform }}
-    if: |
-      (matrix.platform == 'windows-x64' && inputs.run_windows) ||
-      (matrix.platform == 'linux-x64' && inputs.run_linux)
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: windows-x64
-            runner: windows-latest
-          - platform: linux-x64
-            runner: ubuntu-latest
+        include: ${{ fromJSON(needs.context.outputs.desktop_matrix) }}
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       WORKDIR: packages/llm-llamacpp/benchmarks/vlm-performance
