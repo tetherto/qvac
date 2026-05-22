@@ -1105,15 +1105,24 @@ static std::unique_ptr<pi05_model> pi05_load_model(
         "pi05_load_model: forceCpu=true — skipping GPU selection");
   }
 
-  // Open GGUF with no_alloc=true — creates a ggml_context with tensor
-  // metadata only (data pointers stay NULL). Tensor data is allocated
-  // on the chosen backend below via pi05_load_weights_alloc_copy. This
-  // is what makes GPU compute work: weights live in the backend's
-  // buffer (Vulkan / Metal / OpenCL device memory) rather than CPU
-  // heap, so the scheduler doesn't have to copy them per-op. Mirrors
-  // smolvla.cpp's load flow.
+  // GPU path: no_alloc=true so the GGUF loader doesn't mmap; we then
+  // allocate a backend (device) buffer via pi05_load_weights_alloc_copy
+  // and read the weights into it. Required for GPU compute — without
+  // it the scheduler would copy weights per-op every step.
+  //
+  // CPU path: no_alloc=false so gguf_init_from_file mmap's the file
+  // and the tensors' `data` pointers point straight at the OS page
+  // cache. Zero extra heap allocation, lazy paging, low resident
+  // footprint. Critical for iOS pi05 — iPhone 16/17 have 8 GB RAM
+  // and iOS jetsam kills foreground apps that hit ~3–4 GB resident.
+  // The previous code path called pi05_load_weights_alloc_copy
+  // unconditionally, which allocated a CPU-heap buffer of ~4 GB
+  // for the GGUF data even on CPU backend — that copy was tripping
+  // the jetsam kill mid-load (confirmed via bare_console.log in run
+  // 26285927725: app process died right after the sha256-verify
+  // step, before any inference output).
   struct gguf_init_params gp{};
-  gp.no_alloc = true;
+  gp.no_alloc = m->has_gpu;
   gp.ctx = &m->ctx_w;
   m->gguf = gguf_init_from_file(ggufPath.c_str(), gp);
   if (m->gguf == nullptr) {
@@ -1236,22 +1245,27 @@ static std::unique_ptr<pi05_model> pi05_load_model(
   m->time_mlp_out_w = must_get("proj.time_mlp_out.weight");
   m->time_mlp_out_b = must_get("proj.time_mlp_out.bias");
 
-  // Allocate a backend buffer for the weight tensors and copy data
-  // from the GGUF file into it. This is REQUIRED for GPU compute —
-  // without it the tensors' `data` pointers stay NULL (no_alloc=true)
-  // and graph_compute on the GPU backend segfaults the moment a kernel
-  // tries to read a weight. Goes through the alloc+copy path
-  // (skipping smolvla's mmap+host_ptr fast path; that's an optimisation
-  // for a follow-up). Works for both CPU and GPU buffer types.
-  ggml_backend_buffer_type_t buft =
-      ggml_backend_get_default_buffer_type(m->backend);
-  const size_t data_offset = gguf_get_data_offset(m->gguf);
-  const int64_t n_tensors_in_gguf = gguf_get_n_tensors(m->gguf);
-  if (!pi05_load_weights_alloc_copy(
-          *m, ggufPath.c_str(), m->gguf, buft, data_offset,
-          n_tensors_in_gguf)) {
-    throw std::runtime_error(
-        "pi05_load_model: failed to load weights into backend buffer");
+  // GPU only: allocate a backend buffer and copy the GGUF data into
+  // it. Required for GPU compute — without it the tensors' `data`
+  // pointers stay NULL (no_alloc=true) and graph_compute segfaults
+  // the moment a kernel tries to read a weight. (skipping smolvla's
+  // mmap+host_ptr fast path; that's a follow-up optimisation.)
+  //
+  // CPU only: NO buffer copy. `data` pointers are already valid from
+  // the mmap path (no_alloc=false above). Allocating + copying here
+  // would double the resident footprint and trip iOS jetsam on 8 GB
+  // iPhones (see comment on `gp.no_alloc = m->has_gpu` above).
+  if (m->has_gpu) {
+    ggml_backend_buffer_type_t buft =
+        ggml_backend_get_default_buffer_type(m->backend);
+    const size_t data_offset = gguf_get_data_offset(m->gguf);
+    const int64_t n_tensors_in_gguf = gguf_get_n_tensors(m->gguf);
+    if (!pi05_load_weights_alloc_copy(
+            *m, ggufPath.c_str(), m->gguf, buft, data_offset,
+            n_tensors_in_gguf)) {
+      throw std::runtime_error(
+          "pi05_load_model: failed to load weights into backend buffer");
+    }
   }
 
   return m;
