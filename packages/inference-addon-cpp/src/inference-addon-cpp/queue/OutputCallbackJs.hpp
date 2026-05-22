@@ -71,19 +71,20 @@ public:
     }
 
     State* state = std::exchange(state_, nullptr);
+
+    deleteJsReferences(state);
+
     if (state->asyncHandle != nullptr) {
       uv_close(
           reinterpret_cast<uv_handle_t*>(state->asyncHandle),
           [](uv_handle_t* handle) {
             auto* state = static_cast<State*>(uv_handle_get_data(handle));
-            deleteJsReferences(state);
             delete reinterpret_cast<uv_async_t*>(handle);
             delete state;
           });
       return;
     }
 
-    deleteJsReferences(state);
     delete state;
   }
 
