@@ -164,6 +164,14 @@ if(ANDROID)
   target_link_libraries(${ocr-ggml} PRIVATE log)
 endif()
 
+if(ANDROID)
+  target_link_options(
+    ${ocr-ggml}_module
+    PRIVATE
+      -Wl,-z,max-page-size=16384
+      -Wl,-z,common-page-size=16384
+  )
+endif()
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(addon/tests)
