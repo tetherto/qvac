@@ -8,6 +8,7 @@ import { resolvePluginSpecifiers, parseBuiltinSpecifier } from './plugins.js'
 import { generateWorkerEntry } from './entry-gen.js'
 import { runBarePack } from './bare-pack.js'
 import { generateAddonsManifest } from './manifest.js'
+import { resolveSdkPackageDir } from './resolve-sdk-package-dir.js'
 
 export interface BundleSdkOptions {
   projectRoot?: string | undefined
@@ -33,7 +34,7 @@ function resolveSdkPath (projectRoot: string, explicitSdkPath?: string): string 
       ? explicitSdkPath
       : path.join(projectRoot, explicitSdkPath)
   }
-  return path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+  return resolveSdkPackageDir(projectRoot).dir
 }
 
 async function resolveSdkName (sdkPath: string): Promise<string> {
