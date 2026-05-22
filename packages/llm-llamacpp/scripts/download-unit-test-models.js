@@ -16,7 +16,7 @@ const httpsAgent = new https.Agent({ keepAlive: true })
 
 const TRANSIENT_ERROR_CODES = new Set([
   'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE', 'ECHECKSUM'
+  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
 ])
 
 function log (message) {
