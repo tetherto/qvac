@@ -386,6 +386,7 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
       const LOG_INTERVAL_BYTES = 50 * 1024 * 1024
       let downloadedBytes = 0
       let nextLogBytes = LOG_INTERVAL_BYTES
+      let responseEnded = false
       res.on('data', (chunk) => {
         downloadedBytes += chunk.length
         if (downloadedBytes >= nextLogBytes) {
@@ -395,14 +396,37 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
           nextLogBytes += LOG_INTERVAL_BYTES
         }
       })
+      res.on('end', () => { responseEnded = true })
       res.on('error', (err) => {
         file.destroy()
         try { fs.unlinkSync(destPath) } catch (_) {}
         safeReject(err)
       })
       res.pipe(file)
+      // The HF CDN (cas-bridge.xethub.hf.co) sometimes drops the TLS
+      // connection mid-stream on Device Farm. bare-https closes the
+      // file silently in that case — we'd resolve as success with a
+      // truncated GGUF. Cross-check downloadedBytes vs Content-Length
+      // (and require 'end' fired on the response) so a partial stream
+      // surfaces as a real error and the retry loop kicks in.
       file.on('close', () => {
         const mb = downloadedBytes / (1024 * 1024)
+        if (contentLength > 0 && downloadedBytes !== contentLength) {
+          try { fs.unlinkSync(destPath) } catch (_) {}
+          safeReject(new Error(
+            `incomplete stream: got ${downloadedBytes} of ${contentLength} bytes ` +
+            `(${mb.toFixed(1)} MB), responseEnded=${responseEnded}`
+          ))
+          return
+        }
+        if (!responseEnded) {
+          try { fs.unlinkSync(destPath) } catch (_) {}
+          safeReject(new Error(
+            `incomplete stream: response ended early at ${downloadedBytes} bytes ` +
+            `(${mb.toFixed(1)} MB; no Content-Length to cross-check)`
+          ))
+          return
+        }
         console.log(`[pi05-mobile] downloaded: ${path.basename(destPath)} (${mb.toFixed(1)}MB)`)
         safeResolve()
       })
@@ -416,11 +440,19 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
   })
 }
 
-async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
+async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 5) {
+  // Longer backoff than the default exponential, because the failure
+  // mode we hit on Device Farm (cas-bridge.xethub.hf.co — the HF LFS
+  // CDN backing host that resolve/main redirects to) is bare-dns
+  // returning "no address" after a TLS stream drop. The resolver's
+  // negative cache takes a few seconds to clear; the previous 500 ms
+  // base backoff retried before DNS was ready and tripped the same
+  // error each time. 2 s / 4 s / 8 s / 16 s gives ~30 s total of
+  // wait time, well inside the wdio polling window.
   let lastErr = null
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
-      const backoffMs = 500 * (2 ** (attempt - 1))
+      const backoffMs = 2000 * (2 ** (attempt - 1))
       console.log(`[pi05-mobile] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`)
       await new Promise(resolve => setTimeout(resolve, backoffMs))
     }
