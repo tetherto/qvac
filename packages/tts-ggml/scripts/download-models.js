@@ -32,7 +32,11 @@
 const fs = require('fs')
 const path = require('path')
 
-const { getGroup } = require('./registry-models')
+// The shared registry table lives under test/utils/ (not scripts/) so
+// the mobile test framework copies it next to test/utils/downloadModel.js
+// when packing the integration test bundle; see that module's header
+// for the full rationale.
+const { getGroup } = require('../test/utils/registry-models')
 
 const DEFAULT_OUTPUT_DIR = './models'
 const DEFAULT_GROUP = 'all'

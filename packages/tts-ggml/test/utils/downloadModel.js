@@ -393,16 +393,17 @@ async function ensureWhisperModel (targetPath = null) {
 
 // Registry metadata for the QVAC model registry fetch fallback (see
 // `downloadFromRegistry()` below + `models.prod.json` under packages/
-// registry-server/data/).  Tables live in `scripts/registry-models.js`
-// so the desktop CI `npm run download-models` step and this runtime
-// fallback stay in sync; see that file's header for the rationale on
-// per-engine quant tiers and the historical filename convention.
+// registry-server/data/).  Tables live next to this file (rather than
+// under scripts/) so the mobile test framework's "copy test/ into
+// backend/" packing path keeps them resolvable alongside the
+// downloader; the desktop CI `npm run download-models` step imports
+// the same module via a relative path.
 const {
   CHATTERBOX_GGUFS,
   CHATTERBOX_MTL_GGUFS,
   SUPERTONIC_GGUFS,
   SUPERTONIC_MTL_GGUFS
-} = require('../../scripts/registry-models')
+} = require('./registry-models')
 
 /** Directories searched on Android (in order) when the caller-supplied
  *  `targetDir` doesn't already have the GGUFs.  All of these are

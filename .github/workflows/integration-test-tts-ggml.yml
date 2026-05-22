@@ -204,7 +204,7 @@ jobs:
             ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-s3gen-mtl.gguf
             ${{ github.workspace }}/packages/tts-ggml/models/supertonic.gguf
             ${{ github.workspace }}/packages/tts-ggml/models/supertonic2.gguf
-          key: tts-ggml-desktop-registry-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/tts-ggml/scripts/registry-models.js', 'packages/tts-ggml/scripts/download-models.js') }}
+          key: tts-ggml-desktop-registry-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/tts-ggml/test/utils/registry-models.js', 'packages/tts-ggml/scripts/download-models.js') }}
           restore-keys: |
             tts-ggml-desktop-registry-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-
 

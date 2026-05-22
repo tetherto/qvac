@@ -5,11 +5,18 @@
 // Used by both:
 //   - scripts/download-models.js   (Node CLI -- desktop CI pre-stage).
 //   - test/utils/downloadModel.js  (Bare runtime fallback inside the
-//                                   integration suite).
+//                                   integration suite, including the
+//                                   mobile test framework's bundled
+//                                   copy under backend/test/utils/).
 //
-// Keeping the two in sync was the original failure mode: a quant flip
-// landed in the test-time fetcher but not in the converter / mobile
-// asset pipeline.  One source of truth removes the drift.
+// Lives under test/utils/ (rather than scripts/) so the mobile test
+// framework's "copy test/ into backend/" packing path picks it up
+// automatically -- the framework does not copy scripts/, which broke
+// the mobile integration build the first time this file lived there.
+//
+// Keeping the two consumers in sync was the original failure mode: a
+// quant flip landed in the test-time fetcher but not in the converter
+// / mobile asset pipeline.  One source of truth removes the drift.
 //
 // Mobile integration tests prefer the q4_0 quantised variants where
 // available to stay under Android's per-app memory budget (the S23 FE

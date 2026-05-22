@@ -17,11 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for anyone who just wants to run the integration suite. The legacy
   `npm run setup-models` (HF download + GGUF conversion) is still
   available for re-quantisation / model-team work.
-- **`scripts/registry-models.js`**: single source of truth for the
+- **`test/utils/registry-models.js`**: single source of truth for the
   GGUF registry table (path, source, size band). Consumed by both the
-  new download script and the test-time fallback in
-  `test/utils/downloadModel.js`, so the two pipelines can no longer
-  drift apart.
+  new download script (`scripts/download-models.js`) and the test-time
+  fallback in `test/utils/downloadModel.js`, so the two pipelines can
+  no longer drift apart. Lives under `test/utils/` (rather than
+  `scripts/`) so the mobile test framework's "copy `test/` into
+  `backend/`" packing path resolves the module alongside the
+  downloader.
 
 ### Changed
 
