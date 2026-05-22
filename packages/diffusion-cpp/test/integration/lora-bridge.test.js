@@ -68,9 +68,11 @@ safeTest('SD2.1 txt2img with LoRA — generates a valid PNG image', { timeout: 6
         threads: 4,
         device: useCpu ? 'cpu' : 'gpu',
         prediction: 'v', // SD2.1 uses v-prediction
-        diffusion_fa: true
+        diffusion_fa: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     const images = []
