@@ -7,9 +7,9 @@ description: >
 
 inputs:
   label:
-    description: "Label name required for external fork PRs (default: verify)"
+    description: "Label name required for external fork PRs (default: verified)"
     required: false
-    default: "verify"
+    default: "verified"
   github-token:
     description: "GitHub token for permission check and label API calls"
     required: true
