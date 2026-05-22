@@ -12,6 +12,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const { pctDelta } = require('../math')
 
 function parseArgs (argv) {
   const out = {}
@@ -54,7 +55,8 @@ function loadReportsFrom (dir) {
   const reports = []
   if (!fs.existsSync(dir)) return reports
 
-  // Our own per-platform vlm-perf JSONs.
+  // Our own per-platform vlm-perf JSONs. (Mobile perf-report
+  // ingestion was tried and reverted — see workflow comments.)
   const ours = findFiles(dir, (name) => /^vlm-perf-.*\.json$/.test(name) && !name.endsWith('.delta.md'))
   for (const p of ours) {
     try {
@@ -64,81 +66,133 @@ function loadReportsFrom (dir) {
       console.error(`[aggregate] skipped ${p}: ${e.message}`)
     }
   }
-
-  // Mobile perf-report.json produced by _perf-helper.js (different
-  // schema — see packages/llm-llamacpp/test/integration/_perf-helper.js).
-  const mobile = findFiles(dir, (name) => name === 'perf-report.json')
-  for (const p of mobile) {
-    try {
-      const data = JSON.parse(fs.readFileSync(p, 'utf8'))
-      // schema_version + results array distinguishes it from ours.
-      if (data && Array.isArray(data.results) && data.schema_version) {
-        reports.push({ kind: 'mobile-perf', source: path.relative(dir, path.dirname(p)) || '.', path: p, data })
-      }
-    } catch (e) {
-      console.error(`[aggregate] skipped ${p}: ${e.message}`)
-    }
-  }
   return reports
 }
 
-// Convert one mobile perf-report.json into vlm-perf-shaped summary
-// entries. The mobile suite emits multiple results per file (image-
-// elephant, image-fruit-plate, ...) — we only surface VLM-relevant
-// scenarios. Each result becomes one row in the consolidated table.
-function mobileReportToSummary (report) {
-  const data = report.data
-  const deviceName = (data.device && data.device.name) || 'android'
-  const out = []
-  for (const r of (data.results || [])) {
-    // Keep only image-class scenarios so we don't pollute the VLM
-    // table with text-only or tool-calling tests from the same suite.
-    if (!String(r.scenario || '').toLowerCase().includes('image')) continue
-    const metrics = r.metrics || {}
-    out.push({
-      sourceKey: 'mobile-existing',
-      sourceLabel: `mobile/${r.test}`,
-      backend: metrics.backend || 'auto',
-      platform: deviceName,
-      arch: 'mobile',
-      metrics: {
-        repeats: 1,
-        repeatsTotal: 1,
-        failures: 0,
-        visionEncodeMs_median: metrics.vision_encode_time_ms ?? null,
-        ttftMs_median: metrics.ttft_ms ?? null,
-        decodeTps_median: metrics.tps ?? null,
-        wallMs_median: metrics.total_time_ms ?? null,
-        actualBackends: metrics.backend ? [metrics.backend] : [],
-        // No recall scoring on the legacy mobile path — explicit null
-        // so the consumer can render '-' rather than fabricate a value.
-        recallScore_median: null,
-        objectsRecalled: null,
-        objectsTotal: null,
-        objectsMissed: [],
-        extras: [],
-        fullAnswer: r.output || null,
-        answersAreIdentical: true
-      },
-      errors: []
-    })
-  }
-  return out
+function summaryOf (report) {
+  return (report.data && report.data.summary) || []
 }
 
-function renderConsolidatedMarkdown (reports) {
+// Returns "better" / "worse" / "same" given a candidate vs baseline
+// metric value. `lowerIsBetter` flips the sign so wall-time and TPS
+// produce the right verdict. A ±noiseBand window is treated as "same"
+// because runner variability + median-of-3 doesn't reliably resolve
+// sub-2% changes on GitHub-hosted runners.
+const NOISE_BAND_PCT = 2
+
+function verdictFor (candidate, baseline, lowerIsBetter) {
+  const d = pctDelta(candidate, baseline)
+  if (d == null) return { delta: null, label: '-' }
+  if (Math.abs(d) <= NOISE_BAND_PCT) return { delta: d, label: 'same' }
+  const better = lowerIsBetter ? d < 0 : d > 0
+  return { delta: d, label: better ? 'better' : 'worse' }
+}
+
+function fmtDelta (d) {
+  if (d == null) return '-'
+  const sign = d >= 0 ? '+' : ''
+  return `${sign}${d.toFixed(1)}%`
+}
+
+// Walks every (platform, backend) bucket and emits a verdict table
+// per metric when both `candidate` and `baseline` rows are present.
+// Returns null when no comparable pair exists — caller can skip the
+// block entirely.
+function renderVerdictBlock (reports) {
+  const groups = new Map()
+  for (const report of reports) {
+    for (const row of summaryOf(report)) {
+      const k = `${row.platform}-${row.arch}|${row.backend}`
+      if (!groups.has(k)) groups.set(k, {})
+      const sk = String(row.sourceKey || '').toLowerCase()
+      // Match strictly on sourceKey ('candidate' / 'baseline' from
+      // source-resolver.js) — earlier attempt to also match by label
+      // pattern accidentally treated 'addon@candidate' as a baseline
+      // because 'c' is a hex character.
+      if (sk === 'candidate') groups.get(k).candidate = row
+      else if (sk === 'baseline') groups.get(k).baseline = row
+    }
+  }
+  const pairs = []
+  for (const [k, v] of groups) {
+    if (v.candidate && v.baseline) pairs.push({ k, c: v.candidate, b: v.baseline })
+  }
+  if (pairs.length === 0) return null
+
+  const lines = []
+  lines.push('## Verdict (candidate vs baseline)')
+  lines.push('')
+  lines.push(`Noise band: any change within ±${NOISE_BAND_PCT}% is reported as "same" — runner variability + median-of-3 doesn't reliably resolve smaller deltas on GitHub-hosted runners.`)
+  lines.push('')
+  lines.push('| Platform / Backend | vis-enc | TTFT | TPS | wall | recall |')
+  lines.push('|---|---|---|---|---|---|')
+  for (const { c, b } of pairs) {
+    const cm = c.metrics || {}; const bm = b.metrics || {}
+    const v_vis = verdictFor(cm.visionEncodeMs_median, bm.visionEncodeMs_median, true)
+    const v_ttft = verdictFor(cm.ttftMs_median, bm.ttftMs_median, true)
+    const v_tps = verdictFor(cm.decodeTps_median, bm.decodeTps_median, false)
+    const v_wall = verdictFor(cm.wallMs_median, bm.wallMs_median, true)
+    // Recall is exact-match for now: same recall = same; otherwise
+    // worse if candidate recalls fewer, better if more.
+    let recallVerdict = 'same'
+    if (cm.recallScore_median != null && bm.recallScore_median != null) {
+      if (cm.recallScore_median > bm.recallScore_median) recallVerdict = 'better'
+      else if (cm.recallScore_median < bm.recallScore_median) recallVerdict = 'worse'
+    }
+    const cell = (v) => `${fmtDelta(v.delta)} ${v.label}`
+    lines.push(`| ${c.platform}-${c.arch} / ${c.backend} | ${cell(v_vis)} | ${cell(v_ttft)} | ${cell(v_tps)} | ${cell(v_wall)} | ${cm.objectsRecalled ?? '-'}/${cm.objectsTotal ?? '-'} vs ${bm.objectsRecalled ?? '-'}/${bm.objectsTotal ?? '-'} - ${recallVerdict} |`)
+  }
+  lines.push('')
+
+  // Sanity check: are the two refs the same npm version? When yes, the
+  // benchmark exercised the SAME prebuilds twice, and the verdict above
+  // is just measurement noise. Surface that explicitly so reviewers
+  // don't celebrate a non-comparison.
+  const sameVersions = pairs.every(({ c, b }) => {
+    const cLabel = String(c.sourceLabel || '')
+    const bLabel = String(b.sourceLabel || '')
+    return cLabel === bLabel
+  })
+  if (sameVersions) {
+    lines.push('> **Warning**: candidate and baseline resolved to the same addon source. The numbers above are noise, not a real comparison. This usually means the branch did not bump `packages/llm-llamacpp/package.json#version` between the merge-base and HEAD. A true source-level compare requires building the addon at both commits (planned follow-up).')
+    lines.push('')
+  }
+  return lines.join('\n')
+}
+
+function renderConsolidatedMarkdown (reports, commitInfo) {
   const lines = []
   if (reports.length === 0) {
     return '# VLM Benchmark - Consolidated\n\nNo per-platform reports were found. Each platform job must upload a `vlm-perf-<TS>.json` artifact for it to appear here.\n'
   }
 
-  // Pick metadata from the first vlm-perf report (mobile reports
-  // don't have our meta shape).
   const firstVlm = reports.find((r) => r.kind === 'vlm-perf')
   const firstMeta = (firstVlm && firstVlm.data.meta) || {}
-  const hasMobile = reports.some((r) => r.kind === 'mobile-perf')
   lines.push(`# VLM Benchmark - Consolidated`)
   lines.push('')
+
+  // Commit context — what two refs are we comparing?
+  if (commitInfo) {
+    lines.push('## Commits under test')
+    lines.push('')
+    if (commitInfo.head && commitInfo.head.sha) {
+      const sha = commitInfo.head.sha.slice(0, 8)
+      lines.push(`- **HEAD**: \`${sha}\` - ${commitInfo.head.title || '(no title)'} (${commitInfo.head.date || '?'})`)
+    }
+    if (commitInfo.merge_base && commitInfo.merge_base.sha) {
+      const sha = commitInfo.merge_base.sha.slice(0, 8)
+      lines.push(`- **Merge-base with main**: \`${sha}\` - ${commitInfo.merge_base.title || '(no title)'} (${commitInfo.merge_base.date || '?'})`)
+    }
+    if (commitInfo.compare_baseline_requested) {
+      lines.push('')
+      lines.push('Baseline comparison was requested. Verdict block appears below the platform tables once both `addon@candidate` and `addon@<sha>` rows are present.')
+    } else {
+      lines.push('')
+      lines.push('Baseline comparison was NOT requested for this run. Enable `compare_baseline` on the next dispatch to get a side-by-side delta table.')
+    }
+    lines.push('')
+  }
+
   lines.push(`- Model: \`${firstMeta.modelId || 'unknown'}\``)
   lines.push(`- Image: \`${firstMeta.image || 'unknown'}\``)
   lines.push(`- Prompt: \`${firstMeta.prompt || 'unknown'}\``)
@@ -154,9 +208,7 @@ function renderConsolidatedMarkdown (reports) {
   lines.push('| Platform | Backend (req/actual) | Source | runs | vis-enc (ms) | TTFT (ms) | TPS | wall (ms) | recall | status |')
   lines.push('|---|---|---|---|---|---|---|---|---|---|')
   for (const report of reports) {
-    const summary = report.kind === 'mobile-perf'
-      ? mobileReportToSummary(report)
-      : (report.data.summary || [])
+    const summary = summaryOf(report)
     for (const row of summary) {
       const m = row.metrics || {}
       const hasError = row.errors && row.errors.length > 0
@@ -172,9 +224,12 @@ function renderConsolidatedMarkdown (reports) {
   }
   lines.push('')
 
-  if (hasMobile) {
-    lines.push('> **Mobile row caveat**: rows labelled `mobile/*` come from the existing `integration-mobile-test-llm-llamacpp` workflow in `--perf-only` mode. They use a different image (`elephant.jpg`), a different prompt, and (currently) SmolVLM2-500M instead of Qwen3.5 — the numbers are **not directly comparable** to the desktop VLM rows. Bundling our benchmark into the Android test app is a planned follow-up.')
-    lines.push('')
+  // ── Verdict block ───────────────────────────────────────────────
+  // When the candidate-vs-baseline comparison was actually exercised,
+  // emit a per-(platform, backend) delta table with a verdict label.
+  const verdictBlock = renderVerdictBlock(reports)
+  if (verdictBlock) {
+    lines.push(verdictBlock)
   }
 
   // Host hardware block — one line per platform with CPU / RAM / GPU
@@ -197,10 +252,7 @@ function renderConsolidatedMarkdown (reports) {
   // Cross-platform errors block.
   const errorRows = []
   for (const report of reports) {
-    const rows = report.kind === 'mobile-perf'
-      ? mobileReportToSummary(report)
-      : (report.data.summary || [])
-    for (const row of rows) {
+    for (const row of summaryOf(report)) {
       if (row.errors && row.errors.length > 0) errorRows.push(row)
     }
   }
@@ -221,9 +273,7 @@ function renderConsolidatedMarkdown (reports) {
   lines.push('## Full model answers')
   lines.push('')
   for (const report of reports) {
-    const rows = report.kind === 'mobile-perf'
-      ? mobileReportToSummary(report)
-      : (report.data.summary || [])
+    const rows = summaryOf(report)
     for (const row of rows) {
       const m = row.metrics || {}
       if (!m.fullAnswer) continue
@@ -250,10 +300,19 @@ function main () {
   const outputMd = args['output-md'] ? path.resolve(args['output-md']) : path.resolve('vlm-perf-consolidated.md')
   const outputJson = args['output-json'] ? path.resolve(args['output-json']) : path.resolve('vlm-perf-consolidated.json')
 
+  let commitInfo = null
+  if (args['commit-info']) {
+    try {
+      commitInfo = JSON.parse(fs.readFileSync(path.resolve(args['commit-info']), 'utf8'))
+    } catch (e) {
+      console.error(`[aggregate] could not read commit-info: ${e.message}`)
+    }
+  }
+
   const reports = loadReportsFrom(inputs)
   console.log(`[aggregate] loaded ${reports.length} per-platform report(s) from ${inputs}`)
 
-  const md = renderConsolidatedMarkdown(reports)
+  const md = renderConsolidatedMarkdown(reports, commitInfo)
   fs.mkdirSync(path.dirname(outputMd), { recursive: true })
   fs.writeFileSync(outputMd, md)
   console.log(`[aggregate] wrote ${outputMd}`)
@@ -261,11 +320,12 @@ function main () {
   const merged = {
     generatedAt: new Date().toISOString(),
     platformCount: reports.length,
+    commitInfo,
     reports: reports.map((r) => ({
       kind: r.kind,
       source: r.source,
       meta: r.data.meta || null,
-      summary: r.kind === 'mobile-perf' ? mobileReportToSummary(r) : (r.data.summary || [])
+      summary: r.data.summary || []
     }))
   }
   fs.mkdirSync(path.dirname(outputJson), { recursive: true })

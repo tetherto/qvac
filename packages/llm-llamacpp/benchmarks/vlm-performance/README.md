@@ -45,9 +45,15 @@ compare an optimization candidate to a baseline addon build.
   GitHub-hosted (CPU-only). The matrix will extend to
   `qvac-win25-x64-gpu` and `ai-run-linux-gpu` once the CPU path is
   stable.
-- **In-CI baseline diff**: today CI runs candidate-only. Auto-building
-  the merge-base commit (or pulling cached prebuilds from main) so each
-  run produces a delta table is planned next.
+- **Source-level baseline diff in CI**: today the `compare_baseline`
+  input gives you a version-level diff (it installs the
+  `@qvac/llm-llamacpp` version pinned at the merge-base commit and
+  runs as the baseline). This works when the branch bumped the addon
+  version; otherwise the consolidated report shows a warning that
+  candidate == baseline. A true source-level compare (building the
+  addon at both commits) is planned — it needs the clang-22 + vcpkg
+  toolchain orchestration that currently lives in
+  `prebuilds-llm-llamacpp.yml`.
 - **Accuracy as a gate**: recall is reported but does not fail the run.
   Gating is planned once we trust the metric across models.
 - **Additional models and scenarios**: Gemma-4 VL and OCR-heavy
@@ -228,7 +234,7 @@ platforms in one shot, without setting up each machine locally.
 |---|---|---|---|
 | Windows | GitHub-hosted `windows-latest` | CPU | Runs the full benchmark |
 | Linux | GitHub-hosted `ubuntu-latest` | CPU | Runs the full benchmark |
-| Android | (stub) | — | Placeholder job; on-device benchmark integration is pending. For Android perf numbers right now, manually launch `Benchmark Performance (LLM)` (`benchmark-performance-infer-llm-llamacpp.yml`). |
+| Android | (stub, off by default) | — | An earlier iteration reused `integration-mobile-test-llm-llamacpp.yml` in perf-only mode, but that workflow is built for breadth (Android + iOS matrix, many Device-Farm sessions covering tests we don't need) — one invocation took ~20 min. The Android job is now a placeholder so the workflow shape covers Android; a leaner mobile path is planned. For Android perf numbers right now, manually launch `Benchmark Performance (LLM)` (`benchmark-performance-infer-llm-llamacpp.yml`). |
 
 ### Workflow inputs
 
@@ -240,7 +246,8 @@ platforms in one shot, without setting up each machine locally.
 | `thinking` | `off` | Toggle Qwen3.5's `<think>` reasoning block (`on` doubles wall time but produces a chain-of-thought trace). |
 | `run_windows` | `true` | Include the Windows leg. |
 | `run_linux` | `true` | Include the Linux leg. |
-| `run_android` | `true` | Include the Android job (today this just emits a placeholder marker — see "What runs by default"). |
+| `run_android` | `false` | Include the Android job (today this just emits a placeholder marker — see "What runs by default"). |
+| `compare_baseline` | `false` | Compare branch HEAD against the merge-base with `main`. When on, each desktop leg also runs the npm-published `@qvac/llm-llamacpp` pinned in `packages/llm-llamacpp/package.json` at the merge-base commit, and the consolidated report includes a verdict table (better / worse / same per metric, ±2% noise band). Adds ~30 s per leg. |
 
 ### Benchmark  workflow (CI)
 

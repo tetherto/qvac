@@ -49,10 +49,15 @@ on:
         type: boolean
         default: true
       run_android:
-        description: "Run on Android (stub in this iteration)"
+        description: "Run on Android (stub - real wiring planned)"
         required: false
         type: boolean
-        default: true
+        default: false
+      compare_baseline:
+        description: "Compare branch HEAD against the merge-base with main. Adds ~3 min per leg."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -74,6 +79,12 @@ jobs:
       ref: ${{ steps.ctx.outputs.ref }}
       desktop_matrix: ${{ steps.matrix.outputs.value }}
       desktop_count: ${{ steps.matrix.outputs.count }}
+      merge_base: ${{ steps.commits.outputs.merge_base }}
+      head_sha: ${{ steps.commits.outputs.head_sha }}
+      head_title: ${{ steps.commits.outputs.head_title }}
+      head_date: ${{ steps.commits.outputs.head_date }}
+      base_title: ${{ steps.commits.outputs.base_title }}
+      base_date: ${{ steps.commits.outputs.base_date }}
     steps:
       - id: ctx
         shell: bash
@@ -100,6 +111,41 @@ jobs:
           echo "value=$entries" >> "$GITHUB_OUTPUT"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "Desktop matrix: $entries (count=$count)"
+      # Resolve commit metadata so the consolidated report can show what
+      # the candidate ref + merge-base actually point at (hash, title,
+      # date). Needs a real clone — sparse checkout doesn't give us git
+      # history.
+      - name: Checkout for commit lookup
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ steps.ctx.outputs.repository }}
+          ref: ${{ steps.ctx.outputs.ref }}
+          fetch-depth: 0
+      - id: commits
+        shell: bash
+        run: |
+          git fetch origin main --quiet
+          HEAD_SHA=$(git rev-parse HEAD)
+          MERGE_BASE=$(git merge-base HEAD origin/main || echo "")
+          HEAD_TITLE=$(git log -1 --pretty=%s "$HEAD_SHA")
+          HEAD_DATE=$(git log -1 --pretty=%cI "$HEAD_SHA")
+          if [[ -n "$MERGE_BASE" ]]; then
+            BASE_TITLE=$(git log -1 --pretty=%s "$MERGE_BASE")
+            BASE_DATE=$(git log -1 --pretty=%cI "$MERGE_BASE")
+          else
+            BASE_TITLE=""
+            BASE_DATE=""
+          fi
+          {
+            echo "head_sha=$HEAD_SHA"
+            echo "merge_base=$MERGE_BASE"
+            echo "head_title=$HEAD_TITLE"
+            echo "head_date=$HEAD_DATE"
+            echo "base_title=$BASE_TITLE"
+            echo "base_date=$BASE_DATE"
+          } >> "$GITHUB_OUTPUT"
+          echo "HEAD:       $HEAD_SHA - $HEAD_TITLE ($HEAD_DATE)"
+          echo "merge-base: $MERGE_BASE - $BASE_TITLE ($BASE_DATE)"
 
   # ── Desktop benchmark matrix ───────────────────────────────────────
   # Each leg is the same shape — pick the runner via matrix.runner.
@@ -142,12 +188,71 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm run prepare:models
 
+      # ── Optional baseline setup (compare_baseline=true) ───────────
+      # We use the npm-published @qvac/llm-llamacpp version pinned in
+      # packages/llm-llamacpp/package.json at the merge-base commit as
+      # the baseline. This is fast (~30s extra) but only meaningful
+      # when the branch bumped the addon version. When the pin is
+      # identical at both commits, the consolidated report flags the
+      # comparison as "no version bump on branch - baseline == candidate"
+      # so the reviewer knows nothing was actually exercised.
+      #
+      # A true source-level compare (build the addon at both commits)
+      # is planned as a follow-up; it needs the clang-22 + vcpkg
+      # toolchain orchestration and adds ~30-60 min per leg.
+      - name: Resolve baseline addon version
+        if: inputs.compare_baseline
+        id: baseline
+        shell: bash
+        run: |
+          MERGE_BASE="${{ needs.context.outputs.merge_base }}"
+          if [[ -z "$MERGE_BASE" ]]; then
+            echo "::warning::No merge-base resolved; skipping baseline install"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          HEAD_PKG_VER=$(node -e "console.log(require('./packages/llm-llamacpp/package.json').version)")
+          BASE_PKG_VER=$(git show "${MERGE_BASE}:packages/llm-llamacpp/package.json" | node -e "let s=''; process.stdin.on('data',c=>s+=c); process.stdin.on('end',()=>{console.log(JSON.parse(s).version)})")
+          echo "head_pkg_version=$HEAD_PKG_VER" >> "$GITHUB_OUTPUT"
+          echo "base_pkg_version=$BASE_PKG_VER" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "candidate addon = @qvac/llm-llamacpp@$HEAD_PKG_VER"
+          echo "baseline  addon = @qvac/llm-llamacpp@$BASE_PKG_VER"
+
+      - name: Install baseline addon
+        if: inputs.compare_baseline && steps.baseline.outputs.skip != 'true'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          mkdir -p baseline-addon
+          cd baseline-addon
+          npm init -y > /dev/null
+          # If the version isn't published (e.g. branch bumped to a
+          # not-yet-released version), npm will fail — we let the run
+          # continue with a clear warning so the user still gets the
+          # candidate row.
+          if npm install --no-audit --no-fund "@qvac/llm-llamacpp@${{ steps.baseline.outputs.base_pkg_version }}"; then
+            echo "Baseline addon installed."
+          else
+            echo "::warning::Baseline version @qvac/llm-llamacpp@${{ steps.baseline.outputs.base_pkg_version }} not installable; baseline row will be missing"
+          fi
+
       - name: Run VLM benchmark
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
+          BASELINE_ARG="--skip-baseline"
+          if [[ "${{ inputs.compare_baseline }}" == "true" && "${{ steps.baseline.outputs.skip }}" != "true" ]]; then
+            BASELINE_PATH="$(pwd)/baseline-addon/node_modules/@qvac/llm-llamacpp"
+            if [[ -d "$BASELINE_PATH" ]]; then
+              BASELINE_ARG="--baseline-addon-path=$BASELINE_PATH"
+              echo "Using baseline addon at $BASELINE_PATH"
+            else
+              echo "::warning::baseline-addon dir not found; falling back to skip-baseline"
+            fi
+          fi
           npm run run:vlm-bench -- \
-            --skip-baseline \
+            $BASELINE_ARG \
             --warmup-runs=${{ inputs.warmup_runs }} \
             --measured-runs=${{ inputs.measured_runs }} \
             --thinking=${{ inputs.thinking }}
@@ -164,31 +269,49 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  # ── Android (reuses existing mobile-perf workflow) ─────────────────
-  # We don't yet have our benchmark bundled into the Android test
-  # bundle. Until that ships, this job re-uses the existing
-  # integration-mobile-test-llm-llamacpp.yml in perf-only mode, which
-  # runs the `image-*` integration tests (currently SmolVLM2-500M,
-  # not Qwen3.5) on AWS Device Farm and uploads a perf-report shaped
-  # by _perf-helper.js. The summarize step picks that up alongside
-  # our own per-platform JSONs and renders the mobile rows in the same
-  # table, with a clear note about the model/image difference.
+  # ── Android (stub) ─────────────────────────────────────────────────
+  # Earlier iteration tried to reuse integration-mobile-test-llm-
+  # llamacpp.yml in perf-only mode, but the existing mobile workflow
+  # is built for breadth (Android + iOS matrix, 3+12 Device-Farm
+  # sessions covering many tests) — one full invocation took ~20 min
+  # of mostly-irrelevant work for our use case. Until we either land a
+  # leaner mobile workflow that runs just our benchmark, or bundle our
+  # benchmark logic into the existing mobile test app, this job is a
+  # placeholder so the workflow shape covers Android.
+  #
+  # Default is OFF — flip run_android to true to see the marker
+  # artifact and confirm wiring.
   android:
     needs: context
     if: inputs.run_android
-    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
-    secrets: inherit
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      qvac_perf_runs: ${{ inputs.measured_runs }}
-      qvac_perf_warmup_runs: ${{ inputs.warmup_runs }}
-      qvac_perf_only: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Stub notice
+        shell: bash
+        run: |
+          mkdir -p android-stub
+          cat > android-stub/README.txt <<'EOF'
+          Android VLM benchmark - placeholder
+          ===================================
+          The full Android benchmark is not yet wired. The existing
+          mobile workflow (integration-mobile-test-llm-llamacpp.yml)
+          runs the broader integration test suite and is too heavy
+          for the one-cell VLM benchmark; a dedicated leaner mobile
+          path is planned.
+
+          For Android perf numbers right now, run
+            Actions -> Benchmark Performance (LLM) -> Run workflow
+          (workflow file: benchmark-performance-infer-llm-llamacpp.yml)
+          EOF
+          echo "Android benchmark is a stub in this iteration."
+          cat android-stub/README.txt
+      - name: Upload Android stub marker
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-perf-android-${{ github.run_number }}
+          path: android-stub/
+          retention-days: 14
 
   # ── Summarize ──────────────────────────────────────────────────────
   # Downloads every desktop artifact and renders a consolidated table.
@@ -222,12 +345,25 @@ jobs:
           pattern: vlm-perf-*-${{ github.run_number }}
           path: per-platform
 
-      - name: Download mobile perf-report artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          pattern: perf-report-llamacpp-llm-Android-*
-          path: per-platform/mobile
-        continue-on-error: true
+      - name: Build commit-info JSON
+        shell: bash
+        run: |
+          cat > commit-info.json <<EOF
+          {
+            "head": {
+              "sha": "${{ needs.context.outputs.head_sha }}",
+              "title": ${{ toJSON(needs.context.outputs.head_title) }},
+              "date": "${{ needs.context.outputs.head_date }}"
+            },
+            "merge_base": {
+              "sha": "${{ needs.context.outputs.merge_base }}",
+              "title": ${{ toJSON(needs.context.outputs.base_title) }},
+              "date": "${{ needs.context.outputs.base_date }}"
+            },
+            "compare_baseline_requested": ${{ inputs.compare_baseline }}
+          }
+          EOF
+          cat commit-info.json
 
       - name: Aggregate into one report
         shell: bash
@@ -235,6 +371,7 @@ jobs:
           mkdir -p consolidated
           node packages/llm-llamacpp/benchmarks/vlm-performance/scripts/aggregate-platforms.js \
             --inputs=per-platform \
+            --commit-info=commit-info.json \
             --output-md=consolidated/vlm-perf-consolidated.md \
             --output-json=consolidated/vlm-perf-consolidated.json
 
