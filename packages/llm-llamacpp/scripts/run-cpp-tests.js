@@ -20,8 +20,9 @@ async function main () {
 
   await ensureUnitTestModels({ ciOnly })
 
-  const binary = os.platform() === 'win32' ? 'addon-test.exe' : './addon-test'
   const cwd = path.resolve(__dirname, '..', 'build', 'test', 'unit')
+  const binaryName = os.platform() === 'win32' ? 'addon-test.exe' : 'addon-test'
+  const binary = path.join(cwd, binaryName)
 
   const env = { ...process.env }
   if (coverage) {
