@@ -7,6 +7,7 @@ import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cva } from 'class-variance-authority';
 import type { VersionSelectorProps } from '@/lib/versions';
+import { useAskAI } from '@/components/ask-ai';
 
 // Cache fetched Markdown bodies in-memory so repeat clicks on the same page
 // reuse a single network round-trip across both "Copy page" and the
@@ -170,10 +171,12 @@ export function ViewOptions({
    */
   markdownUrl: string;
 }) {
+  const askAI = useAskAI();
+
   // Seeds the ChatGPT / Claude entries with the page's Markdown URL so the
-  // external assistants can read the current page directly. The in-site
-  // assistant (Inkeep) opens via `data-inkeep-modal-trigger="chat"` and does
-  // not currently support programmatic prompt seeding.
+  // external assistants can read the current page directly. Our in-site
+  // assistant uses `askAI.open()` instead and already has the page index,
+  // so it does not need the URL seeded into a prompt.
   const fullMarkdownUrl =
     typeof window !== 'undefined' ? new URL(markdownUrl, window.location.origin) : 'loading';
   const q = `Read ${fullMarkdownUrl}, I want to ask questions about it.`;
@@ -223,7 +226,7 @@ export function ViewOptions({
       <button
         type="button"
         aria-label="Ask our AI assistant"
-        data-inkeep-modal-trigger="chat"
+        onClick={() => askAI.open()}
         className={cn(
           buttonVariants({
             color: 'secondary',
@@ -232,11 +235,7 @@ export function ViewOptions({
           }),
         )}
       >
-        {/* `pointer-events-none` ensures `event.target === <button>`. Inkeep
-            CXKit matches `data-inkeep-modal-trigger` against the exact event
-            target (not via `closest()`), so clicks that land on the inner SVG
-            would otherwise be silently ignored. */}
-        <Sparkles className="size-3.5 text-fd-muted-foreground pointer-events-none" />
+        <Sparkles className="size-3.5 text-fd-muted-foreground" />
       </button>
 
       <Popover>
@@ -256,11 +255,10 @@ export function ViewOptions({
           <PopoverClose asChild>
             <button
               type="button"
-              data-inkeep-modal-trigger="chat"
+              onClick={() => askAI.open()}
               className={cn(optionVariants())}
             >
-              {/* See Sparkles note above — same Inkeep strict-target gotcha. */}
-              <MessageSquare className="text-fd-muted-foreground pointer-events-none" />
+              <MessageSquare className="text-fd-muted-foreground" />
               Ask our AI assistant
             </button>
           </PopoverClose>
