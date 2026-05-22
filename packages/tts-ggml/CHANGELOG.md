@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2]
+
+### Changed
+
+- **`useGPU` now defaults to `false` for Chatterbox** (was `true` in 0.1.1
+  and earlier). Opt in with `config: { useGPU: true }` on GPU-capable
+  hosts. The auto-enable was flipped because Android dynamic-backend
+  builds OOM on small-RAM devices (e.g. 8 GB Galaxy S23 FE) when the
+  Vulkan / OpenCL backend mirrors ~1 GB of f16 `chatterbox-s3gen.gguf`
+  into GPU memory on top of the mmap'd CPU copy, tripping the Android
+  low-memory killer (`lmkd` SIGKILL). Hosts on capable GPUs (Apple
+  Silicon, CUDA desktops, Adreno 700+ phones with enough free RAM)
+  should pass `config: { useGPU: true }` explicitly. Supertonic stays
+  CPU-only.
+- **Android dynamic backend selection** (consumed via tts-cpp
+  2026-05-20): the addon now ships `prebuilds/android-arm64/qvac__tts-ggml/`
+  with per-arch `libqvac-speech-ggml-cpu-android_armv*_*.so` files plus
+  `libqvac-speech-ggml-{vulkan,opencl}.so`, picked up at runtime via
+  the new `BACKENDS_SUBDIR` join + the registry walk in
+  `tts_cpp::detail::init_gpu_backend()` (Adreno 700+ → OpenCL, every
+  other GPU → Vulkan/Metal/CUDA). New `backendsDir` + `openclCacheDir`
+  options on the JS surface let hosts point at a non-default prebuilds
+  root or persist the OpenCL program-binary cache.
+
+### Fixed
+
+- Metal allocation failure on iOS leading to crash after package was
+  unloaded and loaded several times.
+
 ## [0.1.1]
 
 ### Fixed

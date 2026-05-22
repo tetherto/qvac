@@ -68,16 +68,16 @@ function setup(log: string[], swarmOpts?: MockOptions, storeOpts?: MockOptions) 
   return { swarm, store };
 }
 
-test("suspend order: swarms before stores", async (t: { alike: Function }) => {
+test("suspend order: stores before swarms", async (t: { alike: Function }) => {
   const log: string[] = [];
   setup(log);
 
   await suspendRuntime();
 
-  t.alike(log, ["swarm:suspend", "store:suspend"]);
+  t.alike(log, ["store:suspend", "swarm:suspend"]);
 });
 
-test("resume order: stores before swarms", async (t: { alike: Function }) => {
+test("resume order: swarms before stores", async (t: { alike: Function }) => {
   const log: string[] = [];
   setup(log);
 
@@ -85,7 +85,7 @@ test("resume order: stores before swarms", async (t: { alike: Function }) => {
   log.length = 0;
   await resumeRuntime();
 
-  t.alike(log, ["store:resume", "swarm:resume"]);
+  t.alike(log, ["swarm:resume", "store:resume"]);
 });
 
 test("suspend is idempotent when already suspended", async (t: { is: Function; alike: Function }) => {
@@ -122,7 +122,7 @@ test("concurrent suspend calls share the same transition", async (t: { is: Funct
 
   t.is(r1, undefined);
   t.is(r2, undefined);
-  t.alike(log, ["swarm:suspend", "store:suspend"]);
+  t.alike(log, ["store:suspend", "swarm:suspend"]);
   t.is(getLifecycleState(), "suspended");
 });
 
@@ -135,7 +135,7 @@ test("concurrent resume calls share the same transition", async (t: { is: Functi
 
   await Promise.all([resumeRuntime(), resumeRuntime()]);
 
-  t.alike(log, ["store:resume", "swarm:resume"]);
+  t.alike(log, ["swarm:resume", "store:resume"]);
   t.is(getLifecycleState(), "active");
 });
 
@@ -150,7 +150,7 @@ test("resume during in-flight suspend waits then resumes", async (t: { is: Funct
   await suspendP;
   await resumeP;
 
-  t.alike(log, ["swarm:suspend", "store:suspend", "store:resume", "swarm:resume"]);
+  t.alike(log, ["store:suspend", "swarm:suspend", "swarm:resume", "store:resume"]);
   t.is(getLifecycleState(), "active");
 });
 
@@ -168,7 +168,7 @@ test("suspend during in-flight resume waits then suspends", async (t: { is: Func
   await resumeP;
   await suspendP;
 
-  t.alike(log, ["store:resume", "swarm:resume", "swarm:suspend", "store:suspend"]);
+  t.alike(log, ["swarm:resume", "store:resume", "store:suspend", "swarm:suspend"]);
   t.is(getLifecycleState(), "suspended");
 });
 
