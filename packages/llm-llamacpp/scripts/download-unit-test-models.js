@@ -85,18 +85,16 @@ function downloadFileOnce (url, dest, opts = {}) {
       fs.unlink(dest, () => safeReject(err))
     }
 
+    // reqTimer is assigned after req is created so the timer's closure can
+    // reference req safely; declared as let with no initializer so the
+    // response/error closures below can also reference it without TDZ.
+    let reqTimer // eslint-disable-line prefer-const
+
     const file = fs.createWriteStream(dest)
     file.on('error', (err) => {
       file.destroy()
       cleanupAndReject(err)
     })
-
-    const reqTimer = setTimeout(() => {
-      req.destroy(Object.assign(
-        new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`),
-        { code: 'ETIMEDOUT' }
-      ))
-    }, timeoutMs)
 
     const req = https.request(url, { headers: requestHeaders() }, (response) => {
       clearTimeout(reqTimer)
@@ -166,8 +164,24 @@ function downloadFileOnce (url, dest, opts = {}) {
       file.destroy()
       cleanupAndReject(err)
     })
+
+    reqTimer = setTimeout(() => {
+      req.destroy(Object.assign(
+        new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`),
+        { code: 'ETIMEDOUT' }
+      ))
+    }, timeoutMs)
+
     req.end()
   })
+}
+
+function removeIfExists (filePath) {
+  try {
+    fs.unlinkSync(filePath)
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+  }
 }
 
 async function downloadFileWithRetries (url, dest, opts = {}) {
@@ -181,16 +195,14 @@ async function downloadFileWithRetries (url, dest, opts = {}) {
 
       const stat = fs.statSync(partPath)
       if (stat.size < minBytes) {
-        fs.unlinkSync(partPath)
+        removeIfExists(partPath)
         throw Object.assign(new Error(`Downloaded file is empty from ${host}`), { code: 'ESIZE' })
       }
 
       fs.renameSync(partPath, dest)
       return
     } catch (err) {
-      try {
-        fs.unlinkSync(partPath)
-      } catch (_) {}
+      removeIfExists(partPath)
 
       const attemptsLeft = retries - attempt
       if (!isTransientError(err) || attemptsLeft === 0) {
@@ -223,15 +235,13 @@ async function downloadFile (url, dest) {
   try {
     await downloadFileWithRetries(url, dest)
   } catch (err) {
-    try {
-      fs.unlinkSync(dest)
-    } catch (_) {}
+    removeIfExists(dest)
     throw new Error(`failed to download ${name} from ${url}: ${err.message}`)
   }
 
   const stat = fs.statSync(dest)
   if (stat.size <= 0) {
-    fs.unlinkSync(dest)
+    removeIfExists(dest)
     throw new Error(`${name} is empty after download`)
   }
   log(`done: ${name} (${formatSize(stat.size)})`)

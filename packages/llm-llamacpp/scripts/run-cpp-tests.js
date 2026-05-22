@@ -43,7 +43,12 @@ async function main () {
     throw result.error
   }
 
-  process.exit(result.status || 0)
+  if (result.signal) {
+    console.error(`addon-test killed by signal ${result.signal}`)
+    process.exit(1)
+  }
+
+  process.exit(result.status ?? 1)
 }
 
 main().catch((err) => {
