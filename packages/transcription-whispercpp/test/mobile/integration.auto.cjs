@@ -27,6 +27,14 @@ async function runLongEsTest (options = {}) { // eslint-disable-line no-unused-v
   return runIntegrationModule('../integration/longES.test.js', options)
 }
 
+async function runMobilePerfTinyCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-tiny-cpu.test.js', options)
+}
+
+async function runMobilePerfTinyGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-tiny-gpu.test.js', options)
+}
+
 async function runModelFileValidationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/model-file-validation.test.js', options)
 }
