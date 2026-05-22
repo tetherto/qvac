@@ -66,7 +66,7 @@ jobs:
           workdir: ${{ inputs.workdir }}
 
       - name: Run integration tests if labeled
-        if: contains(github.event.pull_request.labels.*.name, 'verify')
+        if: contains(github.event.pull_request.labels.*.name, 'verified')
         uses: ./.github/actions/run-lint-and-integration-tests
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
