@@ -102,6 +102,140 @@ function fmtDelta (d) {
   return `${sign}${d.toFixed(1)}%`
 }
 
+// Human-friendly description of what one comparison source actually is.
+// Used in the top-level "Comparison" block so a reader can read
+// "Baseline (model@unsloth-Q4_K_M): unsloth/Qwen3.5-0.8B-GGUF
+// @ 6ab46149, Q4_K_M, 507.85 MB" without hunting through the
+// provenance table.
+function describeSource (s) {
+  if (!s) return '-'
+  const parts = []
+  if (s.hfRepo) {
+    const rev = s.hfRevision ? ` @ \`${s.hfRevision.slice(0, 8)}\`` : ''
+    parts.push(`\`${s.hfRepo}\`${rev}`)
+  }
+  if (s.quant) parts.push(s.quant)
+  const sizeMb = s.provenance && s.provenance.llm && s.provenance.llm.sizeMb
+  if (sizeMb != null) parts.push(`${sizeMb} MB`)
+  const sha = s.provenance && s.provenance.llm && s.provenance.llm.sha256
+  if (sha) parts.push(`SHA-256 \`${sha.slice(0, 12)}…\``)
+  return parts.length ? parts.join(', ') : '-'
+}
+
+const COMPARISON_MODE_LABELS = {
+  'model-variants': 'two model variants (same addon, different GGUF blobs)',
+  'addon-versions': 'two addon versions (same model, different `@qvac/llm-llamacpp` builds)',
+  'git-hashes': 'two git commits (full source-level rebuild)',
+  none: 'none (candidate-only run)'
+}
+
+// Top-level "what is this run comparing" header. Renders the
+// comparison mode + which source plays the baseline vs candidate
+// role + a one-line description of each source. When no baseline
+// was requested, surfaces a single candidate line and a tip on how
+// to enable comparison.
+function renderComparisonBlock (reports) {
+  const firstVlm = reports.find((r) => r.kind === 'vlm-perf')
+  if (!firstVlm) return null
+  const meta = firstVlm.data && firstVlm.data.meta
+  if (!meta) return null
+  const sources = meta.modelSources || []
+  const mode = meta.comparisonMode || (sources.length > 1 ? 'model-variants' : 'none')
+  const candidate = sources.find((s) => s.key === 'candidate')
+  const baseline = sources.find((s) => s.key === 'baseline')
+
+  const lines = []
+  lines.push('## Comparison')
+  lines.push('')
+  lines.push(`- **Mode**: ${COMPARISON_MODE_LABELS[mode] || mode}`)
+  if (baseline) {
+    lines.push(`- **Baseline** (\`${baseline.label}\`): ${describeSource(baseline)}`)
+    lines.push(`- **Candidate** (\`${candidate.label}\`): ${describeSource(candidate)}`)
+  } else if (candidate) {
+    lines.push(`- **Candidate** (\`${candidate.label}\`): ${describeSource(candidate)}`)
+    lines.push('- _No baseline - run with `compare_baseline=true` to compare._')
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+// One sub-table per platform; inside each sub-table, one row per
+// backend group containing (candidate row, baseline row, delta row).
+// Replaces the previous flat platform table + standalone verdict
+// section so the reader sees candidate vs baseline side-by-side per
+// platform without cross-referencing two tables.
+function renderPerPlatformBlocks (reports) {
+  const byPlatform = new Map()
+  for (const report of reports) {
+    for (const row of summaryOf(report)) {
+      const k = `${row.platform}-${row.arch}`
+      if (!byPlatform.has(k)) byPlatform.set(k, [])
+      byPlatform.get(k).push(row)
+    }
+  }
+  if (byPlatform.size === 0) return []
+
+  const lines = []
+  lines.push('## Per-platform results')
+  lines.push('')
+  lines.push(`Each table compares **candidate** against **baseline** on one platform. The Δ row uses a ±${NOISE_BAND_PCT}% noise band — anything inside is reported as "same", anything outside is "better" or "worse" depending on the metric direction.`)
+  lines.push('')
+
+  for (const [platform, rows] of byPlatform) {
+    lines.push(`### ${platform}`)
+    lines.push('')
+    const byBackend = new Map()
+    for (const row of rows) {
+      if (!byBackend.has(row.backend)) byBackend.set(row.backend, [])
+      byBackend.get(row.backend).push(row)
+    }
+    for (const [backend, brows] of byBackend) {
+      const cand = brows.find((r) => String(r.sourceKey || '').toLowerCase() === 'candidate')
+      const base = brows.find((r) => String(r.sourceKey || '').toLowerCase() === 'baseline')
+      const actualBackends = new Set()
+      for (const r of brows) {
+        for (const ab of ((r.metrics && r.metrics.actualBackends) || [])) actualBackends.add(ab)
+      }
+      const actual = actualBackends.size ? Array.from(actualBackends).join(',') : '-'
+      lines.push(`Backend requested: \`${backend}\` / actual: \`${actual}\``)
+      lines.push('')
+      lines.push('| Role | Source | runs | vis-enc (ms) | TTFT (ms) | TPS | wall (ms) | recall | status |')
+      lines.push('|---|---|---|---|---|---|---|---|---|')
+      if (cand) lines.push(perPlatformRow('candidate', cand))
+      if (base) lines.push(perPlatformRow('baseline', base))
+      if (cand && base) lines.push(perPlatformDeltaRow(cand, base))
+      lines.push('')
+    }
+  }
+  return lines
+}
+
+function perPlatformRow (role, row) {
+  const m = row.metrics || {}
+  const hasError = row.errors && row.errors.length > 0
+  const status = m.repeats > 0 ? 'OK' : (hasError ? `FAIL: ${row.errors[0].phase}` : 'FAIL')
+  const recall = m.recallScore_median != null
+    ? `${m.objectsRecalled}/${m.objectsTotal} (${m.recallScore_median.toFixed(2)})`
+    : '-'
+  const repeats = m.repeatsTotal != null ? `${m.repeats}/${m.repeatsTotal}` : `${m.repeats || 0}`
+  return `| **${role}** | \`${row.sourceLabel}\` | ${repeats} | ${fmt(m.visionEncodeMs_median)} | ${fmt(m.ttftMs_median)} | ${fmt(m.decodeTps_median, 2)} | ${fmt(m.wallMs_median)} | ${recall} | ${status} |`
+}
+
+function perPlatformDeltaRow (cand, base) {
+  const cm = cand.metrics || {}; const bm = base.metrics || {}
+  const v_vis = verdictFor(cm.visionEncodeMs_median, bm.visionEncodeMs_median, true)
+  const v_ttft = verdictFor(cm.ttftMs_median, bm.ttftMs_median, true)
+  const v_tps = verdictFor(cm.decodeTps_median, bm.decodeTps_median, false)
+  const v_wall = verdictFor(cm.wallMs_median, bm.wallMs_median, true)
+  let recallVerdict = 'same'
+  if (cm.recallScore_median != null && bm.recallScore_median != null) {
+    if (cm.recallScore_median > bm.recallScore_median) recallVerdict = 'better'
+    else if (cm.recallScore_median < bm.recallScore_median) recallVerdict = 'worse'
+  }
+  const cell = (v) => `${fmtDelta(v.delta)} ${v.label}`
+  return `| **Δ candidate vs baseline** | - | - | ${cell(v_vis)} | ${cell(v_ttft)} | ${cell(v_tps)} | ${cell(v_wall)} | ${recallVerdict} | - |`
+}
+
 // Walks every (platform, backend) bucket and emits a verdict table
 // per metric when both `candidate` and `baseline` rows are present.
 // Returns null when no comparable pair exists — caller can skip the
@@ -249,6 +383,26 @@ function renderConsolidatedMarkdown (reports, commitInfo) {
   lines.push(`# VLM Benchmark - Consolidated`)
   lines.push('')
 
+  // ── Run setup ───────────────────────────────────────────────────
+  // Static parameters that hold for every row in the report (model
+  // family, image, prompt, ground truth, methodology, reasoning mode).
+  // Renders before "Commits under test" and "Comparison" so a reader
+  // sees the run configuration first, then which two things are
+  // being compared.
+  lines.push('## Run setup')
+  lines.push('')
+  lines.push(`- **Model family**: \`${firstMeta.modelId || 'unknown'}\``)
+  lines.push(`- **Image**: \`${firstMeta.image || 'unknown'}\``)
+  lines.push(`- **Prompt**: \`${firstMeta.prompt || 'unknown'}\``)
+  if (firstMeta.groundTruth) {
+    lines.push(`- **Ground truth** (${firstMeta.groundTruthCount} objects): ${firstMeta.groundTruth.join(', ')}`)
+  }
+  lines.push(`- **Iterations**: ${firstMeta.warmupRuns} warmup + ${firstMeta.measuredRuns} measured per cell, **median** reported`)
+  if (firstMeta.thinkingEnabled != null) {
+    lines.push(`- **Thinking mode**: ${firstMeta.thinkingEnabled ? 'on' : 'off'}`)
+  }
+  lines.push('')
+
   // Commit context — what two refs are we comparing?
   if (commitInfo) {
     lines.push('## Commits under test')
@@ -261,54 +415,24 @@ function renderConsolidatedMarkdown (reports, commitInfo) {
       const sha = commitInfo.merge_base.sha.slice(0, 8)
       lines.push(`- **Merge-base with main**: \`${sha}\` - ${commitInfo.merge_base.title || '(no title)'} (${commitInfo.merge_base.date || '?'})`)
     }
-    if (commitInfo.compare_baseline_requested) {
-      lines.push('')
-      lines.push('Baseline comparison was requested. Verdict block appears below the platform tables once both `addon@candidate` and `addon@<sha>` rows are present.')
-    } else {
-      lines.push('')
-      lines.push('Baseline comparison was NOT requested for this run. Enable `compare_baseline` on the next dispatch to get a side-by-side delta table.')
-    }
     lines.push('')
   }
 
-  lines.push(`- Model: \`${firstMeta.modelId || 'unknown'}\``)
-  lines.push(`- Image: \`${firstMeta.image || 'unknown'}\``)
-  lines.push(`- Prompt: \`${firstMeta.prompt || 'unknown'}\``)
-  if (firstMeta.groundTruth) {
-    lines.push(`- Ground truth (${firstMeta.groundTruthCount} objects): ${firstMeta.groundTruth.join(', ')}`)
-  }
-  lines.push(`- Runs: ${firstMeta.warmupRuns} warmup + ${firstMeta.measuredRuns} measured, **median** reported`)
-  if (firstMeta.thinkingEnabled != null) {
-    lines.push(`- Thinking mode: ${firstMeta.thinkingEnabled ? 'on' : 'off'}`)
-  }
-  lines.push('')
+  // Comparison block (what's being compared, baseline vs candidate
+  // identities). Renders before the per-platform tables so the
+  // reader knows what "candidate" and "baseline" mean before seeing
+  // them in any table.
+  const comparisonBlock = renderComparisonBlock(reports)
+  if (comparisonBlock) lines.push(comparisonBlock)
 
-  lines.push('| Platform | Backend (req/actual) | Source | runs | vis-enc (ms) | TTFT (ms) | TPS | wall (ms) | recall | status |')
-  lines.push('|---|---|---|---|---|---|---|---|---|---|')
-  for (const report of reports) {
-    const summary = summaryOf(report)
-    for (const row of summary) {
-      const m = row.metrics || {}
-      const hasError = row.errors && row.errors.length > 0
-      const status = m.repeats > 0 ? 'OK' : (hasError ? `FAIL: ${row.errors[0].phase}` : 'FAIL')
-      const recall = m.recallScore_median != null
-        ? `${m.objectsRecalled}/${m.objectsTotal} (${m.recallScore_median.toFixed(2)})`
-        : '-'
-      const repeats = m.repeatsTotal != null ? `${m.repeats}/${m.repeatsTotal}` : `${m.repeats || 0}`
-      const actual = m.actualBackends && m.actualBackends.length ? m.actualBackends.join(',') : '-'
-      const backendCol = `${row.backend} / ${actual}`
-      lines.push(`| ${row.platform}-${row.arch} | ${backendCol} | ${row.sourceLabel} | ${repeats} | ${fmt(m.visionEncodeMs_median)} | ${fmt(m.ttftMs_median)} | ${fmt(m.decodeTps_median, 2)} | ${fmt(m.wallMs_median)} | ${recall} | ${status} |`)
-    }
-  }
-  lines.push('')
 
-  // ── Verdict block ───────────────────────────────────────────────
-  // When the candidate-vs-baseline comparison was actually exercised,
-  // emit a per-(platform, backend) delta table with a verdict label.
-  const verdictBlock = renderVerdictBlock(reports)
-  if (verdictBlock) {
-    lines.push(verdictBlock)
-  }
+  // Per-platform sub-tables with interleaved candidate + baseline +
+  // Δ rows. Replaces the previous flat platform table and the
+  // standalone verdict block — the comparison happens IN PLACE next
+  // to the values it's about, so the reader doesn't have to
+  // cross-reference two separate tables.
+  const platformBlocks = renderPerPlatformBlocks(reports)
+  for (const ln of platformBlocks) lines.push(ln)
 
   // Model provenance — exact source the candidate / baseline rows
   // came from. SHA-256 + byte size + URL lets a reviewer trace which

@@ -402,6 +402,11 @@ async function main () {
     platformKey,
     backends,
     hardware: hardwareInfo,
+    // Single source of truth for "what is this run comparing." Used
+    // by the consolidated report to render the top-level Comparison
+    // block. Extend the enum here when we add new comparison axes
+    // (e.g. 'addon-versions', 'git-hashes', 'thinking-modes').
+    comparisonMode: modelSources.length > 1 ? 'model-variants' : 'none',
     modelSources: modelSources.map((s) => ({
       key: s.key,
       label: s.label,
