@@ -65,15 +65,15 @@ export const videoTxt2vidSmoke: TestDefinition = {
     prompt: "a red ball bouncing on a white floor",
     video_frames: 5,
     fps: 16,
-    steps: 4,
+    steps: 1,
     seed: 42,
   },
   expectation: { validation: "function", fn: validateTxt2vidSmoke },
+  suites: ["smoke"],
   metadata: {
     category: "video",
     dependency: "video",
     estimatedDurationMs: 180000,
-    suites: ["smoke"],
   },
 };
 
