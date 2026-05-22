@@ -243,31 +243,41 @@ async function downloadShardedRepo (baseUrl, files) {
   }
 }
 
-const FULL_MODEL_MANIFEST = [
+// Single-file models. Each entry's `scope` controls when it is downloaded:
+//   'ci'       -> always downloaded (mirrors .github/workflows/cpp-tests-llm.yml)
+//   'optional' -> only downloaded for full local runs; the matching unit tests
+//                 use OnMissing::Skip, so CI deliberately skips them.
+const SINGLE_FILE_MANIFEST = [
   {
-    url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf',
-    dest: 'Qwen3-0.6B-Q8_0.gguf'
+    scope: 'ci',
+    url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
+    dest: 'Llama-3.2-1B-Instruct-Q4_0.gguf'
   },
   {
-    url: 'https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf',
-    dest: 'Qwen3-1.7B-Q4_0.gguf'
-  },
-  {
-    url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf',
-    dest: 'bitnet_b1_58-large-TQ2_0.gguf'
-  },
-  {
+    scope: 'ci',
     url: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
     dest: 'SmolVLM-500M-Instruct-Q8_0.gguf'
   },
   {
+    scope: 'ci',
     url: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
     dest: 'mmproj-SmolVLM-500M-Instruct-Q8_0.gguf'
+  },
+  {
+    scope: 'ci',
+    url: 'https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf',
+    dest: 'Qwen3-0.6B-Q8_0.gguf'
+  },
+  {
+    scope: 'ci',
+    url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf',
+    dest: 'bitnet_b1_58-large-TQ2_0.gguf'
   }
 ]
 
 const SHARDED_REPOS = [
   {
+    scope: 'ci',
     label: 'Qwen3-0.6B-UD-IQ1_S (3 shards)',
     baseUrl: 'https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main',
     files: [
@@ -278,6 +288,7 @@ const SHARDED_REPOS = [
     ]
   },
   {
+    scope: 'ci',
     label: 'bitnet_b1_58-large-TQ2_0 (8 shards)',
     baseUrl: 'https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded/resolve/main',
     files: [
@@ -293,7 +304,10 @@ const SHARDED_REPOS = [
     ]
   },
   {
-    label: 'Llama-3.2-1B-Instruct-Q4_0 (8 shards, optional tests)',
+    // Enables ModelFullLoadingTest.{LargeSharded,StreamingLargeShards}_LoadsSuccessfully,
+    // which gtest-skip on CI because the shards aren't fetched there.
+    scope: 'optional',
+    label: 'Llama-3.2-1B-Instruct-Q4_0 (8 shards)',
     baseUrl: 'https://huggingface.co/jmb95/Llama-3.2-1B-Instruct-Q4_0-sharded/resolve/main',
     files: [
       'Llama-3.2-1B-Instruct-Q4_0.tensors.txt',
@@ -309,39 +323,39 @@ const SHARDED_REPOS = [
   }
 ]
 
-const REQUIRED_MODEL = {
-  url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
-  dest: 'Llama-3.2-1B-Instruct-Q4_0.gguf'
+function shouldInclude (scope, options) {
+  if (options.ciOnly) return scope === 'ci'
+  return true
 }
 
 async function ensureUnitTestModels (options = {}) {
-  const minimal = options.minimal === true
+  const opts = { ciOnly: options.ciOnly === true }
 
   fs.mkdirSync(MODEL_DIR, { recursive: true })
   log(`target directory: ${MODEL_DIR}`)
+  log(opts.ciOnly
+    ? 'mode: --ci (matches .github/workflows/cpp-tests-llm.yml)'
+    : 'mode: full (includes optional fixtures CI skips)')
 
-  await downloadFile(REQUIRED_MODEL.url, path.join(MODEL_DIR, REQUIRED_MODEL.dest))
-
-  if (minimal) {
-    log('minimal set complete')
-    return
-  }
-
-  for (const entry of FULL_MODEL_MANIFEST) {
+  for (const entry of SINGLE_FILE_MANIFEST) {
+    if (!shouldInclude(entry.scope, opts)) continue
     await downloadFile(entry.url, path.join(MODEL_DIR, entry.dest))
   }
 
   for (const repo of SHARDED_REPOS) {
+    if (!shouldInclude(repo.scope, opts)) continue
     log(`sharded: ${repo.label}`)
     await downloadShardedRepo(repo.baseUrl, repo.files)
   }
 
-  log(`all unit-test models ready under ${MODEL_DIR}`)
+  log(opts.ciOnly
+    ? `CI manifest ready under ${MODEL_DIR}`
+    : `all unit-test models ready under ${MODEL_DIR}`)
 }
 
 async function main () {
-  const minimal = process.argv.includes('--minimal')
-  await ensureUnitTestModels({ minimal })
+  const ciOnly = process.argv.includes('--ci')
+  await ensureUnitTestModels({ ciOnly })
 }
 
 if (require.main === module) {

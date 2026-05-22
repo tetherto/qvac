@@ -155,45 +155,7 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
-          mkdir -p models/unit-test
-
-          HF="https://huggingface.co"
-          ODIR="models/unit-test"
-
-          hf_download() {
-            local repo="$1"               # owner/repo
-            local file="$2"               # filename on HF main branch
-            local dest_dir="${3:-$ODIR}"  # destination directory
-            local out_file="${4:-$file}"  # optional output filename (defaults to file)
-            echo "Downloading ${file} from ${HF}/${repo}..."
-            curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "${HF}/${repo}/resolve/main/${file}" -o "${dest_dir}/${out_file}"
-          }
-
-          hf_download_shards() {
-            local repo="$1"               # owner/repo
-            local pattern="$2"            # printf pattern, e.g. "MyModel-%05d-of-%05d.gguf"
-            local total="$3"              # total number of shards
-            local dest_dir="${4:-$ODIR}"  # destination directory
-            echo "Downloading $(printf "$pattern" 1 "$total") shards (${total} of ${total}) from ${HF}/${repo}..."
-            for i in $(seq 1 "$total"); do
-              local shard
-              shard=$(printf "$pattern" "$i" "$total")
-              curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "${HF}/${repo}/resolve/main/${shard}" -o "${dest_dir}/${shard}"
-            done
-          }
-
-          hf_download "bartowski/Llama-3.2-1B-Instruct-GGUF" "Llama-3.2-1B-Instruct-Q4_0.gguf"
-          hf_download "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF" "SmolVLM2-500M-Video-Instruct-Q8_0.gguf" "$ODIR" "SmolVLM-500M-Instruct-Q8_0.gguf"
-          hf_download "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF" "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf" "$ODIR" "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"
-          hf_download "Qwen/Qwen3-0.6B-GGUF" "Qwen3-0.6B-Q8_0.gguf"
-
-          hf_download_shards "jmb95/Qwen3-0.6B-UD-IQ1_S-sharded" "Qwen3-0.6B-UD-IQ1_S-%05d-of-%05d.gguf" 3
-          hf_download "jmb95/Qwen3-0.6B-UD-IQ1_S-sharded" "Qwen3-0.6B-UD-IQ1_S.tensors.txt"
-
-          hf_download "gianni-cor/bitnet_b1_58-large-TQ2_0" "bitnet_b1_58-large-TQ2_0.gguf"
-
-          hf_download_shards "jmb95/bitnet_b1_58-large-TQ2_0-sharded" "bitnet_b1_58-large-TQ2_0-%05d-of-%05d.gguf" 8
-          hf_download "jmb95/bitnet_b1_58-large-TQ2_0-sharded" "bitnet_b1_58-large-TQ2_0.tensors.txt"
+          npm run test:cpp:models:ci
 
           echo "Verify downloaded models..."
           ls -lh models/unit-test/
@@ -223,19 +185,10 @@ jobs:
         env:
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
-          # Windows build will typically emit addon-test.exe; unix emits addon-test
-          EXE="build/test/unit/addon-test"
-          if [ -f "build/test/unit/addon-test.exe" ]; then
-            EXE="build/test/unit/addon-test.exe"
-          fi
-
-          if [ ! -f "$EXE" ]; then
-            echo "ERROR: Test executable not found at $EXE"
-            ls -lah build/test/unit || true
-            exit 1
-          fi
-
-          (cd build/test/unit/ && "./$(basename "$EXE")" --gtest_output=xml:cpp-test-results.xml)
+          # coverage:cpp:run:ci sets LLVM_PROFILE_FILE, which is a no-op on
+          # non-instrumented Windows/macOS builds and lets the Ubuntu
+          # coverage build emit default.profraw for coverage:cpp:report.
+          npm run coverage:cpp:run:ci
 
           if [ -f build/test/unit/cpp-test-results.xml ]; then
             test_count=$(grep -c '<testcase' build/test/unit/cpp-test-results.xml || echo "0")

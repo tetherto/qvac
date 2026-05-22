@@ -8,15 +8,18 @@ const { spawnSync } = require('child_process')
 const { ensureUnitTestModels } = require('./download-unit-test-models')
 
 function parseArgs (argv) {
+  const flags = new Set(['--coverage', '--ci'])
   const coverage = argv.includes('--coverage')
-  const gtestArgs = argv.filter(arg => arg !== '--coverage')
-  return { coverage, gtestArgs }
+  const ciOnly = argv.includes('--ci')
+  const gtestArgs = argv.filter(arg => !flags.has(arg))
+  return { coverage, ciOnly, gtestArgs }
 }
 
 async function main () {
-  await ensureUnitTestModels()
+  const { coverage, ciOnly, gtestArgs } = parseArgs(process.argv.slice(2))
 
-  const { coverage, gtestArgs } = parseArgs(process.argv.slice(2))
+  await ensureUnitTestModels({ ciOnly })
+
   const binary = os.platform() === 'win32' ? 'addon-test.exe' : './addon-test'
   const cwd = path.resolve(__dirname, '..', 'build', 'test', 'unit')
 
