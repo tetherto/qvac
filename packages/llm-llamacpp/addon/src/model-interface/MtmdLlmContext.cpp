@@ -300,7 +300,7 @@ bool MtmdLlmContext::evalMessageWithTools(
   const auto nCtx = static_cast<size_t>(llama_n_ctx(lctx_));
 
   // Try sliding context first — it may free enough space.
-  if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
+  if (static_cast<size_t>(nPast_) + nTokens >= nCtx) {
     auto outcome = trySlidePrefill(
         lctx_,
         nPast_,
@@ -331,10 +331,10 @@ bool MtmdLlmContext::evalMessageWithTools(
       break;
     case ContextSlideOutcome::Kind::Overflow: {
       std::string errorMsg = string_format(
-          "[MtmdLlm] context overflow at prefill step (%ld tokens, max "
-          "%d)\n",
-          nPast_ + nTokens,
-          llama_n_ctx(lctx_));
+          "[MtmdLlm] context overflow at prefill step (%zu tokens, max "
+          "%zu)\n",
+          static_cast<size_t>(nPast_) + nTokens,
+          nCtx);
       throw qvac_errors::StatusError(
           ADDON_ID, toString(ContextOverflow), errorMsg);
     }

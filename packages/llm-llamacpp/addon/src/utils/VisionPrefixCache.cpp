@@ -45,6 +45,16 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
     existing->second.first = std::move(entry);
     currentBytes_ += existing->second.first.sizeBytes();
     touch(existing->second.second);
+    while (currentBytes_ > budgetBytes_ && order_.size() > 1) {
+      const std::string& victim = order_.back();
+      auto vIt = entries_.find(victim);
+      if (vIt != entries_.end()) {
+        currentBytes_ -= vIt->second.first.sizeBytes();
+        entries_.erase(vIt);
+      }
+      order_.pop_back();
+      ++evictions_;
+    }
     if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
     return true;
   }

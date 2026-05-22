@@ -27,6 +27,7 @@ add_executable(
   test_model_metadata.cpp
   test_model_full_loading.cpp
   # Utility tests
+  test_vision_prefix_cache.cpp
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
   test_qwen3_reasoning_utils.cpp
@@ -52,6 +53,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/VisionPrefixCache.cpp
 )
 
 target_compile_options(
@@ -114,6 +116,7 @@ target_link_libraries(
     llama::common
     llama::mtmd
     nlohmann_json::nlohmann_json
+    OpenSSL::Crypto
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main
