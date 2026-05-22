@@ -168,6 +168,76 @@ function renderVerdictBlock (reports) {
   return lines.join('\n')
 }
 
+// Pull the modelSources from the first vlm-perf meta (they're the
+// same across platforms in V1 — every leg downloads from the same
+// URL set). Renders both candidate and baseline as a small table.
+function renderModelProvenance (reports) {
+  const firstVlm = reports.find((r) => r.kind === 'vlm-perf')
+  if (!firstVlm) return null
+  const sources = firstVlm.data && firstVlm.data.meta && firstVlm.data.meta.modelSources
+  if (!sources || sources.length === 0) return null
+
+  const lines = []
+  lines.push('## Model provenance')
+  lines.push('')
+  lines.push('Exactly which GGUF blobs produced the rows above. SHA-256 + byte size make the rows reproducible if you re-download from the same URL.')
+  lines.push('')
+  lines.push('| Source | Repo @ revision | Quant | LLM URL | LLM size | LLM SHA-256 | mmproj size | mmproj SHA-256 |')
+  lines.push('|---|---|---|---|---|---|---|---|')
+  for (const s of sources) {
+    const llm = (s.provenance && s.provenance.llm) || {}
+    const mm = (s.provenance && s.provenance.mmproj) || {}
+    const repoCell = s.hfRepo
+      ? `\`${s.hfRepo}\`<br/>@\`${(s.hfRevision || '?').slice(0, 8)}\``
+      : '-'
+    const url = llm.url ? llm.url.replace(/.*\//, '') : '-'
+    const llmSize = llm.sizeMb != null ? `${llm.sizeMb} MB` : '-'
+    const mmSize = mm.sizeMb != null ? `${mm.sizeMb} MB` : '-'
+    const llmHash = llm.sha256 ? `\`${llm.sha256.slice(0, 12)}…\`` : '-'
+    const mmHash = mm.sha256 ? `\`${mm.sha256.slice(0, 12)}…\`` : '-'
+    lines.push(`| **${s.label}** | ${repoCell} | ${s.quant || '-'} | \`${url}\` | ${llmSize} | ${llmHash} | ${mmSize} | ${mmHash} |`)
+  }
+  lines.push('')
+  // If the verdict block exists and the two sources have IDENTICAL
+  // LLM hashes, the verdict numbers above are noise — call that out.
+  if (sources.length === 2) {
+    const cand = sources.find((s) => s.key === 'candidate')
+    const base = sources.find((s) => s.key === 'baseline')
+    const candHash = cand && cand.provenance && cand.provenance.llm && cand.provenance.llm.sha256
+    const baseHash = base && base.provenance && base.provenance.llm && base.provenance.llm.sha256
+    if (candHash && baseHash && candHash === baseHash) {
+      lines.push('> **Heads-up**: candidate and baseline LLM blobs have **identical SHA-256** — they\'re the same file, so any perf delta in the verdict above is measurement noise.')
+      lines.push('')
+    }
+  }
+  return lines.join('\n')
+}
+
+function renderSoftwareProvenance (reports) {
+  const firstVlm = reports.find((r) => r.kind === 'vlm-perf')
+  if (!firstVlm) return null
+  const sw = firstVlm.data && firstVlm.data.meta && firstVlm.data.meta.software
+  if (!sw) return null
+
+  const lines = []
+  lines.push('## Software provenance')
+  lines.push('')
+  const addon = sw.addon || {}
+  const bare = sw.bare || {}
+  const git = sw.git || {}
+  lines.push(`- **Addon**: \`${addon.name || '?'}@${addon.version || '?'}\``)
+  if (addon.prebuildFile) {
+    lines.push(`  - Prebuild: \`${addon.prebuildFile.replace(/.*[\\/]prebuilds[\\/]/, 'prebuilds/')}\` (${addon.prebuildSizeMb || '?'} MB)`)
+  }
+  lines.push(`- **Bare runtime**: \`${bare.version || '?'}\` (source: ${bare.source || '?'})`)
+  lines.push(`- **Node.js**: \`${sw.node || '?'}\``)
+  if (git.sha) {
+    lines.push(`- **Benchmark commit**: \`${git.shortSha}\` on \`${git.branch || '?'}\` - ${git.title || '?'} (${git.date || '?'})`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
 function renderConsolidatedMarkdown (reports, commitInfo) {
   const lines = []
   if (reports.length === 0) {
@@ -238,6 +308,21 @@ function renderConsolidatedMarkdown (reports, commitInfo) {
   const verdictBlock = renderVerdictBlock(reports)
   if (verdictBlock) {
     lines.push(verdictBlock)
+  }
+
+  // Model provenance — exact source the candidate / baseline rows
+  // came from. SHA-256 + byte size + URL lets a reviewer trace which
+  // blob each row used.
+  const modelBlock = renderModelProvenance(reports)
+  if (modelBlock) {
+    lines.push(modelBlock)
+  }
+
+  // Software provenance — addon version, prebuild file, bare version,
+  // git info. Same purpose as model provenance, but for the runtime.
+  const softwareBlock = renderSoftwareProvenance(reports)
+  if (softwareBlock) {
+    lines.push(softwareBlock)
   }
 
   // Host hardware block — one line per platform with CPU / RAM / GPU

@@ -21,10 +21,82 @@ const { spawnSync } = require('child_process')
 
 const config = require('./vlm-bench.config')
 const { parseArgs, csvOrArray } = require('./utils')
-const { resolveSources } = require('./source-resolver')
 const { buildSummary, writeReports } = require('./reporters')
 const { parseStdoutMetrics } = require('./stdout-parser')
 const { detectAll, hasUsableGpu } = require('./hardware')
+
+// Software provenance: what version of @qvac/llm-llamacpp was loaded,
+// where its prebuild lives on disk, which bare CLI we spawned, plus
+// git info for this checkout. All of it gets stamped into the per-
+// platform JSON so the consolidated report can render an exact
+// "what produced this row" footprint.
+function safeExecStr (cmd, args) {
+  try { return require('child_process').execFileSync(cmd, args, { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return null }
+}
+
+function safeReadJson (filePath) {
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')) } catch { return null }
+}
+
+function detectAddonProvenance () {
+  // Look at the npm-installed addon in our package's node_modules.
+  const pkgPath = path.join(SCRIPT_DIR, 'node_modules', '@qvac', 'llm-llamacpp', 'package.json')
+  const pkg = safeReadJson(pkgPath)
+  if (!pkg) return null
+  const addonRoot = path.dirname(pkgPath)
+  // Find the platform-matching prebuild binary actually used by the
+  // addon. Naming: prebuilds/<platform>-<arch>/qvac__llm-llamacpp.bare
+  const prebuildDir = path.join(addonRoot, 'prebuilds', `${process.platform}-${process.arch}`)
+  let prebuildFile = null
+  let prebuildSize = null
+  if (fs.existsSync(prebuildDir)) {
+    for (const f of fs.readdirSync(prebuildDir)) {
+      if (f.endsWith('.bare') || f.endsWith('.node')) {
+        const full = path.join(prebuildDir, f)
+        try {
+          const s = fs.statSync(full)
+          if (!prebuildSize || s.size > prebuildSize) {
+            prebuildFile = full
+            prebuildSize = s.size
+          }
+        } catch {}
+      }
+    }
+  }
+  return {
+    name: pkg.name,
+    version: pkg.version,
+    installedAt: addonRoot,
+    prebuildFile,
+    prebuildSizeMb: prebuildSize ? Math.round((prebuildSize / (1024 * 1024)) * 100) / 100 : null
+  }
+}
+
+function detectBareProvenance () {
+  // Prefer the version of the local bare we invoke (set up in
+  // resolveLocalBare); fall back to a global bare on PATH.
+  const localBareBin = path.join(SCRIPT_DIR, 'node_modules', 'bare', 'bin', 'bare')
+  if (fs.existsSync(localBareBin)) {
+    const ver = safeExecStr(process.execPath, [localBareBin, '--version'])
+    return { source: 'local', binary: localBareBin, version: ver }
+  }
+  const ver = safeExecStr('bare', ['--version'])
+  return { source: 'global', binary: 'bare', version: ver }
+}
+
+function detectGitProvenance () {
+  // Best-effort — the script may run from a worktree without git, or
+  // from a sparse-checkout. Any field can come back null.
+  const sha = safeExecStr('git', ['-C', SCRIPT_DIR, 'rev-parse', 'HEAD'])
+  if (!sha) return null
+  return {
+    sha,
+    shortSha: sha.slice(0, 8),
+    branch: safeExecStr('git', ['-C', SCRIPT_DIR, 'rev-parse', '--abbrev-ref', 'HEAD']),
+    title: safeExecStr('git', ['-C', SCRIPT_DIR, 'log', '-1', '--pretty=%s']),
+    date: safeExecStr('git', ['-C', SCRIPT_DIR, 'log', '-1', '--pretty=%cI'])
+  }
+}
 
 const SCRIPT_DIR = __dirname
 const RESOLVED_MODELS_PATH = path.join(SCRIPT_DIR, 'resolved-models.json')
@@ -88,14 +160,24 @@ function pickBackends (args, platformKey, hardwareInfo) {
   return backends
 }
 
-function ensureModelsResolved (args) {
-  if (fs.existsSync(RESOLVED_MODELS_PATH) && !args['force-prepare']) {
-    return JSON.parse(fs.readFileSync(RESOLVED_MODELS_PATH, 'utf8'))
+function ensureModelsResolved (args, compareBaseline) {
+  // Re-run prepare-models when (a) no resolved-models.json exists,
+  // (b) --force-prepare is set, or (c) compare-baseline is on but the
+  // existing resolution didn't include a baseline.
+  let cached = null
+  if (fs.existsSync(RESOLVED_MODELS_PATH)) {
+    try { cached = JSON.parse(fs.readFileSync(RESOLVED_MODELS_PATH, 'utf8')) } catch {}
   }
-  log('models not resolved yet — running prepare-models.js')
+  const needsRerun = !cached || args['force-prepare'] || (compareBaseline && !cached.baseline)
+  if (!needsRerun) return cached
+
+  log('running prepare-models.js' + (compareBaseline ? ' (with --compare-baseline)' : ''))
   const passThrough = []
-  if (args['local-model']) passThrough.push('--local-model', args['local-model'])
-  if (args['local-mmproj']) passThrough.push('--local-mmproj', args['local-mmproj'])
+  if (compareBaseline) passThrough.push('--compare-baseline')
+  if (args['local-candidate-model']) passThrough.push('--local-candidate-model', args['local-candidate-model'])
+  if (args['local-candidate-mmproj']) passThrough.push('--local-candidate-mmproj', args['local-candidate-mmproj'])
+  if (args['local-baseline-model']) passThrough.push('--local-baseline-model', args['local-baseline-model'])
+  if (args['local-baseline-mmproj']) passThrough.push('--local-baseline-mmproj', args['local-baseline-mmproj'])
   const r = spawnSync(process.execPath, [path.join(SCRIPT_DIR, 'prepare-models.js'), ...passThrough], {
     cwd: SCRIPT_DIR,
     stdio: 'inherit',
@@ -107,14 +189,14 @@ function ensureModelsResolved (args) {
   return JSON.parse(fs.readFileSync(RESOLVED_MODELS_PATH, 'utf8'))
 }
 
-function buildCaseSpec ({ source, backend, resolved, imagePath, runArgs }) {
+function buildCaseSpec ({ source, backend, modelSrc, imagePath, runArgs }) {
   return {
-    sourceKey: source.key,
-    sourceLabel: source.label,
+    sourceKey: source.key,                       // 'candidate' or 'baseline'
+    sourceLabel: source.label,                   // 'model@hf' / 'model@registry'
     addonRequirePath: source.addonPath || 'local',
     backend,
-    llmPath: resolved.llmPath,
-    mmprojPath: resolved.mmprojPath,
+    llmPath: modelSrc.llmPath,
+    mmprojPath: modelSrc.mmprojPath,
     imagePath,
     prompt: config.case.prompt,
     ctxSize: config.model.ctxSize,
@@ -238,7 +320,8 @@ async function main () {
     thinkingEnabled: resolveThinkingFlag(args, config)
   }
 
-  const resolved = ensureModelsResolved(args)
+  const compareBaseline = Boolean(args['compare-baseline'])
+  const resolved = ensureModelsResolved(args, compareBaseline)
   const platformKey = detectPlatformKey()
   const hardwareInfo = detectAll()
   log(`hardware: cpu="${hardwareInfo.cpu.model}" cores=${hardwareInfo.cpu.cores} ram=${hardwareInfo.ram.totalGb}GB gpus=${hardwareInfo.gpus.length}`)
@@ -248,21 +331,26 @@ async function main () {
     throw new Error('No backends resolved for this host (--force-gpu-row may help if you specifically want to surface the GPU-fallback-to-CPU case).')
   }
   log(`backends to run: ${backends.join(', ')}`)
-  const sources = resolveSources(config, args)
 
-  // Skip baseline cells that need a build but have no addon path.
-  const runnableSources = sources.filter((s) => {
-    if (s.type === 'skip') return false
-    if (s.type === 'addon' && s.source === 'commit' && s.requiresBuild && !s.addonPath) {
-      log(`skipping baseline (${s.label}): no --baseline-addon-path provided; CI builds the worktree, local runs should pass --skip-baseline or --baseline-addon-path`)
-      return false
+  // Model sources: candidate is always run; baseline is only run when
+  // --compare-baseline was passed AND prepare-models successfully
+  // resolved it.
+  const modelSources = [
+    { key: 'candidate', label: `model@${resolved.candidate.label}`, model: resolved.candidate }
+  ]
+  if (compareBaseline) {
+    if (resolved.baseline) {
+      modelSources.push({ key: 'baseline', label: `model@${resolved.baseline.label}`, model: resolved.baseline })
+    } else {
+      log('--compare-baseline was set but no baseline was resolved; candidate-only run')
     }
-    return true
-  })
-
-  if (runnableSources.length === 0) {
-    throw new Error('No runnable sources — candidate must be enabled. Check --skip-baseline isn\'t the only source.')
   }
+  log(`model sources: ${modelSources.map((s) => s.label).join(', ')}`)
+
+  // Addon source is uniform — we always use the npm-installed
+  // @qvac/llm-llamacpp. The candidate vs baseline split now happens
+  // along the *model* axis.
+  const addonSource = { key: 'addon', label: 'addon@npm', addonPath: null }
 
   const imagePath = path.resolve(SCRIPT_DIR, config.case.image)
   if (!fs.existsSync(imagePath)) {
@@ -272,11 +360,13 @@ async function main () {
   const resultsDir = path.resolve(SCRIPT_DIR, args['results-dir'] || config.reporting.resultsDir)
   fs.mkdirSync(resultsDir, { recursive: true })
 
+  // For each backend × model-source pair, spawn one bare case-runner.
   const cells = []
   let cellIdx = 0
-  for (const source of runnableSources) {
+  for (const modelSrc of modelSources) {
     for (const backend of backends) {
-      const spec = buildCaseSpec({ source, backend, resolved, imagePath, runArgs })
+      const source = { ...addonSource, key: modelSrc.key, label: modelSrc.label }
+      const spec = buildCaseSpec({ source, backend, modelSrc: modelSrc.model, imagePath, runArgs })
       try {
         const cell = runOneCell(spec, resultsDir, cellIdx++)
         cells.push(cell)
@@ -312,7 +402,20 @@ async function main () {
     platformKey,
     backends,
     hardware: hardwareInfo,
-    sources: runnableSources.map((s) => ({ key: s.key, label: s.label, commit: s.commit || null }))
+    modelSources: modelSources.map((s) => ({
+      key: s.key,
+      label: s.label,
+      quant: s.model.quant || null,
+      hfRepo: s.model.hfRepo || null,
+      hfRevision: s.model.hfRevision || null,
+      provenance: s.model.provenance || null
+    })),
+    software: {
+      addon: detectAddonProvenance(),
+      bare: detectBareProvenance(),
+      git: detectGitProvenance(),
+      node: process.version
+    }
   }
   const written = writeReports({ outputDir: resultsDir, summary, meta })
 

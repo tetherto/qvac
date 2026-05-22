@@ -17,30 +17,52 @@ module.exports = {
   },
 
   // ── Model ────────────────────────────────────────────────────────
-  // Resolution order in prepare-models.js:
-  //   1. --local-model / --local-mmproj (an existing file on disk)
-  //   2. registry-server lookup (when QVAC_REGISTRY_URL is set)
-  //   3. Hugging Face URL fallback (below)
+  // The benchmark has TWO model sources of the same family. The
+  // candidate source is always downloaded and benchmarked. The
+  // baseline source is only used when `--compare-baseline` is set
+  // (orchestrator) / `compare_baseline=true` (workflow input).
+  //
+  // Default configuration is a Q8_0-vs-Q4_K_M compare of the same
+  // unsloth Qwen3.5-0.8B-GGUF repo at the same pinned revision —
+  // guaranteed-different binaries (different filesize and memory
+  // traffic) and a real perf delta to validate the verdict pipeline.
+  // The two model files share the same `mmproj-F16.gguf` so the
+  // vision encoder cost is constant; only the LLM quant differs.
+  //
+  // Swap to a true different-source compare any time by repointing
+  // baseline.url at a different HF repo + revision (e.g. an alternate
+  // quantizer's GGUF), provided their mmproj is also compatible.
   model: {
-    id: 'qwen3.5-0.8b-q8',
-    quant: 'Q8_0',
-    llmFile: 'Qwen3.5-0.8B-Q8_0.gguf',
-    mmprojFile: 'mmproj-Qwen3.5-0.8B-F16.gguf',
-    huggingFace: {
-      repo: 'unsloth/Qwen3.5-0.8B-GGUF',
-      revision: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0',
-      llmFilename: 'Qwen3.5-0.8B-Q8_0.gguf',
-      mmprojFilename: 'mmproj-F16.gguf'
-    },
-    registry: {
-      llmId: 'unsloth/Qwen3.5-0.8B-GGUF/Q8_0',
-      mmprojId: 'unsloth/Qwen3.5-0.8B-GGUF/mmproj-F16'
-    },
+    id: 'qwen3.5-0.8b',
     ctxSize: 4096,
-    // Qwen3.5 is a reasoning model that emits a <think>...</think>
-    // block before its answer; 128 cut us off mid-reasoning. 512 is
-    // enough room for the chain-of-thought plus a 7-object answer.
-    nPredict: 512
+    // Qwen3.5 is a reasoning model; 128 tokens cut off mid-CoT, so
+    // give it 512 — enough for the chain-of-thought plus a 7-object
+    // answer when reasoning is on.
+    nPredict: 512,
+    candidate: {
+      label: 'unsloth-Q8_0',
+      quant: 'Q8_0',
+      hfRepo: 'unsloth/Qwen3.5-0.8B-GGUF',
+      hfRevision: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0',
+      llmFile: 'Qwen3.5-0.8B-Q8_0--cand.gguf',
+      mmprojFile: 'mmproj-Qwen3.5-0.8B-F16--cand.gguf',
+      url: {
+        llm: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf',
+        mmproj: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf'
+      }
+    },
+    baseline: {
+      label: 'unsloth-Q4_K_M',
+      quant: 'Q4_K_M',
+      hfRepo: 'unsloth/Qwen3.5-0.8B-GGUF',
+      hfRevision: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0',
+      llmFile: 'Qwen3.5-0.8B-Q4_K_M--base.gguf',
+      mmprojFile: 'mmproj-Qwen3.5-0.8B-F16--base.gguf',
+      url: {
+        llm: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_K_M.gguf',
+        mmproj: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf'
+      }
+    }
   },
 
   // ── Case (image + prompt + ground truth) ─────────────────────────
