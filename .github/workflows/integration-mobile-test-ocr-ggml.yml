@@ -952,16 +952,19 @@ jobs:
           # Read test groups and create per-group WDIO configs
           GROUPS_JSON="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/test-groups.json"
           PERF_PATTERN=$(jq -r '.perf | join("|")' "$GROUPS_JSON")
-          REGULAR_PATTERN=$(jq -r '.regular | join("|")' "$GROUPS_JSON")
+          REGULAR_A_PATTERN=$(jq -r '.regularA | join("|")' "$GROUPS_JSON")
+          REGULAR_B_PATTERN=$(jq -r '.regularB | join("|")' "$GROUPS_JSON")
           echo "Perf test pattern: $PERF_PATTERN"
-          echo "Regular test pattern: $REGULAR_PATTERN"
+          echo "Regular-A test pattern: $REGULAR_A_PATTERN"
+          echo "Regular-B test pattern: $REGULAR_B_PATTERN"
 
           # Set Mocha grep to the same pattern as TEST_FILTER so WDIO only waits
           # for the it() cases that actually run on the device. Using "." (match-all)
           # causes WDIO to wait for all 17 tests including those filtered out on the
           # device, and the run times out waiting for results that never appear.
           WDIO_CONFIG_PERF_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$PERF_PATTERN#" | sed "s#__TEST_FILTER__#$PERF_PATTERN#" | base64 | tr -d '\n')
-          WDIO_CONFIG_REGULAR_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$REGULAR_PATTERN#" | sed "s#__TEST_FILTER__#$REGULAR_PATTERN#" | base64 | tr -d '\n')
+          WDIO_CONFIG_REGULAR_A_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$REGULAR_A_PATTERN#" | sed "s#__TEST_FILTER__#$REGULAR_A_PATTERN#" | base64 | tr -d '\n')
+          WDIO_CONFIG_REGULAR_B_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$REGULAR_B_PATTERN#" | sed "s#__TEST_FILTER__#$REGULAR_B_PATTERN#" | base64 | tr -d '\n')
 
           # Function to generate a testspec YAML given a base64-encoded WDIO config
           generate_testspec() {
@@ -1121,16 +1124,22 @@ jobs:
           }
 
           generate_testspec "$WDIO_CONFIG_PERF_B64" "testspec-perf.yml"
-          generate_testspec "$WDIO_CONFIG_REGULAR_B64" "testspec-regular.yml"
+          generate_testspec "$WDIO_CONFIG_REGULAR_A_B64" "testspec-regular-a.yml"
+          generate_testspec "$WDIO_CONFIG_REGULAR_B_B64" "testspec-regular-b.yml"
 
           echo "Generated perf test spec:"
           echo "===================="
           head -5 testspec-perf.yml
           echo "..."
           echo "===================="
-          echo "Generated regular test spec:"
+          echo "Generated regular-a test spec:"
           echo "===================="
-          head -5 testspec-regular.yml
+          head -5 testspec-regular-a.yml
+          echo "..."
+          echo "===================="
+          echo "Generated regular-b test spec:"
+          echo "===================="
+          head -5 testspec-regular-b.yml
           echo "..."
           echo "===================="
 
@@ -1173,10 +1182,13 @@ jobs:
           PERF_SPEC_ARN=$(upload_spec "testspec-perf.yml" "Perf")
           echo "test_spec_arn_perf=$PERF_SPEC_ARN" >> $GITHUB_OUTPUT
 
-          REGULAR_SPEC_ARN=$(upload_spec "testspec-regular.yml" "Regular")
-          echo "test_spec_arn_regular=$REGULAR_SPEC_ARN" >> $GITHUB_OUTPUT
+          REGULAR_A_SPEC_ARN=$(upload_spec "testspec-regular-a.yml" "Regular-A")
+          echo "test_spec_arn_regular_a=$REGULAR_A_SPEC_ARN" >> $GITHUB_OUTPUT
 
-      - name: Schedule Device Farm Test Runs (Perf + Regular)
+          REGULAR_B_SPEC_ARN=$(upload_spec "testspec-regular-b.yml" "Regular-B")
+          echo "test_spec_arn_regular_b=$REGULAR_B_SPEC_ARN" >> $GITHUB_OUTPUT
+
+      - name: Schedule Device Farm Test Runs (Perf + Regular-A + Regular-B)
         id: schedule_run
         run: |
           if [ "${{ matrix.platform }}" == "Android" ]; then
@@ -1195,9 +1207,10 @@ jobs:
           APP_ARN="${{ steps.upload_app.outputs.app_upload_arn }}"
           TEST_PKG_ARN="${{ steps.upload_test_package.outputs.test_package_upload_arn }}"
           PERF_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn_perf }}"
-          REGULAR_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn_regular }}"
+          REGULAR_A_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn_regular_a }}"
+          REGULAR_B_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn_regular_b }}"
 
-          echo "🚀 Scheduling 2 Device Farm runs (Perf + Regular)..."
+          echo "🚀 Scheduling 3 Device Farm runs (Perf + Regular-A + Regular-B)..."
           echo "Platform: ${{ matrix.platform }}"
           echo "Device Pool: $POOL_ARN"
 
@@ -1211,32 +1224,45 @@ jobs:
           echo "✅ Perf run scheduled: $PERF_RUN_ARN"
           echo "run_arn_perf=$PERF_RUN_ARN" >> $GITHUB_OUTPUT
 
-          REGULAR_RUN_ARN=$(aws devicefarm schedule-run \
+          REGULAR_A_RUN_ARN=$(aws devicefarm schedule-run \
             --project-arn "$PROJECT_ARN" \
             --device-pool-arn "$POOL_ARN" \
             --app-arn "$APP_ARN" \
-            --name "${RUN_NAME}-Regular" \
-            --test "type=APPIUM_NODE,testPackageArn=$TEST_PKG_ARN,testSpecArn=$REGULAR_SPEC_ARN" \
+            --name "${RUN_NAME}-Regular-A" \
+            --test "type=APPIUM_NODE,testPackageArn=$TEST_PKG_ARN,testSpecArn=$REGULAR_A_SPEC_ARN" \
             --query 'run.arn' --output text)
-          echo "✅ Regular run scheduled: $REGULAR_RUN_ARN"
-          echo "run_arn_regular=$REGULAR_RUN_ARN" >> $GITHUB_OUTPUT
+          echo "✅ Regular-A run scheduled: $REGULAR_A_RUN_ARN"
+          echo "run_arn_regular_a=$REGULAR_A_RUN_ARN" >> $GITHUB_OUTPUT
+
+          REGULAR_B_RUN_ARN=$(aws devicefarm schedule-run \
+            --project-arn "$PROJECT_ARN" \
+            --device-pool-arn "$POOL_ARN" \
+            --app-arn "$APP_ARN" \
+            --name "${RUN_NAME}-Regular-B" \
+            --test "type=APPIUM_NODE,testPackageArn=$TEST_PKG_ARN,testSpecArn=$REGULAR_B_SPEC_ARN" \
+            --query 'run.arn' --output text)
+          echo "✅ Regular-B run scheduled: $REGULAR_B_RUN_ARN"
+          echo "run_arn_regular_b=$REGULAR_B_RUN_ARN" >> $GITHUB_OUTPUT
 
           echo "run_arn=$PERF_RUN_ARN" >> $GITHUB_OUTPUT
 
-      - name: Monitor Test Runs (Perf + Regular)
+      - name: Monitor Test Runs (Perf + Regular-A + Regular-B)
         id: monitor_run
         run: |
           PERF_ARN="${{ steps.schedule_run.outputs.run_arn_perf }}"
-          REGULAR_ARN="${{ steps.schedule_run.outputs.run_arn_regular }}"
-          echo "📊 Monitoring 2 test runs:"
-          echo "  Perf:    $PERF_ARN"
-          echo "  Regular: $REGULAR_ARN"
+          REGULAR_A_ARN="${{ steps.schedule_run.outputs.run_arn_regular_a }}"
+          REGULAR_B_ARN="${{ steps.schedule_run.outputs.run_arn_regular_b }}"
+          echo "📊 Monitoring 3 test runs:"
+          echo "  Perf:      $PERF_ARN"
+          echo "  Regular-A: $REGULAR_A_ARN"
+          echo "  Regular-B: $REGULAR_B_ARN"
           echo ""
 
           MAX_WAIT_TIME=7200
           ELAPSED=0
           PERF_DONE=false
-          REGULAR_DONE=false
+          REGULAR_A_DONE=false
+          REGULAR_B_DONE=false
 
           while true; do
             if [ "$PERF_DONE" = false ]; then
@@ -1247,21 +1273,29 @@ jobs:
               fi
             fi
 
-            if [ "$REGULAR_DONE" = false ]; then
-              REG_STATUS=$(aws devicefarm get-run --arn "$REGULAR_ARN" --query 'run.status' --output text)
-              if [[ "$REG_STATUS" == "COMPLETED" ]]; then
-                REGULAR_DONE=true
-                echo "✅ Regular run completed! (${ELAPSED}s)"
+            if [ "$REGULAR_A_DONE" = false ]; then
+              REG_A_STATUS=$(aws devicefarm get-run --arn "$REGULAR_A_ARN" --query 'run.status' --output text)
+              if [[ "$REG_A_STATUS" == "COMPLETED" ]]; then
+                REGULAR_A_DONE=true
+                echo "✅ Regular-A run completed! (${ELAPSED}s)"
               fi
             fi
 
-            if [ "$PERF_DONE" = true ] && [ "$REGULAR_DONE" = true ]; then
+            if [ "$REGULAR_B_DONE" = false ]; then
+              REG_B_STATUS=$(aws devicefarm get-run --arn "$REGULAR_B_ARN" --query 'run.status' --output text)
+              if [[ "$REG_B_STATUS" == "COMPLETED" ]]; then
+                REGULAR_B_DONE=true
+                echo "✅ Regular-B run completed! (${ELAPSED}s)"
+              fi
+            fi
+
+            if [ "$PERF_DONE" = true ] && [ "$REGULAR_A_DONE" = true ] && [ "$REGULAR_B_DONE" = true ]; then
               echo ""
-              echo "✅ Both runs completed!"
+              echo "✅ All 3 runs completed!"
               break
             fi
 
-            echo "⏳ Perf: ${PERF_STATUS:-done} | Regular: ${REG_STATUS:-done} | Elapsed: ${ELAPSED}s"
+            echo "⏳ Perf: ${PERF_STATUS:-done} | Regular-A: ${REG_A_STATUS:-done} | Regular-B: ${REG_B_STATUS:-done} | Elapsed: ${ELAPSED}s"
 
             if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
               echo ""
@@ -1403,23 +1437,28 @@ jobs:
           echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
           echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
 
-          # Also check regular run result
-          REGULAR_RESULT=$(aws devicefarm get-run --arn "$REGULAR_ARN" --query 'run.result' --output text)
+          # Also check regular run results
+          REGULAR_A_RESULT=$(aws devicefarm get-run --arn "$REGULAR_A_ARN" --query 'run.result' --output text)
+          REGULAR_B_RESULT=$(aws devicefarm get-run --arn "$REGULAR_B_ARN" --query 'run.result' --output text)
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 REGULAR RUN RESULT"
+          echo "📋 REGULAR RUN RESULTS"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Regular run result: $REGULAR_RESULT"
+          echo "Regular-A run result: $REGULAR_A_RESULT"
+          echo "Regular-B run result: $REGULAR_B_RESULT"
           echo ""
 
-          if [[ "$RESULT" != "PASSED" ]] || [[ "$REGULAR_RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
+          if [[ "$RESULT" != "PASSED" ]] || [[ "$REGULAR_A_RESULT" != "PASSED" ]] || [[ "$REGULAR_B_RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
             echo ""
             echo "❌ Device Farm tests failed"
             if [[ "$RESULT" != "PASSED" ]]; then
               echo "   Perf run result: $RESULT"
             fi
-            if [[ "$REGULAR_RESULT" != "PASSED" ]]; then
-              echo "   Regular run result: $REGULAR_RESULT"
+            if [[ "$REGULAR_A_RESULT" != "PASSED" ]]; then
+              echo "   Regular-A run result: $REGULAR_A_RESULT"
+            fi
+            if [[ "$REGULAR_B_RESULT" != "PASSED" ]]; then
+              echo "   Regular-B run result: $REGULAR_B_RESULT"
             fi
             echo "   Perf devices: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
             echo "   Perf counters: $TOTAL total | $PASSED passed | $FAILED failed | $SKIPPED skipped"
@@ -1427,7 +1466,7 @@ jobs:
           fi
 
           echo ""
-          echo "✅ All Device Farm tests passed (Perf + Regular)!"
+          echo "✅ All Device Farm tests passed (Perf + Regular-A + Regular-B)!"
           echo "   Perf devices: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
           echo "   Perf counters: $TOTAL total | $PASSED passed | $FAILED failed | $SKIPPED skipped"
 

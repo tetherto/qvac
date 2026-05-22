@@ -5,13 +5,15 @@
     "runDoctrLabResultsTest",
     "runDoctrLiverFunctionTest"
   ],
-  "regular": [
+  "regularA": [
     "runDoctrBasicTest",
     "runDoctrModelsTest",
     "runDoctrParamValidationTest",
     "runErrorHandlingTest",
     "runFullCoverageTest",
-    "runFullOcrSuiteTest",
+    "runFullOcrSuiteTest"
+  ],
+  "regularB": [
     "runImageFormatsTest",
     "runLargeImagesTest",
     "runLifecycleTest",
