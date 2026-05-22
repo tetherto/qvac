@@ -1,7 +1,6 @@
 import type { TestDefinition, TestResult } from "@tetherto/qvac-test-suite";
 
 interface VideoExecutionSummary {
-  outputPath: string;
   outputs: Uint8Array[];
   stats?: {
     totalVideos?: number;
@@ -56,7 +55,7 @@ function validateTxt2vidSmoke(result: unknown): TestResult {
 
   return {
     passed: true,
-    output: `Generated AVI at ${summary.outputPath} with ${summary.stats.videoFrames} frames @ ${summary.stats.fps} fps`,
+    output: `Generated AVI (${summary.outputs[0]!.length} bytes) with ${summary.stats.videoFrames} frames @ ${summary.stats.fps} fps`,
   };
 }
 
@@ -72,7 +71,7 @@ export const videoTxt2vidSmoke: TestDefinition = {
   expectation: { validation: "function", fn: validateTxt2vidSmoke },
   metadata: {
     category: "video",
-    dependency: "none",
+    dependency: "video",
     estimatedDurationMs: 900000,
   },
 };

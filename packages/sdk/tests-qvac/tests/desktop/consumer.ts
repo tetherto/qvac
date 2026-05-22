@@ -38,6 +38,9 @@ import {
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
+  WAN2_1_T2V_1_3B_FP16,
+  UMT5_XXL_FP16,
+  WAN_2_1_COMFYUI_REPACKAGED_VAE,
   SD_V2_1_1B_Q8_0,
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
@@ -359,6 +362,22 @@ resources.define("diffusion-fa-disabled", {
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
     diffusion_fa: false,
+  },
+});
+
+resources.define("video", {
+  constant: WAN2_1_T2V_1_3B_FP16,
+  type: "diffusion",
+  config: {
+    mode: "video",
+    device: "gpu",
+    threads: 4,
+    t5XxlModelSrc: UMT5_XXL_FP16,
+    vaeModelSrc: WAN_2_1_COMFYUI_REPACKAGED_VAE,
+    diffusion_fa: true,
+    offload_to_cpu: true,
+    vae_on_cpu: true,
+    vae_tiling: true,
   },
 });
 
