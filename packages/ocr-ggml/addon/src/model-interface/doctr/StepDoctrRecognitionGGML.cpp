@@ -539,7 +539,9 @@ struct StepDoctrRecognitionGGML::Impl {
 
   void load(const std::string& pathRecognizer) {
     graph.reset();
-    graph.backend = ggml_backend_cpu_init();
+    ggml_backend_dev_t cpuDev =
+        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    graph.backend = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
     if (graph.backend == nullptr) {
       raise("failed to initialize ggml CPU backend");
     }

@@ -171,13 +171,13 @@ cv::Mat StepDetectionInference::preprocess(
 StepDetectionInference::StepDetectionInference(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& gguf_path, float magRatio, int nThreads)
-    : magRatio_(magRatio),
-      backend_(
-          (ggml_backend_load_all(),
-           ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr))) {
+    : magRatio_(magRatio) {
+  ggml_backend_dev_t cpuDev =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  backend_ = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
   if (backend_ == nullptr) {
     throw std::runtime_error(
-        "StepDetectionInference: ggml_backend_init_by_type(CPU) failed");
+        "StepDetectionInference: failed to init CPU backend");
   }
   if (nThreads >= 0) {
     const int effective =

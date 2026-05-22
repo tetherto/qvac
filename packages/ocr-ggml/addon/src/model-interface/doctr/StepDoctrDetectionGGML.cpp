@@ -53,7 +53,10 @@ float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
 
 StepDoctrDetectionGGML::StepDoctrDetectionGGML(
     const std::string& pathDetector, int nThreads) {
-  ggml_backend_t cpuBackend = ggml_backend_cpu_init();
+  ggml_backend_dev_t cpuDev =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  ggml_backend_t cpuBackend =
+      cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
   if (cpuBackend == nullptr) {
     raise("failed to initialise ggml CPU backend");
   }

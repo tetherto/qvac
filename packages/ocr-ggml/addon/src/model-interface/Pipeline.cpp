@@ -244,8 +244,10 @@ Pipeline::Pipeline(
         std::make_unique<doctr::ggml::pipeline::StepDoctrRecognitionGGML>(
             pathRecognizer, config_.recognizerBatchSize);
   } else {
+    ggml_backend_dev_t cpuDev =
+        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
     recognizerBackend_ =
-        ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+        cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
     if (recognizerBackend_ == nullptr) {
       throw std::runtime_error(
           "ocr-ggml: failed to init CPU ggml backend for recognizer");
