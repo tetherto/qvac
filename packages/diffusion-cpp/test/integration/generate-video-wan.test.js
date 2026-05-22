@@ -17,11 +17,8 @@
 //   WAN_MODELS_DIR  - override the default ../models lookup
 //   WAN_DEVICE      - 'gpu' (default) or 'cpu'
 //
-// The Wan ops (IM2COL_3D, PAD-left) require the ggml fork built via the
-// vcpkg overlay at vcpkg/ports/ggml/ — see build.md "Wan video models and
-// the local ggml overlay" for details. With the upstream/registry ggml
-// this test will hard-abort the process via ggml_abort() rather than fail
-// gracefully.
+// The Wan ops (IM2COL_3D, PAD-left) require the ggml fork pinned through the
+// qvac vcpkg registry.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -144,9 +141,11 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
         device: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
         diffusion_fa: true,
         offload_to_cpu: true,
-        vae_tiling: true
+        vae_tiling: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     let avi = null

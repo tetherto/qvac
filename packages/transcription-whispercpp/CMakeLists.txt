@@ -2,24 +2,8 @@ cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
 
-if(DEFINED CMAKE_SYSTEM_NAME)
-  set(_qvac_whispercpp_target_os "${CMAKE_SYSTEM_NAME}")
-else()
-  set(_qvac_whispercpp_target_os "${CMAKE_HOST_SYSTEM_NAME}")
-endif()
-
-if(_qvac_whispercpp_target_os STREQUAL "Linux" OR _qvac_whispercpp_target_os STREQUAL "Android" OR _qvac_whispercpp_target_os STREQUAL "Windows")
-  option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" ON)
-else()
-  option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
-endif()
-
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
-endif()
-
-if(ENABLE_VULKAN)
-  list(APPEND VCPKG_MANIFEST_FEATURES "vulkan")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
@@ -69,9 +53,32 @@ endif()
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    if(NOT TARGET ggml::${_backend})
+      # GGML_BACKEND_DL=ON ships the per-arch CPU + GPU backends as
+      # standalone MODULE libraries that are dlopen'd at runtime; upstream
+      # ggml's install(TARGETS … EXPORT) skips them, so materialise an
+      # imported target from the .so under vcpkg's bin/.
+      find_library(_${_backend}_LIB
+        NAMES "${_backend}"
+        PATHS "${VCPKG_INSTALLED_PATH}/bin" "${VCPKG_INSTALLED_PATH}/lib"
+        NO_DEFAULT_PATH
+        REQUIRED)
+      add_library(ggml::${_backend} SHARED IMPORTED)
+      set_target_properties(ggml::${_backend} PROPERTIES
+        IMPORTED_LOCATION "${_${_backend}_LIB}"
+        IMPORTED_NO_SONAME TRUE)
+    endif()
     list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
   endforeach()
 endif()
+
+# Subdir bare's runtime installs the dlopenable backend modules into
+# (<addon>/prebuilds/<bare_target>/<module_name>/); WhisperModel joins it
+# with the runtime-supplied backendsDir before
+# ggml_backend_load_all_from_path().
+bare_target(bare_target_value)
+bare_module_target("." _unused_target NAME module_name VERSION _unused_version)
+set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
 add_bare_module(transcription-whispercpp EXPORTS ${BACKEND_DL_LIBS})
 
@@ -107,6 +114,7 @@ target_link_libraries(
 )
 
 target_compile_definitions(${transcription-whispercpp} PUBLIC JS_LOGGER)
+target_compile_definitions(${transcription-whispercpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 if(WIN32)
   target_link_libraries(
