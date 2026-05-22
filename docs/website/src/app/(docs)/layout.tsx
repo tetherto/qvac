@@ -11,9 +11,6 @@ import {
   // AskAITextSelection,  // disabled while we sort out the legacy fallback
 } from '@/components/ask-ai';
 import { AskAILegacyShell, AskAIPill } from '@/components/ask-ai-legacy';
-// #region agent log
-import { DebugLayoutMeasure } from '@/components/_debug-layout-measure';
-// #endregion
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   const linkItems: LinkItemType[] = [
@@ -80,9 +77,6 @@ export default function Layout({ children }: LayoutProps<'/'>) {
        */}
       <AskAILegacyShell />
       <AskAIPill />
-      {/* #region agent log */}
-      <DebugLayoutMeasure />
-      {/* #endregion */}
       {/* AskAITextSelection disabled — re-enable by uncommenting the import above and rendering <AskAITextSelection /> here. */}
     </>
   );

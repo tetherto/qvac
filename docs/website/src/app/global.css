@@ -56,6 +56,37 @@
   max-width: 1200px;
 }
 
+/*
+ * 4) Reduce the article's top padding under the `notebook` layout.
+ *
+ * Fumadocs' <article id="nd-page"> ships `xl:pt-14` (56px) on xl
+ * breakpoints. That padding was calibrated for the `docs` layout,
+ * which has no top navbar. In the `notebook` layout we use here, the
+ * top navbar (#nd-subnav, 56px tall) sits directly above the article
+ * — stacking 56px + 56px = 112px of vertical space between the
+ * viewport edge and the first content (h1 / breadcrumb), roughly
+ * double the industry range of ~24–32px for docs sites with a top
+ * navbar (Next.js, Vercel, Stripe, Tailwind, Astro Starlight, MDN).
+ *
+ * Override only the xl top padding; the base `py-6` (24px) and
+ * `md:pt-8` (32px) Fumadocs defaults already match industry norms.
+ */
+@media (min-width: 1280px) {
+  /*
+   * `article#nd-page` (specificity 0,1,1) is intentionally used here
+   * to outrank Tailwind's `.xl\:pt-14` utility (specificity 0,1,0),
+   * which Fumadocs applies on the article element. A plain `#nd-page`
+   * selector ties on specificity and loses the cascade against the
+   * Tailwind utility because Tailwind v4 emits its `utilities` layer
+   * after this rule in the final bundle. Confirmed by runtime logs:
+   * with the lower-specificity selector, the article's computed
+   * paddingTop remained "56px" instead of dropping to 32px.
+   */
+  article#nd-page {
+    padding-top: 2rem; /* 32px */
+  }
+}
+
 /* ===========================================
    VIEWPORT ADJUSTMENTS - END
    =========================================== */
