@@ -5,6 +5,9 @@ import {
   loadModel,
   unloadModel,
   video,
+  WAN2_1_T2V_1_3B_FP16,
+  UMT5_XXL_FP16,
+  WAN_2_1_COMFYUI_REPACKAGED_VAE,
   type VideoClientParams,
 } from "@qvac/sdk";
 import {
@@ -14,11 +17,6 @@ import {
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { videoTests } from "../../video-tests.js";
-
-const WAN_REPO = "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main";
-const WAN_MODEL_SRC = `${WAN_REPO}/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors`;
-const WAN_VAE_SRC = `${WAN_REPO}/split_files/vae/wan_2.1_vae.safetensors`;
-const WAN_T5_SRC = `${WAN_REPO}/split_files/text_encoders/umt5_xxl_fp16.safetensors`;
 
 function readImageBytes(name: string): Uint8Array {
   const fileName = name.split("/").pop()!;
@@ -118,14 +116,14 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
 
     try {
       modelId = await loadModel({
-        modelSrc: WAN_MODEL_SRC,
+        modelSrc: WAN2_1_T2V_1_3B_FP16,
         modelType: "diffusion",
         modelConfig: {
           mode: "video",
           device: "gpu",
           threads: 4,
-          t5XxlModelSrc: WAN_T5_SRC,
-          vaeModelSrc: WAN_VAE_SRC,
+          t5XxlModelSrc: UMT5_XXL_FP16,
+          vaeModelSrc: WAN_2_1_COMFYUI_REPACKAGED_VAE,
           diffusion_fa: true,
           offload_to_cpu: true,
           vae_on_cpu: true,
