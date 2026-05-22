@@ -4,20 +4,7 @@ const {
   LOG_LEVELS, LEVEL_PRIORITIES, DEFAULT_LEVEL, ENV_LOG_LEVEL
 } = require('./constants')
 
-let qvacLoggerProcess
-if (typeof global !== 'undefined' && global.process) {
-  qvacLoggerProcess = global.process
-} else {
-  try {
-    qvacLoggerProcess = require('process')
-  } catch (e) {
-    try {
-      qvacLoggerProcess = require('bare-process')
-    } catch (e2) {
-      qvacLoggerProcess = { env: {} }
-    }
-  }
-}
+const env = require('./env')
 
 /**
  * Ensures the provided logger implements the required interface.
@@ -80,7 +67,6 @@ function getLevelFromLogger (logger) {
  * @returns {null|string} Valid log level or null if not set or invalid.
  */
 function getLogLevelFromEnv () {
-  const env = (qvacLoggerProcess && qvacLoggerProcess.env) || {}
   const envLevel = env[ENV_LOG_LEVEL] || env[`EXPO_PUBLIC_${ENV_LOG_LEVEL}`]
   if (envLevel && Object.values(LOG_LEVELS).includes(envLevel.toLowerCase())) {
     return envLevel.toLowerCase()
