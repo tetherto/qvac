@@ -72,7 +72,8 @@ export const videoTxt2vidSmoke: TestDefinition = {
   metadata: {
     category: "video",
     dependency: "video",
-    estimatedDurationMs: 900000,
+    estimatedDurationMs: 180000,
+    suites: ["smoke"],
   },
 };
 
