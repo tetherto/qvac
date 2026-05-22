@@ -19,6 +19,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "model-interface/OcrLazyInitializeBackend.hpp"
 #include "steps.hpp"
 
 using ggml_backend_t = struct ggml_backend*;
@@ -100,7 +101,8 @@ public:
   //                  experiments).
   explicit StepDetectionInference(
       // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-      const std::string& gguf_path, float magRatio = 1.5F, int nThreads = 0);
+      const std::string& gguf_path, float magRatio = 1.5F, int nThreads = 0,
+      const std::string& backendsDir = "");
   ~StepDetectionInference();
 
   StepDetectionInference(const StepDetectionInference&) = delete;
@@ -150,6 +152,7 @@ private:
   std::pair<cv::Mat, cv::Mat> runInference(const cv::Mat& inputBlob);
 
   float magRatio_;
+  OcrBackendsHandle backendsHandle_; // must be declared before backend_
   ggml_backend_t backend_ = nullptr;
   std::unique_ptr<GgufLoader> loader_;
   std::unique_ptr<CraftWeights> weights_;

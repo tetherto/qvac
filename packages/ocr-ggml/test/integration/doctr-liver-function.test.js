@@ -67,4 +67,3 @@ function runLiverFunctionTest (ep, run) {
 }
 
 for (let i = 1; i <= PERF_RUNS; i++) runLiverFunctionTest('cpu', i)
-for (let i = 1; i <= PERF_RUNS; i++) runLiverFunctionTest('gpu', i)

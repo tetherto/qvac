@@ -66,4 +66,3 @@ function runCtScanTest (ep, run) {
 }
 
 for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('cpu', i)
-for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('gpu', i)

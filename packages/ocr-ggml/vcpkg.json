@@ -3,10 +3,6 @@
   "version": "0.1.0",
   "dependencies": [
     {
-      "name": "opencl",
-      "platform": "android"
-    },
-    {
       "name": "opencv4",
       "default-features": false,
       "features": [
@@ -19,6 +15,7 @@
     },
     {
       "name": "qvac-fabric",
+      "default-features": false,
       "version>=": "8189.0.2"
     },
     {

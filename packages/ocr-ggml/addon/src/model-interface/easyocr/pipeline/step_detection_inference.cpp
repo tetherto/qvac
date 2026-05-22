@@ -167,8 +167,9 @@ cv::Mat StepDetectionInference::preprocess(
 
 StepDetectionInference::StepDetectionInference(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    const std::string& gguf_path, float magRatio, int nThreads)
-    : magRatio_(magRatio) {
+    const std::string& gguf_path, float magRatio, int nThreads,
+    const std::string& backendsDir)
+    : magRatio_(magRatio), backendsHandle_(backendsDir) {
   ggml_backend_dev_t cpuDev =
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   backend_ = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;

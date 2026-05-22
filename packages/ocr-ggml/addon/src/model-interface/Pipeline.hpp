@@ -9,9 +9,8 @@
 // `processImage()`.
 //
 // Lifetime / threading:
-//   - In `EASYOCR` mode, the pipeline owns one CPU `ggml_backend` that
-//     the recognizer borrows. `StepDetectionInference` owns its own
-//     backend internally.
+//   - In `EASYOCR` mode, `StepDetectionInference` and `StepRecognizeText`
+//     each own their CPU backend internally; this class allocates none.
 //   - In `DOCTR` mode, the detection and recognition steps own their
 //     backends directly; this class does not allocate one.
 //   - `process()` is serialised by the parent addon plumbing; this class
@@ -31,6 +30,7 @@
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
+#include "OcrLazyInitializeBackend.hpp"
 #include "OcrTypes.hpp"
 #include "doctr/StepDoctrDetectionGGML.hpp"
 #include "doctr/StepDoctrRecognitionGGML.hpp"
@@ -38,8 +38,6 @@
 #include "easyocr/pipeline/step_detection_inference.hpp"
 #include "easyocr/pipeline/step_recognize_text.hpp"
 #include "easyocr/pipeline/steps.hpp"
-
-using ggml_backend_t = struct ggml_backend*;
 
 // NOLINTBEGIN(readability-identifier-naming)
 // Constructor parameter pairs (pathDetector/pathRecognizer) follow the
@@ -81,10 +79,7 @@ private:
   Output processDoctr(const cv::Mat& img, const Input& input);
 
   OcrConfig config_;
-
-  // Recognizer-borrowed backend (EASYOCR mode only). The DocTR steps own
-  // their backends internally.
-  ggml_backend_t recognizerBackend_{nullptr};
+  OcrBackendsHandle backendsHandle_; // must be declared after config_
 
   // EasyOCR steps (constructed when config_.mode == PipelineMode::EASYOCR).
   std::unique_ptr<easyocr::ggml::pipeline::StepDetectionInference> easyDetector_;

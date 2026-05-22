@@ -64,4 +64,3 @@ function runClinicalChemistryTest (ep, run) {
 }
 
 for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest('cpu', i)
-for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest('gpu', i)

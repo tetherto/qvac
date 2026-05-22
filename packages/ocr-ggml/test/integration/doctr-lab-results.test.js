@@ -65,4 +65,3 @@ function runLabResultsTest (ep, run) {
 }
 
 for (let i = 1; i <= PERF_RUNS; i++) runLabResultsTest('cpu', i)
-for (let i = 1; i <= PERF_RUNS; i++) runLabResultsTest('gpu', i)

@@ -1,179 +1,18 @@
 #include "Pipeline.hpp"
 
 #include <chrono>
-#include <filesystem>
-#include <mutex>
 #include <stdexcept>
 #include <utility>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "ggml-backend.h"
-#include "ggml-cpu.h"
-#include "ggml.h"
-
-#include "easyocr/pipeline/qlog.hpp"
-
-#ifdef __ANDROID__
-#include <android/log.h>
-#include <dlfcn.h>
-#include <link.h>
-#endif
-
 // NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 // Pipeline consolidates the EasyOCR and DocTR orchestrators into a single
 // IModel adapter, mirroring `@qvac/ocr-onnx`'s `Pipeline` class. The
 // mode-specific step sequences live in private `processEasyOcr` /
 // `processDoctr` helpers; everything else (image decode, timing, cancel,
-// runtimeStats) is shared.
-
-namespace {
-
-// Route ggml log lines to logcat on Android. Mirrors the nmtGgmlLogCallback
-// in translation-nmtcpp's NmtLazyInitializeBackend.cpp.
-void ocrGgmlLogCallback(
-    enum ggml_log_level level, const char* text, void* /*user_data*/) {
-  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-
-  if (text == nullptr || text[0] == '\0') { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    return;
-  }
-  if (level == GGML_LOG_LEVEL_DEBUG) {
-    return;
-  }
-
-  Priority priority = Priority::INFO;
-  switch (level) {
-  case GGML_LOG_LEVEL_ERROR:
-    priority = Priority::ERROR_;
-    break;
-  case GGML_LOG_LEVEL_WARN:
-    priority = Priority::WARN;
-    break;
-  default:
-    break;
-  }
-
-  size_t len = std::strlen(text);
-  // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r')) {
-    --len;
-  }
-  // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  if (len == 0) {
-    return;
-  }
-
-#ifdef __ANDROID__
-  if (level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_WARN) {
-    __android_log_print(
-        level == GGML_LOG_LEVEL_ERROR ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN,
-        "ggml-ocr", "%.*s", static_cast<int>(len), text);
-  }
-#endif
-
-  std::string message;
-  message.reserve(7 + len); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
-  message.append("[ggml] ");
-  message.append(text, len);
-  QLOG(priority, message);
-}
-
-// Route GGML_ABORT messages to logcat synchronously before abort() fires.
-// Without this, assertion failures inside backend .so code are silent on
-// Android because stderr is dropped. See NmtLazyInitializeBackend.cpp.
-void ocrGgmlAbortCallback(const char* message) {
-  if (message == nullptr) {
-    message = "(null abort message)";
-  }
-#ifdef __ANDROID__
-  __android_log_print(
-      ANDROID_LOG_FATAL, "ggml-ocr-abort", "GGML_ABORT: %s", message);
-#endif
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::ERROR_,
-      std::string("[ggml-abort] ") + message);
-}
-
-#ifdef __ANDROID__
-// Install log + abort callbacks into each already-loaded ggml backend .so.
-// Each backend is loaded with RTLD_LOCAL, so its copy of g_logger_state and
-// g_abort_callback is private. We must patch each one separately after
-// ggml_backend_load_all_from_path returns. Mirrors nmtInstallCallbacksInLoadedBackendSos.
-static int ocrBackendSoIterCallback(
-    struct dl_phdr_info* info, size_t /*size*/, void* data) {
-  if (info == nullptr || info->dlpi_name == nullptr ||
-      info->dlpi_name[0] == '\0') {
-    return 0;
-  }
-  const char* slash = strrchr(info->dlpi_name, '/');
-  const char* filename = slash ? slash + 1 : info->dlpi_name;
-  if (strstr(filename, "ggml") == nullptr || strstr(filename, ".so") == nullptr) {
-    return 0;
-  }
-  static_cast<std::vector<std::string>*>(data)->emplace_back(info->dlpi_name);
-  return 0;
-}
-
-static void installCallbacksInBackendSos() {
-  std::vector<std::string> paths;
-  dl_iterate_phdr(&ocrBackendSoIterCallback, &paths);
-
-  using LogSetFn = void (*)(ggml_log_callback, void*);
-  using AbortSetFn = ggml_abort_callback_t (*)(ggml_abort_callback_t);
-
-  for (const auto& soPath : paths) {
-    void* handle = dlopen(soPath.c_str(), RTLD_NOW | RTLD_NOLOAD);
-    if (handle == nullptr) {
-      continue;
-    }
-    if (auto* fn = reinterpret_cast<LogSetFn>(dlsym(handle, "ggml_log_set"))) {
-      fn(&ocrGgmlLogCallback, nullptr);
-    }
-    if (auto* fn = reinterpret_cast<AbortSetFn>(
-            dlsym(handle, "ggml_set_abort_callback"))) {
-      fn(&ocrGgmlAbortCallback);
-    }
-    dlclose(handle);
-  }
-}
-#endif
-
-// Load ggml backends exactly once per process. Appends BACKENDS_SUBDIR so
-// the path points at the flat directory that actually contains the backend
-// .so files (e.g. prebuilds/android-arm64/qvac__ocr-ggml/) rather than the
-// prebuilds root. Mirrors LlamaLazyInitializeBackend / vla-ggml's approach.
-void loadBackendsOnce(const std::string& backendsDir) {
-  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-  static std::once_flag s_backendsOnce;
-
-  std::call_once(s_backendsOnce, [&backendsDir]() {
-    // Install callbacks in the main .bare copy BEFORE loading so that any
-    // registration-time ggml log lines reach logcat.
-    ggml_log_set(&ocrGgmlLogCallback, nullptr);
-    ggml_set_abort_callback(&ocrGgmlAbortCallback);
-
-    if (!backendsDir.empty()) {
-      std::filesystem::path p(backendsDir);
-#ifdef BACKENDS_SUBDIR
-      p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-      QLOG(Priority::INFO, "ocr-ggml: loading backends from " + p.string());
-      ggml_backend_load_all_from_path(p.string().c_str());
-    } else {
-      ggml_backend_load_all();
-    }
-
-#ifdef __ANDROID__
-    // Patch callbacks into each backend .so's private ggml copy so that any
-    // GGML_ASSERT inside the Vulkan/OpenCL backend reaches logcat.
-    installCallbacksInBackendSos();
-#endif
-  });
-}
-
-} // namespace
+// runtimeStats) is shared. Backend loading is handled by OcrBackendsHandle.
 
 namespace qvac_lib_infer_ocr_ggml {
 
@@ -229,8 +68,7 @@ Pipeline::Pipeline(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, OcrConfig config)
-    : config_(std::move(config)) {
-  loadBackendsOnce(config_.backendsDir);
+    : config_(std::move(config)), backendsHandle_(config_.backendsDir) {
 
   if (config_.mode == PipelineMode::DOCTR) {
     doctrDetector_ =
@@ -241,26 +79,10 @@ Pipeline::Pipeline(
         std::make_unique<doctr::ggml::pipeline::StepDoctrRecognitionGGML>(
             pathRecognizer, config_.recognizerBatchSize);
   } else {
-    ggml_backend_dev_t cpuDev =
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-    recognizerBackend_ =
-        cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
-    if (recognizerBackend_ == nullptr) {
-      throw std::runtime_error(
-          "ocr-ggml: failed to init CPU ggml backend for recognizer");
-    }
-
-    if (config_.nThreads >= 0) {
-      const int effective =
-          (config_.nThreads == 0)
-              ? easyocr::ggml::pipeline::defaultPhysicalThreadCount()
-              : config_.nThreads;
-      ggml_backend_cpu_set_n_threads(recognizerBackend_, effective);
-    }
-
     easyDetector_ =
         std::make_unique<easyocr::ggml::pipeline::StepDetectionInference>(
-            pathDetector, config_.magRatio, config_.nThreads);
+            pathDetector, config_.magRatio, config_.nThreads,
+            config_.backendsDir);
 
     easyBoxer_ = std::make_unique<easyocr::ggml::pipeline::StepBoundingBox>();
 
@@ -268,28 +90,24 @@ Pipeline::Pipeline(
         config_.defaultRotationAngles,
         config_.contrastRetry,
         config_.lowConfidenceThreshold,
-        config_.recognizerBatchSize);
+        config_.recognizerBatchSize,
+        config_.nThreads,
+        config_.backendsDir);
 
     easyRecognizer_ =
         std::make_unique<easyocr::ggml::pipeline::StepRecognizeText>(
-            pathRecognizer, langList, recognizerBackend_, recogConfig);
+            pathRecognizer, langList, recogConfig);
   }
 }
 
 Pipeline::~Pipeline() {
   // Destroy steps first; their tensors live in buffers owned by backends.
-  // For EASYOCR mode, the detector owns its own backend and we own the
-  // recognizer's. For DOCTR mode, both steps own their backends internally.
+  // Each step owns its backend internally.
   easyRecognizer_.reset();
   easyBoxer_.reset();
   easyDetector_.reset();
   doctrRecognizer_.reset();
   doctrDetector_.reset();
-
-  if (recognizerBackend_ != nullptr) {
-    ggml_backend_free(recognizerBackend_);
-    recognizerBackend_ = nullptr;
-  }
 }
 
 std::any Pipeline::process(const std::any& input) {

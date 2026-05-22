@@ -620,10 +620,20 @@ rotateBox(const std::array<cv::Point2f, 4>& box, int angle) {
 
 StepRecognizeText::StepRecognizeText(
     const std::string& gguf_path, std::span<const std::string> langList,
-    ggml_backend_t backend, Config config)
-    : config_(std::move(config)), backend_(backend) {
+    Config config)
+    : config_(std::move(config)), backendsHandle_(config_.backendsDir) {
+  ggml_backend_dev_t cpuDev =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  backend_ = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
   if (backend_ == nullptr) {
-    throw std::runtime_error("StepRecognizeText: backend is null");
+    throw std::runtime_error(
+        "StepRecognizeText: failed to init CPU ggml backend");
+  }
+  if (config_.nThreads >= 0) {
+    const int effective = (config_.nThreads == 0)
+                              ? defaultPhysicalThreadCount()
+                              : config_.nThreads;
+    ggml_backend_cpu_set_n_threads(backend_, effective);
   }
 
   loader_ = std::make_unique<easyocr::ggml::GgufLoader>(
@@ -684,7 +694,9 @@ StepRecognizeText::StepRecognizeText(
 StepRecognizeText::~StepRecognizeText() {
   gen2_weights_.reset();
   loader_.reset();
-  // We do not own backend_; the caller (e.g. ocr-cli.cpp) frees it.
+  if (backend_ != nullptr) {
+    ggml_backend_free(backend_);
+  }
 }
 
 StepRecognizeText::Output StepRecognizeText::process(

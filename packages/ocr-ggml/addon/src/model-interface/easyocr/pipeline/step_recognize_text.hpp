@@ -34,6 +34,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "model-interface/OcrLazyInitializeBackend.hpp"
 #include "steps.hpp"
 
 using ggml_backend_t = struct ggml_backend*;
@@ -107,23 +108,28 @@ public:
     bool contrastRetry{false};
     float lowConfidenceThreshold{0.4F};
     int recognizerBatchSize{32};
+    // Thread count for the CPU backend: 0 = auto-detect physical cores,
+    // negative = leave at GGML default, positive = exact count.
+    int nThreads{-1};
+    std::string backendsDir{};
 
     Config() : defaultRotationAngles{90, 270} {}
     Config(
         // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
         std::vector<int> angles, bool retry, float threshold,
-        int batchSize = 32)
+        int batchSize = 32, int nThreads = -1,
+        std::string backendsDir = "")
         : defaultRotationAngles(std::move(angles)), contrastRetry(retry),
-          lowConfidenceThreshold(threshold), recognizerBatchSize(batchSize) {}
+          lowConfidenceThreshold(threshold), recognizerBatchSize(batchSize),
+          nThreads(nThreads), backendsDir(std::move(backendsDir)) {}
   };
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
-  // Construct with the recognizer GGUF, a list of language codes for vocab
-  // / LTR / ignore-list lookup, and a CPU backend the step does NOT take
-  // ownership of — to allow sharing one backend with the detector step.
+  // Construct with the recognizer GGUF and a list of language codes for vocab
+  // / LTR / ignore-list lookup. The step owns its CPU backend.
   StepRecognizeText(
       const std::string& gguf_path, std::span<const std::string> langList,
-      ggml_backend_t backend, Config config = Config{});
+      Config config = Config{});
   ~StepRecognizeText();
 
   StepRecognizeText(const StepRecognizeText&) = delete;
@@ -142,9 +148,10 @@ public:
 private:
   Config config_;
 
-  // GGML state: a loader (kept alive so the GGUF mmap remains valid),
-  // BN-folded weights uploaded to the shared backend, plus the backend
-  // pointer (non-owning).
+  // GGML state: backend handle (ref-counted global init) must be declared
+  // before backend_ so backends are loaded before the device is queried, and
+  // the handle's ref is released only after the backend is freed.
+  OcrBackendsHandle backendsHandle_;
   std::unique_ptr<GgufLoader> loader_;
   std::unique_ptr<CrnnGen2Weights> gen2_weights_;
   ggml_backend_t backend_ = nullptr;
