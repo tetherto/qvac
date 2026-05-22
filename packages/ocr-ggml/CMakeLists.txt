@@ -164,6 +164,17 @@ if(ANDROID)
   target_link_libraries(${ocr-ggml} PRIVATE log)
 endif()
 
+# Android 15+ on Pixel 9 / Pixel 9 Pro / Pixel 9 Pro XL ships with a
+# 16 KB page size kernel (`getconf PAGE_SIZE` -> 16384). The dynamic
+# loader on those devices silently refuses .so files whose LOAD
+# segments are aligned to the older 4 KB max-page-size, which is what
+# NDK r27 still emits by default (NDK r28 flipped the default).
+# Without this flag the addon never registers via bare-kit's linker
+# (Bare's resolver then reports
+# `ADDON_NOT_FOUND: linked:libqvac__ocr-ggml.*.so`) while the same APK
+# loads fine on 4 KB devices like the Samsung S25 Ultra. Mirrors
+# qvac/packages/tts-ggml/CMakeLists.txt; drop the flag
+# once we move to NDK r28+.
 if(ANDROID)
   target_link_options(
     ${ocr-ggml}_module
@@ -172,6 +183,7 @@ if(ANDROID)
       -Wl,-z,common-page-size=16384
   )
 endif()
+
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(addon/tests)

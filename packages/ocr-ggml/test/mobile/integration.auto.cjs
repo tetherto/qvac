@@ -3,73 +3,95 @@ require('./integration-runtime.cjs')
 
 // AUTO-GENERATED FILE. Run `npm run test:mobile:generate` to update.
 // Each function mirrors a single file under test/integration/.
+// Functions are invoked dynamically by the mobile test runner framework.
 
 /* global runIntegrationModule */
 
-async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars
+/* global __shouldRunTest */
+
+const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
+
+async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrBasicTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-basic.test.js', options)
 }
 
-async function runDoctrClinicalChemistryTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runDoctrClinicalChemistryTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrClinicalChemistryTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-clinical-chemistry.test.js', options)
 }
 
-async function runDoctrCtScanTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runDoctrCtScanTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrCtScanTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-ct-scan.test.js', options)
 }
 
-async function runDoctrLabResultsTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runDoctrLabResultsTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrLabResultsTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-lab-results.test.js', options)
 }
 
-async function runDoctrLiverFunctionTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runDoctrLiverFunctionTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrLiverFunctionTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-liver-function.test.js', options)
 }
 
-async function runDoctrModelsTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runDoctrModelsTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrModelsTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-models.test.js', options)
 }
 
-async function runDoctrParamValidationTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runDoctrParamValidationTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrParamValidationTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-param-validation.test.js', options)
 }
 
-async function runErrorHandlingTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runErrorHandlingTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runErrorHandlingTest')) return __FILTERED
   return runIntegrationModule('../integration/error-handling.test.js', options)
 }
 
-async function runFullCoverageTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runFullCoverageTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFullCoverageTest')) return __FILTERED
   return runIntegrationModule('../integration/full-coverage.test.js', options)
 }
 
-async function runFullOcrSuiteTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runFullOcrSuiteTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFullOcrSuiteTest')) return __FILTERED
   return runIntegrationModule('../integration/full-ocr-suite.test.js', options)
 }
 
-async function runImageFormatsTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runImageFormatsTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runImageFormatsTest')) return __FILTERED
   return runIntegrationModule('../integration/image-formats.test.js', options)
 }
 
-async function runLargeImagesTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runLargeImagesTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLargeImagesTest')) return __FILTERED
   return runIntegrationModule('../integration/large-images.test.js', options)
 }
 
-async function runLifecycleTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runLifecycleTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLifecycleTest')) return __FILTERED
   return runIntegrationModule('../integration/lifecycle.test.js', options)
 }
 
-async function runOcrBasicTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runOcrBasicTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOcrBasicTest')) return __FILTERED
   return runIntegrationModule('../integration/ocr-basic.test.js', options)
 }
 
-async function runParamValidationTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runParamValidationTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runParamValidationTest')) return __FILTERED
   return runIntegrationModule('../integration/param-validation.test.js', options)
 }
 
-async function runPipelineTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runPipelineTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runPipelineTest')) return __FILTERED
   return runIntegrationModule('../integration/pipeline.test.js', options)
 }
 
-async function runRunInternalOrderingTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runRunInternalOrderingTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runRunInternalOrderingTest')) return __FILTERED
   return runIntegrationModule('../integration/run-internal-ordering.test.js', options)
 }

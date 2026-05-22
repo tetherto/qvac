@@ -13,6 +13,7 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
+const groupsFile = path.join(mobileDir, 'test-groups.json')
 
 function getIntegrationFiles () {
   if (!fs.existsSync(integrationDir)) {
@@ -38,15 +39,21 @@ function buildFileContents (files) {
   lines.push('')
   lines.push('// AUTO-GENERATED FILE. Run `npm run test:mobile:generate` to update.')
   lines.push('// Each function mirrors a single file under test/integration/.')
+  lines.push('// Functions are invoked dynamically by the mobile test runner framework.')
   lines.push('')
   lines.push('/* global runIntegrationModule */')
+  lines.push('')
+  lines.push('/* global __shouldRunTest */')
+  lines.push('')
+  lines.push("const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }")
   lines.push('')
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const fnName = toFunctionName(file)
     const relativePath = `../integration/${file}`
-    lines.push(`async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars`)
+    lines.push(`async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup`)
+    lines.push(`  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`)
     lines.push(`  return runIntegrationModule('${relativePath}', options)`)
     lines.push('}')
     if (i < files.length - 1) {
@@ -55,6 +62,45 @@ function buildFileContents (files) {
   }
 
   return `${lines.join('\n')}\n`
+}
+
+// Validates that every generated function name appears in exactly one group
+// in test-groups.json and that all group entries resolve to real functions.
+// ocr-ggml uses a flat structure: { perf: [...], regularA: [...], regularB: [...], perf_report_filter: "..." }
+function validateGroups (functionNames) {
+  if (!fs.existsSync(groupsFile)) {
+    console.warn('[warn] test-groups.json not found — skipping split validation')
+    return
+  }
+  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
+  const nameSet = new Set(functionNames)
+
+  // Collect all test names from array-valued group entries (skip string values like perf_report_filter)
+  const covered = new Set()
+  for (const [key, value] of Object.entries(groups)) {
+    if (Array.isArray(value)) {
+      for (const name of value) covered.add(name)
+    } else if (key !== 'perf_report_filter') {
+      console.warn(`[warn] Unexpected non-array group '${key}' in test-groups.json — skipping`)
+    }
+  }
+
+  const missing = functionNames.filter(n => !covered.has(n))
+  const extra = [...covered].filter(n => !nameSet.has(n))
+
+  if (missing.length) {
+    throw new Error(
+      'Tests not assigned to any group in test-groups.json:\n  ' +
+      missing.join('\n  ') + '\nAdd them to a group in test/mobile/test-groups.json.'
+    )
+  }
+  if (extra.length) {
+    throw new Error(
+      'test-groups.json references non-existent tests:\n  ' +
+      extra.join('\n  ') + '\nRemove them or check for typos.'
+    )
+  }
+  console.log('Group coverage validated — all tests assigned.')
 }
 
 function main () {
@@ -67,9 +113,11 @@ function main () {
     throw new Error(`No integration test files found inside ${integrationDir}`)
   }
 
+  const functionNames = files.map(toFunctionName)
   const content = buildFileContents(files)
   fs.writeFileSync(outputFile, content, 'utf8')
   console.log(`Generated ${outputFile} with ${files.length} integration runners.`)
+  validateGroups(functionNames)
 }
 
 if (require.main === module) {
