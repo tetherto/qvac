@@ -64,9 +64,10 @@ function buildFileContents (files) {
   return `${lines.join('\n')}\n`
 }
 
-// Validates that every generated function name appears in exactly one group
+// Validates that every generated function name appears in at least one group
 // in test-groups.json and that all group entries resolve to real functions.
-// ocr-ggml uses a flat structure: { perf: [...], regularA: [...], regularB: [...], perf_report_filter: "..." }
+// Supports nested format: { android: { group: [...] }, ios: { group: [...] }, perf_report_filter: "..." }
+// Also supports legacy flat format: { perf: [...], regularA: [...], perf_report_filter: "..." }
 function validateGroups (functionNames) {
   if (!fs.existsSync(groupsFile)) {
     console.warn('[warn] test-groups.json not found — skipping split validation')
@@ -74,14 +75,22 @@ function validateGroups (functionNames) {
   }
   const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
   const nameSet = new Set(functionNames)
-
-  // Collect all test names from array-valued group entries (skip string values like perf_report_filter)
   const covered = new Set()
+
   for (const [key, value] of Object.entries(groups)) {
-    if (Array.isArray(value)) {
+    if (key === 'perf_report_filter') continue
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      // Nested format: { android: { groupName: [...] }, ios: { groupName: [...] } }
+      for (const groupTests of Object.values(value)) {
+        if (Array.isArray(groupTests)) {
+          for (const name of groupTests) covered.add(name)
+        }
+      }
+    } else if (Array.isArray(value)) {
+      // Flat format (legacy): { groupName: [...] }
       for (const name of value) covered.add(name)
-    } else if (key !== 'perf_report_filter') {
-      console.warn(`[warn] Unexpected non-array group '${key}' in test-groups.json — skipping`)
+    } else {
+      console.warn(`[warn] Unexpected value type for key '${key}' in test-groups.json — skipping`)
     }
   }
 
