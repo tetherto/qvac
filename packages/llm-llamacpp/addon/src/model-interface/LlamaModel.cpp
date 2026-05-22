@@ -322,7 +322,7 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   std::size_t visionCacheBudgetBytes =
-      qvac_lib_inference_addon_llama::VisionPrefixCache::kDefaultBudgetBytes;
+      qvac_lib_inference_addon_llama::VisionPrefixCache::DEFAULT_BUDGET_BYTES;
   bool visionCacheExplicitlyDisabled = false;
   {
     auto vcIt = configFilemap.find("vision_cache");
