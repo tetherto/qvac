@@ -3,7 +3,9 @@ import { execSync } from "child_process";
 import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
-import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
+import { resolveSDKPackageDir } from "@/expo/plugins/resolve-sdk-package-dir";
+import { getProjectRootFromMod } from "@/expo/plugins/get-project-root";
+import { findInAncestorNodeModules } from "@/expo/plugins/find-in-ancestor-node-modules";
 import { BundleVerificationFailedError } from "@/utils/errors-client";
 
 const { withDangerousMod } = configPlugins;
@@ -35,7 +37,7 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
   function buildMobileBundle(
     config: configPlugins.ExportedConfigWithProps<unknown>,
   ) {
-    const projectRoot = config.modRequest.projectRoot;
+    const projectRoot = getProjectRootFromMod(config);
     const sdkPackage = resolveSDKPackageDir(projectRoot);
     const outputPath = path.join(
       sdkPackage.dir,
@@ -99,27 +101,23 @@ function findConfigFile(projectRoot: string): string | null {
 /**
  * Resolves the qvac CLI command.
  *
- * Prefers local @qvac/cli installation for version consistency,
- * falls back to npx for convenience when CLI is not installed.
+ * Prefers a local @qvac/cli installation for version consistency, walking
+ * up from `projectRoot` so a CLI hoisted to a monorepo root is still
+ * found. Falls back to npx (with a warning) when no local copy exists.
  */
 export function resolveCliCommand(projectRoot: string): string {
-  const cliPath = path.join(
-    projectRoot,
-    "node_modules",
-    "@qvac",
-    "cli",
-    "dist",
-    "index.js",
-  );
-
-  if (fs.existsSync(cliPath)) {
-    return `node "${cliPath}"`;
+  const cliPackageDir = findInAncestorNodeModules(projectRoot, "@qvac/cli");
+  if (cliPackageDir !== null) {
+    const cliPath = path.join(cliPackageDir, "dist", "index.js");
+    if (fs.existsSync(cliPath)) {
+      return `node "${cliPath}"`;
+    }
   }
 
-  console.log(
-    "⚠️ QVAC: @qvac/cli not found in node_modules, falling back to npx",
+  console.warn(
+    "⚠️ QVAC: @qvac/cli not found in any ancestor node_modules, falling back to npx",
   );
-  console.log(
+  console.warn(
     "   Tip: Add @qvac/cli as a dependency for consistent versioning",
   );
   return "npx --package=@qvac/cli qvac";
@@ -156,7 +154,7 @@ function runVerifier(
     console.log(
       "⚠️ QVAC: no qvac.config.* found — Bare runtime will be auto-detected " +
         "from node_modules (bare-runtime, then bare). Add qvac.config.json " +
-        'with `bareRuntimeVersion` to pin ABI checks deterministically.',
+        "with `bareRuntimeVersion` to pin ABI checks deterministically.",
     );
   }
 
@@ -209,14 +207,15 @@ function runBundler(
  * This reduces app size by excluding unused native addon binaries.
  */
 function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string) {
-  const bareKitPath = path.join(
+  const bareKitPath = findInAncestorNodeModules(
     projectRoot,
-    "node_modules",
     "react-native-bare-kit",
   );
-  if (!fs.existsSync(bareKitPath)) {
-    console.log(
-      "⚠️ QVAC: react-native-bare-kit not found, skipping linker patch",
+  if (bareKitPath === null) {
+    console.warn(
+      "⚠️ QVAC: react-native-bare-kit not found in any ancestor node_modules, " +
+        "skipping linker patch. The bundle will link all native addons " +
+        "rather than only those required by your bundle.",
     );
     return;
   }
