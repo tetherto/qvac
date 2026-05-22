@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <string_view>
 
 #include <common/log.h>
 #include <llama/mtmd/mtmd-helper.h>
@@ -16,13 +17,10 @@
 #include "utils/LoggingMacros.hpp"
 #include "utils/VisionPrefixCache.hpp"
 
+using namespace qvac_lib_inference_addon_llama;
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::utils;
-using qvac_lib_inference_addon_llama::makeVisionCacheKey;
-using qvac_lib_inference_addon_llama::sha256OfBytes;
-using qvac_lib_inference_addon_llama::sha256OfFile;
-using qvac_lib_inference_addon_llama::VisionCacheEntry;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
@@ -30,7 +28,12 @@ MtmdLlmContext::MtmdLlmContext(
     ToolsCompactController& tools, std::size_t visionCacheBudgetBytes)
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
       model_(llamaInit_->model()), lctx_(llamaInit_->context()),
-      visionPrefixCache_(visionCacheBudgetBytes) {
+      visionPrefixCache_(visionCacheBudgetBytes),
+      visionCacheKeyPrefix_(
+          std::to_string(commonParams.model.path.size()) + ":" +
+          commonParams.model.path + "|" +
+          std::to_string(commonParams.mmproj.path.size()) + ":" +
+          commonParams.mmproj.path + "|") {
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -308,15 +311,18 @@ bool MtmdLlmContext::evalMessageWithTools(
   // or silently truncates output. Surface a clean ContextOverflow up front.
   // n_predict == -1 means "until ctx is exhausted"; treat as 0 here so we
   // don't reject configurations that intentionally fill the window.
-  const size_t nPredict =
+  const size_t nPastCurrent = static_cast<size_t>(nPast_);
+  size_t nPredict =
       params_.n_predict > 0 ? static_cast<size_t>(params_.n_predict) : 0;
+  if (nPredict > nCtx) nPredict = nCtx;
   constexpr size_t kSafetyMargin = 16;
-  if (nTokens + nPredict + kSafetyMargin > nCtx) {
+  if (nPastCurrent + nTokens + nPredict + kSafetyMargin > nCtx) {
     resetMedia();
     std::string errorMsg = string_format(
-        "[MtmdLlm] context overflow at prefill step: prompt=%zu + "
+        "[MtmdLlm] context overflow at prefill step: nPast=%zu + prompt=%zu + "
         "n_predict=%zu + safety=%zu would exceed n_ctx=%zu. Reduce image "
         "resolution or increase ctx_size.\n",
+        nPastCurrent,
         nTokens,
         nPredict,
         kSafetyMargin,
@@ -395,27 +401,27 @@ bool MtmdLlmContext::evalMessageWithTools(
     // Text and audio chunks fall through to the existing helper unchanged.
     if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
       const char* idC = mtmd_input_chunk_get_id(chunk);
-      const std::string imageHash = (idC != nullptr) ? std::string(idC) : std::string{};
-      const std::string cacheKey = makeVisionCacheKey(
-          params_.model.path, params_.mmproj.path, imageHash);
+      const std::string_view imageHashView =
+          (idC != nullptr) ? std::string_view(idC) : std::string_view{};
+      std::string cacheKey;
+      if (!imageHashView.empty() && visionPrefixCache_.budgetBytes() > 0) {
+        cacheKey.reserve(visionCacheKeyPrefix_.size() + imageHashView.size());
+        cacheKey.append(visionCacheKeyPrefix_);
+        cacheKey.append(imageHashView);
+      }
 
-      const VisionCacheEntry* cached = visionPrefixCache_.get(cacheKey);
+      const VisionCacheEntry* cached =
+          cacheKey.empty() ? nullptr : visionPrefixCache_.get(cacheKey);
       if (cached != nullptr) {
-        // Cache hit: skip CLIP + projection.
-        // mtmd_helper_decode_image_chunk takes a non-const float*; the
-        // function does not write through it (it copies into ggml-managed
-        // GPU/CPU buffers internally), so this const_cast is safe.
-        //
-        // NOTE: if decode fails here the cache entry is NOT evicted — the
-        // entry was produced by a prior successful encode+decode cycle, so
-        // failure indicates a transient KV/context issue (e.g. OOM), not
-        // bad embeddings. The caller's error path (resetState) clears the
-        // whole cache anyway.
+        // Cache hit: copy embeddings to a local buffer before passing to
+        // mtmd_helper_decode_image_chunk. The API takes non-const float*
+        // so we cannot safely pass the cached data directly.
+        std::vector<float> localEmbd(cached->embeddings);
         int32_t res = mtmd_helper_decode_image_chunk(
             ctxVision_.get(),
             lctx_,
             chunk,
-            const_cast<float*>(cached->embeddings.data()),
+            localEmbd.data(),
             nPastLocal,
             0,
             params_.n_batch,
@@ -450,38 +456,38 @@ bool MtmdLlmContext::evalMessageWithTools(
       const std::size_t nEmbd =
           static_cast<std::size_t>(llama_model_n_embd(model_));
 
-      VisionCacheEntry entry;
-      if (embd != nullptr && nTokensChunk > 0 && nEmbd > 0) {
-        if (nTokensChunk > SIZE_MAX / nEmbd) {
-          std::string errorMsg = string_format(
-              "[MtmdLlm] embedding size overflow: nTokens=%zu * nEmbd=%zu "
-              "exceeds SIZE_MAX\n",
-              nTokensChunk, nEmbd);
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(EncoderFailed), errorMsg);
-        }
-        entry.embeddings.assign(embd, embd + nTokensChunk * nEmbd);
+      if (embd == nullptr || nTokensChunk == 0 || nEmbd == 0) {
+        std::string errorMsg = string_format(
+            "[MtmdLlm] encoder returned no output for image chunk %zu "
+            "(embd=%p, nTokens=%zu, nEmbd=%zu)\n",
+            i, static_cast<const void*>(embd), nTokensChunk, nEmbd);
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(EncoderFailed), errorMsg);
       }
-      entry.n_tokens = nTokensChunk;
-      entry.n_pos = mtmd_input_chunk_get_n_pos(chunk);
+      if (nTokensChunk > SIZE_MAX / nEmbd) {
+        std::string errorMsg = string_format(
+            "[MtmdLlm] embedding size overflow: nTokens=%zu * nEmbd=%zu "
+            "exceeds SIZE_MAX\n",
+            nTokensChunk, nEmbd);
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(EncoderFailed), errorMsg);
+      }
+
+      VisionCacheEntry entry;
+      entry.embeddings.assign(embd, embd + nTokensChunk * nEmbd);
+      entry.nTokens = nTokensChunk;
+      entry.nPos = mtmd_input_chunk_get_n_pos(chunk);
       if (const auto* imgTokens =
               mtmd_input_chunk_get_tokens_image(chunk)) {
         entry.nx = mtmd_image_tokens_get_nx(imgTokens);
         entry.ny = mtmd_image_tokens_get_ny(imgTokens);
       }
 
-      // Decode using the just-copied buffer. Using our copy (instead of
-      // `embd`) is defensive: if mtmd_helper_decode_image_chunk internally
-      // calls anything that touches the scratch buffer, our caller-owned
-      // memory is safe.
-      float* decodeEmbd = entry.embeddings.empty()
-                              ? const_cast<float*>(embd)
-                              : entry.embeddings.data();
       int32_t res = mtmd_helper_decode_image_chunk(
           ctxVision_.get(),
           lctx_,
           chunk,
-          decodeEmbd,
+          entry.embeddings.data(),
           nPastLocal,
           0,
           params_.n_batch,
@@ -730,14 +736,11 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
-  // QVAC-19118 A2: tag the bitmap with SHA-256(image_bytes) so the chunk
-  // produced by mtmd_tokenize() carries this ID and the eval loop can use
-  // it as a vision-prefix cache key. Empty hash (e.g. audio bitmaps where
-  // we wouldn't reach here, or zero-length media which we already reject)
-  // leaves the ID at libmtmd's default and disables caching for that chunk.
-  const std::string hash = sha256OfBytes(media);
-  if (!hash.empty()) {
-    bmp.set_id(hash.c_str());
+  if (visionPrefixCache_.budgetBytes() > 0) {
+    const std::string hash = sha256OfBytes(media);
+    if (!hash.empty()) {
+      bmp.set_id(hash.c_str());
+    }
   }
   bitmaps_.entries.push_back(std::move(bmp));
 }
@@ -772,15 +775,11 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
-  // QVAC-19118 A2: hash the on-disk file bytes so repeat queries for the
-  // same path hit the cache. The hash helper opens the file a second time
-  // (libmtmd already read it for decode); cost is one streamed read,
-  // dominated by the encode pipeline that follows. If the file becomes
-  // unreadable between the two opens or read fails, the helper returns
-  // empty and we skip caching for this image — vision still works.
-  const std::string hash = sha256OfFile(fname);
-  if (!hash.empty()) {
-    bmp.set_id(hash.c_str());
+  if (visionPrefixCache_.budgetBytes() > 0) {
+    const std::string hash = sha256OfFile(fname);
+    if (!hash.empty()) {
+      bmp.set_id(hash.c_str());
+    }
   }
   bitmaps_.entries.push_back(std::move(bmp));
 }
@@ -804,11 +803,12 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
 
-  // QVAC-19118 A2: KV cache is being wiped, so any cached vision embeddings
-  // referencing positions in it are about to become orphaned/invalid for
-  // M-RoPE bookkeeping. Drop them too. Cache is cheap to refill on the next
-  // image (one CLIP+projection pass).
-  visionPrefixCache_.clear();
+  // KV cache is being wiped — cached vision embeddings referencing positions
+  // in it become invalid. Drop entries but preserve stats across slides.
+  visionPrefixCache_.clearData();
+  if (resetStats) {
+    visionPrefixCache_.clearStats();
+  }
 
   // Reset the KV cache
   llama_memory_clear(llama_get_memory(lctx_), true);

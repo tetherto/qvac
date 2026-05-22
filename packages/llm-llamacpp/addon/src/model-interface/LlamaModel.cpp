@@ -323,25 +323,31 @@ void LlamaModel::init(bool acquireLock) {
 
   std::size_t visionCacheBudgetBytes =
       qvac_lib_inference_addon_llama::VisionPrefixCache::kDefaultBudgetBytes;
-  bool visionCacheDisabled = false;
   {
     auto vcIt = configFilemap.find("vision_cache");
     if (vcIt != configFilemap.end()) {
       if (vcIt->second == "0" || vcIt->second == "false") {
-        visionCacheDisabled = true;
+        visionCacheBudgetBytes = 0;
       }
       configFilemap.erase(vcIt);
     }
     auto budgetIt = configFilemap.find("vision_cache_budget_mb");
     if (budgetIt != configFilemap.end()) {
       try {
+        constexpr std::size_t kMaxMB = SIZE_MAX / (1024ULL * 1024ULL);
         auto val = std::stoul(budgetIt->second);
-        visionCacheBudgetBytes = val * 1024ULL * 1024ULL;
-      } catch (...) {}
+        if (val <= kMaxMB) {
+          visionCacheBudgetBytes = val * 1024ULL * 1024ULL;
+        }
+      } catch (const std::exception&) {
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] invalid vision_cache_budget_mb value: '%s', "
+                "using default\n",
+                budgetIt->second.c_str()));
+      }
       configFilemap.erase(budgetIt);
-    }
-    if (visionCacheDisabled) {
-      visionCacheBudgetBytes = 0;
     }
   }
 

@@ -2,8 +2,8 @@
 
 #include <array>
 #include <fstream>
-#include <iomanip>
-#include <sstream>
+#include <memory>
+#include <string>
 #include <utility>
 
 #include <openssl/evp.h>
@@ -14,6 +14,7 @@ VisionPrefixCache::VisionPrefixCache(std::size_t budgetBytes)
     : budgetBytes_(budgetBytes) {}
 
 const VisionCacheEntry* VisionPrefixCache::get(const std::string& key) {
+  std::lock_guard<std::mutex> lock(mtx_);
   if (key.empty()) {
     ++misses_;
     return nullptr;
@@ -24,12 +25,12 @@ const VisionCacheEntry* VisionPrefixCache::get(const std::string& key) {
     return nullptr;
   }
   ++hits_;
-  it->second.first.lastAccess = std::chrono::steady_clock::now();
   touch(it->second.second);
   return &it->second.first;
 }
 
 bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
+  std::lock_guard<std::mutex> lock(mtx_);
   if (key.empty() || budgetBytes_ == 0) {
     return false;
   }
@@ -38,8 +39,17 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
     currentBytes_ -= existing->second.first.sizeBytes();
     existing->second.first = std::move(entry);
     currentBytes_ += existing->second.first.sizeBytes();
-    existing->second.first.lastAccess = std::chrono::steady_clock::now();
     touch(existing->second.second);
+    while (currentBytes_ > budgetBytes_ && !order_.empty()) {
+      const std::string& victim = order_.back();
+      auto vIt = entries_.find(victim);
+      if (vIt != entries_.end()) {
+        currentBytes_ -= vIt->second.first.sizeBytes();
+        entries_.erase(vIt);
+      }
+      order_.pop_back();
+      ++evictions_;
+    }
     if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
     return true;
   }
@@ -58,7 +68,6 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
     ++evictions_;
   }
   order_.push_front(key);
-  entry.lastAccess = std::chrono::steady_clock::now();
   currentBytes_ += entrySize;
   if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
   entries_.emplace(
@@ -66,13 +75,65 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
   return true;
 }
 
+void VisionPrefixCache::clearData() {
+  std::lock_guard<std::mutex> lock(mtx_);
+  order_.clear();
+  entries_.clear();
+  currentBytes_ = 0;
+}
+
+void VisionPrefixCache::clearStats() {
+  std::lock_guard<std::mutex> lock(mtx_);
+  hits_ = 0;
+  misses_ = 0;
+  evictions_ = 0;
+}
+
 void VisionPrefixCache::clear() {
+  std::lock_guard<std::mutex> lock(mtx_);
   order_.clear();
   entries_.clear();
   currentBytes_ = 0;
   hits_ = 0;
   misses_ = 0;
   evictions_ = 0;
+}
+
+void VisionPrefixCache::onMemoryWarning() {
+  std::lock_guard<std::mutex> lock(mtx_);
+  order_.clear();
+  entries_.clear();
+  currentBytes_ = 0;
+}
+
+std::size_t VisionPrefixCache::size() const {
+  std::lock_guard<std::mutex> lock(mtx_);
+  return order_.size();
+}
+
+std::size_t VisionPrefixCache::hits() const {
+  std::lock_guard<std::mutex> lock(mtx_);
+  return hits_;
+}
+
+std::size_t VisionPrefixCache::misses() const {
+  std::lock_guard<std::mutex> lock(mtx_);
+  return misses_;
+}
+
+std::size_t VisionPrefixCache::evictions() const {
+  std::lock_guard<std::mutex> lock(mtx_);
+  return evictions_;
+}
+
+std::size_t VisionPrefixCache::currentBytes() const {
+  std::lock_guard<std::mutex> lock(mtx_);
+  return currentBytes_;
+}
+
+std::size_t VisionPrefixCache::peakBytes() const {
+  std::lock_guard<std::mutex> lock(mtx_);
+  return peakBytes_;
 }
 
 void VisionPrefixCache::touch(std::list<std::string>::iterator it) {
@@ -85,13 +146,21 @@ void VisionPrefixCache::touch(std::list<std::string>::iterator it) {
 namespace {
 
 std::string digestToHex(const unsigned char* digest, unsigned int len) {
-  std::ostringstream oss;
-  oss << std::hex << std::setfill('0');
+  static constexpr char kHexChars[] = "0123456789abcdef";
+  std::string result(len * 2, '\0');
   for (unsigned int i = 0; i < len; ++i) {
-    oss << std::setw(2) << static_cast<unsigned>(digest[i]);
+    result[i * 2] = kHexChars[(digest[i] >> 4) & 0x0F];
+    result[i * 2 + 1] = kHexChars[digest[i] & 0x0F];
   }
-  return oss.str();
+  return result;
 }
+
+struct EvpMdCtxDeleter {
+  void operator()(EVP_MD_CTX* ctx) const {
+    if (ctx != nullptr) EVP_MD_CTX_free(ctx);
+  }
+};
+using EvpMdCtxPtr = std::unique_ptr<EVP_MD_CTX, EvpMdCtxDeleter>;
 
 } // namespace
 
@@ -120,29 +189,25 @@ std::string sha256OfFile(const std::string& path) {
     if (!fin) {
       return {};
     }
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (ctx == nullptr) {
+    EvpMdCtxPtr ctx(EVP_MD_CTX_new());
+    if (!ctx) {
       return {};
     }
-    if (EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) != 1) {
-      EVP_MD_CTX_free(ctx);
+    if (EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1) {
       return {};
     }
-    std::array<char, 8192> buf{};
+    std::array<char, 65536> buf{};
     while (fin.read(buf.data(), buf.size()) || fin.gcount() > 0) {
-      if (EVP_DigestUpdate(ctx, buf.data(),
+      if (EVP_DigestUpdate(ctx.get(), buf.data(),
                            static_cast<std::size_t>(fin.gcount())) != 1) {
-        EVP_MD_CTX_free(ctx);
         return {};
       }
     }
     unsigned char digest[EVP_MAX_MD_SIZE];
     unsigned int digestLen = 0;
-    if (EVP_DigestFinal_ex(ctx, digest, &digestLen) != 1) {
-      EVP_MD_CTX_free(ctx);
+    if (EVP_DigestFinal_ex(ctx.get(), digest, &digestLen) != 1) {
       return {};
     }
-    EVP_MD_CTX_free(ctx);
     return digestToHex(digest, digestLen);
   } catch (...) {
     return {};
@@ -155,11 +220,17 @@ std::string makeVisionCacheKey(
   if (imageHash.empty()) {
     return {};
   }
-  // Compose with delimiter unlikely to appear in paths or hex digests.
+  // Length-prefixed encoding prevents delimiter collisions when paths contain
+  // special characters. Format: "len:value|len:value|hash"
   std::string scoped;
-  scoped.reserve(modelPath.size() + mmprojPath.size() + imageHash.size() + 2);
+  scoped.reserve(
+      20 + modelPath.size() + mmprojPath.size() + imageHash.size());
+  scoped.append(std::to_string(modelPath.size()));
+  scoped.push_back(':');
   scoped.append(modelPath);
   scoped.push_back('|');
+  scoped.append(std::to_string(mmprojPath.size()));
+  scoped.push_back(':');
   scoped.append(mmprojPath);
   scoped.push_back('|');
   scoped.append(imageHash);

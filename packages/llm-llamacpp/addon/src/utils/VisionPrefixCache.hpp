@@ -1,14 +1,12 @@
 #pragma once
 
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <list>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <llama.h>
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -30,28 +28,17 @@ namespace qvac_lib_inference_addon_llama {
 // reported in metal-baseline.md. Entries live in CPU memory and are copied
 // to GPU buffers transiently inside mtmd_helper_decode_image_chunk().
 struct VisionCacheEntry {
-  // Deep copy of mtmd_get_output_embd() — its underlying buffer is overwritten
-  // on the next mtmd_encode_chunk() call, so we MUST copy before any further
-  // encode runs.
   std::vector<float> embeddings;
 
-  // Token count for this image chunk; required for sizing the embeddings
-  // buffer (n_tokens * n_embd) when calling mtmd_helper_decode_image_chunk.
-  std::size_t n_tokens = 0;
+  std::size_t nTokens = 0;
 
   // Number of temporal positions the chunk advances n_past by. For most
-  // models n_pos == n_tokens; for M-RoPE (Qwen3VL) it can differ. We don't
-  // hand n_pos to mtmd_helper_decode_image_chunk directly (it computes its
-  // own from the chunk metadata), but storing it lets future hooks compare.
-  llama_pos n_pos = 0;
+  // models nPos == nTokens; for M-RoPE (Qwen3VL) it can differ.
+  int32_t nPos = 0;
 
   // Spatial dims, populated from mtmd_image_tokens_get_nx/ny when available.
-  // Used by M-RoPE position assembly inside libmtmd; we keep them so the
-  // cached entry is self-describing and unit tests can exercise round-trip.
   std::size_t nx = 0;
   std::size_t ny = 0;
-
-  std::chrono::steady_clock::time_point lastAccess{};
 
   std::size_t sizeBytes() const { return embeddings.size() * sizeof(float); }
 };
@@ -64,9 +51,8 @@ public:
       std::size_t budgetBytes = kDefaultBudgetBytes);
 
   // Look up a cached entry. Returns nullptr if the key is absent or empty.
-  // On hit, marks the entry MRU (moves to front of LRU list and updates
-  // lastAccess) and increments hit-count. The returned pointer is stable
-  // until the next put()/clear()/evict in the same thread.
+  // On hit, marks the entry MRU and increments hit-count. The returned pointer
+  // is stable until the next put()/clear()/evict in the same thread.
   const VisionCacheEntry* get(const std::string& key);
 
   // Insert / overwrite. Evicts least-recently-used entries while total byte
@@ -74,27 +60,31 @@ public:
   // returns false).
   bool put(std::string key, VisionCacheEntry entry);
 
+  // Drop all cached entries and reset currentBytes. Does NOT reset stats.
+  void clearData();
+
+  // Reset hit/miss/eviction counters. peakBytes persists.
+  void clearStats();
+
+  // Drop all entries AND reset stats (except peakBytes).
   void clear();
 
-  // Called by the host layer when the platform fires a low-memory warning
-  // (iOS UIApplicationDidReceiveMemoryWarningNotification, Android
-  // ComponentCallbacks2.onTrimMemory). Drops all cached entries immediately.
-  void onMemoryWarning() { clear(); }
+  // Called from OS low-memory callbacks (potentially on a different thread).
+  void onMemoryWarning();
 
   std::size_t budgetBytes() const { return budgetBytes_; }
-  std::size_t size() const { return order_.size(); }
+  std::size_t size() const;
 
-  // Stats (cumulative; hits/misses/evictions reset by clear(),
-  // peakBytes persists across clears for session-level reporting).
-  std::size_t hits() const { return hits_; }
-  std::size_t misses() const { return misses_; }
-  std::size_t evictions() const { return evictions_; }
-  std::size_t currentBytes() const { return currentBytes_; }
-  std::size_t peakBytes() const { return peakBytes_; }
+  std::size_t hits() const;
+  std::size_t misses() const;
+  std::size_t evictions() const;
+  std::size_t currentBytes() const;
+  std::size_t peakBytes() const;
 
 private:
   void touch(typename std::list<std::string>::iterator it);
 
+  mutable std::mutex mtx_;
   std::size_t budgetBytes_;
   std::size_t currentBytes_ = 0;
   std::size_t peakBytes_ = 0;
@@ -109,20 +99,14 @@ private:
   std::size_t evictions_ = 0;
 };
 
-// Compute SHA-256(bytes) and return as lowercase hex (64 chars). Returns the
-// empty string when bytes is empty so callers can skip the cache cleanly.
 std::string sha256OfBytes(const std::uint8_t* data, std::size_t len);
 
-// Convenience overload for the addon's media buffer type.
 std::string sha256OfBytes(const std::vector<std::uint8_t>& bytes);
 
-// Stream-hash a file. Returns empty string if the file is missing /
-// unreadable / empty — callers should treat that as "no cache key" and
-// skip caching, not as a hard error (caching is an optimisation).
 std::string sha256OfFile(const std::string& path);
 
-// Build a scope-qualified cache key. Different model+mmproj pairs with the
-// same image bytes must NOT collide — the embeddings are model-specific.
+// Build a scope-qualified cache key using length-prefixed encoding to prevent
+// delimiter collisions when paths contain special characters.
 std::string makeVisionCacheKey(
     const std::string& modelPath, const std::string& mmprojPath,
     const std::string& imageHash);

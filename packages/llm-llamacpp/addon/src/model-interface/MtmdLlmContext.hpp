@@ -148,7 +148,7 @@ public:
     return visionPrefixCache_.peakBytes();
   }
 
-  void onMemoryWarning() { visionPrefixCache_.onMemoryWarning(); }
+  void onMemoryWarning() override { visionPrefixCache_.onMemoryWarning(); }
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -236,6 +236,7 @@ private:
   // queries (cache hit). Default budget 100 MB, configurable via
   // vision_cache_budget_mb config key. Set budget to 0 to disable.
   qvac_lib_inference_addon_llama::VisionPrefixCache visionPrefixCache_;
+  std::string visionCacheKeyPrefix_;
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;

@@ -245,6 +245,9 @@ public:
   [[nodiscard]] virtual std::size_t visionCacheEvictions() const { return 0; }
   [[nodiscard]] virtual std::size_t visionCachePeakBytes() const { return 0; }
 
+  // Called by the host layer on iOS/Android low-memory warnings.
+  virtual void onMemoryWarning() {}
+
   /**
    * The load media method. It loads the media from memory buffer.
    * Default implementation does nothing (for text-only contexts).
