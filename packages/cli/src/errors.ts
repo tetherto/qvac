@@ -69,6 +69,37 @@ export class BareImportsMapNotFoundError extends Error {
   }
 }
 
+export class SdkNotFoundInNodeModulesError extends Error {
+  projectRoot: string
+  searchedNames: string[]
+  constructor (projectRoot: string, searchedNames: string[]) {
+    super(
+      'SDK package not found in any node_modules directory.\n\n' +
+      `  Searched upward from: ${projectRoot}\n` +
+      `  Package names tried:  ${searchedNames.join(', ')}\n\n` +
+      '  Install one of these packages in your project (or a parent\n' +
+      '  workspace), e.g. `npm install @qvac/sdk`.'
+    )
+    this.name = 'SdkNotFoundInNodeModulesError'
+    this.projectRoot = projectRoot
+    this.searchedNames = searchedNames
+  }
+}
+
+export class MultipleSdkInstallationsError extends Error {
+  packageNames: string[]
+  constructor (packageNames: string[]) {
+    super(
+      'Multiple SDK packages installed at the same nesting level:\n\n' +
+      packageNames.map((n) => `  - ${n}`).join('\n') + '\n\n' +
+      '  Pick one and remove the others, or pass --sdk-path explicitly\n' +
+      '  to disambiguate.'
+    )
+    this.name = 'MultipleSdkInstallationsError'
+    this.packageNames = packageNames
+  }
+}
+
 const ERROR_LABELS: Record<string, string> = {
   ConfigNotFoundError: 'Configuration Error',
   ConfigLoadError: 'Config Load Error',
@@ -76,6 +107,8 @@ const ERROR_LABELS: Record<string, string> = {
   BarePackNotInstalledError: 'Bundler Error',
   BarePackError: 'Bundle Failed',
   BareImportsMapNotFoundError: 'SDK Error',
+  SdkNotFoundInNodeModulesError: 'SDK Error',
+  MultipleSdkInstallationsError: 'SDK Error',
   LockfileReadError: 'Lockfile Error',
   LockfileNotFoundAtRefError: 'Lockfile Error',
   UnsupportedLockfileError: 'Lockfile Error'
