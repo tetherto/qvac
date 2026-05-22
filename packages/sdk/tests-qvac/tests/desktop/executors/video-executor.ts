@@ -46,24 +46,6 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
   ): Promise<Record<string, unknown>> {
     const out: Record<string, unknown> = { ...p };
 
-    if (p.init_image !== undefined) {
-      if (typeof p.init_image !== "string") {
-        throw new Error(
-          `init_image in test params must be a string filename, got: ${typeof p.init_image}`,
-        );
-      }
-      out.init_image = readImageBytes(p.init_image);
-    }
-
-    if (p.end_image !== undefined) {
-      if (typeof p.end_image !== "string") {
-        throw new Error(
-          `end_image in test params must be a string filename, got: ${typeof p.end_image}`,
-        );
-      }
-      out.end_image = readImageBytes(p.end_image);
-    }
-
     if (p.control_frames !== undefined) {
       if (
         !Array.isArray(p.control_frames) ||
@@ -114,10 +96,7 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
     if (p.high_noise_cfg_scale != null) params.high_noise_cfg_scale = p.high_noise_cfg_scale as number;
     if (p.high_noise_flow_shift != null) params.high_noise_flow_shift = p.high_noise_flow_shift as number;
     if (p.moe_boundary != null) params.moe_boundary = p.moe_boundary as number;
-    if (p.strength != null) params.strength = p.strength as number;
     if (p.vace_strength != null) params.vace_strength = p.vace_strength as number;
-    if (p.init_image != null) params.init_image = p.init_image as Uint8Array;
-    if (p.end_image != null) params.end_image = p.end_image as Uint8Array;
     if (p.control_frames != null) params.control_frames = p.control_frames as Uint8Array[];
     if (p.vae_tiling != null) params.vae_tiling = p.vae_tiling as boolean;
     if (p.vae_tile_size != null) {

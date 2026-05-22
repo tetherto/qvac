@@ -86,10 +86,8 @@ bareTest(
         const chunks = [];
         for await (const chunk of videoOp({
           modelId,
-          mode: "flf2vid",
-          prompt: "interpolate the scene",
-          init_image: PNG_B64,
-          end_image: JPEG_B64,
+          mode: "txt2vid",
+          prompt: "a running fox",
           control_frames: [PNG_B64, JPEG_B64],
           video_frames: 5,
           fps: 16,
@@ -98,9 +96,7 @@ bareTest(
         }
 
         t.ok(observed, "model.run was called");
-        t.is(observed?.["mode"], "flf2vid");
-        t.ok(observed?.["init_image"] instanceof Uint8Array);
-        t.ok(observed?.["end_image"] instanceof Uint8Array);
+        t.is(observed?.["mode"], "txt2vid");
         t.ok(Array.isArray(observed?.["control_frames"]));
         t.is((observed?.["control_frames"] as Uint8Array[]).length, 2);
 

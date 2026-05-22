@@ -23,8 +23,6 @@ export interface VideoResult {
 
 export function video(params: VideoClientParams): VideoResult {
   const {
-    init_image,
-    end_image,
     control_frames,
     ...rest
   } = params;
@@ -32,8 +30,6 @@ export function video(params: VideoClientParams): VideoResult {
 
   const request: VideoStreamRequest = {
     ...rest,
-    ...(init_image !== undefined && { init_image: encodeBase64(init_image) }),
-    ...(end_image !== undefined && { end_image: encodeBase64(end_image) }),
     ...(control_frames !== undefined && {
       control_frames: control_frames.map(encodeBase64),
     }),
