@@ -39,27 +39,31 @@ module.exports = {
     // give it 512 — enough for the chain-of-thought plus a 7-object
     // answer when reasoning is on.
     nPredict: 512,
+    // Convention: baseline is the heavier / reference build, candidate
+    // is the proposed lighter build under test. The verdict reads
+    // "candidate vs baseline", so the candidate "winning" (lower wall
+    // / higher TPS) shows as "better".
     candidate: {
-      label: 'unsloth-Q8_0',
-      quant: 'Q8_0',
-      hfRepo: 'unsloth/Qwen3.5-0.8B-GGUF',
-      hfRevision: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0',
-      llmFile: 'Qwen3.5-0.8B-Q8_0--cand.gguf',
-      mmprojFile: 'mmproj-Qwen3.5-0.8B-F16--cand.gguf',
-      url: {
-        llm: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf',
-        mmproj: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf'
-      }
-    },
-    baseline: {
       label: 'unsloth-Q4_K_M',
       quant: 'Q4_K_M',
       hfRepo: 'unsloth/Qwen3.5-0.8B-GGUF',
       hfRevision: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0',
-      llmFile: 'Qwen3.5-0.8B-Q4_K_M--base.gguf',
-      mmprojFile: 'mmproj-Qwen3.5-0.8B-F16--base.gguf',
+      llmFile: 'Qwen3.5-0.8B-Q4_K_M--cand.gguf',
+      mmprojFile: 'mmproj-Qwen3.5-0.8B-F16--cand.gguf',
       url: {
         llm: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_K_M.gguf',
+        mmproj: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf'
+      }
+    },
+    baseline: {
+      label: 'unsloth-Q8_0',
+      quant: 'Q8_0',
+      hfRepo: 'unsloth/Qwen3.5-0.8B-GGUF',
+      hfRevision: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0',
+      llmFile: 'Qwen3.5-0.8B-Q8_0--base.gguf',
+      mmprojFile: 'mmproj-Qwen3.5-0.8B-F16--base.gguf',
+      url: {
+        llm: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf',
         mmproj: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf'
       }
     }

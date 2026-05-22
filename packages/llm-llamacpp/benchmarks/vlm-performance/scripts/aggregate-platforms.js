@@ -165,12 +165,18 @@ function renderComparisonBlock (reports) {
 // section so the reader sees candidate vs baseline side-by-side per
 // platform without cross-referencing two tables.
 function renderPerPlatformBlocks (reports) {
+  // Group rows by platform AND keep a reference back to the source
+  // report so we can fish out per-platform host hardware metadata.
   const byPlatform = new Map()
+  const platformMeta = new Map()
   for (const report of reports) {
     for (const row of summaryOf(report)) {
       const k = `${row.platform}-${row.arch}`
       if (!byPlatform.has(k)) byPlatform.set(k, [])
       byPlatform.get(k).push(row)
+      if (!platformMeta.has(k) && report.kind === 'vlm-perf' && report.data && report.data.meta) {
+        platformMeta.set(k, report.data.meta)
+      }
     }
   }
   if (byPlatform.size === 0) return []
@@ -184,6 +190,19 @@ function renderPerPlatformBlocks (reports) {
   for (const [platform, rows] of byPlatform) {
     lines.push(`### ${platform}`)
     lines.push('')
+
+    // Per-platform host hardware line — CPU model + cores + RAM + GPUs.
+    // Used to live in a separate "Host hardware" block at the bottom
+    // of the report; folded into each platform sub-section so the
+    // hardware that produced the numbers sits right next to them.
+    const meta = platformMeta.get(platform)
+    if (meta && meta.hardware) {
+      const h = meta.hardware
+      const gpus = (h.gpus || []).map((g) => `${g.vendor ? g.vendor + ' ' : ''}${g.model || '?'}${g.memoryMb ? ` (${g.memoryMb}MB)` : ''}`).join('; ') || 'none detected'
+      lines.push(`Host: ${h.cpu && h.cpu.model ? h.cpu.model : 'unknown CPU'} (${h.cpu ? h.cpu.cores : '?'} cores), ${h.ram ? h.ram.totalGb + ' GB' : '?'} RAM; GPUs: ${gpus}`)
+      lines.push('')
+    }
+
     const byBackend = new Map()
     for (const row of rows) {
       if (!byBackend.has(row.backend)) byBackend.set(row.backend, [])
@@ -403,8 +422,13 @@ function renderConsolidatedMarkdown (reports, commitInfo) {
   }
   lines.push('')
 
-  // Commit context — what two refs are we comparing?
-  if (commitInfo) {
+  // Commit context — only relevant when the comparison axis is
+  // commits / code (addon-versions, git-hashes). In model-variants
+  // mode the runtime code is identical at both sides so the commit
+  // table is just noise.
+  const mode = firstMeta.comparisonMode || 'none'
+  const showCommits = commitInfo && (mode === 'addon-versions' || mode === 'git-hashes')
+  if (showCommits) {
     lines.push('## Commits under test')
     lines.push('')
     if (commitInfo.head && commitInfo.head.sha) {
@@ -449,22 +473,9 @@ function renderConsolidatedMarkdown (reports, commitInfo) {
     lines.push(softwareBlock)
   }
 
-  // Host hardware block — one line per platform with CPU / RAM / GPU
-  // so a reviewer can see what hardware the row came from.
-  lines.push('## Host hardware')
-  lines.push('')
-  const seenHosts = new Set()
-  for (const report of reports) {
-    if (report.kind !== 'vlm-perf') continue
-    const h = report.data.meta && report.data.meta.hardware
-    if (!h) continue
-    const k = `${h.platform}-${h.arch}`
-    if (seenHosts.has(k)) continue
-    seenHosts.add(k)
-    const gpus = (h.gpus || []).map((g) => `${g.vendor ? g.vendor + ' ' : ''}${g.model || '?'}${g.memoryMb ? ` (${g.memoryMb}MB)` : ''}`).join('; ') || 'none detected'
-    lines.push(`- **${k}**: ${h.cpu && h.cpu.model ? h.cpu.model : 'unknown CPU'} (${h.cpu ? h.cpu.cores : '?'} cores), ${h.ram ? h.ram.totalGb + ' GB' : '?'} RAM; GPUs: ${gpus}`)
-  }
-  lines.push('')
+  // Host hardware previously had its own block at the bottom; that
+  // info now sits inside each per-platform sub-section so the
+  // hardware lives next to the numbers it produced.
 
   // Cross-platform errors block.
   const errorRows = []
