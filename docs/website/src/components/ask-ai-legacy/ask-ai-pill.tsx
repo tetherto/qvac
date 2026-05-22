@@ -47,13 +47,29 @@ export function AskAIPill() {
       // pointer events while the assistant is open; we still animate
       // opacity / translate for a graceful disappearance.
       inert={isAssistantOpen || undefined}
+      // `--ask-ai-scrollbar-gutter` is published by `AskAIProvider`
+      // when it locks the page scroll. Reserving the same width on
+      // the right of this `position: fixed` wrapper keeps the pill's
+      // visual center aligned with the page body (which is already
+      // padded by the same amount via `<html>`). Without this, the
+      // ICB widens by the scrollbar width when the lock removes the
+      // scrollbar, and the centered child appears to shift right.
+      style={{ paddingRight: 'var(--ask-ai-scrollbar-gutter, 0px)' }}
       className={cn(
         // `z-30` is strictly below the Fumadocs notebook mobile
         // drawer (`z-40`) so opening the hamburger menu does not
         // clip the pill over the menu's bottom icons. The Inkeep
         // modal itself uses internal stacking and renders above
         // both layers.
-        'fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 transition-all duration-200 sm:px-6 sm:pb-4',
+        // `transition-[opacity,transform]` instead of `transition-all`
+        // so the `paddingRight` gutter compensation (driven by the
+        // `--ask-ai-scrollbar-gutter` custom property when the modal
+        // opens) applies instantly. With `transition-all`, padding
+        // would animate over 200ms in lockstep with the opacity/slide
+        // fade-out, which is exactly the horizontal "jump" the user
+        // saw - the pill still partially visible while its layout
+        // box was sliding right.
+        'fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 transition-[opacity,transform] duration-200 sm:px-6 sm:pb-4',
         isAssistantOpen
           ? 'pointer-events-none translate-y-4 opacity-0'
           : 'translate-y-0 opacity-100',
