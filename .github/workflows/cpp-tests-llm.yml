@@ -185,10 +185,11 @@ jobs:
         env:
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
-          # coverage:cpp:run:ci sets LLVM_PROFILE_FILE, which is a no-op on
-          # non-instrumented Windows/macOS builds and lets the Ubuntu
-          # coverage build emit default.profraw for coverage:cpp:report.
-          npm run coverage:cpp:run:ci
+          if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
+            npm run coverage:cpp:run:ci
+          else
+            npm run test:cpp:run:ci
+          fi
 
           if [ -f build/test/unit/cpp-test-results.xml ]; then
             test_count=$(grep -c '<testcase' build/test/unit/cpp-test-results.xml || echo "0")
