@@ -44,10 +44,6 @@ async function loadSupertonicMtlTTS (params) {
 test('Supertonic MTL TTS (ggml): synthesizes across es/fr/pt with shared engine', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicMtlModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) {
-    t.pass('Skipped: Supertonic MTL GGUF not available')
-    return
-  }
 
   const model = await loadSupertonicMtlTTS({
     supertonicModelPath: download.path,
@@ -79,10 +75,6 @@ test('Supertonic MTL TTS (ggml): synthesizes across es/fr/pt with shared engine'
 test('Supertonic MTL TTS (ggml): unsupported language fails fast at engine load', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicMtlModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) {
-    t.pass('Skipped: Supertonic MTL GGUF not available')
-    return
-  }
 
   // 'de' is in Chatterbox MTL's tier-1 set but NOT in Supertonic's
   // (which only handles en/ko/es/pt/fr today; see
@@ -117,10 +109,6 @@ test('Supertonic MTL TTS (ggml): unsupported language fails fast at engine load'
 test('Supertonic MTL TTS (ggml): backendDevice + backendId surfaced in stats', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicMtlModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) {
-    t.pass('Skipped: Supertonic MTL GGUF not available')
-    return
-  }
 
   const model = await loadSupertonicMtlTTS({
     supertonicModelPath: download.path,

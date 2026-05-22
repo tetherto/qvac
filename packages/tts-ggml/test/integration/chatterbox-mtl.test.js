@@ -71,10 +71,6 @@ async function loadChatterboxMtlTTS (params) {
 test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt with shared engine', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox MTL GGUFs not available')
-    return
-  }
 
   const model = await loadChatterboxMtlTTS({
     modelDir: download.targetDir,
@@ -107,10 +103,6 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt with shared engi
 test('Chatterbox MTL TTS (ggml): backendDevice + backendId surfaced in stats', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox MTL GGUFs not available')
-    return
-  }
 
   const model = await loadChatterboxMtlTTS({
     modelDir: download.targetDir,

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3]
+
+### Added
+
+- **`npm run download-models`**: new Node CLI that pre-stages every
+  Chatterbox + Supertonic GGUF straight from the QVAC model registry
+  (via `@qvac/registry-client`) into `./models/`. Idempotent (skips
+  files already in band), supports `--type <all|chatterbox|chatterbox-mtl|supertonic|supertonic-mtl>`,
+  `--output`, `--force`. Replaces the HF + Python + convert pipeline
+  for anyone who just wants to run the integration suite. The legacy
+  `npm run setup-models` (HF download + GGUF conversion) is still
+  available for re-quantisation / model-team work.
+- **`scripts/registry-models.js`**: single source of truth for the
+  GGUF registry table (path, source, size band). Consumed by both the
+  new download script and the test-time fallback in
+  `test/utils/downloadModel.js`, so the two pipelines can no longer
+  drift apart.
+
+### Changed
+
+- **Desktop CI** (`integration-test-tts-ggml.yml`): dropped the
+  `Setup Python` + `Stage GGUF models (npm run setup-models)` steps.
+  Replaced with a single `npm run download-models` step backed by a
+  GGUF cache keyed on the new registry-models table hash. Removes
+  Python / Torch / numba / librosa from desktop runners and trims
+  several minutes off cold-cache runs.
+- **`test/utils/downloadModel.js`**: the `ensure{Chatterbox,
+  ChatterboxMtl,Supertonic,SupertonicMtl}` helpers now throw with an
+  actionable message when neither local discovery nor the QVAC
+  registry can produce the GGUFs, instead of returning
+  `{ success: false }`. Existing integration tests no longer silently
+  skip on missing models — a registry outage / network failure now
+  surfaces as a hard test failure on both desktop and mobile.
+  Workaround for offline dev: point `TTS_GGML_LOCAL_MODELS_DIR` at a
+  dir holding the GGUFs, or run `npm run download-models` once.
+
 ## [0.1.2]
 
 ### Changed

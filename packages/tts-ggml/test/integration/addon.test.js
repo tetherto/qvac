@@ -39,11 +39,6 @@ test('Chatterbox TTS (ggml): English synthesis + optional WER verification', { t
 
   console.log('\n=== Ensuring Chatterbox GGUFs ===')
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
-  if (!download.success) {
-    console.log('Chatterbox GGUFs not available locally; see instructions above.')
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
-    return
-  }
   t.ok(download.success, 'Chatterbox GGUFs should be available')
 
   if (isDarwin) {
@@ -145,10 +140,6 @@ test('Chatterbox TTS (ggml): synthesizes without referenceAudio using the built-
   const modelsDir = path.join(baseDir, 'models')
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
-    return
-  }
 
   // referenceAudio omitted on purpose: chatterbox::Engine falls back to
   // the voice profile baked into the S3Gen GGUF (see qvac-tts.cpp's
@@ -194,10 +185,6 @@ test('Chatterbox TTS (ggml): outputSampleRate option is accepted (pass-through f
   const modelsDir = path.join(baseDir, 'models')
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
-    return
-  }
 
   // Native output is always 24 kHz for Chatterbox; outputSampleRate resampling
   // is reserved for the persistent-engine milestone.  This test just verifies
@@ -237,10 +224,6 @@ test('Chatterbox TTS (ggml): native C++ chunk streaming via streamChunkTokens', 
   const modelsDir = path.join(baseDir, 'models')
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
-    return
-  }
 
   // streamChunkTokens > 0 activates the native Engine chunked S3Gen+HiFT
   // loop.  The addon publishes each chunk's PCM via the outputQueue so
@@ -299,10 +282,6 @@ test('Chatterbox TTS (ggml): streaming input + streaming PCM output (runStreamin
 
   console.log('\n=== Ensuring Chatterbox GGUFs (streaming) ===')
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
-    return
-  }
   t.ok(download.success, 'Chatterbox GGUFs should be available')
 
   const model = await loadChatterboxTTS({

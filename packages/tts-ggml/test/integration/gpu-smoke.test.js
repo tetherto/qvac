@@ -131,10 +131,6 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
   const modelsDir = path.join(baseDir, 'models')
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
-    return
-  }
 
   // Mobile-aware resolution: see multiple-runs.test.js for rationale.
   const refWavPath = resolveRefWavPath({})
@@ -198,10 +194,6 @@ test('Chatterbox CPU smoke - useGPU=false must run on the CPU backend', { timeou
   const modelsDir = path.join(baseDir, 'models')
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
-  if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
-    return
-  }
 
   // Mobile-aware resolution: see multiple-runs.test.js for rationale.
   const refWavPath = resolveRefWavPath({})
@@ -236,13 +228,7 @@ test('Supertonic CPU smoke - useGPU=false must run on the CPU backend', { timeou
   const modelsDir = path.join(baseDir, 'models')
 
   const download = await ensureSupertonicModel({ targetDir: modelsDir })
-  if (!download || !download.success) {
-    t.pass('Skipped: Supertonic GGUF not available locally')
-    return
-  }
-
-  const supertonicPath = download.path ||
-    path.join(modelsDir, 'supertonic.gguf')
+  const supertonicPath = download.path
 
   const model = await loadSupertonicTTS({
     supertonicModelPath: supertonicPath,
