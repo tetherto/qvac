@@ -1,30 +1,7 @@
 'use strict'
 
-let _os
-try {
-  _os = require('bare-os')
-} catch (e) {
-  try {
-    _os = require('os')
-  } catch (e2) {
-    _os = null
-  }
-}
-
-let _process
-if (typeof global !== 'undefined' && global.process) {
-  _process = global.process
-} else {
-  try {
-    _process = require('process')
-  } catch (e) {
-    try {
-      _process = require('bare-process')
-    } catch (e2) {
-      _process = null
-    }
-  }
-}
+const w = require('which-runtime')
+const os = (w.isNode || w.isBare) ? require('os') : null
 
 /**
  * Version of the diagnostic report format
@@ -142,45 +119,10 @@ function registerExtension (name, data) {
  * @returns {EnvironmentInfo}
  */
 function collectEnvironment () {
-  let os = 'unknown'
-  let arch = 'unknown'
-  let osVersion = 'unknown'
-  let runtime = 'unknown'
+  const runtime = w.isBare ? 'bare' + w.version : (w.isNode ? 'node' + w.version : 'unknown')
+  const osVersion = os ? os.release() : 'unknown'
 
-  if (_os) {
-    try {
-      os = typeof _os.platform === 'function' ? _os.platform() : String(_os.platform || 'unknown')
-    } catch (e) {
-      os = 'unknown'
-    }
-    try {
-      arch = typeof _os.arch === 'function' ? _os.arch() : String(_os.arch || 'unknown')
-    } catch (e) {
-      arch = 'unknown'
-    }
-    try {
-      osVersion = typeof _os.release === 'function' ? _os.release() : String(_os.release || 'unknown')
-    } catch (e) {
-      osVersion = 'unknown'
-    }
-  }
-
-  if (_process) {
-    try {
-      const ver = _process.version || 'unknown'
-      const plat = _process.platform || os
-      runtime = plat === 'android' || plat === 'ios' ? 'bare' : (typeof Bare !== 'undefined' ? 'bare' : 'node')
-      if (runtime === 'node') {
-        runtime = 'node ' + ver
-      } else {
-        runtime = 'bare ' + ver
-      }
-    } catch (e) {
-      runtime = 'unknown'
-    }
-  }
-
-  return { os, arch, osVersion, runtime }
+  return { os: w.platform, arch: w.arch, osVersion, runtime }
 }
 
 /**
@@ -193,9 +135,9 @@ function collectHardware () {
   let cpuCores = 0
   let totalMemoryMB = 0
 
-  if (_os) {
+  if (os) {
     try {
-      const cpuList = typeof _os.cpus === 'function' ? _os.cpus() : []
+      const cpuList = typeof os.cpus === 'function' ? os.cpus() : []
       if (cpuList && cpuList.length > 0) {
         cpuModel = cpuList[0].model || 'unknown'
         cpuCores = cpuList.length
@@ -205,7 +147,7 @@ function collectHardware () {
       cpuCores = 0
     }
     try {
-      const totalBytes = typeof _os.totalmem === 'function' ? _os.totalmem() : 0
+      const totalBytes = typeof os.totalmem === 'function' ? os.totalmem() : 0
       totalMemoryMB = Math.floor(totalBytes / (1024 * 1024))
     } catch (e) {
       totalMemoryMB = 0
