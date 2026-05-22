@@ -1,13 +1,7 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import {
-  loadModel,
-  unloadModel,
   video,
-  WAN2_1_T2V_1_3B_FP16,
-  UMT5_XXL_FP16,
-  WAN_2_1_COMFYUI_REPACKAGED_VAE,
   type VideoClientParams,
 } from "@qvac/sdk";
 import {
@@ -22,14 +16,6 @@ function readImageBytes(name: string): Uint8Array {
   const fileName = name.split("/").pop()!;
   const filePath = path.resolve(process.cwd(), "assets/images", fileName);
   return new Uint8Array(fs.readFileSync(filePath));
-}
-
-function writeVideoOutput(testId: string, output: Uint8Array): string {
-  const outDir = path.join(os.tmpdir(), "qvac-video-tests");
-  fs.mkdirSync(outDir, { recursive: true });
-  const filePath = path.join(outDir, `${testId}.avi`);
-  fs.writeFileSync(filePath, output);
-  return filePath;
 }
 
 export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
@@ -112,34 +98,15 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = await this.resolveParams(params as Record<string, unknown>);
-    let modelId: string | null = null;
 
     try {
-      modelId = await loadModel({
-        modelSrc: WAN2_1_T2V_1_3B_FP16,
-        modelType: "diffusion",
-        modelConfig: {
-          mode: "video",
-          device: "gpu",
-          threads: 4,
-          t5XxlModelSrc: UMT5_XXL_FP16,
-          vaeModelSrc: WAN_2_1_COMFYUI_REPACKAGED_VAE,
-          diffusion_fa: true,
-          offload_to_cpu: true,
-          vae_on_cpu: true,
-          vae_tiling: true,
-        },
-      });
-
+      const modelId = await this.resources.ensureLoaded("video");
       const run = video(this.buildParams(modelId, p));
       const outputs = await run.outputs;
       const stats = await run.stats;
-      const outputPath = outputs[0]
-        ? writeVideoOutput("video-output", outputs[0])
-        : path.join(os.tmpdir(), "qvac-video-tests", "missing-output.avi");
 
       return ValidationHelpers.validate(
-        { outputPath, outputs, stats },
+        { outputs, stats },
         expectation as Expectation,
       );
     } catch (error) {
@@ -149,12 +116,6 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
         return ValidationHelpers.validate(errorMsg, exp);
       }
       return { passed: false, output: `Video generation failed: ${errorMsg}` };
-    } finally {
-      if (modelId) {
-        try {
-          await unloadModel({ modelId });
-        } catch {}
-      }
     }
   }
 }
