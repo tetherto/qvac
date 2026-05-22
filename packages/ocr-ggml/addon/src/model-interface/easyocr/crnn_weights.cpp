@@ -89,8 +89,6 @@ const std::vector<std::string>& verbatim_paths_after_feature_extractor() {
 // Run the standard BN-fold + verbatim-copy load given a conv inventory and
 // a prebuilt context with destination tensors already declared.  Returns
 // empty string on success; non-empty error message on failure.
-// TODO(clang-tidy): split into helpers (uploadFeatureConvs, uploadLstmStack,
-// uploadLinearHead) to drop cognitive complexity below 25.
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 std::string upload_weights(
     const GgufLoader& loader, const std::vector<ConvSpec>& convs,

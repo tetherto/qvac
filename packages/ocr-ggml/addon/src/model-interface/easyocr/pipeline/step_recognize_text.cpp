@@ -257,10 +257,7 @@ adjustContrastGrey(const cv::Mat& img, double target = PARAGRAPH_Y_DELTA) {
  */
 constexpr double PIXEL_MAX_DOUBLE = 255.0;
 
-cv::Mat
-// TODO(clang-tidy): pack (height, maxWidth) in a small `ImageDims` struct so
-// the adjacent same-type ints cannot be swapped at the call site.
-normalizeAndPad(
+cv::Mat normalizeAndPad(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const cv::Mat& img, int channels, int height, int maxWidth) {
   cv::Mat gray;
@@ -326,8 +323,6 @@ int calculateProportionalWidth(int width, int height) {
  * @param adjustContrast : target contrast
  * @return adjusted image
  */
-// TODO(clang-tidy): wrap (adjustContrast, padMaxWidth) in a small struct so
-// the convertible types cannot be swapped at the call site.
 cv::Mat alignAndCollate(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const SubImage& subImage, int targetWidth, double adjustContrast = 0.0) {
@@ -365,8 +360,6 @@ cv::Mat alignAndCollate(
  * @brief Legacy version for backward compatibility - uses fixed
  * RECOGNIZER_MODEL_WIDTH
  */
-// TODO(clang-tidy): wrap (adjustContrast, padMaxWidth) in a small struct so
-// the convertible types cannot be swapped at the call site.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 cv::Mat alignAndCollate(const SubImage& subImage, double adjustContrast = 0.0) {
   return alignAndCollate(subImage, RECOGNIZER_MODEL_WIDTH, adjustContrast);
@@ -1022,9 +1015,6 @@ namespace {
 // Templated single-image runner.
 // Returns a [T, num_classes] cv::Mat.
 template <class W>
-// TODO(clang-tidy): wrap the (height, width) image dims and weights/runtime
-// pointers in dedicated structs so the convertible parameters cannot be
-// swapped at the call site.
 cv::Mat ggml_run_one_T(
     ggml_backend_t backend, const W& weights, const float* input_data,
     int height, int width, size_t graph_size);
@@ -1077,9 +1067,6 @@ cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
 // optimisation: keep the batch axis through AAP so we can do one graph
 // for the whole batch.
 template <class W>
-// TODO(clang-tidy): pack (height, width) in an `ImageDims` struct and
-// (batchSize) in a strong type so the adjacent same-type ints cannot be
-// swapped at the call site.
 cv::Mat ggml_run_recognizer_t(
     ggml_backend_t backend, const W& weights, const float* input_data,
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -1209,8 +1196,6 @@ void StepRecognizeText::processImg(SubImage& subImage) {
 }
 
 std::vector<InferredText>
-// TODO(clang-tidy): split into helpers (groupByWidth, runPrimaryPass,
-// runContrastRetry, mergeResults) to drop cognitive complexity below 25.
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
   QLOG(

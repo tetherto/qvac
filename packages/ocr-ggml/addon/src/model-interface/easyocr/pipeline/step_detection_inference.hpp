@@ -98,7 +98,6 @@ public:
   //   - <0:          leave the GGML CPU backend's built-in default
   //                  unchanged (escape hatch for thread-scaling
   //                  experiments).
-  // TODO(clang-tidy): hoist magRatio default 1.5F to kDefaultMagRatio.
   explicit StepDetectionInference(
       // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
       const std::string& gguf_path, float magRatio = 1.5F, int nThreads = 0);

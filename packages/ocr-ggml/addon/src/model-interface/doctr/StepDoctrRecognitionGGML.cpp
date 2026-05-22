@@ -276,8 +276,6 @@ tensorToF32(struct ggml_tensor* tensor, const std::string& name) {
   return out;
 }
 
-// TODO(clang-tidy): wrap (destCtx, srcCtx) in a small `CloneContexts` struct
-// so the same-type ggml_context pointers cannot be swapped at the call site.
 struct ggml_tensor* cloneRaw(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     struct ggml_context* dstCtx, struct ggml_context* srcCtx,
@@ -396,8 +394,6 @@ struct GraphBuilder {
     return ggml_add(ctx, scaled, t(bnPrefix + ".shift"));
   }
 
-  // TODO(clang-tidy): wrap (convPrefix, bnPrefix) in a `BnConvPrefixes`
-  // struct so the same-type std::string pairs cannot be swapped.
   struct ggml_tensor* convBnAct(
       struct ggml_tensor* x,
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -417,8 +413,6 @@ struct GraphBuilder {
     return applyActivation ? activate(conv, useHardswish) : conv;
   }
 
-  // TODO(clang-tidy): wrap (convPrefix, bnPrefix) in a `BnConvPrefixes`
-  // struct shared with convBnAct.
   struct ggml_tensor* dwConvBnAct(
       struct ggml_tensor* x,
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -681,8 +675,6 @@ private:
     }
   }
 
-  // TODO(clang-tidy): split into helpers (loadFeatureExtractor,
-  // loadLstmStack, loadLinearHead) to drop cognitive complexity below 25.
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   void loadGraphWeights(struct ggml_context* srcCtx) {
     graph.weightsCtx =

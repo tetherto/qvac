@@ -90,9 +90,6 @@ struct LstmStep {
   ggml_tensor* c;
 };
 
-// TODO(clang-tidy): pack the (W_ii/h_ii/b_ii) and (W_hi/h_hi/b_hi) tensor
-// triples in `LstmGateWeights` structs so the same-type ggml_tensor*
-// parameters cannot be swapped at the call site.
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 LstmStep lstm_cell_step(
     ggml_context* ctx,
@@ -133,9 +130,6 @@ LstmStep lstm_cell_step(
 //
 // We pre-compute the full [4*hidden, T] = (W_ih · seq) + b_ih in a single
 // matmul + broadcast-add to avoid a per-step input projection.
-// TODO(clang-tidy): pack the (ih_weights, hh_weights, bias) tensor triple in
-// an `LstmLayerWeights` struct so the same-type ggml_tensor* parameters
-// cannot be swapped at the call site.
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 ggml_tensor* lstm_one_direction(
     ggml_context* ctx,

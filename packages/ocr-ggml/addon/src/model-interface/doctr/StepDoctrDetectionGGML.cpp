@@ -180,7 +180,6 @@ StepDoctrDetectionGGML::extractPolygons(
   const int mapW = probMap.cols;
 
   cv::Mat binary;
-  // TODO(clang-tidy): hoist epsilon nudge as kBinarizeEpsilon constant.
   cv::threshold(
       probMap,
       binary,

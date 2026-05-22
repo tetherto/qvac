@@ -101,9 +101,6 @@ public:
           isMultiCharacter{isMultiCharacterFlag} {}
   };
 
-  // TODO(clang-tidy): extract Config defaults as named constants
-  // (kDefaultRotationAngles, kDefaultLowConfidenceThreshold,
-  // kDefaultRecognizerBatchSize) shared between Config and OcrConfig.
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   struct Config {
     std::vector<int> defaultRotationAngles;
@@ -112,9 +109,6 @@ public:
     int recognizerBatchSize{32};
 
     Config() : defaultRotationAngles{90, 270} {}
-    // TODO(clang-tidy): the (retry, threshold) pair is convertible (bool
-    // promotes to float); use named struct fields or distinct strong types
-    // to make the order un-swappable.
     Config(
         // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
         std::vector<int> angles, bool retry, float threshold,

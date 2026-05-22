@@ -122,8 +122,6 @@ int CraftWeights::n_loaded() const noexcept {
   return static_cast<int>(w_.size());
 }
 
-// TODO(clang-tidy): split into helpers (declareTensors, uploadConvFiltered,
-// uploadBnFiltered) to drop cognitive complexity below 25.
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
   if (!loader.ok()) {
@@ -137,7 +135,6 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
 
   // --- Step 1: declare every destination tensor in our own ctx --------------
   // We need 2 tensors per conv (W + b) and a small headroom margin.
-  // TODO(clang-tidy): hoist tensor-overhead headroom 16 as kCtxHeadroom.
   ggml_init_params ctx_params{
       // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
       .mem_size = ggml_tensor_overhead() * ((kNumConvs * 2) + 16),

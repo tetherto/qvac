@@ -225,9 +225,6 @@ double elapsedMs(std::chrono::steady_clock::time_point start) {
 
 } // namespace
 
-// TODO(clang-tidy): consider wrapping the two model paths in a small
-// `OcrModelPaths { std::string detector; std::string recognizer; }` struct
-// to make them un-swappable at the call site.
 Pipeline::Pipeline(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& pathDetector, const std::string& pathRecognizer,

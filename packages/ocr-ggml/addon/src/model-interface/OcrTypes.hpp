@@ -37,9 +37,6 @@ struct OcrInput {
   bool isEncoded{false};
   bool paragraph{false};
   std::optional<std::vector<int>> rotationAngles;
-  // TODO(clang-tidy): extract OcrInput / OcrConfig defaults as named
-  // constants (kDefaultBoxMargin, kDefaultMagRatio, kDefaultRotationAngles,
-  // kDefaultLowConfidenceThreshold, kDefaultRecognizerBatchSize).
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   float boxMarginMultiplier{0.1F};
 };

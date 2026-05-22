@@ -157,8 +157,6 @@ void alignDiamondShape(
 
 } // namespace
 
-// TODO(clang-tidy): wrap (textMap, linkMap) in a `DetectorOutputs` struct so
-// the same-type cv::Mat pair cannot be swapped at the call site.
 void StepBoundingBox::loadConnectedComponents(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const cv::Mat& textMap, const cv::Mat& linkMap) {

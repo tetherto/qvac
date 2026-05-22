@@ -165,9 +165,6 @@ cv::Mat StepDetectionInference::preprocess(
   return normalizeAndBuildCHW(imgResized);
 }
 
-// TODO(clang-tidy): the (magRatio, nThreads) pair is convertible (float vs
-// int); make the constructor accept named parameters or distinct strong
-// types to prevent accidental swap.
 StepDetectionInference::StepDetectionInference(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& gguf_path, float magRatio, int nThreads)

@@ -150,9 +150,6 @@ std::vector<float> loadVector1d(
 
 /// Applies folded BatchNorm inline: `x * scale + shift` with pre-reshaped
 /// [1, 1, C, 1] scale/shift broadcasted across [W, H, C, 1].
-// TODO(clang-tidy): wrap the (scale, shift) ggml_tensor* pair in a small
-// `FoldedBnParams { ggml_tensor* scale; ggml_tensor* shift; }` struct so the
-// two same-type pointers cannot be swapped at the call site.
 struct ggml_tensor* applyFoldedBn(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     struct ggml_context* ctx, struct ggml_tensor* x, struct ggml_tensor* scale,
@@ -184,9 +181,6 @@ struct GraphBuilder {
   }
 
   /// Conv2d + folded BN, optionally followed by an activation.
-  // TODO(clang-tidy): wrap (stride, kernel, [pad, dilation]) ints in a small
-  // `ConvShape { int stride; int kernel; int pad; int dilation; }` struct so
-  // adjacent same-type ints cannot be swapped at the call site.
   struct ggml_tensor* convBnAct(
       struct ggml_tensor* x, const std::string& convPrefix,
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -293,9 +287,6 @@ struct GraphBuilder {
   }
 
   /// Depthwise Conv2d + folded BN + activation.
-  // TODO(clang-tidy): wrap (stride, kernel, [pad, dilation]) ints in a small
-  // `ConvShape` struct shared with convBnAct so adjacent same-type ints
-  // cannot be swapped.
   struct ggml_tensor* dwConvBnAct(
       struct ggml_tensor* x, const std::string& convPrefix,
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -342,8 +333,6 @@ struct GraphBuilder {
   }
 
   /// One torchvision InvertedResidual block.
-  // TODO(clang-tidy): pack (featuresIndex, inputSpatialHw) in a struct so the
-  // adjacent ints cannot be swapped at the call site.
   struct ggml_tensor* invertedResidual(
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
       struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex,
@@ -513,9 +502,6 @@ void ComputeGraph::reset() {
   }
 }
 
-// TODO(clang-tidy): split this ~400-line function into helpers
-// (loadFeatureExtractor, loadFpnBranches, loadDbnetHead, loadFoldedBn) to
-// drop cognitive complexity below the 25 threshold.
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 WeightsBundle loadWeights(
     const std::string& ggufPath, std::vector<ggml_backend_t>& backends,

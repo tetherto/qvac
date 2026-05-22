@@ -13,8 +13,6 @@ namespace {
 // Add a [OC] bias to a [W, H, OC, N] activation map. We explicitly broadcast
 // via ggml_repeat (matching the pattern used in ggml's own yolo example) to
 // avoid relying on implicit broadcast semantics in ggml_add.
-// TODO(clang-tidy): wrap (x, bias) in a small `BiasInput` struct so the
-// same-type ggml_tensor* pair cannot be swapped at the call site.
 ::ggml_tensor* add_channel_bias(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* bias) {
@@ -25,8 +23,6 @@ namespace {
 
 } // namespace
 
-// TODO(clang-tidy): wrap (x, kernel, bias) in a small `ConvInput` struct so
-// the same-type ggml_tensor* triple cannot be swapped at the call site.
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 ::ggml_tensor* conv_2d_bias(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
