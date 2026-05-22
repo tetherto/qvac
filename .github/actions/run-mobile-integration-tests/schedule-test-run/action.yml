@@ -51,9 +51,9 @@ inputs:
     required: false
     default: "dual-flagship"
   job-timeout-minutes:
-    description: "Per-run jobTimeoutMinutes (NMT uses 120, others 60)"
+    description: "Per-run Device Farm jobTimeoutMinutes. Default 120 gives headroom for slower devices (Pixel 9 Pro VLM ~56 min). The crash monitor kills hung tests early so the extra ceiling doesn't waste time on crashes."
     required: false
-    default: "60"
+    default: "120"
 
 outputs:
   run-arns:
