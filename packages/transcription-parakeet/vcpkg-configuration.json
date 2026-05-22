@@ -2,7 +2,8 @@
   "default-registry": {
     "kind": "git",
     "baseline": "009daf1da904782f8e72df3690e7eb42464df070",
-    "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git"
+    "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
+    "reference": "QVAC-Registry/QVAC-19270/parakeet-cpp-eou-streaming-fix"
   },
   "registries": [
     {
