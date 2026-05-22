@@ -24,6 +24,7 @@ const { parseArgs, csvOrArray } = require('./utils')
 const { resolveSources } = require('./source-resolver')
 const { buildSummary, writeReports } = require('./reporters')
 const { parseStdoutMetrics } = require('./stdout-parser')
+const { detectAll, hasUsableGpu } = require('./hardware')
 
 const SCRIPT_DIR = __dirname
 const RESOLVED_MODELS_PATH = path.join(SCRIPT_DIR, 'resolved-models.json')
@@ -67,12 +68,24 @@ function detectPlatformKey () {
   return `${p}-${a}`
 }
 
-function pickBackends (args, platformKey) {
+function pickBackends (args, platformKey, hardwareInfo) {
   const fromCli = csvOrArray(args.backends || args.backend)
-  if (fromCli.length) return fromCli
-  const platform = config.platforms[platformKey]
-  if (platform && Array.isArray(platform.backends)) return platform.backends.slice()
-  return ['gpu']
+  let backends
+  if (fromCli.length) {
+    backends = fromCli
+  } else {
+    const platform = config.platforms[platformKey]
+    backends = platform && Array.isArray(platform.backends) ? platform.backends.slice() : ['gpu']
+  }
+  // Drop the 'gpu' row when the runner clearly has no real GPU
+  // (CI runners that don't expose dedicated hardware). The addon would
+  // silently fall back to CPU and produce a row that's identical to
+  // the 'cpu' row, which is misleading. Override with --force-gpu-row
+  // when you specifically want to surface that fallback behaviour.
+  if (!args['force-gpu-row'] && !hasUsableGpu(hardwareInfo)) {
+    backends = backends.filter((b) => b !== 'gpu')
+  }
+  return backends
 }
 
 function ensureModelsResolved (args) {
@@ -227,7 +240,14 @@ async function main () {
 
   const resolved = ensureModelsResolved(args)
   const platformKey = detectPlatformKey()
-  const backends = pickBackends(args, platformKey)
+  const hardwareInfo = detectAll()
+  log(`hardware: cpu="${hardwareInfo.cpu.model}" cores=${hardwareInfo.cpu.cores} ram=${hardwareInfo.ram.totalGb}GB gpus=${hardwareInfo.gpus.length}`)
+  for (const g of hardwareInfo.gpus) log(`  GPU: ${g.vendor || ''} ${g.model || '?'} ${g.memoryMb ? `(${g.memoryMb}MB)` : ''}`)
+  const backends = pickBackends(args, platformKey, hardwareInfo)
+  if (backends.length === 0) {
+    throw new Error('No backends resolved for this host (--force-gpu-row may help if you specifically want to surface the GPU-fallback-to-CPU case).')
+  }
+  log(`backends to run: ${backends.join(', ')}`)
   const sources = resolveSources(config, args)
 
   // Skip baseline cells that need a build but have no addon path.
@@ -291,6 +311,7 @@ async function main () {
     generatedAt: new Date().toISOString(),
     platformKey,
     backends,
+    hardware: hardwareInfo,
     sources: runnableSources.map((s) => ({ key: s.key, label: s.label, commit: s.commit || null }))
   }
   const written = writeReports({ outputDir: resultsDir, summary, meta })

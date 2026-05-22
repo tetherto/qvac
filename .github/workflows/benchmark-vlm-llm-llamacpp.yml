@@ -164,48 +164,31 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  # ── Android (stub for first iteration) ─────────────────────────────
-  # Today our benchmark binary doesn't run on the Android Device Farm
-  # bundle — the test app would need to embed case-runner.js (or an
-  # equivalent on-device runner) the way the existing mobile image
-  # perf tests do. This job is left in place so the workflow shape is
-  # complete and you can flip it on once that wiring lands.
-  #
-  # If you need Android perf numbers right now, manually launch
-  # `Benchmark Performance (LLM)` (benchmark-performance-infer-llm-llamacpp.yml)
-  # with the same ref and read its mobile artifact.
+  # ── Android (reuses existing mobile-perf workflow) ─────────────────
+  # We don't yet have our benchmark bundled into the Android test
+  # bundle. Until that ships, this job re-uses the existing
+  # integration-mobile-test-llm-llamacpp.yml in perf-only mode, which
+  # runs the `image-*` integration tests (currently SmolVLM2-500M,
+  # not Qwen3.5) on AWS Device Farm and uploads a perf-report shaped
+  # by _perf-helper.js. The summarize step picks that up alongside
+  # our own per-platform JSONs and renders the mobile rows in the same
+  # table, with a clear note about the model/image difference.
   android:
     needs: context
-    name: vlm-android
     if: inputs.run_android
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Stub notice
-        shell: bash
-        run: |
-          mkdir -p android-stub
-          cat > android-stub/README.txt <<'EOF'
-          Android VLM benchmark - placeholder
-          ===================================
-          Our benchmark is not yet bundled into the Android Device Farm
-          test app. The job is included so the workflow shape covers
-          Android; the actual on-device run is pending follow-up work
-          to wire packages/llm-llamacpp/benchmarks/vlm-performance into
-          the mobile test bundle.
-
-          For Android perf numbers in the meantime, run:
-            Actions -> Benchmark Performance (LLM) -> Run workflow
-          (workflow file: benchmark-performance-infer-llm-llamacpp.yml)
-          EOF
-          echo "Android benchmark is a stub in this iteration."
-          cat android-stub/README.txt
-      - name: Upload Android stub marker
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: vlm-perf-android-${{ github.run_number }}
-          path: android-stub/
-          retention-days: 14
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      qvac_perf_runs: ${{ inputs.measured_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.warmup_runs }}
+      qvac_perf_only: true
 
   # ── Summarize ──────────────────────────────────────────────────────
   # Downloads every desktop artifact and renders a consolidated table.
@@ -233,11 +216,18 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Download all per-platform artifacts
+      - name: Download desktop per-platform artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: vlm-perf-*-${{ github.run_number }}
           path: per-platform
+
+      - name: Download mobile perf-report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-llamacpp-llm-Android-*
+          path: per-platform/mobile
+        continue-on-error: true
 
       - name: Aggregate into one report
         shell: bash

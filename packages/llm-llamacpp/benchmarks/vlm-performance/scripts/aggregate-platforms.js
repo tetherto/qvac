@@ -33,36 +33,97 @@ function fmt (v, digits = 1) {
   return v.toFixed(digits)
 }
 
+// Recursively find files matching a predicate. Mobile perf-report
+// artifacts arrive several directories deep (one subdir per test
+// group), so we can't rely on the shallow walk our own artifacts use.
+function findFiles (dir, predicate, depth = 0) {
+  const out = []
+  if (!fs.existsSync(dir) || depth > 6) return out
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      out.push(...findFiles(full, predicate, depth + 1))
+    } else if (predicate(entry.name, full)) {
+      out.push(full)
+    }
+  }
+  return out
+}
+
 function loadReportsFrom (dir) {
   const reports = []
   if (!fs.existsSync(dir)) return reports
 
-  // Walk one level deep — actions/download-artifact deposits each
-  // artifact under its own subdirectory.
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      for (const file of fs.readdirSync(path.join(dir, entry.name))) {
-        if (/vlm-perf-.*\.json$/.test(file) && !file.endsWith('.delta.md')) {
-          const fullPath = path.join(dir, entry.name, file)
-          try {
-            const data = JSON.parse(fs.readFileSync(fullPath, 'utf8'))
-            reports.push({ source: entry.name, path: fullPath, data })
-          } catch (e) {
-            console.error(`[aggregate] skipped ${fullPath}: ${e.message}`)
-          }
-        }
+  // Our own per-platform vlm-perf JSONs.
+  const ours = findFiles(dir, (name) => /^vlm-perf-.*\.json$/.test(name) && !name.endsWith('.delta.md'))
+  for (const p of ours) {
+    try {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'))
+      reports.push({ kind: 'vlm-perf', source: path.relative(dir, path.dirname(p)) || '.', path: p, data })
+    } catch (e) {
+      console.error(`[aggregate] skipped ${p}: ${e.message}`)
+    }
+  }
+
+  // Mobile perf-report.json produced by _perf-helper.js (different
+  // schema — see packages/llm-llamacpp/test/integration/_perf-helper.js).
+  const mobile = findFiles(dir, (name) => name === 'perf-report.json')
+  for (const p of mobile) {
+    try {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'))
+      // schema_version + results array distinguishes it from ours.
+      if (data && Array.isArray(data.results) && data.schema_version) {
+        reports.push({ kind: 'mobile-perf', source: path.relative(dir, path.dirname(p)) || '.', path: p, data })
       }
-    } else if (/vlm-perf-.*\.json$/.test(entry.name)) {
-      const fullPath = path.join(dir, entry.name)
-      try {
-        const data = JSON.parse(fs.readFileSync(fullPath, 'utf8'))
-        reports.push({ source: '.', path: fullPath, data })
-      } catch (e) {
-        console.error(`[aggregate] skipped ${fullPath}: ${e.message}`)
-      }
+    } catch (e) {
+      console.error(`[aggregate] skipped ${p}: ${e.message}`)
     }
   }
   return reports
+}
+
+// Convert one mobile perf-report.json into vlm-perf-shaped summary
+// entries. The mobile suite emits multiple results per file (image-
+// elephant, image-fruit-plate, ...) — we only surface VLM-relevant
+// scenarios. Each result becomes one row in the consolidated table.
+function mobileReportToSummary (report) {
+  const data = report.data
+  const deviceName = (data.device && data.device.name) || 'android'
+  const out = []
+  for (const r of (data.results || [])) {
+    // Keep only image-class scenarios so we don't pollute the VLM
+    // table with text-only or tool-calling tests from the same suite.
+    if (!String(r.scenario || '').toLowerCase().includes('image')) continue
+    const metrics = r.metrics || {}
+    out.push({
+      sourceKey: 'mobile-existing',
+      sourceLabel: `mobile/${r.test}`,
+      backend: metrics.backend || 'auto',
+      platform: deviceName,
+      arch: 'mobile',
+      metrics: {
+        repeats: 1,
+        repeatsTotal: 1,
+        failures: 0,
+        visionEncodeMs_median: metrics.vision_encode_time_ms ?? null,
+        ttftMs_median: metrics.ttft_ms ?? null,
+        decodeTps_median: metrics.tps ?? null,
+        wallMs_median: metrics.total_time_ms ?? null,
+        actualBackends: metrics.backend ? [metrics.backend] : [],
+        // No recall scoring on the legacy mobile path — explicit null
+        // so the consumer can render '-' rather than fabricate a value.
+        recallScore_median: null,
+        objectsRecalled: null,
+        objectsTotal: null,
+        objectsMissed: [],
+        extras: [],
+        fullAnswer: r.output || null,
+        answersAreIdentical: true
+      },
+      errors: []
+    })
+  }
+  return out
 }
 
 function renderConsolidatedMarkdown (reports) {
@@ -71,9 +132,11 @@ function renderConsolidatedMarkdown (reports) {
     return '# VLM Benchmark - Consolidated\n\nNo per-platform reports were found. Each platform job must upload a `vlm-perf-<TS>.json` artifact for it to appear here.\n'
   }
 
-  // Pick metadata from the first report — they should all share the
-  // same model / image / prompt / ground truth in V1 (one cell).
-  const firstMeta = reports[0].data.meta || {}
+  // Pick metadata from the first vlm-perf report (mobile reports
+  // don't have our meta shape).
+  const firstVlm = reports.find((r) => r.kind === 'vlm-perf')
+  const firstMeta = (firstVlm && firstVlm.data.meta) || {}
+  const hasMobile = reports.some((r) => r.kind === 'mobile-perf')
   lines.push(`# VLM Benchmark - Consolidated`)
   lines.push('')
   lines.push(`- Model: \`${firstMeta.modelId || 'unknown'}\``)
@@ -88,10 +151,12 @@ function renderConsolidatedMarkdown (reports) {
   }
   lines.push('')
 
-  lines.push('| Platform | Backend | Source | vis-enc (ms) | TTFT (ms) | TPS | wall (ms) | recall | status |')
-  lines.push('|---|---|---|---|---|---|---|---|---|')
+  lines.push('| Platform | Backend (req/actual) | Source | runs | vis-enc (ms) | TTFT (ms) | TPS | wall (ms) | recall | status |')
+  lines.push('|---|---|---|---|---|---|---|---|---|---|')
   for (const report of reports) {
-    const summary = report.data.summary || []
+    const summary = report.kind === 'mobile-perf'
+      ? mobileReportToSummary(report)
+      : (report.data.summary || [])
     for (const row of summary) {
       const m = row.metrics || {}
       const hasError = row.errors && row.errors.length > 0
@@ -99,15 +164,43 @@ function renderConsolidatedMarkdown (reports) {
       const recall = m.recallScore_median != null
         ? `${m.objectsRecalled}/${m.objectsTotal} (${m.recallScore_median.toFixed(2)})`
         : '-'
-      lines.push(`| ${row.platform}-${row.arch} | ${row.backend} | ${row.sourceLabel} | ${fmt(m.visionEncodeMs_median)} | ${fmt(m.ttftMs_median)} | ${fmt(m.decodeTps_median, 2)} | ${fmt(m.wallMs_median)} | ${recall} | ${status} |`)
+      const repeats = m.repeatsTotal != null ? `${m.repeats}/${m.repeatsTotal}` : `${m.repeats || 0}`
+      const actual = m.actualBackends && m.actualBackends.length ? m.actualBackends.join(',') : '-'
+      const backendCol = `${row.backend} / ${actual}`
+      lines.push(`| ${row.platform}-${row.arch} | ${backendCol} | ${row.sourceLabel} | ${repeats} | ${fmt(m.visionEncodeMs_median)} | ${fmt(m.ttftMs_median)} | ${fmt(m.decodeTps_median, 2)} | ${fmt(m.wallMs_median)} | ${recall} | ${status} |`)
     }
+  }
+  lines.push('')
+
+  if (hasMobile) {
+    lines.push('> **Mobile row caveat**: rows labelled `mobile/*` come from the existing `integration-mobile-test-llm-llamacpp` workflow in `--perf-only` mode. They use a different image (`elephant.jpg`), a different prompt, and (currently) SmolVLM2-500M instead of Qwen3.5 — the numbers are **not directly comparable** to the desktop VLM rows. Bundling our benchmark into the Android test app is a planned follow-up.')
+    lines.push('')
+  }
+
+  // Host hardware block — one line per platform with CPU / RAM / GPU
+  // so a reviewer can see what hardware the row came from.
+  lines.push('## Host hardware')
+  lines.push('')
+  const seenHosts = new Set()
+  for (const report of reports) {
+    if (report.kind !== 'vlm-perf') continue
+    const h = report.data.meta && report.data.meta.hardware
+    if (!h) continue
+    const k = `${h.platform}-${h.arch}`
+    if (seenHosts.has(k)) continue
+    seenHosts.add(k)
+    const gpus = (h.gpus || []).map((g) => `${g.vendor ? g.vendor + ' ' : ''}${g.model || '?'}${g.memoryMb ? ` (${g.memoryMb}MB)` : ''}`).join('; ') || 'none detected'
+    lines.push(`- **${k}**: ${h.cpu && h.cpu.model ? h.cpu.model : 'unknown CPU'} (${h.cpu ? h.cpu.cores : '?'} cores), ${h.ram ? h.ram.totalGb + ' GB' : '?'} RAM; GPUs: ${gpus}`)
   }
   lines.push('')
 
   // Cross-platform errors block.
   const errorRows = []
   for (const report of reports) {
-    for (const row of (report.data.summary || [])) {
+    const rows = report.kind === 'mobile-perf'
+      ? mobileReportToSummary(report)
+      : (report.data.summary || [])
+    for (const row of rows) {
       if (row.errors && row.errors.length > 0) errorRows.push(row)
     }
   }
@@ -125,13 +218,21 @@ function renderConsolidatedMarkdown (reports) {
   }
 
   // Per-platform full model answers.
-  lines.push('## Full model answers (run #0 per cell)')
+  lines.push('## Full model answers')
   lines.push('')
   for (const report of reports) {
-    for (const row of (report.data.summary || [])) {
+    const rows = report.kind === 'mobile-perf'
+      ? mobileReportToSummary(report)
+      : (report.data.summary || [])
+    for (const row of rows) {
       const m = row.metrics || {}
       if (!m.fullAnswer) continue
-      lines.push(`### ${row.platform}-${row.arch} / ${row.backend} / ${row.sourceLabel}`)
+      const repeats = m.repeats || 0
+      let tag
+      if (repeats === 1) tag = '(single run)'
+      else if (m.answersAreIdentical) tag = `(identical across all ${repeats} runs)`
+      else tag = `(showing run #0 of ${repeats}; runs differ)`
+      lines.push(`### ${row.platform}-${row.arch} / ${row.backend} / ${row.sourceLabel} ${tag}`)
       lines.push('')
       lines.push('```')
       lines.push(m.fullAnswer)
@@ -160,7 +261,12 @@ function main () {
   const merged = {
     generatedAt: new Date().toISOString(),
     platformCount: reports.length,
-    reports: reports.map((r) => ({ source: r.source, meta: r.data.meta, summary: r.data.summary }))
+    reports: reports.map((r) => ({
+      kind: r.kind,
+      source: r.source,
+      meta: r.data.meta || null,
+      summary: r.kind === 'mobile-perf' ? mobileReportToSummary(r) : (r.data.summary || [])
+    }))
   }
   fs.mkdirSync(path.dirname(outputJson), { recursive: true })
   fs.writeFileSync(outputJson, JSON.stringify(merged, null, 2))

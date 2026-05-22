@@ -36,13 +36,23 @@ function aggregateCell (cell) {
   const okRuns = cell.runs.filter((r) => r.ok)
   const fields = ['visionEncodeMs', 'ttftMs', 'decodeTps', 'ppTps', 'decodeMs', 'loadMs', 'wallMs', 'generatedTokens', 'promptTokens']
 
-  const agg = { repeats: okRuns.length, failures: cell.runs.length - okRuns.length }
+  const agg = {
+    repeats: okRuns.length,
+    repeatsTotal: cell.runs.length,
+    failures: cell.runs.length - okRuns.length
+  }
   for (const f of fields) {
     const vals = okRuns.map((r) => pickMetric(r, f)).filter((v) => v != null)
     agg[`${f}_median`] = round(median(vals), 3)
     agg[`${f}_min`] = round(min(vals), 3)
     agg[`${f}_max`] = round(max(vals), 3)
   }
+  // Distinct backendDevice across runs (addon's auto-pick may differ
+  // between launches; if it does, we want that visible).
+  const actualBackends = new Set(
+    okRuns.map((r) => r.stats && r.stats.backendDevice).filter(Boolean)
+  )
+  agg.actualBackends = Array.from(actualBackends)
 
   // Accuracy: with temp=0 + seed, all runs should be identical; report
   // run #0 verbatim, plus a median recall as a sanity-check.
@@ -64,6 +74,10 @@ function aggregateCell (cell) {
     agg.extras = []
     agg.fullAnswer = null
   }
+  // Were all measured-run answers identical? Used by the reporter to
+  // tag the "Full model answers" block as definitive vs run-#0-only.
+  const answers = okRuns.map((r) => r.fullAnswer).filter((a) => a != null)
+  agg.answersAreIdentical = answers.length > 1 && answers.every((a) => a === answers[0])
   return agg
 }
 
@@ -106,6 +120,16 @@ function renderFullMatrixMarkdown (summary, meta) {
   lines.push(`- Runs: ${meta.warmupRuns} warmup + ${meta.measuredRuns} measured, **median** reported`)
   lines.push(`- Thinking mode: ${meta.thinkingEnabled ? 'on (reasoning-budget=-1)' : 'off (reasoning-budget=0)'}`)
   lines.push(`- Generated at: ${meta.generatedAt}`)
+  if (meta.hardware) {
+    const h = meta.hardware
+    lines.push(`- Host: ${h.platform}-${h.arch}, ${h.cpu.model || 'unknown CPU'} (${h.cpu.cores} cores), ${h.ram.totalGb} GB RAM`)
+    if (h.gpus && h.gpus.length) {
+      const gpuLine = h.gpus.map((g) => `${g.vendor ? g.vendor + ' ' : ''}${g.model || '?'}${g.memoryMb ? ` (${g.memoryMb}MB)` : ''}`).join('; ')
+      lines.push(`- GPUs: ${gpuLine}`)
+    } else {
+      lines.push('- GPUs: none detected')
+    }
+  }
   lines.push('')
 
   const byPlatform = new Map()
@@ -118,8 +142,8 @@ function renderFullMatrixMarkdown (summary, meta) {
   for (const [platform, rows] of byPlatform) {
     lines.push(`## ${platform}`)
     lines.push('')
-    lines.push('| Backend | Source | vis-enc (ms) | TTFT (ms) | TPS | wall (ms) | recall | objects | status |')
-    lines.push('|---|---|---|---|---|---|---|---|---|')
+    lines.push('| Backend (requested / actual) | Source | runs | vis-enc (ms) | TTFT (ms) | TPS | wall (ms) | recall | objects | status |')
+    lines.push('|---|---|---|---|---|---|---|---|---|---|')
     for (const r of rows) {
       const m = r.metrics
       const hasError = r.errors && r.errors.length > 0
@@ -130,7 +154,10 @@ function renderFullMatrixMarkdown (summary, meta) {
       const objects = m.repeats === 0
         ? '-'
         : (m.objectsMissed && m.objectsMissed.length ? `missed: ${m.objectsMissed.join(', ')}` : 'all')
-      lines.push(`| ${r.backend} | ${r.sourceLabel} | ${fmt(m.visionEncodeMs_median)} | ${fmt(m.ttftMs_median)} | ${fmt(m.decodeTps_median, 2)} | ${fmt(m.wallMs_median)} | ${recall} | ${objects} | ${status} |`)
+      const repeats = m.repeatsTotal != null ? `${m.repeats}/${m.repeatsTotal}` : `${m.repeats}`
+      const actual = m.actualBackends && m.actualBackends.length ? m.actualBackends.join(',') : '-'
+      const backendCol = `${r.backend} / ${actual}`
+      lines.push(`| ${backendCol} | ${r.sourceLabel} | ${repeats} | ${fmt(m.visionEncodeMs_median)} | ${fmt(m.ttftMs_median)} | ${fmt(m.decodeTps_median, 2)} | ${fmt(m.wallMs_median)} | ${recall} | ${objects} | ${status} |`)
     }
     lines.push('')
   }
@@ -150,13 +177,20 @@ function renderFullMatrixMarkdown (summary, meta) {
     lines.push('')
   }
 
-  lines.push('## Full model answers (run #0 per cell)')
+  lines.push('## Full model answers')
   lines.push('')
   for (const r of summary) {
-    lines.push(`### ${r.platform}-${r.arch} / ${r.backend} / ${r.sourceLabel}`)
+    const m = r.metrics
+    const repeats = m.repeats || 0
+    let tag
+    if (repeats === 0) tag = '(no successful runs)'
+    else if (repeats === 1) tag = '(single run)'
+    else if (m.answersAreIdentical) tag = `(identical across all ${repeats} runs)`
+    else tag = `(showing run #0 of ${repeats}; runs differ)`
+    lines.push(`### ${r.platform}-${r.arch} / ${r.backend} / ${r.sourceLabel} ${tag}`)
     lines.push('')
     lines.push('```')
-    lines.push(r.metrics.fullAnswer || '(no answer)')
+    lines.push(m.fullAnswer || '(no answer)')
     lines.push('```')
     lines.push('')
   }
