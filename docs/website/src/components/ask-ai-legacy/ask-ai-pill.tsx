@@ -88,9 +88,14 @@ export function AskAIPill() {
           }}
           aria-label="Ask AI anything about QVAC"
           className={cn(
-            'flex w-full cursor-pointer items-center gap-3 rounded-full border bg-fd-popover px-4 py-2.5 text-left shadow-lg transition-colors',
+            'flex w-full cursor-pointer items-center gap-3 rounded-full border border-fd-border bg-fd-popover px-4 py-2.5 text-left shadow-lg transition-colors',
             'hover:bg-fd-secondary',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring',
+            // Theme-colored highlight while the pill is hovered or
+            // selected (mouse click or keyboard focus). Mirrors the
+            // composer bar from the legacy `AskAIChatShell` so the
+            // trigger feels like the input it opens.
+            'hover:border-fd-ring hover:ring-1 hover:ring-fd-ring',
+            'focus:border-fd-ring focus:outline-none focus:ring-1 focus:ring-fd-ring',
           )}
         >
           <Sparkles
