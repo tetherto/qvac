@@ -126,6 +126,10 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
           threads: 4,
           t5XxlModelSrc: WAN_T5_SRC,
           vaeModelSrc: WAN_VAE_SRC,
+          diffusion_fa: true,
+          offload_to_cpu: true,
+          vae_on_cpu: true,
+          vae_tiling: true,
         },
       });
 
