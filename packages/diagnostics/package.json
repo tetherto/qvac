@@ -26,15 +26,23 @@
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/diagnostics#readme",
+  "imports": {
+    "os": {
+      "bare": "bare-os",
+      "default": "os"
+    }
+  },
   "exports": {
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
     }
   },
-  "devDependencies": {
+  "dependencies": {
     "bare-os": "^3.4.0",
-    "bare-process": "^4.2.1",
+    "which-runtime": "^1.4.0"
+  },
+  "devDependencies": {
     "brittle": "^3.10.1",
     "standard": "17.1.0",
     "typescript": "^5.9.3"
