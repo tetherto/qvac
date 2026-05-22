@@ -31,6 +31,8 @@ struct SupertonicConfig {
    */
   std::optional<bool> useGpu;
   std::string noiseNpyPath;
+  std::string backendsDir;
+  std::string openclCacheDir;
 };
 
 }

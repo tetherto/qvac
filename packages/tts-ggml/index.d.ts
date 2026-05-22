@@ -33,7 +33,7 @@ declare interface TTSGgmlFiles {
 declare interface TTSGgmlRuntimeConfig {
   /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA) if available.  Chatterbox: defaults true.  Supertonic: rejected at construction time (engine is CPU-only today). */
+  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Supertonic still rejects `useGPU: true` at construction time (engine is CPU-only today). */
   useGPU?: boolean
   /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
   outputSampleRate?: number
@@ -74,6 +74,10 @@ declare interface TTSGgmlOptions {
   speed?: number
   /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */
   noiseNpyPath?: string
+  /** Directory the addon scans for dynamically-loaded ggml backends */
+  backendsDir?: string
+  /** Directory where ggml-opencl persists its compiled program-binary */
+  openclCacheDir?: string
   opts?: object
   exclusiveRun?: boolean
 }

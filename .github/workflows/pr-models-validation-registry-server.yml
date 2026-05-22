@@ -1,6 +1,6 @@
 # PR Validation and Post-Merge Staging Sync
 #
-# On PR: validates models.prod.json and runs tests (with 'verify' label).
+# On PR: validates models.prod.json and runs tests (with 'verified' label).
 # On merge to main: syncs models to staging registry and runs smoke test.
 
 name: PR Validation and Staging Sync (Registry-server)

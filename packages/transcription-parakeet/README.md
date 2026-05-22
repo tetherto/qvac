@@ -214,10 +214,47 @@ Most users interact with the package through `index.js`. From that entrypoint we
 | | `streamingEnergyVad` | CTC/TDT energy-VAD events (default: `false`) |
 | | `streamingLeftContextMs` | ASR encoder left-context window in ms; `-1` keeps parakeet-cpp's default of 10000. ASR sessions only (Sortformer ignores it). |
 | | `streamingRightLookaheadMs` | ASR encoder right-lookahead window in ms; `-1` keeps parakeet-cpp's default of 2000. Adds directly to the per-segment latency floor (`chunk_ms + right_lookahead_ms`). ASR sessions only. |
+| | `streamingSpkCacheEnable` | AOSC: enable v2.1 Sortformer's speaker-cache streaming (default: `true`). Ignored on v1/v2 Sortformer GGUFs and on non-Sortformer models. Set `false` to force a v2.1 GGUF onto the v1 sliding-window path (A/B comparison). |
+| | `streamingSpkCacheLen` | AOSC: long-term speaker-cache rows (~15 s of encoder frames). Default: 188. |
+| | `streamingFifoLen` | AOSC: FIFO warmup buffer rows. Default: 188. |
+| | `streamingChunkLeftContextMs` | AOSC: encoder left-context window (ms; ~1 encoder frame). Default: 80. |
+| | `streamingChunkRightContextMs` | AOSC: encoder right-context window (ms; ~7 encoder frames). Default: 560. |
+| | `streamingSpkCacheUpdatePeriod` | AOSC: FIFO-overflow pop-out count. Default: 144. |
 | | `backendsDir` | Root directory for dynamically-loaded ggml backend `.so` files (Vulkan, OpenCL, per-arch CPU variants on Android). Defaults to the package's `prebuilds/` folder; the native addon appends `<bare-target>/<module-name>` before scanning. Pass an explicit path when prebuilds live elsewhere — e.g. Android `ApplicationInfo.nativeLibraryDir` when backend libs ship inside the APK. No-op on Apple (statically linked). |
 | | `openclCacheDir` | Persistent directory for ggml-opencl's compiled program-binary cache (`$GGML_OPENCL_CACHE_DIR`). Android-only; pass the host app's cache directory (e.g. `Context.getCacheDir()`) to skip cold `clBuildProgram` on every process start. Ignored on other platforms. |
 
 The model type (CTC / TDT / EOU / Sortformer) is **auto-detected from the GGUF metadata**, so callers don't need to pass `modelType`. Other knobs (`captionEnabled`, `timestampsEnabled`, `seed`, `sampleRate`, `channels`) keep sensible defaults.
+
+**Sortformer Streaming Diarization (v2.1 + AOSC).** parakeet-cpp ships
+two streaming-diarization paths picked automatically by the GGUF:
+
+- **v1** uses a fixed-size sliding-history window inside the engine.
+  Once two voices have been seen, the per-chunk decisions are
+  permutation-invariant; if a speaker goes silent long enough to roll
+  out of the window, the slot can drift onto a different physical voice
+  when they return. Fine for short, stable clips; ships as
+  `sortformer-4spk-v1.q8_0.gguf`.
+- **v2.1** replaces the sliding window with AOSC (Audio-Online Speaker
+  Cache, ported from NVIDIA NeMo) which anchors each slot to its
+  accumulated embedding. Same physical speaker comes back to the same
+  `Speaker N` tag across silences. Default for live capture; ships as
+  `diar_streaming_sortformer_4spk-v2.1.q8_0.gguf`. The engine detects
+  v2.1 via the GGUF metadata tag
+  `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"`; you
+  don't need to opt in via config.
+
+The defaults in the `streamingSpkCache*` / `streamingFifo*` /
+`streamingChunk{Left,Right}ContextMs` table rows above are the NeMo-port
+tuning parakeet-cpp ships -- you almost always want to keep them. The
+knobs are exposed for A/B comparison (e.g. `--spk-cache-enable false`
+in `examples/live-mic-diarized-aosc.js` to force a v2.1 GGUF onto the
+v1 path) and for tuning unusual audio (longer cache, larger
+right-context window for higher latency tolerance, etc.).
+
+For offline diarization (single batch over a finite clip) v1 remains
+the recommended GGUF -- AOSC's slot-stability benefit only applies to
+continuous streaming and offers no measurable improvement when the
+entire clip is available at once.
 
 #### Configuration Example
 
@@ -410,10 +447,16 @@ bare examples/diarized-transcribe.js \
 # Live mic transcription
 bare examples/live-mic.js --model models/parakeet-eou-120m-v1.q8_0.gguf --accumulate
 
-# Live mic + speaker tagging
+# Live mic + speaker tagging (recommended: v2.1 diar GGUF, AOSC auto-on)
 bare examples/live-mic-diarized.js \
      --asr-model  models/parakeet-tdt-0.6b-v3.q8_0.gguf \
-     --diar-model models/sortformer-4spk-v1.q8_0.gguf --accumulate
+     --diar-model models/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf --accumulate
+
+# Same as above, with explicit AOSC tuning knobs exposed as CLI flags
+bare examples/live-mic-diarized-aosc.js \
+     --asr-model  models/parakeet-tdt-0.6b-v3.q8_0.gguf \
+     --diar-model models/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf \
+     --spk-cache-len 256 --chunk-right-context-ms 480 --accumulate
 ```
 
 > If you use `npm run example:* -- ...` instead of `bare`, remember the `--` separator -- without it npm interprets `--model` as one of its own config flags.
@@ -427,14 +470,16 @@ The live-mic examples capture the default input device via `sox -d` (install: `b
 | **CTC** | English | argmax CTC | ~ 700 MiB | Fast, no PnC. |
 | **TDT** | ~25 | RNN-T greedy + duration | ~ 715 MiB | Recommended default; PnC + auto-detect. |
 | **EOU** | English | RNN-T greedy + `<EOU>` | ~ 132 MiB | Streaming-trained; native end-of-turn token. |
-| **Sortformer** | n/a | Diarization head | ~ 141 MiB | 4-speaker. |
+| **Sortformer v1** | n/a | Diarization head (sliding history) | ~ 141 MiB | 4-speaker. **Default for offline diarization.** |
+| **Sortformer v2.1 + AOSC** | n/a | Diarization head + speaker cache | ~ 141 MiB | 4-speaker. **Default for streaming diarization.** AOSC anchors speaker slots across silence/re-entry; auto-detected via GGUF metadata tag `parakeet.model_variant`. |
 
 ## Other examples
 
 - [`examples/transcribe.js`](examples/transcribe.js) -- universal single-file transcribe / diarize (any GGUF, all model types).
 - [`examples/diarized-transcribe.js`](examples/diarized-transcribe.js) -- combined Sortformer + ASR pipeline ("who said what").
 - [`examples/live-mic.js`](examples/live-mic.js) -- live microphone transcription via `sox` and the streaming session.
-- [`examples/live-mic-diarized.js`](examples/live-mic-diarized.js) -- live mic with parallel Sortformer + ASR for speaker-tagged transcripts.
+- [`examples/live-mic-diarized.js`](examples/live-mic-diarized.js) -- live mic with parallel Sortformer + ASR for speaker-tagged transcripts. Pass a v2.1 Sortformer GGUF to get AOSC speaker-cache streaming automatically.
+- [`examples/live-mic-diarized-aosc.js`](examples/live-mic-diarized-aosc.js) -- same as above but with CLI flags for the AOSC tuning knobs (`--spk-cache-len`, `--fifo-len`, `--chunk-right-context-ms`, `--spk-cache-enable`, etc.). Useful for A/B comparing AOSC vs the v1 sliding-window code path on the same v2.1 GGUF.
 - [`examples/decode-audio.js`](examples/decode-audio.js) -- decode + transcribe in one step. Same flag surface as `transcribe.js` but pipes the input through `@qvac/decoder-audio` (FFmpeg) first, so any container / codec FFmpeg supports (mp3, m4a, ogg, flac, mp4, ...) works -- not just 16 kHz mono `.wav` / raw s16le PCM.
 - [`examples/utils.js`](examples/utils.js) -- shared helpers used by the examples (`loadWeights` streaming, `Output`/`JobEnded` race resolution).
 
