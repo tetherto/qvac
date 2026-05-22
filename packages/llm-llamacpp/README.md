@@ -437,6 +437,15 @@ These tests help prevent regressions and ensure the library remains stable as co
 Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
 These tests validate the native implementation and help catch issues early in development.
 
+**C++ unit test models** live under `models/unit-test/` (resolved from the test binary via `../../../models/unit-test`). `npm run test:cpp:run` downloads missing files automatically (cross-platform Node script). To prefetch or refresh without running tests:
+
+```bash
+npm run test:cpp:models           # all models (SmolVLM, sharded sets, etc.)
+npm run test:cpp:models:minimal   # Llama 3.2 1B only; skips multimodal/sharded tests
+```
+
+Set `HF_TOKEN` if a Hugging Face repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).
+
 ## Glossary
 
 • **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).
