@@ -17,7 +17,7 @@ if(SD_OPENCL)
 endif()
 
 # Vulkan and Metal are auto-enabled via default-features in the ggml and
-# stable-diffusion-cpp overlay ports.  CUDA requires a specific build machine
+# stable-diffusion-cpp registry ports.  CUDA requires a specific build machine
 # so it remains opt-in via SD_CUDA.
 #
 # GGML_BACKEND_DL is ON only on Android (set in the ggml portfile), mirroring
@@ -44,7 +44,7 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
-# stable-diffusion.cpp – uses the CMake config installed by the overlay port
+# stable-diffusion.cpp – uses the CMake config installed by the registry port
 find_package(stable-diffusion-cpp CONFIG REQUIRED)
 
 # ggml is installed alongside stable-diffusion.cpp as separate static libs.
@@ -71,7 +71,7 @@ if(ANDROID AND GGML_BACKEND_DL)
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
     endif()
-    # qvac ggml overlays prefix backend module filenames (e.g.
+    # qvac ggml ports prefix backend module filenames (e.g.
     # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so). These
     # modules are installed under vcpkg's bin/ directory on Android.
     find_library(_${_backend}_LIB NAMES

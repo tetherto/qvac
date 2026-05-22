@@ -528,9 +528,9 @@ This section documents non-obvious issues encountered integrating FLUX.2 [klein]
 
 **Symptom:** Generation ran entirely on CPU at 700%+ CPU usage; 20 steps at 512 × 512 never completed.
 
-**Root cause:** The vcpkg overlay port passed `-DGGML_METAL=ON` to CMake, which compiled the ggml Metal library (`libggml-metal.a`). However, `qvac-ext-stable-diffusion.cpp` internally guards `ggml_backend_metal_init()` behind its own `SD_USE_METAL` preprocessor define, which is only set when `-DSD_METAL=ON` is passed — a separate flag from `GGML_METAL`.
+**Root cause:** The vcpkg port passed `-DGGML_METAL=ON` to CMake, which compiled the ggml Metal library (`libggml-metal.a`). However, `qvac-ext-stable-diffusion.cpp` internally guards `ggml_backend_metal_init()` behind its own `SD_USE_METAL` preprocessor define, which is only set when `-DSD_METAL=ON` is passed — a separate flag from `GGML_METAL`.
 
-**Fix:** Changed the portfile (`vcpkg/ports/stable-diffusion-cpp/portfile.cmake`) from:
+**Fix:** Changed the `stable-diffusion-cpp` registry port from:
 
 ```cmake
 -DGGML_METAL=${SD_GGML_METAL}

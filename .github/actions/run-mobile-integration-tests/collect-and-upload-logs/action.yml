@@ -178,6 +178,11 @@ runs:
                 cp "$results_json" "$CONSOLE_DIR/${device}_test-results.json"
                 echo "  Extracted: ${device}_test-results.json"
               fi
+              logcat_full=$(find "$tmpdir" -name "logcat_full.txt" -type f 2>/dev/null | head -1)
+              if [ -n "$logcat_full" ]; then
+                cp "$logcat_full" "$CONSOLE_DIR/${device}_logcat_full.txt"
+                echo "  Extracted: ${device}_logcat_full.txt"
+              fi
             fi
             rm -rf "$tmpdir"
           fi
