@@ -772,17 +772,22 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
   // two rows naturally collapse (same numbers) — we still emit both for
   // schema consistency.
   //
-  // iOS pi05 mobile exception: iPhone 16/17 inference is slow enough
-  // that auto + cpu sequentially exceeds the qvac-test-addon-mobile
-  // wdio polling window (~20 min). Android pi05 fits because Pixel 9
-  // Pro / Galaxy S25/S26 have faster CPU and Vulkan; iPhone doesn't.
-  // Restrict iOS to a single backend pass (auto = Metal) to fit the
-  // window. Re-add cpu on iOS once we either (a) get the polling
-  // timeout bumped in qvac-test-addon-mobile or (b) wire
-  // flushBareLog and diagnose where the iOS time actually goes.
-  // Smolvla still runs both backends on iOS (it's small enough to fit).
+  // iOS pi05 mobile exception: the Metal path allocates a full
+  // ~4 GB device buffer in pi05_load_weights_alloc_copy and reads
+  // the GGUF into it. iPhone 16/17 have 8 GB RAM; iOS jetsam kills
+  // foreground apps once they hit ~3–4 GB resident — so the copy
+  // OOMs silently right after sha256-verify (confirmed via
+  // bare_console.log in run 26285927725: log ends mid-load, no
+  // crash report from JS, app process gone). CPU backend keeps the
+  // GGUF mmap'd (lazy paging, low resident memory) and avoids the
+  // device buffer entirely. Bonus: the Android perf-report shows
+  // CPU is ~9× faster than Vulkan on Adreno for pi05 (32s vs 288s),
+  // so CPU on iOS isn't a regression vs Metal either.
+  //
+  // Proper fix is a mmap+host_ptr fast path for Metal (zero-copy via
+  // iOS unified memory) — tracked as Phase-6 follow-up.
   const backends = (_isMobile && _platform === 'ios')
-    ? ['auto']
+    ? ['cpu']
     : ['auto', 'cpu']
   for (const backend of backends) {
     await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
