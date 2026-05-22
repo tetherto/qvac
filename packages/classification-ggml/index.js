@@ -2,7 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
-const process = require('bare-process')
+const env = require('bare-env')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
@@ -12,8 +12,8 @@ const DEFAULT_WEIGHTS_FILENAME = 'mobilenetv3_3class_v3_fp16.gguf'
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 function resolveDefaultModelPath () {
-  if (typeof process !== 'undefined' && process.env && process.env.QVAC_CLASSIFICATION_MODEL_PATH) {
-    return process.env.QVAC_CLASSIFICATION_MODEL_PATH
+  if (env.QVAC_CLASSIFICATION_MODEL_PATH) {
+    return env.QVAC_CLASSIFICATION_MODEL_PATH
   }
   return path.join(__dirname, 'weights', DEFAULT_WEIGHTS_FILENAME)
 }
@@ -74,7 +74,7 @@ class ImageClassifier {
     }
 
     const disableNativeLogger = !this._nativeLogger ||
-      (process.env && process.env.QVAC_CLASSIFICATION_DISABLE_NATIVE_LOGGER === '1')
+      env.QVAC_CLASSIFICATION_DISABLE_NATIVE_LOGGER === '1'
 
     try {
       this._addon = this._createAddon(configurationParams, { disableNativeLogger })
