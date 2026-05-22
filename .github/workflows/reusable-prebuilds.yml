@@ -214,7 +214,7 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@12106231fbfef0bf12b2f4a150cff95f1dad67e4
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
