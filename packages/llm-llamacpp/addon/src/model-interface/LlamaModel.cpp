@@ -323,31 +323,37 @@ void LlamaModel::init(bool acquireLock) {
 
   std::size_t visionCacheBudgetBytes =
       qvac_lib_inference_addon_llama::VisionPrefixCache::kDefaultBudgetBytes;
+  bool visionCacheExplicitlyDisabled = false;
   {
     auto vcIt = configFilemap.find("vision_cache");
     if (vcIt != configFilemap.end()) {
       if (vcIt->second == "0" || vcIt->second == "false") {
-        visionCacheBudgetBytes = 0;
+        visionCacheExplicitlyDisabled = true;
       }
       configFilemap.erase(vcIt);
     }
-    auto budgetIt = configFilemap.find("vision_cache_budget_mb");
-    if (budgetIt != configFilemap.end()) {
-      try {
-        constexpr std::size_t kMaxMB = SIZE_MAX / (1024ULL * 1024ULL);
-        auto val = std::stoul(budgetIt->second);
-        if (val <= kMaxMB) {
-          visionCacheBudgetBytes = val * 1024ULL * 1024ULL;
+    if (!visionCacheExplicitlyDisabled) {
+      auto budgetIt = configFilemap.find("vision_cache_budget_mb");
+      if (budgetIt != configFilemap.end()) {
+        try {
+          constexpr std::size_t kMaxMB = SIZE_MAX / (1024ULL * 1024ULL);
+          auto val = std::stoul(budgetIt->second, nullptr, 10);
+          if (val <= kMaxMB) {
+            visionCacheBudgetBytes = val * 1024ULL * 1024ULL;
+          }
+        } catch (const std::exception&) {
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] invalid vision_cache_budget_mb value: '%s', "
+                  "using default\n",
+                  budgetIt->second.c_str()));
         }
-      } catch (const std::exception&) {
-        QLOG_IF(
-            Priority::WARNING,
-            string_format(
-                "[LlamaModel] invalid vision_cache_budget_mb value: '%s', "
-                "using default\n",
-                budgetIt->second.c_str()));
+        configFilemap.erase(budgetIt);
       }
-      configFilemap.erase(budgetIt);
+    } else {
+      visionCacheBudgetBytes = 0;
+      configFilemap.erase("vision_cache_budget_mb");
     }
   }
 
@@ -692,6 +698,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   int32_t contextSlides = state_->llmContext_->getNSlides();
 
   auto* ctx = state_->llmContext_.get();
+  auto vcStats = ctx->visionCacheStats();
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
@@ -701,12 +708,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       {"promptTokens", promptTokens},
       {"contextSlides", static_cast<int64_t>(contextSlides)},
       {"backendDevice", runtimeBackendDevice_},
-      {"visionCacheHits", static_cast<int64_t>(ctx->visionCacheHits())},
-      {"visionCacheMisses", static_cast<int64_t>(ctx->visionCacheMisses())},
-      {"visionCacheEvictions",
-       static_cast<int64_t>(ctx->visionCacheEvictions())},
-      {"visionCachePeakBytes",
-       static_cast<int64_t>(ctx->visionCachePeakBytes())}};
+      {"visionCacheHits", static_cast<int64_t>(vcStats.hits)},
+      {"visionCacheMisses", static_cast<int64_t>(vcStats.misses)},
+      {"visionCacheEvictions", static_cast<int64_t>(vcStats.evictions)},
+      {"visionCachePeakBytes", static_cast<int64_t>(vcStats.peakBytes)}};
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats

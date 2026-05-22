@@ -9,6 +9,7 @@
 #include "common/chat.h"
 #include "common/sampling.h"
 #include "llama.h"
+#include "utils/VisionPrefixCache.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
@@ -239,11 +240,12 @@ public:
    */
   virtual void resetNSlides() = 0;
 
-  // Vision prefix cache telemetry. Text-only contexts return 0.
-  [[nodiscard]] virtual std::size_t visionCacheHits() const { return 0; }
-  [[nodiscard]] virtual std::size_t visionCacheMisses() const { return 0; }
-  [[nodiscard]] virtual std::size_t visionCacheEvictions() const { return 0; }
-  [[nodiscard]] virtual std::size_t visionCachePeakBytes() const { return 0; }
+  // Vision prefix cache telemetry (single lock acquisition).
+  // Text-only contexts return zeroed stats.
+  [[nodiscard]] virtual qvac_lib_inference_addon_llama::VisionCacheStats
+  visionCacheStats() const {
+    return {};
+  }
 
   // Called by the host layer on iOS/Android low-memory warnings.
   virtual void onMemoryWarning() {}

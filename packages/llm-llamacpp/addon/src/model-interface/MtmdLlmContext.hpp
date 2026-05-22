@@ -135,17 +135,9 @@ public:
   [[nodiscard]] int32_t getNSlides() const override;
   void resetNSlides() override;
 
-  [[nodiscard]] std::size_t visionCacheHits() const override {
-    return visionPrefixCache_.hits();
-  }
-  [[nodiscard]] std::size_t visionCacheMisses() const override {
-    return visionPrefixCache_.misses();
-  }
-  [[nodiscard]] std::size_t visionCacheEvictions() const override {
-    return visionPrefixCache_.evictions();
-  }
-  [[nodiscard]] std::size_t visionCachePeakBytes() const override {
-    return visionPrefixCache_.peakBytes();
+  [[nodiscard]] qvac_lib_inference_addon_llama::VisionCacheStats
+  visionCacheStats() const override {
+    return visionPrefixCache_.stats();
   }
 
   void onMemoryWarning() override { visionPrefixCache_.onMemoryWarning(); }

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <list>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -43,6 +44,14 @@ struct VisionCacheEntry {
   std::size_t sizeBytes() const { return embeddings.size() * sizeof(float); }
 };
 
+struct VisionCacheStats {
+  std::size_t hits = 0;
+  std::size_t misses = 0;
+  std::size_t evictions = 0;
+  std::size_t currentBytes = 0;
+  std::size_t peakBytes = 0;
+};
+
 class VisionPrefixCache {
 public:
   static constexpr std::size_t kDefaultBudgetBytes = 100ULL * 1024 * 1024;
@@ -50,10 +59,9 @@ public:
   explicit VisionPrefixCache(
       std::size_t budgetBytes = kDefaultBudgetBytes);
 
-  // Look up a cached entry. Returns nullptr if the key is absent or empty.
-  // On hit, marks the entry MRU and increments hit-count. The returned pointer
-  // is stable until the next put()/clear()/evict in the same thread.
-  const VisionCacheEntry* get(const std::string& key);
+  // Look up a cached entry. Returns a copy of the entry (thread-safe — the
+  // copy is made under the lock). Returns std::nullopt on miss.
+  std::optional<VisionCacheEntry> get(const std::string& key);
 
   // Insert / overwrite. Evicts least-recently-used entries while total byte
   // usage exceeds budgetBytes. Empty key or zero budget is rejected (no-op +
@@ -73,16 +81,14 @@ public:
   void onMemoryWarning();
 
   std::size_t budgetBytes() const { return budgetBytes_; }
-  std::size_t size() const;
 
-  std::size_t hits() const;
-  std::size_t misses() const;
-  std::size_t evictions() const;
-  std::size_t currentBytes() const;
-  std::size_t peakBytes() const;
+  // Snapshot all counters under a single lock acquisition.
+  VisionCacheStats stats() const;
 
 private:
   void touch(typename std::list<std::string>::iterator it);
+  void clearDataLocked();
+  void clearStatsLocked();
 
   mutable std::mutex mtx_;
   std::size_t budgetBytes_;
@@ -105,10 +111,9 @@ std::string sha256OfBytes(const std::vector<std::uint8_t>& bytes);
 
 std::string sha256OfFile(const std::string& path);
 
-// Build a scope-qualified cache key using length-prefixed encoding to prevent
-// delimiter collisions when paths contain special characters.
-std::string makeVisionCacheKey(
-    const std::string& modelPath, const std::string& mmprojPath,
-    const std::string& imageHash);
+// Build the model+mmproj portion of a cache key using length-prefixed
+// encoding. Append the image hash to produce the full key.
+std::string makeVisionCacheKeyPrefix(
+    const std::string& modelPath, const std::string& mmprojPath);
 
 } // namespace qvac_lib_inference_addon_llama

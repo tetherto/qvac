@@ -29,11 +29,8 @@ MtmdLlmContext::MtmdLlmContext(
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
       model_(llamaInit_->model()), lctx_(llamaInit_->context()),
       visionPrefixCache_(visionCacheBudgetBytes),
-      visionCacheKeyPrefix_(
-          std::to_string(commonParams.model.path.size()) + ":" +
-          commonParams.model.path + "|" +
-          std::to_string(commonParams.mmproj.path.size()) + ":" +
-          commonParams.mmproj.path + "|") {
+      visionCacheKeyPrefix_(makeVisionCacheKeyPrefix(
+          commonParams.model.path, commonParams.mmproj.path)) {
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -302,34 +299,7 @@ bool MtmdLlmContext::evalMessageWithTools(
   size_t nTokens = mtmd_helper_get_n_tokens(chunksPtr);
   const auto nCtx = static_cast<size_t>(llama_n_ctx(lctx_));
 
-  // QVAC-19118 A3: reject early when (prompt + n_predict + safety) won't fit.
-  // The original `nTokens >= nCtx` check only fires when the prompt alone
-  // exceeds context. For Qwen3VL + a 2250x3000 image at ctx=4096, the prompt
-  // is ~4015 vision tokens — fits, but leaves ~80 tokens of headroom for
-  // generation. Decode then aborts mid-generation with
-  //   "init_batch: failed to prepare attention ubatches"
-  // or silently truncates output. Surface a clean ContextOverflow up front.
-  // n_predict == -1 means "until ctx is exhausted"; treat as 0 here so we
-  // don't reject configurations that intentionally fill the window.
-  const size_t nPastCurrent = static_cast<size_t>(nPast_);
-  size_t nPredict =
-      params_.n_predict > 0 ? static_cast<size_t>(params_.n_predict) : 0;
-  if (nPredict > nCtx) nPredict = nCtx;
-  constexpr size_t kSafetyMargin = 16;
-  if (nPastCurrent + nTokens + nPredict + kSafetyMargin > nCtx) {
-    resetMedia();
-    std::string errorMsg = string_format(
-        "[MtmdLlm] context overflow at prefill step: nPast=%zu + prompt=%zu + "
-        "n_predict=%zu + safety=%zu would exceed n_ctx=%zu. Reduce image "
-        "resolution or increase ctx_size.\n",
-        nPastCurrent,
-        nTokens,
-        nPredict,
-        kSafetyMargin,
-        nCtx);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
+  // Try sliding context first — it may free enough space.
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
     auto outcome = trySlidePrefill(
         lctx_,
@@ -373,6 +343,32 @@ bool MtmdLlmContext::evalMessageWithTools(
     }
   }
 
+  // QVAC-19118 A3: after sliding, check whether the post-slide nPast +
+  // prompt + n_predict + safety margin still fits in n_ctx. This catches
+  // the case where the prompt technically fits but leaves no room for
+  // generation (e.g. Qwen3VL + 2250x3000 image at ctx=4096).
+  {
+    const size_t nPastPostSlide = static_cast<size_t>(nPast_);
+    size_t nPredict =
+        params_.n_predict > 0 ? static_cast<size_t>(params_.n_predict) : 0;
+    if (nPredict > nCtx) nPredict = nCtx;
+    constexpr size_t kSafetyMargin = 16;
+    if (nPastPostSlide + nTokens + nPredict + kSafetyMargin > nCtx) {
+      resetMedia();
+      std::string errorMsg = string_format(
+          "[MtmdLlm] context overflow at prefill step: nPast=%zu + "
+          "prompt=%zu + n_predict=%zu + safety=%zu would exceed n_ctx=%zu. "
+          "Reduce image resolution or increase ctx_size.\n",
+          nPastPostSlide,
+          nTokens,
+          nPredict,
+          kSafetyMargin,
+          nCtx);
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+  }
+
   size_t nChunks = mtmd_input_chunks_size(chunksPtr);
   if (nChunks == 0) {
     const char* errorMsg = "[MtmdLlm] Unable to eval prompt\n";
@@ -410,18 +406,16 @@ bool MtmdLlmContext::evalMessageWithTools(
         cacheKey.append(imageHashView);
       }
 
-      const VisionCacheEntry* cached =
-          cacheKey.empty() ? nullptr : visionPrefixCache_.get(cacheKey);
-      if (cached != nullptr) {
-        // Cache hit: copy embeddings to a local buffer before passing to
-        // mtmd_helper_decode_image_chunk. The API takes non-const float*
-        // so we cannot safely pass the cached data directly.
-        std::vector<float> localEmbd(cached->embeddings);
+      auto cached =
+          cacheKey.empty() ? std::nullopt : visionPrefixCache_.get(cacheKey);
+      if (cached) {
+        // Cache hit: get() returned a copy (thread-safe). The API takes
+        // non-const float* so we pass our owned copy directly.
         int32_t res = mtmd_helper_decode_image_chunk(
             ctxVision_.get(),
             lctx_,
             chunk,
-            localEmbd.data(),
+            cached->embeddings.data(),
             nPastLocal,
             0,
             params_.n_batch,
@@ -503,7 +497,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       // captured embeddings. An empty key would short-circuit lookup
       // anyway, but the explicit check keeps stats honest.
       if (!cacheKey.empty() && !entry.embeddings.empty()) {
-        visionPrefixCache_.put(cacheKey, std::move(entry));
+        visionPrefixCache_.put(std::move(cacheKey), std::move(entry));
       }
       continue;
     }

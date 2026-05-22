@@ -13,25 +13,30 @@ namespace qvac_lib_inference_addon_llama {
 VisionPrefixCache::VisionPrefixCache(std::size_t budgetBytes)
     : budgetBytes_(budgetBytes) {}
 
-const VisionCacheEntry* VisionPrefixCache::get(const std::string& key) {
+std::optional<VisionCacheEntry>
+VisionPrefixCache::get(const std::string& key) {
   std::lock_guard<std::mutex> lock(mtx_);
   if (key.empty()) {
     ++misses_;
-    return nullptr;
+    return std::nullopt;
   }
   auto it = entries_.find(key);
   if (it == entries_.end()) {
     ++misses_;
-    return nullptr;
+    return std::nullopt;
   }
   ++hits_;
   touch(it->second.second);
-  return &it->second.first;
+  return it->second.first;
 }
 
 bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
   std::lock_guard<std::mutex> lock(mtx_);
   if (key.empty() || budgetBytes_ == 0) {
+    return false;
+  }
+  const std::size_t entrySize = entry.sizeBytes();
+  if (entrySize > budgetBytes_) {
     return false;
   }
   auto existing = entries_.find(key);
@@ -40,22 +45,8 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
     existing->second.first = std::move(entry);
     currentBytes_ += existing->second.first.sizeBytes();
     touch(existing->second.second);
-    while (currentBytes_ > budgetBytes_ && !order_.empty()) {
-      const std::string& victim = order_.back();
-      auto vIt = entries_.find(victim);
-      if (vIt != entries_.end()) {
-        currentBytes_ -= vIt->second.first.sizeBytes();
-        entries_.erase(vIt);
-      }
-      order_.pop_back();
-      ++evictions_;
-    }
     if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
     return true;
-  }
-  const std::size_t entrySize = entry.sizeBytes();
-  if (entrySize > budgetBytes_) {
-    return false;
   }
   while (currentBytes_ + entrySize > budgetBytes_ && !order_.empty()) {
     const std::string& victim = order_.back();
@@ -75,65 +66,42 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
   return true;
 }
 
-void VisionPrefixCache::clearData() {
-  std::lock_guard<std::mutex> lock(mtx_);
+void VisionPrefixCache::clearDataLocked() {
   order_.clear();
   entries_.clear();
   currentBytes_ = 0;
+}
+
+void VisionPrefixCache::clearStatsLocked() {
+  hits_ = 0;
+  misses_ = 0;
+  evictions_ = 0;
+}
+
+void VisionPrefixCache::clearData() {
+  std::lock_guard<std::mutex> lock(mtx_);
+  clearDataLocked();
 }
 
 void VisionPrefixCache::clearStats() {
   std::lock_guard<std::mutex> lock(mtx_);
-  hits_ = 0;
-  misses_ = 0;
-  evictions_ = 0;
+  clearStatsLocked();
 }
 
 void VisionPrefixCache::clear() {
   std::lock_guard<std::mutex> lock(mtx_);
-  order_.clear();
-  entries_.clear();
-  currentBytes_ = 0;
-  hits_ = 0;
-  misses_ = 0;
-  evictions_ = 0;
+  clearDataLocked();
+  clearStatsLocked();
 }
 
 void VisionPrefixCache::onMemoryWarning() {
   std::lock_guard<std::mutex> lock(mtx_);
-  order_.clear();
-  entries_.clear();
-  currentBytes_ = 0;
+  clearDataLocked();
 }
 
-std::size_t VisionPrefixCache::size() const {
+VisionCacheStats VisionPrefixCache::stats() const {
   std::lock_guard<std::mutex> lock(mtx_);
-  return order_.size();
-}
-
-std::size_t VisionPrefixCache::hits() const {
-  std::lock_guard<std::mutex> lock(mtx_);
-  return hits_;
-}
-
-std::size_t VisionPrefixCache::misses() const {
-  std::lock_guard<std::mutex> lock(mtx_);
-  return misses_;
-}
-
-std::size_t VisionPrefixCache::evictions() const {
-  std::lock_guard<std::mutex> lock(mtx_);
-  return evictions_;
-}
-
-std::size_t VisionPrefixCache::currentBytes() const {
-  std::lock_guard<std::mutex> lock(mtx_);
-  return currentBytes_;
-}
-
-std::size_t VisionPrefixCache::peakBytes() const {
-  std::lock_guard<std::mutex> lock(mtx_);
-  return peakBytes_;
+  return {hits_, misses_, evictions_, currentBytes_, peakBytes_};
 }
 
 void VisionPrefixCache::touch(std::list<std::string>::iterator it) {
@@ -214,27 +182,19 @@ std::string sha256OfFile(const std::string& path) {
   }
 }
 
-std::string makeVisionCacheKey(
-    const std::string& modelPath, const std::string& mmprojPath,
-    const std::string& imageHash) {
-  if (imageHash.empty()) {
-    return {};
-  }
-  // Length-prefixed encoding prevents delimiter collisions when paths contain
-  // special characters. Format: "len:value|len:value|hash"
-  std::string scoped;
-  scoped.reserve(
-      20 + modelPath.size() + mmprojPath.size() + imageHash.size());
-  scoped.append(std::to_string(modelPath.size()));
-  scoped.push_back(':');
-  scoped.append(modelPath);
-  scoped.push_back('|');
-  scoped.append(std::to_string(mmprojPath.size()));
-  scoped.push_back(':');
-  scoped.append(mmprojPath);
-  scoped.push_back('|');
-  scoped.append(imageHash);
-  return scoped;
+std::string makeVisionCacheKeyPrefix(
+    const std::string& modelPath, const std::string& mmprojPath) {
+  std::string prefix;
+  prefix.reserve(20 + modelPath.size() + mmprojPath.size());
+  prefix.append(std::to_string(modelPath.size()));
+  prefix.push_back(':');
+  prefix.append(modelPath);
+  prefix.push_back('|');
+  prefix.append(std::to_string(mmprojPath.size()));
+  prefix.push_back(':');
+  prefix.append(mmprojPath);
+  prefix.push_back('|');
+  return prefix;
 }
 
 } // namespace qvac_lib_inference_addon_llama
