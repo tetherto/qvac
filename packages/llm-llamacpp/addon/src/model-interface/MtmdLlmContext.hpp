@@ -23,7 +23,9 @@ public:
    */
   MtmdLlmContext(
       common_params& commonParams, common_init_result_ptr llamaInit,
-      ToolsCompactController& tools);
+      ToolsCompactController& tools,
+      std::size_t visionCacheBudgetBytes =
+          qvac_lib_inference_addon_llama::VisionPrefixCache::kDefaultBudgetBytes);
 
   /**
    * The destructor.
@@ -133,6 +135,21 @@ public:
   [[nodiscard]] int32_t getNSlides() const override;
   void resetNSlides() override;
 
+  [[nodiscard]] std::size_t visionCacheHits() const override {
+    return visionPrefixCache_.hits();
+  }
+  [[nodiscard]] std::size_t visionCacheMisses() const override {
+    return visionPrefixCache_.misses();
+  }
+  [[nodiscard]] std::size_t visionCacheEvictions() const override {
+    return visionPrefixCache_.evictions();
+  }
+  [[nodiscard]] std::size_t visionCachePeakBytes() const override {
+    return visionPrefixCache_.peakBytes();
+  }
+
+  void onMemoryWarning() { visionPrefixCache_.onMemoryWarning(); }
+
   /**
    * The load media method. It loads the media from memory buffer.
    *
@@ -216,8 +233,8 @@ private:
   mtmd::bitmaps bitmaps_;
   // QVAC-19118 A2: post-projection vision embedding cache. Populated as
   // images are encoded (cache miss) and consulted before encoding on repeat
-  // queries (cache hit). Capacity is intentionally small (5) — entries are
-  // multi-MB and the cache is process-local.
+  // queries (cache hit). Default budget 100 MB, configurable via
+  // vision_cache_budget_mb config key. Set budget to 0 to disable.
   qvac_lib_inference_addon_llama::VisionPrefixCache visionPrefixCache_;
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;

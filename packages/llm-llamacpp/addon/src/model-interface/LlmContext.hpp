@@ -239,6 +239,12 @@ public:
    */
   virtual void resetNSlides() = 0;
 
+  // Vision prefix cache telemetry. Text-only contexts return 0.
+  [[nodiscard]] virtual std::size_t visionCacheHits() const { return 0; }
+  [[nodiscard]] virtual std::size_t visionCacheMisses() const { return 0; }
+  [[nodiscard]] virtual std::size_t visionCacheEvictions() const { return 0; }
+  [[nodiscard]] virtual std::size_t visionCachePeakBytes() const { return 0; }
+
   /**
    * The load media method. It loads the media from memory buffer.
    * Default implementation does nothing (for text-only contexts).

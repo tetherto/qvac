@@ -321,6 +321,30 @@ void LlamaModel::init(bool acquireLock) {
     snap->backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
   }
 
+  std::size_t visionCacheBudgetBytes =
+      qvac_lib_inference_addon_llama::VisionPrefixCache::kDefaultBudgetBytes;
+  bool visionCacheDisabled = false;
+  {
+    auto vcIt = configFilemap.find("vision_cache");
+    if (vcIt != configFilemap.end()) {
+      if (vcIt->second == "0" || vcIt->second == "false") {
+        visionCacheDisabled = true;
+      }
+      configFilemap.erase(vcIt);
+    }
+    auto budgetIt = configFilemap.find("vision_cache_budget_mb");
+    if (budgetIt != configFilemap.end()) {
+      try {
+        auto val = std::stoul(budgetIt->second);
+        visionCacheBudgetBytes = val * 1024ULL * 1024ULL;
+      } catch (...) {}
+      configFilemap.erase(budgetIt);
+    }
+    if (visionCacheDisabled) {
+      visionCacheBudgetBytes = 0;
+    }
+  }
+
   common_params params;
   std::optional<int> adrenoVersion;
   ResolvedToolsCompactConfig toolsCompactConfig;
@@ -356,7 +380,8 @@ void LlamaModel::init(bool acquireLock) {
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      *snap->toolsCompact_);
+      *snap->toolsCompact_,
+      visionCacheBudgetBytes);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -660,15 +685,22 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
 
   int32_t contextSlides = state_->llmContext_->getNSlides();
 
+  auto* ctx = state_->llmContext_.get();
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"ppTPS", promptProcessingTPS},
-      {"CacheTokens", state_->llmContext_->getNPast()},
+      {"CacheTokens", ctx->getNPast()},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
       {"contextSlides", static_cast<int64_t>(contextSlides)},
-      {"backendDevice", runtimeBackendDevice_}};
+      {"backendDevice", runtimeBackendDevice_},
+      {"visionCacheHits", static_cast<int64_t>(ctx->visionCacheHits())},
+      {"visionCacheMisses", static_cast<int64_t>(ctx->visionCacheMisses())},
+      {"visionCacheEvictions",
+       static_cast<int64_t>(ctx->visionCacheEvictions())},
+      {"visionCachePeakBytes",
+       static_cast<int64_t>(ctx->visionCachePeakBytes())}};
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats
@@ -1248,11 +1280,12 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result_ptr llamaInit, ToolsCompactController& tools) {
+    common_init_result_ptr llamaInit, ToolsCompactController& tools,
+    std::size_t visionCacheBudgetBytes) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), tools);
+        params, std::move(llamaInit), tools, visionCacheBudgetBytes);
   }
   return std::make_unique<TextLlmContext>(params, std::move(llamaInit), tools);
 }

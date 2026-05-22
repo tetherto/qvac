@@ -10,8 +10,8 @@
 
 namespace qvac_lib_inference_addon_llama {
 
-VisionPrefixCache::VisionPrefixCache(std::size_t capacity)
-    : capacity_(capacity == 0 ? 1 : capacity) {}
+VisionPrefixCache::VisionPrefixCache(std::size_t budgetBytes)
+    : budgetBytes_(budgetBytes) {}
 
 const VisionCacheEntry* VisionPrefixCache::get(const std::string& key) {
   if (key.empty()) {
@@ -30,29 +30,37 @@ const VisionCacheEntry* VisionPrefixCache::get(const std::string& key) {
 }
 
 bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
-  if (key.empty()) {
+  if (key.empty() || budgetBytes_ == 0) {
     return false;
   }
   auto existing = entries_.find(key);
   if (existing != entries_.end()) {
+    currentBytes_ -= existing->second.first.sizeBytes();
     existing->second.first = std::move(entry);
+    currentBytes_ += existing->second.first.sizeBytes();
     existing->second.first.lastAccess = std::chrono::steady_clock::now();
     touch(existing->second.second);
+    if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
     return true;
   }
-  while (entries_.size() >= capacity_) {
-    if (order_.empty()) {
-      // capacity_ guaranteed > 0 by ctor, so order_ should never be empty
-      // here, but defensively bail out instead of looping.
-      break;
-    }
+  const std::size_t entrySize = entry.sizeBytes();
+  if (entrySize > budgetBytes_) {
+    return false;
+  }
+  while (currentBytes_ + entrySize > budgetBytes_ && !order_.empty()) {
     const std::string& victim = order_.back();
-    entries_.erase(victim);
+    auto vIt = entries_.find(victim);
+    if (vIt != entries_.end()) {
+      currentBytes_ -= vIt->second.first.sizeBytes();
+      entries_.erase(vIt);
+    }
     order_.pop_back();
     ++evictions_;
   }
   order_.push_front(key);
   entry.lastAccess = std::chrono::steady_clock::now();
+  currentBytes_ += entrySize;
+  if (currentBytes_ > peakBytes_) peakBytes_ = currentBytes_;
   entries_.emplace(
       std::move(key), std::make_pair(std::move(entry), order_.begin()));
   return true;
@@ -61,6 +69,7 @@ bool VisionPrefixCache::put(std::string key, VisionCacheEntry entry) {
 void VisionPrefixCache::clear() {
   order_.clear();
   entries_.clear();
+  currentBytes_ = 0;
   hits_ = 0;
   misses_ = 0;
   evictions_ = 0;

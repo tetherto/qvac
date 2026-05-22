@@ -257,7 +257,8 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result_ptr llamaInit, ToolsCompactController& tools);
+      common_init_result_ptr llamaInit, ToolsCompactController& tools,
+      std::size_t visionCacheBudgetBytes);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 

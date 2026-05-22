@@ -52,13 +52,16 @@ struct VisionCacheEntry {
   std::size_t ny = 0;
 
   std::chrono::steady_clock::time_point lastAccess{};
+
+  std::size_t sizeBytes() const { return embeddings.size() * sizeof(float); }
 };
 
 class VisionPrefixCache {
 public:
-  static constexpr std::size_t kDefaultCapacity = 5;
+  static constexpr std::size_t kDefaultBudgetBytes = 100ULL * 1024 * 1024;
 
-  explicit VisionPrefixCache(std::size_t capacity = kDefaultCapacity);
+  explicit VisionPrefixCache(
+      std::size_t budgetBytes = kDefaultBudgetBytes);
 
   // Look up a cached entry. Returns nullptr if the key is absent or empty.
   // On hit, marks the entry MRU (moves to front of LRU list and updates
@@ -66,26 +69,35 @@ public:
   // until the next put()/clear()/evict in the same thread.
   const VisionCacheEntry* get(const std::string& key);
 
-  // Insert / overwrite. If at capacity, evicts the least-recently-used entry
-  // first. Empty key is rejected (no-op + returns false) — callers should
-  // skip the cache when no SHA-256 was computed (e.g. zero-byte image).
+  // Insert / overwrite. Evicts least-recently-used entries while total byte
+  // usage exceeds budgetBytes. Empty key or zero budget is rejected (no-op +
+  // returns false).
   bool put(std::string key, VisionCacheEntry entry);
 
   void clear();
 
-  // Capacity is fixed at construction; expose for tests.
-  std::size_t capacity() const { return capacity_; }
+  // Called by the host layer when the platform fires a low-memory warning
+  // (iOS UIApplicationDidReceiveMemoryWarningNotification, Android
+  // ComponentCallbacks2.onTrimMemory). Drops all cached entries immediately.
+  void onMemoryWarning() { clear(); }
+
+  std::size_t budgetBytes() const { return budgetBytes_; }
   std::size_t size() const { return order_.size(); }
 
-  // Stats (cumulative, reset by clear()).
+  // Stats (cumulative; hits/misses/evictions reset by clear(),
+  // peakBytes persists across clears for session-level reporting).
   std::size_t hits() const { return hits_; }
   std::size_t misses() const { return misses_; }
   std::size_t evictions() const { return evictions_; }
+  std::size_t currentBytes() const { return currentBytes_; }
+  std::size_t peakBytes() const { return peakBytes_; }
 
 private:
   void touch(typename std::list<std::string>::iterator it);
 
-  std::size_t capacity_;
+  std::size_t budgetBytes_;
+  std::size_t currentBytes_ = 0;
+  std::size_t peakBytes_ = 0;
   std::list<std::string> order_; // front = MRU, back = LRU
   std::unordered_map<
       std::string,

@@ -27,9 +27,10 @@ using qvac_lib_inference_addon_llama::VisionCacheEntry;
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
     common_params& commonParams, common_init_result_ptr llamaInit,
-    ToolsCompactController& tools)
+    ToolsCompactController& tools, std::size_t visionCacheBudgetBytes)
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
-      model_(llamaInit_->model()), lctx_(llamaInit_->context()) {
+      model_(llamaInit_->model()), lctx_(llamaInit_->context()),
+      visionPrefixCache_(visionCacheBudgetBytes) {
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
