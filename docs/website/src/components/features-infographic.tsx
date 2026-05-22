@@ -658,9 +658,15 @@ export function FeaturesInfographic({
               }
             }
             /* Note: each sparkle's peak scale comes from --sparkle-scale, set
-               inline per element. Position is handled by the wrapper <g>'s
+               inline per element. Position is handled by the wrapper group
                SVG transform attribute, so this CSS transform only animates
-               size + opacity around the sparkle's own center. */
+               size and opacity around the sparkle's own center.
+               IMPORTANT: never write any HTML or SVG tag name in
+               angle-bracket form inside this comment. React renders the
+               style text literally, but the browser's HTML parser would
+               treat such text as an opening tag start, which produces a
+               hydration mismatch that bails out the entire page on the
+               client. Always spell tag names in plain words. */
             @keyframes qvac-sparkle-twinkle {
               0%   { transform: scale(0);                                  opacity: 0; }
               12%  { transform: scale(var(--sparkle-scale, 1));            opacity: 0.8; }
