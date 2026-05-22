@@ -36,9 +36,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64
           - os: macos-15
             platform: darwin
             arch: arm64
@@ -46,7 +47,7 @@ jobs:
             platform: win32
             arch: x64
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
 
