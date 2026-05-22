@@ -50,7 +50,6 @@ function createLlmModel(
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
 
-  // Mobile is single-GPU; multi-GPU params trigger Adreno OpenCL SIGABRT.
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(llmConfigStrings);
     if (stripped.length > 0) {

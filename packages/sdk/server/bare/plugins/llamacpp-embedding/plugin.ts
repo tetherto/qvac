@@ -78,7 +78,6 @@ function createEmbeddingsModel(
 
   const config = transformEmbedConfig(embedConfig);
 
-  // Mobile is single-GPU; multi-GPU params trigger Adreno OpenCL SIGABRT.
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(config);
     if (stripped.length > 0) {
