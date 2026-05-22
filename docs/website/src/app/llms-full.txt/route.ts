@@ -1,16 +1,26 @@
 import { source } from '@/lib/source';
 import { getLLMText } from '@/lib/get-llm-text';
-import { isArchivedVersionSlug } from '@/lib/docs-open-graph';
+import { isArchivedPage } from '@/lib/docs-open-graph';
 
-// cached forever
+// Resolves the response at build time so the result is written to
+// `out/llms-full.txt` as a static file under `output: 'export'`.
+export const dynamic = 'force-static';
 export const revalidate = false;
 
+/**
+ * Generates `/llms-full.txt` at build time.
+ *
+ * Concatenates the processed Markdown of every non-archived page into a
+ * single dump so AI agents can ingest the full documentation in one fetch.
+ * Per-section archived versions (`/reference/api/v0.7.0`, etc.) are excluded
+ * via `isArchivedPage` so the dump only carries the latest canonical
+ * documentation — consistent with `sitemap.xml`, `llms.txt`, and per-page
+ * `noindex` metadata.
+ */
 export async function GET() {
-  // Non-canonical bundles (dev + vX.Y.Z) are excluded so the full LLM dump
-  // only contains the latest canonical documentation.
   const scan = source
     .getPages()
-    .filter((page) => !isArchivedVersionSlug(page.slugs))
+    .filter((page) => !isArchivedPage(page))
     .map(getLLMText);
   const scanned = await Promise.all(scan);
 
