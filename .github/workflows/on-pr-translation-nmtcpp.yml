@@ -1,7 +1,7 @@
 name: On PR Trigger (NMTCPP)
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -12,6 +12,7 @@ on:
       - release-*
       - feature-*
       - tmp-*
+      - feature/pr-concurrency-*
     paths:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
@@ -25,6 +26,10 @@ permissions:
 
 env:
   PKG_DIR: packages/translation-nmtcpp
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   label-gate:

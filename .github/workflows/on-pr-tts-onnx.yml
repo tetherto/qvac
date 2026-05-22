@@ -1,9 +1,14 @@
 name: On PR Trigger (TTS)
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened, labeled]
-    branches: [main, release-*, feature-*, tmp-*]
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+      - feature/pr-concurrency-*
     paths:
       - "packages/tts-onnx/**"
       - "scripts/perf-report/**"
@@ -66,6 +71,10 @@ permissions:
   checks: read
   actions: read
   id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   label-gate:
