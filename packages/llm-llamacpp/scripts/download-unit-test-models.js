@@ -333,6 +333,16 @@ const SINGLE_FILE_MANIFEST = [
     url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf',
     dest: 'bitnet_b1_58-large-TQ2_0.gguf',
     sha256: '281aafb18a9f4a3124c10a1d8683e2296f0cfe8a2944da0a5667d17488a951bb'
+  },
+  {
+    // Enables CacheManagementQwen3Test.* (tools_compact feature) which require
+    // a Qwen3 model and otherwise GTEST_SKIP. Upstream Qwen/Qwen3-1.7B-GGUF
+    // does not publish a Q4_0 quant; using the unsloth community quant which
+    // is what the original test author appears to have used.
+    scope: 'optional',
+    url: 'https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf',
+    dest: 'Qwen3-1.7B-Q4_0.gguf',
+    sha256: 'c876f159707a4e4f70e045106c69db15bfc935a4981706fd4f65c6e7ea1e81c5'
   }
 ]
 
