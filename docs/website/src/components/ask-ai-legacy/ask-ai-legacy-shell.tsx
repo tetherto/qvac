@@ -67,6 +67,19 @@ export function AskAILegacyShell() {
 
   const isOpen = askAI.modalState !== 'closed';
 
+  // Lazy-mount the Inkeep modal: keep it absent from the React tree
+  // until the user actually opens the assistant for the first time.
+  // Inkeep's internal `ColorModeProvider` renders an inline `<script>`
+  // that triggers React 19's "Encountered a script tag while rendering
+  // React component" warning whenever the tree is rendered on the
+  // client. Mounting only on first open removes the warning from the
+  // initial GET / hydration; once mounted, the widget stays alive so
+  // its conversation state is preserved across close/reopen.
+  const [hasOpenedOnce, setHasOpenedOnce] = useState(false);
+  if (isOpen && !hasOpenedOnce) {
+    setHasOpenedOnce(true);
+  }
+
   const onOpenChange = useCallback(
     (open: boolean) => {
       if (!open) askAI.close();
@@ -146,7 +159,7 @@ export function AskAILegacyShell() {
       // toggled the view in the same session.
       forceDefaultView: true,
       aiChatSettings: {
-        aiAssistantAvatar: '/qvac-favicon.ico',
+        aiAssistantAvatar: '/qvac-favicon.svg',
         exampleQuestions: [
           'What is QVAC?',
           'How do I run an LLM locally?',
@@ -157,7 +170,7 @@ export function AskAILegacyShell() {
     };
   }, [apiKey, syncTarget, isOpen, onOpenChange]);
 
-  if (!config) return null;
+  if (!config || !hasOpenedOnce) return null;
 
   return <InkeepModalSearchAndChat {...config} />;
 }

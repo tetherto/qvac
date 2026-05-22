@@ -24,6 +24,18 @@ export default function CustomDialog(props: SharedProps) {
     setSyncTarget(document.documentElement);
   }, []);
 
+  // Lazy-mount: see comment in `ask-ai-legacy-shell.tsx`. Fumadocs's
+  // `RootProvider` always mounts this `SearchDialog`, which means the
+  // Inkeep tree (and its inline `<script>`) was being added to every
+  // page render. Holding the modal out of the tree until the user
+  // first triggers Cmd/Ctrl+K removes the warning from the initial
+  // GET / hydration; the widget then stays alive across close/reopen
+  // so query history and session state are preserved.
+  const [hasOpenedOnce, setHasOpenedOnce] = useState(false);
+  if (open && !hasOpenedOnce) {
+    setHasOpenedOnce(true);
+  }
+
   const config: InkeepModalSearchAndChatProps = {
     baseSettings: {
       apiKey: process.env.NEXT_PUBLIC_INKEEP_API_KEY!,
@@ -48,7 +60,7 @@ export default function CustomDialog(props: SharedProps) {
     searchSettings: {},
     defaultView: 'search',
     aiChatSettings: {
-      aiAssistantAvatar: '/qvac-favicon.ico',
+      aiAssistantAvatar: '/qvac-favicon.svg',
       exampleQuestions: [
         'What is QVAC?',
         'Why Tether built QVAC?',
@@ -71,6 +83,8 @@ export default function CustomDialog(props: SharedProps) {
       }
     },
   };
+
+  if (!hasOpenedOnce) return null;
 
   return <InkeepModalSearchAndChat {...config} />;
 }
