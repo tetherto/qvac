@@ -1,7 +1,7 @@
 name: On PR Trigger (Stable Diffusion)
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -12,6 +12,7 @@ on:
       - release-*
       - feature-*
       - tmp-*
+      - feature/pr-concurrency-*
     paths:
       - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
@@ -27,6 +28,10 @@ permissions:
 
 env:
   PKG_DIR: packages/diffusion-cpp
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   label-gate:
