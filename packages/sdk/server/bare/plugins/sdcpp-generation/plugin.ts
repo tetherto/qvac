@@ -98,6 +98,14 @@ function getVideoStableDiffusionCtor(): VideoStableDiffusionCtor {
   return diffusionModule.VideoStableDiffusion;
 }
 
+/**
+ * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
+ *
+ * Video mode is supported on React Native, but the SDK-published Wan model
+ * set is too large to load on typical mobile devices. Mobile apps should
+ * pass a `delegate` to `loadModel(...)` to run video generation on a
+ * desktop peer instead of loading the model on-device.
+ */
 export const diffusionPlugin = definePlugin({
   modelType: ModelType.sdcppGeneration,
   displayName: "Image Generation & Upscaling (stable-diffusion.cpp)",
