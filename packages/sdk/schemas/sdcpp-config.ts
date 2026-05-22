@@ -49,7 +49,11 @@ export const sdcppConfigSchema = z
         "upscaler, and exposes diffusion({ ... }). " +
         "`'upscale'` builds a standalone ESRGAN upscaler from the primary model " +
         "file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). " +
-        "`'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }).",
+        "`'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }). " +
+        "On React Native, loading the video model on-device will likely fail " +
+        "because the video diffusion models currently " +
+        "shipped by the SDK are too large to load on typical mobile devices; " +
+        "pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
       ),
     threads: z.number().optional(),
     device: z.enum(["gpu", "cpu"]).optional(),
@@ -436,7 +440,12 @@ export type DiffusionClientParams = DiffusionClientParamsBase &
 export const videoRequestSchema = z.object({
   modelId: z
     .string()
-    .describe("The identifier of the loaded video model to use for generation."),
+    .describe(
+      "The identifier of the loaded video model to use for generation. " +
+        "On React Native, prefer a `modelId` loaded with a `delegate` because " +
+        "the video diffusion models currently shipped by the SDK are too " +
+        "large to load on typical mobile devices.",
+    ),
   requestId: z
     .string()
     .min(1)
