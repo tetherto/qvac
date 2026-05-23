@@ -196,10 +196,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Use vcpkg in user profile on windows
-        if: matrix.os == 'windows-2025'
-        run: echo "VCPKG_INSTALLATION_ROOT=$HOME\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
-
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
