@@ -78,15 +78,19 @@ test("endOfTurnEventSchema: rejects whisper payload missing silenceDurationMs", 
   );
 });
 
-test("endOfTurnEventSchema: rejects payload without a source discriminator", (t: BrittleT) => {
-  // `source` is the discriminator; payloads missing it (i.e. the
-  // pre-discriminated-union wire shape) must not parse — that
-  // catches old senders forwarding the legacy `{ silenceDurationMs }`
-  // object without tagging which engine produced it.
+test("endOfTurnEventSchema: normalizes legacy whisper wire without source", (t: BrittleT) => {
+  // Pre-discriminated-union whisper addons emit `{ silenceDurationMs }`
+  // only; preprocess maps that to the whisper branch.
   const result = endOfTurnEventSchema.safeParse({ silenceDurationMs: 500 });
+  t.ok(result.success, "legacy whisper endOfTurn without source is accepted");
+  t.alike(result.data, { source: "whisper", silenceDurationMs: 500 });
+});
+
+test("endOfTurnEventSchema: rejects legacy shape without numeric silenceDurationMs", (t: BrittleT) => {
+  const result = endOfTurnEventSchema.safeParse({ silenceDurationMs: "500" });
   t.ok(
     !result.success,
-    "endOfTurn without `source` discriminator is rejected",
+    "legacy endOfTurn with non-numeric silenceDurationMs is rejected",
   );
 });
 
