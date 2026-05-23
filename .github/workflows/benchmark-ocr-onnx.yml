@@ -95,7 +95,7 @@ jobs:
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 
@@ -112,7 +112,7 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Cache vcpkg packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: vcpkg-linux-x64-${{ hashFiles('packages/ocr-onnx/**/vcpkg.json', 'packages/ocr-onnx/**/CMakeLists.txt') }}
           path: |
@@ -122,7 +122,7 @@ jobs:
           restore-keys: vcpkg-linux-x64-
 
       - name: Cache ccache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: ccache-linux-x64-${{ github.sha }}
           path: ~/.ccache
@@ -143,7 +143,7 @@ jobs:
           ccache -z
 
       - name: Cache npm dependencies
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: npm-${{ hashFiles('packages/ocr-onnx/package-lock.json') }}
           path: ~/.npm
@@ -167,7 +167,7 @@ jobs:
         run: ccache -s
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: qvac-addon-build
           path: |
@@ -198,7 +198,7 @@ jobs:
 
       - name: Set up Node.js
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 20
 
@@ -230,7 +230,7 @@ jobs:
           sudo apt-get install -y mesa-vulkan-drivers
 
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # 6.1.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -335,7 +335,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: always()
         with:
           name: ocr-benchmark-results
@@ -344,7 +344,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: failure()
         with:
           name: ocr-benchmark-logs
@@ -475,7 +475,7 @@ jobs:
           PYTHON_SCRIPT
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ocr-benchmark-consolidated
           path: results

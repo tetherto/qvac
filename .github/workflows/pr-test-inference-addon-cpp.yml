@@ -186,7 +186,7 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/inference-addon-cpp/vcpkg.json', 'packages/inference-addon-cpp/vcpkg-configuration.json', 'packages/inference-addon-cpp/vcpkg/ports/**') }}
           path: ${{ env.PKG_DIR }}/vcpkg/cache

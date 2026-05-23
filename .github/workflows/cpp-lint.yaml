@@ -76,12 +76,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@bbbbc2bf559deafc8da10641d8d9c7c66e116590
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@bbbbc2bf559deafc8da10641d8d9c7c66e116590
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -95,7 +95,7 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 

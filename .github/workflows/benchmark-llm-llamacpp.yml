@@ -279,7 +279,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 
@@ -297,7 +297,7 @@ jobs:
       - name: Get vcpkg cache
         if: inputs.addon_version == ''
         id: cache-vcpkg
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: linux-x64-${{ hashFiles( format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir) ) }}
           path: ${{ inputs.workdir }}/vcpkg/cache
@@ -305,7 +305,7 @@ jobs:
 
       - name: Setup LLVM
         if: inputs.addon_version == ''
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+        uses: tetherto/qvac/.github/actions/setup-llvm@bbbbc2bf559deafc8da10641d8d9c7c66e116590
 
       - name: Build addon from source
         if: inputs.addon_version == ''
@@ -461,7 +461,7 @@ jobs:
           fi
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: always()
         with:
           name: benchmark-results-${{ github.run_number }}
@@ -471,7 +471,7 @@ jobs:
           retention-days: 90
 
       - name: Upload server logs
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: failure()
         with:
           name: server-logs-${{ github.run_number }}

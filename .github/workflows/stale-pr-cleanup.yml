@@ -10,7 +10,7 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10
+      - uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10
         with:
           stale-pr-message: 'This PR is stale because it has been open 21 days with no activity. It is flagged for removal. Remove stale label or set the PR to Draft or this will be closed in one day.'
           close-pr-message: 'This PR was closed because it has been stalled for 22 days with no activity. You can reopen this PR later if it is still necessary.'
@@ -25,7 +25,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # 9.0.0
         with:
           script: |
             const { processStaleDraftPrs } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/stale-draft-prs.mjs`)

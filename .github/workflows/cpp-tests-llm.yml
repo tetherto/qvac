@@ -74,7 +74,7 @@ jobs:
 
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@bbbbc2bf559deafc8da10641d8d9c7c66e116590
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -100,14 +100,14 @@ jobs:
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 
@@ -181,7 +181,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |

@@ -146,7 +146,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -272,7 +272,7 @@ jobs:
       - name: Restore models cache
         id: models-cache
         if: inputs.cache-models != false
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
@@ -287,7 +287,7 @@ jobs:
       # others get a non-fatal "unable to reserve" warning which is expected.
       - name: Save models cache
         if: steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
@@ -512,7 +512,7 @@ jobs:
 
       - name: Upload consumer logs
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: consumer-log-desktop-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/consumer.log
@@ -520,7 +520,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: results-desktop-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/
@@ -528,7 +528,7 @@ jobs:
 
       - name: Download baseline for this platform (best-effort)
         if: always() && github.event.pull_request.base.ref != ''
-        uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
         continue-on-error: true
         with:
           workflow: test-desktop-sdk.yml
@@ -597,7 +597,7 @@ jobs:
 
       - name: Upload report section
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: report-section-desktop-${{ steps.runid.outputs.platform }}
           path: |
@@ -608,7 +608,7 @@ jobs:
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: baseline-desktop-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/results-*.json
