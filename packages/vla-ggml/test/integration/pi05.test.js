@@ -730,7 +730,39 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
   }
 }
 
-test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 1200000 }, async (t) => {
+// iOS skip rationale: pi05's q_aggressive GGUF is 3.93 GB. iOS jetsam
+// kills foreground apps that exceed the per-process memory limit on
+// 8 GB iPhones (iPhone 16/17), which lands at ~3 GB resident — and
+// inference touches the full weight set so we can't stay under that
+// cap regardless of mmap vs heap, CPU vs Metal. Confirmed in run
+// 26305222976 syslog:
+//
+//   ReportSystemMemory: Process QvacAddonTester [541] killed by
+//   jetsam reason per-process-limit
+//
+// Same pattern qvac uses everywhere else for 4 GB+ models on mobile:
+// `packages/diffusion-cpp/test/integration/generate-image-flux2.test.js`
+// gates its 5 GB FLUX.2 + 2.5 GB Qwen3-4B test with `skip = isMobile`,
+// and no test in `llm-llamacpp` exercises a model over ~1.6 GB on
+// mobile either. We only skip iOS — Android pi05 fits because Pixel 9
+// Pro / Galaxy S25/S26 have 12-16 GB RAM and much higher per-process
+// limits (verified passing on all 3 Android device classes with
+// cos=0.9994–0.9997).
+//
+// Phase-6 follow-up to lift this: ship a smaller iOS-specific quant
+// variant (~1.5 GB target) OR sign the test app with
+// com.apple.developer.kernel.increased-memory-limit, which raises
+// the per-process budget enough to fit q_aggressive on iPhone.
+const _skipIOSPi05 = _isMobile && _platform === 'ios'
+
+test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 1200000, skip: _skipIOSPi05 }, async (t) => {
+  if (_skipIOSPi05) {
+    t.comment(
+      'iOS pi05 skipped — see comment above (iOS per-process-limit jetsam ' +
+      'on 8 GB iPhones; matches diffusion-cpp flux2 isMobile-skip pattern).'
+    )
+    return
+  }
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
@@ -771,25 +803,7 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
   // On runners with no GPU device, `auto` falls through to cpu and the
   // two rows naturally collapse (same numbers) — we still emit both for
   // schema consistency.
-  //
-  // iOS pi05 mobile exception: the Metal path allocates a full
-  // ~4 GB device buffer in pi05_load_weights_alloc_copy and reads
-  // the GGUF into it. iPhone 16/17 have 8 GB RAM; iOS jetsam kills
-  // foreground apps once they hit ~3–4 GB resident — so the copy
-  // OOMs silently right after sha256-verify (confirmed via
-  // bare_console.log in run 26285927725: log ends mid-load, no
-  // crash report from JS, app process gone). CPU backend keeps the
-  // GGUF mmap'd (lazy paging, low resident memory) and avoids the
-  // device buffer entirely. Bonus: the Android perf-report shows
-  // CPU is ~9× faster than Vulkan on Adreno for pi05 (32s vs 288s),
-  // so CPU on iOS isn't a regression vs Metal either.
-  //
-  // Proper fix is a mmap+host_ptr fast path for Metal (zero-copy via
-  // iOS unified memory) — tracked as Phase-6 follow-up.
-  const backends = (_isMobile && _platform === 'ios')
-    ? ['cpu']
-    : ['auto', 'cpu']
-  for (const backend of backends) {
+  for (const backend of ['auto', 'cpu']) {
     await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
   }
 })
@@ -827,7 +841,11 @@ test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
   t.ok(err, 'expected an error for missing GGUF')
 })
 
-test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000 }, async (t) => {
+test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000, skip: _skipIOSPi05 }, async (t) => {
+  if (_skipIOSPi05) {
+    t.comment('iOS pi05 skipped — see jetsam comment above the main test')
+    return
+  }
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
