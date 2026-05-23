@@ -114,5 +114,11 @@ function removeUnusedRuntimeImport (indexPath) {
 
   if (updated !== content) {
     fs.writeFileSync(indexPath, updated)
+  if (updated === content) {
+    throw new Error(
+      `removeUnusedRuntimeImport: expected import line not found in ${indexPath}; hyperdb runtime header may have changed`
+    )
   }
+
+  fs.writeFileSync(indexPath, updated)
 }
