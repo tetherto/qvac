@@ -55,16 +55,6 @@ TEST_F(SdBackendSelectionTest, PreferredGpuBackendCpuDevice) {
   EXPECT_EQ(preferredGpuBackendForConfigDevice("cpu"), SD_BACKEND_PREF_CPU);
 }
 
-TEST_F(SdBackendSelectionTest, PreferredGpuBackendAutoMatchesGpuPolicy) {
-  const auto gpuPref = preferredGpuBackendForConfigDevice("gpu");
-  const auto autoPref = preferredGpuBackendForConfigDevice("auto");
-  EXPECT_EQ(autoPref, gpuPref);
-  EXPECT_TRUE(
-      autoPref == SD_BACKEND_PREF_GPU || autoPref == SD_BACKEND_PREF_OPENCL ||
-      autoPref == SD_BACKEND_PREF_CPU);
-  EXPECT_NE(autoPref, SD_BACKEND_PREF_AUTO);
-}
-
 TEST_F(SdBackendSelectionTest, PreferredGpuBackendGpuDeviceIsGpuOrCpu) {
   const auto pref = preferredGpuBackendForConfigDevice("gpu");
   EXPECT_TRUE(
@@ -87,35 +77,25 @@ TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendGpuConfigIsCpuOrGpu) {
   }
 }
 
-TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendAutoMatchesGpu) {
-  EXPECT_EQ(
-      expectedEsrganBackendDeviceForConfig("auto"),
-      expectedEsrganBackendDeviceForConfig("gpu"));
-  const auto gpuPref = preferredEsrganBackendForConfigDevice("gpu");
-  const auto autoPref = preferredEsrganBackendForConfigDevice("auto");
-  EXPECT_EQ(autoPref, gpuPref);
-  if (gpuPref == SD_BACKEND_PREF_CPU) {
-    EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "cpu");
-  } else {
-    EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "gpu");
-  }
-}
-
 #if defined(__ANDROID__)
 TEST_F(SdBackendSelectionTest, AndroidEsrganGpuConfigForcesCpu) {
   EXPECT_EQ(expectedEsrganBackendDeviceForConfig("gpu"), "cpu");
-  EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "cpu");
   EXPECT_EQ(preferredEsrganBackendForConfigDevice("gpu"), SD_BACKEND_PREF_CPU);
-  EXPECT_EQ(preferredEsrganBackendForConfigDevice("auto"), SD_BACKEND_PREF_CPU);
   EXPECT_EQ(preferredEsrganBackendForConfigDevice("cpu"), SD_BACKEND_PREF_CPU);
 }
 #endif
 
-TEST_F(SdBackendSelectionTest, ParseConfigDeviceEmptyIsAuto) {
-  EXPECT_EQ(parseConfigDeviceString(""), ConfigDevice::Auto);
-  EXPECT_EQ(
-      preferredGpuBackendForConfigDevice(""),
-      preferredGpuBackendForConfigDevice("gpu"));
+TEST_F(SdBackendSelectionTest, AutoDeviceThrows) {
+  EXPECT_THROW(
+      preferredGpuBackendForConfigDevice("auto"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      preferredEsrganBackendForConfigDevice("auto"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      expectedEsrganBackendDeviceForConfig("auto"), qvac_errors::StatusError);
+}
+
+TEST_F(SdBackendSelectionTest, EmptyDeviceThrows) {
+  EXPECT_THROW(preferredGpuBackendForConfigDevice(""), qvac_errors::StatusError);
 }
 
 TEST_F(SdBackendSelectionTest, PreferredGpuBackendInvalidDeviceThrows) {

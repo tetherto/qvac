@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -16,8 +15,7 @@ inline constexpr int DEFAULT_UPSCALER_TILE_SIZE = 128;
 
 struct EsrganUpscalerConfig {
   std::string esrganPath;
-  /** "cpu", "gpu", or "auto" — post-init truth is exposed via
-   * actualBackendDevice(). */
+  /** "cpu" or "gpu" — post-init truth is exposed via actualBackendDevice(). */
   std::string device{"gpu"};
   int nThreads{-1};
   int upscalerThreads{-1};

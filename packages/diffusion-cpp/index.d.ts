@@ -73,8 +73,8 @@ export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylo
 export interface SdConfig {
   /** Number of CPU threads (-1 = auto) */
   threads?: NumericLike
-  /** Preferred compute device: 'gpu' (try GPU backends), 'cpu', or 'auto' (same as gpu today) */
-  device?: 'gpu' | 'cpu' | 'auto'
+  /** Preferred compute device: 'gpu' (default; try GPU backends) or 'cpu' */
+  device?: 'gpu' | 'cpu'
   /** Weight quantization type */
   type?: WeightType
   /** RNG type for reproducible generation */
@@ -171,11 +171,11 @@ export interface EsrganUpscalerConfig {
   /** Number of CPU threads for ESRGAN upscaler (-1 = auto) */
   upscaler_threads?: NumericLike
   /**
-   * Compute device for the standalone upscaler: `cpu`, `gpu` (try GPU, fall
-   * back to CPU if unavailable), or `auto` (same selection as `gpu`).
+   * Compute device for the standalone upscaler: `gpu` by default (try GPU,
+   * fall back to CPU if unavailable) or `cpu`.
    * `EsrganRuntimeStats.backendDevice` reports the device actually used.
    */
-  device?: 'cpu' | 'gpu' | 'auto'
+  device?: 'cpu' | 'gpu'
   /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
   verbosity?: NumericLike
   [key: string]: string | number | boolean | undefined

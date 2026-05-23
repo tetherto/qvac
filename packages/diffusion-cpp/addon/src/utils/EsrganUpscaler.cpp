@@ -25,8 +25,6 @@ sd_upscaler_device_t deviceStringToSd(const std::string& deviceStr) {
     return SD_UPSCALER_DEVICE_CPU;
   case ConfigDevice::Gpu:
     return SD_UPSCALER_DEVICE_GPU;
-  case ConfigDevice::Auto:
-    return SD_UPSCALER_DEVICE_AUTO;
   }
 }
 
