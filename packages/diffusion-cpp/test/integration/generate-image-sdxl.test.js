@@ -55,9 +55,11 @@ safeTest('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip
       config: {
         threads: 4,
         device: useCpu ? 'cpu' : 'gpu',
-        diffusion_fa: true
+        diffusion_fa: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     const images = []

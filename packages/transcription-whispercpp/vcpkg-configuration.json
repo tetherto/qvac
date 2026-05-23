@@ -1,8 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "c85a41c9417ade8f307091ad7fc0f3d31cca477e",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+    "baseline": "a9d7e924de8cb7133c54c5b1d446e4d9c0508ec8",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg"
   },
   "registries": [
     {
@@ -13,7 +13,8 @@
         "gtest",
         "vulkan",
         "vulkan-headers",
-        "vulkan-loader"
+        "vulkan-loader",
+        "spirv-headers"
       ]
     }
   ]

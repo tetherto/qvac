@@ -36,17 +36,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64
           - os: macos-15
             platform: darwin
             arch: arm64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
 
@@ -87,7 +89,9 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@12106231fbfef0bf12b2f4a150cff95f1dad67e4
+        with:
+          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
       - name: Setup Apple Clang
         if: ${{ matrix.platform == 'darwin' }}

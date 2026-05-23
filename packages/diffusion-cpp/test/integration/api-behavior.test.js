@@ -66,9 +66,10 @@ async function setupModel (t) {
       threads: 4,
       prediction: 'v',
       diffusion_fa: true,
-      verbosity: '2'
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   await model.load()
@@ -210,7 +211,8 @@ safeTest('run() before load() throws clear initialization error', { timeout: 600
     config: {
       device: useCpu ? 'cpu' : 'gpu',
       threads: 4,
-      diffusion_fa: true
+      diffusion_fa: true,
+      verbosity: 2
     },
     logger: console,
     opts: { stats: true }

@@ -1,5 +1,6 @@
 'use strict'
 
+const path = require('bare-path')
 const fs = require('bare-fs')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
@@ -7,6 +8,10 @@ const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
 const { QvacErrorAddonWhisper, ERR_CODES } = require('./lib/error')
+
+// Default prebuilds folder for dynamically-loaded ggml backend `.so`
+// files. Consumed by the native addon on Android (no-op elsewhere).
+const PREBUILDS_DIR = path.join(__dirname, 'prebuilds')
 
 const END_OF_INPUT = 'end of job'
 
@@ -157,6 +162,7 @@ class TranscriptionWhispercpp {
     delete whisperConfig.miscConfig
     delete whisperConfig.vadModelPath
     delete whisperConfig.vad_params
+    delete whisperConfig.backendsDir
 
     // VAD model is required for whisper transcription
     const vadModelPath = this._resolveVadModelPath()
@@ -175,7 +181,8 @@ class TranscriptionWhispercpp {
         caption_enabled: false,
         ...(this._config.miscConfig || {})
       },
-      audio_format: this._config.audio_format || this.params.audio_format || 's16le'
+      audio_format: this._config.audio_format || this.params.audio_format || 's16le',
+      backendsDir: this.params.backendsDir || PREBUILDS_DIR
     }
 
     // this entrypoint serves as the model configuration.
@@ -389,6 +396,7 @@ class TranscriptionWhispercpp {
       delete whisperConfig.miscConfig
       delete whisperConfig.vadModelPath
       delete whisperConfig.vad_params
+      delete whisperConfig.backendsDir
 
       // VAD model configuration
       const vadModelPath = this._resolveVadModelPath()
@@ -405,7 +413,8 @@ class TranscriptionWhispercpp {
         miscConfig: newConfig.miscConfig || {
           caption_enabled: false
         },
-        audio_format: newConfig.audio_format || this.params.audio_format || 's16le'
+        audio_format: newConfig.audio_format || this.params.audio_format || 's16le',
+        backendsDir: this.params.backendsDir || PREBUILDS_DIR
       }
 
       _checkParamsExists(configurationParams)
@@ -421,10 +430,13 @@ class TranscriptionWhispercpp {
   }
 
   /**
-   * Instantiate the native addon with the given parameters.
-   * @param {Object} configurationParams - Configuration parameters for the addon
-   * @param {string} configurationParams.path - Local file or directory path
-   * @param {Object} configurationParams.settings - LLM-specific settings
+   * Instantiate the native Whisper addon.
+   * @param {Object} configurationParams - wire-format config consumed by `JSAdapter::loadFromJSObject`
+   * @param {Object} configurationParams.contextParams - `whisper_context_params` (must contain `model`)
+   * @param {Object} configurationParams.whisperConfig - `whisper_full_params` decoder/VAD knobs
+   * @param {Object} [configurationParams.miscConfig] - addon-side knobs (e.g. `caption_enabled`)
+   * @param {string} [configurationParams.audio_format] - PCM input format (`s16le` by default)
+   * @param {string} [configurationParams.backendsDir] - root of the per-arch ggml backend `.so` modules (Android only)
    * @returns {Addon} The instantiated addon interface
    */
   _createAddon (configurationParams) {
