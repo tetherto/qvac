@@ -5,6 +5,8 @@ import {
   transcribeStreamResponseSchema,
   vadStateEventSchema,
   endOfTurnEventSchema,
+  whisperEndOfTurnEventSchema,
+  parakeetEndOfTurnEventSchema,
   type TranscribeStreamEvent,
 } from "@/schemas/transcription";
 
@@ -38,14 +40,69 @@ test("vadStateEventSchema: rejects missing fields", (t: BrittleT) => {
   t.ok(!noSpeaking.success, "vad without speaking is rejected");
 });
 
-test("endOfTurnEventSchema: accepts a well-formed payload", (t: BrittleT) => {
-  const result = endOfTurnEventSchema.safeParse({ silenceDurationMs: 750 });
-  t.ok(result.success, "endOfTurn payload is valid");
+test("endOfTurnEventSchema: accepts a well-formed whisper payload", (t: BrittleT) => {
+  const result = endOfTurnEventSchema.safeParse({
+    source: "whisper",
+    silenceDurationMs: 750,
+  });
+  t.ok(result.success, "whisper endOfTurn payload is valid");
 });
 
-test("endOfTurnEventSchema: rejects missing fields", (t: BrittleT) => {
-  const empty = endOfTurnEventSchema.safeParse({});
-  t.ok(!empty.success, "endOfTurn without silenceDurationMs is rejected");
+test("endOfTurnEventSchema: accepts a well-formed parakeet payload (no silence window)", (t: BrittleT) => {
+  // Parakeet's EOU is token-driven and surfaces the event without a
+  // measured silence window.
+  const result = endOfTurnEventSchema.safeParse({ source: "parakeet" });
+  t.ok(result.success, "parakeet endOfTurn payload is valid");
+});
+
+test("whisperEndOfTurnEventSchema: rejects payload missing silenceDurationMs", (t: BrittleT) => {
+  // Whisper's silence window is the load-bearing field for downstream
+  // consumers (UI captions, end-of-utterance detection, latency
+  // metrics). Making it non-optional on the whisper variant catches
+  // any upstream regression that would silently drop the field.
+  const result = whisperEndOfTurnEventSchema.safeParse({ source: "whisper" });
+  t.ok(
+    !result.success,
+    "whisper endOfTurn without silenceDurationMs is rejected",
+  );
+});
+
+test("endOfTurnEventSchema: rejects whisper payload missing silenceDurationMs", (t: BrittleT) => {
+  // Same invariant exercised through the union — the whisper branch
+  // must reject a missing silence window even when reached via the
+  // discriminator.
+  const result = endOfTurnEventSchema.safeParse({ source: "whisper" });
+  t.ok(
+    !result.success,
+    "discriminated whisper endOfTurn without silenceDurationMs is rejected",
+  );
+});
+
+test("endOfTurnEventSchema: normalizes legacy whisper wire without source", (t: BrittleT) => {
+  // Pre-discriminated-union whisper addons emit `{ silenceDurationMs }`
+  // only; preprocess maps that to the whisper branch.
+  const result = endOfTurnEventSchema.safeParse({ silenceDurationMs: 500 });
+  t.ok(result.success, "legacy whisper endOfTurn without source is accepted");
+  t.alike(result.data, { source: "whisper", silenceDurationMs: 500 });
+});
+
+test("endOfTurnEventSchema: rejects legacy shape without numeric silenceDurationMs", (t: BrittleT) => {
+  const result = endOfTurnEventSchema.safeParse({ silenceDurationMs: "500" });
+  t.ok(
+    !result.success,
+    "legacy endOfTurn with non-numeric silenceDurationMs is rejected",
+  );
+});
+
+test("parakeetEndOfTurnEventSchema: rejects extraneous silenceDurationMs in strict mode", (t: BrittleT) => {
+  const result = parakeetEndOfTurnEventSchema.strict().safeParse({
+    source: "parakeet",
+    silenceDurationMs: 500,
+  });
+  t.ok(
+    !result.success,
+    "parakeet endOfTurn with silenceDurationMs is rejected (whisper-only field)",
+  );
 });
 
 // =============================================================================
@@ -122,13 +179,25 @@ test("transcribeStreamResponseSchema: round-trips a vad frame", (t: BrittleT) =>
   if (parsed.success) t.alike(parsed.data.vad, wire.vad, "vad preserved");
 });
 
-test("transcribeStreamResponseSchema: round-trips an endOfTurn frame", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: round-trips a whisper endOfTurn frame", (t: BrittleT) => {
   const wire = {
     type: "transcribeStream" as const,
-    endOfTurn: { silenceDurationMs: 1200 },
+    endOfTurn: { source: "whisper" as const, silenceDurationMs: 1200 },
   };
   const parsed = transcribeStreamResponseSchema.safeParse(wire);
-  t.ok(parsed.success, "endOfTurn frame is valid");
+  t.ok(parsed.success, "whisper endOfTurn frame is valid");
+  if (parsed.success) {
+    t.alike(parsed.data.endOfTurn, wire.endOfTurn, "endOfTurn preserved");
+  }
+});
+
+test("transcribeStreamResponseSchema: round-trips a parakeet endOfTurn frame", (t: BrittleT) => {
+  const wire = {
+    type: "transcribeStream" as const,
+    endOfTurn: { source: "parakeet" as const },
+  };
+  const parsed = transcribeStreamResponseSchema.safeParse(wire);
+  t.ok(parsed.success, "parakeet endOfTurn frame is valid");
   if (parsed.success) {
     t.alike(parsed.data.endOfTurn, wire.endOfTurn, "endOfTurn preserved");
   }
@@ -159,10 +228,13 @@ test("TranscribeStreamEvent: discriminated union narrows correctly", (t: Brittle
       segment: { text: "s", startMs: 0, endMs: 100, append: false, id: 0 },
     },
     { type: "vad", speaking: true, probability: 0.5 },
-    { type: "endOfTurn", silenceDurationMs: 500 },
+    { type: "endOfTurn", source: "whisper", silenceDurationMs: 500 },
+    { type: "endOfTurn", source: "parakeet" },
   ];
 
   const seen: Record<string, number> = {};
+  let whisperEot = 0;
+  let parakeetEot = 0;
   for (const ev of events) {
     seen[ev.type] = (seen[ev.type] ?? 0) + 1;
     switch (ev.type) {
@@ -177,9 +249,17 @@ test("TranscribeStreamEvent: discriminated union narrows correctly", (t: Brittle
         t.is(typeof ev.probability, "number");
         break;
       case "endOfTurn":
-        t.is(typeof ev.silenceDurationMs, "number");
+        if (ev.source === "whisper") {
+          t.is(typeof ev.silenceDurationMs, "number");
+          whisperEot++;
+        } else {
+          t.is(ev.source, "parakeet");
+          parakeetEot++;
+        }
         break;
     }
   }
   t.is(Object.keys(seen).length, 4, "all four event variants exercised");
+  t.is(whisperEot, 1, "whisper endOfTurn variant covered");
+  t.is(parakeetEot, 1, "parakeet endOfTurn variant covered");
 });
