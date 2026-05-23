@@ -16,6 +16,16 @@ declare interface WhisperConfig {
   language?: string;
   vad_model_path?: string;
   vad_params?: VadParams;
+  /**
+   * Root directory for dynamically-loaded ggml backend `.so` files
+   * (Vulkan, OpenCL, per-arch CPU variants on Android). Defaults to the
+   * package's `prebuilds/` folder; the native addon appends
+   * `<bare-target>/<module-name>` before scanning. Pass an explicit path
+   * when prebuilds live elsewhere — e.g. Android
+   * `ApplicationInfo.nativeLibraryDir` when backend libs ship inside the
+   * APK. No-op on Apple (statically linked).
+   */
+  backendsDir?: string;
   [key: string]: unknown;
 }
 

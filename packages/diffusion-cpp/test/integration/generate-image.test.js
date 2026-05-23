@@ -55,9 +55,14 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
         threads: 4,
         device: useCpu ? 'cpu' : 'gpu',
         prediction: 'v', // SD2.1 uses v-prediction
-        diffusion_fa: true
+        diffusion_fa: true,
+        fa: true,
+        diffusion_conv_direct: true,
+        vae_conv_direct: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     const images = []

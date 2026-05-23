@@ -3,6 +3,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
+const addonLogging = require('../../addonLogging')
 
 const ANDROID_GENERATED_IMAGE_ARTIFACT_DIRS = [
   '/sdcard/Download/qvac-generated-images',
@@ -287,13 +288,40 @@ function detectPlatform () {
   return `${os.platform()}-${os.arch()}`
 }
 
-function setupJsLogger (binding) {
-  const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+function setupJsLogger (binding = addonLogging) {
+  const priorityNames = {
+    0: 'ERROR',
+    1: 'WARNING',
+    2: 'INFO',
+    3: 'DEBUG'
+  }
+
   binding.setLogger((priority, message) => {
-    const label = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
-    console.log(`[C++ ${label}] ${message}`)
+    const priorityName = priorityNames[priority] || `UNKNOWN(${priority})`
+    const timestamp = new Date().toISOString()
+    console.log(`[${timestamp}] [C++ TEST] [${priorityName}]: ${message}`)
   })
   return binding
+}
+
+function releaseJsLogger (binding = addonLogging) {
+  try {
+    binding.releaseLogger()
+  } catch (_) {}
+}
+
+function withIntegrationDefaults (args) {
+  return {
+    ...args,
+    config: {
+      ...(args.config || {}),
+      verbosity: 2
+    },
+    opts: {
+      ...(args.opts || {}),
+      stats: true
+    }
+  }
 }
 
 function isPng (buf) {
@@ -314,11 +342,14 @@ const test = require('brittle')
 
 function safeTest (name, opts, fn) {
   test(name, opts, async (t) => {
+    setupJsLogger()
     try {
       await fn(t)
     } catch (err) {
       console.error(err)
       t.fail(`${name}: ${err.message}`)
+    } finally {
+      releaseJsLogger()
     }
   })
 }
@@ -331,6 +362,8 @@ module.exports = {
   makeOutputCollector,
   detectPlatform,
   setupJsLogger,
+  releaseJsLogger,
+  withIntegrationDefaults,
   isPng,
   safeTest
 }

@@ -219,9 +219,11 @@ function createModel (modelPath, esrganPath) {
       device: useCpu ? 'cpu' : 'gpu',
       threads: 4,
       prediction: 'v',
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 }
 
@@ -231,9 +233,11 @@ function createUpscaler (esrganPath) {
       esrgan: esrganPath
     },
     config: {
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 }
 
@@ -272,9 +276,11 @@ test('ESRGAN post-generation upscale — emits expected PNG dimensions', { timeo
       device: useCpu ? 'cpu' : 'gpu',
       threads: 4,
       prediction: 'v',
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -326,9 +332,11 @@ test('ESRGAN standalone upscale — emits expected PNG dimensions', { timeout: t
       esrgan: esrganPath
     },
     config: {
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -376,9 +384,11 @@ test('ESRGAN standalone upscale — cancel rejects between repeat passes', { tim
       esrgan: esrganPath
     },
     config: {
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -437,9 +447,11 @@ test('ESRGAN post-generation upscale — cancel rejects without emitted image', 
       device: useCpu ? 'cpu' : 'gpu',
       threads: 4,
       prediction: 'v',
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -496,9 +508,11 @@ test('ESRGAN standalone upscaler and diffusion model can coexist', { timeout: te
       device: useCpu ? 'cpu' : 'gpu',
       threads: 4,
       prediction: 'v',
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   const upscaler = new EsrganUpscaler({
@@ -506,9 +520,11 @@ test('ESRGAN standalone upscaler and diffusion model can coexist', { timeout: te
       esrgan: esrganPath
     },
     config: {
-      upscaler_tile_size: 128
+      upscaler_tile_size: 128,
+      verbosity: 2
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
