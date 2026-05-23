@@ -20,7 +20,7 @@
 /reference/release-notes/:version    /reference/release-notes/:version/index.html   200
 
 # ======================================================================
-# SECTION: Legacy hardcoded redirects
+# PERMANENT REDIRECTS DUE TO CONTENT MOVE
 # ----------------------------------------------------------------------
 # Everything above is pattern-based (wildcards / :placeholders).
 # Everything below is a 1:1 path move kept for backward compatibility
