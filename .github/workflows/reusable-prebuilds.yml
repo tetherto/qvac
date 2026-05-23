@@ -168,7 +168,7 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
 
       - name: Setup build host (Linux arm and macOS)
-        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
         with:
           platform: ${{ matrix.platform }}
@@ -176,8 +176,9 @@ jobs:
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
       - name: Setup LLVM (Linux arm and macOS)
-        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
@@ -195,10 +196,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Use vcpkg in user profile on windows
-        if: matrix.os == 'windows-2025'
-        run: echo "VCPKG_INSTALLATION_ROOT=$HOME\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
-
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
@@ -214,7 +211,7 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@12106231fbfef0bf12b2f4a150cff95f1dad67e4
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
