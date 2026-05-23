@@ -7,10 +7,9 @@
  * consumers running under Node / Bun / Expo without VLA prebuilds can still
  * use the SDK to drive a remote VLA worker.
  *
- * Algorithm is identical to the addon's `preprocessImage`: bilinear resize +
- * letterbox-pad to `size × size`, normalize from `[0, 1]` (or `[0, 255]`)
- * to `[-1, 1]`, write a contiguous CHW Float32Array of length
- * `3 * size * size`. The pad region is filled with `-1`.
+ * This file is a verbatim port of the addon's JS implementation; keep them
+ * in sync so the wire-format tensors stay byte-identical regardless of
+ * where preprocessing runs (consumer process vs worker vs addon).
  */
 
 /** Default vision tower image size used by SmolVLA-LIBERO. */
@@ -32,34 +31,24 @@ export interface VlaPreprocessImageOptions {
 }
 
 function detectScale(pixels: PixelsInput): number {
-  // Heuristic: peek at up to N samples; if any value exceeds 1, assume [0,255].
-  const N = Math.min(pixels.length, 256);
-  for (let i = 0; i < N; i++) {
+  if (pixels instanceof Uint8Array) return 1 / 255;
+  // Float/Number arrays: scan a small window to decide whether it's [0,255] or [0,1].
+  const limit = Math.min(pixels.length, 256);
+  let maxVal = 0;
+  for (let i = 0; i < limit; i++) {
     const v = pixels[i] as number;
-    if (v > 1) return 1 / 255;
+    if (v > maxVal) maxVal = v;
   }
-  return 1;
-}
-
-function readPixel(
-  pixels: PixelsInput,
-  x: number,
-  y: number,
-  width: number,
-  layout: ImageLayout,
-  channel: number,
-  hw: number,
-): number {
-  if (layout === "hwc") {
-    return pixels[(y * width + x) * 3 + channel] as number;
-  }
-  // CHW: pixels[channel * hw + y*width + x]
-  return pixels[channel * hw + y * width + x] as number;
+  return maxVal > 1.001 ? 1 / 255 : 1;
 }
 
 /**
  * Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32
  * in `[-1, 1]`. Drop-in equivalent of `@qvac/vla-ggml`'s `preprocessImage`.
+ *
+ * Letterbox places the resized content at the **bottom-right** with padding
+ * at top/left (`padLeft = size - newW`, `padTop = size - newH`), matching
+ * the reference smolvla.cpp behavior.
  */
 export function vlaPreprocessImage(
   pixels: PixelsInput,
@@ -87,67 +76,102 @@ export function vlaPreprocessImage(
     );
   }
 
-  const scaleHint =
-    typeof opts.scale === "number" && (opts.scale === 1 || opts.scale === 1 / 255)
+  const normalize =
+    opts.scale === 1 || opts.scale === 1 / 255
       ? opts.scale
       : detectScale(pixels);
 
-  // Letterbox math: keep aspect ratio, leftover area gets pad value -1.
+  // Letterbox target size (aspect-ratio preserving).
   const ratio = Math.max(width / size, height / size);
-  const targetW = Math.max(1, Math.round(width / ratio));
-  const targetH = Math.max(1, Math.round(height / ratio));
-  const padX = Math.floor((size - targetW) / 2);
-  const padY = Math.floor((size - targetH) / 2);
+  const newW = Math.max(1, Math.floor(width / ratio));
+  const newH = Math.max(1, Math.floor(height / ratio));
+  const padLeft = size - newW;
+  const padTop = size - newH;
+  const xScale = width / newW;
+  const yScale = height / newH;
 
+  // Output starts at -1 so the pad region is already in [-1, 1] and we only
+  // need to overwrite the (newH × newW) inner region with the resized content.
   const out = new Float32Array(3 * size * size);
-  out.fill(-1); // pad region
+  out.fill(-1);
 
-  const hw = width * height;
-  // For each output pixel inside the resized rect, do bilinear sample.
-  for (let oy = 0; oy < targetH; oy++) {
-    const srcY = (oy + 0.5) * (height / targetH) - 0.5;
-    const y0 = Math.max(0, Math.floor(srcY));
+  const planeStride = size * size;
+  const widthHeight = width * height;
+
+  for (let yy = 0; yy < newH; yy++) {
+    const yIn = (yy + 0.5) * yScale - 0.5;
+    const y0 = Math.max(0, Math.floor(yIn));
     const y1 = Math.min(height - 1, y0 + 1);
-    const wy = srcY - y0;
+    const dy = Math.min(1, Math.max(0, yIn - y0));
+    const dyInv = 1 - dy;
+    const outY = yy + padTop;
 
-    for (let ox = 0; ox < targetW; ox++) {
-      const srcX = (ox + 0.5) * (width / targetW) - 0.5;
-      const x0 = Math.max(0, Math.floor(srcX));
+    for (let xx = 0; xx < newW; xx++) {
+      const xIn = (xx + 0.5) * xScale - 0.5;
+      const x0 = Math.max(0, Math.floor(xIn));
       const x1 = Math.min(width - 1, x0 + 1);
-      const wx = srcX - x0;
+      const dx = Math.min(1, Math.max(0, xIn - x0));
+      const dxInv = 1 - dx;
+      const outX = xx + padLeft;
 
-      for (let c = 0; c < 3; c++) {
-        const v00 = readPixel(pixels, x0, y0, width, layout, c, hw);
-        const v01 = readPixel(pixels, x1, y0, width, layout, c, hw);
-        const v10 = readPixel(pixels, x0, y1, width, layout, c, hw);
-        const v11 = readPixel(pixels, x1, y1, width, layout, c, hw);
-        const top = v00 * (1 - wx) + v01 * wx;
-        const bot = v10 * (1 - wx) + v11 * wx;
-        const v = (top * (1 - wy) + bot * wy) * scaleHint;
-        // Map [0, 1] → [-1, 1].
-        out[c * size * size + (oy + padY) * size + (ox + padX)] = v * 2 - 1;
+      const w00 = dxInv * dyInv;
+      const w10 = dx * dyInv;
+      const w01 = dxInv * dy;
+      const w11 = dx * dy;
+
+      const outIdx = outY * size + outX;
+
+      if (layout === "hwc") {
+        const i00 = (y0 * width + x0) * 3;
+        const i10 = (y0 * width + x1) * 3;
+        const i01 = (y1 * width + x0) * 3;
+        const i11 = (y1 * width + x1) * 3;
+        for (let c = 0; c < 3; c++) {
+          const v =
+            (pixels[i00 + c] as number) * w00 +
+            (pixels[i10 + c] as number) * w10 +
+            (pixels[i01 + c] as number) * w01 +
+            (pixels[i11 + c] as number) * w11;
+          // Apply scale and shift into [-1, 1] in one fused multiply-add.
+          out[c * planeStride + outIdx] = v * normalize * 2 - 1;
+        }
+      } else {
+        for (let c = 0; c < 3; c++) {
+          const plane = c * widthHeight;
+          const v =
+            (pixels[plane + y0 * width + x0] as number) * w00 +
+            (pixels[plane + y0 * width + x1] as number) * w10 +
+            (pixels[plane + y1 * width + x0] as number) * w01 +
+            (pixels[plane + y1 * width + x1] as number) * w11;
+          out[c * planeStride + outIdx] = v * normalize * 2 - 1;
+        }
       }
     }
   }
+
   return out;
 }
 
 /**
- * Zero-pad a robot-state vector to the model's `maxStateDim`. Truncates if
- * the input is longer than the target. Mirrors `@qvac/vla-ggml`'s `padState`.
+ * Zero-pad a state vector to `targetDim`. Extra entries are zero-initialised;
+ * input longer than `targetDim` raises. Mirrors how smolvla.cpp expects the
+ * state tensor (`max_state_dim` = 32 by default).
  */
 export function vlaPadState(
   state: ArrayLike<number>,
-  targetDim?: number,
+  targetDim: number = 32,
 ): Float32Array {
-  const dim = targetDim ?? state.length;
-  if (!Number.isInteger(dim) || dim < 0) {
+  if (!Number.isInteger(targetDim) || targetDim <= 0) {
     throw new TypeError(
-      "vlaPadState: targetDim must be a non-negative integer",
+      "vlaPadState: targetDim must be a positive integer",
     );
   }
-  const out = new Float32Array(dim);
-  const n = Math.min(state.length, dim);
-  for (let i = 0; i < n; i++) out[i] = state[i] as number;
+  if (state.length > targetDim) {
+    throw new RangeError(
+      `vlaPadState: input length ${state.length} exceeds targetDim ${targetDim}`,
+    );
+  }
+  const out = new Float32Array(targetDim);
+  for (let i = 0; i < state.length; i++) out[i] = state[i] as number;
   return out;
 }

@@ -344,14 +344,17 @@ test("vlaPreprocessImage: maps mid-gray (0-255) to ~0 in [-1,1]", (t) => {
 });
 
 test("vlaPreprocessImage: pad region filled with -1", (t) => {
-  // 16-wide, 8-tall — letterbox-pad on top/bottom in a square output.
+  // 16-wide, 8-tall — letterbox-pad in a square output. The addon places
+  // content at the bottom-right (`padTop = size - newH`), so the pad rows
+  // sit at the top. For w=16,h=8,size=16 the resized content occupies
+  // rows 8-15 and the top row (row 0) is pad.
   const w = 16;
   const h = 8;
   const pixels = new Uint8Array(w * h * 3).fill(128);
   const out = vlaPreprocessImage(pixels, w, h, { size: 16 });
-  // The bottom row should be in the pad region (-1).
-  const bottom = out[0 * 16 * 16 + 15 * 16 + 0];
-  t.is(bottom, -1);
+  // The top row should be in the pad region (-1).
+  const top = out[0 * 16 * 16 + 0 * 16 + 0];
+  t.is(top, -1);
 });
 
 // ============================================
@@ -369,11 +372,23 @@ test("vlaPadState: pads short vectors with zeros", (t) => {
   t.is(out[5], 0);
 });
 
-test("vlaPadState: truncates long vectors", (t) => {
-  const out = vlaPadState([1, 2, 3, 4, 5], 3);
-  t.is(out.length, 3);
+test("vlaPadState: throws when input exceeds targetDim", (t) => {
+  let err: unknown;
+  try {
+    vlaPadState([1, 2, 3, 4, 5], 3);
+  } catch (e) {
+    err = e;
+  }
+  t.ok(err instanceof RangeError);
+});
+
+test("vlaPadState: defaults targetDim to 32", (t) => {
+  const out = vlaPadState([1, 2, 3]);
+  t.is(out.length, 32);
   t.is(out[0], 1);
   t.is(out[2], 3);
+  t.is(out[3], 0);
+  t.is(out[31], 0);
 });
 
 test("VLA_DEFAULT_IMAGE_SIZE matches SmolVLA-LIBERO", (t) => {
