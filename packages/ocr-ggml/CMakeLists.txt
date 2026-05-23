@@ -52,7 +52,7 @@ endif()
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/BlobsStream.hpp")
 
 find_package(ggml CONFIG REQUIRED)
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 message(STATUS "ocr-ggml: OpenCV ${OpenCV_VERSION} from ${OpenCV_DIR}")
 
 bare_target(bare_target_value)
