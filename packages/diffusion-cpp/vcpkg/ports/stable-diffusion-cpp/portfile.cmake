@@ -9,36 +9,19 @@
 #   share/stable-diffusion-cpp/  (CMake package config)
 #
 # GPU backend selection is handled at runtime via ggml's backend registry.
-# The sd-generic-backend-init patch replaces SD's backend-specific init
-# with ggml_backend_init_by_type() which works with both statically linked
-# and dynamically loaded backends.
+# The downstream fork replaces SD's backend-specific init with
+# ggml_backend_init_by_type() which works with both statically linked and
+# dynamically loaded backends.
 #
-# sd-upscaler-generic-backend.patch applies the same runtime strategy to the
-# ESRGAN upscaler (src/upscaler.cpp), which otherwise stayed on compile-time
-# SD_USE_* macros and fell back to CPU when those macros were undefined.
-#
-# sd-upscaler-device-and-query.patch adds new_upscaler_ctx_with_device,
-# get_upscaler_backend_device, SD_CPU_ONLY CPU init fallback to ggml_backend_cpu_init,
-# and explicit CPU/GPU/AUTO preference wiring for RuntimeStats.
-#
-# sd-upscaler-backend-preference.patch wires sd_backend_preference_t (CPU/GPU/OpenCL)
-# into ESRGAN init, aligned with StableDiffusionGGML::init_backend().
-#
-# Pinned to release tag master-514-5792c66 (2026-03-01).
+# Pinned to 9a0ca29 from tetherto/qvac-ext-stable-diffusion.cpp#6, which
+# includes the ESRGAN backend/device APIs and aligns ESRGAN backend selection
+# with StableDiffusionGGML::init_backend().
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 5792c668798083f9f6d57dac66fbc62ddfdac405
-    SHA512 9bdf945d27ea24d9ea8218a7b875b6d1346711122723453840f4648cd862de3be28e37736ce0ef46ed304cbe810593dfa4264eec969c9e0c8dafb854298280f7
-    HEAD_REF master
-    PATCHES
-        sd-generic-backend-init.patch
-        sd-android-vulkan-diagnostics.patch
-        abort-callback.patch
-        fix-failure-path-cleanup.patch
-        sd-upscaler-generic-backend.patch
-        sd-upscaler-device-and-query.patch
-        sd-upscaler-backend-preference.patch
+    REF 9a0ca29d00fe655ff617ae21dba733ede19d9c0d
+    SHA512 8bc82dd30c1a86ddae158f112aa1e0075ecb2f434c3f0289df967e1ed141525fadd3e30c0ba1a3a04d40826f3e331344cd6ca334f90686b0e534af0f0d94c117
+    HEAD_REF 2026-03-01
 )
 
 set(SD_FLASH_ATTN OFF)

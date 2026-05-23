@@ -43,8 +43,6 @@ thread_local const SdModel* g_abortModel = nullptr;
 
 std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   switch (pref) {
-  case SD_BACKEND_PREF_AUTO:
-    return "auto";
   case SD_BACKEND_PREF_CPU:
     return "cpu";
   case SD_BACKEND_PREF_GPU:

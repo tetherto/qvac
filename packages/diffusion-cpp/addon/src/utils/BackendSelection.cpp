@@ -72,15 +72,12 @@ namespace {
 [[noreturn]] void throwInvalidConfigDevice(const std::string& device) {
   throw StatusError(
       general_error::InvalidArgument,
-      "device must be 'cpu', 'gpu', or 'auto', got: '" + device + "'");
+      "device must be 'cpu' or 'gpu', got: '" + device + "'");
 }
 
 } // namespace
 
 ConfigDevice parseConfigDeviceString(const std::string& device) {
-  if (device.empty() || device == "auto") {
-    return ConfigDevice::Auto;
-  }
   if (device == "cpu") {
     return ConfigDevice::Cpu;
   }
@@ -233,7 +230,6 @@ preferredGpuBackendForConfigDevice(const std::string& device) {
   switch (parseConfigDeviceString(device)) {
   case ConfigDevice::Cpu:
     return SD_BACKEND_PREF_CPU;
-  case ConfigDevice::Auto:
   case ConfigDevice::Gpu:
     return preferredGpuBackendForGpuLikeDevice();
   }
@@ -244,13 +240,12 @@ preferredEsrganBackendForConfigDevice(const std::string& device) {
 #if defined(__ANDROID__)
   switch (parseConfigDeviceString(device)) {
   case ConfigDevice::Cpu:
-  case ConfigDevice::Auto:
+    return SD_BACKEND_PREF_CPU;
   case ConfigDevice::Gpu: {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
     QLOG_IF(
         Priority::INFO,
-        "Backend selection: Android ESRGAN gpu/auto -> CPU (unstable "
-        "GPU/OpenCL "
+        "Backend selection: Android ESRGAN gpu -> CPU (unstable GPU/OpenCL "
         "path)");
     return SD_BACKEND_PREF_CPU;
   }
@@ -264,7 +259,6 @@ std::string expectedEsrganBackendDeviceForConfig(const std::string& device) {
   switch (parseConfigDeviceString(device)) {
   case ConfigDevice::Cpu:
     return "cpu";
-  case ConfigDevice::Auto:
   case ConfigDevice::Gpu:
 #if defined(__ANDROID__)
     return "cpu";
