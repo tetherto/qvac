@@ -89,7 +89,9 @@ test("buildVerifyBundleCommand: quotes the bundle path", (t: BrittleAssert) => {
     hosts: ["ios-arm64"],
   });
   t.ok(
-    cmd.includes('--addons-source "/abs path with spaces/qvac/worker.bundle.js"'),
+    cmd.includes(
+      '--addons-source "/abs path with spaces/qvac/worker.bundle.js"',
+    ),
   );
 });
 
@@ -102,7 +104,7 @@ test("buildVerifyBundleCommand: invokes the verify bundle subcommand", (t: Britt
   t.ok(cmd.includes(" verify bundle "));
 });
 
-test("resolveCliCommand: returns node-invocation when local CLI exists", (t: BrittleAssert) => {
+test("resolveCliCommand: returns node-invocation when local CLI exists at projectRoot", (t: BrittleAssert) => {
   withTempProjectRoot((projectRoot, cliDir, cliEntry) => {
     fs.mkdirSync(cliDir, { recursive: true });
     fs.writeFileSync(cliEntry, "// stub", "utf8");
@@ -111,26 +113,51 @@ test("resolveCliCommand: returns node-invocation when local CLI exists", (t: Bri
   });
 });
 
+test("resolveCliCommand: walks ancestors and finds a hoisted CLI install", (t: BrittleAssert) => {
+  const workspaceRoot = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), "qvac-cli-hoist-")),
+  );
+  const projectRoot = path.join(workspaceRoot, "mobile");
+  try {
+    fs.mkdirSync(projectRoot);
+    const hoistedCliDir = path.join(
+      workspaceRoot,
+      "node_modules",
+      "@qvac",
+      "cli",
+      "dist",
+    );
+    const hoistedCliEntry = path.join(hoistedCliDir, "index.js");
+    fs.mkdirSync(hoistedCliDir, { recursive: true });
+    fs.writeFileSync(hoistedCliEntry, "// stub", "utf8");
+
+    const cmd = resolveCliCommand(projectRoot);
+    t.is(cmd, `node "${hoistedCliEntry}"`);
+  } finally {
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test("resolveCliCommand: warns and falls back to npx when CLI missing", (t: BrittleAssert) => {
   withTempProjectRoot((projectRoot) => {
-    const originalLog = console.log;
-    const logs: string[] = [];
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
     };
     try {
       const cmd = resolveCliCommand(projectRoot);
       t.is(cmd, "npx --package=@qvac/cli qvac");
       t.ok(
-        logs.some((m) => m.includes("@qvac/cli not found")),
+        warnings.some((m) => m.includes("@qvac/cli not found")),
         "warns about missing @qvac/cli",
       );
       t.ok(
-        logs.some((m) => m.includes("falling back to npx")),
+        warnings.some((m) => m.includes("falling back to npx")),
         "warning surfaces the fallback",
       );
     } finally {
-      console.log = originalLog;
+      console.warn = originalWarn;
     }
   });
 });
