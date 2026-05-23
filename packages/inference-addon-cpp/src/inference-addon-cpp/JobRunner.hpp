@@ -15,6 +15,33 @@
 
 namespace qvac_lib_inference_addon_cpp {
 
+/**
+ * @brief Tracks active processing state for synchronization.
+ *
+ * Used to synchronize cancel() with process() - cancel waits for processing
+ * to complete before returning, ensuring job_ is not reset while in use.
+ */
+class ProcessingSync {
+public:
+  void waitInactive() const {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [this] { return !active_; });
+  }
+
+  void setActive(bool active) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      active_ = active;
+    }
+    cv_.notify_all();
+  }
+
+private:
+  bool active_{false};
+  mutable std::mutex mutex_;
+  mutable std::condition_variable cv_;
+};
+
 class JobRunner {
   std::shared_ptr<OutputQueue> outputQueue_;
   model::IModel* const model_;
@@ -25,21 +52,14 @@ class JobRunner {
   mutable std::thread processingThread_;
   mutable std::atomic_bool running_ = false;
   mutable std::atomic_bool ready_ = false;
-  // Coordinates cancel() - finalizeJob(): cancel waits for the active job
-  // to drain. Uses `mtx_` rather than a second mutex so there's only one lifetime
-  // to worry about during AddonCpp teardown; a dual-mutex pattern with
-  // separate `processingSync_.mutex_` raced with destruction on Android
-  // and tripped bionic FORTIFY's "destroyed mutex" guard.
-  bool inProcessing_ = false;
-  mutable std::condition_variable_any cancelCv_;
+  mutable ProcessingSync processingSync_;
 
   void finalizeJob(std::unique_lock<std::timed_mutex>& lock) {
+    processingSync_.setActive(false);
     if (!lock.owns_lock()) {
       lock.lock();
     }
-    inProcessing_ = false;
     job_.reset();
-    cancelCv_.notify_all();
   }
 
   void process() {
@@ -56,17 +76,17 @@ class JobRunner {
           continue;
         }
 
-        // Mark in-processing while still holding `lock` for atomicity vs cancel().
+        // Acquire processing while holding the main `lock` for atomicity.
         ready_ = false;
-        inProcessing_ = true;
+        processingSync_.setActive(true);
 
-        // Unlock main lock so cancel() (and finalizeJob below) can acquire it.
+        // Unlock main lock to ensure cancel() can acquire without blocking
         lock.unlock();
 
         std::any output = model_->process(job_.value());
 
-        // finalizeJob re-acquires `lock`, clears job_/inProcessing_, and
-        // notifies any cancel() waiter.
+        // Make sure to reset job before queue result. Client might
+        // be waiting to queue a new job as soon as current is ended.
         finalizeJob(lock);
 
         outputQueue_->queueResult(std::move(output));
@@ -136,16 +156,16 @@ public:
       QLOG(logger::Priority::WARNING, "Model does not support cancellation");
       return;
     }
-    if (!job_.has_value()) {
-      return;
+    if (job_.has_value()) {
+      if (ready_.load()) {
+        job_.reset();
+        outputQueue_->queueException(std::runtime_error("Job cancelled"));
+      } else {
+        modelCancel_->cancel();
+        lock.unlock();
+        processingSync_.waitInactive();
+      }
     }
-    if (ready_.load()) {
-      job_.reset();
-      outputQueue_->queueException(std::runtime_error("Job cancelled"));
-      return;
-    }
-    modelCancel_->cancel();
-    cancelCv_.wait(lock, [this] { return !inProcessing_; });
   }
 };
 } // namespace qvac_lib_inference_addon_cpp
