@@ -56,7 +56,8 @@ jobs:
       WORKDIR: ${{ inputs.workdir }}
 
     steps:
-      - name: Setup build host
+      - name: Setup build host (github-hosted runners only)
+        if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         with:
           platform: ${{ matrix.platform }}
