@@ -49,6 +49,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate performance report (manual)
         if: ${{ github.event_name == 'workflow_dispatch' }}

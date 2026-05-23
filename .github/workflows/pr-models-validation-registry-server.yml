@@ -152,6 +152,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -178,6 +179,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -241,6 +243,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -282,6 +285,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install server dependencies
         working-directory: ${{ env.PKG_DIR }}

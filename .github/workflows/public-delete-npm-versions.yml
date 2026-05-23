@@ -46,6 +46,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          token: ${{ secrets.GITHUB_TOKEN }}
           registry-url: "https://npm.pkg.github.com/"
           scope: "@tetherto"
 
