@@ -98,10 +98,10 @@ jobs:
           prebuild-artifact-prefix: 'parakeet-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
-      # GGML model provisioning. q4_0 TDT/EOU/Sortformer GGUFs (~520 MB)
-      # get staged into test/mobile/testAssets/ before build-mobile-app
-      # so they end up in the test bundle. CTC is intentionally skipped
-      # (shares FastConformer encoder with TDT; bundle-size pure cost).
+      # GGML model provisioning. q4_0 TDT/EOU/Sortformer/Sortformer-Streaming
+      # v2.1 GGUFs (~570 MB) get staged into test/mobile/testAssets/ before
+      # build-mobile-app so they end up in the test bundle. CTC is intentionally
+      # skipped (shares FastConformer encoder with TDT; bundle-size pure cost).
       # Cache covers .nemo checkpoints + GGUFs + venv together — ~10
       # min cold, ~0s warm.
       - name: Setup Python (.nemo -> .gguf conversion, iOS only)
@@ -119,9 +119,10 @@ jobs:
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-tdt-0.6b-v3.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-eou-120m-v1.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/sortformer-4spk-v1.q4_0.gguf
-          key: parakeet-mobile-q4-tdt-eou-sortformer-v1-${{ hashFiles(format('{0}/scripts/convert-nemo-to-gguf.py', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/convert-nemo.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/download-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/requirements.txt', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet'))) }}
+            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf
+          key: parakeet-mobile-q4-tdt-eou-sortformer-streaming-v1-${{ hashFiles(format('{0}/scripts/convert-nemo-to-gguf.py', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/convert-nemo.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/download-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/requirements.txt', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/provision-mobile-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet'))) }}
           restore-keys: |
-            parakeet-mobile-q4-tdt-eou-sortformer-v1-
+            parakeet-mobile-q4-tdt-eou-sortformer-streaming-v1-
 
       - name: Provision Parakeet GGUFs (cache miss)
         if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
@@ -144,6 +145,7 @@ jobs:
           cp models/parakeet-tdt-0.6b-v3.q4_0.gguf \
              models/parakeet-eou-120m-v1.q4_0.gguf \
              models/sortformer-4spk-v1.q4_0.gguf \
+             models/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf \
              test/mobile/testAssets/
           ls -lh test/mobile/testAssets/
 
