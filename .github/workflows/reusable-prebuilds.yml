@@ -168,7 +168,7 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
 
       - name: Setup build host (Linux arm and macOS)
-        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
         with:
           platform: ${{ matrix.platform }}
@@ -176,8 +176,9 @@ jobs:
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
       - name: Setup LLVM (Linux arm and macOS)
-        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
