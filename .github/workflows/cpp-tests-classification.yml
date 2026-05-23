@@ -56,7 +56,8 @@ jobs:
       WORKDIR: ${{ inputs.workdir }}
 
     steps:
-      - name: Setup build host
+      - name: Setup build host (github-hosted runners only)
+        if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         with:
           platform: ${{ matrix.platform }}
@@ -89,7 +90,9 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@12106231fbfef0bf12b2f4a150cff95f1dad67e4
+        with:
+          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
       - name: Setup Apple Clang
         if: ${{ matrix.platform == 'darwin' }}
