@@ -84,9 +84,11 @@ safeTest('FLUX2-klein fusion (surjective) — face morphing via feature averagin
         threads: 4,
         device: useCpu ? 'cpu' : 'gpu',
         prediction: 'flux2_flow',
-        diffusion_fa: true
+        diffusion_fa: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     const images = []

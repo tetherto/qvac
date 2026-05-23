@@ -79,9 +79,14 @@ safeTest('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800
       config: {
         threads: 4,
         device: useCpu ? 'cpu' : 'gpu',
-        diffusion_fa: true
+        diffusion_fa: true,
+        fa: true,
+        diffusion_conv_direct: true,
+        vae_conv_direct: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     const images = []

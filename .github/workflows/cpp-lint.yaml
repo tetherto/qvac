@@ -62,14 +62,6 @@ jobs:
           echo "  HEAD_REPO=$HEAD_REPO"
           echo "  HEAD_REF=$HEAD_REF"
 
-      # - name: Setup build host
-      #   uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
-      #   with:
-      #     platform: linux
-      #     arch: x64
-
-      # - name: Setup LLVM
-      #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash

@@ -57,9 +57,11 @@ safeTest('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000
         device: useCpu ? 'cpu' : 'gpu',
         diffusion_fa: true,
         prediction: 'flow',
-        flow_shift: '3.0'
+        flow_shift: '3.0',
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     const images = []
