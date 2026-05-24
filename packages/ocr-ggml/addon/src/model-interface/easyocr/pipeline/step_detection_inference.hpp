@@ -94,8 +94,9 @@ public:
   //     `easyocr::ggml::pipeline::defaultPhysicalThreadCount()`.  On x86
   //     with 2-way SMT this picks the physical-core count, which beats
   //     both T=1 and T=logical for our compute-bound GEMM graphs.
-  //   - >0:          call ggml_backend_cpu_set_n_threads(backend, nThreads)
-  //                  with the given value, overriding auto-detection.
+  //   - >0:          apply the given value via the runtime-resolved
+  //                  `ggml_backend_set_n_threads` proc-address, overriding
+  //                  auto-detection.
   //   - <0:          leave the GGML CPU backend's built-in default
   //                  unchanged (escape hatch for thread-scaling
   //                  experiments).
