@@ -73,38 +73,15 @@ jobs:
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
 
-      - if: ${{ matrix.os == 'windows-2025' }}
-        name: Clone and bootstrap vcpkg (Windows)
-        run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
-      - if: ${{ matrix.os == 'macos-14' }}
-        name: Install vcpkg on macOS
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
-          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT="$(pwd)"
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-          # Set deployment target for C++20 std::format support
-          echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install vcpkg on linux
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
-          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT="$(pwd)"
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-2025' }}
-        name: Cleanup vcpkg
+      - name: Cleanup vcpkg
         shell: bash
         run: |
           rm -rf $VCPKG_ROOT/buildtrees/*
@@ -118,18 +95,9 @@ jobs:
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      # mkdir -p is not portable to pwsh; do per-OS
-      - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-2025' }}
-        working-directory: ${{ env.WORKDIR }}
-        run: mkdir -p vcpkg/cache
-
-      - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-2025' }}
-        shell: powershell
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null
+      - name: Create vcpkg cache location (package-local)
+        shell: bash
+        run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
