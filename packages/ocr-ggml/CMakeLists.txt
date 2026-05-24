@@ -7,8 +7,6 @@ endif()
 
 option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
-# Off by default: Adreno 830 ggml-opencl M%4 assertion (mirrors translation-nmtcpp).
-option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -138,14 +136,6 @@ if(GGML_BACKEND_DL)
   target_compile_definitions(${ocr-ggml} PRIVATE GGML_BACKEND_DL)
 endif()
 
-if(USE_OPENCL)
-  target_compile_definitions(
-    ${ocr-ggml}
-    PRIVATE
-      QVAC_OCR_GGML_USE_OPENCL
-  )
-endif()
-
 target_link_libraries(
   ${ocr-ggml}
   PRIVATE
@@ -165,17 +155,6 @@ if(ANDROID)
   target_link_libraries(${ocr-ggml} PRIVATE log)
 endif()
 
-# Android 15+ on Pixel 9 / Pixel 9 Pro / Pixel 9 Pro XL ships with a
-# 16 KB page size kernel (`getconf PAGE_SIZE` -> 16384). The dynamic
-# loader on those devices silently refuses .so files whose LOAD
-# segments are aligned to the older 4 KB max-page-size, which is what
-# NDK r27 still emits by default (NDK r28 flipped the default).
-# Without this flag the addon never registers via bare-kit's linker
-# (Bare's resolver then reports
-# `ADDON_NOT_FOUND: linked:libqvac__ocr-ggml.*.so`) while the same APK
-# loads fine on 4 KB devices like the Samsung S25 Ultra. Mirrors
-# qvac/packages/tts-ggml/CMakeLists.txt; drop the flag
-# once we move to NDK r28+.
 if(ANDROID)
   target_link_options(
     ${ocr-ggml}_module
