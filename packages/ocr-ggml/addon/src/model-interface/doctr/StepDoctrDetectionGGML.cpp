@@ -60,11 +60,18 @@ StepDoctrDetectionGGML::StepDoctrDetectionGGML(
   if (cpuBackend == nullptr) {
     raise("failed to initialise ggml CPU backend");
   }
-  if (nThreads > 0) {
-    ggml_backend_cpu_set_n_threads(cpuBackend, nThreads);
-  } else if (nThreads == 0) {
-    ggml_backend_cpu_set_n_threads(
-        cpuBackend, static_cast<int>(std::thread::hardware_concurrency()));
+  if (nThreads >= 0) {
+    const int effective =
+        (nThreads > 0) ? nThreads
+                       : static_cast<int>(std::thread::hardware_concurrency());
+    ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(cpuDev);
+    auto* fn_set_n_threads =
+        cpuReg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
+                     cpuReg, "ggml_backend_set_n_threads")
+               : nullptr;
+    if (fn_set_n_threads) {
+      fn_set_n_threads(cpuBackend, effective);
+    }
   }
   backends_.push_back(cpuBackend);
 

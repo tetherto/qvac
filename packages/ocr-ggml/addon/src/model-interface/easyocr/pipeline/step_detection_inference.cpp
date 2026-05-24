@@ -180,7 +180,14 @@ StepDetectionInference::StepDetectionInference(
   if (nThreads >= 0) {
     const int effective =
         (nThreads == 0) ? defaultPhysicalThreadCount() : nThreads;
-    ggml_backend_cpu_set_n_threads(backend_, effective);
+    ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(cpuDev);
+    auto* fn_set_n_threads =
+        cpuReg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
+                     cpuReg, "ggml_backend_set_n_threads")
+               : nullptr;
+    if (fn_set_n_threads) {
+      fn_set_n_threads(backend_, effective);
+    }
   }
 
   loader_ = std::make_unique<easyocr::ggml::GgufLoader>(
