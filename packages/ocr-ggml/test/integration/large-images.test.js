@@ -5,7 +5,7 @@ const test = require('brittle')
 const { isMobile, getImagePath, ensureModelPath } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
-const DESKTOP_TIMEOUT = 300 * 1000 // 5 minutes for desktop (CRAFT+CRNN on 1414x2000 is ~3x slower on ARM CPUs than the previous 1372x781 fixture)
+const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
 /**
@@ -17,10 +17,10 @@ test('Large images are resized internally with coordinates in original space', {
   const detectorPath = await ensureModelPath('detector_craft')
   const recognizerPath = await ensureModelPath('recognizer_latin')
 
-  // lab_results.png is 1414x2000 - larger than the 1200px threshold
-  const imagePath = getImagePath('/test/images/lab_results.png')
-  const originalImageWidth = 1414
-  const originalImageHeight = 2000
+  // unrecognizable_text.bmp is 2467x128 - long axis crosses the 1200px threshold
+  const imagePath = getImagePath('/test/images/unrecognizable_text.bmp')
+  const originalImageWidth = 2467
+  const originalImageHeight = 128
 
   t.comment('Testing internal resize with image: ' + imagePath + ' (' + originalImageWidth + 'x' + originalImageHeight + ')')
 
