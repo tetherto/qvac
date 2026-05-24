@@ -212,3 +212,33 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
+  combine-reports:
+    name: Combined Performance Report
+    needs: [build-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repo 
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+            scripts/perf-report
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Combine performance reports
+        uses: ./.github/actions/run-mobile-integration-tests/combine-perf-reports
+        with:
+          artifact-pattern: perf-report-ocr-*
+          report-title: 'OCR-GGML Performance Report (All Platforms)'
