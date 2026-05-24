@@ -17,10 +17,10 @@ test('Large images are resized internally with coordinates in original space', {
   const detectorPath = await ensureModelPath('detector_craft')
   const recognizerPath = await ensureModelPath('recognizer_latin')
 
-  // portuguese.bmp is 1372x781 - larger than the 1200px threshold
-  const imagePath = getImagePath('/test/images/portuguese.bmp')
-  const originalImageWidth = 1372
-  const originalImageHeight = 781
+  // lab_results.png is 1414x2000 - larger than the 1200px threshold
+  const imagePath = getImagePath('/test/images/lab_results.png')
+  const originalImageWidth = 1414
+  const originalImageHeight = 2000
 
   t.comment('Testing internal resize with image: ' + imagePath + ' (' + originalImageWidth + 'x' + originalImageHeight + ')')
 
