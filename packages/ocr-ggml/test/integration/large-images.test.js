@@ -5,7 +5,7 @@ const test = require('brittle')
 const { isMobile, getImagePath, ensureModelPath } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
-const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
+const DESKTOP_TIMEOUT = 300 * 1000 // 5 minutes for desktop (CRAFT+CRNN on 1414x2000 is ~3x slower on ARM CPUs than the previous 1372x781 fixture)
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
 /**
