@@ -254,7 +254,7 @@ jobs:
 
       - name: Setup LLVM
         if: inputs.addon_version == ''
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
 
       - name: Build addon from source (monorepo workdir)
         if: inputs.addon_version == ''

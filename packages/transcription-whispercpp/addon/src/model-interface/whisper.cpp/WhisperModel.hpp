@@ -97,6 +97,7 @@ public:
   void setWeightsForFile(
       const std::string& /*filename*/,
       std::unique_ptr<std::basic_streambuf<char>>&& /*streambuf*/) override {}
+  // NOLINTNEXTLINE(readability-identifier-naming)
   void set_weights_for_file(
       const std::string& /*filename*/,
       const std::span<const uint8_t>& /*contents*/, bool /*completed*/) {}

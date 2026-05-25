@@ -4,6 +4,18 @@ const test = require('brittle')
 const ImgStableDiffusion = require('../../index')
 const { EsrganUpscaler } = require('../../index')
 const { readImageDimensions } = require('../../addon')
+const { setupJsLogger, releaseJsLogger } = require('./utils')
+
+function nativeTest (name, fn) {
+  test(name, async (t) => {
+    setupJsLogger()
+    try {
+      await fn(t)
+    } finally {
+      releaseJsLogger()
+    }
+  })
+}
 
 // ---------- Minimal PNG/JPEG fixtures (valid headers, no real pixel data) ----------
 
@@ -28,14 +40,14 @@ const VALID_JPEG_HEADER = new Uint8Array([
 
 // ---------- readImageDimensions: valid inputs ----------
 
-test('readImageDimensions | valid PNG header returns correct dimensions', async (t) => {
+nativeTest('readImageDimensions | valid PNG header returns correct dimensions', async (t) => {
   const dims = readImageDimensions(VALID_PNG_HEADER)
   t.ok(dims, 'returns non-null for valid PNG')
   t.is(dims.width, 64, 'PNG width = 64')
   t.is(dims.height, 48, 'PNG height = 48')
 })
 
-test('readImageDimensions | valid JPEG header returns correct dimensions', async (t) => {
+nativeTest('readImageDimensions | valid JPEG header returns correct dimensions', async (t) => {
   const dims = readImageDimensions(VALID_JPEG_HEADER)
   t.ok(dims, 'returns non-null for valid JPEG')
   t.is(dims.width, 128, 'JPEG width = 128')
@@ -44,34 +56,34 @@ test('readImageDimensions | valid JPEG header returns correct dimensions', async
 
 // ---------- readImageDimensions: truncated / corrupt inputs ----------
 
-test('readImageDimensions | null / empty buffer returns null', async (t) => {
+nativeTest('readImageDimensions | null / empty buffer returns null', async (t) => {
   t.is(readImageDimensions(null), null, 'null buffer')
   t.is(readImageDimensions(new Uint8Array(0)), null, 'empty buffer')
   t.is(readImageDimensions(new Uint8Array(3)), null, 'buffer shorter than 4 bytes')
 })
 
-test('readImageDimensions | truncated PNG (magic only) returns null', async (t) => {
+nativeTest('readImageDimensions | truncated PNG (magic only) returns null', async (t) => {
   const truncated = VALID_PNG_HEADER.slice(0, 8)
   t.is(readImageDimensions(truncated), null, 'PNG with only magic bytes returns null')
 })
 
-test('readImageDimensions | truncated PNG (23 bytes — one short of IHDR) returns null', async (t) => {
+nativeTest('readImageDimensions | truncated PNG (23 bytes — one short of IHDR) returns null', async (t) => {
   const truncated = VALID_PNG_HEADER.slice(0, 23)
   t.is(readImageDimensions(truncated), null, 'PNG truncated at 23 bytes returns null')
 })
 
-test('readImageDimensions | truncated JPEG (SOI only) returns null', async (t) => {
+nativeTest('readImageDimensions | truncated JPEG (SOI only) returns null', async (t) => {
   const truncated = new Uint8Array([0xFF, 0xD8])
   t.is(readImageDimensions(truncated), null, 'JPEG with only SOI returns null')
 })
 
-test('readImageDimensions | truncated JPEG (SOF marker but missing dimension bytes) returns null', async (t) => {
+nativeTest('readImageDimensions | truncated JPEG (SOF marker but missing dimension bytes) returns null', async (t) => {
   // SOI + SOF0 marker + segment length, but body truncated before height/width
   const truncated = VALID_JPEG_HEADER.slice(0, 7)
   t.is(readImageDimensions(truncated), null, 'JPEG truncated mid-SOF returns null')
 })
 
-test('readImageDimensions | JPEG with zero segment length returns null', async (t) => {
+nativeTest('readImageDimensions | JPEG with zero segment length returns null', async (t) => {
   const badSegLen = new Uint8Array([
     0xFF, 0xD8,
     0xFF, 0xE0,
@@ -80,20 +92,25 @@ test('readImageDimensions | JPEG with zero segment length returns null', async (
   t.is(readImageDimensions(badSegLen), null, 'JPEG with segLen=0 returns null')
 })
 
-test('readImageDimensions | unrecognised format returns null', async (t) => {
+nativeTest('readImageDimensions | unrecognised format returns null', async (t) => {
   const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
   t.is(readImageDimensions(gif), null, 'GIF buffer returns null')
 })
 
 // ---------- LoRA path validation ----------
 
-test('run | throws when lora is an empty string', async (t) => {
+nativeTest('run | throws when lora is an empty string', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -108,13 +125,18 @@ test('run | throws when lora is an empty string', async (t) => {
   }
 })
 
-test('run | throws when lora is not a string', async (t) => {
+nativeTest('run | throws when lora is not a string', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -129,13 +151,18 @@ test('run | throws when lora is not a string', async (t) => {
   }
 })
 
-test('run | throws when lora is a relative path', async (t) => {
+nativeTest('run | throws when lora is a relative path', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -152,13 +179,18 @@ test('run | throws when lora is a relative path', async (t) => {
 
 // ---------- ESRGAN upscale validation ----------
 
-test('run | throws when ESRGAN upscale is requested without files.esrgan', async (t) => {
+nativeTest('run | throws when ESRGAN upscale is requested without files.esrgan', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -172,14 +204,19 @@ test('run | throws when ESRGAN upscale is requested without files.esrgan', async
   }
 })
 
-test('run | forwards ESRGAN upscale params when files.esrgan is provided', async (t) => {
+nativeTest('run | forwards ESRGAN upscale params when files.esrgan is provided', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf',
       esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   const sentinel = new Error('fake addon stop')
@@ -204,25 +241,33 @@ test('run | forwards ESRGAN upscale params when files.esrgan is provided', async
   t.is(captured.mode, 'txt2img', 'txt2img mode is selected')
 })
 
-test('EsrganUpscaler | constructor accepts files.esrgan without files.model', async (t) => {
+nativeTest('EsrganUpscaler | constructor accepts files.esrgan without files.model', async (t) => {
   const upscaler = new EsrganUpscaler({
     files: {
       esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
     },
-    config: { upscaler_tile_size: 128 },
-    logger: console
+    config: {
+      upscaler_tile_size: 128,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   t.ok(upscaler, 'constructs standalone upscaler')
   t.is(upscaler.getState().configLoaded, false, 'does not auto-load')
 })
 
-test('EsrganUpscaler | constructor throws when files.esrgan is missing', async (t) => {
+nativeTest('EsrganUpscaler | constructor throws when files.esrgan is missing', async (t) => {
   try {
     new EsrganUpscaler({ // eslint-disable-line no-new
       files: {},
-      config: { upscaler_tile_size: 128 },
-      logger: console
+      config: {
+        upscaler_tile_size: 128,
+        verbosity: 2
+      },
+      logger: console,
+      opts: { stats: true }
     })
     t.fail('should have thrown')
   } catch (err) {
@@ -234,14 +279,18 @@ test('EsrganUpscaler | constructor throws when files.esrgan is missing', async (
   }
 })
 
-test('EsrganUpscaler | constructor throws when files.esrgan is relative', async (t) => {
+nativeTest('EsrganUpscaler | constructor throws when files.esrgan is relative', async (t) => {
   try {
     new EsrganUpscaler({ // eslint-disable-line no-new
       files: {
         esrgan: 'RealESRGAN_x4plus_anime_6B.pth'
       },
-      config: { upscaler_tile_size: 128 },
-      logger: console
+      config: {
+        upscaler_tile_size: 128,
+        verbosity: 2
+      },
+      logger: console,
+      opts: { stats: true }
     })
     t.fail('should have thrown')
   } catch (err) {
@@ -253,13 +302,17 @@ test('EsrganUpscaler | constructor throws when files.esrgan is relative', async 
   }
 })
 
-test('EsrganUpscaler | upscale rejects non-Uint8Array input', async (t) => {
+nativeTest('EsrganUpscaler | upscale rejects non-Uint8Array input', async (t) => {
   const upscaler = new EsrganUpscaler({
     files: {
       esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
     },
-    config: { upscaler_tile_size: 128 },
-    logger: console
+    config: {
+      upscaler_tile_size: 128,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -274,13 +327,17 @@ test('EsrganUpscaler | upscale rejects non-Uint8Array input', async (t) => {
   }
 })
 
-test('EsrganUpscaler | upscale forwards repeats into addon path', async (t) => {
+nativeTest('EsrganUpscaler | upscale forwards repeats into addon path', async (t) => {
   const upscaler = new EsrganUpscaler({
     files: {
       esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
     },
-    config: { upscaler_tile_size: 128 },
-    logger: console
+    config: {
+      upscaler_tile_size: 128,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   const sentinel = new Error('fake upscaler addon stop')
@@ -306,13 +363,17 @@ test('EsrganUpscaler | upscale forwards repeats into addon path', async (t) => {
   t.is(captured.params.repeats, 2, 'repeats are forwarded')
 })
 
-test('EsrganUpscaler | upscale defaults repeats to 1', async (t) => {
+nativeTest('EsrganUpscaler | upscale defaults repeats to 1', async (t) => {
   const upscaler = new EsrganUpscaler({
     files: {
       esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
     },
-    config: { upscaler_tile_size: 128 },
-    logger: console
+    config: {
+      upscaler_tile_size: 128,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   const sentinel = new Error('fake upscaler addon stop')
@@ -336,13 +397,17 @@ test('EsrganUpscaler | upscale defaults repeats to 1', async (t) => {
   t.is(captured.params.repeats, 1, 'missing repeats defaults to 1')
 })
 
-test('EsrganUpscaler | upscale rejects invalid repeats', async (t) => {
+nativeTest('EsrganUpscaler | upscale rejects invalid repeats', async (t) => {
   const upscaler = new EsrganUpscaler({
     files: {
       esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
     },
-    config: { upscaler_tile_size: 128 },
-    logger: console
+    config: {
+      upscaler_tile_size: 128,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   const invalidRepeats = [0, -1, 1.5, '2', true]
@@ -361,14 +426,19 @@ test('EsrganUpscaler | upscale rejects invalid repeats', async (t) => {
 
 // ---------- FLUX img2img prediction guard ----------
 
-test('FLUX img2img | throws when prediction is omitted', async (t) => {
+nativeTest('FLUX img2img | throws when prediction is omitted', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   const fakeImage = VALID_PNG_HEADER
@@ -388,14 +458,20 @@ test('FLUX img2img | throws when prediction is omitted', async (t) => {
   }
 })
 
-test('FLUX img2img | throws when prediction is "auto"', async (t) => {
+nativeTest('FLUX img2img | throws when prediction is "auto"', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'auto', diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      prediction: 'auto',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   const fakeImage = VALID_PNG_HEADER
@@ -411,14 +487,19 @@ test('FLUX img2img | throws when prediction is "auto"', async (t) => {
   }
 })
 
-test('FLUX img2img | does NOT throw for txt2img even without prediction', async (t) => {
+nativeTest('FLUX img2img | does NOT throw for txt2img even without prediction', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   // txt2img (no init_image) should pass the guard even without prediction.
@@ -435,13 +516,18 @@ test('FLUX img2img | does NOT throw for txt2img even without prediction', async 
   }
 })
 
-test('non-FLUX model | does NOT throw for img2img without prediction', async (t) => {
+nativeTest('non-FLUX model | does NOT throw for img2img without prediction', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   // SD model (no files.llm) should not trigger the FLUX guard.
@@ -458,14 +544,20 @@ test('non-FLUX model | does NOT throw for img2img without prediction', async (t)
 
 // ---------- init_images (multi-reference "fusion") guards ----------
 
-test('init_images | rejects combining init_image + init_images', async (t) => {
+nativeTest('init_images | rejects combining init_image + init_images', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      prediction: 'flux2_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -483,13 +575,18 @@ test('init_images | rejects combining init_image + init_images', async (t) => {
   }
 })
 
-test('init_images | rejects non-FLUX.2 model (no files.llm)', async (t) => {
+nativeTest('init_images | rejects non-FLUX.2 model (no files.llm)', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1, diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -506,14 +603,19 @@ test('init_images | rejects non-FLUX.2 model (no files.llm)', async (t) => {
   }
 })
 
-test('init_images | rejects FLUX.2 model without prediction=flux2_flow', async (t) => {
+nativeTest('init_images | rejects FLUX.2 model without prediction=flux2_flow', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, diffusion_fa: true /* no prediction */ },
-    logger: console
+    config: {
+      threads: 1,
+      diffusion_fa: true /* no prediction */,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -530,14 +632,20 @@ test('init_images | rejects FLUX.2 model without prediction=flux2_flow', async (
   }
 })
 
-test('init_images | rejects non-Uint8Array entries', async (t) => {
+nativeTest('init_images | rejects non-Uint8Array entries', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      prediction: 'flux2_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -554,14 +662,20 @@ test('init_images | rejects non-Uint8Array entries', async (t) => {
   }
 })
 
-test('init_images | rejects empty Uint8Array entry', async (t) => {
+nativeTest('init_images | rejects empty Uint8Array entry', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      prediction: 'flux2_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
@@ -578,7 +692,7 @@ test('init_images | rejects empty Uint8Array entry', async (t) => {
   }
 })
 
-test('init_images | warns when prompt is missing all @imageN placeholders', async (t) => {
+nativeTest('init_images | warns when prompt is missing all @imageN placeholders', async (t) => {
   const warnings = []
   const logger = {
     error: () => {},
@@ -592,8 +706,14 @@ test('init_images | warns when prompt is missing all @imageN placeholders', asyn
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
-    logger
+    config: {
+      threads: 1,
+      prediction: 'flux2_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger,
+    opts: { stats: true }
   })
 
   try {
@@ -612,7 +732,7 @@ test('init_images | warns when prompt is missing all @imageN placeholders', asyn
   )
 })
 
-test('init_images | warns when prompt references only some @imageN', async (t) => {
+nativeTest('init_images | warns when prompt references only some @imageN', async (t) => {
   const warnings = []
   const logger = {
     error: () => {},
@@ -626,8 +746,14 @@ test('init_images | warns when prompt references only some @imageN', async (t) =
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
-    logger
+    config: {
+      threads: 1,
+      prediction: 'flux2_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger,
+    opts: { stats: true }
   })
 
   try {
@@ -645,7 +771,7 @@ test('init_images | warns when prompt references only some @imageN', async (t) =
   )
 })
 
-test('init_images | logs "fusion" mode info message', async (t) => {
+nativeTest('init_images | logs "fusion" mode info message', async (t) => {
   const infos = []
   const logger = {
     error: () => {},
@@ -659,8 +785,14 @@ test('init_images | logs "fusion" mode info message', async (t) => {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
-    logger
+    config: {
+      threads: 1,
+      prediction: 'flux2_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger,
+    opts: { stats: true }
   })
 
   try {
@@ -678,14 +810,20 @@ test('init_images | logs "fusion" mode info message', async (t) => {
   )
 })
 
-test('init_image | still works on FLUX.2 (regression — single-image path unchanged)', async (t) => {
+nativeTest('init_image | still works on FLUX.2 (regression — single-image path unchanged)', async (t) => {
   const model = new ImgStableDiffusion({
     files: {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
-    logger: console
+    config: {
+      threads: 1,
+      prediction: 'flux2_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
   })
 
   // Single-image path must NOT trigger any of the new init_images errors.

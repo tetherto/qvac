@@ -79,7 +79,7 @@ Not all features work identically in both tools:
 
 Agent files copied to Cursor have Claude-specific frontmatter (`model`, `color`, `memory`) stripped and `.claude/` path references replaced with Cursor equivalents.
 
-Existing skills in `.cursor/skills/` (addon-changelog, sdk-changelog, etc.) are not managed by setup — they remain as-is.
+Existing skills in `.cursor/skills/` (`qv-addon-changelog`, `qv-sdk-changelog`, etc.) are not managed by setup — they remain as-is.
 
 ## Full Pipeline (`/orchestrate`)
 
@@ -139,7 +139,7 @@ SDK/TS packages get automatic PR checks via `pr-checks-sdk-pod`. All other packa
 | `/release <package>` | Release a package to NPM |
 | `/ci-validate <package>` | Trigger and monitor CI for a package |
 
-Existing skills in `.cursor/` (addon-changelog, sdk-changelog, etc.) continue to work as before.
+Existing skills in `.cursor/` (`qv-addon-changelog`, `qv-sdk-changelog`, etc.) continue to work as before.
 
 ## Parallel Execution
 

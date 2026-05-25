@@ -42,7 +42,7 @@
   shape of `addon.test.js` (exports surface, validator error paths,
   img-shape mismatch, end-to-end inference parity).
 
-## 0.1.0
+## [0.1.0]
 
 - Initial release of `@qvac/vla-ggml`. Ports the SmolVLA vision-language-action
   model to ggml with Vulkan / Metal / OpenCL / CPU backends. Bundles the

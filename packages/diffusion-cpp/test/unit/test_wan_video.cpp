@@ -442,8 +442,8 @@ protected:
     // Opt-in: a full Wan 2.1 T2V generation takes ~55s on M3 Ultra Metal and
     // requires several GB of model weights, so we keep the smoke test behind
     // an explicit env var. Metal IM2COL_3D / PAD-left ops are provided by the
-    // tetherto/qvac-ext-ggml fork pinned in vcpkg/ports/ggml/ -- see
-    // vcpkg/ports/ggml/portfile.cmake for details. CPU and Vulkan also work.
+    // tetherto/qvac-ext-ggml fork pinned via the qvac vcpkg registry. CPU and
+    // Vulkan also work.
     if (!std::getenv("SD_RUN_WAN_SMOKE"))
       return;
 

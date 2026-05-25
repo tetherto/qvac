@@ -131,40 +131,15 @@ jobs:
         shell: bash
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2025' }}
-        name: Set Vulkan SDK Path on Windows
-        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@6e8d3c306a462a58589396cda428d65e015f0d8b
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install vcpkg on macOS
-        shell: bash
-        run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
-          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-          echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Clone and bootstrap vcpkg (Linux)
-        shell: bash
-        run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
-          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT="$(pwd)"
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ matrix.os == 'windows-2025' }}
-        name: Clone and bootstrap vcpkg (Windows)
-        run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-2025' }}
-        name: Cleanup vcpkg
+      - name: Cleanup vcpkg
         shell: bash
         run: |
           rm -rf $VCPKG_ROOT/buildtrees/*

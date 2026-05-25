@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.1] - 2026-05-25
+
+### Fixed
+
+#### Correct `SdVideoFrames` construction after `generate_video`
+
+`processVideo()` previously constructed `SdVideoFrames` in the same expression as the `generate_video()` call, passing `numFramesOut` before the library had written the out-parameter. Because C++ does not define evaluation order across function arguments, the RAII wrapper could capture a stale frame count (typically zero), leading to incorrect cleanup or empty output even when frames were produced. The call is now split: `generate_video()` runs first, then `SdVideoFrames` is built from the returned pointer and the updated `numFramesOut` value.
+
+## [0.9.0] - 2026-05-21
+
+### Changed
+
+- Consume merged registry ports for `ggml@2026-01-30#8` and `stable-diffusion-cpp@2026-03-01#4`, which include the merged Flux RoPE, Q/K/V unpacking, and direct Metal conv2d optimizations.
+- Removed the package-local `ggml` and `stable-diffusion-cpp` vcpkg overlay ports now that both pins are available from `tetherto/qvac-registry-vcpkg`.
+
 ## [0.8.0] - 2026-05-16
 
 ### Added
@@ -90,7 +105,7 @@ All `scripts/download-model-*.sh` helpers now share a single retry/resume utilit
 
 - Examples (`generate-image*.js`, `img2img-flux2*.js`, `quickstart.js`, `load-model.js`, `runtime-stats-sd2.js`, `lora-bridge.test.js`, `model-loading.test.js`) now pass absolute model paths and enable `diffusion_fa: true` where appropriate, matching the 0.3.0-era constructor contract.
 - Native C++ headers migrated from `qvac-lib-inference-addon-cpp/` to `inference-addon-cpp/` to match the monorepo simplification landed in #1860; cmake config artifact renamed in the same drop.
-- Dropped the in-tree ggml vcpkg overlay now that `tetherto/qvac-ext-ggml@2026-01-30#7` is served from the merged registry — builds pick it up via `vcpkg-configuration.json` instead.
+- Dropped the in-tree ggml vcpkg overlay now that `tetherto/qvac-ext-ggml@2026-01-30#7` is served from the merged registry — builds pick it up via `vcpkg-configuration.json` instead. The follow-up `0.8.1` release removes the remaining temporary diffusion overlays after the Flux optimization ports were merged.
 - `NOTICE` regenerated to cover the new third-party surface introduced by the video pipeline.
 - C++ image-codec call sites aligned with the shared `inference-addon-cpp` codec helpers.
 

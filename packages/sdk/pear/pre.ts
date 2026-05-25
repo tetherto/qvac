@@ -58,6 +58,7 @@ const BUILTIN_PLUGINS = [
   "@qvac/sdk/onnx-tts/plugin",
   "@qvac/sdk/onnx-ocr/plugin",
   "@qvac/sdk/sdcpp-generation/plugin",
+  "@qvac/sdk/ggml-vla/plugin",
 ];
 
 const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
@@ -68,6 +69,7 @@ const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   "onnx-tts": "ttsPlugin",
   "onnx-ocr": "ocrPlugin",
   "sdcpp-generation": "diffusionPlugin",
+  "ggml-vla": "vlaPlugin",
 };
 
 const SDK_NAME = "@qvac/sdk";

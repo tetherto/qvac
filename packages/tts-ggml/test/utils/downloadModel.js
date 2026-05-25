@@ -230,6 +230,137 @@ async function ensureFileDownloaded (url, filepath) {
   return { success: false, path: filepath, isReal: false }
 }
 
+// QVAC model registry fetch.  Used as a fallback by the
+// ensure{Chatterbox,Supertonic}* helpers below when none of the
+// candidate filesystem paths already has the GGUF.  Mirrors the
+// pattern used by qvac/translation-nmtcpp/lib/indictrans-model-fetcher.js:
+// lazy-require `@qvac/registry-client` (it's a devDependency that's
+// only present in the CI / test image, not in the published addon),
+// fall through to a soft failure when the client can't be loaded so
+// the existing "skip integration test" behaviour is preserved on
+// environments without registry access (no network, no peers, etc.).
+//
+// `path` here is the registry path string stored under each
+// {CHATTERBOX,SUPERTONIC}*_GGUFS entry's `registryPath` field; `source`
+// is the matching `registrySource` (today always "s3", mirroring the
+// `s3:///...` URL prefix used in registry-server/data/models.prod.json).
+async function downloadFromRegistry (registryPath, registrySource, destPath, minSize, maxSize) {
+  let QVACRegistryClient
+  try {
+    ({ QVACRegistryClient } = require('@qvac/registry-client'))
+  } catch (err) {
+    console.log(' Registry client (@qvac/registry-client) not installed; ' +
+      'skipping registry fetch.  Install as a devDependency to enable.')
+    return false
+  }
+
+  const destDir = path.dirname(destPath)
+  if (!fs.existsSync(destDir)) {
+    try {
+      fs.mkdirSync(destDir, { recursive: true })
+    } catch (err) {
+      console.log(` Could not create ${destDir} for registry download: ${err.message}`)
+      return false
+    }
+  }
+
+  console.log(` Fetching ${path.basename(destPath)} from QVAC registry...`)
+  console.log(`   path:   ${registryPath}`)
+  console.log(`   source: ${registrySource}`)
+
+  let client
+  try {
+    client = new QVACRegistryClient()
+    await client.ready()
+    const result = await client.downloadModel(registryPath, registrySource, {
+      outputFile: destPath
+    })
+    if (result && result.artifact && result.artifact.path) {
+      const stats = fs.statSync(result.artifact.path)
+      if (stats.size < minSize) {
+        console.log(` Registry download too small: ${stats.size} bytes (expected >=${minSize})`)
+        try { fs.unlinkSync(destPath) } catch (_e) {}
+      } else if (maxSize && stats.size > maxSize) {
+        // Should be impossible (the registry served a file outside the
+        // declared band) but assert so a future model swap that
+        // accidentally points at the wrong quant level surfaces here
+        // instead of silently triggering an OOM on-device.
+        console.log(` Registry download too large: ${stats.size} bytes (expected <=${maxSize}). ` +
+          'Did the registry path flip to a different quantisation tier?')
+        try { fs.unlinkSync(destPath) } catch (_e) {}
+      } else {
+        console.log(` ✓ Registry download: ${path.basename(destPath)} (${stats.size} bytes)`)
+        return true
+      }
+    } else {
+      console.log(' Registry download returned no artifact path')
+    }
+  } catch (err) {
+    console.log(` Registry download failed: ${err && err.message ? err.message : String(err)}`)
+    try { fs.unlinkSync(destPath) } catch (_e) {}
+  } finally {
+    if (client) {
+      try { await client.close() } catch (_e) {}
+    }
+  }
+
+  return false
+}
+
+// Attempt a registry fetch for every entry in `ggufs` into `targetDir`.
+// Returns true iff every file ended up present at the expected size.
+// Used by the four `ensure*` helpers below as the fallback path when
+// no local candidate directory already had the GGUFs.
+async function tryFetchGgufsFromRegistry (ggufs, targetDir) {
+  try {
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true })
+  } catch (err) {
+    console.log(` Could not create target dir ${targetDir}: ${err.message}`)
+    return false
+  }
+
+  let allOk = true
+  for (const f of ggufs) {
+    const dest = path.join(targetDir, f.name)
+    if (fs.existsSync(dest)) {
+      try {
+        const stats = fs.statSync(dest)
+        const inBand = stats.size >= f.minSize &&
+          (!f.maxSize || stats.size <= f.maxSize)
+        if (inBand) {
+          console.log(` ✓ Already present at expected size: ${f.name} (${stats.size} bytes)`)
+          continue
+        }
+        if (stats.size < f.minSize) {
+          console.log(` Re-fetching ${f.name} (cached ${stats.size} bytes < ${f.minSize})`)
+        } else {
+          // Stale cache from a previous quantisation tier (e.g. an f16
+          // file lingering after the registry source flipped to q4_0).
+          // Drop it and re-fetch the smaller variant.
+          console.log(` Re-fetching ${f.name} (cached ${stats.size} bytes > ${f.maxSize}; ` +
+            'likely a stale cache from a different quantisation tier)')
+        }
+        try { fs.unlinkSync(dest) } catch (_e) {}
+      } catch (_e) { /* fall through to download */ }
+    }
+    if (!f.registryPath || !f.registrySource) {
+      console.log(` ${f.name} has no registryPath/registrySource; cannot fetch.`)
+      allOk = false
+      continue
+    }
+    // eslint-disable-next-line no-await-in-loop
+    const ok = await downloadFromRegistry(
+      f.registryPath, f.registrySource, dest, f.minSize, f.maxSize)
+    if (!ok) {
+      allOk = false
+      // Keep going so the user sees errors for every missing file in
+      // one pass rather than needing N reruns to discover the next
+      // failure.
+    }
+  }
+  return allOk
+}
+
 // Whisper GGML (for the transcription-WER integration check).
 const WHISPER_MODELS = {
   'ggml-small.bin': { url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin', minSize: 460000000 },
@@ -260,22 +391,91 @@ async function ensureWhisperModel (targetPath = null) {
   return { success: result.success, path: targetPath }
 }
 
+// Registry metadata for the QVAC model registry fetch fallback (see
+// `downloadFromRegistry()` below + `models.prod.json` under packages/
+// registry-server/data/).  Paths mirror the canonical `source` field on
+// each model row (the part after `s3:///`); `source` is the prefix
+// before `:///`.
+//
+// Mobile integration tests prefer the q4_0 quantised variants where
+// available to stay under Android's per-app memory budget (the S23 FE
+// triggered lmkd SIGKILL with the full-precision 1.8 GB Chatterbox
+// pair; q4_0 t3 + f16 s3gen drops peak RSS by ~600 MB).
+//
+//   - chatterbox-t3-turbo / -t3-mtl / supertonic / supertonic2:
+//     q4_0 + q8_0 published under qvac_models_compiled/ggml/<engine>/
+//     2026-05-18/ (added in qvac2 commit 029aafe6).
+//   - chatterbox-s3gen / -s3gen-mtl: only f16 exists under
+//     qvac_models_compiled/chatterbox/2026-05-08/ (the vocoder /
+//     HiFT side hasn't been quantised yet; once it lands here, point
+//     the entries below at the q4_0 path and drop the f16 fallback).
+//
+// On-disk filenames stay at the historical `<name>.gguf` shape so the
+// TTSGgml index.js resolver finds them without changing its hard-coded
+// `chatterbox-t3-turbo.gguf` / `chatterbox-s3gen.gguf` / etc. lookups.
+// The registry source URL is the only part that differs between
+// quantisation levels; tts-cpp reads the quant from the GGUF metadata
+// at load time, not from the filename.
+const REGISTRY_SOURCE = 's3'
+const REGISTRY_DATE_F16 = '2026-05-08' // chatterbox-s3gen* (no quant variant yet)
+const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
+
+// Size bands.  Both bounds are enforced (see `hasAllGgufsIn` below) so a
+// stale f16 cache from a previous test run gets rejected and re-fetched
+// at the quantised size.  Numbers are deliberately generous: ~50%
+// headroom on each side of the actual on-registry size to absorb future
+// re-quantisation passes without needing a code change here.
+const SIZE_CHATTERBOX_T3_Q4_0 = { minSize: 100_000_000, maxSize: 500_000_000 }
+const SIZE_CHATTERBOX_S3GEN_F16 = { minSize: 500_000_000, maxSize: 2_000_000_000 }
+const SIZE_SUPERTONIC_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
+const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
+
 const CHATTERBOX_GGUFS = [
-  { name: 'chatterbox-t3-turbo.gguf', minSize: 500_000_000 },
-  { name: 'chatterbox-s3gen.gguf', minSize: 500_000_000 }
+  {
+    name: 'chatterbox-t3-turbo.gguf',
+    ...SIZE_CHATTERBOX_T3_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_Q4_0}/chatterbox-t3-turbo-q4_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'chatterbox-s3gen.gguf',
+    ...SIZE_CHATTERBOX_S3GEN_F16,
+    registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
 ]
 
 const CHATTERBOX_MTL_GGUFS = [
-  { name: 'chatterbox-t3-mtl.gguf', minSize: 500_000_000 },
-  { name: 'chatterbox-s3gen-mtl.gguf', minSize: 500_000_000 }
+  {
+    name: 'chatterbox-t3-mtl.gguf',
+    ...SIZE_CHATTERBOX_T3_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_Q4_0}/chatterbox-t3-mtl-q4_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'chatterbox-s3gen-mtl.gguf',
+    ...SIZE_CHATTERBOX_S3GEN_F16,
+    registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen-mtl.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
 ]
 
 const SUPERTONIC_GGUFS = [
-  { name: 'supertonic.gguf', minSize: 100_000_000 }
+  {
+    name: 'supertonic.gguf',
+    ...SIZE_SUPERTONIC_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_Q4_0}/supertonic-q4_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
 ]
 
 const SUPERTONIC_MTL_GGUFS = [
-  { name: 'supertonic2.gguf', minSize: 100_000_000 }
+  {
+    name: 'supertonic2.gguf',
+    ...SIZE_SUPERTONIC2_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_Q4_0}/supertonic2-q4_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
 ]
 
 /** Directories searched on Android (in order) when the caller-supplied
@@ -300,7 +500,14 @@ function desktopFallbackDirs () {
   return out
 }
 
-/** Returns true if `dir` contains every file in `ggufs` at the expected size. */
+/**
+ * Returns true iff `dir` contains every file in `ggufs` at the
+ * expected size band.  `maxSize` is optional; when provided, a cached
+ * file larger than that band is rejected so the next pass re-fetches
+ * from the registry (used to flush a stale f16 cache after the
+ * registry source flipped to a q4_0 variant — same name on disk, much
+ * smaller payload).
+ */
 function hasAllGgufsIn (dir, ggufs) {
   for (const f of ggufs) {
     const p = path.join(dir, f.name)
@@ -308,6 +515,7 @@ function hasAllGgufsIn (dir, ggufs) {
     try {
       const stats = fs.statSync(p)
       if (stats.size < f.minSize) return false
+      if (f.maxSize && stats.size > f.maxSize) return false
     } catch (e) {
       return false
     }
@@ -370,6 +578,20 @@ async function ensureChatterboxModels (options = {}) {
     return { success: true, results, targetDir: resolvedDir }
   }
 
+  // No local candidate matched.  Try fetching from the QVAC model
+  // registry (writable dir is the caller-supplied `requestedDir`,
+  // which on mobile is the app-internal files dir under
+  // `global.testDir` — always writable from inside Bare).  Mirrors the
+  // SDK / nmtcpp `ensure*` path: registry fetch is opportunistic, and
+  // the original "not found" error message still fires if it fails.
+  if (await tryFetchGgufsFromRegistry(CHATTERBOX_GGUFS, requestedDir)) {
+    const results = {}
+    for (const f of CHATTERBOX_GGUFS) {
+      results[f.name] = { success: true, path: path.join(requestedDir, f.name), cached: false }
+    }
+    return { success: true, results, targetDir: requestedDir }
+  }
+
   try {
     if (!fs.existsSync(requestedDir)) fs.mkdirSync(requestedDir, { recursive: true })
   } catch (e) { /* ignore — informational dir only */ }
@@ -384,12 +606,16 @@ async function ensureChatterboxModels (options = {}) {
   }
   console.log('')
   if (isMobile && platform === 'android') {
-    console.log('Chatterbox GGUFs not found.  On Android, `adb push` them to one of:')
+    console.log('Chatterbox GGUFs not found and registry fetch failed.  On Android, ' +
+      '`adb push` them to one of:')
     for (const d of ANDROID_CANDIDATE_DIRS) console.log(`  ${d}`)
     console.log('(or copy into the app-internal dir that testDir maps to).')
   } else {
-    console.log('Chatterbox GGUFs are not published on HuggingFace yet.  Generate them')
-    console.log('locally from the upstream tts-cpp conversion scripts:')
+    console.log('Chatterbox GGUFs not found locally and the QVAC registry fetch did')
+    console.log('not return a usable file (network / registry unavailable, or the')
+    console.log('@qvac/registry-client devDependency is missing).  Either fix the')
+    console.log('registry path or generate them locally from the upstream tts-cpp')
+    console.log('conversion scripts:')
     console.log('')
     console.log('  git clone git@github.com:tetherto/qvac-ext-lib-whisper.cpp.git')
     console.log('  cd qvac-ext-lib-whisper.cpp/tts-cpp')
@@ -436,7 +662,15 @@ async function ensureChatterboxMtlModels (options = {}) {
     return { success: true, results, targetDir: resolvedDir }
   }
 
-  console.log(' Chatterbox MTL GGUFs not found.  Convert with:')
+  if (await tryFetchGgufsFromRegistry(CHATTERBOX_MTL_GGUFS, requestedDir)) {
+    const results = {}
+    for (const f of CHATTERBOX_MTL_GGUFS) {
+      results[f.name] = { success: true, path: path.join(requestedDir, f.name), cached: false }
+    }
+    return { success: true, results, targetDir: requestedDir }
+  }
+
+  console.log(' Chatterbox MTL GGUFs not found locally and registry fetch failed.  Convert with:')
   console.log('   python scripts/convert-t3-mtl-to-gguf.py --out chatterbox-t3-mtl.gguf')
   console.log('   python scripts/convert-s3gen-to-gguf.py --variant mtl --out chatterbox-s3gen-mtl.gguf')
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
@@ -475,7 +709,15 @@ async function ensureSupertonicModel (options = {}) {
     }
   }
 
-  console.log(' Supertonic GGUF not found.  Convert with:')
+  if (await tryFetchGgufsFromRegistry(SUPERTONIC_GGUFS, requestedDir)) {
+    return {
+      success: true,
+      path: path.join(requestedDir, 'supertonic.gguf'),
+      targetDir: requestedDir
+    }
+  }
+
+  console.log(' Supertonic GGUF not found locally and registry fetch failed.  Convert with:')
   console.log('   python scripts/convert-supertonic2-to-gguf.py --arch supertonic --out supertonic.gguf')
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, path: null, targetDir: requestedDir }
@@ -513,7 +755,15 @@ async function ensureSupertonicMtlModel (options = {}) {
     }
   }
 
-  console.log(' Supertonic MTL GGUF not found.  Convert with:')
+  if (await tryFetchGgufsFromRegistry(SUPERTONIC_MTL_GGUFS, requestedDir)) {
+    return {
+      success: true,
+      path: path.join(requestedDir, 'supertonic2.gguf'),
+      targetDir: requestedDir
+    }
+  }
+
+  console.log(' Supertonic MTL GGUF not found locally and registry fetch failed.  Convert with:')
   console.log('   python scripts/convert-supertonic2-to-gguf.py --arch supertonic2 --out supertonic2.gguf')
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, path: null, targetDir: requestedDir }

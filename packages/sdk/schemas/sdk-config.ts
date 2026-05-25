@@ -8,6 +8,7 @@ import {
 } from "./transcription-config";
 import { ocrConfigSchema } from "./ocr";
 import { sdcppConfigSchema } from "./sdcpp-config";
+import { vlaConfigSchema } from "./vla";
 import { runtimeContextSchema } from "./runtime-context";
 
 // Alias keys for user convenience (maps to canonical types)
@@ -20,6 +21,7 @@ const AliasKeys = {
   tts: "tts",
   ocr: "ocr",
   diffusion: "diffusion",
+  vla: "vla",
 } as const;
 
 /**
@@ -59,6 +61,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.onnxTts]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.onnxOcr]: ocrConfigSchema.partial().optional(),
     [ModelType.sdcppGeneration]: sdcppConfigSchema.partial().optional(),
+    [ModelType.ggmlVla]: vlaConfigSchema.partial().optional(),
     // Alias keys (user-friendly)
     [AliasKeys.llm]: llmConfigBaseSchema.optional(),
     [AliasKeys.embeddings]: embedConfigBaseSchema.optional(),
@@ -68,6 +71,7 @@ export const deviceConfigDefaultsSchema = z
     [AliasKeys.tts]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.ocr]: ocrConfigSchema.partial().optional(),
     [AliasKeys.diffusion]: sdcppConfigSchema.partial().optional(),
+    [AliasKeys.vla]: vlaConfigSchema.partial().optional(),
   })
   .partial();
 

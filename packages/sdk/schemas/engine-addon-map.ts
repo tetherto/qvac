@@ -7,6 +7,7 @@ import {
   ADDON_OCR,
   ADDON_PARAKEET,
   ADDON_TTS,
+  ADDON_VLA,
   ADDON_WHISPER,
 } from "./plugin";
 import {
@@ -26,6 +27,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.onnxOcr]: "ocr",
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.sdcppGeneration]: "diffusion",
+  [ModelType.ggmlVla]: "vla",
   "onnx-vad": "vad",
 } as const satisfies Record<ModelRegistryEngine, ModelRegistryEntryAddon>;
 
@@ -52,6 +54,8 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   ocr: ModelType.onnxOcr,
   [ADDON_DIFFUSION]: ModelType.sdcppGeneration,
   diffusion: ModelType.sdcppGeneration,
+  [ADDON_VLA]: ModelType.ggmlVla,
+  vla: ModelType.ggmlVla,
 };
 
 // Resolves any engine string (legacy or canonical) to a validated canonical engine.

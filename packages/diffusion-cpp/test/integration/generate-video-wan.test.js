@@ -1,27 +1,20 @@
 'use strict'
 
-// Wan 2.1 text-to-video end-to-end smoke test.
+// Wan 2.1 text-to-video end-to-end test.
 //
-// This test drives a real generate_video() call through the native addon —
-// it requires the Wan model files (~7 GB) and takes ~55 s on M3 Ultra Metal.
-// To keep CI fast and avoid forcing every dev to download Wan weights, the
-// test is opt-in:
-//
-//   WAN_INTEGRATION=1 npm run test:integration
-//
-// or run this single file directly with bare:
-//
-//   WAN_INTEGRATION=1 bare test/integration/generate-video-wan.test.js
+// This test drives a real generate_video() call through the native addon. The three
+// Wan 2.1 model files (~8 GB total) are fetched on demand via ensureModel
+// into test/model/ on first run.
 //
 // Optional env vars:
-//   WAN_MODELS_DIR  - override the default ../models lookup
+//   WAN_MODELS_DIR  - reuse an existing models directory (e.g. the one
+//                     populated by ./scripts/download-model-wan.sh).
+//                     Files present here are used as-is; missing files
+//                     fall back to the standard ensureModel download.
 //   WAN_DEVICE      - 'gpu' (default) or 'cpu'
 //
-// The Wan ops (IM2COL_3D, PAD-left) require the ggml fork built via the
-// vcpkg overlay at vcpkg/ports/ggml/ — see build.md "Wan video models and
-// the local ggml overlay" for details. With the upstream/registry ggml
-// this test will hard-abort the process via ggml_abort() rather than fail
-// gracefully.
+// The Wan ops (IM2COL_3D, PAD-left) require the ggml fork pinned through the
+// qvac vcpkg registry.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -30,22 +23,32 @@ const proc = require('bare-process')
 const test = require('brittle')
 const binding = require('../../binding')
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
-const { detectPlatform, setupJsLogger } = require('./utils')
+const { detectPlatform, setupJsLogger, ensureModelPath } = require('./utils')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
-const wanOptIn = proc.env && proc.env.WAN_INTEGRATION === '1'
-const skip = isMobile || !wanOptIn
+const isDarwin = os.platform() === 'darwin'
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const skip = isMobile || isDarwin || noGpu
 
 const platform = detectPlatform()
 
-const DEFAULT_MODELS_DIR = path.resolve(__dirname, '../../models')
-const MODELS_DIR = (proc.env && proc.env.WAN_MODELS_DIR) || DEFAULT_MODELS_DIR
-
-const FILES = {
-  model: path.join(MODELS_DIR, 'wan2.1_t2v_1.3B_fp16.safetensors'),
-  vae: path.join(MODELS_DIR, 'wan_2.1_vae.safetensors'),
-  t5Xxl: path.join(MODELS_DIR, 'umt5_xxl_fp16.safetensors')
-}
+const WAN_FILES = [
+  {
+    key: 'model',
+    name: 'wan2.1_t2v_1.3B_fp16.safetensors',
+    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors'
+  },
+  {
+    key: 'vae',
+    name: 'wan_2.1_vae.safetensors',
+    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors'
+  },
+  {
+    key: 't5Xxl',
+    name: 'umt5_xxl_fp16.safetensors',
+    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors'
+  }
+]
 
 // Detects an MJPG AVI buffer with a basic RIFF/AVI/idx1 sniff. We only
 // validate structural markers — strict bit-for-bit AVI parsing lives in
@@ -100,13 +103,15 @@ function sniffAvi (buf) {
   }
 }
 
-// Use a very small frame count (5) and step count (4) for the smoke test
-// so it runs in well under a minute. Wan 2.1's latent temporal packing
-// requires 4*k+1 frames; 5 is the minimum.
+// Minimum-cost configuration for CI. Wan 2.1's latent temporal packing
+// requires 4*k+1 frames, so 5 is the minimum frame count. Steps and
+// resolution are kept as low as possible to keep wall-clock under a minute
+// on GPU runners; we only assert structural validity of the AVI output, not
+// visual quality.
 const SMOKE_FRAMES = 5
-const SMOKE_STEPS = 4
-const SMOKE_WIDTH = 832
-const SMOKE_HEIGHT = 480
+const SMOKE_STEPS = 1
+const SMOKE_WIDTH = 416
+const SMOKE_HEIGHT = 240
 const SMOKE_FPS = 16
 const SMOKE_SEED = 7
 const SMOKE_PROMPT = 'a red fox running through snow at dusk'
@@ -120,33 +125,44 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
     console.log('WAN 2.1 T2V — INTEGRATION SMOKE')
     console.log('='.repeat(60))
     console.log(` Platform   : ${platform}`)
-    console.log(` Models dir : ${MODELS_DIR}`)
     console.log(` Frames     : ${SMOKE_FRAMES} @ ${SMOKE_FPS}fps`)
     console.log(` Size       : ${SMOKE_WIDTH}x${SMOKE_HEIGHT}`)
     console.log(` Steps      : ${SMOKE_STEPS}`)
     console.log(` Seed       : ${SMOKE_SEED}`)
     console.log(` Device     : ${(proc.env && proc.env.WAN_DEVICE) || 'gpu'}`)
 
-    for (const [k, p] of Object.entries(FILES)) {
-      if (!fs.existsSync(p)) {
-        t.fail(
-          `Wan model "${k}" not found at ${p}. ` +
-          'Run ./scripts/download-model-wan.sh, or set WAN_MODELS_DIR.'
-        )
-        return
+    console.log('\n=== Ensuring Wan 2.1 model files ===')
+    const overrideDir = proc.env && proc.env.WAN_MODELS_DIR
+    const resolvedFiles = {}
+    for (const entry of WAN_FILES) {
+      const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
+      let modelPath
+      if (overridePath && fs.existsSync(overridePath)) {
+        console.log(`[wan] Using override: ${overridePath}`)
+        modelPath = overridePath
+      } else {
+        modelPath = await ensureModelPath({
+          modelName: entry.name,
+          downloadUrl: entry.url
+        })
       }
+      resolvedFiles[entry.key] = modelPath
+      t.ok(fs.existsSync(modelPath), `Wan file present: ${entry.name}`)
     }
+    const resolvedModelDir = path.dirname(resolvedFiles.model)
 
     const model = new VideoStableDiffusion({
-      files: FILES,
+      files: resolvedFiles,
       config: {
         threads: 4,
         device: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
         diffusion_fa: true,
         offload_to_cpu: true,
-        vae_tiling: true
+        vae_tiling: true,
+        verbosity: 2
       },
-      logger: console
+      logger: console,
+      opts: { stats: true }
     })
 
     let avi = null
@@ -241,7 +257,7 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
 
       // Save artifact next to models dir for manual inspection.
       try {
-        const artifactDir = path.resolve(MODELS_DIR, '../output')
+        const artifactDir = path.resolve(resolvedModelDir, '../output')
         fs.mkdirSync(artifactDir, { recursive: true })
         const outPath = path.join(artifactDir, `wan-smoke-seed${SMOKE_SEED}.avi`)
         fs.writeFileSync(outPath, avi)

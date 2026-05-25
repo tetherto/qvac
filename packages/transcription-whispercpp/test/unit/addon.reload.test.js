@@ -6,16 +6,12 @@ const MockedBinding = require('../mocks/MockedBinding.js')
 const { wait, transitionCb } = require('../mocks/utils.js')
 const { WhisperInterface } = require('../../whisper')
 
-const process = require('process')
+const process = require('bare-process')
 global.process = process
-const sinon = require('sinon')
 
-/**
- * Helper function to create test model with common configuration (no VAD)
- */
 function createTestModel ({ onOutput = () => { }, binding = undefined } = {}) {
-  // Restore any existing stub first
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
+  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
+
   const args = {
     files: {
       model: 'ggml-tiny.bin'
@@ -27,15 +23,14 @@ function createTestModel ({ onOutput = () => { }, binding = undefined } = {}) {
       temperature: 0.0
     }
   }
-  sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
   const model = new TranscriptionWhispercpp(args, config)
   let capturedConfigResolve
   const capturedConfig = new Promise(resolve => { capturedConfigResolve = resolve })
-  sinon.stub(model, '_createAddon').callsFake(configurationParams => {
+  model._createAddon = configurationParams => {
     capturedConfigResolve(configurationParams)
     const _binding = binding || new MockedBinding()
     return new WhisperInterface(_binding, configurationParams, onOutput, transitionCb)
-  })
+  }
   return [model, capturedConfig]
 }
 
@@ -72,13 +67,19 @@ test('Reload method updates configuration without VAD', async (t) => {
     }
   }
 
-  // Mock the addon's reload method
-  const reloadSpy = sinon.spy(model.addon, 'reload')
+  let reloadCallCount = 0
+  let reloadCallArg = null
+  const origReload = model.addon.reload.bind(model.addon)
+  model.addon.reload = async (...args) => {
+    reloadCallCount++
+    reloadCallArg = args[0]
+    return origReload(...args)
+  }
 
   await model.addon.reload(newConfig)
 
-  t.ok(reloadSpy.calledOnce, 'Reload method should be called once')
-  t.ok(reloadSpy.calledWith(newConfig), 'Reload should be called with new configuration')
+  t.is(reloadCallCount, 1, 'Reload method should be called once')
+  t.is(reloadCallArg, newConfig, 'Reload should be called with new configuration')
 })
 
 test('Reload method handles configuration changes correctly', async (t) => {

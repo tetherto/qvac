@@ -1,5 +1,7 @@
 'use strict'
 
+const path = require('bare-path')
+
 const {
   QvacErrorAddonParakeet,
   ERR_CODES,
@@ -57,12 +59,42 @@ class ParakeetInterface {
    *   left context (parakeet default 10000 ms; -1 keeps the engine default).
    * @param {number} [configurationParams.streamingRightLookaheadMs] - ASR encoder
    *   right lookahead (parakeet default 2000 ms; -1 keeps the engine default).
+   * @param {boolean} [configurationParams.streamingSpkCacheEnable=true] - AOSC:
+   *   enable v2.1 Sortformer speaker-cache streaming. Ignored on v1/v2 GGUFs
+   *   and on non-Sortformer models. Set false to force the v1 sliding-window
+   *   path on a v2.1 model (A/B comparison).
+   * @param {number} [configurationParams.streamingSpkCacheLen=188] - AOSC:
+   *   long-term speaker-cache rows (~15 s of encoder frames).
+   * @param {number} [configurationParams.streamingFifoLen=188] - AOSC: FIFO
+   *   warmup buffer rows.
+   * @param {number} [configurationParams.streamingChunkLeftContextMs=80] -
+   *   AOSC: encoder left-context window (ms; ~1 encoder frame).
+   * @param {number} [configurationParams.streamingChunkRightContextMs=560] -
+   *   AOSC: encoder right-context window (ms; ~7 encoder frames).
+   * @param {number} [configurationParams.streamingSpkCacheUpdatePeriod=144] -
+   *   AOSC: FIFO-overflow pop-out count.
+   * @param {string} [configurationParams.backendsDir] - root directory
+   *   for dynamically-loaded ggml backends. JS defaults to
+   *   `<package_dir>/prebuilds`; the native addon appends
+   *   `<bare-target>/<module-name>` (via the `BACKENDS_SUBDIR` compile
+   *   define) before calling `ggml_backend_load_all_from_path()`, which
+   *   is where cmake-bare installs the `.so` files
+   *   (`libqvac-speech-ggml-vulkan.so`, `libqvac-speech-ggml-opencl.so`,
+   *   per-arch `libqvac-speech-ggml-cpu-android_armv*_*.so`). Pass an
+   *   explicit path when the host bundles prebuilds elsewhere (e.g. an
+   *   Android APK's `nativeLibraryDir`). No-op on Apple targets
+   *   (statically linked ggml core).
+   * @param {string} [configurationParams.openclCacheDir] - directory where
+   *   ggml-opencl persists its compiled program-binary cache (sets
+   *   `$GGML_OPENCL_CACHE_DIR`). Only honoured on Android; empty
+   *   string keeps whatever value the process env already holds.
+   *   Pass the host platform's app cache directory to skip the cold
+   *   `clBuildProgram` cost on every process restart.
    * @param {Function} outputCallback - callback for transcription output events
    * @param {Function} [stateCallback] - callback for state transitions
    */
   constructor (binding, configurationParams, outputCallback, stateCallback = null) {
     this._binding = binding
-    this._config = configurationParams
     this._outputCallback = outputCallback
     this._stateCallback = stateCallback
     this._handle = null
@@ -73,7 +105,30 @@ class ParakeetInterface {
     this._bufferedAudio = []
     this._bufferedBytes = 0
 
+    this._config = this._applyDefaults(configurationParams)
     this._createNativeInstance(this._config)
+  }
+
+  /**
+   * Per-platform fallback for `backendsDir` when the host didn't pass
+   * one. Mirrors the qvac/packages/llm-llamacpp resolution shape
+   * (`path.join(__dirname, 'prebuilds')`) so a host that already
+   * threads `prebuilds/` through that addon doesn't need to special-
+   * case parakeet. The native addon expects the directory that
+   * directly contains the `lib<prefix>ggml-*.so` files; cmake-bare
+   * installs them under `prebuilds/<bare-target>/<module-name>/`,
+   * but the addon-side `BACKENDS_SUBDIR` compile define joins the
+   * `<bare-target>/<module-name>` shape on its own. Keep this in
+   * sync with the `BACKENDS_SUBDIR_VALUE` derivation in
+   * CMakeLists.txt.
+   * @private
+   */
+  _applyDefaults (configurationParams) {
+    const out = { ...configurationParams }
+    if (!out.backendsDir) {
+      out.backendsDir = path.join(__dirname, 'prebuilds')
+    }
+    return out
   }
 
   _setState (newState) {
@@ -453,6 +508,12 @@ class ParakeetInterface {
    * @param {number} [config.rightLookaheadMs] - ASR encoder right lookahead (overrides cfg.streamingRightLookaheadMs)
    * @param {boolean} [config.emitPartials] - emit partial segments on chunk boundaries
    * @param {boolean} [config.emitEnergyVad] - surface energy-VAD events for CTC/TDT
+   * @param {boolean} [config.spkCacheEnable] - AOSC: enable/disable v2.1 speaker cache (overrides cfg.streamingSpkCacheEnable)
+   * @param {number} [config.spkCacheLen] - AOSC: long-term speaker-cache rows (overrides cfg.streamingSpkCacheLen)
+   * @param {number} [config.fifoLen] - AOSC: FIFO warmup buffer rows (overrides cfg.streamingFifoLen)
+   * @param {number} [config.chunkLeftContextMs] - AOSC: encoder left-context window in ms (overrides cfg.streamingChunkLeftContextMs)
+   * @param {number} [config.chunkRightContextMs] - AOSC: encoder right-context window in ms (overrides cfg.streamingChunkRightContextMs)
+   * @param {number} [config.spkCacheUpdatePeriod] - AOSC: FIFO-overflow pop-out count (overrides cfg.streamingSpkCacheUpdatePeriod)
    * @returns {Promise<number>} jobId assigned to the streaming session
    */
   async startStreaming (config = {}) {
