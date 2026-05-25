@@ -1,7 +1,7 @@
 name: On PR Trigger (Embed)
 
 on:
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - synchronize
@@ -12,7 +12,6 @@ on:
       - release-*
       - feature-*
       - tmp-*
-      - feature/pr-concurrency-*
     paths:
       - "packages/embed-llamacpp/**"
       - ".github/workflows/*embed*.yml"
