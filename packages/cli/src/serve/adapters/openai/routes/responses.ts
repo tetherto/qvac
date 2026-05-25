@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { completion } from '@qvac/sdk'
+import type { CompletionRun, Tool } from '@qvac/sdk'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkCompletion, type CompletionResult } from '../../../core/sdk.js'
-import type { SDKGenerationParams, SDKResponseFormat, SDKTool } from '../../../core/sdk.js'
 import {
   extractResponsesGenerationParams,
   extractResponsesResponseFormat,
@@ -16,7 +16,9 @@ import {
   openaiResponsesToolsToSdk,
   sdkToolCallsToOpenai,
   UnsupportedToolTypeError,
-  validateResponsesStatefulOptions
+  validateResponsesStatefulOptions,
+  type GenerationParams,
+  type ResponseFormat
 } from '../translate.js'
 import { buildResponseObject, functionCallOutputItemId, messageId, responseId as allocResponseId } from '../responses-shape.js'
 import { RESPONSES_DEFAULT_TTL_SEC, RESPONSES_VOLATILE_STUB, type StoredResponse } from '../responses-store.js'
@@ -86,7 +88,7 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
 
   logResponsesUnsupportedParams(body, ctx.logger)
 
-  let tools: SDKTool[] | undefined
+  let tools: Tool[] | undefined
   try {
     tools = openaiResponsesToolsToSdk(body['tools'] as Parameters<typeof openaiResponsesToolsToSdk>[0])
   } catch (err) {
@@ -99,7 +101,7 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
 
   const generationParams = extractResponsesGenerationParams(body)
 
-  let responseFormat: SDKResponseFormat | undefined
+  let responseFormat: ResponseFormat | undefined
   try {
     responseFormat = extractResponsesResponseFormat(body)
   } catch (err) {
@@ -183,23 +185,23 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
 
   try {
     if (streaming) {
-      const result = await sdkCompletion({
+      const result = completion({
         modelId: handlerParams.sdkModelId,
         history: handlerParams.history,
         stream: true,
-        tools: handlerParams.tools,
-        generationParams: handlerParams.generationParams,
-        responseFormat: handlerParams.responseFormat
+        ...(handlerParams.tools !== undefined ? { tools: handlerParams.tools } : {}),
+        ...(handlerParams.generationParams !== undefined ? { generationParams: handlerParams.generationParams } : {}),
+        ...(handlerParams.responseFormat !== undefined ? { responseFormat: handlerParams.responseFormat } : {})
       })
       await writeStreamingResponse(res, handlerParams, result)
     } else {
-      const result = await sdkCompletion({
+      const result = completion({
         modelId: handlerParams.sdkModelId,
         history: handlerParams.history,
         stream: false,
-        tools: handlerParams.tools,
-        generationParams: handlerParams.generationParams,
-        responseFormat: handlerParams.responseFormat
+        ...(handlerParams.tools !== undefined ? { tools: handlerParams.tools } : {}),
+        ...(handlerParams.generationParams !== undefined ? { generationParams: handlerParams.generationParams } : {}),
+        ...(handlerParams.responseFormat !== undefined ? { responseFormat: handlerParams.responseFormat } : {})
       })
       await writeBlockingResponse(res, handlerParams, result)
     }
@@ -214,9 +216,9 @@ export interface ResponsesHandlerParams {
   ctx: RouteContext
   sdkModelId: string
   history: Array<{ role: string; content: string }>
-  tools?: SDKTool[] | undefined
-  generationParams?: SDKGenerationParams | undefined
-  responseFormat?: SDKResponseFormat | undefined
+  tools?: Tool[] | undefined
+  generationParams?: GenerationParams | undefined
+  responseFormat?: ResponseFormat | undefined
   modelAlias: string
   rid: string
   createdAtSec: number
@@ -233,7 +235,7 @@ export interface ResponsesHandlerParams {
 export async function writeBlockingResponse (
   res: ServerResponse,
   p: ResponsesHandlerParams,
-  result: CompletionResult
+  result: CompletionRun
 ): Promise<Record<string, unknown>> {
   const text = await result.text
   const toolCalls = await result.toolCalls
@@ -276,7 +278,7 @@ export async function writeBlockingResponse (
 export async function writeStreamingResponse (
   res: ServerResponse,
   p: ResponsesHandlerParams,
-  result: CompletionResult
+  result: CompletionRun
 ): Promise<Record<string, unknown>> {
   initSSE(res)
 
@@ -319,7 +321,7 @@ export async function writeStreamingResponse (
   }
 
   const toolCalls = await result.toolCalls
-  const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
+  const hasToolCalls = toolCalls.length > 0
 
   sendSSE(res, {
     type: 'response.output_text.done',

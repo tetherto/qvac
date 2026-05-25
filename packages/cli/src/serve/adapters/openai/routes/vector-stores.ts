@@ -1,12 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { readBody, sendJson, sendError } from '../../../http.js'
 import {
-  sdkRagListWorkspaces,
-  sdkRagSearch,
-  sdkRagDeleteWorkspace,
-  sdkRagCloseWorkspace,
-  sdkRagIngest
-} from '../../../core/sdk.js'
+  ragListWorkspaces,
+  ragSearch,
+  ragDeleteWorkspace,
+  ragCloseWorkspace,
+  ragIngest
+} from '@qvac/sdk'
+import { readBody, sendJson, sendError } from '../../../http.js'
 import {
   vectorStoreToOpenAI,
   searchResultsToOpenAI,
@@ -202,7 +202,7 @@ export async function handleDeleteVectorStore (
   // workspace fallback in GET only recovers id and an empty record.
   if (workspaceExists) {
     try {
-      await sdkRagDeleteWorkspace({ workspace: id })
+      await ragDeleteWorkspace({ workspace: id })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       ctx.logger.error(`Failed to delete RAG workspace "${id}": ${message}`)
@@ -295,7 +295,7 @@ export async function handleSearchVectorStore (
   )
 
   try {
-    const results = await sdkRagSearch({
+    const results = await ragSearch({
       modelId: embedding.sdkModelId,
       query,
       ...(topK !== undefined ? { topK } : {}),
@@ -426,7 +426,7 @@ export async function handleAttachVectorStoreFile (
 
   let ingestResult: { processed: unknown[]; droppedIndices: number[] }
   try {
-    ingestResult = await sdkRagIngest({
+    ingestResult = await ragIngest({
       modelId: embedding.sdkModelId,
       documents: text,
       workspace: id,
@@ -497,7 +497,7 @@ interface RagInfo {
 
 async function closeWorkspaceQuiet (ctx: RouteContext, id: string, op: string): Promise<void> {
   try {
-    await sdkRagCloseWorkspace({ workspace: id })
+    await ragCloseWorkspace({ workspace: id })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.warn(`ragCloseWorkspace after ${op} failed for "${id}": ${message}`)
@@ -506,7 +506,7 @@ async function closeWorkspaceQuiet (ctx: RouteContext, id: string, op: string): 
 
 async function safeListWorkspaces (ctx: RouteContext): Promise<RagInfo> {
   try {
-    const workspaces = await sdkRagListWorkspaces()
+    const workspaces = await ragListWorkspaces()
     return { workspaces }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
