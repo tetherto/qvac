@@ -176,7 +176,7 @@ bareTest(
       import("@/server/bare/plugins/whispercpp-transcription/plugin"),
       import("@/server/bare/plugins/parakeet-transcription/plugin"),
       import("@/server/bare/plugins/nmtcpp-translation/plugin"),
-      import("@/server/bare/plugins/onnx-tts/plugin"),
+      import("@/server/bare/plugins/tts-ggml/plugin"),
       import("@/server/bare/plugins/onnx-ocr/plugin"),
       import("@/server/bare/plugins/sdcpp-generation/plugin"),
       import("@/server/bare/plugins/ggml-vla/plugin"),
@@ -207,8 +207,8 @@ bareTest(
         translate: { scope: "none" },
       },
       [ttsPlugin.modelType]: {
-        textToSpeech: { scope: "none" },
-        textToSpeechStream: { scope: "none" },
+        textToSpeech: { scope: "model", hard: true },
+        textToSpeechStream: { scope: "model", hard: true },
       },
       [ocrPlugin.modelType]: {
         ocrStream: { scope: "none" },

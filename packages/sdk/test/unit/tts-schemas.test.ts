@@ -4,7 +4,39 @@ import {
   ttsRequestSchema,
   ttsResponseSchema,
   textToSpeechStreamResponseSchema,
+  ttsConfigSchema,
+  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
 } from "@/schemas/text-to-speech";
+
+test("ttsConfigSchema: accepts GGML chatterbox load config", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf",
+  });
+  t.is(r.success, true);
+});
+
+test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "supertonic",
+    language: "en",
+    voice: "F1",
+  });
+  t.is(r.success, true);
+});
+
+test("ttsConfigSchema: accepts legacy ONNX field names for migration errors", (t) => {
+  for (const name of LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: "chatterbox",
+      language: "en",
+      s3genModelSrc: "s3:///example/s3gen.gguf",
+      [name]: "legacy-value",
+    });
+    t.is(r.success, true, `${name} should parse (plugin rejects at resolveConfig)`);
+  }
+});
 
 test("ttsRequestSchema: accepts sentenceStream options", (t) => {
   const r = ttsRequestSchema.safeParse({

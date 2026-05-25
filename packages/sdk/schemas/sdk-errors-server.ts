@@ -19,6 +19,7 @@ export const SDK_SERVER_ERROR_CODES = {
   TTS_ARTIFACTS_REQUIRED: 52208,
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
   LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
+  LEGACY_TTS_MODEL_DEPRECATED: 52211,
 
   // Model Operations (52,400-52,799)
   MODEL_UNLOAD_FAILED: 52400,
@@ -191,6 +192,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "LEGACY_PARAKEET_MODEL_DEPRECATED",
     message: (legacyFields?: string) =>
       `Legacy parakeet ONNX modelConfig fields are no longer supported (${legacyFields ?? "unknown fields"}). As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level modelSrc (e.g. loadModel({ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" })).`,
+  },
+  [SDK_SERVER_ERROR_CODES.LEGACY_TTS_MODEL_DEPRECATED]: {
+    name: "LEGACY_TTS_MODEL_DEPRECATED",
+    message: (legacyFields?: string) =>
+      `Legacy ONNX TTS modelConfig fields are no longer supported (${legacyFields ?? "unknown fields"}). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc and, for Chatterbox, s3genModelSrc in modelConfig (e.g. loadModel({ modelSrc: TTS_CHATTERBOX_T3_TURBO_Q8_0, modelType: "tts", modelConfig: { ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_CHATTERBOX_S3GEN } })).`,
   },
 
   // Model Operations (52,400-52,799)

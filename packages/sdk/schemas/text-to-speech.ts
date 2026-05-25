@@ -14,14 +14,18 @@ const ttsLanguageSchema = z.enum(TTS_LANGUAGES);
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal("chatterbox"),
   language: ttsLanguageSchema,
+  voice: z.string().optional(),
+  useGPU: z.boolean().optional(),
 });
 
 export const ttsSupertonicRuntimeConfigSchema = z.object({
   ttsEngine: z.literal("supertonic"),
   language: ttsLanguageSchema,
+  voice: z.string().optional(),
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
   ttsSupertonicMultilingual: z.boolean().optional(),
+  useGPU: z.boolean().optional(),
 });
 
 export const ttsRuntimeConfigSchema = z.union([
@@ -29,28 +33,52 @@ export const ttsRuntimeConfigSchema = z.union([
   ttsSupertonicRuntimeConfigSchema,
 ]);
 
-export const ttsChatterboxConfigSchema = ttsChatterboxRuntimeConfigSchema.extend({
-  ttsTokenizerSrc: modelSrcInputSchema,
-  ttsSpeechEncoderSrc: modelSrcInputSchema,
-  ttsEmbedTokensSrc: modelSrcInputSchema,
-  ttsConditionalDecoderSrc: modelSrcInputSchema,
-  ttsLanguageModelSrc: modelSrcInputSchema,
-  referenceAudioSrc: modelSrcInputSchema,
+export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.extend({
+  s3genModelSrc: modelSrcInputSchema,
+  referenceAudioSrc: modelSrcInputSchema.optional(),
 });
 
-export const ttsSupertonicConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
-  ttsTextEncoderSrc: modelSrcInputSchema,
-  ttsDurationPredictorSrc: modelSrcInputSchema,
-  ttsVectorEstimatorSrc: modelSrcInputSchema,
-  ttsVocoderSrc: modelSrcInputSchema,
-  ttsUnicodeIndexerSrc: modelSrcInputSchema,
-  ttsTtsConfigSrc: modelSrcInputSchema,
-  ttsVoiceStyleSrc: modelSrcInputSchema,
-});
+export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema;
+
+export const ttsLoadConfigSchema = z.union([
+  ttsChatterboxLoadConfigSchema,
+  ttsSupertonicLoadConfigSchema,
+]);
+
+// === Legacy ONNX modelConfig fields (deprecated) ===
+//
+// Pre-@qvac/tts-ggml multi-file ONNX `modelConfig` fields are kept ONLY so
+// callers migrating from earlier SDK versions hit a structured
+// `LegacyTtsModelDeprecatedError` from the TTS plugin's `resolveConfig`,
+// rather than a generic Zod `Unrecognized key` error.
+export const LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS = [
+  "ttsTokenizerSrc",
+  "ttsSpeechEncoderSrc",
+  "ttsEmbedTokensSrc",
+  "ttsConditionalDecoderSrc",
+  "ttsLanguageModelSrc",
+  "ttsTextEncoderSrc",
+  "ttsDurationPredictorSrc",
+  "ttsVectorEstimatorSrc",
+  "ttsVocoderSrc",
+  "ttsUnicodeIndexerSrc",
+  "ttsTtsConfigSrc",
+  "ttsVoiceStyleSrc",
+] as const;
+
+const legacyTtsOnnxFieldsShape =
+  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS.reduce<
+    Record<string, z.ZodOptional<z.ZodUnknown>>
+  >((acc, name) => {
+    acc[name] = z.unknown().optional();
+    return acc;
+  }, {});
+
+const legacyTtsOnnxFields = z.object(legacyTtsOnnxFieldsShape);
 
 export const ttsConfigSchema = z.union([
-  ttsChatterboxConfigSchema,
-  ttsSupertonicConfigSchema,
+  ttsChatterboxLoadConfigSchema.merge(legacyTtsOnnxFields),
+  ttsSupertonicLoadConfigSchema.merge(legacyTtsOnnxFields),
 ]);
 
 export const ttsClientParamsSchema = z.object({
@@ -108,9 +136,13 @@ export const textToSpeechStreamResponseSchema = z.object({
 });
 
 export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
-export type TtsChatterboxConfig = z.infer<typeof ttsChatterboxConfigSchema>;
-export type TtsSupertonicConfig = z.infer<typeof ttsSupertonicConfigSchema>;
-export type TtsConfig = z.infer<typeof ttsConfigSchema>;
+export type TtsChatterboxLoadConfig = z.infer<typeof ttsChatterboxLoadConfigSchema>;
+export type TtsSupertonicLoadConfig = z.infer<typeof ttsSupertonicLoadConfigSchema>;
+export type TtsLoadConfig = z.infer<typeof ttsLoadConfigSchema>;
+/** @deprecated Use {@link TtsChatterboxLoadConfig} */
+export type TtsChatterboxConfig = TtsChatterboxLoadConfig;
+/** @deprecated Use {@link TtsSupertonicLoadConfig} */
+export type TtsSupertonicConfig = TtsSupertonicLoadConfig;
 export type TtsChatterboxRuntimeConfig = z.infer<
   typeof ttsChatterboxRuntimeConfigSchema
 >;
@@ -118,6 +150,7 @@ export type TtsSupertonicRuntimeConfig = z.infer<
   typeof ttsSupertonicRuntimeConfigSchema
 >;
 export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>;
+export type TtsConfig = z.infer<typeof ttsConfigSchema>;
 export type TtsClientParamsInput = z.input<typeof ttsClientParamsSchema>;
 export type TtsClientParams = z.output<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;

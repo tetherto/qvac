@@ -52,7 +52,7 @@ export async function* textToSpeech(
   if (sentenceStream) {
     if (!hasRunStream(model)) {
       throw new TextToSpeechFailedError(
-        "sentenceStream requires an ONNX TTS model with runStream (Supertonic)",
+        "sentenceStream requires a TTS model with runStream",
       );
     }
 
@@ -110,6 +110,7 @@ export async function* textToSpeech(
   const response = (await model.run({
     input: text,
     inputType,
+    ...(stream ? { streamOutput: true } : {}),
   })) as unknown as TtsResponse;
 
   if (!stream) {
