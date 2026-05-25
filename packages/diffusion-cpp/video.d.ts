@@ -3,7 +3,7 @@ import type QvacLogger from '@qvac/logging'
 import type { SamplerMethod, ScheduleType, SdConfig, CacheMode } from './index'
 
 /** Supported video-generation modes for `VideoStableDiffusion.run()`. */
-export type VideoMode = 'txt2vid' | 'img2vid' | 'flf2vid'
+export type VideoMode = 'txt2vid' | 'img2vid'
 
 /**
  * File paths for a Wan video model context.
@@ -47,10 +47,8 @@ export interface VideoStableDiffusionArgs {
  *
  * Mode is required (no auto-detect). Every mode enforces its own input
  * invariants both in the JS wrapper and in C++ `SdModel::processVideo()`:
- *   - `txt2vid` rejects `init_image` and `end_image`.
- *   - `img2vid` requires `init_image`, rejects `end_image`.
- *   - `flf2vid` requires both `init_image` (first frame) and `end_image`
- *     (last frame).
+ *   - `txt2vid` rejects `init_image`.
+ *   - `img2vid` requires `init_image`.
  */
 export interface VideoGenerationParams {
   /** Required. Selects the generation branch. */
@@ -108,14 +106,12 @@ export interface VideoGenerationParams {
   moe_boundary?: number
 
   // ── Conditioning inputs ───────────────────────────────────────────────
-  /** img2vid / flf2vid denoise strength (0.0 to 1.0). */
+  /** img2vid denoise strength (0.0 to 1.0). */
   strength?: number
   /** VACE control-frame guidance strength (0.0 to 1.0). */
   vace_strength?: number
-  /** First frame (PNG/JPEG bytes). Required for img2vid / flf2vid. */
+  /** First frame (PNG/JPEG bytes). Required for img2vid. */
   init_image?: Uint8Array
-  /** flf2vid only: last frame (PNG/JPEG bytes). */
-  end_image?: Uint8Array
   /** Optional VACE guidance frames (one PNG/JPEG per frame). */
   control_frames?: Uint8Array[]
 

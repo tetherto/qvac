@@ -7,7 +7,7 @@ const { SdInterface, mapAddonEvent } = require('./addon')
 
 const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'clipVision', 'esrgan']
 
-const VIDEO_MODES = new Set(['txt2vid', 'img2vid', 'flf2vid'])
+const VIDEO_MODES = new Set(['txt2vid', 'img2vid'])
 
 function assertAbsolute (key, value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -208,18 +208,15 @@ class VideoStableDiffusion {
    * Generate a video.
    *
    * Mode is **required** for video (no auto-detect). Choose one of:
-   *   - `'txt2vid'`  — prompt-only; rejects `init_image` and `end_image`.
-   *   - `'img2vid'`  — animate a single starting frame; requires
-   *                    `init_image`; rejects `end_image`.
-   *   - `'flf2vid'`  — interpolate between two frames; requires both
-   *                    `init_image` (first) and `end_image` (last).
+   *   - `'txt2vid'`  — prompt-only; rejects `init_image`.
+   *   - `'img2vid'`  — animate a single starting frame; requires `init_image`.
    *
    * Output stream (via `QvacResponse.onUpdate(data)`):
    *   - `Uint8Array` — a single MJPG AVI buffer at end-of-job.
    *   - `string`     — per-step progress JSON `{"step":N,"total":M,"elapsed_ms":T}`
    *
    * @param {object} params
-   * @param {'txt2vid'|'img2vid'|'flf2vid'} params.mode - Required.
+   * @param {'txt2vid'|'img2vid'} params.mode - Required.
    * @param {string} params.prompt                      - Required.
    * @param {string} [params.negative_prompt]
    * @param {number} [params.width=480]                 - Default portrait (phone-screen friendly).
@@ -238,10 +235,9 @@ class VideoStableDiffusion {
    * @param {number} [params.high_noise_cfg_scale]      - Wan 2.2 only.
    * @param {number} [params.high_noise_flow_shift]     - Wan 2.2 only.
    * @param {number} [params.moe_boundary]              - Wan 2.2 MoE split point [0,1].
-   * @param {number} [params.strength]                  - img2vid / flf2vid denoise strength.
+   * @param {number} [params.strength]                  - img2vid denoise strength.
    * @param {number} [params.vace_strength]             - VACE control-frame guidance.
-   * @param {Uint8Array}   [params.init_image]          - First frame (PNG/JPEG).
-   * @param {Uint8Array}   [params.end_image]           - flf2vid only: last frame.
+   * @param {Uint8Array}   [params.init_image]          - First frame (PNG/JPEG). Required for img2vid.
    * @param {Uint8Array[]} [params.control_frames]      - Optional VACE guidance frames.
    * @param {boolean} [params.vae_tiling]
    * @param {number|string} [params.vae_tile_size]
@@ -260,11 +256,11 @@ class VideoStableDiffusion {
       throw new TypeError('run(params): params must be an object')
     }
 
-    // ── Mode is required and must be one of the three video modes ──────
+    // ── Mode is required and must be one of the two video modes ────────
     if (typeof params.mode !== 'string' || !VIDEO_MODES.has(params.mode)) {
       throw new Error(
         'VideoStableDiffusion.run: params.mode is required and must be one of ' +
-        `'txt2vid' | 'img2vid' | 'flf2vid'. Got: ${JSON.stringify(params.mode)}`
+        `'txt2vid' | 'img2vid'. Got: ${JSON.stringify(params.mode)}`
       )
     }
     const { mode } = params
@@ -312,55 +308,28 @@ class VideoStableDiffusion {
         `Got: ${typeof params.init_image}`
       )
     }
-    if (params.end_image != null && !(params.end_image instanceof Uint8Array)) {
-      throw new TypeError(
-        `end_image must be a Uint8Array. Got: ${typeof params.end_image}`
-      )
-    }
     if (params.init_image instanceof Uint8Array && params.init_image.length === 0) {
       throw new Error('init_image must not be empty')
-    }
-    if (params.end_image instanceof Uint8Array && params.end_image.length === 0) {
-      throw new Error('end_image must not be empty')
     }
 
     // ── init_images is an image-only feature ─────────────────────────────
     if (params.init_images != null) {
       throw new Error(
         'VideoStableDiffusion does not accept init_images (FLUX fusion is ' +
-        'image-only). Use init_image (and end_image for flf2vid), or ' +
-        'control_frames for VACE guidance.'
+        'image-only). Use init_image or control_frames for VACE guidance.'
       )
     }
 
-    // ── Mode-vs-inputs invariants (mirror SdModel::processVideo) ─────────
+    // ── Mode-vs-inputs invariants ─────────────────────────────────────────
     if (mode === 'txt2vid') {
       if (params.init_image != null) {
         throw new Error(
-          "txt2vid does not accept init_image. Use mode='img2vid' or " +
-          "'flf2vid' instead."
+          "txt2vid does not accept init_image. Use mode='img2vid' instead."
         )
-      }
-      if (params.end_image != null) {
-        throw new Error('txt2vid does not accept end_image.')
       }
     } else if (mode === 'img2vid') {
       if (!(params.init_image instanceof Uint8Array)) {
         throw new Error('img2vid requires init_image (Uint8Array of PNG/JPEG bytes).')
-      }
-      if (params.end_image != null) {
-        throw new Error(
-          "end_image is only valid for mode='flf2vid'. Use flf2vid to " +
-          'interpolate between a first and last frame.'
-        )
-      }
-    } else {
-      // flf2vid
-      if (!(params.init_image instanceof Uint8Array)) {
-        throw new Error('flf2vid requires init_image (first frame, Uint8Array).')
-      }
-      if (!(params.end_image instanceof Uint8Array)) {
-        throw new Error('flf2vid requires end_image (last frame, Uint8Array).')
       }
     }
 
@@ -404,7 +373,7 @@ class VideoStableDiffusion {
     // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
     // conditioning in Wan 2.1 I2V and FLF2V. Without it the C++ layer
     // cannot build the img_emb projection and will produce garbage or crash.
-    if ((mode === 'img2vid' || mode === 'flf2vid') && !this._files.clipVision) {
+    if (mode === 'img2vid' && !this._files.clipVision) {
       this.logger.warn(
         `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
         'Download clip_vision_h.safetensors from ' +
