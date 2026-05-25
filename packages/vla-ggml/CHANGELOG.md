@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.2.0
+## [0.2.0]
 
 - feat: π₀.₅ support behind GGUF `general.architecture=pi05`. The addon
   now loads and runs the Physical Intelligence π₀.₅ model alongside
