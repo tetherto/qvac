@@ -390,14 +390,19 @@ test('Qwen3.5-0.8B reasoning-budget=0 disables thinking', {
 
   t.ok(baseline.includes('<think>'),
     `baseline should contain <think> opening tag: "${baseline.slice(0, 100)}"`)
-  // CPU greedy on ARM64 routinely exhausts n_predict mid-thought, so only assert
-  // clean closure when the baseline actually emitted </think>. Same pattern as
-  // gemma4.test.js's reasoning-marker gate.
-  if (baseline.includes('</think>')) {
+  if (isLinuxArm64) {
+    // CPU greedy on ARM64 routinely exhausts n_predict mid-thought, so only assert
+    // clean closure when the baseline actually emitted </think>. Same pattern as
+    // gemma4.test.js's reasoning-marker gate.
+    if (baseline.includes('</think>')) {
+      t.ok(baseline.indexOf('<think>') < baseline.indexOf('</think>'),
+        'baseline opening tag must precede closing tag')
+    } else {
+      t.comment(`baseline opened <think> but did not close it within n_predict (${baseline.length} chars) — skipping closing-tag assertion`)
+    }
+  } else if (baseline.includes('</think>')) {
     t.ok(baseline.indexOf('<think>') < baseline.indexOf('</think>'),
       'baseline opening tag must precede closing tag')
-  } else {
-    t.comment(`baseline opened <think> but did not close it within n_predict (${baseline.length} chars) — skipping closing-tag assertion`)
   }
 
   t.absent(/Thinking Process/i.test(disabled),
