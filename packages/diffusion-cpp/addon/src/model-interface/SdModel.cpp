@@ -1020,8 +1020,9 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   const auto t0 = std::chrono::steady_clock::now();
 
   int numFramesOut = 0;
-  qvac_lib_inference_addon_sd::SdVideoFrames frames(
-      generate_video(sdCtx_.get(), &vidParams, &numFramesOut), numFramesOut);
+  sd_image_t* rawFrames =
+      generate_video(sdCtx_.get(), &vidParams, &numFramesOut);
+  qvac_lib_inference_addon_sd::SdVideoFrames frames(rawFrames, numFramesOut);
 
   // If cancelled during the sampler, surface as an exception for the same
   // reason as the image path: a "successful" completion with zero frames

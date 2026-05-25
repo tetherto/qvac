@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1] - 2026-05-25
+
+### Fixed
+
+#### Correct `SdVideoFrames` construction after `generate_video`
+
+`processVideo()` previously constructed `SdVideoFrames` in the same expression as the `generate_video()` call, passing `numFramesOut` before the library had written the out-parameter. Because C++ does not define evaluation order across function arguments, the RAII wrapper could capture a stale frame count (typically zero), leading to incorrect cleanup or empty output even when frames were produced. The call is now split: `generate_video()` runs first, then `SdVideoFrames` is built from the returned pointer and the updated `numFramesOut` value.
+
 ## [0.9.0] - 2026-05-21
 
 ### Changed
