@@ -285,48 +285,73 @@ def _optional_pt_keys_with_shape() -> dict[str, tuple[int, ...]]:
 # ---------------------------------------------------------------------------
 
 
+# Recognised --variant values. The default `vision-q8` matches the
+# Phase-3 GGUF that the milestone parity tests + initial S3 mirror were
+# calibrated against. `all-q8` and `all-q4` are mobile-tractable variants
+# (plan §4 follow-up: "Try Q8_0 in a follow-up once parity is locked").
+QUANT_VARIANTS = ('vision-q8', 'all-q8', 'all-q4')
+
+
 def select_target_dtype(
-    name: str, arr: np.ndarray
+    name: str, arr: np.ndarray, *, variant: str = 'vision-q8'
 ) -> GGMLQuantizationType:
-    """Pick a target GGML dtype for a given tensor."""
-    # Norms (PiGemmaRMSNorm scale param) — always F32 because the runtime
-    # broadcasts these per-row inside fused kernels and any precision loss
-    # here shows up disproportionately in cos-sim downstream.
+    """Pick a target GGML dtype for a given tensor.
+
+    Variants (sizes measured from the synthetic-shape self-test, which
+    mirrors pi05_base tensor shapes exactly):
+      * `vision-q8` — Q8_0 *only* for the vision tower's attn + fc1 +
+        head linears. Everything else stays F16/F32. ~6.7 GB for
+        pi05_base. Desktop CI parity reference; not mobile-tractable.
+      * `all-q8` — extends Q8_0 to every 2-D weight that's block-divisible
+        (VLM/expert attn + MLP linears, the 257K-row token embedder, the
+        pos_embed table, the action/time projections). Norms + ada
+        densities stay F32; 1-D biases stay F16; the 4-D patch_embed
+        Conv2d kernel stays F16 (can't be Q8). ~4.0 GB for pi05_base —
+        the embedder (257K × 2048) is the largest single saving.
+      * `all-q4` — same eligibility set as `all-q8` but Q4_0 instead.
+        ~2.5 GB for pi05_base. Aggressive size win at the cost of
+        looser per-block parity; needs its own parity sweep before use.
+    """
+    if variant not in QUANT_VARIANTS:
+        raise ValueError(f'unknown --variant {variant!r}; '
+                          f'expected one of {QUANT_VARIANTS}')
+
+    # ── Unconditional F32 (variant-independent): norms + ada modulators.
+    # Tiny tensors on precision-critical paths; quantising these shows up
+    # disproportionately in cos-sim downstream regardless of which variant
+    # we ship.
     if name.endswith(".scale"):
         return GGMLQuantizationType.F32
-
-    # adaRMSNorm modulator weight + bias — F32 too. These project the
-    # time-embedding into (scale, shift, gate) and live on the residual
-    # path; same reasoning as norms.
     if ".ada." in name:
         return GGMLQuantizationType.F32
 
-    # Position embedding (small table, 256×1152) — F16.
-    if name == "vision.pos_embed":
+    # ── Unconditional F16: shapes that no current Q kind can express.
+    # Patch embed conv kernel is 4-D, biases are 1-D — Q8_0/Q4_0 quantise
+    # rows of 2-D matrices only.
+    if name == "vision.patch_embed.weight":  # (out, in, kh, kw) 4-D
         return GGMLQuantizationType.F16
-
-    # Patch embed conv weight (1152, 3, 14, 14). 4-D, can't be Q8_0; F16
-    # is plenty here.
-    if name == "vision.patch_embed.weight":
-        return GGMLQuantizationType.F16
-
-    # Token embedder (257152, 2048) — F16. Big tensor (~1 GB at F16) but
-    # the plan keeps it at F16 for v1 and revisits later.
-    if name == "vlm.embed_tokens":
-        return GGMLQuantizationType.F16
-
-    # Biases always F16 — the cost saving from F32 → F16 is meaningful
-    # in aggregate and they're not on a hot precision path.
     if name.endswith(".bias"):
         return GGMLQuantizationType.F16
+    if arr.ndim != 2:
+        return GGMLQuantizationType.F16
 
-    # Linear weights: Q8_0 *only* for the vision tower's attn projections,
-    # fc1, and the head. fc2 has inner dim 4304 (not /32-divisible) so it
-    # stays F16. VLM/expert linears stay F16 in v1 (plan §4 quant plan —
-    # tighten in a follow-up once parity is locked).
-    if arr.ndim == 2 and name.startswith("vision."):
-        last_dim = arr.shape[-1]
-        is_q8_eligible_kind = (
+    # ── 2-D weight: variant decides which target.
+    target_for_linears = (
+        GGMLQuantizationType.Q4_0 if variant == 'all-q4'
+        else GGMLQuantizationType.Q8_0
+    )
+
+    # Block-size guard: gguf.quants requires the last dim be a multiple of
+    # the block size (32 for Q8_0 + Q4_0). Tensors that don't fit fall
+    # back to F16 — same fall-back rule as the original vision-q8 path.
+    if arr.shape[-1] % Q8_OK_BLOCK != 0:
+        return GGMLQuantizationType.F16
+
+    if variant == 'vision-q8':
+        # Original allow-list: vision tower attn projections + fc1 + head.
+        # fc2 has inner dim 4304 (not /32-divisible) so it lands at F16
+        # via the block-size guard above even when included here.
+        is_eligible = name.startswith("vision.") and (
             ".attn_q.weight" in name
             or ".attn_k.weight" in name
             or ".attn_v.weight" in name
@@ -334,11 +359,16 @@ def select_target_dtype(
             or ".fc1.weight" in name
             or name == "vision.head.weight"
         )
-        if is_q8_eligible_kind and last_dim % Q8_OK_BLOCK == 0:
-            return GGMLQuantizationType.Q8_0
+        if is_eligible:
+            return target_for_linears
+        return GGMLQuantizationType.F16
 
-    # Default: F16.
-    return GGMLQuantizationType.F16
+    # `all-q8` / `all-q4`: every 2-D weight that survives the block-size
+    # guard. That sweeps in VLM/expert attn + MLP linears, the token
+    # embedder, the pos_embed table, the action_in / action_out / time
+    # MLP projections — everything that's currently F16 default in the
+    # vision-q8 build.
+    return target_for_linears
 
 
 def encode_for_gguf(
@@ -354,16 +384,17 @@ def encode_for_gguf(
         return arr.astype(np.float32, copy=False), None
     if target == GGMLQuantizationType.F16:
         return arr.astype(np.float16, copy=False), None
-    if target == GGMLQuantizationType.Q8_0:
+    if target in (GGMLQuantizationType.Q8_0, GGMLQuantizationType.Q4_0):
         # gguf.quants.quantize returns a packed uint8 buffer + we must pass
-        # raw_dtype=Q8_0 so the writer records the right type code.
-        # Flatten then re-shape: quantize_rows expects a 2-D matrix.
+        # raw_dtype=<quant kind> so the writer records the right type code.
+        # quantize_rows expects a 2-D matrix; select_target_dtype already
+        # falls back to F16 for anything that isn't.
         if arr.ndim != 2:
             raise ValueError(
-                f"Q8_0 requested for non-2D tensor (ndim={arr.ndim})"
+                f"{target.name} requested for non-2D tensor (ndim={arr.ndim})"
             )
         packed = gguf_quantize(arr.astype(np.float32, copy=False), target)
-        return packed, GGMLQuantizationType.Q8_0
+        return packed, target
     raise NotImplementedError(f"unsupported target dtype {target}")
 
 
@@ -444,13 +475,21 @@ def convert(
     state_dict: dict[str, torch.Tensor],
     out_path: Path,
     checkpoint: str,
+    *,
+    variant: str = 'vision-q8',
 ) -> tuple[int, dict[str, tuple[GGMLQuantizationType, tuple[int, ...]]]]:
     """Walk the state dict, encode each tensor, write the GGUF.
+
+    `variant` selects the quantisation recipe (see select_target_dtype).
 
     Returns ``(n_written, per_tensor_info)`` for the caller's report.
     """
     writer = GGUFWriter(out_path, arch="pi05")
     stamp_metadata(writer, checkpoint)
+    # Stamp the quant variant into the GGUF so loaders can introspect
+    # which recipe was used without re-running the converter. Cheap to
+    # add; useful for the addon's `getVlaHparams()` surface in the future.
+    writer.add_string("pi05.quantization", variant)
 
     name_map = _global_map()
     written: dict[str, tuple[GGMLQuantizationType, tuple[int, ...]]] = {}
@@ -469,7 +508,7 @@ def convert(
 
         seen_pt_keys.add(pt_name)
         arr = t.numpy()
-        target = select_target_dtype(gg_name, arr)
+        target = select_target_dtype(gg_name, arr, variant=variant)
         payload, raw_dtype = encode_for_gguf(arr, target)
         # For quantised tensors ``payload`` is a packed uint8 buffer whose
         # last dim is bytes (not elements); GGUFWriter does the byte→element
@@ -499,7 +538,7 @@ def convert(
             gg_name = name_map[pt_name]
             shape = optional[pt_name]
             arr = np.zeros(shape, dtype=np.float32)
-            target = select_target_dtype(gg_name, arr)
+            target = select_target_dtype(gg_name, arr, variant=variant)
             payload, raw_dtype = encode_for_gguf(arr, target)
             writer.add_tensor(gg_name, payload, raw_dtype=raw_dtype)
             written[gg_name] = (target, shape)
@@ -734,6 +773,15 @@ def main() -> int:
     )
     parser.add_argument("--out", type=Path, required=True, help="Output GGUF path.")
     parser.add_argument(
+        "--variant",
+        choices=QUANT_VARIANTS,
+        default='vision-q8',
+        help="Quantisation recipe (see select_target_dtype docstring). "
+             "Default `vision-q8` matches the Phase-3 GGUF used by the "
+             "M3.x parity tests; `all-q8` / `all-q4` are smaller mobile-"
+             "tractable variants.",
+    )
+    parser.add_argument(
         "--verify-vs-pt",
         action="store_true",
         help="After writing, reload the GGUF and assert tensor names/shapes "
@@ -759,10 +807,11 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    n_written, intended = convert(sd, args.out, source_label)
+    n_written, intended = convert(sd, args.out, source_label, variant=args.variant)
     elapsed = time.time() - t0
-    log.info("wrote %d tensors → %s (%.1f MB) in %.1f s",
-             n_written, args.out, args.out.stat().st_size / 1e6, elapsed)
+    log.info("wrote %d tensors → %s (%.1f MB) in %.1f s [variant=%s]",
+             n_written, args.out, args.out.stat().st_size / 1e6, elapsed,
+             args.variant)
 
     # Per-quant breakdown for the report.
     by_dt: dict[GGMLQuantizationType, int] = {}
