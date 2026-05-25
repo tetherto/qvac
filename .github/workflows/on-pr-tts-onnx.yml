@@ -1,14 +1,13 @@
 name: On PR Trigger (TTS)
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled]
     branches:
       - main
       - release-*
       - feature-*
       - tmp-*
-      - feature/pr-concurrency-*
     paths:
       - "packages/tts-onnx/**"
       - "scripts/perf-report/**"

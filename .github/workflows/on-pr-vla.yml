@@ -1,7 +1,7 @@
 name: On PR Trigger (VLA)
 
 on:
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - synchronize
@@ -12,7 +12,6 @@ on:
       - release-*
       - feature-*
       - tmp-*
-      - feature/pr-concurrency-*
     paths:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
@@ -106,7 +105,7 @@ jobs:
   cpp-lint:
     # Only runs when we have a PR base SHA to diff against. Workflow_dispatch
     # has no pull_request context, which would make the diff target empty.
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && github.event_name == 'pull_request'
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && github.event_name == 'pull_request_target'
     needs: [authorize, label-gate]
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
