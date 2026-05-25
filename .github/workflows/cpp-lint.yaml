@@ -76,12 +76,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@6e8d3c306a462a58589396cda428d65e015f0d8b
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -104,7 +104,7 @@ jobs:
 
       # - if: ${{ inputs.include-vulkan-sdk }}
       #   name: Setup Vulkan SDK
-      #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+      #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@2e2c94d66a50c8b8851824314e343ede5297eb1f
       #   env:
       #     MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
       #   with:

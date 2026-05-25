@@ -69,7 +69,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup Bare runtime
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@12106231fbfef0bf12b2f4a150cff95f1dad67e4
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 

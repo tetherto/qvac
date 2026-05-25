@@ -169,7 +169,7 @@ jobs:
 
       - name: Setup build host (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
+        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -177,7 +177,7 @@ jobs:
 
       - name: Setup LLVM (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
 
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -192,12 +192,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@6e8d3c306a462a58589396cda428d65e015f0d8b
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -211,16 +211,16 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@12106231fbfef0bf12b2f4a150cff95f1dad67e4
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
       - name: Setup Apple Clang
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
 
       - if: ${{ inputs.include-vulkan-sdk && (matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
         name: Setup Vulkan SDK (Linux ARM and MacOS)
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@2e2c94d66a50c8b8851824314e343ede5297eb1f
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -256,7 +256,7 @@ jobs:
 
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
-        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
+        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@1225268a5953ea733a30dad7d3d9581073fb03da
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -371,7 +371,7 @@ jobs:
           find prebuilds -maxdepth 1 -type d -print || true
 
       - name: Strip debug symbols
-        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@6e8d3c306a462a58589396cda428d65e015f0d8b
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
