@@ -13,7 +13,7 @@
 name: QVAC Tests (sdk) - PR
 
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled, opened, synchronize]
     paths:
       - "packages/sdk/**"
