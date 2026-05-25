@@ -217,7 +217,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, sanity-checks, run-integration-tests, run-mobile-integration-tests]
-    if: always()
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
