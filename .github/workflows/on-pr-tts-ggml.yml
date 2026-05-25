@@ -3,11 +3,7 @@ name: On PR Trigger (TTS GGML)
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
+    branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/tts-ggml/**"
       - ".github/workflows/*tts-ggml*.yml"
