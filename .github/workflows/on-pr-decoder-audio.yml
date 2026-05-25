@@ -3,11 +3,7 @@ name: On PR Trigger (Decoder-audio)
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
+    branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/decoder-audio/**"
       - ".github/workflows/*decoder-audio*.yml"
