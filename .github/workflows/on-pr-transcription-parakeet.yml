@@ -7,6 +7,7 @@ on:
     paths:
       - "packages/transcription-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
+      - ".github/actions/cache-models/**"
 
   workflow_dispatch:
     inputs:

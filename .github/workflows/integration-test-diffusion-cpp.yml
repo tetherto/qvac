@@ -99,9 +99,10 @@ jobs:
 
       # PNGs are test-generated outputs uploaded as artifacts further
       # down; exclude them so they do not accumulate in the cache.
-      - name: Cache HF integration test models
+      - name: Cache integration test models
+        id: model-cache
         if: startsWith(matrix.runner, 'qvac-')
-        uses: ./.github/actions/cache-hf-models
+        uses: ./.github/actions/cache-models
         with:
           package: diffusion-cpp
           paths: |

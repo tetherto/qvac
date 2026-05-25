@@ -7,7 +7,7 @@ on:
     paths:
       - "packages/tts-ggml/**"
       - ".github/workflows/*tts-ggml*.yml"
-      - ".github/actions/cache-hf-models/**"
+      - ".github/actions/cache-models/**"
 
   workflow_dispatch:
     inputs:
