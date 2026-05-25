@@ -159,6 +159,9 @@ function setupCli (): void {
       quiet?: boolean
     }) => {
       try {
+        if (options.host.length === 0) {
+          throw new Error('At least one --host is required (repeat the flag for multiple targets)')
+        }
         const {
           formatVerifyBundleResult,
           hasErrors,
