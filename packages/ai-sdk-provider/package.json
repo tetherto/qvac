@@ -20,6 +20,7 @@
   },
   "files": [
     "dist/**/*",
+    "assets/**/*",
     "README.md",
     "LICENSE",
     "NOTICE"
