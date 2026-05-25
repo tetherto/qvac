@@ -15,7 +15,7 @@ on:
       - feature/pr-concurrency-*
     paths:
       - "packages/llm-llamacpp/**"
-      - ".github/workflows/*llamacpp-llm*.yml"
+      - ".github/workflows/*llm-llamacpp*.yml"
   workflow_dispatch:
   workflow_call:
 
