@@ -66,13 +66,13 @@
     "test:unit": "tsx --test test/*.test.ts"
   },
   "peerDependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.0",
-    "ai": "^6.0.0"
+    "@ai-sdk/openai-compatible": "^2.0",
+    "ai": "^6.0"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.0",
+    "@ai-sdk/openai-compatible": "^2.0",
     "@types/node": "^24.2.1",
-    "ai": "^6.0.0",
+    "ai": "^6.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
