@@ -152,6 +152,7 @@ export const ttsPlugin = definePlugin({
   ) {
     const { ttsEngine } = cfg as { ttsEngine?: string };
 
+    // Same default as the former onnx-tts plugin: omitting `ttsEngine` → Chatterbox.
     if (ttsEngine === "supertonic") {
       return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig);
     }

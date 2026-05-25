@@ -5,6 +5,7 @@ import {
   ttsResponseSchema,
   textToSpeechStreamResponseSchema,
   ttsConfigSchema,
+  ttsSupertonicRuntimeConfigSchema,
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
 } from "@/schemas/text-to-speech";
 
@@ -24,6 +25,18 @@ test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
     voice: "F1",
   });
   t.is(r.success, true);
+});
+
+test("ttsSupertonicRuntimeConfigSchema: strips removed ttsSupertonicMultilingual", (t) => {
+  const r = ttsSupertonicRuntimeConfigSchema.safeParse({
+    ttsEngine: "supertonic",
+    language: "es",
+    ttsSupertonicMultilingual: true,
+  });
+  t.is(r.success, true);
+  if (r.success) {
+    t.is("ttsSupertonicMultilingual" in r.data, false);
+  }
 });
 
 test("ttsConfigSchema: accepts legacy ONNX field names for migration errors", (t) => {

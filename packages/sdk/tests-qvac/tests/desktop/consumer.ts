@@ -267,7 +267,6 @@ resources.define("tts-supertonic-multilingual", {
     ttsEngine: "supertonic",
     language: "es",
     voice: "F1",
-    ttsSupertonicMultilingual: true,
   },
 });
 

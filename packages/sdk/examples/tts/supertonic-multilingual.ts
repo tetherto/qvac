@@ -25,7 +25,6 @@ try {
       voice: "F1",
       ttsSpeed: 1.05,
       ttsNumInferenceSteps: 5,
-      ttsSupertonicMultilingual: true,
     },
     onProgress: (progress: ModelProgressUpdate) => {
       console.log(progress);

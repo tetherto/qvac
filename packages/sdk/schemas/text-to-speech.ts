@@ -24,7 +24,6 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   voice: z.string().optional(),
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
-  ttsSupertonicMultilingual: z.boolean().optional(),
   useGPU: z.boolean().optional(),
 });
 
@@ -52,6 +51,8 @@ export const ttsLoadConfigSchema = z.union([
 // `LegacyTtsModelDeprecatedError` from the TTS plugin's `resolveConfig`,
 // rather than a generic Zod `Unrecognized key` error.
 export const LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS = [
+  // ONNX runtime flag; GGML uses modelSrc (GGUF) + `language` instead.
+  "ttsSupertonicMultilingual",
   "ttsTokenizerSrc",
   "ttsSpeechEncoderSrc",
   "ttsEmbedTokensSrc",
