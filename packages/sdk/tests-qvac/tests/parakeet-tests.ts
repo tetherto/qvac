@@ -125,8 +125,8 @@ export const parakeetCtcCorruptedWav = createParakeetTest(
   60000,
 );
 
-// ── Sortformer (diarization) tests ────────────────────────────────────────────
-// Parakeet Sortformer — speaker diarization, output: "Speaker N: Xs - Ys"
+// ── Sortformer v2.1 (diarization) tests ───────────────────────────────────────
+// Batch `transcribe` on PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0 — expect "Speaker …"
 
 export const parakeetSortformerSingle = createParakeetTest(
   "parakeet-sortformer-single",

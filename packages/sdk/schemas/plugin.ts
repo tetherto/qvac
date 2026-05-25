@@ -381,6 +381,13 @@ export const PLUGIN_DIFFUSION =
   "@qvac/sdk/sdcpp-generation/plugin" as const;
 
 /**
+ * Vision-Language-Action plugin (SmolVLA on ggml).
+ * Provides: robot-action inference from a pair of camera frames and a
+ * natural-language instruction.
+ */
+export const PLUGIN_VLA = "@qvac/sdk/ggml-vla/plugin" as const;
+
+/**
  * All built-in SDK plugins.
  *
  * @example
@@ -398,6 +405,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_TTS,
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
+  PLUGIN_VLA,
 ] as const;
 
 export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];
@@ -429,3 +437,6 @@ export const ADDON_OCR = "@qvac/ocr-onnx" as const;
 
 /** Native addon package for image generation (stable-diffusion.cpp) */
 export const ADDON_DIFFUSION = "@qvac/diffusion-cpp" as const;
+
+/** Native addon package for vision-language-action inference (SmolVLA on ggml) */
+export const ADDON_VLA = "@qvac/vla-ggml" as const;

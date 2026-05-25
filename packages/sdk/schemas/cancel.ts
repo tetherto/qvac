@@ -30,6 +30,7 @@ const cancelKindSchema = z
     "diffusion",
     "tts",
     "ocr",
+    "vla",
     "finetune",
     "loadModel",
     "downloadAsset",

@@ -14,10 +14,10 @@
     "test:integration": "brittle-bare test/integration/addon.test.js",
     "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:integration:long": "brittle-bare test/integration/**/longES.test.js",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_VULKAN=OFF && bare-make build --target test-whisper-core && bare-make install",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-whisper-core && bare-make install",
     "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-whisper-core --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
-    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON -D ENABLE_VULKAN=OFF && bare-make build --target test-whisper-core",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target test-whisper-core",
     "coverage:cpp:summary": "cd build/addon/tests && llvm-cov report ./test-whisper-core --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/addon/tests/ && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./test-whisper-core -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./test-whisper-core -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
@@ -72,8 +72,6 @@
     "@types/node": "^22",
     "bare-buffer": "^3.4.2",
     "bare-ffmpeg": "^1.0.0-32",
-    "bare-fs": "^4.7.1",
-    "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
     "brittle": "^3.17.0",
@@ -85,7 +83,9 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
-    "@qvac/logging": "^0.1.0"
+    "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.7.1",
+    "bare-path": "^3.0.0"
   },
   "exports": {
     "./package": "./package.json",

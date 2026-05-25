@@ -8,26 +8,27 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
-    "whisper-cpp",
+    {
+      "name": "whisper-cpp",
+      "features": ["opencl", "vulkan"],
+      "platform": "android"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["vulkan"],
+      "platform": "!(osx | ios | android)"
+    },
+    {
+      "name": "whisper-cpp",
+      "platform": "osx | ios"
+    },
     "gtest"
   ],
-  "features": {
-    "vulkan": {
-      "description": "Enable Vulkan GPU acceleration",
-      "dependencies": [
-        {
-          "name": "whisper-cpp",
-          "features": [
-            "vulkan"
-          ]
-        }
-      ]
-    }
-  },
   "overrides": [
     {
       "name": "whisper-cpp",
-      "version": "1.8.4.2#1"
+      "version": "1.8.4.3",
+      "port-version": 0
     }
   ]
 }

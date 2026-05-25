@@ -13,6 +13,11 @@ export const audioInputSchema = z.discriminatedUnion("type", [
 
 const transcribeBaseSchema = z.object({
   modelId: z.string(),
+  /**
+   * Initial transcription prompt. Whisper engine only — silently
+   * ignored by the parakeet engine, which has no equivalent prompting
+   * surface in `qvac-parakeet.cpp`.
+   */
   prompt: z.string().optional(),
   metadata: z.boolean().optional(),
 });
@@ -47,9 +52,42 @@ export const vadStateEventSchema = z.object({
   probability: z.number(),
 });
 
-export const endOfTurnEventSchema = z.object({
+export const whisperEndOfTurnEventSchema = z.object({
+  source: z.literal("whisper"),
   silenceDurationMs: z.number(),
 });
+
+export const parakeetEndOfTurnEventSchema = z.object({
+  source: z.literal("parakeet"),
+});
+
+const endOfTurnDiscriminatedSchema = z.discriminatedUnion("source", [
+  whisperEndOfTurnEventSchema,
+  parakeetEndOfTurnEventSchema,
+]);
+
+/** Legacy whisper wire frames omitted `source` and only sent `silenceDurationMs`. */
+function normalizeEndOfTurnWire(value: unknown) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !("source" in value) &&
+    typeof (value as { silenceDurationMs?: unknown }).silenceDurationMs ===
+      "number"
+  ) {
+    return {
+      source: "whisper" as const,
+      silenceDurationMs: (value as { silenceDurationMs: number })
+        .silenceDurationMs,
+    };
+  }
+  return value;
+}
+
+export const endOfTurnEventSchema = z.preprocess(
+  normalizeEndOfTurnWire,
+  endOfTurnDiscriminatedSchema,
+);
 
 export const transcribeRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribe"),
@@ -88,6 +126,35 @@ export type TranscribeClientParams = {
 export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
 export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 
+/**
+ * Per-call overrides for parakeet's duplex streaming session.
+ *
+ * Each field maps to its `streaming*`-prefixed counterpart in
+ * `parakeetConfig` (see `parakeetRuntimeConfigSchema`). The `streaming`
+ * prefix is intentionally dropped here because every field on this
+ * object is already namespaced under the `parakeetStreamingConfig`
+ * field of `transcribeStream({ ... })`. Any field omitted falls back
+ * to the load-time value.
+ */
+export const parakeetStreamingRunConfigSchema = z.object({
+  chunkMs: z.number().int().positive().optional(),
+  historyMs: z.number().int().positive().optional(),
+  leftContextMs: z.number().int().nonnegative().optional(),
+  rightLookaheadMs: z.number().int().nonnegative().optional(),
+  emitPartials: z.boolean().optional(),
+  emitEnergyVad: z.boolean().optional(),
+  spkCacheEnable: z.boolean().optional(),
+  spkCacheLen: z.number().int().positive().optional(),
+  fifoLen: z.number().int().positive().optional(),
+  chunkLeftContextMs: z.number().int().nonnegative().optional(),
+  chunkRightContextMs: z.number().int().nonnegative().optional(),
+  spkCacheUpdatePeriod: z.number().int().positive().optional(),
+});
+
+export type ParakeetStreamingRunConfig = z.infer<
+  typeof parakeetStreamingRunConfigSchema
+>;
+
 export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
   type: z.literal("transcribeStream"),
   emitVadEvents: z.boolean().optional(),
@@ -97,9 +164,10 @@ export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
     .nonnegative()
     .optional()
     .describe(
-      "Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely.",
+      "Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely. Whisper engine only.",
     ),
   vadRunIntervalMs: z.number().int().positive().optional(),
+  parakeetStreamingConfig: parakeetStreamingRunConfigSchema.optional(),
   requestId: z
     .string()
     .min(1)
@@ -125,14 +193,9 @@ export type TranscribeStreamClientParams = {
   prompt?: string;
   metadata?: boolean;
   emitVadEvents?: boolean;
-  /**
-   * Silence (ms) before an `endOfTurn` event fires. `0` or unset disables
-   * end-of-turn detection entirely — no `endOfTurn` events will be emitted
-   * even when `emitVadEvents` is `true`. Pass a positive value (e.g. `800`)
-   * to enable.
-   */
   endOfTurnSilenceMs?: number;
   vadRunIntervalMs?: number;
+  parakeetStreamingConfig?: ParakeetStreamingRunConfig;
 };
 
 export interface TranscribeStreamSession {
@@ -150,6 +213,8 @@ export interface TranscribeStreamMetadataSession {
 }
 
 export type VadStateEvent = z.infer<typeof vadStateEventSchema>;
+export type WhisperEndOfTurnEvent = z.infer<typeof whisperEndOfTurnEventSchema>;
+export type ParakeetEndOfTurnEvent = z.infer<typeof parakeetEndOfTurnEventSchema>;
 export type EndOfTurnEvent = z.infer<typeof endOfTurnEventSchema>;
 
 export type TranscribeStreamEvent =
