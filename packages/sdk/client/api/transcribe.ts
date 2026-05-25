@@ -169,6 +169,14 @@ export function transcribeStream(
   options?: RPCOptions,
 ): Promise<TranscribeStreamConversationSession>;
 export function transcribeStream(
+  params: TranscribeStreamClientParams & {
+    parakeetStreamingConfig: NonNullable<
+      TranscribeStreamClientParams["parakeetStreamingConfig"]
+    >;
+  },
+  options?: RPCOptions,
+): Promise<TranscribeStreamConversationSession>;
+export function transcribeStream(
   params: TranscribeStreamClientParams & { metadata: true },
   options?: RPCOptions,
 ): Promise<TranscribeStreamMetadataSession>;
@@ -196,7 +204,10 @@ export function transcribeStream(
     return transcribeStreamWithAudio(params, options);
   }
   const streamParams = params as TranscribeStreamClientParams;
-  if (streamParams.emitVadEvents === true) {
+  if (
+    streamParams.emitVadEvents === true ||
+    streamParams.parakeetStreamingConfig !== undefined
+  ) {
     return transcribeStreamDuplexConversation(streamParams, options);
   }
   if (streamParams.metadata === true) {
@@ -256,6 +267,9 @@ function buildTranscribeStreamRequest(
     }),
     ...(params.vadRunIntervalMs !== undefined && {
       vadRunIntervalMs: params.vadRunIntervalMs,
+    }),
+    ...(params.parakeetStreamingConfig && {
+      parakeetStreamingConfig: params.parakeetStreamingConfig,
     }),
   };
 }
@@ -435,9 +449,16 @@ function processLineConversation(
       };
     }
     if (response.endOfTurn) {
+      if (response.endOfTurn.source === "whisper") {
+        return {
+          type: "endOfTurn",
+          source: "whisper",
+          silenceDurationMs: response.endOfTurn.silenceDurationMs,
+        };
+      }
       return {
         type: "endOfTurn",
-        silenceDurationMs: response.endOfTurn.silenceDurationMs,
+        source: "parakeet",
       };
     }
     if (wantsMetadata) {

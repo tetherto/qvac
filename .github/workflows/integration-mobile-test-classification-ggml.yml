@@ -103,6 +103,16 @@ jobs:
           prebuild-artifact-prefix: 'classification-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
+      # The shared composite handles prebuild fan-out, but classification-ggml
+      # also needs `weights/*.gguf` copied into `test/mobile/testAssets/<file>.gguf.bin`
+      # (plus `test/images/*` staged) so the React Native bundler packs them into
+      # the APK/IPA. Without this `resolveModelPath()` in test/integration/utils.js
+      # throws at runtime: "Mobile asset not found in global.assetPaths:
+      # mobilenetv3_3class_v3_fp16.gguf.bin". See scripts/copy-mobile-test-assets.js.
+      - name: Copy mobile test assets (weights + images)
+        working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
+        run: npm run mobile:copy-prebuilds
+
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app

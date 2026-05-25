@@ -456,19 +456,37 @@ function generateParakeetName({
 }: BaseNameInput): string {
   const lower = filename.toLowerCase();
 
-  // Detect model variant from registry path
   let variant = "";
-  if (lowerPath.includes("parakeet-tdt") || lowerPath.includes("parakeet/")) {
-    variant = "TDT";
-  } else if (lowerPath.includes("parakeet-ctc")) {
-    variant = "CTC";
-  } else if (lowerPath.includes("eou") || lowerPath.includes("parakeet-rs")) {
-    variant = "EOU";
-  } else if (lowerPath.includes("sortformer")) {
+  if (lower.includes("sortformer") || lower.includes("diar_streaming")) {
     variant = "SORTFORMER";
+  } else if (lower.includes("ctc") || lowerPath.includes("parakeet-ctc")) {
+    variant = "CTC";
+  } else if (lower.includes("eou") || lowerPath.includes("parakeet-rs")) {
+    variant = "EOU";
+  } else if (lower.includes("tdt") || lowerPath.includes("parakeet-tdt")) {
+    variant = "TDT";
   }
 
-  // Detect file role from filename
+  if (lower.endsWith(".gguf")) {
+    const paramsMatch = filename.match(
+      /(?:^|[-_])(\d+(?:\.\d+)?[mb])(?=[-_.])/i,
+    );
+    const versionMatch = filename.match(/[-_]v(\d+(?:\.\d+)?)/i);
+    const speakerMatch = filename.match(/(\d+spk)/i);
+    const paramsHint = paramsMatch ? paramsMatch[1]! : "";
+    const versionHint = versionMatch ? `V${versionMatch[1]!}` : "";
+    const speakerHint = speakerMatch ? speakerMatch[1]! : "";
+
+    const nameParts = [
+      variant,
+      paramsHint,
+      speakerHint,
+      versionHint,
+      quantization,
+    ].filter((p) => p && p !== "");
+    return `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
+  }
+
   let fileRole = "";
   if (lower.includes("encoder") && (lower.endsWith(".data") || lower.endsWith(".onnx.data"))) {
     fileRole = "ENCODER_DATA";

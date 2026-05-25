@@ -1,11 +1,20 @@
+/**
+ * Parakeet TDT transcription from a WAV file.
+ *
+ * Usage:
+ *   bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file> [parakeet-tdt-gguf]
+ *
+ * Loads a single GGUF checkpoint (`PARAKEET_TDT_0_6B_V3_Q8_0` by default) and
+ * transcribes the file with the batch `transcribe` API. Omit the model
+ * argument to use the registry constant.
+ *
+ * Audio should be 16 kHz mono PCM in a WAV container.
+ */
 import {
   loadModel,
   unloadModel,
   transcribe,
-  PARAKEET_TDT_ENCODER_FP32,
-  PARAKEET_TDT_DECODER_FP32,
-  PARAKEET_TDT_VOCAB,
-  PARAKEET_TDT_PREPROCESSOR_FP32,
+  PARAKEET_TDT_0_6B_V3_Q8_0,
 } from "@qvac/sdk";
 
 const args = process.argv.slice(2);
@@ -13,32 +22,22 @@ const args = process.argv.slice(2);
 if (!args[0]) {
   console.error(
     "Usage: bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file-path> " +
-      "[encoder-onnx] [decoder-onnx] [vocab-txt] [preprocessor-onnx]",
+      "[parakeet-tdt-gguf]",
   );
-  console.error("\nIf model paths are omitted, defaults to registry models.");
+  console.error("\nIf the model path is omitted, defaults to the registry model.");
   process.exit(1);
 }
 
 const audioFilePath = args[0];
-
-const parakeetEncoderSrc = args[1] ?? PARAKEET_TDT_ENCODER_FP32;
-const parakeetDecoderSrc = args[2] ?? PARAKEET_TDT_DECODER_FP32;
-const parakeetVocabSrc = args[3] ?? PARAKEET_TDT_VOCAB;
-const parakeetPreprocessorSrc = args[4] ?? PARAKEET_TDT_PREPROCESSOR_FP32;
+const parakeetModelSrc = args[1] ?? PARAKEET_TDT_0_6B_V3_Q8_0;
 
 try {
   console.log("Starting Parakeet transcription example...");
 
   console.log("Loading Parakeet model...");
   const modelId = await loadModel({
-    modelSrc: parakeetEncoderSrc,
+    modelSrc: parakeetModelSrc,
     modelType: "parakeet",
-    modelConfig: {
-      parakeetEncoderSrc,
-      parakeetDecoderSrc,
-      parakeetVocabSrc,
-      parakeetPreprocessorSrc,
-    },
     onProgress: (progress) => {
       console.log(`Download progress: ${progress.percentage.toFixed(1)}%`);
     },
@@ -56,6 +55,6 @@ try {
   await unloadModel({ modelId });
   console.log("Parakeet model unloaded successfully");
 } catch (error) {
-  console.error("Error:", error);
+  console.error("❌ Error:", error);
   process.exit(1);
 }

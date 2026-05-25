@@ -61,16 +61,6 @@ jobs:
             arch: x64
 
     steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Windows — enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: bash
-        run: git config --system core.longpaths true
-
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -79,7 +69,9 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup Bare runtime
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        with:
+          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}

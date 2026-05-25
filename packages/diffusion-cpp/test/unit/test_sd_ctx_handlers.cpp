@@ -198,12 +198,19 @@ TEST(SdCtxHandlers_ComputeAndCompatFlags, DiffusionFaDefaultIsTrue) {
   EXPECT_TRUE(SdCtxConfig{}.diffusionFlashAttn);
 }
 
+TEST(SdCtxHandlers_ComputeAndCompatFlags, ConvDirectDefaultsAreTrue) {
+  EXPECT_TRUE(SdCtxConfig{}.diffusionConvDirect);
+  EXPECT_TRUE(SdCtxConfig{}.vaeConvDirect);
+}
+
 TEST(
     SdCtxHandlers_ComputeAndCompatFlags,
     DiffusionFaConvAndSdxlFlagsMapAndInvalidThrow) {
   EXPECT_TRUE(applyOne("diffusion_fa", "true").diffusionFlashAttn);
   EXPECT_FALSE(applyOne("diffusion_fa", "false").diffusionFlashAttn);
   EXPECT_TRUE(applyOne("diffusion_conv_direct", "1").diffusionConvDirect);
+  EXPECT_FALSE(applyOne("diffusion_conv_direct", "0").diffusionConvDirect);
+  EXPECT_TRUE(applyOne("vae_conv_direct", "1").vaeConvDirect);
   EXPECT_FALSE(applyOne("vae_conv_direct", "0").vaeConvDirect);
   EXPECT_TRUE(
       applyOne("force_sdxl_vae_conv_scale", "true").forceSDXLVaeConvScale);

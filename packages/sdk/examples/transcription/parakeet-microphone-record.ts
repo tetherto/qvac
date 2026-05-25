@@ -1,10 +1,11 @@
 /**
- * Microphone → Parakeet transcription using chunked `transcribe` calls.
+ * Microphone → Parakeet batch transcription (chunked `transcribe`).
  *
- * Usage: bun run examples/transcription/parakeet-microphone-record.ts
+ * Usage:
+ *   bun run examples/transcription/parakeet-microphone-record.ts
  *
- * Captures 3-second audio chunks from the microphone and sends each to the
- * batch `transcribe` API. Press Ctrl+C to quit.
+ * Captures 3 s s16le chunks from the microphone and sends each to `transcribe`
+ * with the TDT model. Press Ctrl+C to stop.
  *
  * Requirements: FFmpeg installed, microphone access.
  */
@@ -12,10 +13,7 @@ import {
   loadModel,
   unloadModel,
   transcribe,
-  PARAKEET_TDT_ENCODER_FP32,
-  PARAKEET_TDT_DECODER_FP32,
-  PARAKEET_TDT_VOCAB,
-  PARAKEET_TDT_PREPROCESSOR_FP32,
+  PARAKEET_TDT_0_6B_V3_Q8_0,
 } from "@qvac/sdk";
 import { spawnSync } from "child_process";
 import { startMicrophone } from "../audio/mic-input";
@@ -37,14 +35,8 @@ try {
 
 console.log("Loading Parakeet model...");
 const modelId = await loadModel({
-  modelSrc: PARAKEET_TDT_ENCODER_FP32,
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
   modelType: "parakeet",
-  modelConfig: {
-    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
-    parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
-    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,
-  },
   onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
 });
 console.log("Model loaded.\n");
