@@ -57,10 +57,10 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
-          - os: mac-mini-m4
+          - os: macos-15-xlarge
             platform: darwin
             arch: arm64
-            runner: mac-mini-m4-gpu
+            runner: macos-15-xlarge
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -289,7 +289,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
       - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
-        name: Install AWS CLI on macOS (user-local, no sudo — covers self-hosted mac-mini-m4)
+        name: Install AWS CLI on macOS (user-local fallback for runners without pre-installed aws)
         shell: bash
         run: |
           # 1. Already on PATH?
@@ -307,9 +307,8 @@ jobs:
               exit 0
             fi
           done
-          # 3. User-local install (self-hosted mac-mini-m4 has no passwordless
-          # sudo, so we extract AWSCLIV2.pkg into $HOME instead of using
-          # `installer -target /`).
+          # 3. User-local install (extract AWSCLIV2.pkg into $HOME instead
+          # of using `installer -target /` which requires sudo).
           echo "Installing AWS CLI v2 user-local..."
           curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
           rm -rf /tmp/awscli-expanded
