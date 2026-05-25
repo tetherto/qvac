@@ -20,10 +20,10 @@ const logger = getClientLogger();
 
 /** Config filenames searched under a project root (bundle/verify/commands). */
 export const CONFIG_CANDIDATES = [
-  "qvac.config.json",
-  "qvac.config.js",
-  "qvac.config.mjs",
   "qvac.config.ts",
+  "qvac.config.mjs",
+  "qvac.config.js",
+  "qvac.config.json",
 ] as const;
 
 async function findProjectRoot(): Promise<string | undefined> {
@@ -92,10 +92,20 @@ async function loadJsConfig(filePath: string): Promise<QvacConfig> {
 }
 
 async function loadTsConfig(filePath: string): Promise<QvacConfig> {
+  let tsxApiPath: string;
   try {
     const { createRequire } = await import("node:module");
     const require = createRequire(import.meta.url);
-    const tsxApiPath = require.resolve("tsx/esm/api");
+    tsxApiPath = require.resolve("tsx/esm/api");
+  } catch (error) {
+    throw new ConfigFileInvalidError(
+      filePath,
+      "Loading a TypeScript qvac.config.ts requires the optional peer dependency `tsx`. Install it as a devDependency, or use qvac.config.mjs / qvac.config.js / qvac.config.json instead.",
+      error,
+    );
+  }
+
+  try {
     const tsxModule = (await import(tsxApiPath)) as {
       tsImport: (
         configFilePath: string,
