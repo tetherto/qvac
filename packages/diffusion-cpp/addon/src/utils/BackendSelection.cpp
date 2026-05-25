@@ -145,8 +145,9 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred) {
     const char* name = ggml_backend_dev_name(dev);
     QLOG_IF(
         Priority::INFO,
-        std::string("Backend selection: GPU device '") + desc +
-            "' (backend: " + name + ")");
+        std::string("Backend selection: GPU device '") +
+            (desc != nullptr ? desc : "<null>") +
+            "' (backend: " + (name != nullptr ? name : "<null>") + ")");
 
     const int model = parseAdrenoModelFromGpuDevice(dev);
     if (model > 0) {
