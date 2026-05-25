@@ -11,7 +11,7 @@ and this project adheres to
 
 ### Changed
 
-- Added the package-local `qvac-fabric` vcpkg overlay and registry configuration used by the mobile and desktop C++ builds, including Android Vulkan backend version handling.
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1` for mobile and desktop C++ builds.
 - Switched environment access in the JS wrapper to `bare-env`, keeping default model path and native logger toggles compatible with Bare runtimes.
 
 ## [0.1.0]

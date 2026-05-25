@@ -2,7 +2,7 @@
 
 ## [0.2.0] - 2026-05-23
 
-- Added the package-local `qvac-fabric` vcpkg overlay and registry configuration with Android Vulkan backend version handling.
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1`.
 - Relaxed the `cmake-bare` dev dependency range to accept compatible patch releases.
 
 ## [0.1.0]

@@ -15,7 +15,7 @@
 
 ### Changed
 
-- Added the package-local `qvac-fabric` vcpkg overlay and registry configuration with Android Vulkan backend version handling.
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1`.
 - Expanded Qwen3.5 and Gemma 4 integration coverage around GPU/mobile paths.
 
 ## [0.21.0] - 2026-05-13

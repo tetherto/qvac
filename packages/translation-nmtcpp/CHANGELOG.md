@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Added the package-local `qvac-fabric` vcpkg overlay and registry configuration with Android Vulkan backend version handling.
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1`.
 - Added the direct `bare-path` dependency required by the updated package tooling and build scripts.
 
 ## [3.0.0] - 2026-05-10

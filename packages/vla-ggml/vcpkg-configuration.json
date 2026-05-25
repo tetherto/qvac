@@ -13,8 +13,5 @@
         "gtest"
       ]
     }
-  ],
-  "overlay-ports": [
-    "vcpkg/ports"
   ]
 }
