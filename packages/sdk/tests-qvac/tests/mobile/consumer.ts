@@ -228,11 +228,12 @@ async function resolveBundledAudioUri(filename: string): Promise<string | undefi
 resources.define("tts-chatterbox", {
   constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
   type: "tts",
-  config: {
+  config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
-  },
+    referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
+  }),
 });
 
 resources.define("tts-supertonic", {

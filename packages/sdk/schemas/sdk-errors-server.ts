@@ -196,7 +196,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.LEGACY_TTS_MODEL_DEPRECATED]: {
     name: "LEGACY_TTS_MODEL_DEPRECATED",
     message: (legacyFields?: string) =>
-      `Legacy ONNX TTS modelConfig fields are no longer supported (${legacyFields ?? "unknown fields"}). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc and, for Chatterbox, s3genModelSrc in modelConfig (e.g. loadModel({ modelSrc: TTS_CHATTERBOX_T3_TURBO_Q8_0, modelType: "tts", modelConfig: { ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_CHATTERBOX_S3GEN } })).`,
+      `Legacy ONNX TTS modelConfig fields are no longer supported (${legacyFields ?? "unknown fields"}). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc and, for Chatterbox, s3genModelSrc in modelConfig (e.g. loadModel({ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: { ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX } })).`,
   },
 
   // Model Operations (52,400-52,799)

@@ -242,6 +242,11 @@ resources.define("tts-chatterbox", {
     ttsEngine: "chatterbox",
     language: "en",
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    referenceAudioSrc: path.resolve(
+      process.cwd(),
+      "assets/audio",
+      "transcription-short-wav.wav",
+    ),
   },
 });
 
