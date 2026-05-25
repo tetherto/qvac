@@ -1,10 +1,10 @@
-// Phase-3 M3.3 parity test: full SigLIP-So400m/14 vision tower.
+// M3.3 parity test: full SigLIP-So400m/14 vision tower.
 //
 // End-to-end vision forward: patch_embed → pos_embed → 27 transformer
 // blocks → post_layernorm → head Linear. Loads the full tower from
 // pi05_base.gguf (≈430 tensors), feeds in the cam0 fixture image, runs
 // the graph, and asserts against `vision.head_out[cam0]` from the
-// Phase-0 PyTorch dump.
+// PyTorch reference.
 
 #include <algorithm>
 #include <cmath>

@@ -1,4 +1,4 @@
-// Phase-3 M3.11 parity test: one explicit-Euler ODE step.
+// M3.11 parity test: one explicit-Euler ODE step.
 //
 // Trivial:  x_next = x + dt · v_t  where dt = -1/10 (pi05's
 // `NUM_INFERENCE_STEPS = 10`).

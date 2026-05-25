@@ -1,6 +1,6 @@
 #pragma once
 
-// π₀.₅ model — full Phase-3 implementation. SigLIP-So400m/14 vision encoder,
+// π₀.₅ model implementation. SigLIP-So400m/14 vision encoder,
 // Gemma-1 2B VLM prefill with KV-cache taps, Gemma-1 300M action expert with
 // joint attention, adaRMSNorm conditioning, and 10-step ODE flow matching.
 
@@ -21,20 +21,18 @@ namespace qvac_lib_infer_vla_ggml {
 // complete) so unique_ptr<pi05_model> compiles without leaking the type.
 struct pi05_model;
 
-// ── Phase 3 milestone helpers ────────────────────────────────────────────
-// Each milestone (M3.1 … M3.13) exposes a small C++ entry point so the
-// matching GoogleTest can drive the sub-graph directly, without going
-// through Pi05Model::infer. Mirrors the pattern in `smolvla.hpp` (e.g.
+// ── Sub-graph helpers ────────────────────────────────────────────────────
+// Each sub-graph exposes a small C++ entry point so the matching
+// GoogleTest can drive it directly, without going through
+// Pi05Model::infer. Mirrors the pattern in `smolvla.hpp` (e.g.
 // `build_siglip_graph`). Implementations live in `pi05.cpp`; tests live
 // next to test_model_factory.cpp under `test/unit/`.
 
-// M3.1 — SigLIP patch embed + position embed.
+// SigLIP patch embed + position embed.
 //
 // Builds the prefix of the SigLIP-So400m/14 forward up to (but excluding)
 // the first transformer block, with both intermediate outputs exposed so
-// the parity test can compare each against
-// `vision.patch_embed_out[cam0]` and `vision.pos_embed_out[cam0]` from
-// the Phase-0 PyTorch dump.
+// the parity test can compare each against the PyTorch reference.
 //
 // Layout note: ggml tensors are dim-0-fastest, so for a (256-patch,
 // 1152-channel) feature map both output tensors have ne=[1152, 256] —
@@ -145,8 +143,7 @@ struct Pi05VisionTowerWeights {
 
 struct Pi05VisionTowerOutputs {
   // Final tower output: ne=[proj_dim=2048, n_patches=256]. Byte-equivalent
-  // to numpy (n_patches, proj_dim) row-major, which is how the Phase-0
-  // dump stores `vision.head_out[cam_i]`.
+  // to numpy (n_patches, proj_dim) row-major.
   struct ggml_tensor* head_out;
 };
 
@@ -174,8 +171,7 @@ Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
 // LayerNorm/RMSNorm sees inputs that are too small by ~45×.
 //
 // Returns ne=[hidden, n_tokens] — byte-equivalent to numpy
-// (n_tokens, hidden) row-major, which is how the Phase-0 dump stores
-// `vlm.embed_out`.
+// (n_tokens, hidden) row-major.
 //
 // `tokens` must be a GGML_TYPE_I32 tensor of shape (n_tokens,) and
 // `embed_tokens` must have ne[0] == hidden. Returns nullptr on
@@ -197,7 +193,7 @@ struct ggml_tensor* pi05_build_vlm_embed_graph(
 // Implementation choices come from cross-referencing llama.cpp's
 // `llm_build_gemma` (gemma.cpp) and openpi's `gemma.py`. Specifically:
 //   * RMSNorm scale is applied as `(1 + scale)` (openpi/gemma.py:122).
-//     The Phase-2 converter copies the raw PyTorch tensor, so we apply
+//     The GGUF converter copies the raw PyTorch tensor, so we apply
 //     the `+1` at graph-build time.
 //   * Hidden activation is GELU with the tanh approximation
 //     (lerobot/pi05's `hidden_activation = "gelu_pytorch_tanh"`).
@@ -467,7 +463,7 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
 // allocates backends, maps all 848 weight tensor pointers, and
 // populates `hparams_` from `pi05.*` metadata keys. `infer()` runs
 // the full SigLIP-tower + VLM-prefill + 10-step-ODE pipeline using
-// the Phase-3 milestone helpers as building blocks.
+// the sub-graph helpers as building blocks.
 class Pi05Model final : public IVlaModel {
 public:
   // Throws std::runtime_error if the GGUF is missing required

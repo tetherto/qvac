@@ -19,7 +19,7 @@ test/results/
 
 *.log
 
-# Phase-0 PyTorch parity oracle dumps (large; reproducible via
+# PyTorch reference dumps (large; reproducible via
 # scripts/dump_pi05_activations.py).
 scripts/oracle_dump/
 

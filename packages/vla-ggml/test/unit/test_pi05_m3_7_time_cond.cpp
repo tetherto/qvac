@@ -1,4 +1,4 @@
-// Phase-3 M3.7 parity test: time-step → adaRMSNorm conditioning.
+// M3.7 parity test: time-step → adaRMSNorm conditioning.
 //
 // For each of the dump's three probe time values (t = 1.0, 0.5, 0.1),
 // build the (1024,) sin-cos embedding in C++, push it through the

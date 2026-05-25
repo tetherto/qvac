@@ -3,8 +3,8 @@
 // JS integration test for π₀.₅.
 //
 // Loads pi05_base.gguf via the public VlaModel surface, feeds the same
-// Phase-0 fixture used by the C++ M3.x parity tests, and asserts the
-// returned action chunk matches the dump's `ode.actions_final`.
+// fixture used by the C++ parity tests, and asserts the returned action
+// chunk matches the PyTorch reference `ode.actions_final`.
 //
 // Catches what the C++ Pi05Integration test can't:
 //   * JS validator + binding.runJob argument marshalling
@@ -13,9 +13,9 @@
 //
 // Skips cleanly when the test artefacts aren't on disk (so CI without
 // the pi05_base mirror still passes):
-//   PI05_TEST_GGUF        — path to pi05_base.gguf  (Phase 2 output)
-//   PI05_TEST_FIXTURE     — path to fixture.safetensors  (Phase 0)
-//   PI05_TEST_ACTIVATIONS — path to activations.safetensors  (Phase 0)
+//   PI05_TEST_GGUF        — path to pi05_base.gguf
+//   PI05_TEST_FIXTURE     — path to fixture.safetensors
+//   PI05_TEST_ACTIVATIONS — path to activations.safetensors
 
 const test = require('brittle')
 const fs = require('bare-fs')
@@ -749,7 +749,7 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
 // limits (verified passing on all 3 Android device classes with
 // cos=0.9994–0.9997).
 //
-// Phase-6 follow-up to lift this: ship a smaller iOS-specific quant
+// Follow-up to lift this: ship a smaller iOS-specific quant
 // variant (~1.5 GB target) OR sign the test app with
 // com.apple.developer.kernel.increased-memory-limit, which raises
 // the per-process budget enough to fit q_aggressive on iPhone.

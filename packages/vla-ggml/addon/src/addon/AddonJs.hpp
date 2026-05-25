@@ -218,8 +218,8 @@ JSCATCH
 //                              maxStateDim, tokenizerMaxLength,
 //                              visionImageSize, numCameras, stateInputMode }
 //
-// `numCameras` and `stateInputMode` were added in Phase 1 of the π₀.₅ port
-// so JS-side input validation can distinguish a SmolVLA model (2 cameras,
+// `numCameras` and `stateInputMode` let JS-side input validation
+// distinguish a SmolVLA model (2 cameras,
 // continuous state) from a π₀.₅ model (up to 3 cameras, discrete state
 // inlined into the prompt). The existing fields are unchanged.
 inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {

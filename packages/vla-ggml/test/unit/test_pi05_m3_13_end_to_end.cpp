@@ -1,4 +1,4 @@
-// Phase-3 M3.13 parity test: end-to-end (prefill → ODE loop).
+// M3.13 parity test: end-to-end (prefill → ODE loop).
 //
 // Runs the production composition end-to-end at the C++ level:
 //   1. VLM prefill (M3.6) on the dump's `vlm.prefix_concat` (sliced

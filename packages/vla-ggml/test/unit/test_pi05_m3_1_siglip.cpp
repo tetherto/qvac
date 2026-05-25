@@ -1,16 +1,16 @@
-// Phase-3 M3.1 parity test: SigLIP patch_embed + pos_embed.
+// M3.1 parity test: SigLIP patch_embed + pos_embed.
 //
 // Loads the three vision tensors from a real pi05_base.gguf, builds the
 // M3.1 sub-graph via `pi05_build_siglip_patch_pos_graph`, runs it on the
-// CPU backend, and asserts the result matches the Phase-0 PyTorch dump's
+// CPU backend, and asserts the result matches the PyTorch reference's
 // `vision.patch_embed_out[cam0]` and `vision.pos_embed_out[cam0]`.
 //
 // Test data is supplied via env vars so CI can opt in once the artefacts
 // are mirrored to its cache, and developers can opt out by leaving them
 // unset:
 //   PI05_TEST_GGUF        — path to pi05_base.gguf (Phase 2 output)
-//   PI05_TEST_FIXTURE     — path to oracle_dump/fixture.safetensors (Phase 0)
-//   PI05_TEST_ACTIVATIONS — path to oracle_dump/activations.safetensors (Phase 0)
+//   PI05_TEST_FIXTURE     — path to oracle_dump/fixture.safetensors (PyTorch reference)
+//   PI05_TEST_ACTIVATIONS — path to oracle_dump/activations.safetensors (PyTorch reference)
 //
 // Tolerances are plan §5 CPU bars: cos > 0.9995 and max-abs-diff < 5e-3.
 
@@ -78,7 +78,7 @@ TEST(Pi05M3_1, SiglipPatchAndPosEmbedMatchPytorch) {
                     "PI05_TEST_ACTIVATIONS to run the M3.1 parity test.";
   }
 
-  // ── 1. Load fixture + expected activations from the Phase-0 dump ──────
+  // ── 1. Load fixture + expected activations from the PyTorch reference ──────
   qvac_vla_safetensors_lite::Reader fixture;
   qvac_vla_safetensors_lite::Reader activations;
   ASSERT_NO_THROW(fixture.open(fixture_path));

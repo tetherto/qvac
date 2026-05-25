@@ -76,7 +76,7 @@ Pi05PatchPosOutputs pi05_build_siglip_patch_pos_graph(
   // into a single "patch" axis (16*16 = 256) and the channels (1152) stay
   // along the fast dim — so the resulting tensor's ne=[C_out, n_patches].
   // That matches the byte layout of numpy's (n_patches, C_out) row-major
-  // array, which is what the Phase-0 dump stored.
+  // array, which is what the PyTorch reference stores.
   const int n_patches =
       static_cast<int>(x->ne[0]) * static_cast<int>(x->ne[1]);
   const int hidden = static_cast<int>(x->ne[2]);
@@ -286,7 +286,7 @@ struct ggml_tensor* pi05_build_vlm_embed_graph(
   return ggml_scale(ctx, e, scale);
 }
 
-// Gemma-1 RMSNorm: `(1 + scale) * normed`. The Phase-2 converter
+// Gemma-1 RMSNorm: `(1 + scale) * normed`. The GGUF converter
 // copies the raw PyTorch tensor as `.scale`, so the `+1` happens
 // here on the graph side. We compute `normed * scale + normed` to
 // avoid needing a one-tensor.
@@ -746,17 +746,14 @@ struct ggml_tensor* pi05_build_euler_step_graph(
 // ─────────────────────────────────────────────────────────────────────────
 // Production loader, inference, and Pi05Model wiring.
 //
-// The implementation composes the Phase-3 milestone helpers (M3.1–M3.13)
-// into a single `IVlaModel` entry point. Per-camera SigLIP towers,
-// PaliGemma embedding lookup, VLM prefill with K/V taps, and the 10-step
-// ODE loop all happen in a single `infer()` call.
+// The implementation composes the sub-graph helpers into a single
+// `IVlaModel` entry point. Per-camera SigLIP towers, PaliGemma embedding
+// lookup, VLM prefill with K/V taps, and the 10-step ODE loop all happen
+// in a single `infer()` call.
 //
-// First-cut limitations (suitable for the Phase-5 integration test, to
-// be tightened in follow-ups):
-//   * Backends: only CPU is initialised. GPU device selection is left
-//     for the Phase-6 hardening pass — the math is verified, but
-//     joint-attention shader compatibility on Vulkan / Metal / OpenCL
-//     needs its own sweep (plan §7 risk row "MQA + RoPE under Vulkan").
+// Known limitations:
+//   * Backends: CPU and GPU (Vulkan/Metal/OpenCL) are supported, but
+//     joint-attention shader compatibility varies by driver.
 //   * Attention masks: the inference fast-path slices the prefix to its
 //     leading-contiguous valid range and runs the VLM prefill /
 //     joint-attn without a softmax mask. Same trick the M3.5/M3.6/M3.13
@@ -1144,7 +1141,7 @@ static std::unique_ptr<pi05_model> pi05_load_model(
         arch + "'");
   }
 
-  // hparams (all keys per the Phase-2 converter's stamp_metadata).
+  // hparams (all keys per the converter's stamp_metadata).
   m->vision_image_size =
       gguf_get_u32_or(m->gguf, "pi05.image_resolution", 224);
   m->vision_n_layers =

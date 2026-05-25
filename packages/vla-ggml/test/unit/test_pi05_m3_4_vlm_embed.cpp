@@ -1,8 +1,8 @@
-// Phase-3 M3.4 parity test: PaliGemma embedder + sqrt(hidden) scaling.
+// M3.4 parity test: PaliGemma embedder + sqrt(hidden) scaling.
 //
 // Loads `vlm.embed_tokens` from pi05_base.gguf, looks up the fixture's
 // 200 prompt tokens, scales by sqrt(2048), and asserts against
-// `vlm.embed_out` from the Phase-0 PyTorch dump.
+// `vlm.embed_out` from the PyTorch reference.
 
 #include <cmath>
 #include <cstdint>

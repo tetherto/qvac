@@ -1,4 +1,4 @@
-// Phase-3 M3.9 parity test: one expert block with joint attention.
+// M3.9 parity test: one expert block with joint attention.
 //
 // Builds the inputs that the dump captured at the t=1.0 ODE step:
 //   * x_exp = action_in_proj(noise)  — from the fixture noise (50, 32)

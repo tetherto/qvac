@@ -1,4 +1,4 @@
-// Phase-3 M3.12 parity test: full 10-step ODE loop.
+// M3.12 parity test: full 10-step ODE loop.
 //
 // Runs the production flow-matching loop:
 //   x = noise

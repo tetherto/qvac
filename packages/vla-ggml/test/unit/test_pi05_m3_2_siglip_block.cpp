@@ -1,7 +1,7 @@
-// Phase-3 M3.2 parity test: one SigLIP block (block 0).
+// M3.2 parity test: one SigLIP block (block 0).
 //
 // Loads block-0's 16 tensors from pi05_base.gguf, feeds in
-// `vision.pos_embed_out[cam0]` from the Phase-0 PyTorch dump as the
+// `vision.pos_embed_out[cam0]` from the PyTorch reference as the
 // block input (so M3.2 is tested independently of M3.1), runs the
 // block, and asserts against `vision.blk_0.out[cam0]`.
 //
@@ -79,7 +79,7 @@ TEST(Pi05M3_2, SiglipBlock0MatchesPytorch) {
   }
 
   // ── 1. Load the M3.2 input (pos_embed_out[cam0]) and the expected
-  //       output (blk_0.out[cam0]) from the Phase-0 dump.
+  //       output (blk_0.out[cam0]) from the PyTorch reference.
   qvac_vla_safetensors_lite::Reader activations;
   ASSERT_NO_THROW(activations.open(activations_path));
   const std::vector<float> input = activations.readF32("vision.pos_embed_out[cam0]");

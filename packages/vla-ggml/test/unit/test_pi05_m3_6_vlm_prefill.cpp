@@ -1,4 +1,4 @@
-// Phase-3 M3.6 parity test: full VLM prefill (18 blocks + final RMSNorm).
+// M3.6 parity test: full VLM prefill (18 blocks + final RMSNorm).
 //
 // Same slicing trick as M3.5 — feed `vlm.prefix_concat` truncated to
 // the 832 valid positions so the test sidesteps attention masking.

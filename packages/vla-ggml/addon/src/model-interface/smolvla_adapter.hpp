@@ -1,6 +1,6 @@
 #pragma once
 
-// SmolVLA → IVlaModel adapter (Phase 1 polymorphism).
+// SmolVLA → IVlaModel adapter.
 //
 // Thin wrapper around the existing `smolvla_model` + the C-style
 // `smolvla_load_model` / `smolvla_inference_with_timing` entry points. The

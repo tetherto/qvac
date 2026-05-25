@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase-0 PyTorch parity oracle for the π₀.₅ ggml port.
+"""PyTorch reference activation dumper for the π₀.₅ ggml port.
 
 Loads LeRobot's ``Pi05Policy`` PyTorch reference in eager mode (no
 ``torch.compile``, no quantisation, float32 everywhere we can hold it) and

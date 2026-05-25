@@ -1,4 +1,4 @@
-// Phase-3 M3.8 parity test: adaRMSNorm split.
+// M3.8 parity test: adaRMSNorm split.
 //
 // Drive the expert's block-0 pre-attention ada-Dense with the
 // dump's `expert.cond[t=1.0]` and assert the three resulting slices

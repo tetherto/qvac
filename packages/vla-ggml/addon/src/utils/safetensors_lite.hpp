@@ -2,14 +2,13 @@
 
 // Tiny header-only reader for the safetensors v1 format.
 //
-// Only the slice we need for the π₀.₅ Phase-3 parity tests:
+// Only the slice we need for the π₀.₅ parity tests:
 //   - open() the file (mmap on POSIX, fallback to read on Windows)
 //   - look up a named tensor's dtype, shape, and byte range
 //   - copy the bytes out as a std::vector<float> when the dtype is F32
 //
 // Not a general-purpose safetensors lib — no bfloat16, no quantised types,
-// no streaming. The Phase-0 oracle stores every parity-ladder breakpoint as
-// F32 so that's all the C++ tests need.
+// no streaming. The PyTorch reference stores all breakpoints as F32.
 
 #include <cctype>
 #include <cstddef>
@@ -36,8 +35,8 @@ public:
   Reader() = default;
 
   // Parses the header and reads the entire data blob into memory. Throws
-  // std::runtime_error on any parse failure. Sized for the 137 MB Phase-0
-  // dump; not appropriate for multi-GB files.
+  // std::runtime_error on any parse failure. Sized for the ~137 MB
+  // reference activations; not appropriate for multi-GB files.
   void open(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
@@ -113,7 +112,7 @@ private:
   // Plus an optional "__metadata__" key (ignored). Whitespace-tolerant. Not
   // a real JSON parser — strings cannot contain escapes other than \" and
   // \\, and numbers must be integers. This is enough for every safetensors
-  // file the Phase-0 dump produces.
+  // file the reference dump produces.
   void parseHeader_(const std::string& h) {
     Pos p{h, 0};
     p.skipWs();

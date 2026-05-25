@@ -1,6 +1,6 @@
 #pragma once
 
-// Polymorphic VLA model interface — Phase 1 of the π₀.₅ port.
+// Polymorphic VLA model interface for multi-architecture dispatch.
 //
 // `IVlaModel` hides the SmolVLA-specific C-style types and entry points from
 // the addon layer so the same `VlaModel` shell can dispatch to either the

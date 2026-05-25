@@ -285,10 +285,9 @@ def _optional_pt_keys_with_shape() -> dict[str, tuple[int, ...]]:
 # ---------------------------------------------------------------------------
 
 
-# Recognised --variant values. The default `vision-q8` matches the
-# Phase-3 GGUF that the milestone parity tests + initial S3 mirror were
-# calibrated against. `all-q8` and `all-q4` are mobile-tractable variants
-# (plan §4 follow-up: "Try Q8_0 in a follow-up once parity is locked").
+# Recognised --variant values. The default `vision-q8` matches the GGUF
+# that the parity tests + S3 mirror were calibrated against. `all-q8`
+# and `all-q4` are mobile-tractable variants.
 QUANT_VARIANTS = ('vision-q8', 'all-q8', 'all-q4')
 
 
@@ -778,9 +777,9 @@ def main() -> int:
         choices=QUANT_VARIANTS,
         default='vision-q8',
         help="Quantisation recipe (see select_target_dtype docstring). "
-             "Default `vision-q8` matches the Phase-3 GGUF used by the "
-             "M3.x parity tests; `all-q8` / `all-q4` are smaller mobile-"
-             "tractable variants.",
+             "Default `vision-q8` matches the GGUF used by the parity "
+             "tests; `all-q8` / `all-q4` are smaller mobile-tractable "
+             "variants.",
     )
     parser.add_argument(
         "--verify-vs-pt",

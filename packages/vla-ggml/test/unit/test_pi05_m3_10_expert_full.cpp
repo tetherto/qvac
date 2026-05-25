@@ -1,9 +1,9 @@
-// Phase-3 M3.10 parity test: full expert pass for one ODE step.
+// M3.10 parity test: full expert pass for one ODE step.
 //
 // Chains all 18 expert blocks (joint attn vs per-layer cached VLM K/V)
 // + final adaRMSNorm + action_out_proj. Asserts the final hidden state
 // against `expert.final_out[t=1.0]` and the projection output against
-// `expert.v_t[t=1.0]` from the Phase-0 dump.
+// `expert.v_t[t=1.0]` from the PyTorch reference.
 
 #include <algorithm>
 #include <cmath>

@@ -1,4 +1,4 @@
-// Phase-3 M3.5 parity test: one Gemma-1 VLM block.
+// M3.5 parity test: one Gemma-1 VLM block.
 //
 // Strategy:
 //   * Use `vlm.prefix_concat` from the dump as the block input (so the
@@ -86,7 +86,7 @@ TEST(Pi05M3_5, VlmBlock0MatchesPytorchOverValidPrefix) {
                     "run the M3.5 parity test.";
   }
 
-  // ── 1. Input + expected output from the Phase-0 dump. ─────────────────
+  // ── 1. Input + expected output from the PyTorch reference. ─────────────────
   qvac_vla_safetensors_lite::Reader activations;
   ASSERT_NO_THROW(activations.open(activations_path));
   const std::vector<float> prefix =
