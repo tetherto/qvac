@@ -298,7 +298,7 @@ jobs:
 
   aggregate-performance-report:
     needs: [authorize, context, run-integration-tests, run-mobile-integration-tests]
-    if: always() && needs.authorize.outputs.allowed == 'true' && github.event_name != 'pull_request_target'
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -371,7 +371,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests, aggregate-performance-report]
-    if: always()
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
