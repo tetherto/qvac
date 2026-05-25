@@ -22,11 +22,9 @@
     "NOTICE"
   ],
   "dependencies": {
+    "hyperdb": "^6.7.0",
     "hyperdispatch": "^1.4.0",
     "hyperschema": "^1.13.0",
     "ready-resource": "^1.2.0"
-  },
-  "peerDependencies": {
-    "hyperdb": "^4.16.0"
   }
 }
