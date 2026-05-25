@@ -317,11 +317,11 @@ JSCATCH
  * using the same Adreno/OpenCL policy as native load. Args: [device] or
  * [device, backendsDir].
  */
-inline js_value_t*
-getExpectedEsrganBackendDevice(js_env_t* env, js_callback_info_t* info) try {
+inline js_value_t *
+getExpectedEsrganBackendDevice(js_env_t *env, js_callback_info_t *info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
-  const std::vector<js_value_t*> argv = js::getArguments(env, info);
+  const std::vector<js_value_t *> argv = js::getArguments(env, info);
   if (argv.empty()) {
     throw StatusError(
         general_error::InvalidArgument,

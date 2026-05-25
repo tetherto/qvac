@@ -17,7 +17,7 @@ enum class ConfigDevice : uint8_t { Cpu, Gpu };
  * Parse config.device. Accepts `cpu` or `gpu`. Throws StatusError on any other
  * value.
  */
-ConfigDevice parseConfigDeviceString(const std::string& device);
+ConfigDevice parseConfigDeviceString(const std::string &device);
 
 /**
  * Parse the "device" key from a config map.
@@ -59,15 +59,16 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred);
  * Omitted device config is handled by SdCtxConfig::device defaulting to `gpu`.
  */
 sd_backend_preference_t
-preferredGpuBackendForConfigDevice(const std::string& device);
+preferredGpuBackendForConfigDevice(const std::string &device);
 
 /**
  * ESRGAN-only stable-diffusion.cpp backend preference.
- * On Android, config gpu always uses CPU (native ESRGAN GPU/OpenCL is unstable).
- * Stable Diffusion uses preferredGpuBackendForConfigDevice() instead.
+ * On Android, config gpu always uses CPU (native ESRGAN GPU/OpenCL is
+ * unstable). Stable Diffusion uses preferredGpuBackendForConfigDevice()
+ * instead.
  */
 sd_backend_preference_t
-preferredEsrganBackendForConfigDevice(const std::string& device);
+preferredEsrganBackendForConfigDevice(const std::string &device);
 
 /**
  * Expected EsrganRuntimeStats.backendDevice ("cpu" or "gpu") after ESRGAN load
@@ -75,6 +76,6 @@ preferredEsrganBackendForConfigDevice(const std::string& device);
  * Elsewhere mirrors resolveBackendForDevice(): Adreno 600/700 + gpu -> "cpu";
  * Adreno 800+ and other GPUs -> "gpu".
  */
-std::string expectedEsrganBackendDeviceForConfig(const std::string& device);
+std::string expectedEsrganBackendDeviceForConfig(const std::string &device);
 
 } // namespace sd_backend_selection

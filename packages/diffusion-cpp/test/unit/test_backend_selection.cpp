@@ -57,9 +57,8 @@ TEST_F(SdBackendSelectionTest, PreferredGpuBackendCpuDevice) {
 
 TEST_F(SdBackendSelectionTest, PreferredGpuBackendGpuDeviceIsGpuOrCpu) {
   const auto pref = preferredGpuBackendForConfigDevice("gpu");
-  EXPECT_TRUE(
-      pref == SD_BACKEND_PREF_GPU || pref == SD_BACKEND_PREF_OPENCL ||
-      pref == SD_BACKEND_PREF_CPU);
+  EXPECT_TRUE(pref == SD_BACKEND_PREF_GPU || pref == SD_BACKEND_PREF_OPENCL ||
+              pref == SD_BACKEND_PREF_CPU);
 }
 
 TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendCpuConfig) {
@@ -86,26 +85,27 @@ TEST_F(SdBackendSelectionTest, AndroidEsrganGpuConfigForcesCpu) {
 #endif
 
 TEST_F(SdBackendSelectionTest, AutoDeviceThrows) {
-  EXPECT_THROW(
-      preferredGpuBackendForConfigDevice("auto"), qvac_errors::StatusError);
-  EXPECT_THROW(
-      preferredEsrganBackendForConfigDevice("auto"), qvac_errors::StatusError);
-  EXPECT_THROW(
-      expectedEsrganBackendDeviceForConfig("auto"), qvac_errors::StatusError);
+  EXPECT_THROW(preferredGpuBackendForConfigDevice("auto"),
+               qvac_errors::StatusError);
+  EXPECT_THROW(preferredEsrganBackendForConfigDevice("auto"),
+               qvac_errors::StatusError);
+  EXPECT_THROW(expectedEsrganBackendDeviceForConfig("auto"),
+               qvac_errors::StatusError);
 }
 
 TEST_F(SdBackendSelectionTest, EmptyDeviceThrows) {
-  EXPECT_THROW(preferredGpuBackendForConfigDevice(""), qvac_errors::StatusError);
+  EXPECT_THROW(preferredGpuBackendForConfigDevice(""),
+               qvac_errors::StatusError);
 }
 
 TEST_F(SdBackendSelectionTest, PreferredGpuBackendInvalidDeviceThrows) {
-  EXPECT_THROW(
-      preferredGpuBackendForConfigDevice("bogus"), qvac_errors::StatusError);
-  EXPECT_THROW(
-      preferredGpuBackendForConfigDevice("cuda"), qvac_errors::StatusError);
+  EXPECT_THROW(preferredGpuBackendForConfigDevice("bogus"),
+               qvac_errors::StatusError);
+  EXPECT_THROW(preferredGpuBackendForConfigDevice("cuda"),
+               qvac_errors::StatusError);
 }
 
 TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendInvalidDeviceThrows) {
-  EXPECT_THROW(
-      expectedEsrganBackendDeviceForConfig("bogus"), qvac_errors::StatusError);
+  EXPECT_THROW(expectedEsrganBackendDeviceForConfig("bogus"),
+               qvac_errors::StatusError);
 }
