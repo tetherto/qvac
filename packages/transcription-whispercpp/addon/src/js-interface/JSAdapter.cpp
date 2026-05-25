@@ -45,6 +45,14 @@ auto JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env)
     loadContextParams(contextParamsObj.value(), env, config);
   }
 
+  // Top-level `configurationParams.backendsDir`. Read directly because
+  // `loadContextParams` would route it through `WHISPER_CONTEXT_HANDLERS`
+  // and throw on an unrecognised key. Consumed only on Android.
+  auto backendsDirJs = jsObject.getOptionalProperty<String>(env, "backendsDir");
+  if (backendsDirJs.has_value()) {
+    config.backendsDir = backendsDirJs.value().as<std::string>(env);
+  }
+
   return config;
 }
 

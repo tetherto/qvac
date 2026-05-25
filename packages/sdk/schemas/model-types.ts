@@ -15,6 +15,7 @@ export const ModelType = {
   parakeetTranscription: "parakeet-transcription",
   onnxOcr: "onnx-ocr",
   sdcppGeneration: "sdcpp-generation",
+  ggmlVla: "ggml-vla",
 } as const;
 
 // === INTERNAL: Alias keys (backward compat names) ===
@@ -27,6 +28,7 @@ const AliasKeys = {
   tts: "tts",
   ocr: "ocr",
   diffusion: "diffusion",
+  vla: "vla",
 } as const;
 
 // === INTERNAL: Aliases (backward compat mapping) ===
@@ -43,6 +45,7 @@ export const ModelTypeAliases = {
   [AliasKeys.tts]: ModelType.onnxTts,
   [AliasKeys.ocr]: ModelType.onnxOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
+  [AliasKeys.vla]: ModelType.ggmlVla,
 } as const;
 
 // === TYPES ===
@@ -230,3 +233,13 @@ export const diffusionModelTypeSchema = modelTypeInputSchema
 export type DiffusionModelTypeInput = z.infer<
   typeof diffusionModelTypeSchema
 >;
+
+/**
+ * VLA (vision-language-action) model type schema.
+ * - Alias: `"vla"` → resolves to `"ggml-vla"`
+ * - Canonical: `"ggml-vla"`
+ */
+export const vlaModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.vla, ModelType.ggmlVla])
+  .describe('VLA model type: "vla" (alias) or "ggml-vla" (canonical)');
+export type VlaModelTypeInput = z.infer<typeof vlaModelTypeSchema>;

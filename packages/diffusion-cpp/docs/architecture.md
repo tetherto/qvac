@@ -68,7 +68,7 @@
 
 **Dependencies:**
 - inference-addon-cpp (≥1.1.5#1): C++ addon framework (single-job runner, runJob/activate/cancel/destroyInstance)
-- stable-diffusion.cpp (2026-03-01#2 via vcpkg): Diffusion inference engine
+- stable-diffusion.cpp (2026-03-01#4 via vcpkg): Diffusion inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 
@@ -124,7 +124,7 @@ graph TB
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.4.0 | Composition utilities (`createJobHandler`, `exclusiveRunQueue`, `QvacResponse`) |
 | inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework (single-job runner) |
-| stable-diffusion.cpp | Native | 2026-03-01#2 | Diffusion inference engine |
+| stable-diffusion.cpp | Native | 2026-03-01#4 | Diffusion inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
 **Integration Points:**

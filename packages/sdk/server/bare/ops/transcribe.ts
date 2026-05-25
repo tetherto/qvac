@@ -12,6 +12,7 @@ import {
   type TranscribeStreamEvent,
   type WhisperConfig,
   type AudioFormat,
+  type ParakeetStreamingRunConfig,
 } from "@/schemas";
 import { createAudioStream } from "@/server/bare/utils/audio-input";
 import { getServerLogger } from "@/logging";
@@ -36,8 +37,13 @@ export {
   type WhisperAddonSegment,
 };
 
+type StreamingSegment = WhisperAddonSegment & {
+  isEndOfTurn?: boolean;
+  startsWord?: boolean;
+};
 type StreamingModelOutput =
-  | { text: string }[]
+  | StreamingSegment[]
+  | StreamingSegment
   | { type: "vad"; speaking: boolean; probability: number }
   | { type: "endOfTurn"; silenceDurationMs: number };
 
@@ -52,10 +58,14 @@ interface WhisperRunStreamingOpts {
   vadRunIntervalMs?: number;
 }
 
+type ParakeetRunStreamingOpts = ParakeetStreamingRunConfig;
+
+type RunStreamingOpts = WhisperRunStreamingOpts | ParakeetRunStreamingOpts;
+
 interface StreamableModel {
   runStreaming(
     audioStream: AsyncIterable<Buffer>,
-    opts?: WhisperRunStreamingOpts,
+    opts?: RunStreamingOpts,
   ): Promise<StreamingModelResponse>;
 }
 
@@ -197,7 +207,7 @@ export async function* transcribe(
     if (ctx.signal.aborted) break;
     requestLogger.debug("Streaming Transcription Update:", output);
 
-    const chunks = output as WhisperAddonSegment[];
+    const chunks = (Array.isArray(output) ? output : [output]) as WhisperAddonSegment[];
 
     if (metadata) {
       for (const chunk of chunks) {
@@ -241,6 +251,26 @@ export interface TranscribeStreamOpts {
   emitVadEvents?: boolean;
   endOfTurnSilenceMs?: number;
   vadRunIntervalMs?: number;
+  parakeetStreamingConfig?: ParakeetStreamingRunConfig;
+}
+
+function buildRunStreamingOpts(
+  engineType: string,
+  opts?: TranscribeStreamOpts,
+): RunStreamingOpts | undefined {
+  if (engineType === ModelType.parakeetTranscription) {
+    return opts?.parakeetStreamingConfig;
+  }
+
+  const runOpts: WhisperRunStreamingOpts = {};
+  if (opts?.emitVadEvents) runOpts.emitVadEvents = true;
+  if (opts?.endOfTurnSilenceMs !== undefined) {
+    runOpts.endOfTurnSilenceMs = opts.endOfTurnSilenceMs;
+  }
+  if (opts?.vadRunIntervalMs !== undefined) {
+    runOpts.vadRunIntervalMs = opts.vadRunIntervalMs;
+  }
+  return runOpts;
 }
 
 export function transcribeStream(
@@ -311,15 +341,7 @@ export async function* transcribeStream(
     ctx.signal.removeEventListener("abort", onAbort);
   });
 
-  const runOpts: WhisperRunStreamingOpts = {};
-  if (opts?.emitVadEvents) runOpts.emitVadEvents = true;
-  if (opts?.endOfTurnSilenceMs !== undefined) {
-    runOpts.endOfTurnSilenceMs = opts.endOfTurnSilenceMs;
-  }
-  if (opts?.vadRunIntervalMs !== undefined) {
-    runOpts.vadRunIntervalMs = opts.vadRunIntervalMs;
-  }
-
+  const runOpts = buildRunStreamingOpts(engineType, opts);
   const response = await model.runStreaming(audioInputStream, runOpts);
 
   for await (const output of response.iterate()) {
@@ -327,34 +349,58 @@ export async function* transcribeStream(
     requestLogger.debug("Live Transcription Update:", output);
 
     if (!Array.isArray(output)) {
-      if (output.type === "vad") {
-        yield {
-          type: "vad",
-          speaking: output.speaking,
-          probability: output.probability,
-        };
+      if ("type" in output) {
+        if (output.type === "vad") {
+          yield {
+            type: "vad",
+            speaking: output.speaking,
+            probability: output.probability,
+          };
+          continue;
+        }
+        if (output.type === "endOfTurn") {
+          yield {
+            type: "endOfTurn",
+            source: "whisper",
+            silenceDurationMs: output.silenceDurationMs,
+          };
+          continue;
+        }
         continue;
       }
-      if (output.type === "endOfTurn") {
-        yield {
-          type: "endOfTurn",
-          silenceDurationMs: output.silenceDurationMs,
-        };
-        continue;
-      }
+      yield* emitSegment(output, metadata, silenceMarker);
       continue;
     }
 
-    for (const segment of output as WhisperAddonSegment[]) {
-      if (!segment.text) continue;
-      if (silenceMarker && segment.text.includes(silenceMarker)) continue;
-      if (metadata) {
-        yield toTranscribeSegment(segment);
-        continue;
-      }
-      if (segment.text.trim()) {
-        yield segment.text;
-      }
+    for (const segment of output) {
+      yield* emitSegment(segment, metadata, silenceMarker);
     }
+  }
+}
+
+function* emitSegment(
+  segment: StreamingSegment,
+  metadata: boolean | undefined,
+  silenceMarker: string,
+): Generator<string | TranscribeSegment | TranscribeStreamEvent> {
+  if (!segment.text) {
+    if (segment.isEndOfTurn) {
+      yield { type: "endOfTurn", source: "parakeet" };
+    }
+    return;
+  }
+  if (silenceMarker && segment.text.includes(silenceMarker)) {
+    if (segment.isEndOfTurn) {
+      yield { type: "endOfTurn", source: "parakeet" };
+    }
+    return;
+  }
+  if (metadata) {
+    yield toTranscribeSegment(segment);
+  } else if (segment.text.trim()) {
+    yield segment.text;
+  }
+  if (segment.isEndOfTurn) {
+    yield { type: "endOfTurn", source: "parakeet" };
   }
 }
