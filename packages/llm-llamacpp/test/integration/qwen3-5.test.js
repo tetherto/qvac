@@ -464,10 +464,18 @@ test('Qwen3.5-0.8B per-request generationParams.reasoning_budget overrides load-
 
     t.ok(defaultOutput.includes('<think>'),
       `subsequent default run should restore <think>: "${defaultOutput.slice(0, 200)}"`)
-    // CPU greedy on ARM64 may exhaust n_predict before emitting </think>;
-    // accept that as a valid restore so long as <think> reappeared.
-    if (!defaultOutput.includes('</think>')) {
-      t.comment(`subsequent default run opened <think> but did not close it within n_predict (${defaultOutput.length} chars) — skipping closing-tag assertion`)
+    if (isLinuxArm64) {
+      // CPU greedy on ARM64 may exhaust n_predict before emitting </think>;
+      // accept that as a valid restore so long as <think> reappeared.
+      if (defaultOutput.includes('</think>')) {
+        t.ok(defaultOutput.indexOf('<think>') < defaultOutput.indexOf('</think>'),
+          'subsequent default opening tag must precede closing tag')
+      } else {
+        t.comment(`subsequent default run opened <think> but did not close it within n_predict (${defaultOutput.length} chars) — skipping closing-tag assertion`)
+      }
+    } else if (defaultOutput.includes('</think>')) {
+      t.ok(defaultOutput.indexOf('<think>') < defaultOutput.indexOf('</think>'),
+        'subsequent default opening tag must precede closing tag')
     }
   } finally {
     await addon.unload().catch(() => {})
