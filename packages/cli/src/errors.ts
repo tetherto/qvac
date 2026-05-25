@@ -19,96 +19,9 @@ export class ConfigLoadError extends Error {
   }
 }
 
-export class InvalidPluginSpecifierError extends Error {
-  constructor (specifiers: string[]) {
-    const list = specifiers.map((s) => `  - ${s}`).join('\n')
-    super(`Invalid plugin specifiers (must end with /plugin):\n${list}`)
-    this.name = 'InvalidPluginSpecifierError'
-  }
-}
-
-export class BarePackNotInstalledError extends Error {
-  constructor () {
-    super(
-      'bare-pack binary not found.\n\n' +
-      '  This indicates a corrupted @qvac/cli installation.\n' +
-      '  Try reinstalling: npm install @qvac/cli'
-    )
-    this.name = 'BarePackNotInstalledError'
-  }
-}
-
-export class BarePackError extends Error {
-  entryPath: string
-  outputPath: string
-  constructor (exitCode: number, entryPath: string, outputPath: string) {
-    super(
-      `bare-pack exited with code ${exitCode}\n\n` +
-      `  Entry file: ${entryPath}\n` +
-      `  Output file: ${outputPath}\n\n` +
-      '  Run bare-pack manually for more details.'
-    )
-    this.name = 'BarePackError'
-    this.entryPath = entryPath
-    this.outputPath = outputPath
-  }
-}
-
-export class BareImportsMapNotFoundError extends Error {
-  sdkName: string
-  expectedPath: string
-  constructor (sdkName: string, expectedPath: string) {
-    super(
-      'bare-imports.json not found.\n\n' +
-      `  Expected at: ${expectedPath}\n\n` +
-      `  Make sure ${sdkName} is installed in your project.`
-    )
-    this.name = 'BareImportsMapNotFoundError'
-    this.sdkName = sdkName
-    this.expectedPath = expectedPath
-  }
-}
-
-export class SdkNotFoundInNodeModulesError extends Error {
-  projectRoot: string
-  searchedNames: string[]
-  constructor (projectRoot: string, searchedNames: string[]) {
-    super(
-      'SDK package not found in any node_modules directory.\n\n' +
-      `  Searched upward from: ${projectRoot}\n` +
-      `  Package names tried:  ${searchedNames.join(', ')}\n\n` +
-      '  Install one of these packages in your project (or a parent\n' +
-      '  workspace), e.g. `npm install @qvac/sdk`.'
-    )
-    this.name = 'SdkNotFoundInNodeModulesError'
-    this.projectRoot = projectRoot
-    this.searchedNames = searchedNames
-  }
-}
-
-export class MultipleSdkInstallationsError extends Error {
-  packageNames: string[]
-  constructor (packageNames: string[]) {
-    super(
-      'Multiple SDK packages installed at the same nesting level:\n\n' +
-      packageNames.map((n) => `  - ${n}`).join('\n') + '\n\n' +
-      '  Pick one and remove the others, or pass --sdk-path explicitly\n' +
-      '  to disambiguate.'
-    )
-    this.name = 'MultipleSdkInstallationsError'
-    this.packageNames = packageNames
-  }
-}
-
 const ERROR_LABELS: Record<string, string> = {
   ConfigNotFoundError: 'Configuration Error',
   ConfigLoadError: 'Config Load Error',
-  InvalidPluginSpecifierError: 'Plugin Error',
-  BarePackNotInstalledError: 'Bundler Error',
-  BarePackError: 'Bundle Failed',
-  BareImportsMapNotFoundError: 'SDK Error',
-  SdkNotFoundInNodeModulesError: 'SDK Error',
-  MultipleSdkInstallationsError: 'SDK Error',
   LockfileReadError: 'Lockfile Error',
   LockfileNotFoundAtRefError: 'Lockfile Error',
   UnsupportedLockfileError: 'Lockfile Error'
