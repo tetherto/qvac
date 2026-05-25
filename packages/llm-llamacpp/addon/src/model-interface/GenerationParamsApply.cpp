@@ -47,7 +47,9 @@ void applyGenerationOverridesToSampling(
   if (overrides.json_schema) {
     try {
       auto parsed = nlohmann::ordered_json::parse(*overrides.json_schema);
-      sampling.grammar = json_schema_to_grammar(parsed);
+      sampling.grammar =
+          common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT,
+                         json_schema_to_grammar(parsed));
     } catch (const std::exception& ex) {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -56,7 +58,8 @@ void applyGenerationOverridesToSampling(
           std::string("invalid generationParams.json_schema: ") + ex.what());
     }
   } else if (overrides.grammar) {
-    sampling.grammar = *overrides.grammar;
+    sampling.grammar =
+        common_grammar(COMMON_GRAMMAR_TYPE_USER, *overrides.grammar);
   }
 }
 
