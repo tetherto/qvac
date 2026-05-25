@@ -21,6 +21,56 @@ export interface VideoResult {
   stats: Promise<VideoStats | undefined>;
 }
 
+/**
+ * Generates a video using a loaded video diffusion model.
+ *
+ * @param params - Video request parameters (model, prompt, dimensions, frame count, fps, sampler, seed, etc.).
+ * @returns A result object exposing `requestId` (stable identifier for this in-flight generation), `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated video buffers, typically a single AVI file), and `stats` (promise of generation statistics).
+ *
+ * Only `txt2vid` mode is supported today. On React Native, prefer a `modelId` loaded with a `delegate` since the bundled video diffusion models are too large for typical mobile devices.
+ *
+ * @example
+ * ```typescript
+ * // Basic txt2vid generation
+ * const { outputs, stats } = video({
+ *   modelId,
+ *   mode: "txt2vid",
+ *   prompt: "a cat surfing a wave at sunset",
+ *   width: 480,
+ *   height: 832,
+ *   video_frames: 17, // must satisfy (4*k + 1)
+ *   fps: 16,
+ * });
+ * const buffers = await outputs;
+ * fs.writeFileSync("output.avi", buffers[0]);
+ *
+ * // With progress tracking
+ * const { progressStream, outputs } = video({
+ *   modelId,
+ *   mode: "txt2vid",
+ *   prompt: "a sunset over the ocean",
+ * });
+ * for await (const { step, totalSteps } of progressStream) {
+ *   console.log(`${step}/${totalSteps}`);
+ * }
+ * const buffers = await outputs;
+ *
+ * // With control frames (e.g. for guided generation)
+ * const frameA = fs.readFileSync("frame-a.png");
+ * const frameB = fs.readFileSync("frame-b.png");
+ * const { outputs } = video({
+ *   modelId,
+ *   mode: "txt2vid",
+ *   prompt: "smooth transition between scenes",
+ *   control_frames: [frameA, frameB],
+ * });
+ *
+ * // Cancellation via requestId
+ * const { requestId, outputs } = video({ modelId, mode: "txt2vid", prompt: "..." });
+ * // ...later
+ * await cancel(requestId);
+ * ```
+ */
 export function video(params: VideoClientParams): VideoResult {
   const {
     control_frames,
