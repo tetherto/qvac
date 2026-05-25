@@ -76,6 +76,76 @@ qvac.imageModel('flux-schnell')        // image generation
 
 ---
 
+## Using with coding agents
+
+QVAC's primary v1 use case is wiring local AI into coding agents (OpenCode, Cline, Aider, Continue, Roo). The OpenAI-compatible bridge works end-to-end, but a few `qvac serve` behaviours need explicit configuration before an agent harness will feel right.
+
+### 1. Concurrent requests collide on a single model instance
+
+The underlying llama.cpp addon serializes inference per native model context and **rejects** concurrent requests rather than queuing them. The server log shows `Cannot set new job: a job is already set or being processed`; clients see `500 An internal error occurred`.
+
+Coding agents routinely fire concurrent requests — typically a main chat completion plus a "title generation" call for the conversation panel. To get parallel inference today you need **two different model files** loaded under two aliases. Same-file aliases collapse to one native context because the SDK deduplicates `loadModel` by `modelSrc`, so two aliases pointing at the same `QWEN3_4B_INST_Q4_K_M` get the same `sdkModelId` and share the same job lock.
+
+```json
+// qvac.config.json — agent-friendly setup
+{
+  "serve": {
+    "models": {
+      "qwen3-8b-chat": {
+        "model": "QWEN3_8B_INST_Q4_K_M",
+        "preload": true,
+        "config": {
+          "ctx_size": 16384,
+          "reasoning_budget": 0
+        }
+      },
+      "qwen3-1_7b-title": {
+        "model": "QWEN3_1_7B_INST_Q4",
+        "preload": true,
+        "config": {
+          "ctx_size": 4096,
+          "reasoning_budget": 0
+        }
+      }
+    }
+  }
+}
+```
+
+Then map the two aliases to your harness's chat vs. utility model slots — for OpenCode:
+
+```json
+// opencode.json
+{
+  "model":       "qvac/qwen3-8b-chat",
+  "small_model": "qvac/qwen3-1_7b-title"
+}
+```
+
+A proper per-`sdkModelId` request queue inside `qvac serve` would obsolete this workaround; tracked as a follow-up on the CLI side.
+
+### 2. `ctx_size` defaults to 1024 — too small for agents
+
+The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat, `4096` is plenty for title gen) or you'll see context fills and truncated responses well before the model misbehaves.
+
+### 3. `reasoning_budget: 0` to suppress `<think>` blocks
+
+Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoning_budget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
+
+Requires `@qvac/sdk >= 0.11.0` (and `@qvac/cli >= 0.5.0` which pins it). Older SDKs reject the key on startup with `"Unrecognized keys: reasoning_budget"`.
+
+### 4. Local-model capability is the real ceiling
+
+The integration is plumbing — your local-model choice decides whether an agent actually works. Empirical findings from `qvac serve` + OpenCode testing:
+
+- **Q4-quantized 4B/8B Qwen3-Instruct** can hold a conversation but won't reliably *invoke* tools. The model will say "let me search the docs" without emitting a tool call, then fabricate an answer.
+- **Cloud Qwen3.5-9B** (full precision, e.g. via OpenRouter) calls tools aggressively but still hallucinates content from tool results.
+- Reliable local tool use generally needs **≥14B parameters and coder/agent post-training** (e.g. `GPT_OSS_20B_INST_Q4_K_M` from the catalog, future Qwen3-Coder variants). Plain Instruct tunes at 4–8B sizes are not reliable agent backends.
+
+This is an industry-wide reality for local AI, not specific to QVAC. Calibrate user expectations accordingly when documenting QVAC integrations for downstream harnesses.
+
+---
+
 ## Default base URL
 
 ```ts
