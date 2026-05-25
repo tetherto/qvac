@@ -190,21 +190,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   // -- Video-specific inputs ------------------------------------------------
-  // `endImageBuffer`       -- last frame bytes for Wan flf2vid
-  //                           (first-last-frame interpolation). Mutually
-  //                           exclusive with all non-flf2vid video modes;
-  //                           rejected by SdModel::processVideo() if supplied
-  //                           alongside mode="txt2vid" or "img2vid".
   // `controlFramesBuffers` -- VACE control-frame sequence (one PNG/JPEG
   //                           buffer per frame). Optional on every video
   //                           mode; `vace_strength` controls guidance.
-  auto endBuf =
-      inputObj
-          .getOptionalPropertyAs<js::TypedArray<uint8_t>, std::vector<uint8_t>>(
-              env, "endImageBuffer");
-  if (endBuf.has_value())
-    job.endImageBytes = std::move(endBuf.value());
-
   auto controlBufs =
       inputObj.getOptionalProperty<js::Array>(env, "controlFramesBuffers");
   if (controlBufs.has_value()) {

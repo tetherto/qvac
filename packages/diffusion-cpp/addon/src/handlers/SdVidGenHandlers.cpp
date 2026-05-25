@@ -86,11 +86,10 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"mode",
      [](SdVidGenConfig& c, const picojson::value& v) {
        const auto mode = requireStr(v, "mode");
-       if (mode != "txt2vid" && mode != "img2vid" && mode != "flf2vid")
+       if (mode != "txt2vid" && mode != "img2vid")
          throw StatusError(
              general_error::InvalidArgument,
-             "mode must be 'txt2vid', 'img2vid', or 'flf2vid', got: '" + mode +
-                 "'");
+             "mode must be 'txt2vid' or 'img2vid', got: '" + mode + "'");
        c.mode = mode;
      }},
 
@@ -208,7 +207,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
        c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
      }},
 
-    // img_cfg_scale -- image-conditioning guidance for img2vid / flf2vid.
+    // img_cfg_scale -- image-conditioning guidance for img2vid.
     // Mirrors SdGenHandlers' "img_cfg_scale" handler. Sentinel -1 means
     // "use cfgScale (txt_cfg) for img_cfg too", which is what most callers
     // want. Any value >= 0 overrides sample_params.guidance.img_cfg.
@@ -263,7 +262,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
        c.moeBoundary = requireRange(v, "moe_boundary", 0.0f, 1.0f);
      }},
 
-    // -- img2vid / flf2vid ---------------------------------------------------
+    // -- img2vid -------------------------------------------------------------
 
     {"strength",
      [](SdVidGenConfig& c, const picojson::value& v) {

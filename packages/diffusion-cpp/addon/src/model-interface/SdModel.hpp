@@ -32,8 +32,7 @@
  * Modes dispatched by SdModel::process() based on the top-level JSON
  * "mode" key:
  *   txt2img / img2img       -> generate_image() path
- *   txt2vid / img2vid /      -> generate_video() path (Wan)
- *       flf2vid
+ *   txt2vid / img2vid       -> generate_video() path (Wan)
  *
  * Lifecycle:
  *   1. Construct  -- stores SdCtxConfig, allocates nothing
@@ -111,7 +110,7 @@ public:
      *  as a Uint8Array, bypassing JSON serialisation. Falls back to the
      *  JSON "init_image_bytes" array when empty (e.g. C++ unit tests).
      *  Mutually exclusive with initImagesBytes -- at most one is non-empty.
-     *  For video modes: first frame for img2vid and flf2vid. */
+     *  For video modes: first frame for img2vid. */
     std::vector<uint8_t> initImageBytes;
     /** FLUX "fusion" mode -- multiple reference images (PNG/JPEG bytes) passed
      *  in as a JS array of Uint8Array. Each blob becomes a separate ref_image
@@ -119,19 +118,15 @@ public:
      *  Addressed in the prompt as @image1, @image2, ...
      *  Only valid for FLUX / FLUX2 models (enforced in SdModel::process()). */
     std::vector<std::vector<uint8_t>> initImagesBytes;
-    /** Last frame (PNG/JPEG bytes) for Wan flf2vid (first-last-frame
-     *  interpolation). Required for flf2vid, ignored by all other modes. */
-    std::vector<uint8_t> endImageBytes;
     /** Control frames for Wan VACE-guided video generation (PNG/JPEG bytes
-     *  per frame). Empty for unguided txt2vid / img2vid / flf2vid. When
-     *  supplied, vaceStrength controls how strongly these frames guide
-     *  generation. */
+     *  per frame). Empty for unguided txt2vid / img2vid. When supplied,
+     *  vaceStrength controls how strongly these frames guide generation. */
     std::vector<std::vector<uint8_t>> controlFramesBytes;
     /** Called each diffusion step: {"step":N,"total":M,"elapsed_ms":T} */
     std::function<void(const std::string&)> progressCallback;
     /** Called once per output image (txt2img / img2img) with PNG bytes,
-     *  OR once for the full video (txt2vid / img2vid / flf2vid) with MJPG
-     *  AVI bytes. Only one invocation per job for video modes. */
+     *  OR once for the full video (txt2vid / img2vid) with MJPG AVI bytes.
+     *  Only one invocation per job for video modes. */
     std::function<void(const std::vector<uint8_t>&)> outputCallback;
     /** Optional per-frame fan-out for video modes. When set, fires once
      *  per decoded frame with PNG-encoded bytes so JS consumers can do

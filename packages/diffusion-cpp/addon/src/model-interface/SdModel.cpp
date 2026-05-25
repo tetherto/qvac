@@ -350,7 +350,7 @@ std::any SdModel::process(const std::any& input) {
   }
 
   const bool isVideo =
-      (mode == "txt2vid" || mode == "img2vid" || mode == "flf2vid");
+      (mode == "txt2vid" || mode == "img2vid");
   if (isVideo) {
     return processVideo(job, v);
   }
@@ -787,11 +787,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
       vid, v.get<picojson::object>());
 
-  if (vid.mode != "txt2vid" && vid.mode != "img2vid" && vid.mode != "flf2vid")
+  if (vid.mode != "txt2vid" && vid.mode != "img2vid")
     throw StatusError(
         general_error::InvalidArgument,
         "processVideo: unsupported mode '" + vid.mode +
-            "' (expected txt2vid, img2vid, or flf2vid)");
+            "' (expected txt2vid or img2vid)");
 
   // -- Mode-vs-inputs invariants --------------------------------------------
   // These checks mirror the JS-layer validation but are duplicated here so
@@ -802,27 +802,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
         general_error::InvalidArgument,
         "img2vid: init_image is required (the first frame to animate)");
 
-  if (vid.mode == "flf2vid") {
-    if (job.initImageBytes.empty())
-      throw StatusError(
-          general_error::InvalidArgument,
-          "flf2vid: init_image (first frame) is required");
-    if (job.endImageBytes.empty())
-      throw StatusError(
-          general_error::InvalidArgument,
-          "flf2vid: end_image (last frame) is required");
-  }
-
-  if (!job.endImageBytes.empty() && vid.mode != "flf2vid")
-    throw StatusError(
-        general_error::InvalidArgument,
-        "end_image is only valid for mode='flf2vid', got mode='" + vid.mode +
-            "'");
-
   if (vid.mode == "txt2vid" && !job.initImageBytes.empty())
     throw StatusError(
         general_error::InvalidArgument,
-        "txt2vid does not accept init_image; use img2vid or flf2vid instead");
+        "txt2vid does not accept init_image; use img2vid instead");
 
   // -- Decode init / end / control-frame images -----------------------------
   // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
@@ -831,12 +814,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   // or the AVI muxer). The sd_image_t structs themselves stay plain values
   // so we can pass them straight to the C ABI.
   sd_image_t initImg{};
-  sd_image_t endImg{};
   std::vector<sd_image_t> controlFrames;
 
   using PixelBuffer = std::unique_ptr<uint8_t, image_codec::FreeDeleter>;
   PixelBuffer initData;
-  PixelBuffer endData;
   std::vector<PixelBuffer> controlData;
 
   if (!job.initImageBytes.empty()) {
@@ -867,30 +848,6 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
                 std::to_string(vid.width) + "x" + std::to_string(vid.height));
       initData.reset(resized.data);
       initImg = resized;
-    }
-  }
-
-  if (!job.endImageBytes.empty()) {
-    endImg = image_codec::decodeImage(job.endImageBytes);
-    if (!endImg.data)
-      throw StatusError(
-          general_error::InvalidArgument,
-          "processVideo: failed to decode end_image (corrupt or unsupported "
-          "format; supported: PNG, JPEG)");
-    endData.reset(endImg.data);
-    if (static_cast<int>(endImg.width) != vid.width ||
-        static_cast<int>(endImg.height) != vid.height) {
-      sd_image_t resized =
-          image_utils::resizeSdImage(endImg, vid.width, vid.height);
-      if (!resized.data)
-        throw StatusError(
-            general_error::InvalidArgument,
-            "processVideo: failed to resize end_image from " +
-                std::to_string(endImg.width) + "x" +
-                std::to_string(endImg.height) + " to " +
-                std::to_string(vid.width) + "x" + std::to_string(vid.height));
-      endData.reset(resized.data);
-      endImg = resized;
     }
   }
 
@@ -943,8 +900,6 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
 
   if (initImg.data)
     vidParams.init_image = initImg;
-  if (endImg.data)
-    vidParams.end_image = endImg;
   if (!controlFrames.empty()) {
     vidParams.control_frames = controlFrames.data();
     vidParams.control_frames_size = static_cast<int>(controlFrames.size());
@@ -957,8 +912,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
   // img_cfg: -1 sentinel means "use cfg_scale for image conditioning too",
   // identical to the image-gen path (SdModel processImage's img_cfg
-  // wiring). For txt2vid the field is ignored downstream; for img2vid /
-  // flf2vid it drives sample_params.guidance.img_cfg.
+  // wiring). For txt2vid the field is ignored downstream; for img2vid
+  // it drives sample_params.guidance.img_cfg.
   vidParams.sample_params.guidance.img_cfg =
       vid.imgCfgScale < 0.0f ? vid.cfgScale : vid.imgCfgScale;
   // Per-job flow_shift overrides ctx-level flowShift; 0.0 falls through to

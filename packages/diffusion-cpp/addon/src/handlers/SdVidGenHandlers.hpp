@@ -12,7 +12,7 @@ namespace qvac_lib_inference_addon_sd {
 
 /**
  * All per-job generation parameters for a single video generation call
- * (txt2vid / img2vid / flf2vid). Populated by applySdVidGenHandlers() inside
+ * (txt2vid / img2vid). Populated by applySdVidGenHandlers() inside
  * SdModel::process(), then mapped to sd_vid_gen_params_t before
  * generate_video() is called.
  *
@@ -26,11 +26,9 @@ namespace qvac_lib_inference_addon_sd {
 struct SdVidGenConfig {
 
   // -- Mode ------------------------------------------------------------------
-  // "txt2vid" (default)  -- prompt-only, no init or end image
+  // "txt2vid" (default)  -- prompt-only, no init image
   // "img2vid"            -- animate a single init image (strength controls
   //                         how much denoise deviates from init)
-  // "flf2vid"            -- interpolate between first (init) and last (end)
-  //                         frame; both images required
   std::string mode = "txt2vid";
 
   // -- Prompt ----------------------------------------------------------------
@@ -66,7 +64,7 @@ struct SdVidGenConfig {
   sample_method_t sampleMethod = EULER_SAMPLE_METHOD; // Wan recommended
   scheduler_t scheduler = SIMPLE_SCHEDULER;           // Wan recommended
   float cfgScale = 6.0f;                              // guidance.txt_cfg
-  // Image-conditioning guidance for img2vid / flf2vid. Mirrors the image
+  // Image-conditioning guidance for img2vid. Mirrors the image
   // path's SdGenConfig::imgCfgScale exactly:
   //   -1.0f (default sentinel): fall through to cfgScale (txt_cfg), so a
   //     caller that only sets cfg_scale gets the same value applied to
@@ -103,7 +101,7 @@ struct SdVidGenConfig {
   // empty (Wan 2.1).
   float moeBoundary = 0.875f;
 
-  // -- Denoising strength (img2vid / flf2vid) -------------------------------
+  // -- Denoising strength (img2vid) -----------------------------------------
   // 0 = keep init, 1 = ignore it. Ignored for txt2vid.
   float strength = 0.75f;
 

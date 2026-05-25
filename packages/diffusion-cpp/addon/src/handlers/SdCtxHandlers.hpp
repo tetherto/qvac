@@ -28,7 +28,7 @@ namespace qvac_lib_inference_addon_sd {
  * diffusionModelPath + clipLPath + clipGPath + t5XxlPath FLUX.2 [klein] -- uses
  * diffusionModelPath + llmPath (Qwen3) + vaePath
  * Wan 2.1 I2V   -- diffusionModelPath + t5XxlPath (UMT5-XXL) + vaePath
- *                  + clipVisionPath (OpenCLIP ViT-H/14, required for I2V/FLF2V)
+ *                  + clipVisionPath (OpenCLIP ViT-H/14, required for I2V)
  */
 struct SdCtxConfig {
   // -- Model file paths -------------------------------------------------------
@@ -55,7 +55,7 @@ struct SdCtxConfig {
   std::string
       vaePath; // vae_path              -- standalone VAE decoder weights
   std::string clipVisionPath; // clip_vision_path     -- CLIP vision encoder
-                              // (OpenCLIP ViT-H/14) for Wan 2.1 I2V / FLF2V
+                              // (OpenCLIP ViT-H/14) for Wan 2.1 I2V
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
   std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
                           // fast preview)
