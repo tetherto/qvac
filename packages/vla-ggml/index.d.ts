@@ -60,9 +60,9 @@ export interface VlaRunStats {
   /** Legacy alias for `prefill_total_ms`; see `smollm2_compute_ms`. */
   smollm2_total_ms: number
   /** Architecture-neutral prefill compute time (ms). */
-  prefill_compute_ms?: number
+  prefill_compute_ms: number
   /** Architecture-neutral prefill total time (ms). */
-  prefill_total_ms?: number
+  prefill_total_ms: number
   ode_ms: number
   total_ms: number
   /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
@@ -100,7 +100,7 @@ export class VlaModel {
   pause (): Promise<void>
   cancel (): Promise<void>
   unload (): Promise<void>
-  getState (): { configLoaded: boolean }
+  getState (): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
 }
 
 export function preprocessImage (

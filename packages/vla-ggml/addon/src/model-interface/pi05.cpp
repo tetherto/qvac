@@ -1,3 +1,7 @@
+#ifndef _WIN32
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #include "model-interface/pi05.hpp"
 
 #include <algorithm>
@@ -154,6 +158,9 @@ struct ggml_tensor* pi05_build_siglip_block_graph(
       w.attn_out_w == nullptr || w.attn_out_b == nullptr ||
       w.fc1_w == nullptr || w.fc1_b == nullptr || w.fc2_w == nullptr ||
       w.fc2_b == nullptr) {
+    return nullptr;
+  }
+  if (n_heads <= 0 || hidden <= 0 || hidden % n_heads != 0) {
     return nullptr;
   }
   const int head_dim = hidden / n_heads;
@@ -618,11 +625,10 @@ struct ggml_tensor* pi05_build_expert_block_graph(
   v_exp = ggml_cont(ctx, ggml_permute(ctx, v_exp, 0, 2, 1, 3));
 
   // The cached prefix K/V is stored ne=[head_dim, prefix_len, n_kv_heads]
-  // already — no permute needed, just `ggml_cont` so we can concat with
-  // the expert tensors. (cached_k/v come straight from the caller; if
-  // they're already contiguous this is a cheap no-op in ggml.)
-  struct ggml_tensor* k_cached_c = ggml_cont(ctx, cached_k);
-  struct ggml_tensor* v_cached_c = ggml_cont(ctx, cached_v);
+  // already — no permute needed, and tensors from ggml_new_tensor_3d +
+  // ggml_backend_tensor_set are inherently contiguous.
+  struct ggml_tensor* k_cached_c = cached_k;
+  struct ggml_tensor* v_cached_c = cached_v;
 
   // Concatenate on the seq axis (ggml dim 1). Both halves are
   // ne=[head_dim, seq_*, n_kv_heads]; the joint K/V is
@@ -1020,7 +1026,7 @@ static bool pi05_load_weights_alloc_copy(
 #ifdef _WIN32
     int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
 #else
-    int seek_err = std::fseek(f, (long)off, SEEK_SET);
+    int seek_err = fseeko(f, static_cast<off_t>(off), SEEK_SET);
 #endif
     if (seek_err != 0 || std::fread(read_buf.data(), 1, nbytes, f) != nbytes) {
       QLOG_IF(
@@ -1144,6 +1150,11 @@ static std::unique_ptr<pi05_model> pi05_load_model(
   m->vision_n_layers =
       gguf_get_u32_or(m->gguf, "pi05.vision.num_layers", 27);
   m->vlm_n_layers = gguf_get_u32_or(m->gguf, "pi05.vlm.num_layers", 18);
+  m->vlm_hidden = gguf_get_u32_or(m->gguf, "pi05.vlm.hidden_size", 2048);
+  m->vlm_n_heads = gguf_get_u32_or(m->gguf, "pi05.vlm.num_heads", 8);
+  m->vlm_n_kv_heads =
+      gguf_get_u32_or(m->gguf, "pi05.vlm.num_kv_heads", 1);
+  m->vlm_head_dim = gguf_get_u32_or(m->gguf, "pi05.vlm.head_dim", 256);
   m->vlm_vocab_size = gguf_get_u32_or(m->gguf, "pi05.vocab_size", 257152);
   m->expert_hidden =
       gguf_get_u32_or(m->gguf, "pi05.expert.hidden_size", 1024);
@@ -1157,6 +1168,26 @@ static std::unique_ptr<pi05_model> pi05_load_model(
   m->vision_n_patches =
       (m->vision_image_size / m->vision_patch_size) *
       (m->vision_image_size / m->vision_patch_size);
+
+  // Sanity-check hparams to prevent OOM / integer overflow from crafted GGUFs.
+  if (m->vision_n_layers > 512 || m->vlm_n_layers > 512 ||
+      m->expert_n_layers > 512 || m->action_horizon > 1024 ||
+      m->max_token_len > 8192 || m->num_cameras > 16 ||
+      m->action_dim > 512 || m->vision_image_size > 2048 ||
+      m->expert_hidden > 16384 || m->vlm_vocab_size > 1048576 ||
+      m->vision_n_patches == 0) {
+    throw std::runtime_error(
+        "pi05_load_model: one or more GGUF hparams are out of expected range");
+  }
+
+  // The ODE loop indexes k_cache (sized vlm_n_layers) with expert_n_layers.
+  // Both are 18 for pi05_base; reject any checkpoint where they differ.
+  if (m->vlm_n_layers != m->expert_n_layers) {
+    throw std::runtime_error(
+        "pi05_load_model: vlm_n_layers (" + std::to_string(m->vlm_n_layers) +
+        ") != expert_n_layers (" + std::to_string(m->expert_n_layers) +
+        "); this implementation requires them to match");
+  }
 
   auto must_get = [&](const std::string& name) -> struct ggml_tensor* {
     struct ggml_tensor* t = ggml_get_tensor(m->ctx_w, name.c_str());
@@ -1285,6 +1316,9 @@ static bool pi05_inference(
     float* actions_out,
     int* n_actions_out,
     VlaTimingGeneric* timing_out) {
+  if (actions_out == nullptr || n_actions_out == nullptr) {
+    return false;
+  }
   const auto t_start = std::chrono::steady_clock::now();
   if (n_images < 1 || n_images > m.num_cameras) {
     return false;
@@ -1310,18 +1344,23 @@ static bool pi05_inference(
   const size_t per_image_out =
       static_cast<size_t>(m.vision_n_patches) * m.vision_proj_dim;
   std::vector<std::vector<float>> image_features(n_images);
-  std::vector<float> permuted(3 * H * H);
+  const size_t img_floats = static_cast<size_t>(3) * H * H;
+
+  // P5: construct vision tower weight struct once (all fields are immutable
+  // pointers into the model's weight context).
+  Pi05VisionTowerWeights tw{};
+  tw.patch_embed_w = m.vision_patch_embed_w;
+  tw.patch_embed_b = m.vision_patch_embed_b;
+  tw.pos_embed = m.vision_pos_embed;
+  tw.blocks = m.vision_blocks;
+  tw.post_ln_w = m.vision_post_ln_w;
+  tw.post_ln_b = m.vision_post_ln_b;
+  tw.head_w = m.vision_head_w;
+  tw.head_b = m.vision_head_b;
+
   for (int cam = 0; cam < n_images; ++cam) {
-    // (C, H, W) row-major → ggml's (W, H, C, N) fast-dim-first.
-    for (int c = 0; c < 3; ++c) {
-      for (int h = 0; h < H; ++h) {
-        for (int w = 0; w < H; ++w) {
-          const size_t src = static_cast<size_t>(c) * H * H + h * H + w;
-          const size_t dst = w + h * H + static_cast<size_t>(c) * H * H;
-          permuted[dst] = images[cam][src];
-        }
-      }
-    }
+    // CHW row-major is already ggml's (W, H, C, 1) layout for square images.
+    const float* img_data = images[cam];
 
     pi05_staged_guard vg;
     vg.sg = pi05_build_staged(size_t{32} * 1024 * 1024, 8192);
@@ -1330,16 +1369,6 @@ static bool pi05_inference(
     }
     struct ggml_tensor* pixels =
         ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, H, H, 3, 1);
-
-    Pi05VisionTowerWeights tw{};
-    tw.patch_embed_w = m.vision_patch_embed_w;
-    tw.patch_embed_b = m.vision_patch_embed_b;
-    tw.pos_embed = m.vision_pos_embed;
-    tw.blocks = m.vision_blocks;
-    tw.post_ln_w = m.vision_post_ln_w;
-    tw.post_ln_b = m.vision_post_ln_b;
-    tw.head_w = m.vision_head_w;
-    tw.head_b = m.vision_head_b;
 
     auto outs = pi05_build_siglip_tower_graph(
         vg.sg.ctx, pixels, tw, m.vision_n_patches, m.vision_hidden,
@@ -1360,8 +1389,8 @@ static bool pi05_inference(
     if (!ok) {
       return false;
     }
-    ggml_backend_tensor_set(pixels, permuted.data(), 0,
-                            permuted.size() * sizeof(float));
+    ggml_backend_tensor_set(pixels, img_data, 0,
+                            img_floats * sizeof(float));
     if (!pi05_compute_staged(vg.sg, m.backend)) {
       return false;
     }
@@ -1423,12 +1452,9 @@ static bool pi05_inference(
   const auto t_prefill_start = std::chrono::steady_clock::now();
   const size_t per_layer_kv =
       static_cast<size_t>(m.vlm_head_dim) * prefix_len * m.vlm_n_kv_heads;
-  std::vector<std::vector<float>> k_cache(m.vlm_n_layers);
-  std::vector<std::vector<float>> v_cache(m.vlm_n_layers);
-  for (int L = 0; L < m.vlm_n_layers; ++L) {
-    k_cache[L].resize(per_layer_kv);
-    v_cache[L].resize(per_layer_kv);
-  }
+  // Flat buffers — one allocation each instead of n_layers separate vectors.
+  std::vector<float> k_cache(static_cast<size_t>(m.vlm_n_layers) * per_layer_kv);
+  std::vector<float> v_cache(static_cast<size_t>(m.vlm_n_layers) * per_layer_kv);
   {
     pi05_staged_guard pg;
     pg.sg = pi05_build_staged(size_t{64} * 1024 * 1024, 65536);
@@ -1475,10 +1501,12 @@ static bool pi05_inference(
       return false;
     }
     for (int L = 0; L < m.vlm_n_layers; ++L) {
-      ggml_backend_tensor_get(out_keys[L], k_cache[L].data(), 0,
-                              per_layer_kv * sizeof(float));
-      ggml_backend_tensor_get(out_values[L], v_cache[L].data(), 0,
-                              per_layer_kv * sizeof(float));
+      ggml_backend_tensor_get(out_keys[L],
+                              k_cache.data() + static_cast<size_t>(L) * per_layer_kv,
+                              0, per_layer_kv * sizeof(float));
+      ggml_backend_tensor_get(out_values[L],
+                              v_cache.data() + static_cast<size_t>(L) * per_layer_kv,
+                              0, per_layer_kv * sizeof(float));
     }
   }
   const auto t_prefill_end = std::chrono::steady_clock::now();
@@ -1560,10 +1588,12 @@ static bool pi05_inference(
     ggml_backend_tensor_set(act_pos_t, act_pos_data.data(), 0,
                             act_pos_data.size() * sizeof(int32_t));
     for (int L = 0; L < m.expert_n_layers; ++L) {
-      ggml_backend_tensor_set(cached_k_t[L], k_cache[L].data(), 0,
-                              k_cache[L].size() * sizeof(float));
-      ggml_backend_tensor_set(cached_v_t[L], v_cache[L].data(), 0,
-                              v_cache[L].size() * sizeof(float));
+      ggml_backend_tensor_set(cached_k_t[L],
+                              k_cache.data() + static_cast<size_t>(L) * per_layer_kv,
+                              0, per_layer_kv * sizeof(float));
+      ggml_backend_tensor_set(cached_v_t[L],
+                              v_cache.data() + static_cast<size_t>(L) * per_layer_kv,
+                              0, per_layer_kv * sizeof(float));
     }
     if (!pi05_compute_staged(og.sg, m.backend)) {
       return false;

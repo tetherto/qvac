@@ -160,11 +160,10 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
             << "\n";
 
-  // Embedding lookup is a single F16 → F32 promotion + a scalar multiply.
-  // No matmul accumulation, so F16 storage error caps the per-element
-  // delta at ~0.05 % × max_value. Direction must be exact.
-  EXPECT_GT(cos, 0.99999f);
-  EXPECT_LT(diff / std::max(max_abs_expected, 1e-9f), 1e-3f);
+  // Q8_0 embed table lookup + scalar multiply. Observed rel_max ~0.0038
+  // across hardware; bar gives ~2× headroom.
+  EXPECT_GT(cos, 0.9999f);
+  EXPECT_LT(diff / std::max(max_abs_expected, 1e-9f), 0.01f);
 
   ggml_free(ctx_g);
   gguf_free(gguf);

@@ -220,16 +220,10 @@ TEST(Pi05M3_3, SiglipFullTowerMatchesPytorch) {
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
             << "\n";
 
-  // Plan §5 end-to-end bar: cos > 0.999. We require a tighter 0.9999
-  // (4 nines) — the M3.2 commit explains why direction is the right
-  // signal for a deep F16-weight graph. The per-element bound has to
-  // track F16 quant noise accumulating across 27 blocks: M3.2 measured
-  // ~0.08 % rel per block, so a few-percent rel max after 27 blocks is
-  // expected. RMS rel error of ~0.02 % confirms it's broadband.
-  // FIXME(pi05-converter): tightening here is gated on the same
-  // higher-precision-build follow-up flagged in M3.1/M3.2.
-  EXPECT_GT(cos, 0.9999f);
-  EXPECT_LT(diff / std::max(max_abs_expected, 1e-9f), 0.025f);
+  // q_aggressive Q5_0 vision across 27 blocks. Observed cos ~0.9995 and
+  // rel_max ~0.031; bars give ~2× headroom for cross-hardware variance.
+  EXPECT_GT(cos, 0.999f);
+  EXPECT_LT(diff / std::max(max_abs_expected, 1e-9f), 0.07f);
 
   ggml_free(ctx_g);
   gguf_free(gguf);

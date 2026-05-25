@@ -756,13 +756,6 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
 const _skipIOSPi05 = _isMobile && _platform === 'ios'
 
 test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 1200000, skip: _skipIOSPi05 }, async (t) => {
-  if (_skipIOSPi05) {
-    t.comment(
-      'iOS pi05 skipped — see comment above (iOS per-process-limit jetsam ' +
-      'on 8 GB iPhones; matches diffusion-cpp flux2 isMobile-skip pattern).'
-    )
-    return
-  }
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
@@ -842,10 +835,6 @@ test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
 })
 
 test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000, skip: _skipIOSPi05 }, async (t) => {
-  if (_skipIOSPi05) {
-    t.comment('iOS pi05 skipped — see jetsam comment above the main test')
-    return
-  }
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return

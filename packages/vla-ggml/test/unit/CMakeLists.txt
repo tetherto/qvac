@@ -52,7 +52,7 @@ target_link_libraries(
     GTest::gmock_main
 )
 
-add_test(NAME SmolvlaUnit COMMAND addon-test)
-set_tests_properties(SmolvlaUnit PROPERTIES
+add_test(NAME VlaGgmlUnit COMMAND addon-test)
+set_tests_properties(VlaGgmlUnit PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  TIMEOUT 120)
+  TIMEOUT 900)

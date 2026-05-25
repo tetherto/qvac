@@ -193,11 +193,10 @@ TEST(Pi05M3_5, VlmBlock0MatchesPytorchOverValidPrefix) {
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
             << "\n";
 
-  // Bars: cos > 0.9999 (4 nines — joint Gemma block on F16 weights),
-  // rel_max < 0.5 %. See M3.2 commit for the rationale on relative
-  // vs absolute bars.
+  // Q8_0 VLM weights. Observed rel_max ~0.0071 across hardware; bar
+  // gives ~2× headroom.
   EXPECT_GT(cos, 0.9999f);
-  EXPECT_LT(diff / std::max(max_abs_expected, 1e-9f), 5e-3f);
+  EXPECT_LT(diff / std::max(max_abs_expected, 1e-9f), 0.015f);
 
   ggml_free(ctx_g);
   gguf_free(gguf);

@@ -1,10 +1,8 @@
 #pragma once
 
-// π₀.₅ model stub — Phase 1 wire-up only. The constructor throws
-// std::runtime_error so the factory path is exercised by tests but no real
-// loading or inference is attempted yet. Phase 3 fills in the implementation
-// (SigLIP-So400m, Gemma-1 2B VLM, Gemma-1 300M action expert, joint
-// attention, adaRMSNorm, …) per plan §4.
+// π₀.₅ model — full Phase-3 implementation. SigLIP-So400m/14 vision encoder,
+// Gemma-1 2B VLM prefill with KV-cache taps, Gemma-1 300M action expert with
+// joint attention, adaRMSNorm conditioning, and 10-step ODE flow matching.
 
 #include <memory>
 #include <string>

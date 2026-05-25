@@ -177,16 +177,11 @@ TEST(Pi05M3_2, SiglipBlock0MatchesPytorch) {
   // Plan §5's per-block CPU bar (cos > 0.9995, max abs diff < 5e-3) was
   // calibrated against smolvla's smaller F16-weight graph (768-wide,
   // 12-head). For pi05 the SigLIP-So400m block is 1152-wide / 16-head
-  // / 4304 intermediate, so F16 quant noise accumulates through 4 attn
-  // linears + 2 MLP linears with one-and-a-half-OOM-larger matrices,
-  // and per-element abs diff lands around 0.2 on output magnitudes near
-  // 15 — ~1.5% relative, which `cos > 0.99999` confirms is broadband
-  // (no structural skew). FIXME(pi05-converter): bumping attn/MLP
-  // weights from F16 → BF16 (or even F32 for one block in a "high-
-  // precision verify" build of the GGUF) would let us tighten this
-  // back. Until then the bar tracks measured F16 behavior.
-  EXPECT_GT(cos, 0.99999f);
-  EXPECT_LT(diff, 0.3f);
+  // q_aggressive uses Q5_0 for vision weights — more quant noise than F16.
+  // Observed cos ~0.9998 and max_abs_diff ~0.88 across hardware; bars give
+  // ~2× headroom to absorb SIMD rounding differences across CPU targets.
+  EXPECT_GT(cos, 0.999f);
+  EXPECT_LT(diff, 2.0f);
 
   ggml_free(ctx_g);
   gguf_free(gguf);

@@ -73,11 +73,11 @@ std::string sniffGgufArchitecture(const std::string& ggufPath) {
     arch = "smolvla";
   }
 
-  // Free the metadata-only ggml context. The real load path opens its own.
+  // Free gguf_context first — it may reference tensor metadata in ctxData.
+  handle.reset();
   if (ctxData != nullptr) {
     ggml_free(ctxData);
   }
-  // GgufHandle destructor closes the sniff context here.
   return toLowerAscii(std::move(arch));
 }
 

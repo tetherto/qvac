@@ -24,7 +24,7 @@ std::string sniffGgufArchitecture(const std::string& ggufPath);
 
 // Build the matching `IVlaModel` instance. Recognised architectures:
 //   "smolvla" → SmolvlaModelAdapter (the existing implementation)
-//   "pi05"    → Pi05Model           (Phase 1 stub — throws on construction)
+//   "pi05"    → Pi05Model           (full Phase-3 implementation)
 // Any other value throws std::runtime_error with the offending arch name.
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
     const std::string& ggufPath,

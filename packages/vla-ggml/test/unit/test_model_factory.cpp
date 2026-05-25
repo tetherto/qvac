@@ -102,11 +102,10 @@ TEST(VlaModelFactory, SniffThrowsOnMissingFile) {
 // ─── Dispatch ───────────────────────────────────────────────────────────────
 
 // For the dispatch tests, the metadata-only GGUF is missing every required
-// tensor, so the real SmolVLA load path will fail. We can't reach a
-// successful infer() with a synthetic fixture, but we CAN observe which
-// subclass the factory chose by inspecting the exception message: the
-// SmolVLA adapter throws "failed to load SmolVLA model …" while the
-// π₀.₅ stub throws "pi05 … not yet implemented".
+// tensor, so the real load path will fail. We observe which subclass the
+// factory chose by inspecting the exception message: the SmolVLA adapter
+// throws "failed to load SmolVLA model …" while the Pi05Model loader
+// throws "pi05_load_model: tensor missing from GGUF: …".
 
 TEST(VlaModelFactory, DispatchesPi05ArchitectureToPi05Loader) {
   // The metadata-only GGUF doesn't carry any of the 848 tensors pi05

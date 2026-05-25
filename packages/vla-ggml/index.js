@@ -101,9 +101,11 @@ class VlaModel {
     this._backendName = null
     this._hasActiveResponse = false
     this._nativeLoggerActive = false
+    this._packageName = '@qvac/vla-ggml'
+    this._packageVersion = require('./package.json').version
     // Per-run accumulator filled by _onAddonEvent; null between runs.
     this._pending = null
-    this.state = { configLoaded: false }
+    this.state = { configLoaded: false, weightsLoaded: false, destroyed: false }
   }
 
   _connectNativeLogger () {
@@ -179,6 +181,7 @@ class VlaModel {
       if (this.state.configLoaded) return
       await this._load(backend)
       this.state.configLoaded = true
+      this.state.weightsLoaded = true
     })
   }
 
@@ -335,6 +338,7 @@ class VlaModel {
       this._hparams = null
       this._backendName = null
       this.state.configLoaded = false
+      this.state.weightsLoaded = false
     })
   }
 

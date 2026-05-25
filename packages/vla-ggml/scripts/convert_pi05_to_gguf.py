@@ -415,8 +415,9 @@ def load_state_dict_from_lerobot(checkpoint: str) -> dict[str, torch.Tensor]:
     policy = PI05Policy.from_pretrained(checkpoint, config=cfg, strict=False)
     policy.eval()
     sd = policy.state_dict()
-    # Detach + cast to float32 on CPU for deterministic downstream encoding.
-    return {k: v.detach().to(torch.float32).cpu() for k, v in sd.items()}
+    # Detach + move to CPU; keep original dtype to avoid 2× peak RAM.
+    # The per-tensor encode_for_gguf path handles the float32 cast.
+    return {k: v.detach().cpu() for k, v in sd.items()}
 
 
 def load_state_dict_from_safetensors(path: Path) -> dict[str, torch.Tensor]:
@@ -424,7 +425,7 @@ def load_state_dict_from_safetensors(path: Path) -> dict[str, torch.Tensor]:
     from safetensors.torch import load_file as st_load_file
 
     sd = st_load_file(str(path))
-    return {k: v.to(torch.float32) for k, v in sd.items()}
+    return {k: v for k, v in sd.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +508,7 @@ def convert(
             continue
 
         seen_pt_keys.add(pt_name)
-        arr = t.numpy()
+        arr = t.to(torch.float32).numpy()
         target = select_target_dtype(gg_name, arr, variant=variant)
         payload, raw_dtype = encode_for_gguf(arr, target)
         # For quantised tensors ``payload`` is a packed uint8 buffer whose
