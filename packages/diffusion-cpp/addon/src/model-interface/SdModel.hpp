@@ -17,18 +17,17 @@
 #include "handlers/SdVidGenHandlers.hpp"
 #include "utils/EsrganUpscaler.hpp"
 
-// clang-format off
 /**
  * Core stable-diffusion.cpp model wrapper.
  *
  * Supported model families:
- *   SD2.x          -- all-in-one .ckpt / .safetensors via modelPath; set prediction="v"
- *   SDXL           -- all-in-one + optional split CLIP-G; set force_sdxl_vae_conv_scale if needed
- *   SD3 Medium     -- all-in-one GGUF via modelPath (CLIP-L, CLIP-G, T5-XXL baked in)
- *                     OR split layout: diffusionModelPath + clipLPath + clipGPath + t5XxlPath
- *   FLUX.2 [klein] -- split: diffusionModelPath + llmPath (Qwen3) + vaePath
+ *   SD1.x  -- all-in-one .ckpt / .safetensors via modelPath
+ *   SD2.x  -- same as SD1; set prediction="v" in context config
+ *   SDXL   -- all-in-one + optional split CLIP-G; set force_sdxl_vae_conv_scale
+ * if needed FLUX.2 [klein] -- split: diffusionModelPath + llmPath (Qwen3) +
+ * vaeModel
  *   Wan 2.1 / Wan 2.2 -- video: diffusionModelPath + (optional)
- *                     highNoiseDiffusionModelPath + t5xxlPath (UMT5-XXL) + vaePath
+ * highNoiseDiffusionModelPath + t5xxlPath (UMT5-XXL) + vaePath
  *
  * Modes dispatched by SdModel::process() based on the top-level JSON
  * "mode" key:
@@ -46,14 +45,13 @@
  *   4. Destroy    -- destructor calls free_sd_ctx() and releases all GPU/CPU
  *                   memory; to unload simply let the object go out of scope
  */
-// clang-format on
 class SdModel : public qvac_lib_inference_addon_cpp::model::IModel,
                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
-  SdModel(const SdModel &) = delete;
-  SdModel &operator=(const SdModel &) = delete;
-  SdModel(SdModel &&) = delete;
-  SdModel &operator=(SdModel &&) = delete;
+  SdModel(const SdModel&) = delete;
+  SdModel& operator=(const SdModel&) = delete;
+  SdModel(SdModel&&) = delete;
+  SdModel& operator=(SdModel&&) = delete;
 
   /**
    * Stores config. Does NOT load weights -- call load() for that.
@@ -91,7 +89,7 @@ public:
    * Input must be a SdModel::GenerationJob wrapped in std::any.
    * Throws if the model is not loaded.
    */
-  std::any process(const std::any &input) final;
+  std::any process(const std::any& input) final;
 
   // -- IModelCancel -----------------------------------------------------------
 
@@ -130,36 +128,36 @@ public:
      *  generation. */
     std::vector<std::vector<uint8_t>> controlFramesBytes;
     /** Called each diffusion step: {"step":N,"total":M,"elapsed_ms":T} */
-    std::function<void(const std::string &)> progressCallback;
+    std::function<void(const std::string&)> progressCallback;
     /** Called once per output image (txt2img / img2img) with PNG bytes,
      *  OR once for the full video (txt2vid / img2vid / flf2vid) with MJPG
      *  AVI bytes. Only one invocation per job for video modes. */
-    std::function<void(const std::vector<uint8_t> &)> outputCallback;
+    std::function<void(const std::vector<uint8_t>&)> outputCallback;
     /** Optional per-frame fan-out for video modes. When set, fires once
      *  per decoded frame with PNG-encoded bytes so JS consumers can do
      *  their own muxing / previewing in parallel with the AVI build. */
-    std::function<void(const std::vector<uint8_t> &, int /*index*/,
-                       int /*total*/)>
+    std::function<void(
+        const std::vector<uint8_t>&, int /*index*/, int /*total*/)>
         frameCallback;
   };
 
 private:
-  sd_image_t upscaleImage(const sd_image_t &inputImage, int repeats);
+  sd_image_t upscaleImage(const sd_image_t& inputImage, int repeats);
 
   // Per-mode handlers split from the unified process() entry point. Both
   // run under the progress/abort guard owned by process(); return value is
   // always std::any{} (outputs delivered via job callbacks).
-  std::any processImage(const GenerationJob &job,
-                        const picojson::value &parsed);
-  std::any processVideo(const GenerationJob &job,
-                        const picojson::value &parsed);
+  std::any
+  processImage(const GenerationJob& job, const picojson::value& parsed);
+  std::any
+  processVideo(const GenerationJob& job, const picojson::value& parsed);
 
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
 
   std::unique_ptr<sd_ctx_t, decltype(&free_sd_ctx)> sdCtx_;
   qvac_lib_inference_addon_sd::EsrganUpscaler upscaler_;
   mutable std::atomic<bool> cancelRequested_{false};
-  mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_;
+  mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_{};
 
   // -- Cumulative stats ------------------------------------------------------
   struct CumulativeStats {

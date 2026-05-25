@@ -21,13 +21,7 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
     return { type: 'Output', data: rawData, error: null }
   }
 
-  // JobEnded carries a plain runtime-stats POJO. Excluding typed-array views
-  // here keeps future per-frame typed-array handlers (e.g. when
-  // SdModel::GenerationJob::frameCallback wires through to JS) from being
-  // misclassified as JobEnded and prematurely closing the response stream.
-  // `ArrayBuffer.isView` is true for every TypedArray + DataView, false for
-  // plain objects -- exactly the discrimination we want.
-  if (rawData && typeof rawData === 'object' && !ArrayBuffer.isView(rawData)) {
+  if (rawData && typeof rawData === 'object') {
     return { type: 'JobEnded', data: rawData, error: null }
   }
 
@@ -171,11 +165,10 @@ class SdInterface {
       : null
 
     // ── Multi-reference ("fusion") path ─────────────────────────────────────
-    // FLUX2 in-context conditioning with N reference images. index.js defaults
-    // width/height to 1024 for FLUX img2img before this point, so
-    // _fillDimsFromImage is a no-op when both axes are already set.
-    // auto_resize_ref_image handles per-reference resizing inside
-    // generate_image() for the remaining refs.
+    // FLUX2 in-context conditioning with N reference images. Dimensions are
+    // auto-resized inside generate_image() via auto_resize_ref_image, so we
+    // don't pre-align width/height here — the first reference's dimensions
+    // are used by SdModel::process() as the output default.
     if (Array.isArray(params.init_images) && params.init_images.length > 0) {
       const serializable = { ...params }
       const imgBufs = serializable.init_images
@@ -245,21 +238,8 @@ class SdInterface {
 
   /**
    * Helper: fill missing dimensions from image buffer, preserving explicit values.
-   *
-   * Rounds the auto-detected dimensions up to the nearest multiple of 8.
-   * The native SdGenHandlers validates width/height % 8 == 0 *before* the
-   * downstream alignment in SdModel::processImage gets a chance to run,
-   * so passing raw image dimensions (e.g. 500x627 for the bundled
-   * assets/von-neumann.jpg) makes img2img calls fail with:
-   *   "height must be a positive multiple of 8, got: 627"
-   *
-   * The image path is the only consumer that hits this: the FLUX/FLUX2
-   * multi-reference path uses generate_image()'s auto_resize_ref_image
-   * internally, and the video path (VideoStableDiffusion._runInternal)
-   * pre-validates off-grid init/end/control frames at the JS layer and
-   * rejects them with a clear caller-facing error before this helper
-   * runs, so the ceil() here is a no-op on aligned video inputs.
-   *
+   * If neither width nor height is set, read from the image and align to 8-pixel boundary.
+   * If one axis is set, only fill the missing axis from the image.
    * @private
    */
   _fillDimsFromImage (params, buf) {
@@ -268,9 +248,15 @@ class SdInterface {
     const dims = readImageDimensions(buf)
     if (!dims) return
 
-    const align8 = (n) => Math.ceil(n / 8) * 8
-    if (!params.width) params.width = align8(dims.width)
-    if (!params.height) params.height = align8(dims.height)
+    // Use 16 as the snap multiple: Wan video requires spatial_multiple=16
+    // (vae_scale_factor 8 × diffusion_down_factor 2). This is also safe for
+    // all other supported models (any multiple of 16 is a multiple of 8).
+    if (!params.width) {
+      params.width = Math.ceil(dims.width / 16) * 16
+    }
+    if (!params.height) {
+      params.height = Math.ceil(dims.height / 16) * 16
+    }
   }
 
   /**

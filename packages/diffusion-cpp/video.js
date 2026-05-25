@@ -3,9 +3,9 @@
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
-const { SdInterface, mapAddonEvent, readImageDimensions } = require('./addon')
+const { SdInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'esrgan']
+const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'clipVision', 'esrgan']
 
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid', 'flf2vid'])
 
@@ -68,6 +68,9 @@ class VideoStableDiffusion {
    *        encoder (Wan uses the `t5xxl_path` slot for UMT5). Absolute path.
    * @param {string} [args.files.vae]                     - Absolute path to
    *        the Wan VAE.
+   * @param {string} [args.files.clipVision]              - Absolute path to
+   *        clip_vision_h.safetensors (OpenCLIP ViT-H/14). Required for
+   *        img2vid and flf2vid; omit for txt2vid.
    * @param {string} [args.files.esrgan]                  - Optional; forwarded
    *        to the native ctx as `esrganPath` (empty string when unset). Video
    *        generation does not use ESRGAN — same binding shape as image mode.
@@ -139,6 +142,7 @@ class VideoStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: '',
       vaePath: this._files.vae || '',
+      clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
       config: this._config
     }
@@ -264,24 +268,6 @@ class VideoStableDiffusion {
       )
     }
     const { mode } = params
-
-    // ── Prompt is required ─────────────────────────────────────────────
-    // JSDoc declares `params.prompt` as Required, but it's never type-checked
-    // here. Without this guard:
-    //   prompt: undefined  → JSON.stringify strips the key → C++
-    //                        SdVidGenConfig::prompt stays "" → noise-y, empty-
-    //                        prompt clip with no diagnostic.
-    //   prompt: ""         → SdParsers::requireStr accepts (no length check)
-    //                        → same outcome.
-    //   prompt: 42         → stringifies to "42" → requireStr throws in the
-    //                        native handler, far from this layer (confusing).
-    // Catch all three here so the JS caller gets one clear error at the
-    // wrapper boundary.
-    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
-      throw new TypeError(
-        'params.prompt is required and must be a non-empty string'
-      )
-    }
 
     // ── Dimension alignment (multiples of 8) ─────────────────────────────
     // Only validate provided dims; C++ falls back to 480x832 (portrait,
@@ -414,40 +400,17 @@ class VideoStableDiffusion {
       )
     }
 
-    // ── Off-grid image probe (implicit-dim path) ─────────────────────────
-    // Native processVideo() strict-compares every decoded init/end/control
-    // frame against vid.width / vid.height. When the caller doesn't pass
-    // explicit width/height, addon.js infers them from the first image's
-    // actual pixel dims (verbatim -- no silent rounding). Wan requires
-    // multiples of 8, so an off-grid image here would fail deep in the
-    // native pipeline with a cryptic stride error. Catch it up front and
-    // tell the user exactly which image and how to fix it.
-    if (params.width == null || params.height == null) {
-      const offGrid = (label, buf) => {
-        const d = readImageDimensions(buf)
-        if (!d) return null
-        if (d.width % alignTo !== 0 || d.height % alignTo !== 0) {
-          return `${label} dimensions ${d.width}x${d.height} must be ` +
-            `multiples of ${alignTo}. Pre-align the image, or pass ` +
-            `explicit width/height (also multiples of ${alignTo}) so the ` +
-            'video pipeline uses those dims instead.'
-        }
-        return null
-      }
-      if (params.init_image instanceof Uint8Array) {
-        const err = offGrid('init_image', params.init_image)
-        if (err) throw new Error(err)
-      }
-      if (params.end_image instanceof Uint8Array) {
-        const err = offGrid('end_image', params.end_image)
-        if (err) throw new Error(err)
-      }
-      if (Array.isArray(params.control_frames)) {
-        for (let i = 0; i < params.control_frames.length; i++) {
-          const err = offGrid(`control_frames[${i}]`, params.control_frames[i])
-          if (err) throw new Error(err)
-        }
-      }
+    // ── Wan 2.1 I2V / FLF2V CLIP vision sanity check ────────────────────
+    // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
+    // conditioning in Wan 2.1 I2V and FLF2V. Without it the C++ layer
+    // cannot build the img_emb projection and will produce garbage or crash.
+    if ((mode === 'img2vid' || mode === 'flf2vid') && !this._files.clipVision) {
+      this.logger.warn(
+        `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
+        'Download clip_vision_h.safetensors from ' +
+        'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +
+        'files.clipVision. Generation will likely fail or produce incorrect output.'
+      )
     }
 
     // ── Wan 2.2 sanity check ─────────────────────────────────────────────
@@ -472,19 +435,14 @@ class VideoStableDiffusion {
       }
     }
 
-    // ── LoRA: not yet supported on the video path ────────────────────────
-    // `SD_VID_GEN_HANDLERS` has no "lora" entry and `SdModel::processVideo`
-    // never touches `sd_vid_gen_params_t::loras` / `lora_count`, so any LoRA
-    // path passed through here is silently dropped by the native side. Fail
-    // loudly at the JS boundary instead of silently producing LoRA-less
-    // output -- callers can re-enable this once the native handler + wiring
-    // land (mirror of `processImage` + `prepareLoras()`).
+    // ── LoRA path validation ─────────────────────────────────────────────
     if (params.lora != null) {
-      throw new TypeError(
-        'params.lora is not supported for video generation yet. ' +
-        'LoRA is currently only wired through the image path ' +
-        '(ImgStableDiffusion); the Wan video pipeline ignores it.'
-      )
+      if (typeof params.lora !== 'string' || params.lora.length === 0) {
+        throw new TypeError('params.lora must be a non-empty string')
+      }
+      if (!path.isAbsolute(params.lora)) {
+        throw new TypeError(`params.lora must be an absolute path (got: ${params.lora})`)
+      }
     }
 
     if (!this.addon) {

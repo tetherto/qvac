@@ -33,13 +33,11 @@ struct ProgressCtx {
   std::chrono::steady_clock::time_point startTime;
 };
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables,bugprone-throwing-static-initialization)
-thread_local ProgressCtx g_progressCtx;
+thread_local ProgressCtx tl_progressCtx;
 // Thread-local model pointer for abort callback routing -- same pattern as
-// g_progressCtx for progress.  Avoids relying on the process-global
+// tl_progressCtx for progress.  Avoids relying on the process-global
 // sd_abort_cb_data when multiple SdModel instances could coexist.
-thread_local const SdModel* g_abortModel = nullptr;
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables,bugprone-throwing-static-initialization)
+thread_local const SdModel* tl_abortModel = nullptr;
 
 std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   switch (pref) {
@@ -57,28 +55,27 @@ std::string preferredBackendToString(enum sd_backend_preference_t pref) {
 }
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
-  if (g_progressCtx.job == nullptr || !g_progressCtx.job->progressCallback) {
+  if (!tl_progressCtx.job || !tl_progressCtx.job->progressCallback)
     return;
-  }
 
   const auto elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now() - g_progressCtx.startTime)
+          std::chrono::steady_clock::now() - tl_progressCtx.startTime)
           .count();
 
   std::ostringstream oss;
   oss << R"({"step":)" << step << R"(,"total":)" << steps << R"(,"elapsed_ms":)"
       << elapsed << "}";
 
-  g_progressCtx.job->progressCallback(oss.str());
+  tl_progressCtx.job->progressCallback(oss.str());
 }
 
 // Abort callback -- wired into sd_set_abort_callback() so that
 // generate_image() can be interrupted mid-denoising.
-// Reads from thread-local g_abortModel (not the global sd_abort_cb_data)
+// Reads from thread-local tl_abortModel (not the global sd_abort_cb_data)
 // to avoid concurrency issues when multiple SdModel instances coexist.
 bool sdAbortCallback(void* /*data*/) {
-  return (g_abortModel != nullptr) && g_abortModel->isCancelRequested();
+  return tl_abortModel && tl_abortModel->isCancelRequested();
 }
 
 // RAII wrapper for the sd_image_t* array returned by generate_image().
@@ -90,14 +87,11 @@ class SdImageBatch {
 public:
   SdImageBatch(sd_image_t* data, int count) : data_(data), count_(count) {}
   ~SdImageBatch() {
-    if (data_ == nullptr) {
+    if (!data_)
       return;
+    for (int i = 0; i < count_; ++i) {
+      free(data_[i].data);
     }
-    for (int idx = 0; idx < count_; ++idx) {
-      // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory,cppcoreguidelines-pro-bounds-pointer-arithmetic)
-      free(data_[idx].data);
-    }
-    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
     free(data_);
   }
 
@@ -107,23 +101,18 @@ public:
   SdImageBatch& operator=(SdImageBatch&&) = delete;
 
   [[nodiscard]] int count() const { return count_; }
-  [[nodiscard]] const sd_image_t& operator[](int idx) const {
-    if (data_ == nullptr) {
+  [[nodiscard]] const sd_image_t& operator[](int i) const {
+    if (!data_)
       throw std::runtime_error("SdImageBatch: null data");
-    }
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    return data_[idx];
+    return data_[i];
   }
 
-  // Release pixel buffer for image idx immediately after it has been consumed.
-  void release(int idx) {
-    if (data_ == nullptr) {
+  // Release pixel buffer for image i immediately after it has been consumed.
+  void release(int i) {
+    if (!data_)
       return;
-    }
-    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory,cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    free(data_[idx].data);
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    data_[idx].data = nullptr;
+    free(data_[i].data);
+    data_[i].data = nullptr;
   }
 
 private:
@@ -149,7 +138,7 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
 
   sd_lora_t item{};
   item.is_high_noise = false;
-  item.multiplier = 1.0F;
+  item.multiplier = 1.0f;
   item.path = prepared.paths.back().c_str();
   prepared.items.push_back(item);
 
@@ -180,9 +169,8 @@ SdModel::~SdModel() = default;
 // ---------------------------------------------------------------------------
 
 void SdModel::load() {
-  if (isLoaded()) {
+  if (isLoaded())
     return;
-  }
 
   const auto tLoadStart = std::chrono::steady_clock::now();
 
@@ -198,9 +186,9 @@ void SdModel::load() {
   // -- Model paths ------------------------------------------------------------
   // For FLUX.2 [klein] the GGUF contains only diffusion weights with no SD
   // version metadata KV pairs, so we must use diffusion_model_path.
-  // Classic all-in-one SD2.x / SDXL checkpoints use model_path.
-  auto optPath = [](const std::string& str) -> const char* {
-    return str.empty() ? nullptr : str.c_str();
+  // Classic all-in-one SD1.x / SDXL checkpoints use model_path.
+  auto optPath = [](const std::string& s) -> const char* {
+    return s.empty() ? nullptr : s.c_str();
   };
   params.model_path = optPath(config_.modelPath);
   params.diffusion_model_path = optPath(config_.diffusionModelPath);
@@ -211,6 +199,7 @@ void SdModel::load() {
   params.t5xxl_path = optPath(config_.t5XxlPath);
   params.llm_path = optPath(config_.llmPath);
   params.vae_path = optPath(config_.vaePath);
+  params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
 
   // -- Compute ----------------------------------------------------------------
@@ -246,14 +235,20 @@ void SdModel::load() {
     params.preferred_gpu_backend = SD_BACKEND_PREF_GPU;
   }
 
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
   QLOG_IF(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "Preferred backend passed to stable-diffusion: " +
           preferredBackendToString(params.preferred_gpu_backend) + " (" +
           std::to_string(static_cast<int>(params.preferred_gpu_backend)) + ")");
 
+#if defined(__APPLE__)
+  // The ggml Metal backend does not fully support GGML_OP_NORM for
+  // non-contiguous tensors (the CLIP text encoder hits this path).
+  // Force CLIP to CPU on Apple to avoid a Metal encoder abort.
+  params.keep_clip_on_cpu = true;
+#else
   params.keep_clip_on_cpu = config_.keepClipOnCpu;
+#endif
   params.keep_vae_on_cpu = config_.keepVaeOnCpu;
 
   // -- Precision -------------------------------------------------------------
@@ -279,7 +274,7 @@ void SdModel::load() {
   params.free_params_immediately = config_.freeParamsImmediately;
 
   sd_ctx_t* raw = new_sd_ctx(&params);
-  if (raw == nullptr) {
+  if (!raw) {
     const std::string path = config_.diffusionModelPath.empty()
                                  ? config_.modelPath
                                  : config_.diffusionModelPath;
@@ -302,7 +297,6 @@ void SdModel::load() {
 // processImage() (generate_image) or processVideo() (generate_video).
 // ---------------------------------------------------------------------------
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 std::any SdModel::process(const std::any& input) {
   if (!isLoaded()) {
     throw StatusError(
@@ -313,67 +307,54 @@ std::any SdModel::process(const std::any& input) {
   const auto& job = std::any_cast<const GenerationJob&>(input);
 
   cancelRequested_.store(false);
-  g_progressCtx.job = &job;
-  g_progressCtx.startTime = std::chrono::steady_clock::now();
+  tl_progressCtx.job = &job;
+  tl_progressCtx.startTime = std::chrono::steady_clock::now();
   sd_set_progress_callback(sdProgressCallback, nullptr);
-  g_abortModel = this;
+  tl_abortModel = this;
   sd_set_abort_callback(sdAbortCallback, nullptr);
 
   // Scope guard: clear process-global callbacks on any exit path (including
   // early exceptions from parsing/validation before generate_image runs).
   auto clearCallbacks = [&]() {
-    g_progressCtx.job = nullptr;
-    g_abortModel = nullptr;
+    tl_progressCtx.job = nullptr;
+    tl_abortModel = nullptr;
     sd_set_progress_callback(nullptr, nullptr);
     sd_set_abort_callback(nullptr, nullptr);
   };
   struct CallbackGuard {
     std::function<void()> fn;
-    explicit CallbackGuard(std::function<void()> callback) noexcept
-        : fn(std::move(callback)) {}
-    CallbackGuard(const CallbackGuard&) = delete;
-    CallbackGuard& operator=(const CallbackGuard&) = delete;
-    CallbackGuard(CallbackGuard&&) = delete;
-    CallbackGuard& operator=(CallbackGuard&&) = delete;
-    ~CallbackGuard() noexcept {
-      try {
-        fn();
-      } catch (...) { // NOLINT(bugprone-empty-catch)
-      }
-    }
-  } guard(clearCallbacks);
+    ~CallbackGuard() { fn(); }
+  } guard{clearCallbacks};
 
   // -- Parse JSON params -----------------------------------------------------
-  picojson::value jsonRoot;
-  const std::string parseErr = picojson::parse(jsonRoot, job.paramsJson);
-  if (!parseErr.empty()) {
+  picojson::value v;
+  const std::string parseErr = picojson::parse(v, job.paramsJson);
+  if (!parseErr.empty())
     throw StatusError(
         general_error::InvalidArgument,
         "Failed to parse generation params JSON: " + parseErr);
-  }
-  if (!jsonRoot.is<picojson::object>()) {
+  if (!v.is<picojson::object>())
     throw StatusError(
         general_error::InvalidArgument, "Params must be a JSON object");
-  }
 
   // -- Peek top-level mode to choose dispatch branch -------------------------
   // Default is "txt2img" for backwards compatibility: a JSON payload that
   // omits "mode" keeps behaving as an image generation job.
   std::string mode = "txt2img";
-  const auto &obj = jsonRoot.get<picojson::object>();
+  const auto& obj = v.get<picojson::object>();
   if (auto it = obj.find("mode"); it != obj.end()) {
     if (!it->second.is<std::string>())
-      throw StatusError(general_error::InvalidArgument,
-                        "mode must be a string");
+      throw StatusError(
+          general_error::InvalidArgument, "mode must be a string");
     mode = it->second.get<std::string>();
   }
 
   const bool isVideo =
       (mode == "txt2vid" || mode == "img2vid" || mode == "flf2vid");
   if (isVideo) {
-    return processVideo(job, jsonRoot);
+    return processVideo(job, v);
   }
-  return processImage(job, jsonRoot);
+  return processImage(job, v);
 }
 
 // ---------------------------------------------------------------------------
@@ -382,18 +363,17 @@ std::any SdModel::process(const std::any& input) {
 // process().
 // ---------------------------------------------------------------------------
 
-std::any SdModel::processImage(const GenerationJob &job,
-                               const picojson::value &v) {
+std::any
+SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
-  qvac_lib_inference_addon_sd::applySdGenHandlers(gen,
-                                                  v.get<picojson::object>());
+  qvac_lib_inference_addon_sd::applySdGenHandlers(
+      gen, v.get<picojson::object>());
 
-  if (gen.mode != "txt2img" && gen.mode != "img2img") {
+  if (gen.mode != "txt2img" && gen.mode != "img2img")
     throw StatusError(
         general_error::InvalidArgument,
         "Unsupported mode: '" + gen.mode + "'. Supported: txt2img, img2img.");
-  }
 
   if (gen.upscale && config_.esrganPath.empty()) {
     throw StatusError(
@@ -424,7 +404,7 @@ std::any SdModel::processImage(const GenerationJob &job,
   genParams.sample_params.guidance.txt_cfg = gen.cfgScale;
   genParams.sample_params.guidance.distilled_guidance = gen.guidance;
   genParams.sample_params.guidance.img_cfg =
-      gen.imgCfgScale < 0.0F ? gen.cfgScale : gen.imgCfgScale;
+      gen.imgCfgScale < 0.0f ? gen.cfgScale : gen.imgCfgScale;
   genParams.sample_params.eta = gen.eta;
   genParams.sample_params.flow_shift = config_.flowShift;
 
@@ -437,15 +417,12 @@ std::any SdModel::processImage(const GenerationJob &job,
   // -- Step-caching ----------------------------------------------------------
   sd_cache_params_init(&genParams.cache);
   genParams.cache.mode = gen.cacheMode;
-  if (gen.cacheThreshold > 0.0F) {
+  if (gen.cacheThreshold > 0.0f)
     genParams.cache.reuse_threshold = gen.cacheThreshold;
-  }
-  if (gen.cacheStart > 0.0F) {
+  if (gen.cacheStart > 0.0f)
     genParams.cache.start_percent = gen.cacheStart;
-  }
-  if (gen.cacheEnd > 0.0F) {
+  if (gen.cacheEnd > 0.0f)
     genParams.cache.end_percent = gen.cacheEnd;
-  }
 
   // -- img2img --------------------------------------------------------------
   //
@@ -460,7 +437,11 @@ std::any SdModel::processImage(const GenerationJob &job,
   //     a fully new image. N>=2 is "fusion" mode -- addressable in the prompt
   //     as @image1, @image2, ...
   //
-  //   All other models (SD2.x, SDXL, SD3):
+  //   FLUX (FLUX_FLOW_PRED) with a single reference image:
+  //     Same ref_images path as FLUX2, just a single ref. Multi-image is
+  //     rejected here because only FLUX2 defines the @imageN placeholders.
+  //
+  //   All other models (SD1.x, SD2.x, SDXL, SD3):
   //     Uses init_image -- traditional SDEdit. The input image is noised to
   //     the level specified by `strength`, then denoised for the remaining
   //     steps. Lower strength = closer to the original image. Multi-image
@@ -472,25 +453,23 @@ std::any SdModel::processImage(const GenerationJob &job,
   // RAII wrapper for multi-image FLUX fusion reference images. Automatically
   // frees pixel buffers on scope exit (normal or exceptional) using a custom
   // deleter that iterates the vector and frees each sd_image_t.data pointer.
-  auto refImgsDeleter = [](std::vector<sd_image_t>* ptr) {
-    if (ptr == nullptr) {
+  auto refImgsDeleter = [](std::vector<sd_image_t>* v) {
+    if (!v)
       return;
-    }
-    for (auto& img : *ptr) {
-      if (img.data != nullptr) {
-        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
+    for (auto& img : *v) {
+      if (img.data) {
         free(img.data);
         img.data = nullptr;
       }
     }
-    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-    delete ptr;
+    delete v;
   };
   std::unique_ptr<std::vector<sd_image_t>, decltype(refImgsDeleter)> refImgs(
-      new std::vector<sd_image_t>(), refImgsDeleter); // NOLINT
+      new std::vector<sd_image_t>(), refImgsDeleter);
 
   if (gen.mode == "img2img") {
-    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED;
+    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
+                              config_.prediction == FLUX_FLOW_PRED;
     const bool isFlux2 = config_.prediction == FLUX2_FLOW_PRED;
     const size_t nMulti = job.initImagesBytes.size();
 
@@ -499,58 +478,52 @@ std::any SdModel::processImage(const GenerationJob &job,
     // These checks mirror the JS-layer validation in index.js but are
     // duplicated here so the C++ API stays safe when called directly from
     // unit tests or bindings that bypass index.js.
-    if (!job.initImageBytes.empty() && nMulti > 0) {
+    if (!job.initImageBytes.empty() && nMulti > 0)
       throw StatusError(
           general_error::InvalidArgument,
           "img2img: init_image and init_images are mutually exclusive -- "
           "pick one. Use init_images (with FLUX2) for multi-reference "
           "fusion, or init_image for single-image conditioning.");
-    }
 
-    if (nMulti > 0 && !isFlux2) {
+    if (nMulti > 0 && !isFlux2)
       throw StatusError(
           general_error::InvalidArgument,
           "img2img: init_images (multi-reference fusion) requires a FLUX2 "
           "model with prediction='flux2_flow'. The current model does not "
           "support @image1/@imageN in-context references.");
-    }
 
     // -- Multi-image (FLUX2 "fusion" mode) ---------------------------------
     if (nMulti > 0) {
       refImgs->reserve(nMulti);
-      for (size_t idx = 0; idx < nMulti; ++idx) {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        if (job.initImagesBytes[idx].empty()) {
+      for (size_t i = 0; i < nMulti; ++i) {
+        if (job.initImagesBytes[i].empty())
           throw StatusError(
               general_error::InvalidArgument,
-              "img2img: init_images[" + std::to_string(idx) +
+              "img2img: init_images[" + std::to_string(i) +
                   "] is empty -- every reference must be a non-empty "
                   "PNG/JPEG buffer.");
-        }
 
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[idx]);
+        sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[i]);
         if (decoded.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
-              "img2img: failed to decode init_images[" + std::to_string(idx) +
+              "img2img: failed to decode init_images[" + std::to_string(i) +
                   "] (corrupt or unsupported format; supported: PNG, JPEG)");
         }
         refImgs->push_back(decoded);
       }
 
-      // index.js defaults FLUX img2img (fusion and single-ref) to 1024×1024
-      // when the caller omits width/height, so addon.js::_fillDimsFromImage
-      // is a no-op for that path. Direct C++ callers should supply explicit
-      // dimensions; otherwise the SdGenConfig 512×512 default is used.
-      // auto_resize_ref_image handles the remaining refs.
+      // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
+      // which falls back to the first reference's size when the caller omits
+      // width/height). C++ callers using the binding directly must supply
+      // both dimensions explicitly. auto_resize_ref_image handles the
+      // remaining refs.
 
       // clang-format off
       // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
       // whether the std::string(...) branches of this ternary should hang the
       // call open-paren on its own line. Pinning the layout here keeps local
       // and CI bit-for-bit.
-      // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
           "img2img: entering FLUX2 *fusion* mode -- " + std::to_string(nMulti) +
@@ -577,17 +550,13 @@ std::any SdModel::processImage(const GenerationJob &job,
       // -- Single-image path (existing behaviour) --------------------------
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
-      } else {
-        const auto &jsonObj = v.get<picojson::object>();
-        auto initBytesIt = jsonObj.find("init_image_bytes");
-        if (initBytesIt != jsonObj.end() &&
-            initBytesIt->second.is<picojson::array>()) {
-          const auto& arr = initBytesIt->second.get<picojson::array>();
-          initPng.reserve(arr.size());
-          for (const auto& elem : arr) {
-            initPng.push_back(static_cast<uint8_t>(elem.get<double>()));
-          }
-        }
+      } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
+                 it != v.get<picojson::object>().end() &&
+                 it->second.is<picojson::array>()) {
+        const auto& arr = it->second.get<picojson::array>();
+        initPng.reserve(arr.size());
+        for (const auto& el : arr)
+          initPng.push_back(static_cast<uint8_t>(el.get<double>()));
       }
       if (!initPng.empty()) {
         initImg = image_codec::decodeImage(initPng);
@@ -604,12 +573,16 @@ std::any SdModel::processImage(const GenerationJob &job,
       const int imgH = static_cast<int>(initImg.height);
 
       if (isFluxFamily) {
-        // genParams.width/height are already assigned from gen earlier in this
-        // function. index.js defaults any missing FLUX img2img axis to 1024;
-        // direct C++ callers should supply explicit dimensions, otherwise the
-        // SdGenConfig 512×512 default is used.
+        // FLUX in-context conditioning: ref_images handles its own resizing
+        // via auto_resize_ref_image, so only override genParams dimensions
+        // when they are still at the 512x512 default.
+        if (gen.width == 512 && gen.height == 512) {
+          genParams.width = imgW;
+          genParams.height = imgH;
+        }
+        gen.width = genParams.width;
+        gen.height = genParams.height;
 
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
             "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
@@ -634,7 +607,6 @@ std::any SdModel::processImage(const GenerationJob &job,
         gen.height = alignedH;
 
         if (imgW != alignedW || imgH != alignedH) {
-          // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
           QLOG_IF(
               qvac_lib_inference_addon_cpp::logger::Priority::INFO,
               "img2img: resizing " + std::to_string(imgW) + "x" +
@@ -644,19 +616,16 @@ std::any SdModel::processImage(const GenerationJob &job,
 
           sd_image_t resized =
               image_utils::resizeSdImage(initImg, alignedW, alignedH);
-          if (resized.data == nullptr) {
+          if (!resized.data)
             throw StatusError(
                 general_error::InternalError,
                 "Failed to resize init_image from " + std::to_string(imgW) +
                     "x" + std::to_string(imgH) + " to " +
                     std::to_string(alignedW) + "x" + std::to_string(alignedH));
-          }
-          // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
           free(initImg.data);
           initImg = resized;
         }
 
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
             "img2img: " + std::to_string(alignedW) + "x" +
@@ -669,21 +638,17 @@ std::any SdModel::processImage(const GenerationJob &job,
         // sd_image_to_ggml_tensor() on mask_image (even when no mask was
         // provided), which asserts mask_image dimensions match the tensor.
         // Provide an all-white mask (= denoise everywhere) to satisfy it.
-        if (genParams.mask_image.data == nullptr) {
+        if (!genParams.mask_image.data) {
           const size_t maskSize =
               static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
-          // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
           auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
-          if (maskData == nullptr) {
+          if (!maskData)
             throw StatusError(
                 general_error::InternalError,
                 "Failed to allocate " + std::to_string(maskSize) +
                     " bytes for SDEdit mask (" + std::to_string(alignedW) +
                     "x" + std::to_string(alignedH) + ")");
-          }
-          // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
           memset(maskData, 255, maskSize);
-          // NOLINTNEXTLINE(modernize-use-designated-initializers)
           genParams.mask_image = {
               static_cast<uint32_t>(alignedW),
               static_cast<uint32_t>(alignedH),
@@ -695,17 +660,15 @@ std::any SdModel::processImage(const GenerationJob &job,
   } // end gen.mode == "img2img"
 
   // -- Generate --------------------------------------------------------------
-  const auto genStart = std::chrono::steady_clock::now();
+  const auto t0 = std::chrono::steady_clock::now();
 
   SdImageBatch results(
       generate_image(sdCtx_.get(), &genParams), gen.batchCount);
 
-  if (initImg.data != nullptr) {
-    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
+  if (initImg.data) {
     free(initImg.data);
   }
-  if (genParams.mask_image.data != nullptr) {
-    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
+  if (genParams.mask_image.data) {
     free(genParams.mask_image.data);
   }
 
@@ -716,21 +679,18 @@ std::any SdModel::processImage(const GenerationJob &job,
   auto statsWidth = static_cast<int64_t>(gen.width);
   auto statsHeight = static_cast<int64_t>(gen.height);
   bool wasCancelled = false;
-  for (int idx = 0; idx < results.count(); ++idx) {
+  for (int i = 0; i < results.count(); ++i) {
     if (cancelRequested_.load()) {
       wasCancelled = true;
       break;
     }
 
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    if (results[idx].data != nullptr) {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      sd_image_t imageForOutput = results[idx];
+    if (results[i].data != nullptr) {
+      sd_image_t imageForOutput = results[i];
       std::unique_ptr<uint8_t, image_codec::FreeDeleter> upscaledData(nullptr);
 
       if (gen.upscale) {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        sd_image_t upscaled = upscaleImage(results[idx], gen.upscaleRepeats);
+        sd_image_t upscaled = upscaleImage(results[i], gen.upscaleRepeats);
         imageForOutput = upscaled;
         upscaledData.reset(upscaled.data);
       }
@@ -751,7 +711,7 @@ std::any SdModel::processImage(const GenerationJob &job,
       }
     }
     results.release(
-        idx); // free pixel buffer immediately; destructor handles the rest
+        i); // free pixel buffer immediately; destructor handles the rest
     if (cancelRequested_.load()) {
       wasCancelled = true;
     }
@@ -767,33 +727,15 @@ std::any SdModel::processImage(const GenerationJob &job,
   // on cancel (partial text output is still useful).  Diffusion produces no
   // partial images, so a "successful" completion with output_count=0 would
   // be misleading -- throwing gives the JS caller an explicit cancel signal.
-  // We tag the StatusError with localCodeMsg="Cancelled" so the JS layer
-  // can discriminate cancel from real internal failures via the status
-  // code (codeString() == "[ General :: Cancelled ]") instead of
-  // string-matching the exception message.
-  //
-  // Note: we use the 3-arg StatusError ctor with explicit addonId +
-  // localCodeMsg instead of adding `Cancelled` to general_error's enum
-  // so this PR doesn't have to touch the shared inference-addon-cpp
-  // header (which would force a coordinated update across every other
-  // package that pulls it in via vcpkg).
   if (wasCancelled) {
-    throw StatusError(std::string(general_error::GeneralAddonId), "Cancelled",
-                      "Job cancelled");
+    throw std::runtime_error("Job cancelled");
   }
 
-  if (outputCount == 0) {
-    throw StatusError(
-        general_error::InternalError,
-        "Image generation produced no output. The VAE decode likely failed "
-        "(out of device memory). Try enabling vae_tiling in run() params.");
-  }
-
-  const auto genEnd = std::chrono::steady_clock::now();
+  const auto t1 = std::chrono::steady_clock::now();
 
   // -- Accumulate cumulative counters -----------------------------------------
   const int64_t genMsI = static_cast<int64_t>(
-      std::chrono::duration<double, std::milli>(genEnd - genStart).count());
+      std::chrono::duration<double, std::milli>(t1 - t0).count());
   stats_.totalGenerationMs += genMsI;
   stats_.totalWallMs += genMsI;
   stats_.totalSteps += gen.steps;
@@ -838,17 +780,18 @@ std::any SdModel::processImage(const GenerationJob &job,
 // Assumes callbacks + guard are already set up by process().
 // ---------------------------------------------------------------------------
 
-std::any SdModel::processVideo(const GenerationJob &job,
-                               const picojson::value &v) {
+std::any
+SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   // -- Build SdVidGenConfig from handlers ------------------------------------
   qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
-  qvac_lib_inference_addon_sd::applySdVidGenHandlers(vid,
-                                                     v.get<picojson::object>());
+  qvac_lib_inference_addon_sd::applySdVidGenHandlers(
+      vid, v.get<picojson::object>());
 
   if (vid.mode != "txt2vid" && vid.mode != "img2vid" && vid.mode != "flf2vid")
-    throw StatusError(general_error::InvalidArgument,
-                      "processVideo: unsupported mode '" + vid.mode +
-                          "' (expected txt2vid, img2vid, or flf2vid)");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "processVideo: unsupported mode '" + vid.mode +
+            "' (expected txt2vid, img2vid, or flf2vid)");
 
   // -- Mode-vs-inputs invariants --------------------------------------------
   // These checks mirror the JS-layer validation but are duplicated here so
@@ -861,17 +804,20 @@ std::any SdModel::processVideo(const GenerationJob &job,
 
   if (vid.mode == "flf2vid") {
     if (job.initImageBytes.empty())
-      throw StatusError(general_error::InvalidArgument,
-                        "flf2vid: init_image (first frame) is required");
+      throw StatusError(
+          general_error::InvalidArgument,
+          "flf2vid: init_image (first frame) is required");
     if (job.endImageBytes.empty())
-      throw StatusError(general_error::InvalidArgument,
-                        "flf2vid: end_image (last frame) is required");
+      throw StatusError(
+          general_error::InvalidArgument,
+          "flf2vid: end_image (last frame) is required");
   }
 
   if (!job.endImageBytes.empty() && vid.mode != "flf2vid")
-    throw StatusError(general_error::InvalidArgument,
-                      "end_image is only valid for mode='flf2vid', got mode='" +
-                          vid.mode + "'");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "end_image is only valid for mode='flf2vid', got mode='" + vid.mode +
+            "'");
 
   if (vid.mode == "txt2vid" && !job.initImageBytes.empty())
     throw StatusError(
@@ -896,27 +842,32 @@ std::any SdModel::processVideo(const GenerationJob &job,
   if (!job.initImageBytes.empty()) {
     initImg = image_codec::decodeImage(job.initImageBytes);
     if (!initImg.data)
-      throw StatusError(general_error::InvalidArgument,
-                        "processVideo: failed to decode init_image (corrupt or "
-                        "unsupported format; supported: PNG, JPEG)");
-    // Take ownership *before* the dimension check so a mismatch can't leak
-    // the freshly-decoded pixel buffer (mirrors the control_frames path).
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: failed to decode init_image (corrupt or "
+          "unsupported format; supported: PNG, JPEG)");
+    // Take ownership of the freshly-decoded pixel buffer BEFORE the
+    // dimension check so a mismatch can't leak the buffer. Mirrors the
+    // control_frames pattern below.
     initData.reset(initImg.data);
-    // generate_video() takes a single (width, height) for the whole pipeline;
-    // mixing an init_image of a different size with a width/height the user
-    // declared elsewhere produces inconsistent frame data downstream. Reject
-    // explicitly here -- consistent with the end_image / control_frames
-    // checks below, all three compare against vid.width / vid.height as the
-    // single source of truth for the video's final dimensions.
+    // Auto-resize init_image to the target video dimensions when they differ.
+    // stable-diffusion.cpp's sd_image_to_tensor resizes internally too, but
+    // the VAE latent stride is computed from vid.width/vid.height, so we
+    // resize here to guarantee the pixel buffer layout matches exactly.
     if (static_cast<int>(initImg.width) != vid.width ||
-        static_cast<int>(initImg.height) != vid.height)
-      throw StatusError(general_error::InvalidArgument,
-                        "processVideo: init_image dimensions " +
-                            std::to_string(initImg.width) + "x" +
-                            std::to_string(initImg.height) +
-                            " do not match video dimensions " +
-                            std::to_string(vid.width) + "x" +
-                            std::to_string(vid.height));
+        static_cast<int>(initImg.height) != vid.height) {
+      sd_image_t resized =
+          image_utils::resizeSdImage(initImg, vid.width, vid.height);
+      if (!resized.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: failed to resize init_image from " +
+                std::to_string(initImg.width) + "x" +
+                std::to_string(initImg.height) + " to " +
+                std::to_string(vid.width) + "x" + std::to_string(vid.height));
+      initData.reset(resized.data);
+      initImg = resized;
+    }
   }
 
   if (!job.endImageBytes.empty()) {
@@ -928,13 +879,19 @@ std::any SdModel::processVideo(const GenerationJob &job,
           "format; supported: PNG, JPEG)");
     endData.reset(endImg.data);
     if (static_cast<int>(endImg.width) != vid.width ||
-        static_cast<int>(endImg.height) != vid.height)
-      throw StatusError(
-          general_error::InvalidArgument,
-          "processVideo: end_image dimensions " + std::to_string(endImg.width) +
-              "x" + std::to_string(endImg.height) +
-              " do not match video dimensions " + std::to_string(vid.width) +
-              "x" + std::to_string(vid.height));
+        static_cast<int>(endImg.height) != vid.height) {
+      sd_image_t resized =
+          image_utils::resizeSdImage(endImg, vid.width, vid.height);
+      if (!resized.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: failed to resize end_image from " +
+                std::to_string(endImg.width) + "x" +
+                std::to_string(endImg.height) + " to " +
+                std::to_string(vid.width) + "x" + std::to_string(vid.height));
+      endData.reset(resized.data);
+      endImg = resized;
+    }
   }
 
   if (!job.controlFramesBytes.empty()) {
@@ -948,18 +905,22 @@ std::any SdModel::processVideo(const GenerationJob &job,
             "processVideo: failed to decode control_frames[" +
                 std::to_string(i) +
                 "] (corrupt or unsupported format; supported: PNG, JPEG)");
-      // Take ownership *before* the dimension check so a mismatch can't leak
-      // the freshly-decoded pixel buffer.
+      // Take ownership *before* the resize so a failure can't leak the buffer.
       PixelBuffer owned(decoded.data);
       if (static_cast<int>(decoded.width) != vid.width ||
           static_cast<int>(decoded.height) != vid.height) {
-        throw StatusError(general_error::InvalidArgument,
-                          "processVideo: control_frames[" + std::to_string(i) +
-                              "] dimensions " + std::to_string(decoded.width) +
-                              "x" + std::to_string(decoded.height) +
-                              " do not match video dimensions " +
-                              std::to_string(vid.width) + "x" +
-                              std::to_string(vid.height));
+        sd_image_t resized =
+            image_utils::resizeSdImage(decoded, vid.width, vid.height);
+        if (!resized.data)
+          throw StatusError(
+              general_error::InvalidArgument,
+              "processVideo: failed to resize control_frames[" +
+                  std::to_string(i) + "] from " +
+                  std::to_string(decoded.width) + "x" +
+                  std::to_string(decoded.height) + " to " +
+                  std::to_string(vid.width) + "x" + std::to_string(vid.height));
+        owned.reset(resized.data);
+        decoded = resized;
       }
       controlData.push_back(std::move(owned));
       controlFrames.push_back(decoded);
@@ -994,6 +955,12 @@ std::any SdModel::processVideo(const GenerationJob &job,
   vidParams.sample_params.scheduler = vid.scheduler;
   vidParams.sample_params.sample_steps = vid.sampleSteps;
   vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
+  // img_cfg: -1 sentinel means "use cfg_scale for image conditioning too",
+  // identical to the image-gen path (SdModel processImage's img_cfg
+  // wiring). For txt2vid the field is ignored downstream; for img2vid /
+  // flf2vid it drives sample_params.guidance.img_cfg.
+  vidParams.sample_params.guidance.img_cfg =
+      vid.imgCfgScale < 0.0f ? vid.cfgScale : vid.imgCfgScale;
   // Per-job flow_shift overrides ctx-level flowShift; 0.0 falls through to
   // the ctx default (SdCtxConfig::flowShift, which is infinity / embedded).
   if (vid.flowShift > 0.0f) {
@@ -1033,31 +1000,22 @@ std::any SdModel::processVideo(const GenerationJob &job,
   qvac_lib_inference_addon_sd::SdVideoFrames frames(
       generate_video(sdCtx_.get(), &vidParams, &numFramesOut), numFramesOut);
 
-  // If cancelled during the sampler, surface as an exception for the same
-  // reason as the image path: a "successful" completion with zero frames
-  // would be misleading. Typed Cancelled status (see image path above for
-  // the 3-arg ctor rationale).
-  auto throwCancelled = []() {
-    throw StatusError(std::string(general_error::GeneralAddonId), "Cancelled",
-                      "Job cancelled");
-  };
-  if (cancelRequested_.load()) {
-    throwCancelled();
+  const bool wasCancelled = cancelRequested_.load();
+
+  // If cancelled, surface as an exception for the same reason as the image
+  // path: a "successful" completion with zero frames would be misleading.
+  if (wasCancelled) {
+    throw std::runtime_error("Job cancelled");
   }
 
   if (frames.empty())
-    throw StatusError(general_error::InternalError,
-                      "processVideo: generate_video() returned no frames");
+    throw StatusError(
+        general_error::InternalError,
+        "processVideo: generate_video() returned no frames");
 
   // -- Fan out per-frame PNGs (opt-in) --------------------------------------
-  // PNG encoding for an 81-frame 832x480 video can take multiple seconds; we
-  // re-check cancelRequested_ at the top of each iteration so a user pressing
-  // cancel during the fan-out gets a prompt signal instead of waiting for
-  // the AVI mux to finish.
   if (job.frameCallback) {
     for (int i = 0; i < frames.count(); ++i) {
-      if (cancelRequested_.load())
-        throwCancelled();
       if (!frames[i].data)
         continue;
       auto png = image_codec::encodeToPng(frames[i]);
@@ -1066,12 +1024,6 @@ std::any SdModel::processVideo(const GenerationJob &job,
       }
     }
   }
-
-  // One last cancellation check before the MJPG mux: encodeFramesToAvi can
-  // also take multiple seconds on large videos, and it has no cancellation
-  // hook of its own.
-  if (cancelRequested_.load())
-    throwCancelled();
 
   // -- Encode AVI and deliver ----------------------------------------------
   auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(

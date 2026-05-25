@@ -44,7 +44,7 @@ public:
    * destructor will short-circuit on null); it avoids exposing an extra
    * error state to callers that already checked `data != nullptr`.
    */
-  SdVideoFrames(sd_image_t *data, int count) : data_(data), count_(count) {}
+  SdVideoFrames(sd_image_t* data, int count) : data_(data), count_(count) {}
 
   ~SdVideoFrames() {
     if (!data_)
@@ -55,16 +55,16 @@ public:
     free(data_);
   }
 
-  SdVideoFrames(const SdVideoFrames &) = delete;
-  SdVideoFrames &operator=(const SdVideoFrames &) = delete;
-  SdVideoFrames(SdVideoFrames &&) = delete;
-  SdVideoFrames &operator=(SdVideoFrames &&) = delete;
+  SdVideoFrames(const SdVideoFrames&) = delete;
+  SdVideoFrames& operator=(const SdVideoFrames&) = delete;
+  SdVideoFrames(SdVideoFrames&&) = delete;
+  SdVideoFrames& operator=(SdVideoFrames&&) = delete;
 
   [[nodiscard]] int count() const noexcept { return count_; }
   [[nodiscard]] bool empty() const noexcept { return !data_ || count_ == 0; }
-  [[nodiscard]] const sd_image_t *data() const noexcept { return data_; }
+  [[nodiscard]] const sd_image_t* data() const noexcept { return data_; }
 
-  [[nodiscard]] const sd_image_t &operator[](int i) const {
+  [[nodiscard]] const sd_image_t& operator[](int i) const {
     if (!data_)
       throw std::runtime_error("SdVideoFrames: null data");
     if (i < 0 || i >= count_)
@@ -73,7 +73,7 @@ public:
   }
 
 private:
-  sd_image_t *const data_;
+  sd_image_t* const data_;
   const int count_;
 };
 

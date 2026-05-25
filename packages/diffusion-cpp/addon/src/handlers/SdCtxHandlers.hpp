@@ -10,7 +10,6 @@
 
 namespace qvac_lib_inference_addon_sd {
 
-// clang-format off
 /**
  * All load-time configuration for the stable-diffusion context.
  *
@@ -21,19 +20,22 @@ namespace qvac_lib_inference_addon_sd {
  * Consumed once in SdModel::load() where new_sd_ctx() is called.
  *
  * Supported models:
- *   SD2.x          -- uses modelPath (all-in-one .ckpt / .safetensors / GGUF), add prediction="v"
- *   SDXL           -- uses modelPath (all-in-one GGUF); set force_sdxl_vae_conv_scale if needed
- *   SD3 Medium     -- all-in-one GGUF via modelPath (CLIP-L, CLIP-G, T5-XXL baked in)
- *                     OR split layout: diffusionModelPath + clipLPath + clipGPath + t5XxlPath
- *   FLUX.2 [klein] -- uses diffusionModelPath + llmPath (Qwen3) + vaePath
+ *   SD1.x        -- uses modelPath (all-in-one .ckpt / .safetensors / GGUF)
+ *   SD2.x        -- same as SD1, add prediction="v" to the config
+ *   SDXL         -- uses modelPath (all-in-one GGUF); set
+ * force_sdxl_vae_conv_scale if needed SD3 Medium   -- all-in-one GGUF via
+ * modelPath (CLIP-L, CLIP-G, T5-XXL baked in) OR split layout:
+ * diffusionModelPath + clipLPath + clipGPath + t5XxlPath FLUX.2 [klein] -- uses
+ * diffusionModelPath + llmPath (Qwen3) + vaePath
+ * Wan 2.1 I2V   -- diffusionModelPath + t5XxlPath (UMT5-XXL) + vaePath
+ *                  + clipVisionPath (OpenCLIP ViT-H/14, required for I2V/FLF2V)
  */
-// clang-format on
 struct SdCtxConfig {
   // -- Model file paths -------------------------------------------------------
   // All paths are absolute; empty string = not used.
 
-  std::string modelPath;          // model_path            -- SD2.x/SDXL/SD3
-                                  // all-in-one checkpoint
+  std::string modelPath; // model_path            -- SD1.x/SD2.x/SDXL/SD3
+                         // all-in-one checkpoint
   std::string diffusionModelPath; // diffusion_model_path  -- FLUX.2 [klein] or
                                   // SD3 pure diffusion GGUF. For Wan 2.1 this
                                   // holds the single expert; for Wan 2.2 this
@@ -52,6 +54,8 @@ struct SdCtxConfig {
       llmPath; // llm_path              -- LLM text encoder (FLUX.2 -> Qwen3)
   std::string
       vaePath; // vae_path              -- standalone VAE decoder weights
+  std::string clipVisionPath; // clip_vision_path     -- CLIP vision encoder
+                              // (OpenCLIP ViT-H/14) for Wan 2.1 I2V / FLF2V
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
   std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
                           // fast preview)
@@ -59,10 +63,8 @@ struct SdCtxConfig {
   // -- Compute ---------------------------------------------------------------
   int nThreads = -1; // n_threads:            -1 = auto-detect physical cores
   bool flashAttn = false; // flash_attn:           full-model flash attention
-  // diffusion_flash_attn: flash attention on diffusion model only.
-  // Defaults to true — safe for all model families; backends that don't
-  // support ggml_flash_attn_ext fall back to standard attention silently.
-  bool diffusionFlashAttn = true;
+  bool diffusionFlashAttn =
+      false; // diffusion_flash_attn: flash attention on diffusion only
 
   // -- Memory management -----------------------------------------------------
   bool mmap = false;         // enable_mmap:           memory-map the GGUF file
@@ -88,7 +90,7 @@ struct SdCtxConfig {
   // -- Prediction type -------------------------------------------------------
   // PREDICTION_COUNT = auto-detect from model GGUF metadata (recommended).
   // Override if the GGUF lacks metadata (community conversions often do):
-  //   EPS_PRED        -> SD2.x (epsilon prediction, pre-v-pred fine-tunes)
+  //   EPS_PRED        -> SD1.x
   //   V_PRED          -> SD2.x
   //   FLOW_PRED       -> SD3 (flow matching)
   //   FLUX2_FLOW_PRED -> FLUX.2 [klein]
@@ -103,29 +105,21 @@ struct SdCtxConfig {
   float flowShift = std::numeric_limits<float>::infinity();
 
   // -- Convolution kernel options --------------------------------------------
-  bool diffusionConvDirect = true; // ggml_conv2d_direct in diffusion model
-  bool vaeConvDirect = true;       // ggml_conv2d_direct in VAE
+  bool diffusionConvDirect = false; // ggml_conv2d_direct in diffusion model
+  bool vaeConvDirect = false;       // ggml_conv2d_direct in VAE
 
   // -- SDXL compatibility ----------------------------------------------------
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
 
   // -- Preview callback -------------------------------------------------------
-  // TODO(QVAC-18026 follow-up): wire to sd_set_preview_callback() in
-  //   SdModel::process(). The four config keys (preview_mode, preview_interval,
-  //   preview_denoised, preview_noisy) and their SdCtxHandlers entries below
-  //   already parse, validate, and store values into this struct, but no
-  //   reader exists yet -- a grep across packages/diffusion-cpp/ for
-  //   sd_set_preview_callback currently returns zero matches, so today the
-  //   four keys are a silent no-op end-to-end. Pick one of:
-  //     (a) install sd_set_preview_callback() in SdModel::process() next to
-  //         sd_set_abort_callback (~SdModel.cpp:312), forward the preview
-  //         sd_image_t to JS as PNG bytes via outputCallback, and add an
-  //         integration test asserting at least one preview event fires; OR
-  //     (b) remove the handlers + fields + tests until the wiring lands.
+  // Opt-in, ctx-level toggle for mid-denoising preview frames. Wired to
+  // sd_set_preview_callback() in SdModel::process(). When previewMode !=
+  // PREVIEW_NONE, the upstream library fires the preview callback every
+  // previewInterval steps with an intermediate sd_image_t that the addon
+  // forwards to JS as PNG bytes (one event per fire).
   //
   // Modes (preview_t from stable-diffusion.h):
-  //   PREVIEW_NONE  -- disabled (default; zero overhead, also today's behaviour
-  //                    regardless of the user-supplied preview_mode)
+  //   PREVIEW_NONE  -- disabled (default; zero overhead)
   //   PREVIEW_PROJ  -- cheap linear projection of latents (fast, blurry)
   //   PREVIEW_TAE   -- Tiny AutoEncoder (requires taesdPath; mid quality)
   //   PREVIEW_VAE   -- full VAE decode every N steps (slowest, highest quality)
@@ -135,7 +129,6 @@ struct SdCtxConfig {
   bool previewNoisy = false;   // also include noisy xT preview
 
   // -- ESRGAN upscaler -------------------------------------------------------
-  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
   int upscalerTileSize = 128;
   bool upscalerDirect = false;
   bool upscalerOffloadParamsToCpu = false;

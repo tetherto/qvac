@@ -4,89 +4,182 @@ const path = require('bare-path')
 const process = require('bare-process')
 const fs = require('bare-fs')
 const VideoStableDiffusion = require('../video')
+const { setLogger, releaseLogger } = require('../addonLogging')
 
 // ---------------------------------------------------------------------------
-// Model files — downloaded via: ./scripts/download-model-wan.sh
+// Model files — download via: ./scripts/download-model-wan-i2v.sh
+//
+// flf2vid (first-last-frame interpolation) uses the Wan 2.1 I2V 14B
+// FLF2V-capable checkpoint in GGUF format. Like img2vid, it requires the
+// CLIP vision encoder (clip_vision_h.safetensors) to condition on both the
+// first and last frames.
+//
+// Use GGUF (not fp8_scaled safetensors): stable-diffusion.cpp ignores the
+// per-tensor scale_weight tensors in fp8_scaled files, producing corrupted
+// output. GGUF uses native GGML quantisation and works correctly.
+//
+// Required files (~17.2 GB total, default Q4_K_M):
+//   wan2.1-i2v-14b-480p-Q4_K_M.gguf   11.3 GB  (I2V/FLF2V diffusion, GGUF)
+//   wan_2.1_vae.safetensors             1.2 GB
+//   umt5_xxl_fp16.safetensors           4.6 GB
+//   clip_vision_h.safetensors           0.6 GB   (CLIP ViT-H/14)
 // ---------------------------------------------------------------------------
 const MODELS_DIR = path.resolve(__dirname, '../models')
 const OUTPUT_DIR = path.resolve(__dirname, '../output')
 
-// NOTE: flf2vid (first-last-frame interpolation) is expected to be run with
-// a Wan I2V / flf-tuned checkpoint. This example reuses the T2V 1.3B file
-// so the download-model-wan.sh flow is sufficient; on production flows
-// point files.model at a flf-tuned Wan checkpoint for best quality.
-const DIFFUSION_MODEL = 'wan2.1_t2v_1.3B_fp16.safetensors'
+const DIFFUSION_MODEL = process.env.WAN_I2V_MODEL ||
+  'wan2.1-i2v-14b-480p-Q4_K_M.gguf'
 const VAE_MODEL = 'wan_2.1_vae.safetensors'
 const T5XXL_MODEL = 'umt5_xxl_fp16.safetensors'
+const CLIP_VISION_MODEL = 'clip_vision_h.safetensors'
 
 // ---------------------------------------------------------------------------
-// Frame paths — drop two same-sized frames at these locations to run.
+// Frame paths — drop two same-sized PNG/JPEG frames at these locations.
+// Both frames MUST have the same dimensions and must match WIDTH x HEIGHT.
 // ---------------------------------------------------------------------------
-const INIT_IMAGE_PATH = path.resolve(__dirname, '../assets/flf-first.png')
-const END_IMAGE_PATH = path.resolve(__dirname, '../assets/flf-last.png')
+const INIT_IMAGE_PATH = process.env.INIT_IMAGE ||
+  path.resolve(__dirname, '../assets/flf-first.png')
+const END_IMAGE_PATH = process.env.END_IMAGE ||
+  path.resolve(__dirname, '../assets/flf-last.png')
 
 // ---------------------------------------------------------------------------
 // Generation params — edit freely
 // ---------------------------------------------------------------------------
-const PROMPT = 'smooth cinematic transition between the two frames, coherent motion'
-const NEG_PROMPT = 'blurry, low quality, stutter, jump cut'
+const PROMPT = process.env.PROMPT ||
+  'smooth cinematic transition between the two frames, coherent motion'
+const NEG_PROMPT = process.env.NEG_PROMPT ||
+  'blurry, low quality, stutter, jump cut'
 
-const VIDEO_FRAMES = 33
-const FPS = 16
-const STEPS = 30
-const CFG_SCALE = 6.0
-// Wan 2.1 needs flow_shift = 3.0 for actual frame-to-frame motion; higher
-// values flatten the trajectory and produce near-static output. See the
-// long comment in generate-video-wan.js.
-const FLOW_SHIFT = 3.0
-const STRENGTH = 0.85
-const SEED = 42
+// Read image dimensions from PNG/JPEG header bytes — no external dependencies.
+function readImageDims (buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+    return { width: dv.getUint32(16, false), height: dv.getUint32(20, false) }
+  }
+  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    let i = 2
+    while (i + 8 < buf.length) {
+      if (buf[i] !== 0xFF) break
+      const m = buf[i + 1]
+      if ((m >= 0xC0 && m <= 0xC3) || (m >= 0xC5 && m <= 0xC7) ||
+          (m >= 0xC9 && m <= 0xCB) || (m >= 0xCD && m <= 0xCF)) {
+        return { width: dv.getUint16(i + 7, false), height: dv.getUint16(i + 5, false) }
+      }
+      if (m === 0xD9 || m === 0xDA) break
+      i += 2 + dv.getUint16(i + 2, false)
+    }
+  }
+  return null
+}
+
+// Wan spatial_multiple = 16 (vae_scale_factor 8 × diffusion_down_factor 2).
+function snapTo16 (n) { return Math.max(16, Math.round(n / 16) * 16) }
+
+const VIDEO_FRAMES = parseInt(process.env.FRAMES || '33', 10)
+const FPS = parseInt(process.env.FPS || '16', 10)
+const STEPS = parseInt(process.env.STEPS || '30', 10)
+const CFG_SCALE = parseFloat(process.env.CFG_SCALE || '6.0')
+const FLOW_SHIFT = parseFloat(process.env.FLOW_SHIFT || '3.0')
+const STRENGTH = parseFloat(process.env.STRENGTH || '0.85')
+const SEED = parseInt(process.env.SEED || '42', 10)
 
 async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
+
+  if (VIDEO_FRAMES < 5 || (VIDEO_FRAMES - 1) % 4 !== 0) {
+    console.error(`FRAMES must be (4*k + 1), k >= 1 (got ${VIDEO_FRAMES}).`)
+    console.error('Valid: 5, 9, 13, 17, 21, 25, 29, 33, ..., 81.')
+    process.exit(1)
+  }
+
+  const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+  setLogger((priority, message) => {
+    const label = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
+    process.stdout.write(`[C++ ${label}] ${message}`)
+    if (!message.endsWith('\n')) process.stdout.write('\n')
+  })
 
   if (!fs.existsSync(INIT_IMAGE_PATH) || !fs.existsSync(END_IMAGE_PATH)) {
     console.error('Missing frames for flf2vid.')
     console.error('  expected first frame :', INIT_IMAGE_PATH)
     console.error('  expected last frame  :', END_IMAGE_PATH)
-    console.error('Drop two same-sized PNG/JPEG files at those paths and re-run.')
+    console.error('Set INIT_IMAGE / END_IMAGE env vars or drop files at the default locations.')
     process.exit(1)
+  }
+
+  for (const file of [DIFFUSION_MODEL, VAE_MODEL, T5XXL_MODEL, CLIP_VISION_MODEL]) {
+    const fullPath = path.join(MODELS_DIR, file)
+    if (!fs.existsSync(fullPath)) {
+      console.error(`Missing model file: ${fullPath}`)
+      console.error('Run ./scripts/download-model-wan-i2v.sh to download all required files.')
+      process.exit(1)
+    }
   }
 
   const initImage = fs.readFileSync(INIT_IMAGE_PATH)
   const endImage = fs.readFileSync(END_IMAGE_PATH)
 
-  console.log('Wan 2.1 T2V 1.3B — first-last-frame video inference')
-  console.log('==================================================')
-  console.log('First frame :', INIT_IMAGE_PATH, `(${initImage.length.toLocaleString()} bytes)`)
-  console.log('Last frame  :', END_IMAGE_PATH, `(${endImage.length.toLocaleString()} bytes)`)
-  console.log('Prompt      :', PROMPT)
-  console.log('Frames      :', VIDEO_FRAMES, `(@${FPS} fps → ${(VIDEO_FRAMES / FPS).toFixed(2)}s)`)
-  console.log('Steps       :', STEPS)
-  console.log('Strength    :', STRENGTH)
-  console.log('Seed        :', SEED)
-  console.log('Note        : dimensions are auto-detected from the first frame; ' +
-              'both frames must be the same size.')
+  // Derive video dimensions from the first frame; snap to nearest multiple of 8.
+  // Both frames must be the same size — the C++ layer enforces this.
+  let width, height
+  if (process.env.WIDTH && process.env.HEIGHT) {
+    width = parseInt(process.env.WIDTH, 10)
+    height = parseInt(process.env.HEIGHT, 10)
+  } else {
+    const dims = readImageDims(initImage)
+    if (!dims) {
+      console.error('Could not read first-frame dimensions — pass WIDTH and HEIGHT env vars explicitly.')
+      process.exit(1)
+    }
+    width = process.env.WIDTH ? parseInt(process.env.WIDTH, 10) : snapTo16(dims.width)
+    height = process.env.HEIGHT ? parseInt(process.env.HEIGHT, 10) : snapTo16(dims.height)
+    if (dims.width !== width || dims.height !== height) {
+      console.log(`Note: first frame is ${dims.width}x${dims.height} — snapped to ${width}x${height} (nearest multiples of 16)`)
+    }
+  }
+
+  if (width % 16 !== 0 || height % 16 !== 0) {
+    console.error(`Dimensions ${width}x${height} must be multiples of 16 for Wan I2V.`)
+    process.exit(1)
+  }
+
+  console.log('Wan 2.1 I2V 14B — first-last-frame video inference')
+  console.log('===================================================')
+  console.log('Diffusion  :', DIFFUSION_MODEL)
+  console.log('CLIP vision:', CLIP_VISION_MODEL)
+  console.log('First frame:', INIT_IMAGE_PATH, `(${initImage.length.toLocaleString()} bytes)`)
+  console.log('Last frame :', END_IMAGE_PATH, `(${endImage.length.toLocaleString()} bytes)`)
+  console.log('Prompt     :', PROMPT)
+  console.log('Size       :', `${width}x${height}`)
+  console.log('Frames     :', VIDEO_FRAMES, `(@${FPS} fps → ${(VIDEO_FRAMES / FPS).toFixed(2)}s)`)
+  console.log('Steps      :', STEPS)
+  console.log('Strength   :', STRENGTH)
+  console.log('Flow shift :', FLOW_SHIFT)
+  console.log('Seed       :', SEED)
+  console.log('Note       : both frames must be exactly', `${width}x${height}`)
   console.log()
 
   const model = new VideoStableDiffusion({
     files: {
       model: path.join(MODELS_DIR, DIFFUSION_MODEL),
       t5Xxl: path.join(MODELS_DIR, T5XXL_MODEL),
-      vae: path.join(MODELS_DIR, VAE_MODEL)
+      vae: path.join(MODELS_DIR, VAE_MODEL),
+      clipVision: path.join(MODELS_DIR, CLIP_VISION_MODEL)
     },
     config: {
       threads: 4,
       device: 'gpu',
       diffusion_fa: true,
       offload_to_cpu: true,
-      vae_tiling: true
+      vae_tiling: true,
+      flow_shift: FLOW_SHIFT
     },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   })
 
   try {
-    console.log('Loading Wan 2.1 T2V 1.3B weights...')
+    console.log('Loading Wan 2.1 I2V 14B weights (this may take ~1–2 min)...')
     const tLoad = Date.now()
     await model.load()
     console.log(`Loaded in ${((Date.now() - tLoad) / 1000).toFixed(1)}s\n`)
@@ -101,6 +194,8 @@ async function main () {
       negative_prompt: NEG_PROMPT,
       init_image: initImage,
       end_image: endImage,
+      width,
+      height,
       video_frames: VIDEO_FRAMES,
       fps: FPS,
       steps: STEPS,
@@ -149,6 +244,7 @@ async function main () {
   } finally {
     console.log('\nUnloading model...')
     await model.unload()
+    releaseLogger()
     console.log('Done.')
   }
 }
