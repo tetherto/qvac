@@ -400,7 +400,9 @@ test('Qwen3.5-0.8B reasoning-budget=0 disables thinking', {
     } else {
       t.comment(`baseline opened <think> but did not close it within n_predict (${baseline.length} chars) — skipping closing-tag assertion`)
     }
-  } else if (baseline.includes('</think>')) {
+  } else {
+    t.ok(baseline.includes('</think>'),
+      `baseline should contain </think> closing tag: "${baseline.slice(-100)}"`)
     t.ok(baseline.indexOf('<think>') < baseline.indexOf('</think>'),
       'baseline opening tag must precede closing tag')
   }
@@ -473,7 +475,9 @@ test('Qwen3.5-0.8B per-request generationParams.reasoning_budget overrides load-
       } else {
         t.comment(`subsequent default run opened <think> but did not close it within n_predict (${defaultOutput.length} chars) — skipping closing-tag assertion`)
       }
-    } else if (defaultOutput.includes('</think>')) {
+    } else {
+      t.ok(defaultOutput.includes('</think>'),
+        `subsequent default run should restore </think>: "${defaultOutput.slice(-200)}"`)
       t.ok(defaultOutput.indexOf('<think>') < defaultOutput.indexOf('</think>'),
         'subsequent default opening tag must precede closing tag')
     }
