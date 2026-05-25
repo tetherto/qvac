@@ -52,13 +52,13 @@ int parseAdrenoModelFromGpuDevice(ggml_backend_dev_t dev) {
   if (dev == nullptr) {
     return 0;
   }
-  const char *descPtr = ggml_backend_dev_description(dev);
+  const char* descPtr = ggml_backend_dev_description(dev);
   const std::string desc = descPtr != nullptr ? descPtr : "";
   int model = parseAdrenoModel(desc);
   if (model > 0) {
     return model;
   }
-  const char *namePtr = ggml_backend_dev_name(dev);
+  const char* namePtr = ggml_backend_dev_name(dev);
   const std::string name = namePtr != nullptr ? namePtr : "";
   return parseAdrenoModel(name);
 }
@@ -69,14 +69,15 @@ namespace sd_backend_selection {
 
 namespace {
 
-[[noreturn]] void throwInvalidConfigDevice(const std::string &device) {
-  throw StatusError(general_error::InvalidArgument,
-                    "device must be 'cpu' or 'gpu', got: '" + device + "'");
+[[noreturn]] void throwInvalidConfigDevice(const std::string& device) {
+  throw StatusError(
+      general_error::InvalidArgument,
+      "device must be 'cpu' or 'gpu', got: '" + device + "'");
 }
 
 } // namespace
 
-ConfigDevice parseConfigDeviceString(const std::string &device) {
+ConfigDevice parseConfigDeviceString(const std::string& device) {
   if (device == "cpu") {
     return ConfigDevice::Cpu;
   }
@@ -93,7 +94,7 @@ BackendDevice preferredDeviceFromMap(
     return BackendDevice::GPU; // default: prefer GPU
   }
 
-  const std::string &device = deviceEntry->second;
+  const std::string& device = deviceEntry->second;
   if (device == "gpu") {
     return BackendDevice::GPU;
   }
@@ -187,9 +188,9 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred) {
       continue;
     }
 
-    const char *descPtr = ggml_backend_dev_description(dev);
+    const char* descPtr = ggml_backend_dev_description(dev);
     const std::string desc = descPtr != nullptr ? descPtr : "";
-    const char *namePtr = ggml_backend_dev_name(dev);
+    const char* namePtr = ggml_backend_dev_name(dev);
     const std::string backendName = namePtr != nullptr ? namePtr : "";
 
     const int model = parseAdrenoModelFromGpuDevice(dev);
@@ -225,7 +226,7 @@ sd_backend_preference_t preferredGpuBackendForGpuLikeDevice() {
 }
 
 sd_backend_preference_t
-preferredGpuBackendForConfigDevice(const std::string &device) {
+preferredGpuBackendForConfigDevice(const std::string& device) {
   switch (parseConfigDeviceString(device)) {
   case ConfigDevice::Cpu:
     return SD_BACKEND_PREF_CPU;
@@ -235,16 +236,17 @@ preferredGpuBackendForConfigDevice(const std::string &device) {
 }
 
 sd_backend_preference_t
-preferredEsrganBackendForConfigDevice(const std::string &device) {
+preferredEsrganBackendForConfigDevice(const std::string& device) {
 #if defined(__ANDROID__)
   switch (parseConfigDeviceString(device)) {
   case ConfigDevice::Cpu:
     return SD_BACKEND_PREF_CPU;
   case ConfigDevice::Gpu: {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-    QLOG_IF(Priority::INFO,
-            "Backend selection: Android ESRGAN gpu -> CPU (unstable GPU/OpenCL "
-            "path)");
+    QLOG_IF(
+        Priority::INFO,
+        "Backend selection: Android ESRGAN gpu -> CPU (unstable GPU/OpenCL "
+        "path)");
     return SD_BACKEND_PREF_CPU;
   }
   }
@@ -253,7 +255,7 @@ preferredEsrganBackendForConfigDevice(const std::string &device) {
 #endif
 }
 
-std::string expectedEsrganBackendDeviceForConfig(const std::string &device) {
+std::string expectedEsrganBackendDeviceForConfig(const std::string& device) {
   switch (parseConfigDeviceString(device)) {
   case ConfigDevice::Cpu:
     return "cpu";

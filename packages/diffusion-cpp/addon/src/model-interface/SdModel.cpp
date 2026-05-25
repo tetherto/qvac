@@ -342,11 +342,11 @@ std::any SdModel::process(const std::any& input) {
   // Default is "txt2img" for backwards compatibility: a JSON payload that
   // omits "mode" keeps behaving as an image generation job.
   std::string mode = "txt2img";
-  const auto &obj = jsonRoot.get<picojson::object>();
+  const auto& obj = jsonRoot.get<picojson::object>();
   if (const auto modeEntry = obj.find("mode"); modeEntry != obj.end()) {
     if (!modeEntry->second.is<std::string>()) {
-      throw StatusError(general_error::InvalidArgument,
-                        "mode must be a string");
+      throw StatusError(
+          general_error::InvalidArgument, "mode must be a string");
     }
     mode = modeEntry->second.get<std::string>();
   }
@@ -365,8 +365,8 @@ std::any SdModel::process(const std::any& input) {
 // process().
 // ---------------------------------------------------------------------------
 
-std::any SdModel::processImage(const GenerationJob &job,
-                               const picojson::value &parsed) {
+std::any
+SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
@@ -561,7 +561,7 @@ std::any SdModel::processImage(const GenerationJob &job,
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
       } else {
-        const auto &jsonObj = parsed.get<picojson::object>();
+        const auto& jsonObj = parsed.get<picojson::object>();
         auto initBytesIt = jsonObj.find("init_image_bytes");
         if (initBytesIt != jsonObj.end() &&
             initBytesIt->second.is<picojson::array>()) {
@@ -761,8 +761,10 @@ std::any SdModel::processImage(const GenerationJob &job,
   // header (which would force a coordinated update across every other
   // package that pulls it in via vcpkg).
   if (wasCancelled) {
-    throw StatusError(std::string(general_error::GeneralAddonId), "Cancelled",
-                      "Job cancelled");
+    throw StatusError(
+        std::string(general_error::GeneralAddonId),
+        "Cancelled",
+        "Job cancelled");
   }
 
   if (outputCount == 0) {
@@ -821,17 +823,18 @@ std::any SdModel::processImage(const GenerationJob &job,
 // Assumes callbacks + guard are already set up by process().
 // ---------------------------------------------------------------------------
 
-std::any SdModel::processVideo(const GenerationJob &job,
-                               const picojson::value &parsed) {
+std::any
+SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // -- Build SdVidGenConfig from handlers ------------------------------------
   qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
       vid, parsed.get<picojson::object>());
 
   if (vid.mode != "txt2vid" && vid.mode != "img2vid" && vid.mode != "flf2vid")
-    throw StatusError(general_error::InvalidArgument,
-                      "processVideo: unsupported mode '" + vid.mode +
-                          "' (expected txt2vid, img2vid, or flf2vid)");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "processVideo: unsupported mode '" + vid.mode +
+            "' (expected txt2vid, img2vid, or flf2vid)");
 
   // -- Mode-vs-inputs invariants --------------------------------------------
   // These checks mirror the JS-layer validation but are duplicated here so
@@ -844,17 +847,20 @@ std::any SdModel::processVideo(const GenerationJob &job,
 
   if (vid.mode == "flf2vid") {
     if (job.initImageBytes.empty())
-      throw StatusError(general_error::InvalidArgument,
-                        "flf2vid: init_image (first frame) is required");
+      throw StatusError(
+          general_error::InvalidArgument,
+          "flf2vid: init_image (first frame) is required");
     if (job.endImageBytes.empty())
-      throw StatusError(general_error::InvalidArgument,
-                        "flf2vid: end_image (last frame) is required");
+      throw StatusError(
+          general_error::InvalidArgument,
+          "flf2vid: end_image (last frame) is required");
   }
 
   if (!job.endImageBytes.empty() && vid.mode != "flf2vid")
-    throw StatusError(general_error::InvalidArgument,
-                      "end_image is only valid for mode='flf2vid', got mode='" +
-                          vid.mode + "'");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "end_image is only valid for mode='flf2vid', got mode='" + vid.mode +
+            "'");
 
   if (vid.mode == "txt2vid" && !job.initImageBytes.empty())
     throw StatusError(
@@ -879,9 +885,10 @@ std::any SdModel::processVideo(const GenerationJob &job,
   if (!job.initImageBytes.empty()) {
     initImg = image_codec::decodeImage(job.initImageBytes);
     if (!initImg.data)
-      throw StatusError(general_error::InvalidArgument,
-                        "processVideo: failed to decode init_image (corrupt or "
-                        "unsupported format; supported: PNG, JPEG)");
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: failed to decode init_image (corrupt or "
+          "unsupported format; supported: PNG, JPEG)");
     // Take ownership *before* the dimension check so a mismatch can't leak
     // the freshly-decoded pixel buffer (mirrors the control_frames path).
     initData.reset(initImg.data);
@@ -893,13 +900,13 @@ std::any SdModel::processVideo(const GenerationJob &job,
     // single source of truth for the video's final dimensions.
     if (static_cast<int>(initImg.width) != vid.width ||
         static_cast<int>(initImg.height) != vid.height)
-      throw StatusError(general_error::InvalidArgument,
-                        "processVideo: init_image dimensions " +
-                            std::to_string(initImg.width) + "x" +
-                            std::to_string(initImg.height) +
-                            " do not match video dimensions " +
-                            std::to_string(vid.width) + "x" +
-                            std::to_string(vid.height));
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: init_image dimensions " +
+              std::to_string(initImg.width) + "x" +
+              std::to_string(initImg.height) +
+              " do not match video dimensions " + std::to_string(vid.width) +
+              "x" + std::to_string(vid.height));
   }
 
   if (!job.endImageBytes.empty()) {
@@ -936,13 +943,13 @@ std::any SdModel::processVideo(const GenerationJob &job,
       PixelBuffer owned(decoded.data);
       if (static_cast<int>(decoded.width) != vid.width ||
           static_cast<int>(decoded.height) != vid.height) {
-        throw StatusError(general_error::InvalidArgument,
-                          "processVideo: control_frames[" + std::to_string(i) +
-                              "] dimensions " + std::to_string(decoded.width) +
-                              "x" + std::to_string(decoded.height) +
-                              " do not match video dimensions " +
-                              std::to_string(vid.width) + "x" +
-                              std::to_string(vid.height));
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: control_frames[" + std::to_string(i) +
+                "] dimensions " + std::to_string(decoded.width) + "x" +
+                std::to_string(decoded.height) +
+                " do not match video dimensions " + std::to_string(vid.width) +
+                "x" + std::to_string(vid.height));
       }
       controlData.push_back(std::move(owned));
       controlFrames.push_back(decoded);
@@ -1021,16 +1028,19 @@ std::any SdModel::processVideo(const GenerationJob &job,
   // would be misleading. Typed Cancelled status (see image path above for
   // the 3-arg ctor rationale).
   auto throwCancelled = []() {
-    throw StatusError(std::string(general_error::GeneralAddonId), "Cancelled",
-                      "Job cancelled");
+    throw StatusError(
+        std::string(general_error::GeneralAddonId),
+        "Cancelled",
+        "Job cancelled");
   };
   if (cancelRequested_.load()) {
     throwCancelled();
   }
 
   if (frames.empty())
-    throw StatusError(general_error::InternalError,
-                      "processVideo: generate_video() returned no frames");
+    throw StatusError(
+        general_error::InternalError,
+        "processVideo: generate_video() returned no frames");
 
   // -- Fan out per-frame PNGs (opt-in) --------------------------------------
   // PNG encoding for an 81-frame 832x480 video can take multiple seconds; we

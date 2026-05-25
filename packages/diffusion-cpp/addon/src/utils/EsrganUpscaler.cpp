@@ -17,7 +17,7 @@ namespace qvac_lib_inference_addon_sd {
 
 namespace {
 
-sd_upscaler_device_t deviceStringToSd(const std::string &deviceStr) {
+sd_upscaler_device_t deviceStringToSd(const std::string& deviceStr) {
   using sd_backend_selection::ConfigDevice;
   using sd_backend_selection::parseConfigDeviceString;
   switch (parseConfigDeviceString(deviceStr)) {
@@ -42,14 +42,14 @@ void freeSdImageData(sd_image_t& image) noexcept {
 } // namespace
 
 EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config) {
-  return EsrganUpscalerConfig{.esrganPath = config.esrganPath,
-                              .device = config.device,
-                              .nThreads = config.nThreads,
-                              .upscalerThreads = config.upscalerThreads,
-                              .upscalerTileSize = config.upscalerTileSize,
-                              .upscalerDirect = config.upscalerDirect,
-                              .upscalerOffloadParamsToCpu =
-                                  config.upscalerOffloadParamsToCpu};
+  return EsrganUpscalerConfig{
+      .esrganPath = config.esrganPath,
+      .device = config.device,
+      .nThreads = config.nThreads,
+      .upscalerThreads = config.upscalerThreads,
+      .upscalerTileSize = config.upscalerTileSize,
+      .upscalerDirect = config.upscalerDirect,
+      .upscalerOffloadParamsToCpu = config.upscalerOffloadParamsToCpu};
 }
 
 void sdLogCallback(sd_log_level_t level, const char* text, void* /*userData*/) {
@@ -129,9 +129,14 @@ upscaler_ctx_t* EsrganUpscaler::ensureContextLocked() {
   const sd_backend_preference_t backendPref =
       sd_backend_selection::preferredEsrganBackendForConfigDevice(
           config_.device);
-  upscaler_ctx_t *raw = new_upscaler_ctx_with_device(
-      config_.esrganPath.c_str(), config_.upscalerOffloadParamsToCpu,
-      config_.upscalerDirect, resolveThreads(), tileSize, sdDev, backendPref);
+  upscaler_ctx_t* raw = new_upscaler_ctx_with_device(
+      config_.esrganPath.c_str(),
+      config_.upscalerOffloadParamsToCpu,
+      config_.upscalerDirect,
+      resolveThreads(),
+      tileSize,
+      sdDev,
+      backendPref);
 
   if (raw == nullptr) {
     throw StatusError(
