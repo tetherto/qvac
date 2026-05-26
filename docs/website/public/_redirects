@@ -1,12 +1,3 @@
-# Markdown content negotiation — serve the .md sibling of a page when the
-# client asks for it via `Accept: text/markdown`. Home maps to `/index.md`;
-# every other page `/foo/bar/` maps to `/foo/bar.md`. We need both the
-# trailing-slash and no-slash variants so the `:splat` placeholder doesn't
-# produce `/foo/.md`.
-/                /index.md      301   Header:Accept=text/markdown
-/*/              /:splat.md     301   Header:Accept=text/markdown
-/*               /:splat.md     301   Header:Accept=text/markdown
-
 # Sevalla CDN does not resolve directory-to-index.html for path segments
 # containing dots (e.g. `v0.7.0`). Each `:version` segment is rewritten to
 # its index.html explicitly. `:version` matches a single path segment, so
@@ -122,3 +113,35 @@
 # Section rename: /http-server → /cli/http-server
 /http-server/   /cli/http-server/   301
 /http-server    /cli/http-server/   301
+
+# ======================================================================
+# MARKDOWN CONTENT NEGOTIATION
+# ----------------------------------------------------------------------
+# Serve the .md sibling of a page when the client asks for it via
+# `Accept: text/markdown`. Home maps to `/index.md`; every other page
+# `/foo/bar/` maps to `/foo/bar.md`. We need both the trailing-slash and
+# no-slash variants so the `:splat` placeholder doesn't produce `/foo/.md`.
+#
+# These rules MUST stay at the bottom of the file: `_redirects` is
+# evaluated top-to-bottom with first-match-wins, and the wildcard
+# `/*` here would otherwise shadow every legacy 301 and version rewrite
+# above when a client sends `Accept: text/markdown` (producing a `.md`
+# path that doesn't exist for moved pages).
+#
+# Why `200!` (rewrite, force) instead of `301`/`302`:
+#   - Content negotiation: HTML and Markdown are two representations of
+#     the same resource, not different resources, so a rewrite (same URL,
+#     different body) is the semantically correct answer.
+#   - No redirect cache pitfall: a 301 captured by an intermediary while
+#     a markdown-asking client was talking to it can be replayed for a
+#     normal browser request (browsers/proxies do not reliably vary their
+#     redirect cache by `Accept`). With a rewrite there is no redirect
+#     to cache.
+#   - The `!` (force) is required because the original path resolves to
+#     a real static file (e.g. `/quickstart/index.html`); without it the
+#     rule is never consulted.
+# ======================================================================
+
+/                /index.md      200!  Header:Accept=text/markdown
+/*/              /:splat.md     200!  Header:Accept=text/markdown
+/*               /:splat.md     200!  Header:Accept=text/markdown
