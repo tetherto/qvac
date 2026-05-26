@@ -63,7 +63,7 @@ Track this checklist:
 - [ ] 2. Ask user to select tier and mobile platform when needed
 - [ ] 3. Print proposed command sequence
 - [ ] 4a. Run agent-owned setup/examples when safe and applicable
-- [ ] 4b. If SDK e2e is included: stop and ask user to run the printed tests-qvac setup + e2e command block
+- [ ] 4b. If SDK e2e is included: stop and ask user to run the printed e2e setup + e2e command block
 - [ ] 4c. If SDK e2e is not included: ask approval, then execute remaining commands
 - [ ] 5. Analyze logs/reports
 - [ ] 6. Summarize pass/fail and next action
@@ -123,7 +123,7 @@ Use `touchedPackages[].commands.install` and `touchedPackages[].commands.build` 
 All tiers include necessary install/build setup for the touched package roots.
 
 - **T1 - examples**: run package-root install/build setup, then added/modified examples. If no examples were added or modified, mark the examples step `not applicable`.
-- **T2 - changed e2e/tests on desktop**: SDK runs changed `tests-qvac` e2e on desktop. Non-SDK runs the smallest unit-level package script (`test:unit` or `test`), or first available `test:*`.
+- **T2 - changed e2e/tests on desktop**: SDK runs changed `e2e` tests on desktop. Non-SDK runs the smallest unit-level package script (`test:unit` or `test`), or first available `test:*`.
 - **T3 - changed e2e/tests on mobile**: SDK adds changed e2e on selected mobile platform (`android` or `ios`). Non-SDK uses mobile scripts only if package.json exposes them.
 - **T4 - smoke desktop**: SDK runs `--suite smoke` on desktop. Non-SDK advances to the next least-to-most-complete script if one exists.
 - **T5 - smoke mobile**: SDK runs `--suite smoke` on selected mobile platform. Non-SDK uses mobile scripts only if package.json exposes them.
@@ -138,7 +138,7 @@ Related examples and tests are bundled into the existing tiers as proposal items
 - `relatedTests` are existing SDK e2e filters related to the changed paths. If no e2e files changed, use the highest-scoring related filter as the proposed T2 filter. If e2e files did change, show related filters as optional additions.
 - Example: a transcription SDK change should propose transcription examples and the `transcription` e2e filter even if the PR did not edit those files directly.
 
-Changed examples are agent-run steps after package-root install/build setup succeeds. SDK `tests-qvac` setup is **not** agent-run; hand it to the user together with the e2e command because it requires npm auth.
+Changed examples are agent-run steps after package-root install/build setup succeeds. SDK `e2e` setup is **not** agent-run; hand it to the user together with the e2e command because it requires npm auth.
 
 T6/T7 replace the smoke step from T4/T5. T1-T3 still run unchanged.
 
@@ -162,25 +162,25 @@ Before executing examples, show both changed and related example commands. Relat
 
 SDK changed examples may be agent-run inside the prepared worktree after the SDK package root has been installed and built.
 
-SDK `tests-qvac` setup and e2e commands are manual/user-run:
+SDK `e2e` setup and e2e commands are manual/user-run:
 
 - `npm run install:build`
 - `npm run install:build:full`
 - `npx qvac-test run:local:*`
 
-Do not execute those agentically. `tests-qvac` setup needs npm/GitHub Packages auth that is not available in the agent context, and SDK e2e commands are device/broker-dependent and may run for a long time.
+Do not execute those agentically. `e2e` setup needs npm/GitHub Packages auth that is not available in the agent context, and SDK e2e commands are device/broker-dependent and may run for a long time.
 
 ## SDK e2e setup
 
-For any SDK e2e command, run setup from `packages/sdk/tests-qvac` first.
+For any SDK e2e command, run setup from `packages/sdk/e2e` first.
 
-- SDK source outside `packages/sdk/tests-qvac/` changed:
+- SDK source outside `packages/sdk/e2e/` changed:
 
   ```bash
   npm run install:build:full
   ```
 
-- Only `packages/sdk/tests-qvac/` changed:
+- Only `packages/sdk/e2e/` changed:
 
   ```bash
   npm run install:build
@@ -192,7 +192,7 @@ Do not separately run `bun install` or `bun run build` in `packages/sdk` before 
 
 ## SDK e2e manual execution
 
-For SDK e2e tiers, print the `tests-qvac` setup command and e2e command for the user to run manually. The agent must not run `npm run install:build`, `npm run install:build:full`, or `npx qvac-test run:local:*` from `packages/sdk/tests-qvac`.
+For SDK e2e tiers, print the `e2e` setup command and e2e command for the user to run manually. The agent must not run `npm run install:build`, `npm run install:build:full`, or `npx qvac-test run:local:*` from `packages/sdk/e2e`.
 
 Generate commands for the user's shell/OS. Do not assume POSIX-only utilities or paths. In particular:
 
@@ -210,17 +210,17 @@ pr-<num>-<headSha7>-<tier>-<platform-or-desktop>
 Report directory:
 
 ```text
-<WORKTREE_PATH>/packages/sdk/tests-qvac/reports/<runId>/
+<WORKTREE_PATH>/packages/sdk/e2e/reports/<runId>/
 ```
 
 Manual command block shape for POSIX shells:
 
 ```sh
 export QVAC_PR_TEST_RUN_ID=pr-1234-abcdef0-t3-android
-export QVAC_PR_TEST_REPORT_DIR=<WORKTREE_PATH>/packages/sdk/tests-qvac/reports/$QVAC_PR_TEST_RUN_ID
+export QVAC_PR_TEST_REPORT_DIR=<WORKTREE_PATH>/packages/sdk/e2e/reports/$QVAC_PR_TEST_RUN_ID
 mkdir -p $QVAC_PR_TEST_REPORT_DIR/logs
 
-cd <WORKTREE_PATH>/packages/sdk/tests-qvac
+cd <WORKTREE_PATH>/packages/sdk/e2e
 npm run install:build:full
 
 npx qvac-test run:local:desktop --filter vision- --runId $QVAC_PR_TEST_RUN_ID --report-dir $QVAC_PR_TEST_REPORT_DIR
@@ -231,10 +231,10 @@ Manual command block shape for PowerShell:
 
 ```powershell
 $env:QVAC_PR_TEST_RUN_ID = "pr-1234-abcdef0-t3-android"
-$env:QVAC_PR_TEST_REPORT_DIR = "<WORKTREE_PATH>/packages/sdk/tests-qvac/reports/$env:QVAC_PR_TEST_RUN_ID"
+$env:QVAC_PR_TEST_REPORT_DIR = "<WORKTREE_PATH>/packages/sdk/e2e/reports/$env:QVAC_PR_TEST_RUN_ID"
 New-Item -ItemType Directory -Force "$env:QVAC_PR_TEST_REPORT_DIR/logs"
 
-Set-Location "<WORKTREE_PATH>/packages/sdk/tests-qvac"
+Set-Location "<WORKTREE_PATH>/packages/sdk/e2e"
 npm run install:build:full
 
 npx qvac-test run:local:desktop --filter vision- --runId $env:QVAC_PR_TEST_RUN_ID --report-dir $env:QVAC_PR_TEST_REPORT_DIR
@@ -259,13 +259,13 @@ bun run build
 bun run examples/<changed-example>.ts
 ```
 
-The user runs the `tests-qvac` setup command and the `qvac-test run:local:*` commands. The agent may run changed examples separately only after the required SDK package-root install/build state exists or has been prepared without `tests-qvac` npm auth.
+The user runs the `e2e` setup command and the `qvac-test run:local:*` commands. The agent may run changed examples separately only after the required SDK package-root install/build state exists or has been prepared without `e2e` npm auth.
 
 Do not use `script` for log capture. It is not portable in this agent environment. For agent-run example steps, rely on terminal output. For user-run setup/e2e, rely on qvac-test's structured `--report-dir` output first; ask the user to paste terminal output only if setup fails before report files are produced or report files are missing/incomplete. Keep the `--runId` unchanged.
 
 When the user says the commands finished:
 
-1. Inspect `<WORKTREE_PATH>/packages/sdk/tests-qvac/reports/<runId>/` first. Prefer qvac-test's structured report files over terminal logs.
+1. Inspect `<WORKTREE_PATH>/packages/sdk/e2e/reports/<runId>/` first. Prefer qvac-test's structured report files over terminal logs.
 2. Read supplemental terminal output only if the agent captured any for setup/example steps, or ask the user to paste terminal output if report files are missing/incomplete.
 3. Summarize failures first, then passes and skipped/not-applicable steps.
 
@@ -341,6 +341,6 @@ Logs: `<path>`
 - Generic discovery helpers: `.cursor/skills/_lib/pr-skills/pr-test-generic.mjs`
 - SDK-specific discovery heuristics: `.cursor/skills/_lib/pr-skills/pr-test-sdk.mjs`
 - Shared worktree library: `.cursor/skills/_lib/pr-skills/worktree.mjs`
-- SDK e2e rules: `.cursor/rules/sdk/tests-qvac.mdc`
-- SDK e2e scripts: `packages/sdk/tests-qvac/package.json`
-- SDK e2e docs: `packages/sdk/tests-qvac/README.md`
+- SDK e2e rules: `.cursor/rules/sdk/e2e.mdc`
+- SDK e2e scripts: `packages/sdk/e2e/package.json`
+- SDK e2e docs: `packages/sdk/e2e/README.md`

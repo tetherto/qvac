@@ -499,7 +499,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
   private async resolveAssetPath(fileName: string) {
     const candidates = [
       path.resolve(process.cwd(), "assets/documents", fileName),
-      path.resolve(process.cwd(), "tests-qvac/assets/documents", fileName),
+      path.resolve(process.cwd(), "e2e/assets/documents", fileName),
       path.resolve(process.cwd(), "../../assets/documents", fileName),
     ];
 
