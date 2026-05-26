@@ -60,19 +60,6 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
-  print-context:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    continue-on-error: true
-    steps:
-      - run: |
-          echo "Inputs Context: $INPUTS_CONTEXT"
-        env:
-          INPUTS_CONTEXT: ${{ toJSON(inputs) }}
-      - run: |
-          echo "GitHub Context: $GITHUB_CONTEXT"
-        env:
-          GITHUB_CONTEXT: ${{ toJSON(github) }}
   delete-npm-versions-trigger:
     needs:
       - label-gate

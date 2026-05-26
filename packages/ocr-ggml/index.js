@@ -199,7 +199,7 @@ class OcrGgml {
    * by OpenCV in C++); BMP is decoded in JS to raw RGB.
    *
    * @param {string} imagePath
-   * @returns {{ data: Buffer, isEncoded?: boolean, width?: number, height?: number }}
+   * @returns {{ data: Buffer, isEncoded?: boolean, width?: number, height?: number, bitsPerPixel?: number }}
    */
   _readImage (imagePath) {
     this.logger.debug('Reading image from path:', imagePath)
@@ -271,11 +271,11 @@ class OcrGgml {
       })
     }
 
-    const SUPPORTED_BITS = new Set([8, 16, 24, 32])
+    const SUPPORTED_BITS = new Set([8, 24, 32])
     if (!SUPPORTED_BITS.has(bitsPerPixel)) {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.UNSUPPORTED_IMAGE_FORMAT,
-        adds: `BMP bitsPerPixel ${bitsPerPixel}`
+        adds: `BMP bitsPerPixel ${bitsPerPixel} (supported: 8, 24, 32)`
       })
     }
 
@@ -310,7 +310,7 @@ class OcrGgml {
       pixelDataBuffer.copy(unpaddedData, destStart, srcStart, srcEnd)
     }
 
-    return { width, height: rows, data: unpaddedData }
+    return { width, height: rows, data: unpaddedData, bitsPerPixel }
   }
 
   _addonOutputCallback (addon, event, data, error) {

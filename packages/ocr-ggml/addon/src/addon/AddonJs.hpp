@@ -262,6 +262,11 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         input.getProperty<js::Int32>(env, "width").as<int>(env);
     modelInput.imageHeight =
         input.getProperty<js::Int32>(env, "height").as<int>(env);
+    if (auto bpp =
+            input.getOptionalProperty<js::Number>(env, "bitsPerPixel");
+        bpp) {
+      modelInput.bitsPerPixel = bpp->as<int>(env);
+    }
     modelInput.data = input.getProperty<js::TypedArray<uint8_t>>(env, "data")
                           .as<std::vector<uint8_t>>(env);
   }

@@ -101,7 +101,7 @@ export interface RuntimeStats {
   numBoxes: number
 }
 
-export default class OcrGgml {
+export class OcrGgml {
   constructor(args: OcrGgmlArgs)
   getState(): InferenceClientState
   load(): Promise<void>
@@ -112,3 +112,27 @@ export default class OcrGgml {
   static readonly inferenceManagerConfig: { noAdditionalDownload: boolean }
   static getModelKey(): string
 }
+
+export const modelClass: typeof OcrGgml
+export const modelFile: unknown
+
+export const ERR_CODES: {
+  readonly FAILED_TO_LOAD_WEIGHTS: number
+  readonly FAILED_TO_CANCEL: number
+  readonly FAILED_TO_RUN_JOB: number
+  readonly FAILED_TO_GET_STATUS: number
+  readonly FAILED_TO_DESTROY: number
+  readonly FAILED_TO_ACTIVATE: number
+  readonly MISSING_REQUIRED_PARAMETER: number
+  readonly UNSUPPORTED_LANGUAGE: number
+  readonly INVALID_IMAGE_OR_INSUFFICIENT_DATA: number
+  readonly UNSUPPORTED_IMAGE_FORMAT: number
+  readonly NOT_LOADED: number
+}
+
+export class QvacErrorAddonOcrGgml extends Error {
+  code: number
+}
+
+export const binding: unknown
+export const addonLogging: unknown

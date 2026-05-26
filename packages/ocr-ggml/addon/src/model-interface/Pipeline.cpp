@@ -36,12 +36,64 @@ cv::Mat decodeOrWrapImage(const OcrInput& input) {
         "ocr-ggml: raw image input requires positive width/height and data");
   }
 
-  return {
+  int matType = 0;
+  int expectedBytesPerPixel = 0;
+  switch (input.bitsPerPixel) {
+    case 8:
+      matType = CV_8UC1;
+      expectedBytesPerPixel = 1;
+      break;
+    case 24:
+      matType = CV_8UC3;
+      expectedBytesPerPixel = 3;
+      break;
+    case 32:
+      matType = CV_8UC4;
+      expectedBytesPerPixel = 4;
+      break;
+    default:
+      throw std::runtime_error(
+          "ocr-ggml: unsupported raw image bitsPerPixel " +
+          std::to_string(input.bitsPerPixel) +
+          " (only 8 / 24 / 32 are supported)");
+  }
+  // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+
+  const size_t expectedBytes = static_cast<size_t>(input.imageWidth) *
+                               static_cast<size_t>(input.imageHeight) *
+                               static_cast<size_t>(expectedBytesPerPixel);
+  if (input.data.size() != expectedBytes) {
+    throw std::runtime_error(
+        "ocr-ggml: raw image data size mismatch (expected " +
+        std::to_string(expectedBytes) + " bytes for " +
+        std::to_string(input.imageWidth) + "x" +
+        std::to_string(input.imageHeight) + " @ " +
+        std::to_string(input.bitsPerPixel) + "bpp, got " +
+        std::to_string(input.data.size()) + ")");
+  }
+
+  // Wrap as a non-owning cv::Mat. OcrInput is passed by const& through
+  // Pipeline::process and lives for the synchronous duration of processImage,
+  // so this view is safe to use until processImage returns.
+  cv::Mat raw(
       input.imageHeight,
       input.imageWidth,
-      CV_8UC3,
+      matType,
       const_cast<uint8_t*>( // NOLINT(cppcoreguidelines-pro-type-const-cast)
-          input.data.data())};
+          input.data.data()));
+
+  // Normalise to a 3-channel image; downstream steps expect CV_8UC3.
+  // 24bpp is the historical fast path — pass through unchanged.
+  if (matType == CV_8UC3) {
+    return raw;
+  }
+  cv::Mat rgb;
+  if (matType == CV_8UC1) {
+    cv::cvtColor(raw, rgb, cv::COLOR_GRAY2RGB);
+  } else { // CV_8UC4
+    cv::cvtColor(raw, rgb, cv::COLOR_BGRA2RGB);
+  }
+  return rgb;
 }
 
 double elapsedMs(std::chrono::steady_clock::time_point start) {

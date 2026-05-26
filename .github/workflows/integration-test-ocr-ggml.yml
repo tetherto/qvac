@@ -34,7 +34,6 @@ env:
 
 jobs:
   run-integration-tests:
-    continue-on-error: true
     timeout-minutes: 30
     runs-on: ${{ matrix.runner }}
     environment: release

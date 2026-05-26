@@ -161,7 +161,6 @@ jobs:
       - label-gate
     if: >-
       needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
-    continue-on-error: true
     timeout-minutes: 20
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}

@@ -32,6 +32,8 @@ const cv::Scalar DOCTR_DET_STD(0.264, 0.2749, 0.287);
 // NOLINTEND(bugprone-throwing-static-initialization)
 constexpr double PIXEL_MAX = 255.0;
 
+constexpr int kNumChannels = 3;
+
 // Mean probability inside a bounding rectangle (assume_straight_pages=True).
 float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
   const int x0 = std::max(0, bbox.x);
@@ -140,7 +142,6 @@ cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
   // allocated three full-resolution scratch `cv::Mat`s on every call
   // (~12 MB at DBNET_INPUT_SIZE=1024).  The single-pass HWC->CHW loop
   // below produces identical bytes but reuses `inputBuffer_` across calls.
-  constexpr int kNumChannels = 3;
   const size_t planeFloats = static_cast<size_t>(H) * W;
   inputBuffer_.resize(planeFloats * static_cast<size_t>(kNumChannels));
 

@@ -33,6 +33,7 @@ enum class PipelineMode {
 struct OcrInput {
   int imageWidth{};
   int imageHeight{};
+  int bitsPerPixel{24};
   std::vector<uint8_t> data;
   bool isEncoded{false};
   bool paragraph{false};

@@ -104,7 +104,7 @@ jobs:
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
-      sha: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+      sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/embed-llamacpp
 
