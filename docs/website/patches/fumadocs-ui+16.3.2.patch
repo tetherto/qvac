@@ -1,0 +1,13 @@
+diff --git a/node_modules/fumadocs-ui/dist/components/sidebar/base.js b/node_modules/fumadocs-ui/dist/components/sidebar/base.js
+index 1de0767..223c00e 100644
+--- a/node_modules/fumadocs-ui/dist/components/sidebar/base.js
++++ b/node_modules/fumadocs-ui/dist/components/sidebar/base.js
+@@ -104,7 +104,7 @@ export function SidebarDrawerContent({ className, children, ...props }) {
+     return (_jsx(Presence, { present: open, children: ({ present }) => (_jsx("aside", { id: "nd-sidebar-mobile", "data-state": state, className: cn(!present && 'invisible', className), ...props, children: children })) }));
+ }
+ export function SidebarViewport(props) {
+-    return (_jsx(ScrollArea, { ...props, className: cn('min-h-0 flex-1', props.className), children: _jsx(ScrollViewport, { className: "p-4 overscroll-contain", style: {
++    return (_jsx(ScrollArea, { ...props, type: "always", className: cn('min-h-0 flex-1', props.className), children: _jsx(ScrollViewport, { className: "p-4 overscroll-contain", style: {
+                 maskImage: 'linear-gradient(to bottom, transparent, white 12px, white calc(100% - 12px), transparent)',
+             }, children: props.children }) }));
+ }

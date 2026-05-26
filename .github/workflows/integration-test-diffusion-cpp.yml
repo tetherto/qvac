@@ -309,7 +309,7 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
 
       - name: List generated images
-        if: always()
+        if: always() && !cancelled()
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -329,7 +329,7 @@ jobs:
           fi
 
       - name: Upload generated images
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: sd-test-images-${{ matrix.os }}-${{ matrix.arch }}

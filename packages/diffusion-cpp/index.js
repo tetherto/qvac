@@ -516,7 +516,8 @@ class EsrganUpscaler {
    * @param {object} args
    * @param {object} args.files - Absolute file paths for ESRGAN components
    * @param {string} args.files.esrgan - ESRGAN upscaler model (absolute path)
-   * @param {object} [args.config] - ESRGAN context configuration
+   * @param {object} [args.config] - ESRGAN context configuration (`device`:
+   *   `'gpu'` by default, or `'cpu'`; `'gpu'` tries GPU then falls back to CPU).
    * @param {object} [args.logger] - Structured logger for JS wrapper logs.
    *   Native C++ logs are process-global; configure them once with
    *   `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
