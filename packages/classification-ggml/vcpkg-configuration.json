@@ -11,7 +11,8 @@
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "gtest",
-        "stb"
+        "stb",
+        "spirv-headers"
       ]
     }
   ]
