@@ -10,6 +10,7 @@
     "heavy8": ["runImageHighResAuroraTest"],
     "heavy9": ["runGemma4Test"],
     "heavy10": ["runOcrPaddleTest"],
+    "heavy11": ["runQuantizedKvcacheTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -24,6 +25,7 @@
       "runMultiGpuTest",
       "runMultiInstanceTest",
       "runQwen35Test",
+      "runTurboquantTest",
       "runUtf8OutputTest"
     ]
   },
@@ -31,22 +33,24 @@
     "groupA": [
       "runApiBehaviorTest",
       "runBitnetTest",
-      "runCacheStateMachineTest",
       "runConfigParametersTest",
-      "runToolsCompactTest",
       "runFinetuningPauseResumeTest",
       "runGenerationParamsTest",
-      "runGrammarTest"
+      "runGrammarTest",
+      "runMultiInstanceTest",
+      "runQuantizedKvcacheTest",
+      "runQwen35Test",
+      "runReasoningTest",
+      "runToolsCompactTest",
+      "runTurboquantTest"
     ],
     "groupB": [
-      "runQwen35Test",
+      "runCacheStateMachineTest",
       "runGemma4Test",
       "runModelLoadingTest",
       "runMultiGpuTest",
-      "runMultiInstanceTest",
       "runOcrLightonTest",
       "runOcrPaddleTest",
-      "runReasoningTest",
       "runSlidingContextTest",
       "runToolCallingTest",
       "runUtf8OutputTest"
