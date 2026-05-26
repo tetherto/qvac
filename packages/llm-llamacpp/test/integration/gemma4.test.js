@@ -210,17 +210,32 @@ test('Gemma 4 can describe an image', {
   const projectionModelPath = path.join(dirPath, projModelName)
 
   // ctx_size: a single elephant.jpg encodes to ~260 mtmd image tokens; the
-  // system turn, user message and the answer fit comfortably in 8192 (with
-  // headroom for Gemma 4's typical CoT preamble even though we disable it
-  // below).
+  // system turn, user message and the answer fit comfortably even at 4096
+  // (~15x headroom over the ~275 tokens actually used). 8192 was originally
+  // chosen to leave room for Gemma 4's CoT preamble, but reasoning-budget=0
+  // below already suppresses CoT, so the extra 4k cells were dead KV cache
+  // weight ridden by jetsam on iPhone 16 -- which has a tighter per-process
+  // memory ceiling than iPhone 17 and was timing out at 20 min on test 3.
+  // Halving the KV cache cuts ~75 MB on the GPU side without affecting any
+  // image-token, prompt or answer fit.
   // reasoning-budget: 0 -- we ask the model for a one-word answer and don't
   // need the <|channel>thought ...<channel|> preamble. Without this, Gemma 4
   // happily generates 8k+ tokens of CoT for a vision question and the
   // generation loop overflows ctx_size before reaching <eos>.
+  // ubatch-size: 320 -- the LLM's Metal compute buffer is sized by n_ubatch
+  // (default 512), and at default it lands around 830 MiB for Gemma 4.
+  // Together with the ~1 GB base model and ~941 MB bf16 mmproj that pushes
+  // iPhone 17 over its per-process jetsam ceiling and the app hangs. Lowering
+  // ubatch shrinks the compute buffer proportionally. CLIP's vision encoder
+  // uses non-causal attention which asserts n_ubatch >= n_tokens_per_call,
+  // and elephant.jpg encodes to ~260 mtmd image tokens, so 320 is the
+  // smallest 64-aligned value that still fits the image in one call while
+  // saving ~40% of the compute buffer vs the default 512.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
-    ctx_size: '8192',
+    ctx_size: '4096',
+    'ubatch-size': '320',
     temp: '0',
     seed: '42',
     'reasoning-budget': '0',
