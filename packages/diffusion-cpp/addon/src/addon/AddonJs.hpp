@@ -205,6 +205,21 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
+  // Lifetime contract for the `[&instance]` captures below:
+  //
+  //   `instance` is a reference into the AddonJs that the inference-addon-cpp
+  //   parent framework holds in a stable storage slot keyed by `js_env_t`.
+  //   The framework destroys that slot only on `destroyInstance()`, and
+  //   `destroyInstance()` first joins / drains the JobRunner, which means
+  //   the async job consuming these callbacks is guaranteed to have
+  //   finished before the AddonJs is freed. As long as that invariant
+  //   holds, capturing by reference is safe.
+  //
+  //   If the parent framework ever changes that ordering (e.g. allows
+  //   destroyInstance during an in-flight job), these captures must be
+  //   converted to a refcounted handle (e.g. shared_ptr to AddonCpp) or
+  //   to a stable-key copy. Update both callbacks together.
+  //
   // Progress updates are queued as JSON strings (JsStringOutputHandler).
   job.progressCallback = [&instance](const std::string& progressJson) {
     instance.addonCpp->outputQueue->queueResult(std::any(progressJson));

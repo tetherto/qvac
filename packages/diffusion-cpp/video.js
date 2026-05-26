@@ -30,7 +30,15 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 // larger Wan variants (14B, future checkpoints) may extend that range, but
 // the error message points users to the recommended set.
 function validateVideoFrames (n) {
-  if (!Number.isFinite(n) || n < 5 || (n - 1) % 4 !== 0) {
+  // Two distinct error classes: shape (must be an integer) vs. value
+  // (the 4*k+1 / >= 5 invariant). Tests rely on these messages staying
+  // separable; merging them obscures which one tripped.
+  if (!Number.isInteger(n)) {
+    throw new Error(
+      `video_frames must be an integer of the form (4*k + 1) with k >= 1. Got: ${n}`
+    )
+  }
+  if (n < 5 || (n - 1) % 4 !== 0) {
     throw new Error(
       'video_frames must be an integer >= 5 of the form (4*k + 1). ' +
       'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
@@ -38,6 +46,24 @@ function validateVideoFrames (n) {
       `Got: ${n}`
     )
   }
+}
+
+// See index.js::_coerceToUint8 for the long form of this contract — duplicated
+// here only because video.js does not depend on index.js (separate entry
+// points). Keep both copies in sync.
+function _coerceToUint8 (name, value) {
+  if (value instanceof Uint8Array) return value
+  if (ArrayBuffer.isView(value) && value.BYTES_PER_ELEMENT === 1) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  }
+  if (value instanceof ArrayBuffer ||
+      (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)) {
+    return new Uint8Array(value)
+  }
+  throw new TypeError(
+    `${name} must be a Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes. ` +
+    `Got: ${value === null ? 'null' : typeof value}`
+  )
 }
 
 /**
@@ -256,6 +282,15 @@ class VideoStableDiffusion {
       throw new TypeError('run(params): params must be an object')
     }
 
+    // The native handler enforces this too, but failing here gives a
+    // precise JS-side error and avoids a roundtrip to C++ for trivially
+    // invalid input.
+    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
+      throw new TypeError(
+        `params.prompt is required and must be a non-empty string. Got: ${typeof params.prompt}`
+      )
+    }
+
     // ── Mode is required and must be one of the two video modes ────────
     if (typeof params.mode !== 'string' || !VIDEO_MODES.has(params.mode)) {
       throw new Error(
@@ -302,14 +337,13 @@ class VideoStableDiffusion {
     }
 
     // ── init_image / end_image type checks ───────────────────────────────
-    if (params.init_image != null && !(params.init_image instanceof Uint8Array)) {
-      throw new TypeError(
-        'init_image must be a Uint8Array (e.g. fs.readFileSync("frame.png")). ' +
-        `Got: ${typeof params.init_image}`
-      )
-    }
-    if (params.init_image instanceof Uint8Array && params.init_image.length === 0) {
-      throw new Error('init_image must not be empty')
+    // Accept Buffer / Uint8ClampedArray / ArrayBuffer in addition to plain
+    // Uint8Array; see _coerceToUint8 above for the contract.
+    if (params.init_image != null) {
+      params.init_image = _coerceToUint8('init_image', params.init_image)
+      if (params.init_image.length === 0) {
+        throw new Error('init_image must not be empty')
+      }
     }
 
     // ── init_images is an image-only feature ─────────────────────────────
@@ -327,9 +361,21 @@ class VideoStableDiffusion {
           "txt2vid does not accept init_image. Use mode='img2vid' instead."
         )
       }
+      if (params.end_image != null) {
+        throw new Error(
+          'txt2vid does not accept end_image.'
+        )
+      }
     } else if (mode === 'img2vid') {
+      // After coercion above, init_image is either a normalized Uint8Array
+      // or null/undefined.
       if (!(params.init_image instanceof Uint8Array)) {
-        throw new Error('img2vid requires init_image (Uint8Array of PNG/JPEG bytes).')
+        throw new Error('img2vid requires init_image (Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes).')
+      }
+      if (params.end_image != null) {
+        throw new Error(
+          'img2vid does not accept end_image.'
+        )
       }
     }
 
@@ -348,12 +394,11 @@ class VideoStableDiffusion {
         )
       }
       for (let i = 0; i < params.control_frames.length; i++) {
-        const f = params.control_frames[i]
-        if (!(f instanceof Uint8Array) || f.length === 0) {
-          throw new Error(
-            `control_frames[${i}] must be a non-empty Uint8Array (PNG/JPEG bytes).`
-          )
+        const coerced = _coerceToUint8(`control_frames[${i}]`, params.control_frames[i])
+        if (coerced.length === 0) {
+          throw new Error(`control_frames[${i}] must be non-empty (PNG/JPEG bytes).`)
         }
+        params.control_frames[i] = coerced
       }
     }
 
@@ -369,10 +414,10 @@ class VideoStableDiffusion {
       )
     }
 
-    // ── Wan 2.1 I2V / FLF2V CLIP vision sanity check ────────────────────
+    // ── Wan 2.1 I2V CLIP vision sanity check ───────────────────────────────
     // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
-    // conditioning in Wan 2.1 I2V and FLF2V. Without it the C++ layer
-    // cannot build the img_emb projection and will produce garbage or crash.
+    // conditioning in Wan 2.1 I2V. Without it the C++ layer cannot build the
+    // img_emb projection and will produce garbage or crash.
     if (mode === 'img2vid' && !this._files.clipVision) {
       this.logger.warn(
         `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
@@ -404,14 +449,13 @@ class VideoStableDiffusion {
       }
     }
 
-    // ── LoRA path validation ─────────────────────────────────────────────
+    // ── LoRA is not supported for video generation ────────────────────────
     if (params.lora != null) {
-      if (typeof params.lora !== 'string' || params.lora.length === 0) {
-        throw new TypeError('params.lora must be a non-empty string')
-      }
-      if (!path.isAbsolute(params.lora)) {
-        throw new TypeError(`params.lora must be an absolute path (got: ${params.lora})`)
-      }
+      throw new Error(
+        'params.lora is not supported for video generation yet. ' +
+        'Video generation uses distinct diffusion and expert components ' +
+        'that do not yet support LoRA injection.'
+      )
     }
 
     if (!this.addon) {

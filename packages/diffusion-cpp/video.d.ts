@@ -25,6 +25,12 @@ export interface VideoDiffusionFiles {
   /** Absolute path to the Wan VAE. */
   vae?: string
   /**
+   * Absolute path to `clip_vision_h.safetensors` (OpenCLIP ViT-H/14).
+   * Required for `img2vid`; omit for pure `txt2vid`. The JS wrapper warns
+   * loudly when an `img2vid` job is dispatched without this file.
+   */
+  clipVision?: string
+  /**
    * Optional ESRGAN weights path for native ctx parity; video jobs do not apply
    * ESRGAN. Omit and the addon passes an empty string.
    */
@@ -47,8 +53,8 @@ export interface VideoStableDiffusionArgs {
  *
  * Mode is required (no auto-detect). Every mode enforces its own input
  * invariants both in the JS wrapper and in C++ `SdModel::processVideo()`:
- *   - `txt2vid` rejects `init_image`.
- *   - `img2vid` requires `init_image`.
+ *   - `txt2vid` rejects `init_image` and `end_image`.
+ *   - `img2vid` requires `init_image`, rejects `end_image`.
  */
 export interface VideoGenerationParams {
   /** Required. Selects the generation branch. */

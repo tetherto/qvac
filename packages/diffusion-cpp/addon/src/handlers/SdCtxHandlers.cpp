@@ -275,45 +275,32 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 
     // -- Preview callback
     // ------------------------------------------------------------
-    // preview_mode maps strings to preview_t enum. Accepts "none", "proj",
-    // "tae", "vae". Empty string / "none" disables previews (default).
-    // Note: "tae" additionally requires taesdPath to be set at context load.
+    // GATED: preview_mode is parsed but not wired to sd_set_preview_callback().
+    // Until the callback machinery is implemented end-to-end (C++/JS plumbing,
+    // queueing PNG events), these options are silently ignored.
+    // See C2: preview_mode feature gate.
 
+    // NOTE: remove this gate once preview_mode -> sd_set_preview_callback
+    // wiring is completed. For now, callers may pass these keys; they are
+    // parsed for forward compatibility but do not change behavior.
     {"preview_mode",
-     [](SdCtxConfig& c, const std::string& v) {
-       if (v.empty() || v == "none")
-         c.previewMode = PREVIEW_NONE;
-       else if (v == "proj")
-         c.previewMode = PREVIEW_PROJ;
-       else if (v == "tae")
-         c.previewMode = PREVIEW_TAE;
-       else if (v == "vae")
-         c.previewMode = PREVIEW_VAE;
-       else
-         throw StatusError(
-             general_error::InvalidArgument,
-             "preview_mode must be 'none', 'proj', 'tae', or 'vae', got: '" +
-                 v + "'");
+     [](SdCtxConfig&, const std::string&) {
+       // Silently ignore; reserved for future use.
      }},
 
     {"preview_interval",
-     [](SdCtxConfig& c, const std::string& v) {
-       int n = parseInt(v, "preview_interval");
-       if (n < 1)
-         throw StatusError(
-             general_error::InvalidArgument,
-             "preview_interval must be >= 1, got: " + std::to_string(n));
-       c.previewInterval = n;
+     [](SdCtxConfig&, const std::string&) {
+       // Silently ignore; reserved for future use (C2 gate).
      }},
 
     {"preview_denoised",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.previewDenoised = parseBool(v, "preview_denoised");
+     [](SdCtxConfig&, const std::string&) {
+       // Silently ignore; reserved for future use (C2 gate).
      }},
 
     {"preview_noisy",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.previewNoisy = parseBool(v, "preview_noisy");
+     [](SdCtxConfig&, const std::string&) {
+       // Silently ignore; reserved for future use (C2 gate).
      }},
 
     // -- ESRGAN upscaler

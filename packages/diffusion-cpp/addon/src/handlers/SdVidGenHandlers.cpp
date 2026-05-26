@@ -1,8 +1,5 @@
 #include "SdVidGenHandlers.hpp"
 
-#include <climits>
-#include <cmath>
-
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "SdParsers.hpp"
@@ -16,64 +13,12 @@ using parsers::parseSampler;
 using parsers::parseScheduler;
 using parsers::parseVaeTileSize;
 using parsers::requireBool;
+using parsers::requireInt;
+using parsers::requireInt64;
 using parsers::requireNum;
+using parsers::requirePositiveInt;
+using parsers::requireRange;
 using parsers::requireStr;
-
-// -----------------------------------------------------------------------------
-// Shared mini-helpers for this file only
-// -----------------------------------------------------------------------------
-
-namespace {
-
-// Convert a JSON number to int with full safety checks:
-//   - rejects NaN and infinity (since NaN != NaN and inf != floor(inf) trips
-//     std::isfinite, while a plain `d != std::floor(d)` only catches NaN)
-//   - rejects non-integer doubles (e.g. 8.5)
-//   - rejects values that don't fit in a signed 32-bit int (casting a double
-//     outside [INT_MIN, INT_MAX] to int is undefined behaviour)
-// Use this anywhere a JSON number must land in a C++ `int` slot.
-inline int requireInt(const picojson::value& v, const std::string& key) {
-  const double d = requireNum(v, key);
-  if (!std::isfinite(d)) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be a finite integer, got: " + std::to_string(d));
-  }
-  if (d != std::floor(d)) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be an integer, got: " + std::to_string(d));
-  }
-  if (d < static_cast<double>(INT_MIN) || d > static_cast<double>(INT_MAX)) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " is out of int range, got: " + std::to_string(d));
-  }
-  return static_cast<int>(d);
-}
-
-inline int
-requirePositiveInt(const picojson::value& v, const std::string& key) {
-  const int n = requireInt(v, key);
-  if (n <= 0)
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be > 0, got: " + std::to_string(n));
-  return n;
-}
-
-inline float requireRange(
-    const picojson::value& v, const std::string& key, float lo, float hi) {
-  const float f = static_cast<float>(requireNum(v, key));
-  if (f < lo || f > hi)
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be in [" + std::to_string(lo) + ", " + std::to_string(hi) +
-            "], got: " + std::to_string(f));
-  return f;
-}
-
-} // namespace
 
 // -----------------------------------------------------------------------------
 // Handler map

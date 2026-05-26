@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -24,6 +25,38 @@ std::string requireStr(const picojson::value& v, const std::string& key);
 
 /** Require a JSON value is a boolean and return it. */
 bool requireBool(const picojson::value& v, const std::string& key);
+
+/**
+ * Require a JSON number safely castable to a signed 32-bit int.
+ *
+ * Rejects:
+ *   - NaN / infinity (`!std::isfinite`)
+ *   - non-integer doubles (e.g. `8.5`)
+ *   - values outside `[INT_MIN, INT_MAX]` (casting such doubles to `int`
+ *     is undefined behaviour, not just a wrap)
+ *
+ * Use this for any handler that lands a JSON number in a C++ `int` slot
+ * (width, height, steps, batch_count, clip_skip, ...).
+ */
+int requireInt(const picojson::value& v, const std::string& key);
+
+/** As `requireInt`, but additionally requires `n > 0`. */
+int requirePositiveInt(const picojson::value& v, const std::string& key);
+
+/**
+ * Require a JSON number safely castable to int64_t. Used for `seed`, where
+ * the JS layer can submit values larger than `INT_MAX`. JSON numbers are IEEE
+ * 754 doubles, so the precise representable integer range is
+ * `[-(2^53), 2^53]` -- we reject above/below that explicitly.
+ */
+int64_t requireInt64(const picojson::value& v, const std::string& key);
+
+/**
+ * Require a JSON number in `[lo, hi]` and return it as `float`. Used for
+ * any bounded-range parameter (strength, overlap, moe_boundary, ...).
+ */
+float requireRange(
+    const picojson::value& v, const std::string& key, float lo, float hi);
 
 /**
  * Parse a sampler name (e.g. "euler", "dpm++2m") into a sample_method_t.

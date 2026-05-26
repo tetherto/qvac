@@ -1,6 +1,9 @@
 #include "SdParsers.hpp"
 
 #include <charconv>
+#include <cmath>
+#include <climits>
+#include <cstdint>
 #include <string_view>
 #include <unordered_map>
 
@@ -31,6 +34,72 @@ bool requireBool(const picojson::value& v, const std::string& key) {
     throw StatusError(
         general_error::InvalidArgument, key + " must be a boolean");
   return v.get<bool>();
+}
+
+// Largest integer JSON (IEEE 754 double) can losslessly represent. Used by
+// requireInt64 to reject silent precision loss for large seeds.
+inline constexpr double kMaxSafeJsonInt = 9007199254740992.0;  // 2^53
+
+int requireInt(const picojson::value& v, const std::string& key) {
+  const double d = requireNum(v, key);
+  if (!std::isfinite(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite integer, got: " + std::to_string(d));
+  }
+  if (d != std::floor(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be an integer, got: " + std::to_string(d));
+  }
+  if (d < static_cast<double>(INT_MIN) || d > static_cast<double>(INT_MAX)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " is out of int range, got: " + std::to_string(d));
+  }
+  return static_cast<int>(d);
+}
+
+int requirePositiveInt(const picojson::value& v, const std::string& key) {
+  const int n = requireInt(v, key);
+  if (n <= 0)
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be > 0, got: " + std::to_string(n));
+  return n;
+}
+
+int64_t requireInt64(const picojson::value& v, const std::string& key) {
+  const double d = requireNum(v, key);
+  if (!std::isfinite(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite integer, got: " + std::to_string(d));
+  }
+  if (d != std::floor(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be an integer, got: " + std::to_string(d));
+  }
+  if (d < -kMaxSafeJsonInt || d > kMaxSafeJsonInt) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " is outside the safe integer range "
+              "[-2^53, 2^53], got: " +
+            std::to_string(d));
+  }
+  return static_cast<int64_t>(d);
+}
+
+float requireRange(
+    const picojson::value& v, const std::string& key, float lo, float hi) {
+  const float f = static_cast<float>(requireNum(v, key));
+  if (f < lo || f > hi)
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be in [" + std::to_string(lo) + ", " +
+            std::to_string(hi) + "], got: " + std::to_string(f));
+  return f;
 }
 
 // -- Enum parsers -------------------------------------------------------------

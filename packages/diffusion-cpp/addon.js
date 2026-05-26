@@ -7,24 +7,43 @@ const path = require('bare-path')
  * tick), `Error`, or `JobEnded`. Returns `null` for unknown shapes
  * (caller logs and skips).
  *
+ * Classification priority:
+ *   1. Error if rawEvent (string) includes substring "Error"
+ *   2. Output if rawData is Uint8Array or string (binary or JSON)
+ *   3. JobEnded if rawData is a truthy object (stats payload)
+ *   4. Unknown (null) for anything else
+ *
  * @param {string} rawEvent
  * @param {*} rawData
  * @param {*} rawError
  * @returns {{ type: string, data: *, error: * } | null}
  */
 function mapAddonEvent (rawEvent, rawData, rawError) {
+  // Error classification: event string contains "Error" (e.g.,
+  // "GenerationError", "ContextError", hypothetical "ProcessingErrored").
+  // Runs first so that error events are never misclassified as Output/JobEnded.
   if (typeof rawEvent === 'string' && rawEvent.includes('Error')) {
     return { type: 'Error', data: rawData, error: rawError }
   }
 
+  // Output classification: Uint8Array (image PNG/JPEG bytes) or string
+  // (progress JSON). Buffer (Node.js) is a Uint8Array subclass so it matches.
   if (rawData instanceof Uint8Array || typeof rawData === 'string') {
     return { type: 'Output', data: rawData, error: null }
   }
 
-  if (rawData && typeof rawData === 'object') {
+  // JobEnded classification: truthy object but not Uint8Array (which is
+  // also an object). Expects a stats { totalSteps, ... } shape.
+  // NOTE: this will accept any plain object, including plain arrays [] and
+  // even Array-like objects { length: N }. Arrays should not be emitted by
+  // the native layer; if misclassified here as JobEnded, the job handler
+  // will reject the stats shape and error. This is safe but may be confusing.
+  if (rawData && typeof rawData === 'object' && !(rawData instanceof Uint8Array)) {
     return { type: 'JobEnded', data: rawData, error: null }
   }
 
+  // Unknown: event does not match Error, Output, or JobEnded patterns.
+  // Likely a bug in the native layer or a proto-versioning mismatch.
   return null
 }
 

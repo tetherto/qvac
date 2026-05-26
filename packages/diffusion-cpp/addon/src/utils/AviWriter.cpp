@@ -143,6 +143,11 @@ std::vector<uint8_t> encodeFramesToAvi(
   const size_t bytesPerFrame = wSz * hSz * 3;
   const size_t perFrameWithOverhead = bytesPerFrame + kChunkOverhead;
 
+  // bytesPerFrame is bounded by `estimated <= UINT32_MAX` below, so this
+  // cast is safe and equals the AVI 1.0 "biSizeImage" / suggested-buffer
+  // value used in three header fields.
+  const auto suggestedBufferSize = static_cast<uint32_t>(bytesPerFrame);
+
   const size_t framesSz = static_cast<size_t>(numFrames);
   if (framesSz > (SIZE_MAX - kHeaderBytes) / perFrameWithOverhead) {
     throw StatusError(
@@ -187,7 +192,7 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU32LE(out, static_cast<uint32_t>(numFrames)); // total frames
   appendU32LE(out, 0);                                // initial frames
   appendU32LE(out, 1);                                // number of streams
-  appendU32LE(out, width * height * 3);               // suggested buffer size
+  appendU32LE(out, suggestedBufferSize);              // suggested buffer size
   appendU32LE(out, width);
   appendU32LE(out, height);
   appendU32LE(out, 0); // reserved
@@ -213,7 +218,7 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU32LE(out, static_cast<uint32_t>(fps));       // rate
   appendU32LE(out, 0);                                // start
   appendU32LE(out, static_cast<uint32_t>(numFrames)); // length
-  appendU32LE(out, width * height * 3);               // suggested buffer size
+  appendU32LE(out, suggestedBufferSize);              // suggested buffer size
   appendU32LE(out, 0xFFFFFFFFu); // quality (== -1 "default")
   appendU32LE(out, 0);           // sample size
   appendU16LE(out, 0);           // rcFrame.left
@@ -230,7 +235,7 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU16LE(out, 1);                  // biPlanes
   appendU16LE(out, 24);                 // biBitCount
   appendFourCC(out, "MJPG");            // biCompression (FOURCC)
-  appendU32LE(out, width * height * 3); // biSizeImage
+  appendU32LE(out, suggestedBufferSize); // biSizeImage
   appendU32LE(out, 0);                  // XPelsPerMeter
   appendU32LE(out, 0);                  // YPelsPerMeter
   appendU32LE(out, 0);                  // colors used
