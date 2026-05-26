@@ -268,7 +268,7 @@ jobs:
       - run-integration-tests
       - run-mobile-integration-tests
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && always()
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
