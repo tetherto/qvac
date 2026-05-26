@@ -142,6 +142,18 @@ export function AskAIPill() {
           <button
             type="button"
             onClick={handleDismiss}
+            // `event.stopPropagation()` in `onClick` is not enough: the
+            // browser synthesizes a click when Enter/Space is pressed
+            // on a native <button>, but the original keydown keeps
+            // bubbling independently. Without stopping it here, Enter
+            // on the X dismisses the pill *and* opens the modal,
+            // because the surrounding wrapper (`role="button"`) has
+            // its own `onKeyDown` that triggers `handleOpen()`.
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.stopPropagation();
+              }
+            }}
             aria-label="Dismiss the assistant bar for this session"
             className={cn(
               'inline-flex size-7 shrink-0 items-center justify-center rounded-full text-fd-muted-foreground transition-colors',
