@@ -10,7 +10,7 @@ export default [
       "bun.lock",
       "eslint.config.*",
       "scripts/**/*.mjs",
-      "tests-qvac/**",
+      "e2e/**",
       "test/**",
     ],
   },

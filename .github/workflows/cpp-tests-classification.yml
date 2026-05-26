@@ -56,6 +56,11 @@ jobs:
       WORKDIR: ${{ inputs.workdir }}
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
+
       - name: Setup build host (github-hosted runners only)
         if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
