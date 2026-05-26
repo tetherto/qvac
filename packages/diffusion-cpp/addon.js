@@ -28,7 +28,15 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
   // `ArrayBuffer.isView` is true for every TypedArray + DataView, false for
   // plain objects -- exactly the discrimination we want.
   if (rawData && typeof rawData === 'object' && !ArrayBuffer.isView(rawData)) {
-    return { type: 'JobEnded', data: rawData, error: null }
+    const data = { ...rawData }
+    if (typeof data.backendDevice === 'number') {
+      if (data.backendDevice === 0) {
+        data.backendDevice = 'cpu'
+      } else if (data.backendDevice === 1) {
+        data.backendDevice = 'gpu'
+      }
+    }
+    return { type: 'JobEnded', data, error: null }
   }
 
   return null
