@@ -206,9 +206,29 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
     if (modalState === 'closed') return;
     const root = document.documentElement;
     const previousOverflow = root.style.overflow;
+    const previousPaddingRight = root.style.paddingRight;
+    // Measure the scrollbar gutter before hiding overflow so we can
+    // pad the page by the same amount, preventing the body from
+    // jumping right when the scrollbar disappears under the modal.
+    // Mirrors what `react-remove-scroll` (used by Radix Dialog inside
+    // Inkeep's search modal) does in the Cmd+K path - so opening the
+    // assistant now matches Cmd+K visually.
+    const scrollbarWidth = window.innerWidth - root.clientWidth;
+    if (scrollbarWidth > 0) {
+      root.style.paddingRight = `${scrollbarWidth}px`;
+    }
     root.style.overflow = 'hidden';
+    // Publish the gutter as a CSS custom property so any
+    // `position: fixed` element (e.g. `AskAIPill`) can reserve the
+    // same width and avoid being recentered when the scrollbar is
+    // removed from the ICB. Only fixed-positioned children need
+    // this; flow-positioned content already inherits the
+    // documentElement padding.
+    root.style.setProperty('--ask-ai-scrollbar-gutter', `${scrollbarWidth}px`);
     return () => {
       root.style.overflow = previousOverflow;
+      root.style.paddingRight = previousPaddingRight;
+      root.style.removeProperty('--ask-ai-scrollbar-gutter');
     };
   }, [modalState]);
 

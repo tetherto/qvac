@@ -29,16 +29,61 @@
   --fd-layout-width: var(--spacing-page);
 }
 
-/* 3) MORE breathing room between sidebar ↔ text ↔ ToC */
-@media (min-width: 1024px) {
-  #nd-page > article {
-    padding-inline: 3rem !important; /* 48px */
-  }
+/*
+ * 3) Constrain the article block to 900px and center it on screen.
+ *
+ * We use Fumadocs' `notebook` layout (so the search bar lives in the
+ * top navbar instead of the sidebar). The notebook layout's
+ * <article id="nd-page"> intentionally has NO max-width and NO
+ * mx-auto on the article itself — Fumadocs sets `*:max-w-[900px]` on
+ * its children instead, leaving the article block filling the entire
+ * main grid column and the children left-aligned.
+ *
+ * The previous `docs` layout's article was `max-w-[900px] mx-auto`
+ * (with `max-w-[1200px]` when `data-full`). We re-impose the same
+ * constraint here so the rendered page width and prose line-length
+ * stay identical to what they were under the `docs` layout.
+ *
+ * Padding is intentionally NOT overridden here: the default
+ * `xl:px-8` (32px) already matches what the `docs` layout shipped.
+ */
+#nd-page {
+  max-width: 900px;
+  margin-inline: auto;
 }
 
+#nd-page[data-full='true'] {
+  max-width: 1200px;
+}
+
+/*
+ * 4) Reduce the article's top padding under the `notebook` layout.
+ *
+ * Fumadocs' <article id="nd-page"> ships `xl:pt-14` (56px) on xl
+ * breakpoints. That padding was calibrated for the `docs` layout,
+ * which has no top navbar. In the `notebook` layout we use here, the
+ * top navbar (#nd-subnav, 56px tall) sits directly above the article
+ * — stacking 56px + 56px = 112px of vertical space between the
+ * viewport edge and the first content (h1 / breadcrumb), roughly
+ * double the industry range of ~24–32px for docs sites with a top
+ * navbar (Next.js, Vercel, Stripe, Tailwind, Astro Starlight, MDN).
+ *
+ * Override only the xl top padding; the base `py-6` (24px) and
+ * `md:pt-8` (32px) Fumadocs defaults already match industry norms.
+ */
 @media (min-width: 1280px) {
-  #nd-page > article {
-    padding-inline: 4rem !important; /* 64px */
+  /*
+   * `article#nd-page` (specificity 0,1,1) is intentionally used here
+   * to outrank Tailwind's `.xl\:pt-14` utility (specificity 0,1,0),
+   * which Fumadocs applies on the article element. A plain `#nd-page`
+   * selector ties on specificity and loses the cascade against the
+   * Tailwind utility because Tailwind v4 emits its `utilities` layer
+   * after this rule in the final bundle. Confirmed by runtime logs:
+   * with the lower-specificity selector, the article's computed
+   * paddingTop remained "56px" instead of dropping to 32px.
+   */
+  article#nd-page {
+    padding-top: 2rem; /* 32px */
   }
 }
 
@@ -196,6 +241,33 @@
 @layer utilities {
   :root.light #nd-sidebar {
     background-color: var(--color-fd-background) !important;
+  }
+}
+
+/* ===========================================
+   SIDEBAR SCROLLBAR — fade edges to match viewport
+   ===========================================
+   The sidebar viewport fades its top/bottom 12px via `mask-image`
+   (set inline in `Base.SidebarViewport`). Radix's `type="always"`
+   scrollbar is rendered as a sibling of that viewport, so it does
+   NOT inherit the fade and ends up flush against the bottom of the
+   top navbar. Replicate the same 12px fade here so the always-
+   visible thumb tucks elegantly under the navbar (and above the
+   footer / Ask AI pill) instead of touching them.
+
+   Selector targets the Radix vertical scrollbar specifically:
+   the only sibling of `[data-radix-scroll-area-viewport]` inside
+   `#nd-sidebar` carrying `data-orientation="vertical"`.
+*/
+@layer utilities {
+  #nd-sidebar [data-radix-scroll-area-viewport] ~ [data-orientation="vertical"] {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 12px,
+      black calc(100% - 12px),
+      transparent
+    );
   }
 }
 
