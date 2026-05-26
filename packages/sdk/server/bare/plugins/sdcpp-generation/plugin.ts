@@ -1,8 +1,10 @@
 import ImgStableDiffusion, {
   EsrganUpscaler,
+  VideoStableDiffusion,
   type DiffusionFiles,
   type EsrganUpscalerConfig,
   type SdConfig,
+  type VideoStableDiffusionArgs,
 } from "@qvac/diffusion-cpp";
 import addonLogging from "@qvac/diffusion-cpp/addonLogging";
 import {
@@ -67,35 +69,6 @@ function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
     ...flattenUpscalerKeys(config.upscaler),
     ...(config.verbosity !== undefined && { verbosity: config.verbosity }),
   };
-}
-
-type VideoStableDiffusionInstance = {
-  load: () => Promise<void>;
-  run: (params: unknown) => Promise<unknown>;
-  cancel: () => Promise<void>;
-  unload: () => Promise<void>;
-};
-
-type VideoModelFiles = {
-  model: string;
-  highNoiseDiffusionModel?: string;
-  t5Xxl: string;
-  vae: string;
-  esrgan?: string;
-};
-
-type VideoStableDiffusionCtor = new (args: {
-  files: VideoModelFiles;
-  config?: SdConfig;
-  logger?: unknown;
-  opts?: { stats?: boolean };
-}) => VideoStableDiffusionInstance;
-
-function getVideoStableDiffusionCtor(): VideoStableDiffusionCtor {
-  const diffusionModule = ImgStableDiffusion as typeof ImgStableDiffusion & {
-    VideoStableDiffusion: VideoStableDiffusionCtor;
-  };
-  return diffusionModule.VideoStableDiffusion;
 }
 
 /**
@@ -190,9 +163,9 @@ export const diffusionPlugin = definePlugin({
     ) {
       throw new ModelLoadFailedError(
         "modelConfig.upscaler.model_src is required when modelConfig.upscaler " +
-          "is set in diffusion mode. Provide the ESRGAN model, omit the " +
-          "upscaler block, or switch to modelConfig.mode = 'upscale' to load " +
-          "a standalone upscaler.",
+        "is set in diffusion mode. Provide the ESRGAN model, omit the " +
+        "upscaler block, or switch to modelConfig.mode = 'upscale' to load " +
+        "a standalone upscaler.",
       );
     }
 
@@ -213,17 +186,17 @@ export const diffusionPlugin = definePlugin({
       if (!artifacts?.["t5XxlModelPath"]) {
         throw new ModelLoadFailedError(
           "modelConfig.t5XxlModelSrc is required in video mode. " +
-            "Provide the Wan text encoder model before loading the video pipeline.",
+          "Provide the Wan text encoder model before loading the video pipeline.",
         );
       }
       if (!artifacts?.["vaeModelPath"]) {
         throw new ModelLoadFailedError(
           "modelConfig.vaeModelSrc is required in video mode. " +
-            "Provide the Wan VAE model before loading the video pipeline.",
+          "Provide the Wan VAE model before loading the video pipeline.",
         );
       }
 
-      const files: VideoModelFiles = {
+      const files: VideoStableDiffusionArgs["files"] = {
         model: modelPath,
         t5Xxl: artifacts["t5XxlModelPath"],
         vae: artifacts["vaeModelPath"],
@@ -233,6 +206,7 @@ export const diffusionPlugin = definePlugin({
         ...(artifacts?.["esrganModelPath"] && { esrgan: artifacts["esrganModelPath"] }),
       };
 
+      /* eslint-disable @typescript-eslint/no-unused-vars */
       const {
         clipLModelSrc,
         clipGModelSrc,
@@ -244,23 +218,14 @@ export const diffusionPlugin = definePlugin({
         mode,
         ...rest
       } = config;
-      void clipLModelSrc;
-      void clipGModelSrc;
-      void t5XxlModelSrc;
-      void llmModelSrc;
-      void vaeModelSrc;
-      void highNoiseDiffusionModelSrc;
-      void upscaler;
-      void mode;
+      /* eslint-enable @typescript-eslint/no-unused-vars */
 
-      const VideoStableDiffusion = getVideoStableDiffusionCtor();
-      const videoArgs: ConstructorParameters<VideoStableDiffusionCtor>[0] = {
+      const model = new VideoStableDiffusion({
         files,
         config: rest as SdConfig,
         logger,
         opts: { stats: true },
-      };
-      const model: VideoStableDiffusionInstance = new VideoStableDiffusion(videoArgs);
+      });
       return { model };
     }
 
