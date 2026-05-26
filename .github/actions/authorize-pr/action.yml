@@ -1,10 +1,6 @@
 name: Authorize PR
 description: >
-  Security gate for pull_request_target workflows. Checks actor write
-  permission, author association, and label presence for external fork PRs.
-  Strips the gate label on synchronize events from non-writers to force
-  re-review after new commits.
-
+  Security gate for pull_request_target workflows. Checks actor write permission, author association, and label presence for external fork PRs. Strips the gate label on synchronize events from non-writers to force re-review after new commits.
 inputs:
   label:
     description: "Label name required for external fork PRs (default: verified)"

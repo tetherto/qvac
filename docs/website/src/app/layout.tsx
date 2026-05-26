@@ -46,8 +46,9 @@ export default function Layout({ children }: LayoutProps<'/'>) {
          * and the `Cmd/Ctrl+I` hotkey are reachable from every route.
          * `AskAIShell` is mounted inside the `(docs)` layout so the
          * desktop sidebar lands as a direct grid child of
-         * `#nd-docs-layout` and can claim `grid-area: toc` to push
-         * the page content (see `ask-ai-shell.tsx` + `global.css`).
+         * `#nd-notebook-layout` and can claim `grid-area: toc` to
+         * push the page content (see `ask-ai-shell.tsx` +
+         * `global.css`).
          */}
         <AskAIProvider>
           <Provider>{children}</Provider>

@@ -20,13 +20,7 @@ import {
   unloadModel,
   type ModelProgressUpdate,
   LLAMA_3_2_1B_INST_Q4_0,
-  TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
-  TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
+  TTS_EN_SUPERTONIC_Q8_0,
 } from "@qvac/sdk";
 import { createWav, playPcmInt16Chunk } from "./utils";
 
@@ -90,22 +84,14 @@ try {
 
   console.log("Loading Supertonic TTS (registry)…");
   const ttsModelId = await loadModel({
-    modelSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32.src,
+    modelSrc: TTS_EN_SUPERTONIC_Q8_0.src,
     modelType: "tts",
     modelConfig: {
       ttsEngine: "supertonic",
       language: "en",
+      voice: "F1",
       ttsSpeed: 1.05,
       ttsNumInferenceSteps: 10,
-      ttsSupertonicMultilingual: true,
-      ttsTextEncoderSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32.src,
-      ttsDurationPredictorSrc:
-        TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32.src,
-      ttsVectorEstimatorSrc: TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32.src,
-      ttsVocoderSrc: TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32.src,
-      ttsUnicodeIndexerSrc: TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32.src,
-      ttsTtsConfigSrc: TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE.src,
-      ttsVoiceStyleSrc: TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE.src,
     },
     onProgress: (progress: ModelProgressUpdate) =>
       console.log(`TTS load: ${progress.percentage.toFixed(1)}%`),

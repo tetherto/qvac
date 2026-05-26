@@ -21,7 +21,7 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 - [`worktree-prepare.mjs`](worktree-prepare.mjs) — CLI entry for `/qv-pr-review`'s worktree mode. Success: prints `WORKTREE_PATH`, `HEAD_SHA`, `PATCH_PATH`, `BASE_REF` on stdout. Any failure: prints `WORKTREE_FALLBACK=<reason>` on stderr and exits 0 so the agent transparently falls back to API-only mode.
 - [`pr-test-discover.mjs`](pr-test-discover.mjs) — discovery CLI for `/qv-pr-test`. Orchestrates PR metadata/patch loading, package discovery, and JSON manifest output. It never uses `git diff`/`git status` against the worktree for classification.
 - [`pr-test-generic.mjs`](pr-test-generic.mjs) — package-agnostic discovery helpers: PR JSON/patch loading, patch-status parsing, package path detection, package.json script discovery, generic package classification, and non-SDK recommendation logic.
-- [`pr-test-sdk.mjs`](pr-test-sdk.mjs) — SDK-specific `/qv-pr-test` heuristics: SDK pod package detection, SDK example command generation, related SDK examples, related `tests-qvac` filters, and SDK e2e setup recommendations.
+- [`pr-test-sdk.mjs`](pr-test-sdk.mjs) — SDK-specific `/qv-pr-test` heuristics: SDK pod package detection, SDK example command generation, related SDK examples, related `e2e` filters, and SDK e2e setup recommendations.
 
 ## Modes
 

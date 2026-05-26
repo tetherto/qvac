@@ -27,6 +27,7 @@ import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
+import { handleVideoStream } from "@/server/rpc/handlers/video-stream";
 import { handleUpscaleStream } from "@/server/rpc/handlers/upscale-stream";
 import {
   handlePluginInvoke,
@@ -131,6 +132,7 @@ export const registry: Record<string, HandlerEntry> = {
   textToSpeechStream: { type: "duplex", handler: handleTextToSpeechStream },
   ocrStream: { type: "stream", handler: handleOCRStream },
   diffusionStream: { type: "stream", handler: handleDiffusionStream },
+  videoStream: { type: "stream", handler: handleVideoStream },
   upscaleStream: { type: "stream", handler: handleUpscaleStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
