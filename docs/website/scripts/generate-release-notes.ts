@@ -45,8 +45,6 @@
  *                       (e.g. v0.9.0 + v0.9.1) into a single page from the
  *                       root CHANGELOG.md. Manual regen only; not used by
  *                       the release pipeline.
- *   --ai                Use AI to generate a summary preamble when none
- *                       exists in the changelogs.
  *   --title-only       Skip changelog parsing + render. Only rewrite the
  *                      frontmatter title of the existing target file. The
  *                      target must already exist (created by a prior
@@ -123,7 +121,6 @@ function parseOverrides(filePath: string): OverrideSection[] {
 async function main() {
   const args = process.argv.slice(2);
   const version = args.find((arg) => !arg.startsWith("--"));
-  const useAi = args.includes("--ai");
   const isLatest = args.includes("--latest");
   const aggregateMinor = args.includes("--aggregate-minor");
   const appendPatch = args.includes("--append-patch");
@@ -133,7 +130,7 @@ async function main() {
 
   if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
     console.error(
-      "Usage: bun run scripts/generate-release-notes.ts <version> [--latest] [--target=<file>] [--append-patch] [--aggregate-minor] [--ai] [--title-only]"
+      "Usage: bun run scripts/generate-release-notes.ts <version> [--latest] [--target=<file>] [--append-patch] [--aggregate-minor] [--title-only]"
     );
     console.error("  version must be semver (e.g. 0.8.1)");
     process.exit(1);
@@ -146,9 +143,9 @@ async function main() {
     process.exit(1);
   }
 
-  if (titleOnly && (appendPatch || aggregateMinor || useAi)) {
+  if (titleOnly && (appendPatch || aggregateMinor)) {
     console.error(
-      "Error: --title-only is incompatible with --append-patch / --aggregate-minor / --ai.",
+      "Error: --title-only is incompatible with --append-patch / --aggregate-minor.",
     );
     process.exit(1);
   }
@@ -282,39 +279,6 @@ async function main() {
   const preambles = changelogs
     .filter((c) => c.preamble.length > 0)
     .map((c) => ({ pkg: c.pkg, content: c.preamble }));
-
-  if (useAi && preambles.length === 0 && categories.length > 0) {
-    try {
-      const { isAugmentConfigured, generateReleaseSummary } = await import(
-        "./api-docs/ai-augment.js"
-      );
-      if (isAugmentConfigured()) {
-        console.log("  🤖 No preamble found — generating AI summary...");
-        const changeDescription = categories
-          .map((c) =>
-            c.packages.map((p) => `[${c.name}] @qvac/${p.pkg}: ${p.content}`).join("\n")
-          )
-          .join("\n");
-        const affectedFunctions = categories
-          .flatMap((c) => c.packages.map((p) => p.pkg))
-          .join(", ");
-        const summary = await generateReleaseSummary(
-          categories[0].name,
-          changeDescription.slice(0, 2000),
-          affectedFunctions,
-        );
-        if (summary) {
-          preambles.push({ pkg: "sdk", content: summary });
-          console.log("  ✓ AI summary generated");
-        }
-      } else {
-        console.log("  ⏭️  Skipping AI summary (env vars not configured)");
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`  ⚠️  AI summary failed (non-fatal): ${msg}`);
-    }
-  }
 
   const overridesPath = resolve(
     websiteDir,

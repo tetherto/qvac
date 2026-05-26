@@ -9,22 +9,20 @@
  *     the patch-archived flow to write into a renamed sibling).
  *
  * The pipeline is:
- *   1. Phase 1 — Extract: TypeDoc walks the SDK and writes api-data.json
- *      (signatures, top-level descriptions, throws, examples, deprecated,
- *      errors). Scope is restricted to functions re-exported from
+ *   1. Extract: TypeDoc walks the SDK and writes api-data.json (signatures,
+ *      top-level descriptions, throws, examples, deprecated, errors). Scope
+ *      is restricted to functions re-exported from
  *      `packages/sdk/client/api/index.ts` plus the `profiler` object.
- *   2. Phase 1.5 — AI augmentation (optional): fills in missing prose. Skipped
- *      with `--no-ai` and disabled by default in CI to keep output reproducible.
- *   3. Phase 2 — Render: writes a single MDX through `single-page.njk`.
+ *   2. Render: writes a single MDX through `single-page.njk`.
  *
- * Title-only mode (`--title-only`) skips Phase 1 + Phase 1.5 + the full
- * render. It opens the existing target MDX, rewrites only the frontmatter
+ * Title-only mode (`--title-only`) skips extraction and the full render.
+ * It opens the existing target MDX, rewrites only the frontmatter
  * `title:` line to the new version label, and keeps the body verbatim.
  * Used by the patch flow so we never re-run TypeDoc for a patch (patches
  * must not change the public API surface — that would be a minor).
  *
  * Usage:
- *   bun run scripts/generate-api-docs.ts <version> [--no-ai] [--force-extract]
+ *   bun run scripts/generate-api-docs.ts <version> [--force-extract]
  *   bun run scripts/generate-api-docs.ts <version> --latest
  *   bun run scripts/generate-api-docs.ts <version> --title-only [--latest|--target=<file>]
  *
@@ -34,9 +32,8 @@
  *   --target=<file>   Override the output filename inside the API section
  *                     directory (e.g. `--target=v0.8.2.mdx`). Mutually
  *                     exclusive with `--latest`.
- *   --title-only      Skip TypeDoc + AI + render. Only rewrite the
+ *   --title-only      Skip TypeDoc + render. Only rewrite the
  *                     frontmatter title of the existing target file.
- *   --no-ai           Skip the AI augmentation phase (CI default).
  *   --force-extract   Bypass mtime-based extraction cache.
  *
  * SDK_PATH env: override the SDK source root (default: ../../../packages/sdk
@@ -68,7 +65,6 @@ const SDK_PATH =
 interface GenerateOptions {
   isLatest: boolean;
   forceExtract: boolean;
-  noAi: boolean;
   titleOnly: boolean;
   target: string | null;
 }
@@ -115,31 +111,9 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
   console.log(`📚 Generating API summary for ${versionLabel}...`);
   console.log(`   SDK path: ${SDK_PATH}`);
 
-  // Phase 1: Extract
   await extractApiData(SDK_PATH, version, {
     forceExtract: options.forceExtract,
   });
-
-  // Phase 1.5: AI augmentation (optional, non-fatal on failure)
-  if (!options.noAi) {
-    try {
-      const { isAugmentConfigured, augmentApiData } = await import(
-        "./api-docs/ai-augment.js"
-      );
-      if (isAugmentConfigured()) {
-        console.log("🤖 Running AI augmentation...");
-        const result = await augmentApiData(API_DATA_PATH);
-        console.log(
-          `✓ AI augmentation: ${result.augmented} augmented, ${result.skipped} skipped`,
-        );
-      } else {
-        console.log("⏭️  Skipping AI augmentation (env vars not configured)");
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`⚠️  AI augmentation failed (non-fatal): ${msg}`);
-    }
-  }
 
   await renderApiDocs(API_DATA_PATH, {
     versionLabel,
@@ -218,7 +192,6 @@ if (import.meta.main) {
   const versionArg = args.find((arg) => !arg.startsWith("--"));
   const isLatest = args.includes("--latest");
   const forceExtract = args.includes("--force-extract");
-  const noAi = args.includes("--no-ai");
   const titleOnly = args.includes("--title-only");
   const targetFlag = args.find((arg) => arg.startsWith("--target="));
   const target = targetFlag ? targetFlag.slice("--target=".length) : null;
@@ -237,13 +210,11 @@ if (import.meta.main) {
     console.error(
       "  --title-only      Rewrite frontmatter title in-place (skips TypeDoc + render)",
     );
-    console.error("  --no-ai           Skip AI augmentation (CI default)");
     console.error(
       "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
     );
     console.error("Examples:");
     console.error("  bun run scripts/generate-api-docs.ts 0.9.1 --latest");
-    console.error("  bun run scripts/generate-api-docs.ts 0.8.0 --no-ai");
     console.error(
       "  bun run scripts/generate-api-docs.ts 0.8.2 --target=v0.8.2.mdx --title-only",
     );
@@ -252,7 +223,6 @@ if (import.meta.main) {
     generateApiDocs(versionArg, {
       isLatest,
       forceExtract,
-      noAi,
       titleOnly,
       target,
     }).catch((error) => {

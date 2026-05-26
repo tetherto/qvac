@@ -20,12 +20,10 @@
  *      `(latest)` and may carry a stale version label. Steps 1a / 1b
  *      relabel the snapshots to the canonical archived form (`vX.Y.Z`
  *      without `(latest)`) without re-rendering their bodies.
- *   2. `generate-api-docs.ts <new> --latest --no-ai` — runs TypeDoc + render
- *      and writes the new `index.mdx`. The release pipeline always passes
- *      `--no-ai`: AI augmentation is intentionally not part of this
- *      pipeline (it produces non-deterministic output and forces extra
- *      review). The standalone `generate-api-docs.ts` script still
- *      supports AI for ad-hoc manual runs.
+ *   2. `generate-api-docs.ts <new> --latest` — runs TypeDoc + render
+ *      and writes the new `index.mdx`. The output is deterministic by
+ *      construction: AI augmentation is no longer part of the pipeline
+ *      (moved to local skills) so every input produces the same MDX.
  *   3. `generate-release-notes.ts <new> --latest` — reads the per-version
  *      changelog folder (Fonte B: `packages/sdk/changelog/<new>/CHANGELOG_LLM.md`)
  *      and writes the new `index.mdx`. No `--aggregate-minor` here because
@@ -48,11 +46,11 @@ import {
 } from "./lib/release-shared.js";
 import * as path from "path";
 
-interface MinorOptions {
+export interface MinorOptions {
   forceExtract: boolean;
 }
 
-async function releaseMinor(newVersion: string, options: MinorOptions) {
+export async function releaseMinor(newVersion: string, options: MinorOptions) {
   const parsed = parseVersion(newVersion);
   if (parsed.patch !== 0) {
     throw new Error(
@@ -115,11 +113,7 @@ async function releaseMinor(newVersion: string, options: MinorOptions) {
     );
   }
 
-  // Pipeline-level decision: never run AI augmentation. Keeps CI output
-  // deterministic and removes the LLM secret/PAT surface from this flow.
-  // The standalone generate-api-docs.ts script still supports AI for
-  // ad-hoc manual runs.
-  const apiFlags: string[] = ["--latest", "--no-ai"];
+  const apiFlags: string[] = ["--latest"];
   if (options.forceExtract) apiFlags.push("--force-extract");
 
   runStep(
@@ -143,40 +137,37 @@ async function releaseMinor(newVersion: string, options: MinorOptions) {
   console.log(`\n✅ Release ${incoming} complete (minor)`);
 }
 
-const args = process.argv.slice(2);
-const versionArg = args.find((a) => !a.startsWith("--"));
-const forceExtract = args.includes("--force-extract");
+// CLI — only runs when this module is invoked directly (not when imported
+// by `release-version.ts` for dispatch). `import.meta.main` is true under
+// both Bun and Node 24+.
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const versionArg = args.find((a) => !a.startsWith("--"));
+  const forceExtract = args.includes("--force-extract");
 
-if (!versionArg || args.includes("--help") || args.includes("-h")) {
-  console.log(
-    "Usage: bun run scripts/release-version-minor.ts <X.Y.0> [--force-extract]",
-  );
-  console.log("");
-  console.log("Promotes a minor release to latest:");
-  console.log(
-    "  - Freezes the outgoing latest as vX.Y.Z.mdx for both API + release notes.",
-  );
-  console.log(
-    "  - Generates new API summary + release notes (Fonte B per-version folder).",
-  );
-  console.log("  - Refreshes src/lib/versions.ts.");
-  console.log("");
-  console.log("Flags:");
-  console.log(
-    "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction.",
-  );
-  console.log("");
-  console.log(
-    "AI augmentation is intentionally not exposed here — the pipeline always",
-  );
-  console.log(
-    "passes --no-ai to generate-api-docs.ts. Use that script directly for",
-  );
-  console.log("ad-hoc runs that want AI.");
-  process.exit(versionArg ? 0 : 1);
+  if (!versionArg || args.includes("--help") || args.includes("-h")) {
+    console.log(
+      "Usage: bun run scripts/release-version-minor.ts <X.Y.0> [--force-extract]",
+    );
+    console.log("");
+    console.log("Promotes a minor release to latest:");
+    console.log(
+      "  - Freezes the outgoing latest as vX.Y.Z.mdx for both API + release notes.",
+    );
+    console.log(
+      "  - Generates new API summary + release notes (Fonte B per-version folder).",
+    );
+    console.log("  - Refreshes src/lib/versions.ts.");
+    console.log("");
+    console.log("Flags:");
+    console.log(
+      "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction.",
+    );
+    process.exit(versionArg ? 0 : 1);
+  }
+
+  releaseMinor(versionArg, { forceExtract }).catch((err) => {
+    console.error(`❌ Release (minor) failed: ${err.message}`);
+    process.exit(1);
+  });
 }
-
-releaseMinor(versionArg, { forceExtract }).catch((err) => {
-  console.error(`❌ Release (minor) failed: ${err.message}`);
-  process.exit(1);
-});
