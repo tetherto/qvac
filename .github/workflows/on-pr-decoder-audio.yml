@@ -53,6 +53,10 @@ permissions:
   checks: read
   id-token: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   label-gate:
     name: Authorise (label-gate)
@@ -208,7 +212,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, sanity-checks, run-integration-tests, run-mobile-integration-tests]
-    if: always()
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
