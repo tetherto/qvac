@@ -49,7 +49,6 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
     }
     return { type: 'JobEnded', data, error: null }
   }
-  }
 
   // Unknown: event does not match Error, Output, or JobEnded patterns.
   // Likely a bug in the native layer or a proto-versioning mismatch.

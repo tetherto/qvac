@@ -41,8 +41,6 @@ thread_local const SdModel* tl_abortModel = nullptr;
 
 std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   switch (pref) {
-  case SD_BACKEND_PREF_AUTO:
-    return "auto";
   case SD_BACKEND_PREF_CPU:
     return "cpu";
   case SD_BACKEND_PREF_GPU:
@@ -216,24 +214,8 @@ void SdModel::load() {
   params.enable_mmap = config_.mmap;
   params.offload_params_to_cpu = config_.offloadToCpu;
 
-  // Resolve the effective backend based on GPU capabilities.
-  // Adreno 800+ uses GPU (OpenCL), Adreno 600/700 is forced to CPU,
-  // everything else uses GPU (Vulkan).
-  auto preferredDevice = config_.device == "cpu"
-                             ? sd_backend_selection::BackendDevice::CPU
-                             : sd_backend_selection::BackendDevice::GPU;
-  auto effectiveDevice =
-      sd_backend_selection::resolveBackendForDevice(preferredDevice);
-  const bool preferOpenClForAdreno =
-      sd_backend_selection::shouldPreferOpenClForAdreno(preferredDevice);
-
-  if (effectiveDevice == sd_backend_selection::BackendDevice::CPU) {
-    params.preferred_gpu_backend = SD_BACKEND_PREF_CPU;
-  } else if (preferOpenClForAdreno) {
-    params.preferred_gpu_backend = SD_BACKEND_PREF_OPENCL;
-  } else {
-    params.preferred_gpu_backend = SD_BACKEND_PREF_GPU;
-  }
+  params.preferred_gpu_backend =
+      sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
 
   QLOG_IF(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -342,11 +324,12 @@ std::any SdModel::process(const std::any& input) {
   // omits "mode" keeps behaving as an image generation job.
   std::string mode = "txt2img";
   const auto& obj = v.get<picojson::object>();
-  if (auto it = obj.find("mode"); it != obj.end()) {
-    if (!it->second.is<std::string>())
+  if (const auto modeEntry = obj.find("mode"); modeEntry != obj.end()) {
+    if (!modeEntry->second.is<std::string>()) {
       throw StatusError(
           general_error::InvalidArgument, "mode must be a string");
-    mode = it->second.get<std::string>();
+    }
+    mode = modeEntry->second.get<std::string>();
   }
 
   const bool isVideo =
@@ -364,11 +347,11 @@ std::any SdModel::process(const std::any& input) {
 // ---------------------------------------------------------------------------
 
 std::any
-SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
+SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
-      gen, v.get<picojson::object>());
+      gen, parsed.get<picojson::object>());
 
   if (gen.mode != "txt2img" && gen.mode != "img2img")
     throw StatusError(
@@ -550,13 +533,17 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
       // -- Single-image path (existing behaviour) --------------------------
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
-      } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
-                 it != v.get<picojson::object>().end() &&
-                 it->second.is<picojson::array>()) {
-        const auto& arr = it->second.get<picojson::array>();
-        initPng.reserve(arr.size());
-        for (const auto& el : arr)
-          initPng.push_back(static_cast<uint8_t>(el.get<double>()));
+      } else {
+        const auto& jsonObj = parsed.get<picojson::object>();
+        auto initBytesIt = jsonObj.find("init_image_bytes");
+        if (initBytesIt != jsonObj.end() &&
+            initBytesIt->second.is<picojson::array>()) {
+          const auto& arr = initBytesIt->second.get<picojson::array>();
+          initPng.reserve(arr.size());
+          for (const auto& elem : arr) {
+            initPng.push_back(static_cast<uint8_t>(elem.get<double>()));
+          }
+        }
       }
       if (!initPng.empty()) {
         initImg = image_codec::decodeImage(initPng);
@@ -728,7 +715,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // partial images, so a "successful" completion with output_count=0 would
   // be misleading -- throwing gives the JS caller an explicit cancel signal.
   if (wasCancelled) {
-    throw std::runtime_error("Job cancelled");
+    throw StatusError(
+        std::string(general_error::GeneralAddonId),
+        "Cancelled",
+        "Job cancelled");
   }
 
   const auto t1 = std::chrono::steady_clock::now();
@@ -781,11 +771,11 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
 // ---------------------------------------------------------------------------
 
 std::any
-SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
+SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // -- Build SdVidGenConfig from handlers ------------------------------------
   qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
-      vid, v.get<picojson::object>());
+      vid, parsed.get<picojson::object>());
 
   if (vid.mode != "txt2vid" && vid.mode != "img2vid")
     throw StatusError(
@@ -827,9 +817,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           general_error::InvalidArgument,
           "processVideo: failed to decode init_image (corrupt or "
           "unsupported format; supported: PNG, JPEG)");
-    // Take ownership of the freshly-decoded pixel buffer BEFORE the
-    // dimension check so a mismatch can't leak the buffer. Mirrors the
-    // control_frames pattern below.
+    // Take ownership *before* the dimension check so a mismatch can't leak
+    // the freshly-decoded pixel buffer (mirrors the control_frames path).
     initData.reset(initImg.data);
     // Auto-resize init_image to the target video dimensions when they differ.
     // stable-diffusion.cpp's sd_image_to_tensor resizes internally too, but
@@ -952,15 +941,19 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   const auto t0 = std::chrono::steady_clock::now();
 
   int numFramesOut = 0;
-  qvac_lib_inference_addon_sd::SdVideoFrames frames(
-      generate_video(sdCtx_.get(), &vidParams, &numFramesOut), numFramesOut);
+  sd_image_t* rawFrames =
+      generate_video(sdCtx_.get(), &vidParams, &numFramesOut);
+  qvac_lib_inference_addon_sd::SdVideoFrames frames(rawFrames, numFramesOut);
 
-  const bool wasCancelled = cancelRequested_.load();
-
-  // If cancelled, surface as an exception for the same reason as the image
-  // path: a "successful" completion with zero frames would be misleading.
-  if (wasCancelled) {
-    throw std::runtime_error("Job cancelled");
+  // If cancelled during the sampler, surface as an exception for the same
+  // reason as the image path: a "successful" completion with zero frames
+  // would be misleading. Typed Cancelled status (see image path above for
+  // the 3-arg ctor rationale).
+  if (cancelRequested_.load()) {
+    throw StatusError(
+        std::string(general_error::GeneralAddonId),
+        "Cancelled",
+        "Job cancelled");
   }
 
   if (frames.empty())
