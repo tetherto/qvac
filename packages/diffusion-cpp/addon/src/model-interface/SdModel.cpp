@@ -332,8 +332,7 @@ std::any SdModel::process(const std::any& input) {
     mode = modeEntry->second.get<std::string>();
   }
 
-  const bool isVideo =
-      (mode == "txt2vid" || mode == "img2vid");
+  const bool isVideo = (mode == "txt2vid" || mode == "img2vid");
   if (isVideo) {
     return processVideo(job, v);
   }

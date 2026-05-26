@@ -1,11 +1,11 @@
-#include <cstdint>
 #include <any>
+#include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
 
 #include "model-interface/SdModel.hpp"
 
@@ -15,8 +15,8 @@ std::vector<uint8_t> loadImageFile(const std::string& path) {
   if (!file.is_open()) {
     throw std::runtime_error("Failed to open image: " + path);
   }
-  return std::vector<uint8_t>((std::istreambuf_iterator<char>(file)),
-                               std::istreambuf_iterator<char>());
+  return std::vector<uint8_t>(
+      (std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 }
 
 // Save AVI bytes to file
@@ -45,9 +45,9 @@ int main(int argc, char* argv[]) {
     // clipVisionPath this model will fail to build the img_emb projection.
     std::string diffusion_model =
         models_dir + "/wan2.1_i2v_480p_14B_fp8_scaled.safetensors";
-    std::string vae_model       = models_dir + "/wan_2.1_vae.safetensors";
-    std::string t5xxl_model     = models_dir + "/umt5_xxl_fp16.safetensors";
-    std::string clip_vision     = models_dir + "/clip_vision_h.safetensors";
+    std::string vae_model = models_dir + "/wan_2.1_vae.safetensors";
+    std::string t5xxl_model = models_dir + "/umt5_xxl_fp16.safetensors";
+    std::string clip_vision = models_dir + "/clip_vision_h.safetensors";
     std::string init_image_path = assets_dir + "/von-neumann.jpg";
 
     // ── Generation params ──────────────────────────────────────────────────
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     // match the init_image after any resize; both must be multiples of 8.
     const int width = 480;
     const int height = 832;
-    const int video_frames = 33;  // (4*k+1): 5, 9, 13, ..., 33, ..., 81
+    const int video_frames = 33; // (4*k+1): 5, 9, 13, ..., 33, ..., 81
     const int fps = 16;
     const int steps = 30;
     const float cfg_scale = 6.0f;
@@ -71,8 +71,10 @@ int main(int argc, char* argv[]) {
         "blurry, distorted, low quality, jittery, static, frozen, "
         "watermark, double face, extra limbs";
 
-    std::cout << "Wan 2.1 I2V 14B — image-to-video inference (C++ standalone)\n";
-    std::cout << "=============================================================\n";
+    std::cout
+        << "Wan 2.1 I2V 14B — image-to-video inference (C++ standalone)\n";
+    std::cout
+        << "=============================================================\n";
     std::cout << "Model       : " << diffusion_model << "\n";
     std::cout << "CLIP vision : " << clip_vision << "\n";
     std::cout << "Init image  : " << init_image_path << "\n";
@@ -89,7 +91,8 @@ int main(int argc, char* argv[]) {
     // dimensions are used to derive the VAE latent; width/height in the
     // params must match the decoded image dimensions.
     auto init_image_bytes = loadImageFile(init_image_path);
-    std::cout << "Loaded init image: " << init_image_bytes.size() << " bytes\n\n";
+    std::cout << "Loaded init image: " << init_image_bytes.size()
+              << " bytes\n\n";
 
     // ── Create model ───────────────────────────────────────────────────────
     std::cout << "Creating Wan 2.1 I2V 14B video model...\n";
@@ -107,35 +110,36 @@ int main(int argc, char* argv[]) {
     config.offloadToCpu = true;
     config.flowShift = flow_shift;
 
-    auto model = std::make_unique<qvac_lib_inference_addon_cpp::SdModel>(config);
+    auto model =
+        std::make_unique<qvac_lib_inference_addon_cpp::SdModel>(config);
 
-    std::cout << "Loading Wan 2.1 I2V 14B weights (this may take ~1–2 min)...\n";
+    std::cout
+        << "Loading Wan 2.1 I2V 14B weights (this may take ~1–2 min)...\n";
     model->load();
     std::cout << "Model loaded.\n\n";
 
     // ── Build generation params ────────────────────────────────────────────
     std::string params_json = R"({
       "mode": "img2vid",
-      "prompt": ")" +
-                             prompt + R"(",
-      "negative_prompt": ")" +
-                             neg_prompt + R"(",
-      "width": )" +
-                             std::to_string(width) + R"(,
-      "height": )" +
-                             std::to_string(height) + R"(,
-      "video_frames": )" +
-                             std::to_string(video_frames) + R"(,
-      "fps": )" +
-                             std::to_string(fps) + R"(,
-      "steps": )" +
-                             std::to_string(steps) + R"(,
-      "cfg_scale": )" +
-                             std::to_string(cfg_scale) + R"(,
-      "flow_shift": )" +
-                             std::to_string(flow_shift) + R"(,
-      "seed": )" +
-                             std::to_string(seed) + R"(
+      "prompt": ")" + prompt + R"(",
+      "negative_prompt": ")" + neg_prompt +
+                              R"(",
+      "width": )" + std::to_string(width) +
+                              R"(,
+      "height": )" + std::to_string(height) +
+                              R"(,
+      "video_frames": )" + std::to_string(video_frames) +
+                              R"(,
+      "fps": )" + std::to_string(fps) +
+                              R"(,
+      "steps": )" + std::to_string(steps) +
+                              R"(,
+      "cfg_scale": )" + std::to_string(cfg_scale) +
+                              R"(,
+      "flow_shift": )" + std::to_string(flow_shift) +
+                              R"(,
+      "seed": )" + std::to_string(seed) +
+                              R"(
     })";
 
     // ── Run generation ─────────────────────────────────────────────────────
@@ -171,10 +175,9 @@ int main(int argc, char* argv[]) {
     model->process(std::any(job));
 
     auto t_gen_end = std::chrono::steady_clock::now();
-    auto gen_time_ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(t_gen_end -
-                                                               t_gen_start)
-            .count();
+    auto gen_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           t_gen_end - t_gen_start)
+                           .count();
 
     std::cout << "\nGenerated in " << (gen_time_ms / 1000.0) << "s\n";
     std::cout << "Progress ticks: " << progress_ticks << "\n";

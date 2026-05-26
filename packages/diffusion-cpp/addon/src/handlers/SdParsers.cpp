@@ -1,8 +1,8 @@
 #include "SdParsers.hpp"
 
 #include <charconv>
-#include <cmath>
 #include <climits>
+#include <cmath>
 #include <cstdint>
 #include <string_view>
 #include <unordered_map>
@@ -38,7 +38,7 @@ bool requireBool(const picojson::value& v, const std::string& key) {
 
 // Largest integer JSON (IEEE 754 double) can losslessly represent. Used by
 // requireInt64 to reject silent precision loss for large seeds.
-inline constexpr double kMaxSafeJsonInt = 9007199254740992.0;  // 2^53
+inline constexpr double kMaxSafeJsonInt = 9007199254740992.0; // 2^53
 
 int requireInt(const picojson::value& v, const std::string& key) {
   const double d = requireNum(v, key);
@@ -84,8 +84,9 @@ int64_t requireInt64(const picojson::value& v, const std::string& key) {
   if (d < -kMaxSafeJsonInt || d > kMaxSafeJsonInt) {
     throw StatusError(
         general_error::InvalidArgument,
-        key + " is outside the safe integer range "
-              "[-2^53, 2^53], got: " +
+        key +
+            " is outside the safe integer range "
+            "[-2^53, 2^53], got: " +
             std::to_string(d));
   }
   return static_cast<int64_t>(d);
@@ -97,8 +98,8 @@ float requireRange(
   if (f < lo || f > hi)
     throw StatusError(
         general_error::InvalidArgument,
-        key + " must be in [" + std::to_string(lo) + ", " +
-            std::to_string(hi) + "], got: " + std::to_string(f));
+        key + " must be in [" + std::to_string(lo) + ", " + std::to_string(hi) +
+            "], got: " + std::to_string(f));
   return f;
 }
 

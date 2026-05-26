@@ -213,7 +213,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"vae_tile_overlap",
      [](SdGenConfig& c, const picojson::value& v) {
-       const float overlap = static_cast<float>(requireNum(v, "vae_tile_overlap"));
+       const float overlap =
+           static_cast<float>(requireNum(v, "vae_tile_overlap"));
        if (overlap < 0.0f || overlap >= 1.0f)
          throw StatusError(
              general_error::InvalidArgument,
