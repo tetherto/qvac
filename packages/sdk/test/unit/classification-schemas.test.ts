@@ -21,7 +21,7 @@ import {
   unregisterModel,
   type AnyModel,
 } from "@/server/bare/registry/model-registry";
-import { handlePluginInvoke } from "@/server/rpc/handlers/plugin-invoke";
+import { handlePluginInvokeStream } from "@/server/rpc/handlers/plugin-invoke";
 import { classify as classifyOp } from "@/server/bare/plugins/ggml-classification/ops/classify";
 import { encodeBase64 } from "@/utils/encoding";
 
@@ -305,8 +305,13 @@ test("classification plugin: registers and dispatches classify", async function 
     async (modelId) => {
       t.ok(hasPlugin(ModelType.ggmlClassification));
 
-      const result = await handlePluginInvoke({
-        type: "pluginInvoke",
+      // classify is `streaming: true`, so dispatch via the stream
+      // plugin-invoke path. handlePluginInvokeStream wraps each handler
+      // yield in `{type, result, done: false}` then emits a terminal
+      // `{result: null, done: true}` after the generator drains.
+      const envelopes: { type: string; result: unknown; done: boolean }[] = [];
+      for await (const envelope of handlePluginInvokeStream({
+        type: "pluginInvokeStream",
         modelId,
         handler: "classify",
         params: {
@@ -314,10 +319,20 @@ test("classification plugin: registers and dispatches classify", async function 
           modelId,
           image: encodeBase64(new Uint8Array([0])),
         },
-      });
+      })) {
+        envelopes.push(
+          envelope as { type: string; result: unknown; done: boolean },
+        );
+      }
 
-      t.is(result.type, "pluginInvoke");
-      const data = result.result as Record<string, unknown>;
+      // Our mock handler yields once, so expect 2 envelopes: data + terminator.
+      t.is(envelopes.length, 2);
+      t.is(envelopes[0]?.type, "pluginInvokeStream");
+      t.is(envelopes[0]?.done, false);
+      t.is(envelopes[1]?.done, true);
+      t.is(envelopes[1]?.result, null);
+
+      const data = envelopes[0]?.result as Record<string, unknown>;
       t.is((data["results"] as ClassificationResult[]).length, 3);
       t.is((data["results"] as ClassificationResult[])[0]?.label, "food");
       t.is(data["done"], true);
