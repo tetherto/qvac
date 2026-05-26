@@ -7,6 +7,7 @@ on:
     paths:
       - "packages/transcription-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
+      - ".github/actions/cache-models/**"
 
   workflow_dispatch:
     inputs:
@@ -43,6 +44,10 @@ permissions:
   packages: read
   checks: read
   id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   label-gate:
@@ -243,7 +248,7 @@ jobs:
       - run-integration-tests
       - run-mobile-integration-tests
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'))
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -297,7 +302,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests, combine-unified-performance-report]
-    if: always()
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}

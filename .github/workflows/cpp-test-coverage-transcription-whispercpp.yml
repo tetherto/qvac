@@ -88,7 +88,17 @@ jobs:
         run: |
           npm run coverage:cpp:build
 
+      - name: Cache C++ test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: transcription-whispercpp
+          paths: packages/transcription-whispercpp/models
+          hash-files-glob: .github/workflows/cpp-test-coverage-transcription-whispercpp.yml
+
       - name: Download test models
+        if: steps.model-cache.outputs.cache-hit != 'true'
         working-directory: ${{ env.WORKDIR }}
         run: |
           mkdir -p models

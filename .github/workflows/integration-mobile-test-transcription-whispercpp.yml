@@ -147,7 +147,7 @@ jobs:
           run-count: ${{ steps.schedule.outputs.run-count }}
 
       - name: Collect and upload Device Farm logs
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
         with:
           platform: ${{ matrix.platform }}
@@ -165,7 +165,7 @@ jobs:
           artifact-name: perf-report-whispercpp-${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
         with:
           addon-npm-name: '@qvac/transcription-whispercpp'

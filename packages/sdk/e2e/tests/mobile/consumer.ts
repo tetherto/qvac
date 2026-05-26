@@ -16,18 +16,10 @@ import {
   BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_TOKENIZER_EN_CHATTERBOX,
-  TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
-  TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
-  TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
-  TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
-  TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
-  TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
+  TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
+  TTS_S3GEN_EN_CHATTERBOX,
+  TTS_EN_SUPERTONIC_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -59,6 +51,7 @@ import { MobileParakeetStreamExecutor } from "./executors/parakeet-stream-execut
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
+import { MobileClassificationExecutor } from "./executors/classification-executor.js";
 import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
@@ -130,6 +123,12 @@ resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
   type: "ocr",
   config: { langList: ["en"] },
+});
+
+// Classification ships bundled weights inside @qvac/classification-ggml,
+// so no registry constant / pre-download is required.
+resources.define("classification", {
+  type: "classification",
 });
 
 resources.define("sharded-embeddings", {
@@ -232,47 +231,33 @@ async function resolveBundledAudioUri(filename: string): Promise<string | undefi
 }
 
 resources.define("tts-chatterbox", {
-  constant: TTS_TOKENIZER_EN_CHATTERBOX,
+  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
   type: "tts",
   config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
-    ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
-    ttsSpeechEncoderSrc: TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
-    ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
-    ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
-    ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
     referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
   }),
 });
 
-const ttsSupertonicBaseConfig = {
-  ttsEngine: "supertonic",
-  ttsTextEncoderSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
-  ttsDurationPredictorSrc: TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
-  ttsVectorEstimatorSrc: TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
-  ttsVocoderSrc: TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
-  ttsUnicodeIndexerSrc: TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
-  ttsTtsConfigSrc: TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
-  ttsVoiceStyleSrc: TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
-};
-
 resources.define("tts-supertonic", {
-  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
-  type: "onnx-tts",
+  constant: TTS_EN_SUPERTONIC_Q8_0,
+  type: "tts",
   config: {
-    ...ttsSupertonicBaseConfig,
+    ttsEngine: "supertonic",
     language: "en",
+    voice: "F1",
   },
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
-  type: "onnx-tts",
+  constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  type: "tts",
   config: {
-    ...ttsSupertonicBaseConfig,
+    ttsEngine: "supertonic",
     language: "es",
-    supertonicMultilingual: true,
+    voice: "F1",
   },
 });
 
@@ -386,6 +371,7 @@ export const executor = createExecutor({
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new MobileOcrExecutor(resources),
+    new MobileClassificationExecutor(resources),
     new MobileTtsExecutor(resources),
     new MobileConfigReloadExecutor(resources),
     new MobileLoggingExecutor(resources),

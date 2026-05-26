@@ -13,6 +13,7 @@ const modelRegistryEntryAddonSchema = z.enum([
   "parakeet",
   "diffusion",
   "vla",
+  "classification",
   "other",
 ]);
 
@@ -27,10 +28,12 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.llamacppEmbedding,
   ModelType.nmtcppTranslation,
   ModelType.onnxTts,
+  ModelType.ttsGgml,
   ModelType.onnxOcr,
   ModelType.parakeetTranscription,
   ModelType.sdcppGeneration,
   ModelType.ggmlVla,
+  ModelType.ggmlClassification,
   "onnx-vad",
 ]);
 

@@ -55,10 +55,11 @@ const BUILTIN_PLUGINS = [
   "@qvac/sdk/llamacpp-embedding/plugin",
   "@qvac/sdk/whispercpp-transcription/plugin",
   "@qvac/sdk/nmtcpp-translation/plugin",
-  "@qvac/sdk/onnx-tts/plugin",
+  "@qvac/sdk/tts-ggml/plugin",
   "@qvac/sdk/onnx-ocr/plugin",
   "@qvac/sdk/sdcpp-generation/plugin",
   "@qvac/sdk/ggml-vla/plugin",
+  "@qvac/sdk/ggml-classification/plugin",
 ];
 
 const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
@@ -66,10 +67,11 @@ const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   "llamacpp-embedding": "embeddingsPlugin",
   "whispercpp-transcription": "whisperPlugin",
   "nmtcpp-translation": "nmtPlugin",
-  "onnx-tts": "ttsPlugin",
+  "tts-ggml": "ttsPlugin",
   "onnx-ocr": "ocrPlugin",
   "sdcpp-generation": "diffusionPlugin",
   "ggml-vla": "vlaPlugin",
+  "ggml-classification": "classificationPlugin",
 };
 
 const SDK_NAME = "@qvac/sdk";
