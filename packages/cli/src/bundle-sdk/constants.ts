@@ -4,7 +4,7 @@ export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   'whispercpp-transcription': { exportName: 'whisperPlugin' },
   'parakeet-transcription': { exportName: 'parakeetPlugin' },
   'nmtcpp-translation': { exportName: 'nmtPlugin' },
-  'onnx-tts': { exportName: 'ttsPlugin' },
+  'tts-ggml': { exportName: 'ttsPlugin' },
   'onnx-ocr': { exportName: 'ocrPlugin' },
   'sdcpp-generation': { exportName: 'diffusionPlugin' }
 }

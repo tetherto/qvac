@@ -12,6 +12,7 @@ export const ModelType = {
   llamacppEmbedding: "llamacpp-embedding",
   nmtcppTranslation: "nmtcpp-translation",
   onnxTts: "onnx-tts",
+  ttsGgml: "tts-ggml",
   parakeetTranscription: "parakeet-transcription",
   onnxOcr: "onnx-ocr",
   sdcppGeneration: "sdcpp-generation",
@@ -42,7 +43,7 @@ export const ModelTypeAliases = {
   [AliasKeys.embeddings]: ModelType.llamacppEmbedding,
   [AliasKeys.nmt]: ModelType.nmtcppTranslation,
   [AliasKeys.parakeet]: ModelType.parakeetTranscription,
-  [AliasKeys.tts]: ModelType.onnxTts,
+  [AliasKeys.tts]: ModelType.ttsGgml,
   [AliasKeys.ocr]: ModelType.onnxOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
   [AliasKeys.vla]: ModelType.ggmlVla,
@@ -202,12 +203,12 @@ export type NmtModelTypeInput = z.infer<typeof nmtModelTypeSchema>;
 
 /**
  * TTS model type schema.
- * - Alias: `"tts"` → resolves to `"onnx-tts"`
- * - Canonical: `"onnx-tts"`
+ * - Alias: `"tts"` → resolves to `"tts-ggml"`
+ * - Canonical: `"tts-ggml"`
  */
 export const ttsModelTypeSchema = modelTypeInputSchema
-  .extract([AliasKeys.tts, ModelType.onnxTts])
-  .describe('TTS model type: "tts" (alias) or "onnx-tts" (canonical)');
+  .extract([AliasKeys.tts, ModelType.ttsGgml])
+  .describe('TTS model type: "tts" (alias) or "tts-ggml" (canonical)');
 export type TtsModelTypeInput = z.infer<typeof ttsModelTypeSchema>;
 
 /**

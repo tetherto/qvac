@@ -24,6 +24,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.llamacppEmbedding]: "embeddings",
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
+  [ModelType.ttsGgml]: "tts",
   [ModelType.onnxOcr]: "ocr",
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.sdcppGeneration]: "diffusion",
@@ -38,19 +39,21 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   [ADDON_WHISPER]: ModelType.whispercppTranscription,
   [ADDON_EMBEDDING]: ModelType.llamacppEmbedding,
   [ADDON_NMT]: ModelType.nmtcppTranslation,
-  [ADDON_TTS]: ModelType.onnxTts,
+  [ADDON_TTS]: ModelType.ttsGgml,
   [ADDON_OCR]: ModelType.onnxOcr,
   [ADDON_PARAKEET]: ModelType.parakeetTranscription,
   "@qvac/translation-llamacpp": ModelType.nmtcppTranslation,
   "@qvac/vad-silero": "onnx-vad",
-  "@qvac/tts": ModelType.onnxTts,
+  // Legacy package / tag names from the ONNX era — resolve to the GGML engine.
+  "@qvac/tts": ModelType.ttsGgml,
+  "@qvac/tts-onnx": ModelType.ttsGgml,
   // Tag-style names (used by some older registry entries)
   generation: ModelType.llamacppCompletion,
   transcription: ModelType.whispercppTranscription,
   embedding: ModelType.llamacppEmbedding,
   translation: ModelType.nmtcppTranslation,
   vad: "onnx-vad",
-  tts: ModelType.onnxTts,
+  tts: ModelType.ttsGgml,
   ocr: ModelType.onnxOcr,
   [ADDON_DIFFUSION]: ModelType.sdcppGeneration,
   diffusion: ModelType.sdcppGeneration,
@@ -64,7 +67,11 @@ export function resolveCanonicalEngine(
   engine: string,
 ): ModelRegistryEngine | null {
   const direct = modelRegistryEngineSchema.safeParse(engine);
-  if (direct.success) return direct.data;
+  if (direct.success) {
+    // Registry rows and cached metadata may still say "onnx-tts"; route to GGML.
+    if (direct.data === ModelType.onnxTts) return ModelType.ttsGgml;
+    return direct.data;
+  }
 
   const canonical = LEGACY_ENGINE_TO_CANONICAL[engine];
   if (canonical) return canonical;
