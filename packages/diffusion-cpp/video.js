@@ -66,6 +66,43 @@ function _coerceToUint8 (name, value) {
   )
 }
 
+// Read image width/height from a PNG or JPEG header without decoding pixels.
+// Returns { w, h } on success, or null if the buffer is too short/unrecognised.
+// Used to pre-validate off-grid frame dimensions before dispatching to C++.
+function peekImageDims (buf) {
+  if (!buf || buf.length < 8) return null
+  // PNG: 8-byte signature → 4-byte IHDR length → "IHDR" → 4-byte width → 4-byte height
+  if (
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
+    buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A
+  ) {
+    if (buf.length < 24) return null
+    const w = ((buf[16] << 24) | (buf[17] << 16) | (buf[18] << 8) | buf[19]) >>> 0
+    const h = ((buf[20] << 24) | (buf[21] << 16) | (buf[22] << 8) | buf[23]) >>> 0
+    return { w, h }
+  }
+  // JPEG: scan segments for SOF0–SOF3 (0xFF 0xC0–0xC3) which carry height/width
+  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    let i = 2
+    while (i + 3 < buf.length) {
+      if (buf[i] !== 0xFF) break
+      const marker = buf[i + 1]
+      if (marker === 0xD9 || marker === 0xDA) break // EOI or SOS
+      const segLen = (buf[i + 2] << 8) | buf[i + 3]
+      if (marker >= 0xC0 && marker <= 0xC3) {
+        if (buf.length >= i + 9) {
+          const h = (buf[i + 5] << 8) | buf[i + 6]
+          const w = (buf[i + 7] << 8) | buf[i + 8]
+          return { w, h }
+        }
+        break
+      }
+      i += 2 + segLen
+    }
+  }
+  return null
+}
+
 /**
  * Text-to-video, image-to-video, and first-last-frame video generation
  * using stable-diffusion.cpp's `generate_video()` path. Supports Wan 2.1
@@ -299,6 +336,11 @@ class VideoStableDiffusion {
       )
     }
     const { mode } = params
+    // True when the caller omits both width and height, meaning C++ will infer
+    // them from the input image. In that case we pre-validate that the image
+    // header dimensions are on the multiple-of-8 grid so the error message
+    // names the actual pixels rather than an internal derived value.
+    const dimsImplicit = params.width == null && params.height == null
 
     // ── Dimension alignment (multiples of 8) ─────────────────────────────
     // Only validate provided dims; C++ falls back to 480x832 (portrait,
@@ -343,6 +385,15 @@ class VideoStableDiffusion {
       params.init_image = _coerceToUint8('init_image', params.init_image)
       if (params.init_image.length === 0) {
         throw new Error('init_image must not be empty')
+      }
+      if (dimsImplicit) {
+        const dims = peekImageDims(params.init_image)
+        if (dims && (dims.w % 8 !== 0 || dims.h % 8 !== 0)) {
+          throw new Error(
+            `init_image dimensions ${dims.w}x${dims.h} must be multiples of 8. ` +
+            'Pass explicit width/height to override or pre-scale the image.'
+          )
+        }
       }
     }
 
@@ -394,11 +445,27 @@ class VideoStableDiffusion {
         )
       }
       for (let i = 0; i < params.control_frames.length; i++) {
-        const coerced = _coerceToUint8(`control_frames[${i}]`, params.control_frames[i])
+        let coerced
+        try {
+          coerced = _coerceToUint8(`control_frames[${i}]`, params.control_frames[i])
+        } catch (_) {
+          throw new TypeError(`control_frames[${i}] must be a non-empty Uint8Array`)
+        }
         if (coerced.length === 0) {
-          throw new Error(`control_frames[${i}] must be non-empty (PNG/JPEG bytes).`)
+          throw new TypeError(`control_frames[${i}] must be a non-empty Uint8Array`)
         }
         params.control_frames[i] = coerced
+      }
+      if (dimsImplicit) {
+        for (let i = 0; i < params.control_frames.length; i++) {
+          const dims = peekImageDims(params.control_frames[i])
+          if (dims && (dims.w % 8 !== 0 || dims.h % 8 !== 0)) {
+            throw new Error(
+              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of 8. ` +
+              'Pass explicit width/height to override or pre-scale the frame.'
+            )
+          }
+        }
       }
     }
 
