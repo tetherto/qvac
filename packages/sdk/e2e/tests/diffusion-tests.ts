@@ -428,7 +428,7 @@ export const diffusionStandaloneUpscalerCpu = createDiffusionTest(
     repeats: 1,
   },
   { validation: "type", expectedType: "string" },
-  { estimatedDurationMs: 2000, dependency: "upscaler-cpu" },
+  { estimatedDurationMs: 2000, dependency: "upscaler-cpu", suites: ["smoke"] },
 );
 
 // ---- error cases ----
