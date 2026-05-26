@@ -190,7 +190,7 @@ jobs:
           run-count: ${{ steps.schedule.outputs.run-count }}
 
       - name: Collect and upload Device Farm logs
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
         with:
           platform: ${{ matrix.platform }}
@@ -200,7 +200,7 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
 
       - name: Read OCR perf report filter
-        if: always() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        if: always() && !cancelled() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
         id: perf_filter
         shell: bash
         run: |
@@ -208,7 +208,7 @@ jobs:
           echo "filter=$(jq -r '.perf_report_filter // ""' "$GROUPS_FILE")" >> "$GITHUB_OUTPUT"
 
       - name: Extract and upload OCR performance report
-        if: always() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        if: always() && !cancelled() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
         uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
           platform: ${{ matrix.platform }}
@@ -217,7 +217,7 @@ jobs:
           artifact-name: perf-report-qvac-ocr-onnx-${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
         with:
           addon-npm-name: '@qvac/ocr-onnx'
@@ -233,7 +233,7 @@ jobs:
   combine-reports:
     name: Combined Performance Report
     needs: [build-and-test]
-    if: always()
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

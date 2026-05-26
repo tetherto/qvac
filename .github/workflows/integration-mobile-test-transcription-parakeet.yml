@@ -194,7 +194,7 @@ jobs:
           run-count: ${{ steps.schedule.outputs.run-count }}
 
       - name: Collect and upload Device Farm logs
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
         with:
           platform: ${{ matrix.platform }}
@@ -204,7 +204,7 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
 
       - name: Extract and report parakeet performance
-        if: always() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        if: always() && !cancelled() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
         uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
           platform: ${{ matrix.platform }}
@@ -212,7 +212,7 @@ jobs:
           artifact-name: perf-report-parakeet-${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
         with:
           addon-npm-name: '@qvac/transcription-parakeet'
