@@ -119,6 +119,10 @@
     "./logging": {
       "import": "./dist/logging/index.js"
     },
+    "./commands": {
+      "types": "./dist/commands/index.d.ts",
+      "import": "./dist/commands/index.js"
+    },
     "./pear-pre": "./dist/pear/pre.js"
   },
   "imports": {
@@ -197,6 +201,7 @@
     "bare-fs": "^4.5.1",
     "bare-net": "^2.2.0",
     "bare-os": "^3.6.2",
+    "bare-pack": "^2.0.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "bare-rpc": "^1.3.2",
@@ -208,6 +213,7 @@
     "hyperdrive": "^13.0.1",
     "hyperswarm": "^4.14.0",
     "llm-splitter": "~0.2.0",
+    "semver": "^7.8.0",
     "tar-stream": "^3.1.8",
     "which-runtime": "^1.3.2",
     "zod": "^4.3.0"
@@ -216,11 +222,10 @@
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.4",
     "@lancedb/lancedb": "^0.21.3",
-    "@qvac/cli": "^0.4.0",
     "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
     "@types/node": "^24.2.1",
+    "@types/semver": "^7.7.1",
     "@types/tar-stream": "^3.1.4",
-    "bare-pack": "^2.0.1",
     "bare-readline": "^1.2.0",
     "bare-subprocess": "^5.2.3",
     "bare-url": "^2.4.3",
@@ -252,6 +257,14 @@
     "expo-file-system": "^19.0.21",
     "pear-pipe": "^1.0.6",
     "react-native-bare-kit": "^0.14.0"
+  },
+  "peerDependencies": {
+    "tsx": "*"
+  },
+  "peerDependenciesMeta": {
+    "tsx": {
+      "optional": true
+    }
   },
   "patchedDependencies": {}
 }
