@@ -76,7 +76,8 @@
         "vcpkg-boost",
         "mimalloc",
         "wil",
-        "gtest"
+        "gtest",
+        "spirv-headers"
       ]
     }
   ]

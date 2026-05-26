@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include <picojson/picojson.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -15,10 +14,13 @@
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <picojson/picojson.h>
 
 #include "handlers/SdCtxHandlers.hpp"
 #include "model-interface/EsrganUpscalerModel.hpp"
 #include "model-interface/SdModel.hpp"
+#include "utils/BackendLoader.hpp"
+#include "utils/BackendSelection.hpp"
 
 namespace qvac_lib_inference_addon_sd {
 
@@ -307,6 +309,36 @@ activateUpscaler(js_env_t* env, js_callback_info_t* info) try {
   js_value_t* result = nullptr;
   js_get_undefined(env, &result);
   return result;
+}
+JSCATCH
+
+/**
+ * Query expected ESRGAN RuntimeStats.backendDevice for a config.device value,
+ * using the same Adreno/OpenCL policy as native load. Args: [device] or
+ * [device, backendsDir].
+ */
+inline js_value_t*
+getExpectedEsrganBackendDevice(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  const std::vector<js_value_t*> argv = js::getArguments(env, info);
+  if (argv.empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "getExpectedEsrganBackendDevice: device argument is required");
+  }
+
+  const std::string device = js::String{env, argv[0]}.as<std::string>(env);
+  std::string backendsDir;
+  if (argv.size() > 1 && !js::is<js::Undefined>(env, argv[1]) &&
+      !js::is<js::Null>(env, argv[1])) {
+    backendsDir = js::String{env, argv[1]}.as<std::string>(env);
+  }
+
+  loadBackendModulesOnce(backendsDir);
+  const std::string expected =
+      sd_backend_selection::expectedEsrganBackendDeviceForConfig(device);
+  return js::String::create(env, expected);
 }
 JSCATCH
 

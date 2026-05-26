@@ -10,10 +10,21 @@ import {
   parseJsonConfig,
   type QvacConfig,
 } from "./config-utils";
-import { ConfigFileParseFailedError } from "@/utils/errors-client";
+import {
+  ConfigFileInvalidError,
+  ConfigFileParseFailedError,
+} from "@/utils/errors-client";
 import { getClientLogger } from "@/logging";
 
 const logger = getClientLogger();
+
+/** Config filenames searched under a project root (bundle/verify/commands). */
+export const CONFIG_CANDIDATES = [
+  "qvac.config.ts",
+  "qvac.config.mjs",
+  "qvac.config.js",
+  "qvac.config.json",
+] as const;
 
 async function findProjectRoot(): Promise<string | undefined> {
   try {
@@ -80,23 +91,114 @@ async function loadJsConfig(filePath: string): Promise<QvacConfig> {
   }
 }
 
-async function findConfigFile(
-  searchDir: string,
-): Promise<{ path: string; type: "json" | "js" | "ts" } | undefined> {
-  const configFiles = [
-    { name: "qvac.config.ts", type: "ts" as const },
-    { name: "qvac.config.js", type: "js" as const },
-    { name: "qvac.config.json", type: "json" as const },
-  ];
+async function loadTsConfig(filePath: string): Promise<QvacConfig> {
+  let tsxApiPath: string;
+  try {
+    const { createRequire } = await import("node:module");
+    const require = createRequire(import.meta.url);
+    tsxApiPath = require.resolve("tsx/esm/api");
+  } catch (error) {
+    throw new ConfigFileInvalidError(
+      filePath,
+      "Loading a TypeScript qvac.config.ts requires the optional peer dependency `tsx`. Install it as a devDependency, or use qvac.config.mjs / qvac.config.js / qvac.config.json instead.",
+      error,
+    );
+  }
 
-  for (const { name, type } of configFiles) {
+  try {
+    const tsxModule = (await import(tsxApiPath)) as {
+      tsImport: (
+        configFilePath: string,
+        baseUrl: string,
+      ) => Promise<{ default?: unknown }>;
+    };
+    const mod = await tsxModule.tsImport(filePath, import.meta.url);
+    return validateConfig(mod.default ?? mod);
+  } catch (error) {
+    throw new ConfigFileParseFailedError(
+      filePath,
+      error instanceof Error ? error.message : String(error),
+      error,
+    );
+  }
+}
+
+/** Load and validate a config file at an explicit path (used by RPC init and commands). */
+export async function loadConfigFromPath(
+  configPath: string,
+): Promise<QvacConfig> {
+  const ext = path.extname(configPath).toLowerCase();
+
+  if (ext === ".json") {
+    return loadJsonConfig(configPath);
+  }
+  if (ext === ".js" || ext === ".mjs") {
+    return loadJsConfig(configPath);
+  }
+  if (ext === ".ts") {
+    return loadTsConfig(configPath);
+  }
+
+  throw new ConfigFileInvalidError(
+    configPath,
+    `Unsupported config format: ${ext}. Use .json, .js, .mjs, or .ts`,
+  );
+}
+
+async function findConfigFileInDir(
+  searchDir: string,
+): Promise<string | undefined> {
+  for (const name of CONFIG_CANDIDATES) {
     const filePath = path.resolve(searchDir, name);
     if (await fileExists(filePath)) {
-      return { path: filePath, type };
+      return filePath;
     }
   }
 
   return undefined;
+}
+
+/**
+ * Resolve a config file path under `projectRoot` (or an explicit relative/absolute path).
+ * Used by `bundleSdk` / `verifyBundle` when the caller supplies `projectRoot`.
+ */
+export async function resolveConfigFileInProject(
+  projectRoot: string,
+  explicitPath?: string,
+): Promise<string | null> {
+  if (explicitPath) {
+    const absPath = path.isAbsolute(explicitPath)
+      ? explicitPath
+      : path.join(projectRoot, explicitPath);
+    if (await fileExists(absPath)) {
+      return absPath;
+    }
+    throw new ConfigFileInvalidError(
+      absPath,
+      "Config file not found at explicit path",
+    );
+  }
+
+  const found = await findConfigFileInDir(projectRoot);
+  return found ?? null;
+}
+
+/**
+ * Load `qvac.config.*` for a known project directory (commands tooling API).
+ */
+export async function resolveConfigForProject(
+  projectRoot: string,
+  explicitPath?: string,
+): Promise<{ configPath: string | null; config: QvacConfig }> {
+  const configPath = await resolveConfigFileInProject(
+    projectRoot,
+    explicitPath,
+  );
+  if (!configPath) {
+    return { configPath: null, config: {} };
+  }
+  const config = await loadConfigFromPath(configPath);
+  return { configPath, config };
 }
 
 function getResourcesPath(): string | undefined {
@@ -137,15 +239,7 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
     const normalizedPath = path.resolve(configPath);
 
     if (await fileExists(normalizedPath)) {
-      const ext = normalizedPath.endsWith(".json")
-        ? "json"
-        : normalizedPath.endsWith(".ts")
-          ? "ts"
-          : "js";
-      const config =
-        ext === "json"
-          ? await loadJsonConfig(normalizedPath)
-          : await loadJsConfig(normalizedPath);
+      const config = await loadConfigFromPath(normalizedPath);
 
       logger.info(`✅ Loaded config from: ${normalizedPath}`);
       return config;
@@ -161,14 +255,11 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
 
   const projectRoot = await findProjectRoot();
   if (projectRoot) {
-    const configFile = await findConfigFile(projectRoot);
-    if (configFile) {
-      const config =
-        configFile.type === "json"
-          ? await loadJsonConfig(configFile.path)
-          : await loadJsConfig(configFile.path);
+    const configFilePath = await findConfigFileInDir(projectRoot);
+    if (configFilePath) {
+      const config = await loadConfigFromPath(configFilePath);
 
-      logger.info(`✅ Loaded config from: ${configFile.path}`);
+      logger.info(`✅ Loaded config from: ${configFilePath}`);
       return config;
     }
   }

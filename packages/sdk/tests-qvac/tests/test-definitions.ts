@@ -23,10 +23,12 @@ import { registryTests } from "./registry-tests.js";
 import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
+import { parakeetStreamTests } from "./parakeet-stream-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
+import { videoTests } from "./video-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
 import { lifecycleTests } from "./lifecycle-tests.js";
 import { configTests } from "./config-tests.js";
@@ -190,6 +192,7 @@ export const tests = [
 
   // Parakeet transcription tests
   ...parakeetTests,
+  ...parakeetStreamTests,
 
   // Completion tests
   ...completionTests,
@@ -265,6 +268,9 @@ export const tests = [
 
   // Diffusion tests
   ...diffusionTests,
+
+  // Video generation tests
+  ...videoTests,
 
   // Delegated inference tests (P2P)
   ...delegatedInferenceTests,
