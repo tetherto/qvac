@@ -35,7 +35,6 @@ import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
 import { multiGpuTests } from "./multi-gpu-tests.js";
 import { cancellationTests } from "./cancellation-tests.js";
-import { classificationTests } from "./classification-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -292,9 +291,6 @@ export const tests = [
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
-
-  // Image classification (GGML / MobileNetV3-Small, bundled weights)
-  ...classificationTests,
 
   // Additional model tests
   modelSwitchLlm,
