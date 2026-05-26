@@ -26,6 +26,10 @@ permissions:
 env:
   PKG_DIR: packages/classification-ggml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   label-gate:
     name: Authorise (label-gate)
@@ -81,7 +85,7 @@ jobs:
 
   sanity-checks:
     needs: [authorize, changes, label-gate]
-    if: always() && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -99,7 +103,7 @@ jobs:
 
   ts-checks:
     needs: [authorize, changes, sanity-checks]
-    if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -120,6 +124,7 @@ jobs:
     needs: [authorize, changes, sanity-checks, label-gate]
     if: |
       always() &&
+      !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
@@ -134,6 +139,7 @@ jobs:
     needs: [authorize, changes, sanity-checks, label-gate]
     if: |
       always() &&
+      !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
@@ -153,6 +159,7 @@ jobs:
     needs: [authorize, changes, sanity-checks, label-gate]
     if: |
       always() &&
+      !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
@@ -166,6 +173,7 @@ jobs:
     needs: [authorize, changes, sanity-checks, prebuild, label-gate]
     if: |
       always() &&
+      !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
@@ -188,6 +196,7 @@ jobs:
     needs: [authorize, changes, sanity-checks, prebuild, label-gate]
     if: |
       always() &&
+      !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
@@ -210,7 +219,7 @@ jobs:
         run-integration-tests,
         run-mobile-integration-tests,
       ]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && needs.cpp-lint.result == 'success' && needs.cpp-tests.result == 'success' }}

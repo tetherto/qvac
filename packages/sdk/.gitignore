@@ -5,8 +5,8 @@ node_modules
 .rag-*
 .npmrc
 package-lock.json
-tests-qvac/reports/*
-!tests-qvac/reports/.gitkeep
+e2e/reports/*
+!e2e/reports/.gitkeep
 .env
 .secrets
 .artifacts

@@ -24,7 +24,7 @@ export function transformConfigForReload(
     case ModelType.llamacppCompletion:
     case ModelType.llamacppEmbedding:
     case ModelType.nmtcppTranslation:
-    case ModelType.onnxTts:
+    case ModelType.ttsGgml:
       // Return as-is for now
       return config;
     default:

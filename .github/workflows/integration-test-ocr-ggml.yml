@@ -1,0 +1,182 @@
+name: Integration Tests (OCR-GGML)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/ocr-ggml@0.1.0)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      model:
+        type: string
+        required: false
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/ocr-ggml"
+
+permissions:
+  contents: read
+
+env:
+  PKG_DIR: packages/ocr-ggml
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 30
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
+          - os: macos-15-xlarge
+            platform: darwin
+            arch: arm64
+            runner: macos-15-xlarge
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64-gpu
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          git config --global core.longpaths true
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      # EasyOCR + Doctr GGUFs live in S3 under date-stamped snapshot
+      # directories. Bump the date segments below when new snapshots are
+      # published.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
+        run: |
+          if ! [[ "$PREBUILD_PACKAGE" =~ ^@?[A-Za-z0-9._/~^>=<-]+$ ]]; then
+            echo "ERROR: invalid prebuild_package spec" >&2
+            exit 1
+          fi
+          mkdir -p prebuilds
+          PACK_DIR="$(mktemp -d -t ocr-ggml-prebuild.XXXXXX)"
+          PACK_OUTPUT="$(npm pack "$PREBUILD_PACKAGE" --pack-destination "$PACK_DIR" --json | jq -r '.[0].filename')"
+          tar -xzf "$PACK_DIR/$PACK_OUTPUT" -C "$PACK_DIR"
+          cp -r "$PACK_DIR/package/prebuilds/." prebuilds/
+
+      - name: Linux - install dependencies
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Update c++ tools to install GLIBC++
+        run: |
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - name: Download EasyOCR + Doctr GGUF model files
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          mkdir -p models
+          aws s3 cp \
+            "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/" \
+            models/ \
+            --recursive
+          aws s3 cp \
+            "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/" \
+            models/ \
+            --recursive
+          ls -lh models/
+
+      - name: Run integration tests
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: npm run test:integration
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          OCR_GGML_DETECTOR: models/craft_mlt_25k.gguf
+          OCR_GGML_RECOGNIZER: models/latin_g2.gguf
+          OCR_GGML_DOCTR_DETECTOR: models/db_mobilenet_v3_large.gguf
+          OCR_GGML_DOCTR_RECOGNIZER: models/crnn_mobilenet_v3_small.gguf
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+        with:
+          name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
+          retention-days: 90
+          if-no-files-found: ignore

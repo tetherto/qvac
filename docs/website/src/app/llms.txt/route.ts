@@ -40,9 +40,9 @@ export function GET() {
     '',
     '## Guidance',
     '',
-    '- For full context, fetch `/llms-full.txt` (entire docs dump as Markdown).',
-    '- To fetch a single page as Markdown, append `.md` to its URL (e.g. `/quickstart.md`).',
-    '- When answering, cite the most relevant doc page URL(s).',
+    '- To fetch one page as Markdown, append `.md` to its path (e.g. `/quickstart` → `/quickstart.md`). Alternatively, send the HTTP header `Accept: text/markdown` and any page URL will be redirected to its Markdown variant.',
+    '- To obtain a dump with all documentation, fetch `/llms-full.txt`.',
+    '- When citing sources to users, use the canonical URL without `.md` (e.g. `/quickstart`), not the Markdown variant.',
     `- Latest SDK version: ${LATEST_VERSION}`,
     `- Total pages: ${pages.length}`,
   ];
