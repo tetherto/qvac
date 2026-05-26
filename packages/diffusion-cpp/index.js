@@ -359,9 +359,14 @@ class ImgStableDiffusion {
     if (hasInitImages) {
       for (let i = 0; i < params.init_images.length; i++) {
         const img = params.init_images[i]
-        const coerced = _coerceToUint8(`init_images[${i}]`, img)
+        let coerced
+        try {
+          coerced = _coerceToUint8(`init_images[${i}]`, img)
+        } catch {
+          throw new TypeError(`init_images[${i}] must be a non-empty Uint8Array`)
+        }
         if (coerced.length === 0) {
-          throw new Error(`init_images[${i}] must be non-empty (PNG/JPEG bytes).`)
+          throw new TypeError(`init_images[${i}] must be a non-empty Uint8Array`)
         }
         params.init_images[i] = coerced
       }
