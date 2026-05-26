@@ -33,7 +33,9 @@ export const ttsRuntimeConfigSchema = z.union([
 ]);
 
 export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.extend({
-  s3genModelSrc: modelSrcInputSchema,
+  // Optional at schema time so legacy ONNX configs (no s3genModelSrc) reach
+  // the plugin's resolveConfig and raise LegacyTtsModelDeprecatedError.
+  s3genModelSrc: modelSrcInputSchema.optional(),
   referenceAudioSrc: modelSrcInputSchema.optional(),
 });
 
@@ -75,11 +77,13 @@ const legacyTtsOnnxFieldsShape =
     return acc;
   }, {});
 
-const legacyTtsOnnxFields = z.object(legacyTtsOnnxFieldsShape);
-
+// Strict load schema used by `loadModel` and the tts-ggml plugin's
+// `loadConfigSchema`. Permits deprecated ONNX field names so
+// `resolveConfig` can raise LegacyTtsModelDeprecatedError instead of a
+// generic Zod error; other unknown keys are still rejected by `.strict()`.
 export const ttsConfigSchema = z.union([
-  ttsChatterboxLoadConfigSchema.merge(legacyTtsOnnxFields),
-  ttsSupertonicLoadConfigSchema.merge(legacyTtsOnnxFields),
+  ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
+  ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
 ]);
 
 export const ttsClientParamsSchema = z.object({
