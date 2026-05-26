@@ -64,6 +64,8 @@ import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
   diffusionStreamRequestSchema,
   diffusionStreamResponseSchema,
+  videoStreamRequestSchema,
+  videoStreamResponseSchema,
   upscaleStreamRequestSchema,
   upscaleStreamResponseSchema,
 } from "./sdcpp-config";
@@ -116,6 +118,7 @@ export const requestSchema = z.union([
   getLoadedModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
+  videoStreamRequestSchema,
   upscaleStreamRequestSchema,
   finetuneRequestSchema,
   pluginInvokeRequestSchema,
@@ -154,6 +157,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   getLoadedModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
+  videoStreamResponseSchema,
   upscaleStreamResponseSchema,
   finetuneResponseSchema,
   finetuneProgressResponseSchema,
