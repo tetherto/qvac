@@ -202,6 +202,15 @@ jobs:
         name: Set Vulkan SDK Path on Windows Server 2025
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
+      - name: Cache integration test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: transcription-whispercpp
+          paths: packages/transcription-whispercpp/models
+          hash-files-glob: packages/transcription-whispercpp/test/integration/helpers.js
+
       - name: Run integration test (Unix)
         if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}

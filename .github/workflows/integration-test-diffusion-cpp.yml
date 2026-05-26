@@ -97,6 +97,18 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      # PNGs are test-generated outputs uploaded as artifacts further
+      # down; exclude them so they do not accumulate in the cache.
+      - name: Cache integration test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          paths: |
+            packages/diffusion-cpp/test/model
+            !packages/diffusion-cpp/test/model/*.png
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:

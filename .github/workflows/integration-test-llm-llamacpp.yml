@@ -144,6 +144,13 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Cache integration test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: llm-llamacpp
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
@@ -283,7 +290,7 @@ jobs:
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
 
       - name: Generate HTML performance report
-        if: ${{ always() }}
+        if: ${{ always() && !cancelled() }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -299,7 +306,7 @@ jobs:
           fi
 
       - name: Upload performance report
-        if: ${{ always() }}
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: perf-report-llamacpp-llm-${{ matrix.label }}-${{ github.run_number }}

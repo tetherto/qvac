@@ -8,6 +8,7 @@ on:
       - "packages/tts-onnx/**"
       - "scripts/perf-report/**"
       - ".github/workflows/*onnx-tts*.yml"
+      - ".github/actions/cache-models/**"
 
   workflow_dispatch:
     inputs:

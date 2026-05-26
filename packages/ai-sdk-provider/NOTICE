@@ -1,0 +1,22 @@
+@qvac/ai-sdk-provider
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their respective
+licenses. @qvac/ai-sdk-provider itself is licensed under Apache-2.0; the
+peer-dependency packages it composes (the Vercel AI SDK and
+@ai-sdk/openai-compatible) are governed by their own licenses.
+
+=========================================================================
+JavaScript Dependencies (peer)
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  ai
+    https://github.com/vercel/ai
+  @ai-sdk/openai-compatible
+    https://github.com/vercel/ai
+
+NOTE: This NOTICE file is a placeholder. The full third-party listing must
+be regenerated before publishing 0.1.0 via the qv-notice-generate skill
+(.cursor/skills/qv-notice-generate/SKILL.md). See QVAC-19194 (T-8).
