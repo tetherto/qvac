@@ -236,7 +236,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           
       - name: Run RTF benchmark (Unix)
-        if: ${{ always() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks != false }}
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         working-directory: ${{ inputs.workdir }}
         shell: bash
@@ -248,7 +248,7 @@ jobs:
           QVAC_WHISPER_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
 
       - name: Run RTF benchmark (Windows)
-        if: ${{ always() && matrix.platform == 'win32' && inputs.run_rtf_benchmarks != false }}
+        if: ${{ always() && !cancelled() && matrix.platform == 'win32' && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         working-directory: ${{ inputs.workdir }}
         shell: powershell
@@ -260,7 +260,7 @@ jobs:
           QVAC_WHISPER_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
 
       - name: Upload RTF results
-        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -270,7 +270,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Add RTF summary
-        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         working-directory: ${{ inputs.workdir }}
         shell: bash

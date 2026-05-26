@@ -55,6 +55,7 @@ import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-ev
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { VlaExecutor } from "./executors/vla-executor.js";
+import { ClassificationExecutor } from "./executors/classification-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
@@ -154,6 +155,12 @@ resources.define("vla", {
   constant: SMOLVLA_LIBERO_VISION_Q8,
   type: "vla",
   config: { backend: "cpu" },
+});
+
+// Classification ships bundled weights inside @qvac/classification-ggml,
+// so no registry constant / pre-download is required.
+resources.define("classification", {
+  type: "classification",
 });
 
 resources.define("sharded-embeddings", {
@@ -425,6 +432,7 @@ export const executor = createExecutor({
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
     new VlaExecutor(resources),
+    new ClassificationExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
     new DesktopLoggingExecutor(resources),

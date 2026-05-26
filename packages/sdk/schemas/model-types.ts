@@ -17,6 +17,7 @@ export const ModelType = {
   onnxOcr: "onnx-ocr",
   sdcppGeneration: "sdcpp-generation",
   ggmlVla: "ggml-vla",
+  ggmlClassification: "ggml-classification",
 } as const;
 
 // === INTERNAL: Alias keys (backward compat names) ===
@@ -30,6 +31,7 @@ const AliasKeys = {
   ocr: "ocr",
   diffusion: "diffusion",
   vla: "vla",
+  classification: "classification",
 } as const;
 
 // === INTERNAL: Aliases (backward compat mapping) ===
@@ -47,6 +49,7 @@ export const ModelTypeAliases = {
   [AliasKeys.ocr]: ModelType.onnxOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
   [AliasKeys.vla]: ModelType.ggmlVla,
+  [AliasKeys.classification]: ModelType.ggmlClassification,
 } as const;
 
 // === TYPES ===
@@ -244,3 +247,17 @@ export const vlaModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.vla, ModelType.ggmlVla])
   .describe('VLA model type: "vla" (alias) or "ggml-vla" (canonical)');
 export type VlaModelTypeInput = z.infer<typeof vlaModelTypeSchema>;
+
+/**
+ * Image Classification model type schema.
+ * - Alias: `"classification"` → resolves to `"ggml-classification"`
+ * - Canonical: `"ggml-classification"`
+ */
+export const classificationModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.classification, ModelType.ggmlClassification])
+  .describe(
+    'Classification model type: "classification" (alias) or "ggml-classification" (canonical)',
+  );
+export type ClassificationModelTypeInput = z.infer<
+  typeof classificationModelTypeSchema
+>;
