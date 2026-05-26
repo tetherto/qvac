@@ -144,6 +144,7 @@ class ImgStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: this._files.llm || '',
       vaePath: this._files.vae || '',
+      clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
       config: this._config
     }
