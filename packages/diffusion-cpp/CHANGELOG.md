@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.0] - 2026-05-25
+
+### Changed
+
+- Consume `stable-diffusion-cpp@2026-03-01#5` from `tetherto/qvac-registry-vcpkg` after sd.cpp PR #6 and registry PR #166, which add generic GGML ESRGAN upscaler backend init with device and preference APIs.
+- Remove the temporary package-local `stable-diffusion-cpp` vcpkg overlay port; the addon now resolves the port from the registry.
+
+### Added
+
+- Report `backendDevice` in ESRGAN upscaler runtime stats after load, reflecting the backend stable-diffusion.cpp selected for the upscaler context.
+
+### Fixed
+
+- On Android, ESRGAN `gpu` / `auto` config now falls back to CPU to avoid the unstable mobile GPU/OpenCL upscaler path.
+
 ## [0.9.1] - 2026-05-25
 
 ### Fixed
