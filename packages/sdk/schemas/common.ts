@@ -89,6 +89,10 @@ import {
 import { suspendRequestSchema, suspendResponseSchema } from "./suspend";
 import { resumeRequestSchema, resumeResponseSchema } from "./resume";
 import { stateRequestSchema, stateResponseSchema } from "./state";
+import {
+  classifyRequestSchema,
+  classifyResponseSchema,
+} from "./classification";
 
 export const requestSchema = z.union([
   heartbeatRequestSchema,
@@ -122,6 +126,7 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
+  classifyRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -160,6 +165,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
+  classifyResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

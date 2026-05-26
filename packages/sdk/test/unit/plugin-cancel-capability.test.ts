@@ -170,6 +170,7 @@ bareTest(
       { ocrPlugin },
       { diffusionPlugin },
       { vlaPlugin },
+      { classificationPlugin },
     ] = await Promise.all([
       import("@/server/bare/plugins/llamacpp-completion/plugin"),
       import("@/server/bare/plugins/llamacpp-embedding/plugin"),
@@ -180,6 +181,7 @@ bareTest(
       import("@/server/bare/plugins/onnx-ocr/plugin"),
       import("@/server/bare/plugins/sdcpp-generation/plugin"),
       import("@/server/bare/plugins/ggml-vla/plugin"),
+      import("@/server/bare/plugins/ggml-classification/plugin"),
     ]);
 
     const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {
@@ -221,6 +223,9 @@ bareTest(
         vlaRun: { scope: "model", hard: true },
         vlaHparams: { scope: "none" },
       },
+      [classificationPlugin.modelType]: {
+        classify: { scope: "none" },
+      },
     };
 
     type BuiltinPlugin = {
@@ -241,6 +246,7 @@ bareTest(
       ocrPlugin as unknown as BuiltinPlugin,
       diffusionPlugin as unknown as BuiltinPlugin,
       vlaPlugin as unknown as BuiltinPlugin,
+      classificationPlugin as unknown as BuiltinPlugin,
     ];
 
     for (const plugin of builtins) {

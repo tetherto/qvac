@@ -28,6 +28,7 @@ import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delega
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
 import { handleUpscaleStream } from "@/server/rpc/handlers/upscale-stream";
+import { handleClassify } from "@/server/rpc/handlers/classify";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -132,6 +133,7 @@ export const registry: Record<string, HandlerEntry> = {
   ocrStream: { type: "stream", handler: handleOCRStream },
   diffusionStream: { type: "stream", handler: handleDiffusionStream },
   upscaleStream: { type: "stream", handler: handleUpscaleStream },
+  classify: { type: "stream", handler: handleClassify },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
   // Handlers with delegation support

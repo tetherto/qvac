@@ -104,6 +104,10 @@
       "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
       "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
     },
+    "./ggml-classification/plugin": {
+      "types": "./dist/server/bare/plugins/ggml-classification/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/ggml-classification/plugin.js"
+    },
     "./plugin-utils": {
       "types": "./dist/schemas/plugin.d.ts",
       "import": "./dist/schemas/plugin.js"

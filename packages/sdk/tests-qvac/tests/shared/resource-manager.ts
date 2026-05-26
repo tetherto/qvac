@@ -5,7 +5,12 @@ type ModelConfig = Record<string, unknown>;
 type ModelConfigResolver = () => Promise<ModelConfig>;
 
 interface ModelDefinition {
-  constant: ModelConstant;
+  /**
+   * Registry constant for the model. Omit for addons that ship bundled
+   * weights inside the package (`@qvac/classification-ggml`) — `loadModel`
+   * is then invoked without `modelSrc` and `skipPreDownload` is implied.
+   */
+  constant?: ModelConstant;
   type: string;
   /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
   config?: ModelConfig | ModelConfigResolver;
@@ -161,7 +166,7 @@ export class ResourceManager {
     };
 
     for (const [dep, def] of contributors) {
-      addConstant(def.constant, dep);
+      if (def.constant) addConstant(def.constant, dep);
       const cfg = await this.resolveConfig(dep, def);
       if (cfg) {
         const found = new Map<string, ModelConstant>();
@@ -239,10 +244,10 @@ export class ResourceManager {
     if (!def) throw new Error(`Unknown dependency: ${dep}`);
 
     const modelId = await loadModel({
-      modelSrc: def.constant as never,
-      modelType: def.type as "llm" | "whisper" | "embeddings",
+      ...(def.constant ? { modelSrc: def.constant as never } : {}),
+      modelType: def.type as never,
       modelConfig: await this.resolveConfig(dep, def),
-    });
+    } as never);
 
     this.models.set(dep, {
       modelId,
