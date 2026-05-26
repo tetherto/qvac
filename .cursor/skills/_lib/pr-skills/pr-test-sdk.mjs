@@ -61,7 +61,7 @@ export function isSdkPackage(packagePath) {
 
 export function isSdkE2eTestPath(filePath) {
   return (
-    filePath.startsWith("packages/sdk/tests-qvac/tests/") &&
+    filePath.startsWith("packages/sdk/e2e/tests/") &&
     filePath.endsWith(".ts")
   );
 }
@@ -224,13 +224,13 @@ export function relatedSdkTests({
   changedTests,
   changedExamples,
 }) {
-  const testsRoot = join(root, packagePath, "tests-qvac", "tests");
+  const testsRoot = join(root, packagePath, "e2e", "tests");
   const topics = topicTokens(changedPaths);
   const changed = new Set(changedTests);
   const exampleGroups = changedExampleGroups(packagePath, changedExamples);
   const candidates = walkFiles(testsRoot)
     .filter((rel) => rel.endsWith("-tests.ts"))
-    .map((rel) => `${packagePath}/tests-qvac/tests/${rel}`)
+    .map((rel) => `${packagePath}/e2e/tests/${rel}`)
     .filter((path) => !changed.has(path))
     .map((path) => {
       const filter = basename(path).replace(/-tests\.ts$/, "");
@@ -253,20 +253,20 @@ export function relatedSdkTests({
 }
 
 export function sdkE2eSetup(touchedPaths) {
-  const touchesSdkOutsideTestsQvac = touchedPaths.some(
+  const touchesSdkOutsideE2e = touchedPaths.some(
     (path) =>
       path.startsWith("packages/sdk/") &&
-      !path.startsWith("packages/sdk/tests-qvac/"),
+      !path.startsWith("packages/sdk/e2e/"),
   );
-  if (touchesSdkOutsideTestsQvac) {
+  if (touchesSdkOutsideE2e) {
     return {
       command: "npm run install:build:full",
-      reason: "Committed PR files touch packages/sdk outside tests-qvac",
+      reason: "Committed PR files touch packages/sdk outside e2e",
     };
   }
   return {
     command: "npm run install:build",
-    reason: "Committed SDK e2e changes are limited to packages/sdk/tests-qvac",
+    reason: "Committed SDK e2e changes are limited to packages/sdk/e2e",
   };
 }
 
