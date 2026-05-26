@@ -1,0 +1,57 @@
+name: Cache CI test models
+description: |
+  Caches an addon's test model directory using actions/cache. Works for
+  HuggingFace, S3, GitHub Release, or script-based model downloads.
+  Callers should gate with `if: startsWith(matrix.runner, 'qvac-')` on
+  Hetzner self-hosted runners (transparent local cache server) and
+  condition the download step on `steps.<id>.outputs.cache-hit != 'true'`.
+  Tracks QVAC-19322.
+
+inputs:
+  package:
+    description: Package directory name under `packages/` (e.g. `llm-llamacpp`).
+    required: true
+  cache-version:
+    description: Bump to invalidate every cached entry for this addon.
+    required: false
+    default: v1
+  paths:
+    description: |
+      Optional multi-line override for cached paths. Supports
+      `actions/cache` exclude patterns (lines starting with `!`).
+      Defaults to `packages/<package>/test/model`.
+    required: false
+    default: ''
+  hash-files-glob:
+    description: |
+      Optional override for the glob folded into the cache key. Defaults
+      to all `.js` files under the package's `test/integration/` tree.
+      For S3 workflows, point at the workflow YAML itself. For script
+      downloads, point at the download script.
+    required: false
+    default: ''
+  enable-cross-os:
+    description: |
+      Set to 'true' for platform-agnostic formats (GGUF, ONNX, .bin).
+      Set to 'false' when the cache includes OS-specific artifacts
+      (e.g. Python venvs).
+    required: false
+    default: 'true'
+
+outputs:
+  cache-hit:
+    description: "'true' when cache was restored (download can be skipped)"
+    value: ${{ steps.cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Cache test models
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
+        key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(inputs.hash-files-glob != '' && inputs.hash-files-glob || format('packages/{0}/test/integration/**/*.js', inputs.package)) }}
+        restore-keys: |
+          models-${{ inputs.package }}-${{ inputs.cache-version }}-
+        enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}

@@ -1,7 +1,16 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Check, ChevronDown, ExternalLinkIcon, MessageSquare, Sparkles, Tag } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  ExternalLinkIcon,
+  FileText,
+  MessageSquare,
+  Sparkles,
+  Tag,
+} from 'lucide-react';
 import { cn } from '../lib/cn';
 import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -141,7 +150,7 @@ export function CopyPageButton({
               onClick={copy}
               className={cn(optionVariants())}
             >
-              <MarkdownIcon className="text-fd-muted-foreground" />
+              <Copy className="text-fd-muted-foreground" />
               Copy page as Markdown
             </button>
           </PopoverClose>
@@ -152,8 +161,20 @@ export function CopyPageButton({
               onClick={() => window.open(markdownUrl, '_blank', 'noopener,noreferrer')}
               className={cn(optionVariants())}
             >
-              <ExternalLinkIcon className="text-fd-muted-foreground" />
+              <FileText className="text-fd-muted-foreground" />
               View page as Markdown
+              <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
+            </button>
+          </PopoverClose>
+
+          <PopoverClose asChild>
+            <button
+              type="button"
+              onClick={() => window.open('/llms-full.txt', '_blank', 'noopener,noreferrer')}
+              className={cn(optionVariants())}
+            >
+              <FileText className="text-fd-muted-foreground" />
+              View full docs dump
               <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
             </button>
           </PopoverClose>

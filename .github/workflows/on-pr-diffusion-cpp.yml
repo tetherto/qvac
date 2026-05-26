@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
+      - ".github/actions/cache-models/**"
   workflow_dispatch:
 
   workflow_call:

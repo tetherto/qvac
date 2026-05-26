@@ -144,7 +144,17 @@ jobs:
           path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
+      - name: Cache C++ test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: embed-llamacpp
+          paths: packages/embed-llamacpp/models/unit-test
+          hash-files-glob: .github/workflows/cpp-tests-embed.yml
+
       - name: Download test models (into package dir)
+        if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail

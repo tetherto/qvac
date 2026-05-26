@@ -208,6 +208,15 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      - name: Cache TTS ONNX models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: tts-onnx
+          paths: packages/tts-onnx/models
+          hash-files-glob: packages/tts-onnx/test/utils/downloadModel.js
+
       - name: Run integration test
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration
@@ -217,7 +226,7 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
 
       - name: Upload performance report
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: perf-report-tts-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ github.run_number }}
@@ -624,7 +633,7 @@ jobs:
           }
 
       - name: Stop servers (Unix)
-        if: ${{ always() && matrix.platform != 'win32' }}
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
@@ -638,7 +647,7 @@ jobs:
           fi
 
       - name: Stop servers (Windows)
-        if: ${{ always() && matrix.platform == 'win32' }}
+        if: ${{ always() && !cancelled() && matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: |
@@ -652,7 +661,7 @@ jobs:
           }
 
       - name: Display server logs
-        if: always()
+        if: always() && !cancelled()
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
@@ -674,7 +683,7 @@ jobs:
           fi
 
       - name: Upload benchmark results
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: supertonic-rtf-results-${{ matrix.runner_label }}-${{ matrix.backend }}
@@ -683,7 +692,7 @@ jobs:
           if-no-files-found: ignore
 
   summarize-supertonic-desktop-benchmarks:
-    if: ${{ always() && inputs.run_supertonic_desktop_benchmarks == true }}
+    if: ${{ always() && !cancelled() && inputs.run_supertonic_desktop_benchmarks == true }}
     needs: run-supertonic-desktop-benchmarks
     runs-on: ubuntu-latest
     permissions:
