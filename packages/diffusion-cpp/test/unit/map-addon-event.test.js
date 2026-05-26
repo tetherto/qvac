@@ -29,8 +29,17 @@ test('plain object data maps to JobEnded (RuntimeStats)', function (t) {
   const stats = { total_time_ms: 5000, steps: 20 }
   const result = mapAddonEvent('Stats', stats, null)
   t.is(result.type, 'JobEnded')
-  t.is(result.data, stats)
+  t.alike(result.data, stats)
   t.is(result.error, null)
+})
+
+test('JobEnded maps backendDevice 0/1 to cpu/gpu strings', function (t) {
+  const cpu = mapAddonEvent('Stats', { upscaleMs: 1, backendDevice: 0 }, null)
+  t.is(cpu.data.backendDevice, 'cpu')
+  const gpu = mapAddonEvent('Stats', { upscaleMs: 1, backendDevice: 1 }, null)
+  t.is(gpu.data.backendDevice, 'gpu')
+  const passthrough = mapAddonEvent('Stats', { backendDevice: 2 }, null)
+  t.is(passthrough.data.backendDevice, 2)
 })
 
 test('Error event takes precedence over data shape', function (t) {
