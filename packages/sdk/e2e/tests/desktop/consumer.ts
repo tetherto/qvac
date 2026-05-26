@@ -1,6 +1,4 @@
-import { Platform } from "react-native";
-import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import { createExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -32,56 +30,70 @@ import {
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   PARAKEET_EOU_120M_V1_Q8_0,
+  SMOLVLA_LIBERO_VISION_Q8,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
   AFRICAN_4B_TRANSLATION_Q4_K_M,
+  FLUX_2_KLEIN_4B_Q4_0,
+  FLUX_2_KLEIN_4B_VAE,
+  QWEN3_4B_Q4_K_M,
+  WAN2_1_T2V_1_3B_FP16,
+  UMT5_XXL_FP16,
+  WAN_2_1_COMFYUI_REPACKAGED_VAE,
   SD_V2_1_1B_Q8_0,
+  REALESRGAN_X4PLUS_ANIME_6B,
+  QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  GEMMA4_2B_MULTIMODAL_Q4_K_M,
 } from "@qvac/sdk";
+import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { collectTestDeps } from "../shared/collect-test-deps.js";
-import { resolveBundledAssetUri } from "./asset-uri.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
-import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { TranslationBergamotCacheExecutor } from "../shared/executors/translation-bergamot-cache-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
-import { MobileLoggingExecutor } from "./executors/logging-executor.js";
+import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
+import { TranscriptionExecutor } from "./executors/transcription-executor.js";
+import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
+import { RagExecutor } from "./executors/rag-executor.js";
+import { OcrExecutor } from "./executors/ocr-executor.js";
+import { VlaExecutor } from "./executors/vla-executor.js";
+import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
+import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
-import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
-import { MobileTranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
-import { MobileParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
-import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
-import { MobileVisionExecutor } from "./executors/vision-executor.js";
-import { MobileOcrExecutor } from "./executors/ocr-executor.js";
-import { MobileRagExecutor } from "./executors/rag-executor.js";
-import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
-import { MobileTtsExecutor } from "./executors/tts-executor.js";
+import { TtsExecutor } from "../shared/executors/tts-executor.js";
+import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
+import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
-import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
-import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
+import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
+import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
+import { VideoExecutor } from "./executors/video-executor.js";
+import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
-import { MobileCancellationExecutor } from "./executors/cancellation-executor.js";
+import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
+import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
+import { DesktopCancellationExecutor } from "./executors/cancellation-executor.js";
 
-const resources = new ResourceManager({
-  // Mobile (iOS + Android) needs a tick after each unloadModel for the
-  // kernel to actually release pages / reclaim mmap regions — without
-  // it, the next test's load arrives while the previous model's RSS is
-  // still resident and either the GGML allocator crashes (iOS) or
-  // Scudo's mmap fails with "internal map failure" (Android). Empirically
-  // 200ms is enough; desktop doesn't need it.
-  unloadSettleMs: 200,
-});
+const resources = new ResourceManager();
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: "llm",
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+});
+
+resources.define("finetune-llm", {
+  constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
@@ -128,10 +140,28 @@ resources.define("tools-dynamic", {
   config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
 });
 
+resources.define("tools-qwen35", {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("tools-gemma4", {
+  constant: GEMMA4_2B_MULTIMODAL_Q4_K_M,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true },
+});
+
 resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
   type: "ocr",
   config: { langList: ["en"] },
+});
+
+resources.define("vla", {
+  constant: SMOLVLA_LIBERO_VISION_Q8,
+  type: "vla",
+  config: { backend: "cpu" },
 });
 
 resources.define("sharded-embeddings", {
@@ -216,27 +246,13 @@ resources.define("afriquegemma", {
   },
 });
 
-/** Look up a bundled audio file by name and resolve it to a POSIX path. */
-async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
-  // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
-  const assets = await import("../../../assets");
-  const assetModule = assets.audio?.[filename];
-  if (!assetModule) {
-    console.warn(`[tts-chatterbox] reference audio not in registry: ${filename}`);
-    return undefined;
-  }
-  try {
-    return await resolveBundledAssetUri(assetModule);
-  } catch (err) {
-    console.warn(`[tts-chatterbox] failed to resolve ${filename}:`, err);
-    return undefined;
-  }
-}
+
+const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short-wav.wav");
 
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
-  config: async () => ({
+  config: {
     ttsEngine: "chatterbox",
     language: "en",
     ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
@@ -244,8 +260,8 @@ resources.define("tts-chatterbox", {
     ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
     ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
     ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
-    referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
-  }),
+    referenceAudioSrc: referenceAudioPath,
+  },
 });
 
 const ttsSupertonicBaseConfig = {
@@ -312,6 +328,61 @@ resources.define("vision", {
 });
 
 resources.define("diffusion", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "flux2_flow",
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+  },
+});
+
+resources.define("diffusion-fa", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "flux2_flow",
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+    diffusion_fa: true,
+  },
+});
+
+resources.define("diffusion-fa-disabled", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "flux2_flow",
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+    diffusion_fa: false,
+  },
+});
+
+resources.define("video", {
+  constant: WAN2_1_T2V_1_3B_FP16,
+  type: "diffusion",
+  config: {
+    mode: "video",
+    device: "gpu",
+    threads: 4,
+    t5XxlModelSrc: UMT5_XXL_FP16,
+    vaeModelSrc: WAN_2_1_COMFYUI_REPACKAGED_VAE,
+    diffusion_fa: true,
+    offload_to_cpu: true,
+    vae_on_cpu: true,
+    vae_tiling: true,
+  },
+});
+
+// Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
+resources.define("diffusion-esrgan", {
   constant: SD_V2_1_1B_Q8_0,
   type: "diffusion",
   config: {
@@ -319,97 +390,80 @@ resources.define("diffusion", {
     threads: 4,
     prediction: "v",
     vae_on_cpu: true,
+    upscaler: {
+      type: "esrgan",
+      model_src: REALESRGAN_X4PLUS_ANIME_6B,
+      tile_size: 128,
+    },
   },
 });
 
-function skipTests(testIds: string[], reason: string) {
-  return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
-}
+resources.define("upscaler", {
+  constant: REALESRGAN_X4PLUS_ANIME_6B,
+  type: "diffusion",
+  config: {
+    mode: "upscale",
+    upscaler: {
+      tile_size: 128,
+    },
+  },
+});
 
 export async function bootstrap(filteredTests?: TestDefinition[]) {
+  // Point the SDK at the committed e2e fixture unless the developer
+  // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
+  // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
+  // propagation end-to-end (see tests/config-tests.ts).
+  if (!process.env["QVAC_CONFIG_PATH"]) {
+    process.env["QVAC_CONFIG_PATH"] = path.resolve(
+      process.cwd(),
+      "fixtures/qvac.config.e2e.json",
+    );
+  }
   // `filteredTests` (when present) is the producer's post-filter test list
   // delivered via register-ack; absence keeps the legacy "warm everything" path.
   const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
   await resources.downloadAllOnce(console.log, { allowedDeps });
-}
+};
 
 export const executor = createExecutor({
   handlers: [
-    // Mobile platform skips (before real executors -- first match wins)
-    skipTests([
-      "http-sharded-embed-load",
-      "http-sharded-embed-progress",
-      "http-archive-embed-load",
-      "http-archive-embed-progress",
-      "http-archive-embed-inference",
-    ], "HTTP test disabled on mobile (OOM)"),
-    new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
-    new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
-    new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
-    new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
-    new SkipExecutor(
-      /^translation-bergamot-.+-cache-reload$/,
-      "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
-    ),
-    // suspend() hangs the test runner on mobile (the lifecycle coordinator
-    // pauses MQTT/network ops and never resumes within the test timeout).
-    // Only resume-idempotent is safe -- it does not call suspend().
-    skipTests([
-      "lifecycle-suspend-resume-basic",
-      "lifecycle-suspend-idempotent",
-      "lifecycle-suspend-resume-inference",
-      "lifecycle-rapid-toggle",
-      "lifecycle-suspend-during-inference",
-    ], "suspend() hangs the runner on mobile"),
-    ...(Platform.OS === "ios" ? [
-      skipTests([
-        "ocr-sign-image",
-        "ocr-chart-image",
-        "ocr-no-text-image",
-        "ocr-large-image",
-        "ocr-low-quality",
-        "ocr-mixed-language",
-        "ocr-single-language",
-        "ocr-blurry-text",
-        "ocr-horizontally-inverted",
-        "ocr-vertically-inverted",
-        "ocr-misaligned-text",
-        "ocr-multi-sized-text",
-        "ocr-multiple-fonts",
-        "addon-logging-ocr",
-      ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
-      new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
-    ] : []),
-
-    // Real executors
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
-    new MobileTranscriptionExecutor(resources),
-    new MobileTranscribeStreamEventsExecutor(resources),
+    new TranscriptionExecutor(resources),
+    new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
-    new MobileRagExecutor(resources),
+    new RagExecutor(resources),
     new ModelInfoExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
+
+    // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
+    new TranslationBergamotCacheExecutor(),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
-    new MobileOcrExecutor(resources),
-    new MobileTtsExecutor(resources),
-    new MobileConfigReloadExecutor(resources),
-    new MobileLoggingExecutor(resources),
+    new OcrExecutor(resources),
+    new VlaExecutor(resources),
+    new TtsExecutor(resources),
+    new ConfigReloadExecutor(resources),
+    new DesktopLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
-    new MobileParakeetStreamExecutor(resources),
-    new MobileParakeetExecutor(resources),
-    new MobileVisionExecutor(resources),
+    new ParakeetStreamExecutor(resources),
+    new ParakeetExecutor(resources),
+    new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new MobileDiffusionExecutor(resources),
+    new DesktopDiffusionExecutor(resources),
+    new VideoExecutor(resources),
+    new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
-    new MobileCancellationExecutor(resources),
+    new NoLingeringBareExecutor(),
+    new MultiGpuExecutor(resources),
+    new DesktopCancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

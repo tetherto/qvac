@@ -182,9 +182,9 @@ function buildManifest({
 
     if (isSdkPackage(packagePath)) {
       packageInfo.sdkE2eSetup = sdkE2eSetup(changedPaths);
-      packageInfo.sdkTestsQvacCwd = worktreePath
-        ? join(worktreePath, "packages", "sdk", "tests-qvac")
-        : "packages/sdk/tests-qvac";
+      packageInfo.sdkE2eCwd = worktreePath
+        ? join(worktreePath, "packages", "sdk", "e2e")
+        : "packages/sdk/e2e";
     }
 
     touchedPackages.push(packageInfo);
