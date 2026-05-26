@@ -5,40 +5,52 @@ Reads a LeRobot ``Pi05Policy`` checkpoint (e.g. ``lerobot/pi05_base``,
 ``lerobot/pi05_libero``) and emits a single GGUF that the C++ pi05.cpp
 implementation will consume.
 
-GGUF namespace and quantisation plan are documented in
-``README-pi05-converter.md``. The short version:
+**The full quantisation scheme — including every profile's per-tensor
+dtype, the universal guardrails, the 2026-05-21 sweep results, and the
+K-quant follow-up — lives in ``README-pi05-converter.md`` next to this
+script.** Read that first if you're touching anything quant-related.
+
+Short version:
 
 - ``general.architecture = "pi05"`` — selected by the addon's model factory.
+- ``pi05.quant_profile`` records which profile produced the GGUF.
 - Tensor names follow the ``vision.* / vlm.* / expert.* / proj.*`` pattern
   from plan §4, with one small divergence: K/V (MQA) and MLP gate/up are
   stored *unpacked* so the converter is a 1:1 map of the PyTorch state
   dict. The runtime can pack them on load if it prefers.
-- Quantisation: ``Q8_0`` for the SigLIP vision linears where the inner
-  dimension is a multiple of 32 (attn projections, fc1, head). Everything
-  else is ``F16``. RMSNorm scales stay ``F32``. SigLIP fc2 weights cannot
-  be Q8_0 (mlp_dim 4304 is not divisible by 32) — they stay F16.
+- The default profile is ``q_aggressive`` (= Q5_0 vision + Q8_0 VLM +
+  Q8_0 expert linears + F32 norms/ada; ~3.7 GB for ``pi05_base``,
+  cos > 0.999 end-to-end).
 
 Usage:
 
+    # Default (q_aggressive) — recommended for testing & shipping.
     python3 convert_pi05_to_gguf.py \\
       --checkpoint lerobot/pi05_base \\
       --out        ./pi05_base.gguf
 
-    # End-to-end self-check: re-load the GGUF and assert every PT tensor is
-    # represented with the expected shape.
+    # Pick a different profile explicitly.
+    python3 convert_pi05_to_gguf.py \\
+      --checkpoint lerobot/pi05_base \\
+      --out        ./pi05_base.gguf \\
+      --profile    current
+
+    # Structural self-check: re-load the GGUF and assert every tensor is
+    # present with the right shape/dtype (does NOT do a PT forward).
     python3 convert_pi05_to_gguf.py \\
       --checkpoint lerobot/pi05_base \\
       --out        ./pi05_base.gguf \\
       --verify-vs-pt
 
-The conversion is deterministic for a fixed checkpoint revision (no
-randomness in the mapping or quantisation).
+The conversion is deterministic for a fixed checkpoint revision and a
+fixed profile (no randomness in the mapping or quantisation).
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 import time
 from collections.abc import Iterable
@@ -279,78 +291,79 @@ def _optional_pt_keys_with_shape() -> dict[str, tuple[int, ...]]:
 
 
 # ---------------------------------------------------------------------------
-# Quantisation policy. Returns the target GGML dtype for a GGUF tensor name +
-# its numpy dtype/shape. Order matters: norms before linears so the F32
-# rule wins on ``.scale`` even if the name otherwise matches a Q8_0 pattern.
+# Quantisation policy. Profile-driven: a profile is a function that, given a
+# (gguf_name, numpy_array), returns the target GGML dtype.
+#
+# Universal guardrails apply across ALL profiles — quantising these blows up
+# cos-sim downstream regardless of profile aggression:
+#   - norms (.scale)                  → F32
+#   - adaRMSNorm modulator (.ada.*)   → F32
+#   - biases                          → F16
+#   - 4-D patch_embed weight          → F16 (not block-quantizable)
+#   - small position embedding        → F16
+#   - expert linears                  → F16 (residual path, precision-sensitive)
+#   - action / time projections       → F16 (residual path)
+#
+# Profile-specific rules apply only to the VLM linears, vision linears, and
+# token embedder. Order matters: guardrails are checked first.
 # ---------------------------------------------------------------------------
 
 
-# Recognised --variant values. The default `vision-q8` matches the GGUF
-# that the parity tests + S3 mirror were calibrated against. `all-q8`
-# and `all-q4` are mobile-tractable variants.
-QUANT_VARIANTS = ('vision-q8', 'all-q8', 'all-q4')
+# All Python-native legacy quants use block size 32 along the last dim.
+LEGACY_QUANT_BLOCK = 32
+
+# K-quants (Q*_K) are *named* in gguf-py but their Python packers raise
+# NotImplementedError. Listed here so the validator catches us before runtime.
+PYTHON_NATIVE_QUANTS: frozenset[GGMLQuantizationType] = frozenset({
+    GGMLQuantizationType.F32,
+    GGMLQuantizationType.F16,
+    GGMLQuantizationType.Q4_0,
+    GGMLQuantizationType.Q4_1,
+    GGMLQuantizationType.Q5_0,
+    GGMLQuantizationType.Q5_1,
+    GGMLQuantizationType.Q8_0,
+})
 
 
-def select_target_dtype(
-    name: str, arr: np.ndarray, *, variant: str = 'vision-q8'
-) -> GGMLQuantizationType:
-    """Pick a target GGML dtype for a given tensor.
+def _is_q_eligible(arr: np.ndarray, block: int = LEGACY_QUANT_BLOCK) -> bool:
+    return arr.ndim == 2 and arr.shape[-1] % block == 0
 
-    Variants (sizes measured from the synthetic-shape self-test, which
-    mirrors pi05_base tensor shapes exactly):
-      * `vision-q8` — Q8_0 *only* for the vision tower's attn + fc1 +
-        head linears. Everything else stays F16/F32. ~6.7 GB for
-        pi05_base. Desktop CI parity reference; not mobile-tractable.
-      * `all-q8` — extends Q8_0 to every 2-D weight that's block-divisible
-        (VLM/expert attn + MLP linears, the 257K-row token embedder, the
-        pos_embed table, the action/time projections). Norms + ada
-        densities stay F32; 1-D biases stay F16; the 4-D patch_embed
-        Conv2d kernel stays F16 (can't be Q8). ~4.0 GB for pi05_base —
-        the embedder (257K × 2048) is the largest single saving.
-      * `all-q4` — same eligibility set as `all-q8` but Q4_0 instead.
-        ~2.5 GB for pi05_base. Aggressive size win at the cost of
-        looser per-block parity; needs its own parity sweep before use.
-    """
-    if variant not in QUANT_VARIANTS:
-        raise ValueError(f'unknown --variant {variant!r}; '
-                          f'expected one of {QUANT_VARIANTS}')
 
-    # ── Unconditional F32 (variant-independent): norms + ada modulators.
-    # Tiny tensors on precision-critical paths; quantising these shows up
-    # disproportionately in cos-sim downstream regardless of which variant
-    # we ship.
+def _guardrail_dtype(name: str, arr: np.ndarray) -> GGMLQuantizationType | None:
+    """Return the forced dtype if a universal guardrail applies; else None."""
     if name.endswith(".scale"):
         return GGMLQuantizationType.F32
     if ".ada." in name:
         return GGMLQuantizationType.F32
-
-    # ── Unconditional F16: shapes that no current Q kind can express.
-    # Patch embed conv kernel is 4-D, biases are 1-D — Q8_0/Q4_0 quantise
-    # rows of 2-D matrices only.
-    if name == "vision.patch_embed.weight":  # (out, in, kh, kw) 4-D
-        return GGMLQuantizationType.F16
     if name.endswith(".bias"):
         return GGMLQuantizationType.F16
-    if arr.ndim != 2:
+    if name == "vision.patch_embed.weight":
         return GGMLQuantizationType.F16
-
-    # ── 2-D weight: variant decides which target.
-    target_for_linears = (
-        GGMLQuantizationType.Q4_0 if variant == 'all-q4'
-        else GGMLQuantizationType.Q8_0
-    )
-
-    # Block-size guard: gguf.quants requires the last dim be a multiple of
-    # the block size (32 for Q8_0 + Q4_0). Tensors that don't fit fall
-    # back to F16 — same fall-back rule as the original vision-q8 path.
-    if arr.shape[-1] % Q8_OK_BLOCK != 0:
+    if name == "vision.pos_embed":
         return GGMLQuantizationType.F16
+    # Expert linears: never quantize. The 300M action expert sits on the
+    # residual path with adaRMSNorm modulation; precision loss here is the
+    # one place cos-sim regresses most violently.
+    if name.startswith("expert.") and name.endswith(".weight") and arr.ndim == 2:
+        return GGMLQuantizationType.F16
+    # Action in/out + time MLP projections: tiny + residual path.
+    if name.startswith("proj.") and name.endswith(".weight"):
+        return GGMLQuantizationType.F16
+    return None
 
-    if variant == 'vision-q8':
-        # Original allow-list: vision tower attn projections + fc1 + head.
-        # fc2 has inner dim 4304 (not /32-divisible) so it lands at F16
-        # via the block-size guard above even when included here.
-        is_eligible = name.startswith("vision.") and (
+
+def _profile_f16(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """P0 — every weight F16. Numerical ceiling baseline."""
+    return GGMLQuantizationType.F16
+
+
+def _profile_current(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """P1 — historical default. Q8_0 on the vision attn projections + fc1
+    + head; F16 everywhere else. Reproduces the existing pi05_base.gguf
+    bit-for-bit."""
+    if arr.ndim == 2 and name.startswith("vision."):
+        last_dim = arr.shape[-1]
+        is_q8_eligible_kind = (
             ".attn_q.weight" in name
             or ".attn_k.weight" in name
             or ".attn_v.weight" in name
@@ -358,16 +371,244 @@ def select_target_dtype(
             or ".fc1.weight" in name
             or name == "vision.head.weight"
         )
-        if is_eligible:
-            return target_for_linears
+        if is_q8_eligible_kind and last_dim % LEGACY_QUANT_BLOCK == 0:
+            return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens":
         return GGMLQuantizationType.F16
+    return GGMLQuantizationType.F16
 
-    # `all-q8` / `all-q4`: every 2-D weight that survives the block-size
-    # guard. That sweeps in VLM/expert attn + MLP linears, the token
-    # embedder, the pos_embed table, the action_in / action_out / time
-    # MLP projections — everything that's currently F16 default in the
-    # vision-q8 build.
-    return target_for_linears
+
+def _profile_q8_broad(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """P2 — Q8_0 on every 2-D linear in vision/VLM (incl. embedder)
+    whose last dim is /32-divisible. Expert linears already F16 via
+    guardrail. Vision fc2 (last_dim 4304, not /32) stays F16."""
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+def _is_vlm_mlp(name: str) -> bool:
+    return name.startswith("vlm.blk.") and ".mlp." in name
+
+
+def _profile_q5_mlp(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """P3 — P2 + Q5_0 on the VLM MLP linears (biggest mass)."""
+    if _is_q_eligible(arr) and _is_vlm_mlp(name):
+        return GGMLQuantizationType.Q5_0
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+def _profile_q4_mlp_emb(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """P4 — most aggressive Python-native: Q4_0 on VLM MLP + token
+    embedder; Q8_0 everywhere else block-eligible."""
+    if _is_q_eligible(arr) and _is_vlm_mlp(name):
+        return GGMLQuantizationType.Q4_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q4_0
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic profiles (from the second sweep, 2026-05-21). Each one flips a
+# *single* knob off the q8_broad baseline (which clears the cos > 0.999 bar)
+# so we can attribute any cos-sim regression to one specific component.
+# ---------------------------------------------------------------------------
+
+
+def _is_vlm_attn(name: str) -> bool:
+    return name.startswith("vlm.blk.") and ".attn." in name
+
+
+_VLM_MLP_LAYER_RE = re.compile(r"^vlm\.blk\.(\d+)\.mlp\.")
+
+
+def _vlm_mlp_layer_index(name: str) -> int | None:
+    m = _VLM_MLP_LAYER_RE.match(name)
+    return int(m.group(1)) if m else None
+
+
+def _profile_q8b_q5_embed(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """Diag — q8_broad + token embedder dropped Q8_0 → Q5_0."""
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q5_0
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+def _profile_q8b_q4_embed(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """Diag — q8_broad + token embedder dropped Q8_0 → Q4_0."""
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q4_0
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+def _profile_q8b_q5_vision(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """Diag — every Q8_0-eligible vision linear dropped to Q5_0. The
+    vision tower feeds the VLM through one Linear and 18 attention
+    layers smooth its output, so it has the most error-tolerance."""
+    if _is_q_eligible(arr) and name.startswith("vision."):
+        return GGMLQuantizationType.Q5_0
+    if _is_q_eligible(arr) and name.startswith("vlm."):
+        return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+def _is_expert_linear(name: str) -> bool:
+    """An expert *linear* weight (attn or mlp), not a norm scale, not an
+    adaRMSNorm modulator. Used by both the bypass-guardrail allow-list
+    and the q8b_q8_expert profile."""
+    if not (name.startswith("expert.") and name.endswith(".weight")):
+        return False
+    if ".ada." in name:
+        return False
+    return True
+
+
+def _profile_q8b_q8_expert(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """Diag — expert linears F16 → Q8_0. Off the guardrail: the expert
+    sits on the residual path with adaRMSNorm gates and is the path
+    that emits actions, so this is the highest-risk knob."""
+    # NOTE: this profile deliberately overrides the F16 guardrail on
+    # expert linears. We achieve that by short-circuiting in
+    # select_target_dtype below; see the special-case there.
+    if _is_q_eligible(arr) and _is_expert_linear(name):
+        return GGMLQuantizationType.Q8_0
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+def _profile_q8b_q5_vlm_attn(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """Diag — VLM attn linears Q8_0 → Q5_0. Small win (~50 MB) but
+    cheap to test."""
+    if _is_q_eligible(arr) and _is_vlm_attn(name):
+        return GGMLQuantizationType.Q5_0
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+# Middle six layers (6..11) of the 18-layer VLM. Hypothesis: edges
+# (layer 0 = right after embed; layer 17 = right before expert sees it)
+# are more sensitive than middle layers that do abstract processing.
+_MID_LAYERS: frozenset[int] = frozenset(range(6, 12))
+
+
+def _profile_q8b_q5_mlp_mid(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """Diag — VLM MLP in *middle* layers only (6..11) dropped to Q5_0;
+    edge layers (0..5, 12..17) stay at Q8_0. Tests whether the previous
+    q5_mlp failure was driven by edges rather than the middle."""
+    layer = _vlm_mlp_layer_index(name)
+    if layer is not None and layer in _MID_LAYERS and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q5_0
+    if _is_q_eligible(arr) and (name.startswith("vision.") or name.startswith("vlm.")):
+        return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+def _profile_q_aggressive(name: str, arr: np.ndarray) -> GGMLQuantizationType:
+    """Final candidate after the 2026-05-21 diagnostic sweep. Stacks
+    every knob that individually passed plan §5's cos > 0.999 bar:
+
+    - Expert linears: F16 → Q8_0          (~−290 MB; cos 0.999892 alone)
+    - Vision Q8_0-eligible: Q8_0 → Q5_0   (~−105 MB; cos 0.999680 alone)
+    - Everything else q8_broad-style: Q8_0 on VLM/embedder/non-vision
+
+    Knobs that failed individually and are deliberately NOT stacked:
+    embedder below Q8_0, VLM attn below Q8_0, MLP edges, MLP middle below Q8_0.
+    """
+    # Bypass-eligible expert linear → Q8_0 (guardrail handled in
+    # select_target_dtype via the bypass list below).
+    if _is_q_eligible(arr) and _is_expert_linear(name):
+        return GGMLQuantizationType.Q8_0
+    # Vision Q5_0 where block-eligible.
+    if _is_q_eligible(arr) and name.startswith("vision."):
+        return GGMLQuantizationType.Q5_0
+    # VLM linears + embedder: Q8_0.
+    if _is_q_eligible(arr) and name.startswith("vlm."):
+        return GGMLQuantizationType.Q8_0
+    if name == "vlm.embed_tokens" and _is_q_eligible(arr):
+        return GGMLQuantizationType.Q8_0
+    return GGMLQuantizationType.F16
+
+
+PROFILES: dict[str, Any] = {
+    "f16":              _profile_f16,
+    "current":          _profile_current,
+    "q8_broad":         _profile_q8_broad,
+    "q5_mlp":           _profile_q5_mlp,
+    "q4_mlp_emb":       _profile_q4_mlp_emb,
+    # Diagnostic profiles (one knob off q8_broad each)
+    "q8b_q5_embed":     _profile_q8b_q5_embed,
+    "q8b_q4_embed":     _profile_q8b_q4_embed,
+    "q8b_q5_vision":    _profile_q8b_q5_vision,
+    "q8b_q8_expert":    _profile_q8b_q8_expert,
+    "q8b_q5_vlm_attn":  _profile_q8b_q5_vlm_attn,
+    "q8b_q5_mlp_mid":   _profile_q8b_q5_mlp_mid,
+    # Final stacked candidate (only the ✅ diagnostic knobs).
+    "q_aggressive":     _profile_q_aggressive,
+}
+
+
+# Profiles that *intentionally* override the expert guardrail. The default
+# guardrail forces all expert linears to F16; this set is allowed to break
+# that. Treated as a single exception so the guardrail logic stays simple
+# and other profiles get the protection by default.
+PROFILES_BYPASS_EXPERT_GUARDRAIL: frozenset[str] = frozenset({
+    "q8b_q8_expert", "q_aggressive",
+})
+
+
+def select_target_dtype(
+    name: str, arr: np.ndarray, profile: str = "current"
+) -> GGMLQuantizationType:
+    """Pick a target GGML dtype for a given tensor under a named profile."""
+    # The expert-linear guardrail is intentionally bypassable by a small,
+    # explicit allow-list of *diagnostic* profiles (see
+    # PROFILES_BYPASS_EXPERT_GUARDRAIL). Every other profile must respect it.
+    # Only the actual expert linears (attn + mlp .weight) are bypassed —
+    # norms and adaRMSNorm modulators stay protected.
+    bypass_expert = (
+        profile in PROFILES_BYPASS_EXPERT_GUARDRAIL
+        and _is_expert_linear(name)
+        and arr.ndim == 2
+    )
+    if not bypass_expert:
+        forced = _guardrail_dtype(name, arr)
+        if forced is not None:
+            return forced
+    rule = PROFILES.get(profile)
+    if rule is None:
+        raise ValueError(
+            f"unknown quant profile {profile!r}; valid: {sorted(PROFILES)}"
+        )
+    dt = rule(name, arr)
+    if dt not in PYTHON_NATIVE_QUANTS:
+        raise ValueError(
+            f"profile {profile!r} selected {dt.name} for {name!r}, which "
+            f"gguf-py cannot pack in Python. Only legacy quants "
+            f"(Q4_0/Q4_1/Q5_0/Q5_1/Q8_0) + F16/F32 are supported."
+        )
+    return dt
 
 
 def encode_for_gguf(
@@ -383,14 +624,24 @@ def encode_for_gguf(
         return arr.astype(np.float32, copy=False), None
     if target == GGMLQuantizationType.F16:
         return arr.astype(np.float16, copy=False), None
-    if target in (GGMLQuantizationType.Q8_0, GGMLQuantizationType.Q4_0):
-        # gguf.quants.quantize returns a packed uint8 buffer + we must pass
-        # raw_dtype=<quant kind> so the writer records the right type code.
-        # quantize_rows expects a 2-D matrix; select_target_dtype already
-        # falls back to F16 for anything that isn't.
+    # All Python-native legacy quants share the same packing call: pass a
+    # 2-D float32 matrix in, get a packed uint8 buffer out. The writer needs
+    # raw_dtype so it records the right type code.
+    if target in {
+        GGMLQuantizationType.Q4_0,
+        GGMLQuantizationType.Q4_1,
+        GGMLQuantizationType.Q5_0,
+        GGMLQuantizationType.Q5_1,
+        GGMLQuantizationType.Q8_0,
+    }:
         if arr.ndim != 2:
             raise ValueError(
                 f"{target.name} requested for non-2D tensor (ndim={arr.ndim})"
+            )
+        if arr.shape[-1] % LEGACY_QUANT_BLOCK != 0:
+            raise ValueError(
+                f"{target.name} requested for tensor with last_dim "
+                f"{arr.shape[-1]} (not /{LEGACY_QUANT_BLOCK}-divisible)"
             )
         packed = gguf_quantize(arr.astype(np.float32, copy=False), target)
         return packed, target
@@ -414,9 +665,8 @@ def load_state_dict_from_lerobot(checkpoint: str) -> dict[str, torch.Tensor]:
     policy = PI05Policy.from_pretrained(checkpoint, config=cfg, strict=False)
     policy.eval()
     sd = policy.state_dict()
-    # Detach + move to CPU; keep original dtype to avoid 2× peak RAM.
-    # The per-tensor encode_for_gguf path handles the float32 cast.
-    return {k: v.detach().cpu() for k, v in sd.items()}
+    # Detach + cast to float32 on CPU for deterministic downstream encoding.
+    return {k: v.detach().to(torch.float32).cpu() for k, v in sd.items()}
 
 
 def load_state_dict_from_safetensors(path: Path) -> dict[str, torch.Tensor]:
@@ -424,7 +674,7 @@ def load_state_dict_from_safetensors(path: Path) -> dict[str, torch.Tensor]:
     from safetensors.torch import load_file as st_load_file
 
     sd = st_load_file(str(path))
-    return {k: v for k, v in sd.items()}
+    return {k: v.to(torch.float32) for k, v in sd.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -432,10 +682,11 @@ def load_state_dict_from_safetensors(path: Path) -> dict[str, torch.Tensor]:
 # ---------------------------------------------------------------------------
 
 
-def stamp_metadata(writer: GGUFWriter, checkpoint: str) -> None:
+def stamp_metadata(writer: GGUFWriter, checkpoint: str, profile: str) -> None:
     """All ``pi05.*`` keys consumed by the addon's load path."""
     writer.add_string("general.architecture", "pi05")
     writer.add_string("general.name", checkpoint)
+    writer.add_string("pi05.quant_profile", profile)
     writer.add_string("pi05.paligemma_variant", "gemma_2b")
     writer.add_string("pi05.action_expert_variant", "gemma_300m")
 
@@ -475,21 +726,14 @@ def convert(
     state_dict: dict[str, torch.Tensor],
     out_path: Path,
     checkpoint: str,
-    *,
-    variant: str = 'vision-q8',
+    profile: str = "current",
 ) -> tuple[int, dict[str, tuple[GGMLQuantizationType, tuple[int, ...]]]]:
     """Walk the state dict, encode each tensor, write the GGUF.
-
-    `variant` selects the quantisation recipe (see select_target_dtype).
 
     Returns ``(n_written, per_tensor_info)`` for the caller's report.
     """
     writer = GGUFWriter(out_path, arch="pi05")
-    stamp_metadata(writer, checkpoint)
-    # Stamp the quant variant into the GGUF so loaders can introspect
-    # which recipe was used without re-running the converter. Cheap to
-    # add; useful for the addon's `getVlaHparams()` surface in the future.
-    writer.add_string("pi05.quantization", variant)
+    stamp_metadata(writer, checkpoint, profile)
 
     name_map = _global_map()
     written: dict[str, tuple[GGMLQuantizationType, tuple[int, ...]]] = {}
@@ -507,8 +751,8 @@ def convert(
             continue
 
         seen_pt_keys.add(pt_name)
-        arr = t.to(torch.float32).numpy()
-        target = select_target_dtype(gg_name, arr, variant=variant)
+        arr = t.numpy()
+        target = select_target_dtype(gg_name, arr, profile)
         payload, raw_dtype = encode_for_gguf(arr, target)
         # For quantised tensors ``payload`` is a packed uint8 buffer whose
         # last dim is bytes (not elements); GGUFWriter does the byte→element
@@ -538,7 +782,7 @@ def convert(
             gg_name = name_map[pt_name]
             shape = optional[pt_name]
             arr = np.zeros(shape, dtype=np.float32)
-            target = select_target_dtype(gg_name, arr, variant=variant)
+            target = select_target_dtype(gg_name, arr, profile)
             payload, raw_dtype = encode_for_gguf(arr, target)
             writer.add_tensor(gg_name, payload, raw_dtype=raw_dtype)
             written[gg_name] = (target, shape)
@@ -773,13 +1017,17 @@ def main() -> int:
     )
     parser.add_argument("--out", type=Path, required=True, help="Output GGUF path.")
     parser.add_argument(
-        "--variant",
-        choices=QUANT_VARIANTS,
-        default='vision-q8',
-        help="Quantisation recipe (see select_target_dtype docstring). "
-             "Default `vision-q8` matches the GGUF used by the parity "
-             "tests; `all-q8` / `all-q4` are smaller mobile-tractable "
-             "variants.",
+        "--profile",
+        choices=sorted(PROFILES),
+        default="q_aggressive",
+        help="Quantisation profile. Default 'q_aggressive' (Q5_0 vision + "
+             "Q8_0 VLM + Q8_0 expert linears + F32 norms/ada; ~3.7 GB for "
+             "pi05_base, cos > 0.999 end-to-end) is what we recommend for "
+             "testing and shipping. See README-pi05-converter.md for the "
+             "full profile table, the 2026-05-21 sweep results, and the "
+             "K-quant follow-up. K-quants (Q*_K) are NOT supported because "
+             "gguf-py lacks Python packers for them and llama-quantize "
+             "doesn't know the pi05 architecture.",
     )
     parser.add_argument(
         "--verify-vs-pt",
@@ -807,11 +1055,11 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    n_written, intended = convert(sd, args.out, source_label, variant=args.variant)
+    n_written, intended = convert(sd, args.out, source_label, args.profile)
     elapsed = time.time() - t0
-    log.info("wrote %d tensors → %s (%.1f MB) in %.1f s [variant=%s]",
+    log.info("wrote %d tensors → %s (%.1f MB) in %.1f s [profile=%s]",
              n_written, args.out, args.out.stat().st_size / 1e6, elapsed,
-             args.variant)
+             args.profile)
 
     # Per-quant breakdown for the report.
     by_dt: dict[GGMLQuantizationType, int] = {}
