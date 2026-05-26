@@ -38,6 +38,10 @@ export const SDK_CLIENT_ERROR_CODES = {
   PEAR_WORKER_ENTRY_REQUIRED: 50606,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
   BUNDLE_VERIFICATION_FAILED: 50609,
+  BARE_PACK_NOT_INSTALLED: 50610,
+  BARE_PACK_ERROR: 50611,
+  INVALID_PLUGIN_SPECIFIER: 50612,
+  BARE_IMPORTS_MAP_NOT_FOUND: 50613,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800,
@@ -179,6 +183,26 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "BUNDLE_VERIFICATION_FAILED",
     message: (bundlePath: string) =>
       `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED]: {
+    name: "BARE_PACK_NOT_INSTALLED",
+    message:
+      "bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack",
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR]: {
+    name: "BARE_PACK_ERROR",
+    message: (exitCode: number, entryPath: string, outputPath: string) =>
+      `bare-pack exited with code ${exitCode}\n\n  Entry file: ${entryPath}\n  Output file: ${outputPath}\n\n  Run bare-pack manually for more details.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER]: {
+    name: "INVALID_PLUGIN_SPECIFIER",
+    message: (specifiers: string) =>
+      `Invalid plugin specifiers (must end with /plugin):\n${specifiers}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_IMPORTS_MAP_NOT_FOUND]: {
+    name: "BARE_IMPORTS_MAP_NOT_FOUND",
+    message: (sdkName: string, expectedPath: string) =>
+      `bare-imports.json not found.\n\n  Expected at: ${expectedPath}\n\n  Make sure ${sdkName} is installed in your project.`,
   },
 
   // Profiler Errors (50,800-50,899)
