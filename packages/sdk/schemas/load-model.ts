@@ -30,6 +30,7 @@ import {
   ocrModelTypeSchema,
   diffusionModelTypeSchema,
   vlaModelTypeSchema,
+  classificationModelTypeSchema,
   ModelType,
   ModelTypeAliases,
   type CanonicalModelType,
@@ -37,6 +38,7 @@ import {
 } from "./model-types";
 import { sdcppConfigSchema } from "./sdcpp-config";
 import { vlaConfigSchema } from "./vla";
+import { classificationConfigSchema } from "./classification";
 
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([
@@ -122,6 +124,14 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: vlaModelTypeSchema,
       modelConfig: vlaConfigSchema.strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelSrc: modelSrcInputSchema.optional(),
+      modelType: classificationModelTypeSchema,
+      modelConfig: classificationConfigSchema.strict().optional(),
     })
     .strict(),
 ]);
@@ -324,6 +334,25 @@ const loadModelOptionsToRequestBaseSchema = z.union([
   z
     .object({
       ...loadModelRequestCommonFields,
+      modelSrc: modelSrcInputSchema.optional(),
+      modelType: classificationModelTypeSchema,
+      modelConfig: classificationConfigSchema.strict().optional(),
+    })
+    .strict()
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.ggmlClassification,
+      modelSrc: data.modelSrc ? modelInputToSrcSchema.parse(data.modelSrc) : "",
+      modelName: data.modelSrc ? modelInputToNameSchema.parse(data.modelSrc) : undefined,
+      modelConfig: data.modelConfig ?? {},
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
       modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
         message: "Built-in model types must use their specific schema",
       }),
@@ -427,6 +456,13 @@ export const loadVlaModelRequestSchema = commonModelConfigSchema
   })
   .strict();
 
+export const loadClassificationModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.ggmlClassification),
+    modelConfig: classificationConfigSchema.optional(),
+  })
+  .strict();
+
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
 export const loadCustomPluginModelRequestSchema =
   commonModelConfigSchema.extend({
@@ -448,6 +484,7 @@ export const loadModelSrcRequestSchema = z
     loadOcrModelRequestSchema,
     loadDiffusionModelRequestSchema,
     loadVlaModelRequestSchema,
+    loadClassificationModelRequestSchema,
     loadCustomPluginModelRequestSchema,
   ])
   .transform((data) => ({

@@ -52,6 +52,7 @@ import { MobileParakeetStreamExecutor } from "./executors/parakeet-stream-execut
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
+import { MobileClassificationExecutor } from "./executors/classification-executor.js";
 import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
@@ -124,6 +125,12 @@ resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
   type: "ocr",
   config: { langList: ["en"] },
+});
+
+// Classification ships bundled weights inside @qvac/classification-ggml,
+// so no registry constant / pre-download is required.
+resources.define("classification", {
+  type: "classification",
 });
 
 resources.define("sharded-embeddings", {
@@ -377,6 +384,7 @@ export const executor = createExecutor({
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new MobileOcrExecutor(resources),
+    new MobileClassificationExecutor(resources),
     new MobileTtsExecutor(resources),
     new MobileConfigReloadExecutor(resources),
     new MobileLoggingExecutor(resources),

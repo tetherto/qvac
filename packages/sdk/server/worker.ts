@@ -15,6 +15,7 @@ import {
   ocrPlugin,
   diffusionPlugin,
   vlaPlugin,
+  classificationPlugin,
 } from "@/server/bare/plugins";
 
 const { hasRPCConfig } = initializeWorkerCore();
@@ -33,6 +34,7 @@ registerPlugin(ttsPlugin);
 registerPlugin(ocrPlugin);
 registerPlugin(diffusionPlugin);
 registerPlugin(vlaPlugin);
+registerPlugin(classificationPlugin);
 
 logger.info(
   hasRPCConfig
