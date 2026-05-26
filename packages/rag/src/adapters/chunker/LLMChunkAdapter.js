@@ -7,21 +7,9 @@ const { tokenizeText } = require('./Tokenizer')
 
 let _llmSplitterSplit = null
 
-async function getLLMSplitter () {
+function getLLMSplitter () {
   if (!_llmSplitterSplit) {
-    try {
-      const llmSplitter = await import('llm-splitter')
-      _llmSplitterSplit = llmSplitter.split
-    } catch (error) {
-      if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
-        throw new QvacErrorRAG({
-          code: ERR_CODES.DEPENDENCY_REQUIRED,
-          adds: 'llm-splitter is required for LLMChunkAdapter.',
-          cause: error
-        })
-      }
-      throw error
-    }
+    _llmSplitterSplit = require('llm-splitter').split
   }
   return _llmSplitterSplit
 }
@@ -87,7 +75,7 @@ class LLMChunkAdapter extends BaseChunkAdapter {
 
       delete chunkOptions.splitStrategy
 
-      const split = await getLLMSplitter()
+      const split = getLLMSplitter()
       const chunks = split(input, chunkOptions)
       return this._processChunks(chunks)
     } catch (error) {
