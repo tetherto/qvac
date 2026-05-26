@@ -10,9 +10,13 @@
 // Lifetime / threading
 //   - The step owns a CPU `ggml_backend`, a `GgufLoader`, and a
 //     `CraftWeights` containing the BN-folded weights.
-//   - One `process()` call rebuilds a graph for the input's spatial size
-//     (so any image dim is supported).  Not thread-safe.
+//   - A `process()` call builds a ggml graph the first time it sees an
+//     input shape (so any image dim is supported), caches the graph +
+//     allocator + I/O tensor pointers, and reuses them on subsequent
+//     calls with the same `(H, W)`.  Calls with a new shape rebuild
+//     once and re-cache.  Not thread-safe.
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -23,6 +27,10 @@
 #include "steps.hpp"
 
 using ggml_backend_t = struct ggml_backend*;
+using ggml_gallocr_t = struct ggml_gallocr*;
+struct ggml_cgraph;
+struct ggml_context;
+struct ggml_tensor;
 
 // NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 // StepDetectionInference header uses snake_case (gguf_path) to mirror the
@@ -152,11 +160,34 @@ private:
   // Returns (textMap, linkMap) as 2D CV_32F mats sized [H/2, W/2].
   std::pair<cv::Mat, cv::Mat> runInference(const cv::Mat& inputBlob);
 
+  // The CRAFT graph is fully determined by the input spatial shape (H,W);
+  // weights and ops are otherwise identical across calls.  Keep the
+  // context / allocator / graph / input+output tensor pointers live so
+  // that back-to-back inferences on same-sized inputs (the common case
+  // when batching a single document's pages) skip the per-call
+  // `ggml_init` + `build_craft` + `gallocr_alloc_graph` cost.
+  // Rebuild lazily when (H,W) changes; tear down in the destructor.
+  struct CraftGraphCache {
+    int lastW = 0;
+    int lastH = 0;
+    std::vector<uint8_t> ctxBuf;
+    ggml_context* gctx = nullptr;
+    ggml_gallocr_t gallocr = nullptr;
+    ggml_cgraph* gf = nullptr;
+    ggml_tensor* x = nullptr;   // input tensor
+    ggml_tensor* out = nullptr; // output tensor
+  };
+  void ensureGraph(int H, int W);
+  void destroyGraph();
+
   float magRatio_;
   OcrBackendsHandle backendsHandle_; // must be declared before backend_
   ggml_backend_t backend_ = nullptr;
   std::unique_ptr<GgufLoader> loader_;
   std::unique_ptr<CraftWeights> weights_;
+  CraftGraphCache graphCache_{};
+  // Reusable host buffer for ggml_backend_tensor_get of the NHWC output.
+  std::vector<float> nhwcScratch_;
   DetectionStageTimings lastTimings_{};
 };
 

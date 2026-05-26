@@ -36,6 +36,9 @@ permissions:
   packages: read
   id-token: write
 
+env:
+  PKG_DIR: packages/ocr-ggml
+
 jobs:
   label-gate:
     name: Authorise (label-gate)

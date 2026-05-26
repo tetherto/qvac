@@ -54,6 +54,10 @@ constexpr int kFpnFeatureTap1 = 3;
 constexpr int kFpnFeatureTap2 = 6;
 constexpr int kFpnFeatureTap3 = 12;
 
+#ifdef QVAC_OCR_GGML_DEBUG_GGUF_METADATA
+// Diagnostic dump of every GGUF metadata key.  Gated behind a build-time
+// flag because the per-load DEBUG log line (and the std::ostringstream
+// build) is dev-only and irrelevant for production inference paths.
 void printGgufMetadataKeys(const gguf_context* gguf) {
   if (gguf == nullptr) {
     QLOG(
@@ -71,6 +75,7 @@ void printGgufMetadataKeys(const gguf_context* gguf) {
   }
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, os.str());
 }
+#endif
 
 /// Tensors whose first dim is F16 are treated as storage-only; everything
 /// used in runtime math (BN-folded scale/shift, FC weights) is kept as F32
@@ -523,7 +528,9 @@ WeightsBundle loadWeights(
       gguf, gguf_free);
   std::unique_ptr<struct ggml_context, decltype(&ggml_free)> ggmlCtxGuard(
       ggmlCtx, ggml_free);
+#ifdef QVAC_OCR_GGML_DEBUG_GGUF_METADATA
   printGgufMetadataKeys(gguf);
+#endif
 
   // Read BN epsilon metadata and fall back to the architecture-standard 0.001
   // if the GGUF was produced by a tool that omitted it. Never trust 1e-5.

@@ -205,12 +205,72 @@ StepDetectionInference::StepDetectionInference(
 }
 
 StepDetectionInference::~StepDetectionInference() {
+  destroyGraph();
   weights_.reset();
   loader_.reset();
   if (backend_ != nullptr) {
     ggml_backend_free(backend_);
     backend_ = nullptr;
   }
+}
+
+void StepDetectionInference::destroyGraph() {
+  if (graphCache_.gallocr != nullptr) {
+    ggml_gallocr_free(graphCache_.gallocr);
+    graphCache_.gallocr = nullptr;
+  }
+  if (graphCache_.gctx != nullptr) {
+    ggml_free(graphCache_.gctx);
+    graphCache_.gctx = nullptr;
+  }
+  graphCache_.gf = nullptr;
+  graphCache_.x = nullptr;
+  graphCache_.out = nullptr;
+  graphCache_.lastW = 0;
+  graphCache_.lastH = 0;
+}
+
+void StepDetectionInference::ensureGraph(int H, int W) {
+  if (graphCache_.gctx != nullptr && graphCache_.lastH == H &&
+      graphCache_.lastW == W) {
+    return;
+  }
+
+  destroyGraph();
+
+  const size_t graph_ctx_size =
+      (ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE) +
+      ggml_graph_overhead();
+  graphCache_.ctxBuf.assign(graph_ctx_size, 0);
+  ggml_init_params init{
+      .mem_size = graph_ctx_size,
+      .mem_buffer = graphCache_.ctxBuf.data(),
+      .no_alloc = true,
+  };
+  graphCache_.gctx = ggml_init(init);
+
+  graphCache_.x = ggml_new_tensor_4d(
+      graphCache_.gctx, GGML_TYPE_F32, W, H, /*C=*/3, /*N=*/1);
+  ggml_set_name(graphCache_.x, "input");
+
+  graphCache_.out = easyocr::ggml::build_craft(
+      graphCache_.gctx, *weights_, graphCache_.x, /*taps=*/nullptr);
+  ggml_set_output(graphCache_.out);
+
+  graphCache_.gf =
+      ggml_new_graph_custom(graphCache_.gctx, GGML_DEFAULT_GRAPH_SIZE, false);
+  ggml_build_forward_expand(graphCache_.gf, graphCache_.out);
+
+  graphCache_.gallocr =
+      ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend_));
+  if (!ggml_gallocr_alloc_graph(graphCache_.gallocr, graphCache_.gf)) {
+    destroyGraph();
+    throw std::runtime_error(
+        "StepDetectionInference: ggml_gallocr_alloc_graph failed");
+  }
+
+  graphCache_.lastH = H;
+  graphCache_.lastW = W;
 }
 
 std::pair<cv::Mat, cv::Mat>
@@ -232,49 +292,26 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
         "StepDetectionInference::runInference: expected NCHW [1,3,H,W]");
   }
 
-  // ---- Stage: graph build ----
+  // ---- Stage: graph build (cached) ----
   const auto tBuild0 = clock::now();
-  const size_t graph_ctx_size =
-      (ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE) +
-      ggml_graph_overhead();
-  std::vector<uint8_t> graph_buf(graph_ctx_size);
-  ggml_init_params init{
-      .mem_size = graph_ctx_size,
-      .mem_buffer = graph_buf.data(),
-      .no_alloc = true,
-  };
-  ggml_context* gctx = ggml_init(init);
-
-  auto* x = ggml_new_tensor_4d(gctx, GGML_TYPE_F32, W, H, C, N);
-  ggml_set_name(x, "input");
-
-  auto* out = easyocr::ggml::build_craft(gctx, *weights_, x, /*taps=*/nullptr);
-  ggml_set_output(out);
-
-  auto* gf = ggml_new_graph_custom(gctx, GGML_DEFAULT_GRAPH_SIZE, false);
-  ggml_build_forward_expand(gf, out);
+  const bool needsRebuild =
+      graphCache_.gctx == nullptr || graphCache_.lastH != H ||
+      graphCache_.lastW != W;
   const auto tBuild1 = clock::now();
-  lastTimings_.graphBuildMs = msd(tBuild1 - tBuild0).count();
+  lastTimings_.graphBuildMs = needsRebuild ? 0.0 : msd(tBuild1 - tBuild0).count();
 
-  // ---- Stage: graph alloc ----
+  // ---- Stage: graph alloc (cached; only re-runs on (H,W) change) ----
   const auto tAlloc0 = clock::now();
-  auto* gallocr =
-      ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend_));
-  if (!ggml_gallocr_alloc_graph(gallocr, gf)) {
-    ggml_gallocr_free(gallocr);
-    ggml_free(gctx);
-    throw std::runtime_error(
-        "StepDetectionInference: ggml_gallocr_alloc_graph failed");
-  }
-  ggml_backend_tensor_set(x, inputBlob.ptr<float>(), 0, ggml_nbytes(x));
+  ensureGraph(H, W);
+  ggml_backend_tensor_set(
+      graphCache_.x, inputBlob.ptr<float>(), 0, ggml_nbytes(graphCache_.x));
   const auto tAlloc1 = clock::now();
   lastTimings_.graphAllocMs = msd(tAlloc1 - tAlloc0).count();
 
   // ---- Stage: graph compute (actual inference) ----
   const auto tCompute0 = clock::now();
-  if (ggml_backend_graph_compute(backend_, gf) != GGML_STATUS_SUCCESS) {
-    ggml_gallocr_free(gallocr);
-    ggml_free(gctx);
+  if (ggml_backend_graph_compute(backend_, graphCache_.gf) !=
+      GGML_STATUS_SUCCESS) {
     throw std::runtime_error(
         "StepDetectionInference: ggml_backend_graph_compute failed");
   }
@@ -286,12 +323,13 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
   // out has ggml ne [2, W/2, H/2, 1] == NHWC [1, H/2, W/2, 2]. Copy it
   // back as [H/2, W/2, 2] interleaved, then split into two single-channel
   // CV_32F mats — same memory layout `extractOutputFromOrtValue` produced.
+  ggml_tensor* out = graphCache_.out;
   const int outH = static_cast<int>(out->ne[2]);
   const int outW = static_cast<int>(out->ne[1]);
   assert(out->ne[0] == 2 && out->ne[3] == 1);
 
-  std::vector<float> nhwc(static_cast<size_t>(outH) * outW * 2);
-  ggml_backend_tensor_get(out, nhwc.data(), 0, ggml_nbytes(out));
+  nhwcScratch_.resize(static_cast<size_t>(outH) * outW * 2);
+  ggml_backend_tensor_get(out, nhwcScratch_.data(), 0, ggml_nbytes(out));
   const auto tGet1 = clock::now();
   lastTimings_.tensorGetMs = msd(tGet1 - tGet0).count();
 
@@ -299,7 +337,7 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
   const auto tDeinterleave0 = clock::now();
   cv::Mat textMap(outH, outW, CV_32F);
   cv::Mat linkMap(outH, outW, CV_32F);
-  const float* p = nhwc.data();
+  const float* p = nhwcScratch_.data();
   for (int y = 0; y < outH; ++y) {
     auto* tRow = textMap.ptr<float>(y);
     auto* lRow = linkMap.ptr<float>(y);
@@ -310,9 +348,6 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
   }
   const auto tDeinterleave1 = clock::now();
   lastTimings_.deinterleaveMs = msd(tDeinterleave1 - tDeinterleave0).count();
-
-  ggml_gallocr_free(gallocr);
-  ggml_free(gctx);
 
   return {textMap, linkMap};
 }

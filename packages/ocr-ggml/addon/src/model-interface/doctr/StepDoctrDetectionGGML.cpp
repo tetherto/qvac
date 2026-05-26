@@ -132,19 +132,27 @@ cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
   const int H = preprocessed.rows;
   const int W = preprocessed.cols;
   CV_Assert(H == DBNET_INPUT_SIZE && W == DBNET_INPUT_SIZE);
+  CV_Assert(preprocessed.type() == CV_32FC3);
+  CV_Assert(preprocessed.isContinuous());
 
-  std::vector<cv::Mat> channels;
-  cv::split(preprocessed, channels);
-
-  const int numChannels = static_cast<int>(channels.size());
+  // Deinterleave HWC -> CHW directly into the reusable inputBuffer_.
+  // Previously this path used `cv::split` + a per-channel `memcpy`, which
+  // allocated three full-resolution scratch `cv::Mat`s on every call
+  // (~12 MB at DBNET_INPUT_SIZE=1024).  The single-pass HWC->CHW loop
+  // below produces identical bytes but reuses `inputBuffer_` across calls.
+  constexpr int kNumChannels = 3;
   const size_t planeFloats = static_cast<size_t>(H) * W;
-  inputBuffer_.resize(planeFloats * static_cast<size_t>(numChannels));
-  for (int c = 0; c < numChannels; ++c) {
-    CV_Assert(channels[c].isContinuous());
-    std::memcpy(
-        inputBuffer_.data() + (planeFloats * static_cast<size_t>(c)),
-        channels[c].ptr<float>(),
-        planeFloats * sizeof(float));
+  inputBuffer_.resize(planeFloats * static_cast<size_t>(kNumChannels));
+
+  const auto* srcHwc = preprocessed.ptr<float>();
+  float* dstChwR = inputBuffer_.data();
+  float* dstChwG = dstChwR + planeFloats;
+  float* dstChwB = dstChwG + planeFloats;
+  for (size_t i = 0; i < planeFloats; ++i) {
+    const size_t si = i * kNumChannels;
+    dstChwR[i] = srcHwc[si];
+    dstChwG[i] = srcHwc[si + 1];
+    dstChwB[i] = srcHwc[si + 2];
   }
 
   ggml_backend_tensor_set(
