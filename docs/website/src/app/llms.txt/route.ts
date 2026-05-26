@@ -15,10 +15,10 @@ const ROOT_SECTION = '(root)';
 /**
  * Generates the `llms.txt` agent index at build time.
  *
- * Format follows the de-facto convention popularized by https://llmstxt.org/:
- * an H1 with the project name, a short paragraph describing the site, a
- * "Guidance" preamble, and one `## Section` per top-level slug whose body is
- * a bullet list of `- [Title](url): description` entries.
+ * Format follows the spec at https://llmstxt.org/#format: an H1 with the
+ * project name, a blockquote with a short summary, optional non-heading
+ * details (here, a "Guidance" preamble), and one H2 section per top-level
+ * slug whose body is a bullet list of `- [Title](url): description` entries.
  *
  * Archived per-section versions (e.g. `/reference/api/v0.7.0`) are filtered
  * out via `isArchivedPage` so the index advertises only the latest canonical
@@ -36,7 +36,7 @@ export function GET() {
   const lines: string[] = [
     '# QVAC Documentation',
     '',
-    "Agent index for the QVAC developer documentation. QVAC is Tether's local-first AI SDK for cross-platform, peer-to-peer applications.",
+    "> Agent index for the QVAC developer documentation. QVAC is Tether's local-first AI SDK for cross-platform, peer-to-peer applications.",
     '',
     '## Guidance',
     '',
