@@ -11,7 +11,7 @@ export function loadCurrentModels (outputFile: string): CurrentModel[] {
     }
 
     const content = fs.readFileSync(outputFile, 'utf-8')
-    const modelsMatch = content.match(/export const models = \[([\s\S]*?)\] as const/)
+    const modelsMatch = content.match(/export const allModels = \[([\s\S]*?)\] as const/)
 
     if (!modelsMatch?.[1]) {
       return []
