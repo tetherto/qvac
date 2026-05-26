@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.0] - 2026-05-23
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1`.
+- Relaxed the `cmake-bare` dev dependency range to accept compatible patch releases.
+
 ## [0.1.0]
 
 - Initial release of `@qvac/vla-ggml`. Ports the SmolVLA vision-language-action

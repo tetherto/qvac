@@ -1,6 +1,6 @@
 {
   "name": "@qvac/registry-schema",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "HyperDB schema and database wrapper for QVAC Registry",
   "license": "Apache-2.0",
   "repository": {
@@ -22,11 +22,9 @@
     "NOTICE"
   ],
   "dependencies": {
+    "hyperdb": "^6.7.0",
     "hyperdispatch": "^1.4.0",
     "hyperschema": "^1.13.0",
     "ready-resource": "^1.2.0"
-  },
-  "peerDependencies": {
-    "hyperdb": "^4.16.0"
   }
 }

@@ -28,7 +28,7 @@
     {
       "name": "whisper-cpp",
       "version": "1.8.4.3",
-      "port-version": 0
+      "port-version": 1
     }
   ]
 }

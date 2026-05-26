@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.10.0] - 2026-05-25
+
+### Changed
+
+- Consume `stable-diffusion-cpp@2026-03-01#5` from `tetherto/qvac-registry-vcpkg` after sd.cpp PR #6 and registry PR #166, which add generic GGML ESRGAN upscaler backend init with device and preference APIs.
+- Remove the temporary package-local `stable-diffusion-cpp` vcpkg overlay port; the addon now resolves the port from the registry.
+
+### Added
+
+- Report `backendDevice` in ESRGAN upscaler runtime stats after load, reflecting the backend stable-diffusion.cpp selected for the upscaler context.
+
+### Fixed
+
+- On Android, ESRGAN `gpu` / `auto` config now falls back to CPU to avoid the unstable mobile GPU/OpenCL upscaler path.
+
+## [0.9.1] - 2026-05-25
+
+### Fixed
+
+#### Correct `SdVideoFrames` construction after `generate_video`
+
+`processVideo()` previously constructed `SdVideoFrames` in the same expression as the `generate_video()` call, passing `numFramesOut` before the library had written the out-parameter. Because C++ does not define evaluation order across function arguments, the RAII wrapper could capture a stale frame count (typically zero), leading to incorrect cleanup or empty output even when frames were produced. The call is now split: `generate_video()` runs first, then `SdVideoFrames` is built from the returned pointer and the updated `numFramesOut` value.
+
 ## [0.9.0] - 2026-05-21
 
 ### Changed
