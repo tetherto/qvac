@@ -18,18 +18,16 @@
 # for the upstream-bound fix; that file is the canonical source of truth for
 # the change and should land verbatim in the upstream PR.
 
-# Pinned to 00cd2a09 -- the same commit the qvac registry's
-# stable-diffusion-cpp@2026-03-01#4 served (which is what `vcpkg.json`
-# `version>=": "2026-03-01#4"` currently resolves to before the registry
-# bumped to #5). Stays on #4 because the addon's SdModel.cpp references
-# `SD_BACKEND_PREF_AUTO` which #4 exposes but #5 dropped from the public
-# enum; bumping to a newer revision is a separate concern from the wan-i2v
-# tiling fix.
+# Pinned to 747a1801 -- the same commit the qvac registry's
+# stable-diffusion-cpp@2026-03-01#5 uses (merge of qvac-ext PR#6 which adds
+# generic ESRGAN upscaler backend init with sd_upscaler_device_t and
+# new_upscaler_ctx_with_device). The wan-i2v VAE-tiling patch is layered on
+# top of this base.
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 00cd2a099d984f9c484a0e9cdb5e096e94ec68d1
-    SHA512 5be72e982fa970ebebe2cf6325ef73cde7a34ec1299018e8b16340e2cd6dccda8c65de04b408d294c84013683765c84be40c42790784cb3c77d3cdc7d79b4c0a
+    REF 747a180119c864e8cde0879f308200f028dfb9fe
+    SHA512 ad3079f2466c9182b465f7b3aca7793d01c25095732fd101a0fd19036938ec0f866b76ecc8dabda30e04c1098e34173f6a62be6c86ffca2745a6f8ecfb30b4fa
     HEAD_REF 2026-03-01
     PATCHES
         wan-i2v-encode-video-bypass-tiling.patch
