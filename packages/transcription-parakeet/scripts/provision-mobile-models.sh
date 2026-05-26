@@ -1,48 +1,49 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# provision-mobile-models.sh
-#
-# Provisions the Parakeet q4_0 GGUFs (TDT + EOU + Sortformer, ~520 MiB
-# total) into test/mobile/testAssets/ so the mobile test framework can
-# bundle them into the test app.  CTC is intentionally skipped — shares
-# the FastConformer encoder with TDT so duplicating it would only add
-# bundle size.
-#
-# Called from .github/workflows/integration-mobile-test-transcription-parakeet.yml
-# in a step gated by the actions/cache hit — cache miss runs this,
-# cache hit skips it (the GGUFs + .nemo checkpoints are cached at models/).
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ADDON_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$ADDON_DIR"
 
-echo "[$(basename "$0")] Setting up Python venv..."
-bash scripts/setup-venv.sh
+REGISTRY_BUCKET="${MODEL_S3_BUCKET:-}"
+if [ -z "$REGISTRY_BUCKET" ]; then
+  echo "ERROR: MODEL_S3_BUCKET env var is required (the S3 bucket holding the QVAC model registry)." >&2
+  exit 1
+fi
 
-for t in tdt eou sortformer; do
-  echo ""
-  echo "[$(basename "$0")] === Downloading and converting ${t} ==="
-  bash scripts/download-models.sh -t "$t"
-  bash scripts/convert-nemo.sh -t "$t" -q q4_0
+REGISTRY_PREFIX="qvac_models_compiled/ggml/parakeet/2026-05-11"
+MODELS_DIR="models"
+TEST_ASSETS_DIR="test/mobile/testAssets"
+Q4_FILES=(
+  "parakeet-tdt-0.6b-v3.q4_0.gguf"
+  "parakeet-eou-120m-v1.q4_0.gguf"
+  "sortformer-4spk-v1.q4_0.gguf"
+)
+
+mkdir -p "$MODELS_DIR" "$TEST_ASSETS_DIR"
+
+for f in "${Q4_FILES[@]}"; do
+  if [ -s "$MODELS_DIR/$f" ]; then
+    echo "[$(basename "$0")] ✓ $f already present in $MODELS_DIR/"
+    continue
+  fi
+  echo "[$(basename "$0")] Downloading $f from s3://$REGISTRY_BUCKET/$REGISTRY_PREFIX/"
+  aws s3 cp "s3://$REGISTRY_BUCKET/$REGISTRY_PREFIX/$f" "$MODELS_DIR/$f"
 done
 
 echo ""
-echo "[$(basename "$0")] Converted GGUFs:"
-ls -lh models/*.q4_0.gguf
+echo "[$(basename "$0")] Downloaded GGUFs:"
+ls -lh "$MODELS_DIR"/*.q4_0.gguf
 
-mkdir -p test/mobile/testAssets
-for f in parakeet-tdt-0.6b-v3.q4_0.gguf \
-         parakeet-eou-120m-v1.q4_0.gguf \
-         sortformer-4spk-v1.q4_0.gguf; do
-  if [ ! -s "models/$f" ]; then
-    echo "ERROR: missing or empty models/$f -- conversion may have failed" >&2
-    ls -la models/ || true
+for f in "${Q4_FILES[@]}"; do
+  if [ ! -s "$MODELS_DIR/$f" ]; then
+    echo "ERROR: missing or empty $MODELS_DIR/$f -- registry download may have failed" >&2
+    ls -la "$MODELS_DIR/" || true
     exit 1
   fi
-  cp "models/$f" "test/mobile/testAssets/"
+  cp "$MODELS_DIR/$f" "$TEST_ASSETS_DIR/"
 done
 
-echo "[$(basename "$0")] Staged GGUFs in test/mobile/testAssets/:"
-ls -lh test/mobile/testAssets/
+echo "[$(basename "$0")] Staged GGUFs in $TEST_ASSETS_DIR/:"
+ls -lh "$TEST_ASSETS_DIR/"
