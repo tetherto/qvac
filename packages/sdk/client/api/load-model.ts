@@ -8,11 +8,13 @@ import {
   type ReloadConfigOptions,
   type RPCOptions,
   type ModelDescriptor,
+  type SdcppConfig,
   loadModelOptionsToRequestSchema,
   reloadConfigOptionsToRequestSchema,
   isModelTypeAlias,
   normalizeModelType,
   inferModelTypeFromModelSrc,
+  ModelType,
 } from "@/schemas";
 import {
   ModelLoadFailedError,
@@ -26,6 +28,17 @@ import { decoratePromise } from "@/utils/decorate-promise";
 import { generateClientRequestId } from "@/client/api/client-request-id";
 
 const logger = getClientLogger();
+
+interface ReactNativeRuntimeGlobal {
+  navigator?: { product?: string };
+}
+
+function isReactNativeRuntime() {
+  const runtime = globalThis as ReactNativeRuntimeGlobal;
+  return runtime.navigator?.product === "ReactNative";
+}
+
+let warnedLocalVideoModelLoad = false;
 
 /**
  * Loads a model from a descriptor; `modelType` is inferred from `modelSrc`.
@@ -256,6 +269,31 @@ async function runLoadModel(
       logger.warn(
         `Model type "${modelType}" is an alias and will be deprecated. Use "${canonical}" instead.`,
       );
+    }
+
+    const canonicalModelType =
+      typeof modelType === "string" ? normalizeModelType(modelType) : modelType;
+    const modelConfig = resolvedOptions["modelConfig"] as
+      | SdcppConfig
+      | undefined;
+    if (
+      isReactNativeRuntime() &&
+      canonicalModelType === ModelType.sdcppGeneration &&
+      modelConfig?.mode === "video" &&
+      resolvedOptions["delegate"] === undefined &&
+      !warnedLocalVideoModelLoad
+    ) {
+      warnedLocalVideoModelLoad = true;
+      const message =
+        "QVAC video generation works on React Native, but loading the video " +
+        "model on-device will usually fail or take several minutes — the video " +
+        "diffusion models currently shipped by the SDK are too large to load " +
+        "on typical mobile devices. Pass a `delegate` to `loadModel(...)` to " +
+        "run generation on a desktop peer instead.";
+      logger.warn(message);
+      // Surface via console too - if an RN host app doesn't wire getClientLogger()
+      // to a visible transport, logger.warn alone won't reach the dev.
+      console.warn(message);
     }
   }
 

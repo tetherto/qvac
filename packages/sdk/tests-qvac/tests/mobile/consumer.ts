@@ -346,6 +346,10 @@ export const executor = createExecutor({
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
+    new SkipExecutor(
+      /^video-/,
+      "Video mode works on mobile but SDK-shipped Wan models are too large to load on-device; mobile apps should pass a `delegate` to loadModel(...), desktop covers local-load coverage",
+    ),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
     new SkipExecutor(
       /^translation-bergamot-.+-cache-reload$/,
