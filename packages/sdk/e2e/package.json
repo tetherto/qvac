@@ -5,7 +5,7 @@
   "type": "module",
   "description": "SDK tests using QVAC test framework",
   "scripts": {
-    "prepare:sdk": "cd .. && (bun i && bun run build); cd tests-qvac",
+    "prepare:sdk": "cd .. && (bun i && bun run build); cd e2e",
     "build": "npm run clean && tsc",
     "install:build": "npm install --install-links && npm run build",
     "install:build:full": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run install:build",
