@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
+      - ".github/actions/cache-models/**"
   workflow_dispatch:
 
 permissions:

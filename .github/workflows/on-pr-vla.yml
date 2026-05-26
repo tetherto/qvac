@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
+      - ".github/actions/cache-models/**"
   workflow_dispatch:
 
   workflow_call:

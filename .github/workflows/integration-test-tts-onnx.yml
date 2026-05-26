@@ -208,6 +208,15 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      - name: Cache TTS ONNX models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: tts-onnx
+          paths: packages/tts-onnx/models
+          hash-files-glob: packages/tts-onnx/test/utils/downloadModel.js
+
       - name: Run integration test
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration

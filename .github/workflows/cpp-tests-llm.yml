@@ -119,7 +119,17 @@ jobs:
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
+      - name: Cache C++ test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: llm-llamacpp
+          paths: packages/llm-llamacpp/models/unit-test
+          hash-files-glob: packages/llm-llamacpp/scripts/download-unit-test-models.js
+
       - name: Download test models
+        if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
