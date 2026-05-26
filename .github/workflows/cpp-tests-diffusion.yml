@@ -118,7 +118,19 @@ jobs:
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14' }}
+      - name: Cache C++ test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          paths: |
+            packages/diffusion-cpp/test/model
+            packages/diffusion-cpp/models
+            !packages/diffusion-cpp/test/model/*.png
+          hash-files-glob: packages/diffusion-cpp/scripts/download-model-sd2.sh
+
+      - if: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14') && steps.model-cache.outputs.cache-hit != 'true' }}
         name: Download SD2 model for C++ tests
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -130,7 +142,7 @@ jobs:
           cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
           test -f ./test/model/stable-diffusion-v2-1-Q8_0.gguf
 
-      - if: ${{ matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == 'windows-2025' && steps.model-cache.outputs.cache-hit != 'true' }}
         name: Download SD2 model for C++ tests (Windows)
         working-directory: ${{ env.WORKDIR }}
         shell: powershell

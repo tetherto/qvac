@@ -108,6 +108,10 @@
       "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
       "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
     },
+    "./ggml-classification/plugin": {
+      "types": "./dist/server/bare/plugins/ggml-classification/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/ggml-classification/plugin.js"
+    },
     "./plugin-utils": {
       "types": "./dist/schemas/plugin.d.ts",
       "import": "./dist/schemas/plugin.js"
@@ -184,6 +188,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
+    "@qvac/classification-ggml": "^0.2.0",
     "@qvac/decoder-audio": "^0.3.7",
     "@qvac/diffusion-cpp": "^0.9.1",
     "@qvac/embed-llamacpp": "^0.17.0",

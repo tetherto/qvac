@@ -186,7 +186,7 @@ jobs:
           run-count: ${{ steps.schedule.outputs.run-count }}
 
       - name: Collect and upload Device Farm logs
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
         with:
           platform: ${{ matrix.platform }}
@@ -205,7 +205,7 @@ jobs:
       # umbrella `combine-perf-reports` job (on-pr-llm-llamacpp.yml)
       # scans for.
       - name: Extract & upload addon perf report (LLM)
-        if: always() && steps.schedule.outputs.run-count != '0' && steps.schedule.outputs.run-count != ''
+        if: always() && !cancelled() && steps.schedule.outputs.run-count != '0' && steps.schedule.outputs.run-count != ''
         uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
           platform: ${{ matrix.platform }}
@@ -214,7 +214,7 @@ jobs:
           artifact-name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
         with:
           addon-npm-name: '@qvac/llm-llamacpp'

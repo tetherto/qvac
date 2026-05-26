@@ -7,3 +7,4 @@ export { ttsPlugin } from "./tts-ggml/plugin";
 export { ocrPlugin } from "./onnx-ocr/plugin";
 export { diffusionPlugin } from "./sdcpp-generation/plugin";
 export { vlaPlugin } from "./ggml-vla/plugin";
+export { classificationPlugin } from "./ggml-classification/plugin";
