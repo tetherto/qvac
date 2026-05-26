@@ -1,4 +1,4 @@
-import { readdirSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { join, dirname } from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
@@ -23,8 +23,17 @@ const testFiles = collectTestFiles(testDir);
 
 let hasFailure = false;
 
+function usesNodeTestRunner(filePath: string): boolean {
+  const source = readFileSync(filePath, "utf8");
+  return (
+    source.includes("from 'node:test'") ||
+    source.includes('from "node:test"')
+  );
+}
+
 for (const file of testFiles) {
-  const result = spawnSync("bun", ["run", file], {
+  const args = usesNodeTestRunner(file) ? ["test", file] : ["run", file];
+  const result = spawnSync("bun", args, {
     stdio: "inherit",
   });
   if (result.status !== 0) {

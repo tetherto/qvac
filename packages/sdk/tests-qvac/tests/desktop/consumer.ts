@@ -38,6 +38,9 @@ import {
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
+  WAN2_1_T2V_1_3B_FP16,
+  UMT5_XXL_FP16,
+  WAN_2_1_COMFYUI_REPACKAGED_VAE,
   SD_V2_1_1B_Q8_0,
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
@@ -73,6 +76,7 @@ import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
 import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
+import { VideoExecutor } from "./executors/video-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
@@ -361,6 +365,22 @@ resources.define("diffusion-fa-disabled", {
   },
 });
 
+resources.define("video", {
+  constant: WAN2_1_T2V_1_3B_FP16,
+  type: "diffusion",
+  config: {
+    mode: "video",
+    device: "gpu",
+    threads: 4,
+    t5XxlModelSrc: UMT5_XXL_FP16,
+    vaeModelSrc: WAN_2_1_COMFYUI_REPACKAGED_VAE,
+    diffusion_fa: true,
+    offload_to_cpu: true,
+    vae_on_cpu: true,
+    vae_tiling: true,
+  },
+});
+
 // Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
 resources.define("diffusion-esrgan", {
   constant: SD_V2_1_1B_Q8_0,
@@ -437,6 +457,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new DesktopDiffusionExecutor(resources),
+    new VideoExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
