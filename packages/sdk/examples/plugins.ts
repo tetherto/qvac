@@ -11,7 +11,7 @@
  *
  */
 
-import { execSync } from "child_process";
+import { bundleSdk } from "@/commands";
 import { existsSync, rmSync } from "fs";
 import path from "path";
 
@@ -32,15 +32,9 @@ console.log(
 console.log("🔨 Generating worker bundle from plugins config...\n");
 
 try {
-  execSync(`npx @qvac/cli bundle sdk --config "${configPath}" --quiet`, {
-    cwd: projectRoot,
-    stdio: "inherit",
-  });
+  await bundleSdk({ projectRoot, configPath, quiet: true });
 } catch (error) {
-  console.error(
-    "❌ Failed to generate worker bundle. Ensure @qvac/cli is installed:",
-  );
-  console.error("   npm install -D @qvac/cli");
+  console.error("❌ Failed to generate worker bundle.");
   console.error("❌ Error:", error);
   process.exit(1);
 }
