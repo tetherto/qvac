@@ -131,6 +131,11 @@ std::any EsrganUpscalerModel::process(const std::any& input) {
   lastStats_.emplace_back("width", statsWidth);
   lastStats_.emplace_back("height", statsHeight);
   lastStats_.emplace_back("repeats", static_cast<int64_t>(job.repeats));
+  const int backendDevice = upscaler_.actualBackendDevice();
+  if (backendDevice >= 0) {
+    lastStats_.emplace_back(
+        "backendDevice", static_cast<int64_t>(backendDevice));
+  }
 
   return std::any{};
 }

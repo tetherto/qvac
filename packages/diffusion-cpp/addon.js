@@ -32,14 +32,23 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
     return { type: 'Output', data: rawData, error: null }
   }
 
-  // JobEnded classification: truthy object but not Uint8Array (which is
-  // also an object). Expects a stats { totalSteps, ... } shape.
-  // NOTE: this will accept any plain object, including plain arrays [] and
-  // even Array-like objects { length: N }. Arrays should not be emitted by
-  // the native layer; if misclassified here as JobEnded, the job handler
-  // will reject the stats shape and error. This is safe but may be confusing.
-  if (rawData && typeof rawData === 'object' && !(rawData instanceof Uint8Array)) {
-    return { type: 'JobEnded', data: rawData, error: null }
+  // JobEnded carries a plain runtime-stats POJO. Excluding typed-array views
+  // here keeps future per-frame typed-array handlers (e.g. when
+  // SdModel::GenerationJob::frameCallback wires through to JS) from being
+  // misclassified as JobEnded and prematurely closing the response stream.
+  // `ArrayBuffer.isView` is true for every TypedArray + DataView, false for
+  // plain objects -- exactly the discrimination we want.
+  if (rawData && typeof rawData === 'object' && !ArrayBuffer.isView(rawData)) {
+    const data = { ...rawData }
+    if (typeof data.backendDevice === 'number') {
+      if (data.backendDevice === 0) {
+        data.backendDevice = 'cpu'
+      } else if (data.backendDevice === 1) {
+        data.backendDevice = 'gpu'
+      }
+    }
+    return { type: 'JobEnded', data, error: null }
+  }
   }
 
   // Unknown: event does not match Error, Output, or JobEnded patterns.

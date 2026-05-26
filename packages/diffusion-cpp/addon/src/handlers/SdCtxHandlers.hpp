@@ -129,7 +129,8 @@ struct SdCtxConfig {
   bool previewNoisy = false;   // also include noisy xT preview
 
   // -- ESRGAN upscaler -------------------------------------------------------
-  int upscalerTileSize = 128;
+  static constexpr int K_DEFAULT_UPSCALER_TILE_SIZE = 128;
+  int upscalerTileSize = K_DEFAULT_UPSCALER_TILE_SIZE;
   bool upscalerDirect = false;
   bool upscalerOffloadParamsToCpu = false;
   int upscalerThreads = -1;

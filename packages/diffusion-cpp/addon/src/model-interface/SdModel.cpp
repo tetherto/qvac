@@ -17,7 +17,6 @@
 #include "utils/ImageCodec.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
-#include "utils/SdErrors.hpp"
 #include "utils/SdVideoFrames.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
@@ -350,7 +349,8 @@ std::any SdModel::process(const std::any& input) {
     mode = it->second.get<std::string>();
   }
 
-  const bool isVideo = (mode == "txt2vid" || mode == "img2vid");
+  const bool isVideo =
+      (mode == "txt2vid" || mode == "img2vid");
   if (isVideo) {
     return processVideo(job, v);
   }
@@ -550,10 +550,9 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
       // -- Single-image path (existing behaviour) --------------------------
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
-      } else if (
-          auto it = v.get<picojson::object>().find("init_image_bytes");
-          it != v.get<picojson::object>().end() &&
-          it->second.is<picojson::array>()) {
+      } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
+                 it != v.get<picojson::object>().end() &&
+                 it->second.is<picojson::array>()) {
         const auto& arr = it->second.get<picojson::array>();
         initPng.reserve(arr.size());
         for (const auto& el : arr)
@@ -569,12 +568,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
             "img2img: failed to decode init_image (corrupt or unsupported "
             "format)");
       }
-
-      // Take ownership of decoded image pixel buffer immediately to ensure
-      // it's freed on all exit paths (exception, early return, etc.).
-      // Mirrors the RAII pattern used in processVideo().
-      std::unique_ptr<uint8_t, image_codec::FreeDeleter> initImgData(
-          initImg.data);
 
       const int imgW = static_cast<int>(initImg.width);
       const int imgH = static_cast<int>(initImg.height);
@@ -629,8 +622,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
                 "Failed to resize init_image from " + std::to_string(imgW) +
                     "x" + std::to_string(imgH) + " to " +
                     std::to_string(alignedW) + "x" + std::to_string(alignedH));
-          // initImgData releases the old buffer; resized becomes the new owner.
-          initImgData.reset(resized.data);
+          free(initImg.data);
           initImg = resized;
         }
 
@@ -646,24 +638,22 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
         // sd_image_to_ggml_tensor() on mask_image (even when no mask was
         // provided), which asserts mask_image dimensions match the tensor.
         // Provide an all-white mask (= denoise everywhere) to satisfy it.
-        std::unique_ptr<uint8_t, image_codec::FreeDeleter> maskData(nullptr);
         if (!genParams.mask_image.data) {
           const size_t maskSize =
               static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
-          auto* rawMask = static_cast<uint8_t*>(malloc(maskSize));
-          if (!rawMask)
+          auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
+          if (!maskData)
             throw StatusError(
                 general_error::InternalError,
                 "Failed to allocate " + std::to_string(maskSize) +
                     " bytes for SDEdit mask (" + std::to_string(alignedW) +
                     "x" + std::to_string(alignedH) + ")");
-          memset(rawMask, 255, maskSize);
-          maskData.reset(rawMask);
+          memset(maskData, 255, maskSize);
           genParams.mask_image = {
               static_cast<uint32_t>(alignedW),
               static_cast<uint32_t>(alignedH),
               1,
-              rawMask};
+              maskData};
         }
       } // end SDEdit else
     } // end single-image else (nMulti == 0)
@@ -672,23 +662,15 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // -- Generate --------------------------------------------------------------
   const auto t0 = std::chrono::steady_clock::now();
 
-  sd_image_t* generatedImages = generate_image(sdCtx_.get(), &genParams);
-  if (!generatedImages) {
-    // generate_image() failed without returning a batch; clean up temp
-    // allocations and surface as InternalError rather than propagating a silent
-    // null.
-    if (initImg.data) {
-      free(initImg.data);
-    }
-    if (genParams.mask_image.data) {
-      free(genParams.mask_image.data);
-    }
-    throw StatusError(
-        general_error::InternalError,
-        "generate_image() failed to produce image batch");
-  }
+  SdImageBatch results(
+      generate_image(sdCtx_.get(), &genParams), gen.batchCount);
 
-  SdImageBatch results(generatedImages, gen.batchCount);
+  if (initImg.data) {
+    free(initImg.data);
+  }
+  if (genParams.mask_image.data) {
+    free(genParams.mask_image.data);
+  }
 
   int outputCount = 0;
   // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
@@ -717,16 +699,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
         wasCancelled = true;
       } else {
         auto png = image_codec::encodeToPng(imageForOutput);
-        // PNG encode failures used to be silent skips, which produced
-        // "successful" jobs with missing outputs and no error context.
-        // Surface as InternalError instead.
-        if (png.empty()) {
-          throw StatusError(
-              general_error::InternalError,
-              "Failed to encode generated image " + std::to_string(i) +
-                  " as PNG");
-        }
-        if (static_cast<bool>(job.outputCallback)) {
+        if (!png.empty() && static_cast<bool>(job.outputCallback)) {
           const auto outputWidth = static_cast<int64_t>(imageForOutput.width);
           const auto outputHeight = static_cast<int64_t>(imageForOutput.height);
           job.outputCallback(png);
@@ -755,7 +728,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // partial images, so a "successful" completion with output_count=0 would
   // be misleading -- throwing gives the JS caller an explicit cancel signal.
   if (wasCancelled) {
-    throw qvac_lib_inference_addon_sd::errors::makeCancelledError();
+    throw std::runtime_error("Job cancelled");
   }
 
   const auto t1 = std::chrono::steady_clock::now();
@@ -979,23 +952,15 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   const auto t0 = std::chrono::steady_clock::now();
 
   int numFramesOut = 0;
-  sd_image_t* generatedFrames =
-      generate_video(sdCtx_.get(), &vidParams, &numFramesOut);
-  if (!generatedFrames) {
-    throw StatusError(
-        general_error::InternalError,
-        "generate_video() failed to produce frame batch");
-  }
-
   qvac_lib_inference_addon_sd::SdVideoFrames frames(
-      generatedFrames, numFramesOut);
+      generate_video(sdCtx_.get(), &vidParams, &numFramesOut), numFramesOut);
 
   const bool wasCancelled = cancelRequested_.load();
 
   // If cancelled, surface as an exception for the same reason as the image
   // path: a "successful" completion with zero frames would be misleading.
   if (wasCancelled) {
-    throw qvac_lib_inference_addon_sd::errors::makeCancelledError();
+    throw std::runtime_error("Job cancelled");
   }
 
   if (frames.empty())
@@ -1004,39 +969,20 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
         "processVideo: generate_video() returned no frames");
 
   // -- Fan out per-frame PNGs (opt-in) --------------------------------------
-  // generate_video() blocks for the full denoise loop, so we cannot interrupt
-  // it mid-pass. The cooperative cancel checks below are the next-best thing:
-  // a long fan-out (e.g. 81 frames at 1024x1024) can take seconds, and we
-  // don't want to keep encoding after the caller has already abandoned the
-  // job. The same goes for the AVI mux pass.
   if (job.frameCallback) {
     for (int i = 0; i < frames.count(); ++i) {
-      if (cancelRequested_.load()) {
-        throw qvac_lib_inference_addon_sd::errors::makeCancelledError();
-      }
       if (!frames[i].data)
         continue;
       auto png = image_codec::encodeToPng(frames[i]);
-      if (png.empty()) {
-        throw StatusError(
-            general_error::InternalError,
-            "Failed to encode video frame " + std::to_string(i) + " as PNG");
+      if (!png.empty()) {
+        job.frameCallback(png, i, frames.count());
       }
-      job.frameCallback(png, i, frames.count());
     }
-  }
-
-  if (cancelRequested_.load()) {
-    throw qvac_lib_inference_addon_sd::errors::makeCancelledError();
   }
 
   // -- Encode AVI and deliver ----------------------------------------------
   auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(
       frames.data(), frames.count(), vid.fps);
-
-  if (cancelRequested_.load()) {
-    throw qvac_lib_inference_addon_sd::errors::makeCancelledError();
-  }
 
   if (!avi.empty() && job.outputCallback) {
     job.outputCallback(avi);

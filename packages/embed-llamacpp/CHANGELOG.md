@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0] - 2026-05-23
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1`, matching the fabric pin used by the related addons in this PR.
+- Reduced the iOS large-batch embedding stress-test size so the test still exercises the failure path without being killed by the platform memory limit.
+
 ## [0.16.0] - 2026-05-10
 
 ### Changed
