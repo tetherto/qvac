@@ -16,6 +16,7 @@ on:
       - "packages/rag/**"
       - "packages/logging/**"
       - "packages/error/**"
+      - "packages/ai-sdk-provider/**"
     branches:
       - main
       - release-*

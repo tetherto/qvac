@@ -1,0 +1,214 @@
+name: Mobile Integration Tests (OCR GGML)
+
+# Migrated to .github/actions/run-mobile-integration-tests composites.
+#
+# OCR-GGML uses sharded scheduling: 3 groups (perf, regularA, regularB)
+# per platform, each scheduled as its own Device Farm run. Group definitions
+# live in test/mobile/test-groups.json (nested android/ios format).
+#
+# Before building the app, presigned URLs for OCR models are generated and
+# written to test/mobile/testAssets/ocr-ggml-model-urls.json so the device
+# can download models at runtime. Test images are also staged into testAssets/
+# with Android-safe filenames (no duplicate base names across extensions).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/ocr-ggml"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      package:
+        description: "Full NPM package spec to test"
+        type: string
+        required: false
+        default: "@qvac/ocr-ggml@latest"
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/ocr-ggml"
+
+jobs:
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    timeout-minutes: 120
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
+        run: npm run test:mobile:validate || true
+
+      # Model provisioning: presigned URLs so the device can download detector
+      # and recognizer models at runtime. Must happen before build-mobile-app
+      # because testAssets/ is bundled into the app during the build step.
+      - name: Configure AWS credentials (eu-central-1) for model download
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-duration-seconds: 7200
+
+      - name: Generate presigned URLs for OCR models
+        working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          OUTPUT_DIR: ${{ github.workspace }}/addon/${{ inputs.workdir || 'packages/ocr-ggml' }}/test/mobile/testAssets
+        run: |
+          mkdir -p test/mobile/testAssets
+          chmod +x scripts/generate-ocr-ggml-presigned-urls.sh
+          ./scripts/generate-ocr-ggml-presigned-urls.sh
+
+      - name: Copy test images to testAssets
+        working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
+        run: |
+          ASSETS_DIR="test/mobile/testAssets"
+          mkdir -p "$ASSETS_DIR"
+          cp test/images/basic_test.bmp           "$ASSETS_DIR/basic_test_bmp.bmp"
+          cp test/images/basic_test.jpg           "$ASSETS_DIR/basic_test_jpg.jpg"
+          cp test/images/basic_test.png           "$ASSETS_DIR/basic_test_png.png"
+          cp test/images/unrecognizable_text.bmp  "$ASSETS_DIR/unrecognizable_text.bmp"
+          cp test/images/english.bmp              "$ASSETS_DIR/english.bmp"
+          cp test/images/lab_results.png          "$ASSETS_DIR/lab_results.png"
+          cp test/images/liver_function_test.png  "$ASSETS_DIR/liver_function_test.png"
+          cp test/images/clinical_chemistry.png   "$ASSETS_DIR/clinical_chemistry.png"
+          cp test/images/ct_scan_report.png       "$ASSETS_DIR/ct_scan_report.png"
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/ocr-ggml' }}
+          addon-npm-name: '@qvac/ocr-ggml'
+          prebuild-artifact-prefix: 'ggml-ocr-'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/ocr-ggml' }}
+          addon-npm-name: '@qvac/ocr-ggml'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Sharded mode is wired automatically: the composite reads test-groups.json
+      # under <addon-workdir>/test/mobile/ and creates one test spec per group.
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/ocr-ggml' }}
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
+          enables-perf: 'true'
+          mocha-timeout-ms: '1800000'
+
+      - name: Schedule Device Farm test runs
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
+          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_OCR_FASTTEXT }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_OCR_FASTTEXT }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Monitor Device Farm test runs
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+
+      - name: Collect and upload Device Farm logs
+        if: always()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform }}
+          addon-npm-name: '@qvac/ocr-ggml'
+          enables-perf: 'true'
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Extract & upload addon perf report (OCR GGML)
+        if: always() && steps.schedule.outputs.run-count != '0' && steps.schedule.outputs.run-count != ''
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          merge: 'true'
+          artifact-name: perf-report-ocr-${{ matrix.platform }}-${{ github.run_number }}
+
+      - name: Comment results on PR
+        if: always()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: '@qvac/ocr-ggml'
+          platform: ${{ matrix.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}

@@ -14,6 +14,7 @@ import { cloneElement, isValidElement } from "react";
 import type { AnchorHTMLAttributes } from "react";
 import { CopyPageButton, ViewOptions, VersionSelector } from '@/components/page-actions';
 import {
+  DOCS_SITE_ORIGIN,
   buildCanonicalDocsUrl,
   buildPageCanonicalUrl,
   isArchivedVersionSlug,
@@ -156,6 +157,15 @@ export async function generateMetadata(
   // textbook "this is a near-duplicate, prefer the canonical" signal. OG and
   // Twitter still carry the self-URL so social previews remain version-accurate.
   const isArchived = isArchivedVersionSlug(params.slug);
+  // Per-page Markdown alternate. Hidden archived pages (currently only the
+  // API summary back-versions) don't ship a `.md` sibling — see
+  // `isArchivedPage` in `docs-open-graph.ts` — so we omit the link for them
+  // to avoid advertising a 404. Every other page (including indexable
+  // archived release-notes) gets a `<link rel="alternate" type="text/markdown">`
+  // that mirrors the `Accept: text/markdown` redirect in `_redirects`.
+  const markdownAlternateUrl = isArchived
+    ? undefined
+    : `${DOCS_SITE_ORIGIN}${page.url === '/' ? '/index.md' : `${page.url}.md`}`;
 
   return {
     title: isHomePage ? { absolute: title } : title,
@@ -163,6 +173,9 @@ export async function generateMetadata(
     ...(isArchived && { robots: { index: false, follow: true } }),
     alternates: {
       canonical: linkCanonicalUrl,
+      ...(markdownAlternateUrl && {
+        types: { 'text/markdown': markdownAlternateUrl },
+      }),
     },
     openGraph: {
       title,
