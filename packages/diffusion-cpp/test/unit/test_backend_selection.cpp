@@ -50,3 +50,63 @@ TEST_F(SdBackendSelectionTest, ResolveBackendCpuPreferenceReturnsCPU) {
 TEST_F(SdBackendSelectionTest, CpuPreferenceDoesNotPreferOpenCl) {
   EXPECT_FALSE(shouldPreferOpenClForAdreno(BackendDevice::CPU));
 }
+
+TEST_F(SdBackendSelectionTest, PreferredGpuBackendCpuDevice) {
+  EXPECT_EQ(preferredGpuBackendForConfigDevice("cpu"), SD_BACKEND_PREF_CPU);
+}
+
+TEST_F(SdBackendSelectionTest, PreferredGpuBackendGpuDeviceIsGpuOrCpu) {
+  const auto pref = preferredGpuBackendForConfigDevice("gpu");
+  EXPECT_TRUE(
+      pref == SD_BACKEND_PREF_GPU || pref == SD_BACKEND_PREF_OPENCL ||
+      pref == SD_BACKEND_PREF_CPU);
+}
+
+TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendCpuConfig) {
+  EXPECT_EQ(expectedEsrganBackendDeviceForConfig("cpu"), "cpu");
+}
+
+TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendGpuConfigIsCpuOrGpu) {
+  const std::string expected = expectedEsrganBackendDeviceForConfig("gpu");
+  EXPECT_TRUE(expected == "cpu" || expected == "gpu");
+  const auto pref = preferredEsrganBackendForConfigDevice("gpu");
+  if (pref == SD_BACKEND_PREF_CPU) {
+    EXPECT_EQ(expected, "cpu");
+  } else {
+    EXPECT_EQ(expected, "gpu");
+  }
+}
+
+#if defined(__ANDROID__)
+TEST_F(SdBackendSelectionTest, AndroidEsrganGpuConfigForcesCpu) {
+  EXPECT_EQ(expectedEsrganBackendDeviceForConfig("gpu"), "cpu");
+  EXPECT_EQ(preferredEsrganBackendForConfigDevice("gpu"), SD_BACKEND_PREF_CPU);
+  EXPECT_EQ(preferredEsrganBackendForConfigDevice("cpu"), SD_BACKEND_PREF_CPU);
+}
+#endif
+
+TEST_F(SdBackendSelectionTest, AutoDeviceThrows) {
+  EXPECT_THROW(
+      preferredGpuBackendForConfigDevice("auto"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      preferredEsrganBackendForConfigDevice("auto"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      expectedEsrganBackendDeviceForConfig("auto"), qvac_errors::StatusError);
+}
+
+TEST_F(SdBackendSelectionTest, EmptyDeviceThrows) {
+  EXPECT_THROW(
+      preferredGpuBackendForConfigDevice(""), qvac_errors::StatusError);
+}
+
+TEST_F(SdBackendSelectionTest, PreferredGpuBackendInvalidDeviceThrows) {
+  EXPECT_THROW(
+      preferredGpuBackendForConfigDevice("bogus"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      preferredGpuBackendForConfigDevice("cuda"), qvac_errors::StatusError);
+}
+
+TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendInvalidDeviceThrows) {
+  EXPECT_THROW(
+      expectedEsrganBackendDeviceForConfig("bogus"), qvac_errors::StatusError);
+}

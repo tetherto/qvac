@@ -1,20 +1,15 @@
 import configPlugins from "@expo/config-plugins";
-import { execSync } from "child_process";
 import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
+import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from "@/commands";
+import { CONFIG_CANDIDATES } from "@/client/config-loader/resolve-config.node";
 import { resolveSDKPackageDir } from "@/expo/plugins/resolve-sdk-package-dir";
 import { getProjectRootFromMod } from "@/expo/plugins/get-project-root";
 import { findInAncestorNodeModules } from "@/expo/plugins/find-in-ancestor-node-modules";
 import { BundleVerificationFailedError } from "@/utils/errors-client";
 
 const { withDangerousMod } = configPlugins;
-
-const CONFIG_CANDIDATES = [
-  "qvac.config.json",
-  "qvac.config.js",
-  "qvac.config.mjs",
-];
 
 /** Modules to defer from mobile bundles (not available at bundle time) */
 const DEFERRED_MODULES = ["expo-file-system", "react-native-bare-kit"];
@@ -29,12 +24,11 @@ const MOBILE_HOSTS = [
 /**
  * Expo plugin: bundle, verify, then copy the mobile worker bundle.
  *
- * Flow: `bundle sdk` -> assert `qvac/worker.bundle.js` exists ->
- * `verify bundle` -> copy to `<sdkPackageDir>/dist/worker.mobile.bundle.js`.
- * Requires a local `@qvac/cli` install. Uses `qvac.config.*` if present.
+ * Flow: bundleSdk -> verifyBundle -> copy to `<sdkPackageDir>/dist/worker.mobile.bundle.js`.
+ * Uses `qvac.config.*` if present.
  */
 function withMobileBundle(config: ExpoConfig): ExpoConfig {
-  function buildMobileBundle(
+  async function buildMobileBundle(
     config: configPlugins.ExportedConfigWithProps<unknown>,
   ) {
     const projectRoot = getProjectRootFromMod(config);
@@ -45,8 +39,6 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       "worker.mobile.bundle.js",
     );
 
-    // Generate bundle via qvac CLI
-    // (uses qvac.config.* if exists, else includes all built-in plugins)
     const configPath = findConfigFile(projectRoot);
     if (configPath) {
       console.log(
@@ -62,19 +54,15 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       ...DEFERRED_MODULES,
       `${sdkPackage.name}/worker.mobile.bundle`,
     ];
-    runBundler(projectRoot, sdkPackage.dir, configPath, deferredModules);
+    await runBundler(
+      projectRoot,
+      sdkPackage.dir,
+      configPath,
+      deferredModules,
+    );
 
-    // Copy the generated bundle to SDK location
     const generatedBundle = path.join(projectRoot, "qvac", "worker.bundle.js");
-    if (!fs.existsSync(generatedBundle)) {
-      throw new Error(
-        `QVAC: Bundle generation failed — ${generatedBundle} not found. ` +
-          `Check qvac CLI output above for errors.`,
-      );
-    }
-
-    // Verify before copying so the dist artifact only updates on success.
-    runVerifier(projectRoot, generatedBundle, configPath);
+    await runVerifier(projectRoot, generatedBundle, configPath);
 
     fs.copyFileSync(generatedBundle, outputPath);
 
@@ -98,58 +86,11 @@ function findConfigFile(projectRoot: string): string | null {
   return null;
 }
 
-/**
- * Resolves the qvac CLI command.
- *
- * Prefers a local @qvac/cli installation for version consistency, walking
- * up from `projectRoot` so a CLI hoisted to a monorepo root is still
- * found. Falls back to npx (with a warning) when no local copy exists.
- */
-export function resolveCliCommand(projectRoot: string): string {
-  const cliPackageDir = findInAncestorNodeModules(projectRoot, "@qvac/cli");
-  if (cliPackageDir !== null) {
-    const cliPath = path.join(cliPackageDir, "dist", "index.js");
-    if (fs.existsSync(cliPath)) {
-      return `node "${cliPath}"`;
-    }
-  }
-
-  console.warn(
-    "⚠️ QVAC: @qvac/cli not found in any ancestor node_modules, falling back to npx",
-  );
-  console.warn(
-    "   Tip: Add @qvac/cli as a dependency for consistent versioning",
-  );
-  return "npx --package=@qvac/cli qvac";
-}
-
-/** Builds the `qvac verify bundle` command string (pure helper for tests). */
-export function buildVerifyBundleCommand(opts: {
-  cliCommand: string;
-  bundlePath: string;
-  hosts: string[];
-  configPath?: string;
-}): string {
-  const hostFlags = opts.hosts.map((h) => `--host ${h}`).join(" ");
-  const configFlag = opts.configPath ? ` --config "${opts.configPath}"` : "";
-  return `${opts.cliCommand} verify bundle --addons-source "${opts.bundlePath}" ${hostFlags}${configFlag}`;
-}
-
-/**
- * Runs `qvac verify bundle` against the freshly generated worker bundle.
- * Passes the discovered `qvac.config.*` so the CLI reads `bareRuntimeVersion`
- * and pins ABI checks deterministically. Without a config, the CLI falls back
- * to auto-detecting Bare runtime from `node_modules` (`bare-runtime`, then
- * `bare`); ABI checks stay strict when that lookup succeeds, and only skip
- * (with an `unknown-runtime-version` warning) when neither is installed.
- */
-function runVerifier(
+async function runVerifier(
   projectRoot: string,
   generatedBundle: string,
   configPath: string | null,
 ) {
-  const cliCommand = resolveCliCommand(projectRoot);
-
   if (!configPath) {
     console.log(
       "⚠️ QVAC: no qvac.config.* found — Bare runtime will be auto-detected " +
@@ -158,53 +99,41 @@ function runVerifier(
     );
   }
 
-  const verifyCommand = buildVerifyBundleCommand({
-    cliCommand,
-    bundlePath: generatedBundle,
+  const result = await verifyBundle({
+    projectRoot,
+    addonsSource: generatedBundle,
     hosts: MOBILE_HOSTS,
     ...(configPath ? { configPath } : {}),
   });
 
-  try {
-    execSync(verifyCommand, { stdio: "inherit", cwd: projectRoot });
-  } catch (error) {
-    throw new BundleVerificationFailedError(generatedBundle, error);
+  if (hasErrors(result)) {
+    throw new BundleVerificationFailedError(
+      generatedBundle,
+      new Error(formatVerifyBundleResult(result)),
+    );
   }
 }
 
-/** Runs qvac CLI with mobile-specific options */
-function runBundler(
+async function runBundler(
   projectRoot: string,
   qvacSdkPath: string,
   configPath: string | null,
   deferredModules: string[],
 ) {
-  // Patch bare-kit linkers to use addons manifest
   patchBareKitLinkers(projectRoot, qvacSdkPath);
 
-  const hostFlags = MOBILE_HOSTS.map((h) => `--host ${h}`).join(" ");
-  const deferFlags = deferredModules.map((m) => `--defer "${m}"`).join(" ");
-  const configFlag = configPath ? `--config "${configPath}"` : "";
-  const sdkPathFlag = `--sdk-path "${qvacSdkPath}"`;
-  const cliCommand = resolveCliCommand(projectRoot);
-
-  try {
-    execSync(
-      `${cliCommand} bundle sdk ${sdkPathFlag} ${configFlag} ${hostFlags} ${deferFlags} --quiet`,
-      { stdio: "inherit", cwd: projectRoot },
-    );
-  } catch (error) {
-    console.error("❌ QVAC: Failed to generate bundle:", error);
-    throw error;
-  }
+  await bundleSdk({
+    projectRoot,
+    sdkPath: qvacSdkPath,
+    ...(configPath ? { configPath } : {}),
+    hosts: MOBILE_HOSTS,
+    defer: deferredModules,
+    quiet: true,
+  });
 }
 
 /**
  * Patches react-native-bare-kit linkers to use the addons manifest.
- *
- * Copies the manifest-aware link.mjs files over the originals so that
- * bare-link only links the native addons actually required by the bundle.
- * This reduces app size by excluding unused native addon binaries.
  */
 function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string) {
   const bareKitPath = findInAncestorNodeModules(
@@ -228,7 +157,6 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string) {
     return;
   }
 
-  // Patch Android linker
   const androidPatch = path.join(patchesDir, "android-link.mjs");
   const androidTarget = path.join(bareKitPath, "android", "link.mjs");
   if (fs.existsSync(androidPatch)) {
@@ -238,7 +166,6 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string) {
     console.log(`⚠️ QVAC: Android linker patch not found (${androidPatch})`);
   }
 
-  // Patch iOS linker
   const iosPatch = path.join(patchesDir, "ios-link.mjs");
   const iosTarget = path.join(bareKitPath, "ios", "link.mjs");
   if (fs.existsSync(iosPatch)) {
