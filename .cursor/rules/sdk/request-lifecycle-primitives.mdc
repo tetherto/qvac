@@ -223,6 +223,7 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 | `onnx-tts`                   | `textToSpeech`, `textToSpeechStream`  | `{ scope: "none" }`               |
 | `onnx-ocr`                   | `ocrStream`                           | `{ scope: "none" }`               |
 | `sdcpp-generation`           | `diffusionStream`                     | `{ scope: "model", hard: true }`  |
+| `sdcpp-generation`           | `videoStream`                         | `{ scope: "model", hard: true }`  |
 | `sdcpp-generation`           | `upscaleStream`                       | `{ scope: "none" }`               |
 
 `llamacpp-completion.finetune` declares `{ scope: "model", hard: true }`: the addon exposes `model.cancel()` for the running finetune job, `startFinetune` wires the registry's abort signal to that call, and the legacy `cancelFinetune(modelId)` wrapper broadcasts through `getRequestRegistry().cancel({ modelId, kind: "finetune" })`.
