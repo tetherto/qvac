@@ -45,12 +45,11 @@
     "test:unit": "npx tsx --test test/*.test.ts",
     "test:bats": "npm run build && bats test/cli.bats",
     "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats",
-    "dev:link": "npm install ../../../qvac/packages/sdk",
-    "dev:unlink": "npm install @qvac/sdk@^0.11.0"
+    "dev:link": "npm install ../sdk",
+    "dev:unlink": "node scripts/dev-unlink.cjs"
   },
   "dependencies": {
     "@qvac/sdk": "file:../sdk",
-    "bare-pack": "^2.0.0",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",
     "tsx": "^4.21.0"
