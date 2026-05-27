@@ -132,7 +132,7 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -199,7 +199,7 @@ test('Chatterbox CPU smoke - useGPU=false must run on the CPU backend', { timeou
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -237,7 +237,7 @@ test('Supertonic CPU smoke - useGPU=false must run on the CPU backend', { timeou
 
   const download = await ensureSupertonicModel({ targetDir: modelsDir })
   if (!download || !download.success) {
-    t.pass('Skipped: Supertonic GGUF not available locally')
+    t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 

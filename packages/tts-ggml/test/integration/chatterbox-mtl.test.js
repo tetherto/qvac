@@ -72,7 +72,7 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt with shared engi
   const baseDir = getBaseDir()
   const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox MTL GGUFs not available')
+    t.fail('Chatterbox MTL GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -108,7 +108,7 @@ test('Chatterbox MTL TTS (ggml): backendDevice + backendId surfaced in stats', {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox MTL GGUFs not available')
+    t.fail('Chatterbox MTL GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 

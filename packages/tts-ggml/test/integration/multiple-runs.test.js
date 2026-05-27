@@ -50,7 +50,7 @@ const PHRASES = [
 test('Chatterbox: multiple sequential runs reuse the same engine instance', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Chatterbox GGUFs not available'); return }
+  if (!download.success) { t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   // Mobile-aware resolution: on iOS / Android the asset is staged into
   // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
@@ -98,7 +98,7 @@ test('Chatterbox: multiple sequential runs reuse the same engine instance', { ti
 test('Supertonic: multiple sequential runs reuse the same engine instance', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const model = await loadSupertonicTTS({
     supertonicModelPath: download.path,
@@ -138,7 +138,7 @@ test('Supertonic: multiple sequential runs reuse the same engine instance', { ti
 test('Chatterbox: fresh instance per run (app-restart simulation)', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Chatterbox GGUFs not available'); return }
+  if (!download.success) { t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   // Mobile-aware resolution: on iOS / Android the asset is staged into
   // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
@@ -177,7 +177,7 @@ test('Chatterbox: fresh instance per run (app-restart simulation)', { timeout: 1
 test('Supertonic: fresh instance per run (app-restart simulation)', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const N = 2
   const results = []
@@ -208,7 +208,7 @@ test('Supertonic: fresh instance per run (app-restart simulation)', { timeout: 1
 test('Chatterbox: reload() between runs preserves stability', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Chatterbox GGUFs not available'); return }
+  if (!download.success) { t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   // Mobile-aware resolution: on iOS / Android the asset is staged into
   // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
@@ -242,7 +242,7 @@ test('Chatterbox: reload() between runs preserves stability', { timeout: 1800000
 test('Supertonic: reload() between runs preserves stability', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const model = await loadSupertonicTTS({
     supertonicModelPath: download.path,
@@ -269,7 +269,7 @@ test('Engine swap: chatterbox -> supertonic -> chatterbox in separate instances'
   const baseDir = getBaseDir()
   const cb = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
   const st = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!cb.success || !st.success) { t.pass('Skipped: not all engines have models locally'); return }
+  if (!cb.success || !st.success) { t.fail('Not all engines have models locally - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   // Mobile-aware resolution: on iOS / Android the asset is staged into
   // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls

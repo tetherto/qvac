@@ -36,7 +36,8 @@
     "test:dts": "tsc index.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-models": "bash scripts/convert-models.sh",
-    "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh"
+    "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh",
+    "download-models:registry": "node scripts/download-tts-ggml-models.js"
   },
   "files": [
     "addonLogging.js",

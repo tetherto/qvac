@@ -22,7 +22,7 @@ function getBaseDir () {
 test('Supertonic TTS (ggml): basic synthesis returns ~44.1 kHz audio + stats', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const model = await loadSupertonicTTS({
     supertonicModelPath: download.path,
@@ -56,7 +56,7 @@ test('Supertonic TTS (ggml): basic synthesis returns ~44.1 kHz audio + stats', {
 test('Supertonic TTS (ggml): cancel mid-flight rejects the response', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const model = await loadSupertonicTTS({
     supertonicModelPath: download.path,
@@ -84,7 +84,7 @@ test('Supertonic TTS (ggml): cancel mid-flight rejects the response', { timeout:
 test('Supertonic TTS (ggml): runStream emits per-sentence chunks with chunkIndex / sentenceChunk / isLast', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const TTSGgml = require('@qvac/tts-ggml')
   const model = new TTSGgml({
@@ -137,7 +137,7 @@ test('Supertonic TTS (ggml): runStream emits per-sentence chunks with chunkIndex
 test('Supertonic TTS (ggml): runStreaming with async iterator emits one job per yielded sentence', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const TTSGgml = require('@qvac/tts-ggml')
   const model = new TTSGgml({
@@ -175,7 +175,7 @@ test('Supertonic TTS (ggml): runStreaming with async iterator emits one job per 
 test('Supertonic TTS (ggml): voice + steps + speed knobs survive ttsParams round-trip', { timeout: 600000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) { t.pass('Skipped: Supertonic GGUF not available'); return }
+  if (!download.success) { t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'); return }
 
   const model = await loadSupertonicTTS({
     supertonicModelPath: download.path,
