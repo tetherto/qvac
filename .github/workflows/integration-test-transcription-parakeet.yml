@@ -147,7 +147,18 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Cache Parakeet GGUF models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: transcription-parakeet
+          paths: packages/transcription-parakeet/models
+          hash-files-glob: packages/transcription-parakeet/scripts/download-models.sh
+          enable-cross-os: 'false'
+
       - name: Stage GGUF models (npm run setup-models)
+        if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         run: npm run setup-models

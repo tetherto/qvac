@@ -6,10 +6,12 @@
 # exclusive by construction — pushes to `release-sdk-X.Y.0` only fire the
 # minor workflow.
 #
-# `release-version-patch.ts` then decides at runtime whether this is a
-# "patch-latest" (incoming X.Y matches latest in versions.ts → edit the
-# bare `index.mdx` files) or "patch-archived" (older minor → rename the
-# archived sibling `v<old>.mdx` → `v<new>.mdx` and update inside it).
+# Each minor line owns a single permanent MDX page that accumulates
+# patch sections (`## vX.Y.Z`) directly under the minor block, so
+# patches never rename anything. `release-version-patch.ts` decides at
+# runtime whether this is a "patch-latest" (incoming X.Y matches latest
+# in versions.ts → edit the `index.mdx` files) or "patch-archived"
+# (older minor → edit the existing `v<X.Y>.x.mdx` in place).
 name: Docs Release - Patch
 
 on:
@@ -83,9 +85,12 @@ jobs:
 
       - name: Release patch docs version
         # release-version-patch.ts inspects src/lib/versions.ts to decide:
-        #   - patch-latest  -> edits index.mdx (title-only API + append-patch RN)
-        #   - patch-archived -> git mv v<old>.mdx -> v<new>.mdx, then edits
-        # See script for full flow. Patch never re-runs TypeDoc.
+        #   - patch-latest   -> appends ## v<X.Y.Z> directly after the
+        #                       ## v<X.Y>.0 block in index.mdx; bumps the
+        #                       manifest's stored patch.
+        #   - patch-archived -> inserts the same section inside the
+        #                       existing v<X.Y>.x.mdx; manifest unchanged.
+        # API summary is NOT touched (patches don't change public API).
         working-directory: main-tree/${{ env.DOCS_DIR }}
         env:
           SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
@@ -119,11 +124,15 @@ jobs:
             Updates docs for SDK patch **v${{ steps.setup.outputs.version }}**.
 
             The script auto-detected whether this patch targets the current latest
-            minor (in which case the bare `index.mdx` files are updated in place —
-            title-only API summary + appended release-notes section) or an archived
-            minor (in which case the previous `v<X.Y.Z-1>.mdx` siblings were
-            renamed to `v${{ steps.setup.outputs.version }}.mdx`).
+            minor (in which case `index.mdx` is updated in place — a new
+            `## v${{ steps.setup.outputs.version }}` section inserted directly
+            after the `## v<X.Y>.0` minor block) or an archived minor (in which
+            case the existing `v<X.Y>.x.mdx` is updated the same way).
 
-            Release notes were appended from `packages/sdk/changelog/${{ steps.setup.outputs.version }}/CHANGELOG_LLM.md`.
+            The API summary page is never touched by a patch — patches don't
+            change the public API surface.
+
+            Release notes content was inlined verbatim from the per-package
+            `CHANGELOG_LLM.md` under `packages/<sdk-pod-pkg>/changelog/${{ steps.setup.outputs.version }}/`.
 
             Produced by the `Docs Release - Patch` workflow.
