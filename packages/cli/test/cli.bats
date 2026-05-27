@@ -158,7 +158,7 @@ http_status() {
   mkdir -p "${dir}/node_modules"
   run ${QVAC} verify bundle --addons-source "${dir}/node_modules"
   [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "--host" ]]
+  [[ "${output}" =~ "host is required" ]]
   rm -rf "${dir}"
 }
 

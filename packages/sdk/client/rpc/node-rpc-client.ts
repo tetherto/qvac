@@ -258,7 +258,10 @@ async function ensureRPC(): Promise<RPC> {
           WORKER_PATH,
           JSON.stringify({
             QVAC_IPC_SOCKET_PATH: socketPath,
-            HOME_DIR: os.homedir(),
+            // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
+            HOME_DIR: process.env["SNAP_USER_COMMON"]
+              ? String(process.env["SNAP_USER_COMMON"])
+              : os.homedir(),
           }),
         ],
         stdio: ["inherit", "inherit", "inherit"],
