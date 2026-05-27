@@ -35,7 +35,11 @@ const SYNTHETIC_TIMESTAMP = 0
 
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.get('/v1/vector_stores', {
-    schema: { tags: ['Vector Stores'], summary: 'List vector stores' }
+    schema: {
+      tags: ['Vector Stores'],
+      summary: 'List vector stores',
+      description: 'Merge of in-memory metadata records and live RAG workspaces. Workspaces with no local metadata appear as synthetics (`createdAt: 0`).'
+    }
   }, async () => {
     const ctx = app.qvac
     const ragInfo = await safeListWorkspaces(ctx)
@@ -51,7 +55,24 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/vector_stores', {
-    schema: { body: vectorStoreCreateBody, tags: ['Vector Stores'], summary: 'Create a vector store' }
+    schema: {
+      body: vectorStoreCreateBody,
+      tags: ['Vector Stores'],
+      summary: 'Create a vector store',
+      description: `
+Create an in-memory metadata record for a new vector store. The RAG workspace
+itself is created lazily on the first \`POST /v1/vector_stores/{id}/files\`.
+
+**\`file_ids\`** on create is logged as ignored — attach files separately via
+\`POST /v1/vector_stores/{id}/files\` after uploading them through
+\`POST /v1/files\`.
+
+**\`chunking_strategy\`** is logged as ignored — chunking is configured via the
+SDK's ingest options, not per-request.
+
+\`expires_after\` accepts only \`{ anchor: 'last_active_at', days: <positive int> }\`.
+      `.trim()
+    }
   }, async (req) => {
     const ctx = app.qvac
     const body = req.body
@@ -79,7 +100,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.get('/v1/vector_stores/:id', {
-    schema: { params: vectorStoreIdParams, tags: ['Vector Stores'], summary: 'Get a vector store' }
+    schema: {
+      params: vectorStoreIdParams,
+      tags: ['Vector Stores'],
+      summary: 'Get a vector store',
+      description: 'Returns the merged view (local metadata + RAG workspace info). If only the workspace exists, a synthetic record is returned with `createdAt: 0`.'
+    }
   }, async (req) => {
     const ctx = app.qvac
     const id = decodeId(req.params.id)
@@ -90,7 +116,13 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/vector_stores/:id', {
-    schema: { params: vectorStoreIdParams, body: vectorStoreUpdateBody, tags: ['Vector Stores'], summary: 'Update a vector store' }
+    schema: {
+      params: vectorStoreIdParams,
+      body: vectorStoreUpdateBody,
+      tags: ['Vector Stores'],
+      summary: 'Update a vector store',
+      description: 'Patch `name` / `expires_after` / `metadata` on the in-memory metadata record. If the store exists only as a disk-only RAG workspace, a local metadata record is materialized first.'
+    }
   }, async (req) => {
     const ctx = app.qvac
     const id = decodeId(req.params.id)
@@ -126,7 +158,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.delete('/v1/vector_stores/:id', {
-    schema: { params: vectorStoreIdParams, tags: ['Vector Stores'], summary: 'Delete a vector store' }
+    schema: {
+      params: vectorStoreIdParams,
+      tags: ['Vector Stores'],
+      summary: 'Delete a vector store',
+      description: 'Delete both the in-memory metadata record AND the underlying RAG workspace. If the RAG delete fails, the metadata is preserved so a retry sees the same state (avoids losing caller-supplied fields).'
+    }
   }, async (req) => {
     const ctx = app.qvac
     const id = decodeId(req.params.id)
@@ -152,7 +189,31 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/vector_stores/:id/search', {
-    schema: { params: vectorStoreIdParams, body: vectorStoreSearchBody, tags: ['Vector Stores'], summary: 'Search a vector store' }
+    schema: {
+      params: vectorStoreIdParams,
+      body: vectorStoreSearchBody,
+      tags: ['Vector Stores'],
+      summary: 'Search a vector store',
+      description: `
+Vector search over a workspace via SDK \`ragSearch()\`.
+
+**Requires an embedding model** configured under \`serve.models\`. Exactly one
+default embedding (or a single embedding alias) must resolve, or the request
+fails with \`no_embedding_model_configured\` / \`ambiguous_embedding_model\`.
+
+**Embedding-model mismatch**: if the store was ingested under a different
+embedding alias, requests are rejected with \`embedding_model_mismatch\` to
+prevent silent precision loss.
+
+**Ignored params** (logged, not rejected): \`filters\`, \`ranking_options\`,
+\`rewrite_query\`. Only \`max_num_results\` (mapped to SDK \`topK\`) is
+forwarded.
+
+Hit attribution carries the original upload's \`file_id\` and \`filename\`
+when known (from the \`POST /v1/vector_stores/{id}/files\` step); falls back
+to the raw chunk id for workspaces ingested out-of-band.
+      `.trim()
+    }
   }, async (req) => {
     const ctx = app.qvac
     const id = decodeId(req.params.id)
@@ -201,7 +262,29 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/vector_stores/:id/files', {
-    schema: { params: vectorStoreIdParams, body: vectorStoreAttachBody, tags: ['Vector Stores'], summary: 'Attach a file to a vector store' }
+    schema: {
+      params: vectorStoreIdParams,
+      body: vectorStoreAttachBody,
+      tags: ['Vector Stores'],
+      summary: 'Attach a file to a vector store',
+      description: `
+Ingest a previously-uploaded ephemeral file (\`POST /v1/files\`) into the
+RAG workspace.
+
+**UTF-8 text only.** Binary uploads are rejected with
+\`unsupported_file_type\` via a NUL-byte sniff over the first 8 KB
+(catches PDF/PNG/DOCX/etc.). Empty-after-trim text is rejected with
+\`empty_file\`.
+
+**Side effects**: on success the file is removed from the ephemeral-files
+store, the store's \`embeddingAlias\` is recorded, and per-chunk attributions
+are stored so subsequent searches return the file's id / filename instead of
+opaque chunk ids.
+
+Same embedding-model resolution + mismatch rules as
+\`POST /v1/vector_stores/{id}/search\`.
+      `.trim()
+    }
   }, async (req) => {
     const ctx = app.qvac
     const id = decodeId(req.params.id)

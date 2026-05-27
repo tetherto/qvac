@@ -107,9 +107,28 @@ async function runStreaming (req: FastifyRequest, reply: FastifyReply, p: Shared
   endSSE(raw)
 }
 
+const descriptions = {
+  completion: `
+Legacy text completion. \`prompt\` accepts a single string or an array of strings;
+token-id prompts (numeric arrays) are rejected with \`invalid_prompt\`.
+
+**Multi-prompt + \`stream: true\`** is rejected with \`unsupported_streaming\` —
+each prompt would need its own SSE stream which we don't support.
+
+**Implementation note**: under the hood this routes through the same SDK
+\`completion()\` capability as \`/v1/chat/completions\`, wrapping each prompt
+as a single \`user\` turn. The SDK chat template still applies, so legacy
+clients expecting raw completion semantics may see template-shaped output.
+
+**Ignored params** (warned, not rejected): \`logit_bias\`, \`n\` (>1),
+\`user\`, \`seed\`, \`logprobs\`, \`best_of\`, \`echo\`, \`suffix\`,
+\`frequency_penalty\`, \`presence_penalty\`, \`stop\`.
+`.trim()
+}
+
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/completions', {
-    schema: { body: completionsBody, tags: ['Completions'], summary: 'Legacy text completion' },
+    schema: { body: completionsBody, tags: ['Completions'], summary: 'Legacy text completion', description: descriptions.completion },
     config: { unsupportedParams: [...COMPLETIONS_UNSUPPORTED_PARAMS] },
     preHandler: [requireModel('chat'), logUnsupported]
   }, async (req, reply) => {

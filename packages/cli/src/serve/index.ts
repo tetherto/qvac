@@ -30,6 +30,7 @@ import contextPlugin from './plugins/context.js'
 import errorHandlerPlugin from './plugins/error-handler.js'
 import authPlugin from './plugins/auth.js'
 import cancelBridgePlugin from './plugins/cancel-bridge.js'
+import { TAG_DESCRIPTIONS } from './route-meta.js'
 
 import './lib/types.js'
 
@@ -99,6 +100,7 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
       servers: [
         { url: `http://${options.host}:${options.port}`, description: 'this server' }
       ],
+      tags: Object.entries(TAG_DESCRIPTIONS).map(([name, description]) => ({ name, description })),
       components: {
         securitySchemes: {
           bearerAuth: { type: 'http', scheme: 'bearer' }

@@ -166,9 +166,53 @@ async function runAndRespond (
 
 const EDIT_IMAGE_FIELD_NAMES = new Set(['image', 'image[]'])
 
+const GENERATIONS_DESCRIPTION = `
+Generate one or more images from a text prompt via the Stable Diffusion-cpp backend.
+
+**Output**: PNG only. \`output_format=jpeg\`/\`webp\` are rejected with
+\`unsupported_output_format\` (the server has no JPEG encoder); \`output_compression\`
+and \`background\` are similarly rejected (no alpha-channel control). Only
+\`response_format=b64_json\` (default) or \`url\` are accepted.
+
+**\`response_format=url\`** requires the server to be started with
+\`--public-base-url <origin>\` so URLs can resolve back to \`/v1/files/{id}/content\`.
+Without it, the request is rejected with \`unsupported_response_format\`.
+
+**Streaming**: pass \`stream: true\` to receive one
+\`image_generation.completed\` SSE event per generated image, then \`[DONE]\`.
+Intermediate \`partial_image\` events are not emitted (the underlying engine
+streams step ticks, not image bytes).
+
+**Validation order**: schema → model resolution (\`model_not_found\` /
+\`invalid_model_type\` / \`model_not_ready\`) → param assertions
+(\`unsupported_output_format\`, \`invalid_size\`, \`invalid_n\`, etc.).
+`.trim()
+
+const EDITS_DESCRIPTION = `
+Edit an input image conditioned on a text prompt (img2img) via Stable Diffusion-cpp.
+
+**Multipart body**. Required fields: \`model\`, \`image\` (or \`image[]\`).
+Optional: \`prompt\`, \`size\`, \`response_format\`, \`n\`, \`strength\`, \`stream\`.
+
+**Mask inpainting is not supported.** Sending a \`mask\` or \`mask[]\` field
+returns 400 \`mask_not_supported\` — the underlying diffusion engine has no mask
+channel. Use a prompt-only edit (full-image img2img) instead.
+
+**Multiple images via \`image[]\`** are accepted but only the first is used;
+the rest produce a warning log line.
+
+Same output / \`response_format=url\` / streaming caveats as
+\`POST /v1/images/generations\`.
+`.trim()
+
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/images/generations', {
-    schema: { body: imagesGenerationsBody, tags: ['Images'], summary: 'Image generation' },
+    schema: {
+      body: imagesGenerationsBody,
+      tags: ['Images'],
+      summary: 'Image generation',
+      description: GENERATIONS_DESCRIPTION
+    },
     preHandler: requireModel('image')
   }, async (req, reply) => {
     const body = req.body
@@ -200,7 +244,13 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/images/edits', {
-    schema: { body: imagesEditsBody, tags: ['Images'], summary: 'Image editing (img2img)', consumes: ['multipart/form-data'] },
+    schema: {
+      body: imagesEditsBody,
+      tags: ['Images'],
+      summary: 'Image editing (img2img)',
+      description: EDITS_DESCRIPTION,
+      consumes: ['multipart/form-data']
+    },
     preValidation: multipartToBody,
     preHandler: requireModel('image')
   }, async (req, reply) => {

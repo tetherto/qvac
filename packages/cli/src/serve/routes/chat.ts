@@ -57,9 +57,32 @@ function randomId (): string {
   return Math.random().toString(36).slice(2, 12)
 }
 
+const descriptions = {
+  completion: `
+OpenAI-compatible chat completion. Accepts a chat-style \`messages\` array,
+optional \`tools\` for function-calling, and an optional \`response_format\`
+(\`text\` / \`json_object\` / \`json_schema\`).
+
+**Streaming**: pass \`stream: true\` to receive Server-Sent Events. The stream
+ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
+
+**Tools + structured output**: combining \`tools\` with
+\`response_format: { type: 'json_object' | 'json_schema' }\` is rejected with
+\`invalid_response_format\`.
+
+**Ignored params** (warned, not rejected): \`logit_bias\`, \`n\`, \`user\`,
+\`seed\`, \`logprobs\`, \`top_logprobs\`, \`frequency_penalty\`,
+\`presence_penalty\`, \`stop\`.
+
+**Token accounting**: \`usage.prompt_tokens\` is reported as 0;
+\`completion_tokens\` comes from \`CompletionStats.generatedTokens\` when the
+SDK provides it, otherwise from a whitespace split of the output.
+`.trim()
+}
+
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/chat/completions', {
-    schema: { body: chatCompletionsBody, tags: ['Chat'], summary: 'Chat completion' },
+    schema: { body: chatCompletionsBody, tags: ['Chat'], summary: 'Chat completion', description: descriptions.completion },
     config: { unsupportedParams: [...CHAT_UNSUPPORTED_PARAMS] },
     preHandler: [requireModel('chat'), logUnsupported]
   }, async (req, reply) => {

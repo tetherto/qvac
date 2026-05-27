@@ -19,9 +19,35 @@ import type { ModelEntry, ResolvedModelEntry } from '../core/model-registry.js'
 const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text'])
 const UNSUPPORTED_TRANSCRIPTION_FORMATS = new Set(['srt', 'vtt', 'verbose_json'])
 
+const TRANSCRIPTIONS_DESCRIPTION = `
+Speech-to-text via Whisper-cpp / Parakeet. Multipart body with required
+\`file\` (audio bytes) and \`model\` (alias of a registered transcription
+model).
+
+**\`response_format\`** accepts only \`json\` (default) and \`text\`.
+\`srt\`, \`vtt\`, and \`verbose_json\` return \`400 unsupported_response_format\`
+(timestamps and segment metadata are not exposed). Unknown values return
+\`400 invalid_response_format\`.
+
+**\`language\`** is honored as a model-load-time config, not per request.
+Sending it logs a warning and uses whatever language the model was loaded
+with.
+
+**\`temperature\`** is logged as ignored.
+
+**Validation order**: \`Content-Type\` must be multipart → schema (file + model
+required) → param checks (response_format) → model resolution → SDK call.
+`.trim()
+
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/audio/transcriptions', {
-    schema: { body: transcriptionsBody, tags: ['Audio'], summary: 'Audio transcription', consumes: ['multipart/form-data'] },
+    schema: {
+      body: transcriptionsBody,
+      tags: ['Audio'],
+      summary: 'Audio transcription',
+      description: TRANSCRIPTIONS_DESCRIPTION,
+      consumes: ['multipart/form-data']
+    },
     preValidation: multipartToBody
   }, async (req, reply) => {
     const body = req.body
@@ -62,7 +88,26 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/audio/translations', {
-    schema: { body: translationsBody, tags: ['Audio'], summary: 'Audio translation (to English)', consumes: ['multipart/form-data'] },
+    schema: {
+      body: translationsBody,
+      tags: ['Audio'],
+      summary: 'Audio translation (to English)',
+      description: `
+Speech-to-English-text via a Whisper translation model. Multipart body, same
+required fields as transcriptions.
+
+**Output is always English** — the underlying capability is fixed. Sending a
+\`language\` field returns \`400 unsupported_param\`.
+
+Same \`response_format\` rules as transcriptions
+(\`json\`/\`text\` accepted; \`srt\`/\`vtt\`/\`verbose_json\` rejected).
+
+The model must be registered with sdkType
+\`whispercpp-audio-translation\` (i.e. \`endpointCategory: 'audio-translation'\`)
+— a plain transcription model is rejected with \`invalid_model_type\`.
+      `.trim(),
+      consumes: ['multipart/form-data']
+    },
     preValidation: multipartToBody
   }, async (req, reply) => {
     const body = req.body
@@ -107,7 +152,35 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/audio/speech', {
-    schema: { body: audioSpeechBody, tags: ['Audio'], summary: 'Text-to-speech' },
+    schema: {
+      body: audioSpeechBody,
+      tags: ['Audio'],
+      summary: 'Text-to-speech',
+      description: `
+Synthesize speech from \`input\` text. **The response is raw audio bytes**
+(not JSON) with the appropriate \`Content-Type\` (\`audio/wav\`,
+\`audio/x-pcm\`, etc.) and \`X-Audio-Sample-Rate\` / \`X-Audio-Channels\` /
+\`X-Audio-Bits-Per-Sample\` headers.
+
+**Model lookup is voice-aware** (multi-stage): the server first checks the
+\`serve.openai.audio.speech.voices\` map (\`voice → alias\`), then a hyphen
+alias (\`{model}-{voice}\`), then the bare \`model\`. If no candidate
+resolves, the error message lists all three lookup keys it tried.
+
+**\`voice\`** is required unless \`serve.openai.audio.speech.defaultVoice\` is
+configured (default: \`"alloy"\`).
+
+**\`input_too_long\`** is returned when \`input.length\` exceeds
+\`serve.openai.audio.speech.maxInputChars\` (default 4096). Whitespace-only
+input is rejected as \`missing_input\`.
+
+**\`response_format\`** accepts engine-native formats (wav, pcm, raw). MP3,
+opus, aac, flac return \`unsupported_response_format\` (no transcoder).
+
+**Ignored params** (logged, returned in \`X-QVAC-Ignored-Params\` header):
+\`speed\`, \`instructions\`, \`stream_format\`.
+      `.trim()
+    },
     config: { unsupportedParams: [...SPEECH_UNSUPPORTED_PARAMS] },
     preHandler: logUnsupported
   }, async (req, reply) => {

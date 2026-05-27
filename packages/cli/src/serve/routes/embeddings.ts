@@ -4,9 +4,24 @@ import { requireModel } from '../plugins/require-model.js'
 import { logUnsupported } from '../plugins/log-unsupported.js'
 import { embeddingsBody, EMBEDDINGS_UNSUPPORTED_PARAMS } from '../schemas/embeddings.js'
 
+const descriptions = {
+  embed: `
+Compute embeddings for a single string or an array of strings.
+
+**Output**: \`data[]\` always wraps each input's vector under
+\`{ object: 'embedding', index, embedding: number[] }\`, matching OpenAI.
+
+**Ignored params** (warned, not rejected): \`encoding_format\` (we always
+return float arrays), \`dimensions\` (no truncation/padding), \`user\`.
+
+**Token accounting**: \`usage.prompt_tokens\` and \`total_tokens\` are
+reported as 0 — the SDK \`embed()\` operation doesn't surface a token count.
+`.trim()
+}
+
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/embeddings', {
-    schema: { body: embeddingsBody, tags: ['Embeddings'], summary: 'Generate embeddings' },
+    schema: { body: embeddingsBody, tags: ['Embeddings'], summary: 'Generate embeddings', description: descriptions.embed },
     config: { unsupportedParams: [...EMBEDDINGS_UNSUPPORTED_PARAMS] },
     preHandler: [requireModel('embedding'), logUnsupported]
   }, async (req) => {

@@ -53,7 +53,36 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.post('/v1/responses', {
-    schema: { body: responsesBody, tags: ['Responses'], summary: 'Create a model response' },
+    schema: {
+      body: responsesBody,
+      tags: ['Responses'],
+      summary: 'Create a model response',
+      description: `
+OpenAI Responses API — stateful chat completion that can be retrieved /
+deleted later via the returned \`id\`.
+
+**Storage is in-memory only.** Every \`/v1/responses*\` reply carries
+\`X-QVAC-Stub: responses-volatile\`. IDs expire on process restart (60-minute
+TTL, 256 max entries).
+
+**Conversation chaining** via \`previous_response_id\` walks the stored chain
+(up to 32 turns) and prepends prior turns into the SDK history. A missing or
+expired \`previous_response_id\` returns \`404 previous_response_not_found\`.
+
+**\`store: false\`** opts out of storage — the response is returned but not
+addressable via GET / DELETE / input_items.
+
+**Rejections**:
+- \`conversation\` → \`400 conversation_not_supported\` (Conversation persistence not implemented)
+- \`background: true\` → \`400 background_not_supported\` (only synchronous responses)
+- \`tools[].type\` other than \`function\` (e.g. \`web_search\`, \`file_search\`, \`code_interpreter\`) → \`400 invalid_tool_type\`
+- structured output (\`json_object\`/\`json_schema\`) combined with non-empty \`tools\` → \`400 invalid_response_format\`
+
+**Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
+(\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
+and terminates **without** a \`[DONE]\` sentinel (per the spec).
+      `.trim()
+    },
     config: { unsupportedParams: [...RESPONSES_UNSUPPORTED_PARAMS], sseSentinel: false },
     preHandler: [requireModel('chat'), logUnsupported]
   }, async (req, reply) => {
@@ -164,7 +193,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.get('/v1/responses/:id', {
-    schema: { params: responsesIdParams, tags: ['Responses'], summary: 'Retrieve a stored response' }
+    schema: {
+      params: responsesIdParams,
+      tags: ['Responses'],
+      summary: 'Retrieve a stored response',
+      description: 'Fetch a previously-created response. **In-memory only** — 404 once expired or after a restart. Reply carries `X-QVAC-Stub: responses-volatile`.'
+    }
   }, async (req, reply) => {
     const rec = app.qvac.responsesStore.get(req.params.id)
     if (!rec) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
@@ -172,7 +206,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.delete('/v1/responses/:id', {
-    schema: { params: responsesIdParams, tags: ['Responses'], summary: 'Delete a stored response' }
+    schema: {
+      params: responsesIdParams,
+      tags: ['Responses'],
+      summary: 'Delete a stored response',
+      description: 'Remove a stored response from memory. Subsequent chains via `previous_response_id` that referenced this one will return `404 previous_response_not_found`.'
+    }
   }, async (req) => {
     const ok = app.qvac.responsesStore.delete(req.params.id)
     if (!ok) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
@@ -184,7 +223,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       params: responsesIdParams,
       querystring: responsesListInputItemsQuery,
       tags: ['Responses'],
-      summary: 'List input items for a stored response'
+      summary: 'List input items for a stored response',
+      description: 'Paginate over a stored response\'s normalized input items (the request that produced it). `limit` and `after` work as on the OpenAI cursor-paginated endpoints.'
     }
   }, async (req, reply) => {
     const opts: { limit?: number; after?: string } = {}
