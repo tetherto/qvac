@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Consume `tts-cpp` `2026-05-20#1`, which disables host BLAS/OpenBLAS
-  auto-linking for Linux prebuilds.
+- Consume `tts-cpp` `2026-05-20#2`, which keeps BLAS enabled only on
+  macOS and disables host BLAS/OpenBLAS auto-linking everywhere else.
 
 ## [0.1.2]
 
