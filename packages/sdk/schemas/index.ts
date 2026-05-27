@@ -46,7 +46,7 @@ export * from "./state";
 export { SDK_CLIENT_ERROR_CODES } from "./sdk-errors-client";
 export { SDK_SERVER_ERROR_CODES } from "./sdk-errors-server";
 export { REGISTRY_ERROR_CODES } from "./sdk-errors-registry";
-export { ERR_CODES as RAG_ERROR_CODES } from "@qvac/rag";
+export { ERR_CODES as RAG_ERROR_CODES } from "@qvac/rag/src/errors";
 export {
   qvacConfigSchema,
   deviceMatchSchema,
