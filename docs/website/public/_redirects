@@ -19,6 +19,26 @@
 # /reference/release-notes/:version/   /reference/release-notes/:version/index.html   200
 # /reference/release-notes/:version    /reference/release-notes/:version/index.html   200
 
+# Versioned redirects hardcoded:
+
+/reference/api/v0.7.0/    /reference/api/v0.7.0/index.html    200
+/reference/api/v0.7.0     /reference/api/v0.7.0/index.html    200
+/reference/api/v0.8.0/    /reference/api/v0.8.0/index.html    200
+/reference/api/v0.8.0     /reference/api/v0.8.0/index.html    200
+/reference/api/v0.9.1/    /reference/api/v0.9.1/index.html    200
+/reference/api/v0.9.1     /reference/api/v0.9.1/index.html    200
+/reference/api/v0.10.0/   /reference/api/v0.10.0/index.html   200
+/reference/api/v0.10.0    /reference/api/v0.10.0/index.html   200
+
+/reference/release-notes/v0.7.0/    /reference/release-notes/v0.7.0/index.html    200
+/reference/release-notes/v0.7.0     /reference/release-notes/v0.7.0/index.html    200
+/reference/release-notes/v0.8.0/    /reference/release-notes/v0.8.0/index.html    200
+/reference/release-notes/v0.8.0     /reference/release-notes/v0.8.0/index.html    200
+/reference/release-notes/v0.9.1/    /reference/release-notes/v0.9.1/index.html    200
+/reference/release-notes/v0.9.1     /reference/release-notes/v0.9.1/index.html    200
+/reference/release-notes/v0.10.0/   /reference/release-notes/v0.10.0/index.html   200
+/reference/release-notes/v0.10.0    /reference/release-notes/v0.10.0/index.html   200
+
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
 # ----------------------------------------------------------------------
@@ -94,24 +114,6 @@
 /sdk/examples/utilities/plugin-system         /configuration/plugins/                    301
 /sdk/examples/utilities/write-custom-plugin/  /configuration/plugins/write-custom-plugin/  301
 /sdk/examples/utilities/write-custom-plugin   /configuration/plugins/write-custom-plugin/  301
-
-# Section rename: /sdk/api → /reference/api, /sdk/release-notes → /reference/release-notes
-/sdk/api/                       /reference/api/                       301
-/sdk/api                        /reference/api/                       301
-/sdk/api/v0.7.0/                /reference/api/v0.7.0/                301
-/sdk/api/v0.7.0                 /reference/api/v0.7.0/                301
-/sdk/api/v0.8.0/                /reference/api/v0.8.0/                301
-/sdk/api/v0.8.0                 /reference/api/v0.8.0/                301
-/sdk/api/v0.9.1/                /reference/api/v0.9.1/                301
-/sdk/api/v0.9.1                 /reference/api/v0.9.1/                301
-/sdk/release-notes/             /reference/release-notes/             301
-/sdk/release-notes              /reference/release-notes/             301
-/sdk/release-notes/v0.7.0/      /reference/release-notes/v0.7.0/      301
-/sdk/release-notes/v0.7.0       /reference/release-notes/v0.7.0/      301
-/sdk/release-notes/v0.8.0/      /reference/release-notes/v0.8.0/      301
-/sdk/release-notes/v0.8.0       /reference/release-notes/v0.8.0/      301
-/sdk/release-notes/v0.9.1/      /reference/release-notes/v0.9.1/      301
-/sdk/release-notes/v0.9.1       /reference/release-notes/v0.9.1/      301
 
 # Section rename: /sdk/tutorials/* → /tutorials/*
 /sdk/tutorials/electron/   /tutorials/electron/   301
