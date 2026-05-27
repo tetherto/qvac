@@ -44,12 +44,15 @@ export interface StartServerOptions {
   cors?: boolean | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
+  /** Silence the logger entirely. Useful when capturing the OpenAPI spec or
+   * when other tooling consumes stdout. */
+  quiet?: boolean | undefined
   docs?: boolean | undefined
   transcribeOverride?: QvacContext['transcribeOverride']
 }
 
 export async function buildServer (options: StartServerOptions): Promise<FastifyInstance> {
-  const logger = createLogger(options.verbose ? 'debug' : 'info')
+  const logger = createLogger(options.quiet ? 'silent' : options.verbose ? 'debug' : 'info')
 
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? await loadConfig(configPath) as Record<string, unknown> : {}

@@ -235,6 +235,24 @@ function setupCli (): void {
       }
     })
 
+  openaiCmd
+    .command('spec')
+    .description('Emit the OpenAPI spec for qvac serve openai (without starting the server)')
+    .option('-o, --output <path>', 'Write to file instead of stdout')
+    .option('--yaml', 'Emit YAML instead of JSON')
+    .action(async (options: { output?: string; yaml?: boolean }) => {
+      try {
+        const { emitOpenApiSpec } = await import('./openai/spec.js')
+        const specOpts: Parameters<typeof emitOpenApiSpec>[0] = {}
+        if (options.output) specOpts.output = options.output
+        if (options.yaml) specOpts.format = 'yaml'
+        await emitOpenApiSpec(specOpts)
+      } catch (error: unknown) {
+        handleError(error)
+        process.exit(1)
+      }
+    })
+
   const serveCmd = program
     .command('serve')
     .description('Start an API server backed by QVAC')
