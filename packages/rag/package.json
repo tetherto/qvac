@@ -27,6 +27,17 @@
     "NOTICE"
   ],
   "types": "index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./errors": {
+      "types": "./src/errors.d.ts",
+      "default": "./src/errors.js"
+    }
+  },
   "imports": {
     "#crypto": {
       "bare": "bare-crypto",
