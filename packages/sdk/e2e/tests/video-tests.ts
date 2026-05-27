@@ -67,6 +67,8 @@ export const videoTxt2vidSmoke: TestDefinition = {
     fps: 16,
     steps: 1,
     seed: 42,
+    width: 416,
+    height: 240,
   },
   expectation: { validation: "function", fn: validateTxt2vidSmoke },
   suites: ["smoke"],

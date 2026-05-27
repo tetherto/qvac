@@ -396,6 +396,18 @@ resources.define("upscaler", {
   },
 });
 
+resources.define("upscaler-cpu", {
+  constant: REALESRGAN_X4PLUS_ANIME_6B,
+  type: "diffusion",
+  config: {
+    mode: "upscale",
+    device: "cpu",
+    upscaler: {
+      tile_size: 64,
+    },
+  },
+});
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   // Point the SDK at the committed e2e fixture unless the developer
   // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
