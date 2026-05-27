@@ -2,25 +2,7 @@
 
 const BaseLlmAdapter = require('./BaseLlmAdapter')
 const { QvacErrorRAG, ERR_CODES } = require('../../errors')
-
-function getFetch () {
-  try {
-    const fetchMod = require('#fetch')
-    return fetchMod.default || fetchMod
-  } catch (error) {
-    if (error instanceof QvacErrorRAG) {
-      throw error
-    }
-    if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.DEPENDENCY_REQUIRED,
-        adds: 'Fetch unavailable: #fetch could not resolve. Bare: install bare-fetch; otherwise ensure globalThis.fetch exists and your bundler supports package imports.',
-        cause: error
-      })
-    }
-    throw error
-  }
-}
+const resolveFetch = require('../../shims/resolve-fetch')
 
 /**
  * HTTP-based LLM adapter that can work with various HTTP LLM APIs.
@@ -97,7 +79,7 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * @private
    */
   async _makeHttpRequest (requestBody) {
-    const fetch = getFetch()
+    const fetch = resolveFetch()
 
     const response = await fetch(this.httpConfig.apiUrl, {
       method: this.httpConfig.method,
