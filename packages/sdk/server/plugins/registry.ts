@@ -70,6 +70,12 @@ export function registerPlugin(plugin: QvacPlugin): void {
   }
 }
 
+export function registerPlugins(pluginList: readonly QvacPlugin[]): void {
+  for (const plugin of pluginList) {
+    registerPlugin(plugin);
+  }
+}
+
 export function getPlugin(modelType: string): QvacPlugin | undefined {
   return plugins.get(modelType);
 }
