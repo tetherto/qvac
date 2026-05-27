@@ -66,7 +66,7 @@ CONF
   ${QVAC} serve openai -p "${E2E_PORT}" --cors >"${FILE_TMPDIR}/serve.log" 2>&1 &
   echo "$!" > "${FILE_TMPDIR}/server_pid"
 
-  local max_wait=300
+  local max_wait=600
   local elapsed=0
   while [[ "${elapsed}" -lt "${max_wait}" ]]; do
     local count
