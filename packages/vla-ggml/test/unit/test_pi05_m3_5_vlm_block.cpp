@@ -150,8 +150,8 @@ TEST(Pi05M3_5, VlmBlock0MatchesPytorchOverValidPrefix) {
   std::memcpy(pos->data, pos_data.data(),
               VALID_PREFIX_LEN * sizeof(int32_t));
 
-  using qvac_lib_infer_vla_ggml::pi05_build_gemma_vlm_block_graph;
-  struct ggml_tensor* out = pi05_build_gemma_vlm_block_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildGemmaVlmBlockGraph;
+  struct ggml_tensor* out = pi05BuildGemmaVlmBlockGraph(
       ctx_g, x, pos, /*attn_mask=*/nullptr, bw,
       VLM_HIDDEN, VLM_N_HEADS, VLM_N_KV_HEADS, VLM_HEAD_DIM,
       VALID_PREFIX_LEN, VLM_RMS_EPS, VLM_ROPE_BASE);

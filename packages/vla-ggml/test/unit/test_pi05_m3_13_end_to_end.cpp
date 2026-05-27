@@ -4,7 +4,7 @@
 //   1. VLM prefill (M3.6) on the dump's `vlm.prefix_concat` (sliced
 //      to 832 valid positions) — produces `final_out` *and* taps the
 //      18 per-layer post-RoPE K/V tensors via the new optional out
-//      params on `pi05_build_vlm_prefill_graph`.
+//      params on `pi05BuildVlmPrefillGraph`.
 //   2. Read those K/V out into CPU buffers (one round of
 //      `ggml_backend_tensor_get` per layer).
 //   3. ODE loop (M3.12) consuming the live cached K/V — same 10
@@ -230,8 +230,8 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
     std::vector<struct ggml_tensor*> out_keys;
     std::vector<struct ggml_tensor*> out_values;
 
-    using qvac_lib_infer_vla_ggml::pi05_build_vlm_prefill_graph;
-    struct ggml_tensor* final_out = pi05_build_vlm_prefill_graph(
+    using qvac_lib_infer_vla_ggml::pi05BuildVlmPrefillGraph;
+    struct ggml_tensor* final_out = pi05BuildVlmPrefillGraph(
         ctx_g, x, pos, /*attn_mask=*/nullptr, vlm_blocks, vlm_final_norm,
         VLM_HIDDEN, VLM_N_HEADS, VLM_N_KV_HEADS, VLM_HEAD_DIM,
         VALID_PREFIX_LEN, RMS_EPS, ROPE_BASE,
@@ -290,7 +290,7 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
 
   for (int step = 0; step < N_STEPS; ++step) {
     const float t = 1.0f + step * STEP_DT;
-    qvac_lib_infer_vla_ggml::pi05_compute_time_sincos(
+    qvac_lib_infer_vla_ggml::pi05ComputeTimeSincos(
         t, COND_DIM, MIN_PERIOD, MAX_PERIOD, sincos_buf.data());
 
     const size_t ctx_mem = size_t{96} * 1024 * 1024;
@@ -320,16 +320,16 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
           EXPERT_N_KV_HEADS);
     }
 
-    using qvac_lib_infer_vla_ggml::pi05_build_time_mlp_graph;
-    struct ggml_tensor* cond = pi05_build_time_mlp_graph(
+    using qvac_lib_infer_vla_ggml::pi05BuildTimeMlpGraph;
+    struct ggml_tensor* cond = pi05BuildTimeMlpGraph(
         ctx_g, sincos_t, time_in_w, time_in_b, time_out_w, time_out_b);
 
     struct ggml_tensor* x_exp_t = ggml_mul_mat(ctx_g, action_in_w, x_t_t);
     x_exp_t = ggml_add(
         ctx_g, x_exp_t, ggml_cast(ctx_g, action_in_b, GGML_TYPE_F32));
 
-    using qvac_lib_infer_vla_ggml::pi05_build_expert_ode_step_graph;
-    auto outs = pi05_build_expert_ode_step_graph(
+    using qvac_lib_infer_vla_ggml::pi05BuildExpertOdeStepGraph;
+    auto outs = pi05BuildExpertOdeStepGraph(
         ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
         expert_blocks, final_norm_ada_w, final_norm_ada_b,
         action_out_w, action_out_b,
@@ -337,8 +337,8 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
         EXPERT_HEAD_DIM, VALID_PREFIX_LEN, N_ACT, RMS_EPS, ROPE_BASE);
     ASSERT_NE(outs.v_t, nullptr);
 
-    using qvac_lib_infer_vla_ggml::pi05_build_euler_step_graph;
-    struct ggml_tensor* x_next = pi05_build_euler_step_graph(
+    using qvac_lib_infer_vla_ggml::pi05BuildEulerStepGraph;
+    struct ggml_tensor* x_next = pi05BuildEulerStepGraph(
         ctx_g, x_t_t, outs.v_t, STEP_DT);
 
     struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 32768, false);

@@ -11,7 +11,7 @@
 //   * cond = `expert.cond[t=1.0]` from the dump.
 //   * act_positions = [832, 833, …, 881] (continued from prefix).
 //
-// Runs `pi05_build_expert_block_graph` and asserts vs
+// Runs `pi05BuildExpertBlockGraph` and asserts vs
 // `expert.blk_0.out[t=1.0]`.
 
 #include <algorithm>
@@ -167,7 +167,7 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   // ── 3. Build & run the graph. ────────────────────────────────────────
   // pi05's `action_in_proj` (Linear 32 → 1024) is included as the first
   // op so the F16-stored weights are promoted inside the graph (the
-  // `to_f32` call in pi05_linear handles it). M3.10 will reuse the
+  // `toF32` call in pi05Linear handles it). M3.10 will reuse the
   // same op when chaining 18 expert blocks.
   ggml_backend_t cpu_backend =
       ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
@@ -210,14 +210,14 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   // promotes it implicitly.
   struct ggml_tensor* x_exp_t = ggml_mul_mat(ctx_g, action_in_w, noise_t);
   // The bias is F16; promote then add. We can't call the static
-  // pi05_linear helper here, so inline the cast.
+  // pi05Linear helper here, so inline the cast.
   struct ggml_tensor* action_in_b_f32 =
       ggml_cast(ctx_g, action_in_b, GGML_TYPE_F32);
   x_exp_t = ggml_add(ctx_g, x_exp_t, action_in_b_f32);
   ggml_set_name(x_exp_t, "x_exp");
 
-  using qvac_lib_infer_vla_ggml::pi05_build_expert_block_graph;
-  struct ggml_tensor* out = pi05_build_expert_block_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildExpertBlockGraph;
+  struct ggml_tensor* out = pi05BuildExpertBlockGraph(
       ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond_t, bw,
       EXPERT_HIDDEN, EXPERT_N_HEADS, EXPERT_N_KV_HEADS, EXPERT_HEAD_DIM,
       VALID_PREFIX_LEN, N_ACT, EXPERT_RMS_EPS, EXPERT_ROPE_BASE);

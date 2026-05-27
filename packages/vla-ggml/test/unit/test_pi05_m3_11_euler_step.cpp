@@ -97,8 +97,8 @@ TEST(Pi05M3_11, EulerStepMatchesPytorch) {
   std::memcpy(x_t->data, noise.data(), noise.size() * sizeof(float));
   std::memcpy(v_t_t->data, v_t.data(), v_t.size() * sizeof(float));
 
-  using qvac_lib_infer_vla_ggml::pi05_build_euler_step_graph;
-  struct ggml_tensor* out = pi05_build_euler_step_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildEulerStepGraph;
+  struct ggml_tensor* out = pi05BuildEulerStepGraph(
       ctx_g, x_t, v_t_t, STEP_DT);
   ASSERT_NE(out, nullptr);
 

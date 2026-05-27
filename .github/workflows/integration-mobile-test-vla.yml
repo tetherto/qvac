@@ -40,6 +40,10 @@ env:
 # secret suffixes below are reused on purpose. Provision dedicated `_VLA`
 # secrets and rename here when VLA needs an isolated Device Farm budget.
 
+concurrency:
+  group: integration-mobile-test-vla-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Defense-in-depth gate for workflow_dispatch. The repository's PR entry
   # point (on-pr-vla.yml) already runs authorize-pr before invoking this

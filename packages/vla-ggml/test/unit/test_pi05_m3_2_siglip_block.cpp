@@ -137,8 +137,8 @@ TEST(Pi05M3_2, SiglipBlock0MatchesPytorch) {
       ggml_new_tensor_2d(ctx_g, GGML_TYPE_F32, HIDDEN, N_PATCHES);
   std::memcpy(x->data, input.data(), input.size() * sizeof(float));
 
-  using qvac_lib_infer_vla_ggml::pi05_build_siglip_block_graph;
-  struct ggml_tensor* out = pi05_build_siglip_block_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildSiglipBlockGraph;
+  struct ggml_tensor* out = pi05BuildSiglipBlockGraph(
       ctx_g, x, bw, N_PATCHES, HIDDEN, N_HEADS, LAYER_NORM_EPS);
   ASSERT_NE(out, nullptr);
 

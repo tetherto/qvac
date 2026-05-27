@@ -130,9 +130,9 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
   std::memcpy(tok_t->data, tokens.data(),
               tokens.size() * sizeof(int32_t));
 
-  using qvac_lib_infer_vla_ggml::pi05_build_vlm_embed_graph;
+  using qvac_lib_infer_vla_ggml::pi05BuildVlmEmbedGraph;
   struct ggml_tensor* out =
-      pi05_build_vlm_embed_graph(ctx_g, tok_t, embed_tokens, HIDDEN);
+      pi05BuildVlmEmbedGraph(ctx_g, tok_t, embed_tokens, HIDDEN);
   ASSERT_NE(out, nullptr);
 
   struct ggml_cgraph* gf = ggml_new_graph(ctx_g);

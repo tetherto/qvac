@@ -225,8 +225,8 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
       ggml_cast(ctx_g, action_in_b, GGML_TYPE_F32);
   x_exp_t = ggml_add(ctx_g, x_exp_t, action_in_b_f32);
 
-  using qvac_lib_infer_vla_ggml::pi05_build_expert_ode_step_graph;
-  auto outs = pi05_build_expert_ode_step_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildExpertOdeStepGraph;
+  auto outs = pi05BuildExpertOdeStepGraph(
       ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond_t,
       blocks, final_norm_ada_w, final_norm_ada_b,
       action_out_w, action_out_b,

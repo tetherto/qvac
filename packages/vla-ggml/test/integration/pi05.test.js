@@ -623,7 +623,7 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     if (backend === 'cpu') {
       // Explicit-cpu request must resolve to cpu. `auto` may legitimately
       // pick anything else, so we only log the resolved backendName below.
-      t.is(model.backendName, 'cpu', `[${tag}] backend name (cpu)`)
+      t.is(model.backendName.toLowerCase(), 'cpu', `[${tag}] backend name (cpu)`)
     }
 
     // pi05 ignores `state` (its state is tokenised into the prompt —
@@ -692,7 +692,7 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     // stays at ~0.3 %, so cos (direction parity) is the main signal.
     // Matches the spirit of smolvla's per-backend tolerances in
     // addon.test.js (which uses absolute max-abs < 0.6 on Vulkan).
-    const isCpu = (model.backendName === 'cpu')
+    const isCpu = (model.backendName.toLowerCase() === 'cpu')
     const cosBar = isCpu ? 0.999 : 0.99
     const relBar = isCpu ? 0.05 : 0.20
     t.ok(cos > cosBar, `[${tag}] cos sim ${cos} > ${cosBar} (${isCpu ? 'CPU' : 'GPU-class'} bar)`)

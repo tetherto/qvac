@@ -8,6 +8,7 @@
 
 #include "../utils/BackendSelection.hpp"
 #include "../utils/LoggingMacros.hpp"
+#include "gguf_helpers.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -806,14 +807,7 @@ get_tensor(struct ggml_context* ctx, const char* name) {
   return t;
 }
 
-// Helper to read a uint32 from GGUF metadata
-static uint32_t
-gguf_get_u32(struct gguf_context* gguf, const char* key, uint32_t default_val) {
-  int64_t idx = gguf_find_key(gguf, key);
-  if (idx < 0)
-    return default_val;
-  return gguf_get_val_u32(gguf, idx);
-}
+using qvac_lib_infer_vla_ggml::ggufGetU32Or;
 
 // Helper to assign a tensor pointer by name
 static struct ggml_tensor*
@@ -947,39 +941,39 @@ static void try_init_gpu_backend(smolvla_model& model, bool force_cpu) {
 // a key still load. Caller is expected to validate the resulting hparams
 // before any sizing arithmetic.
 static void read_hparams_from_gguf(gguf_context* gguf, smolvla_hparams& hp) {
-  hp.vision_hidden_size = gguf_get_u32(gguf, "smolvla.vision.hidden_size", 768);
+  hp.vision_hidden_size = ggufGetU32Or(gguf, "smolvla.vision.hidden_size", 768);
   hp.vision_intermediate =
-      gguf_get_u32(gguf, "smolvla.vision.intermediate_size", 3072);
-  hp.vision_num_layers = gguf_get_u32(gguf, "smolvla.vision.num_layers", 12);
-  hp.vision_num_heads = gguf_get_u32(gguf, "smolvla.vision.num_heads", 12);
-  hp.vision_image_size = gguf_get_u32(gguf, "smolvla.vision.image_size", 512);
-  hp.vision_patch_size = gguf_get_u32(gguf, "smolvla.vision.patch_size", 16);
+      ggufGetU32Or(gguf, "smolvla.vision.intermediate_size", 3072);
+  hp.vision_num_layers = ggufGetU32Or(gguf, "smolvla.vision.num_layers", 12);
+  hp.vision_num_heads = ggufGetU32Or(gguf, "smolvla.vision.num_heads", 12);
+  hp.vision_image_size = ggufGetU32Or(gguf, "smolvla.vision.image_size", 512);
+  hp.vision_patch_size = ggufGetU32Or(gguf, "smolvla.vision.patch_size", 16);
 
   hp.connector_scale_factor =
-      gguf_get_u32(gguf, "smolvla.connector.scale_factor", 4);
+      ggufGetU32Or(gguf, "smolvla.connector.scale_factor", 4);
 
-  hp.text_hidden_size = gguf_get_u32(gguf, "smolvla.text.hidden_size", 960);
+  hp.text_hidden_size = ggufGetU32Or(gguf, "smolvla.text.hidden_size", 960);
   hp.text_intermediate =
-      gguf_get_u32(gguf, "smolvla.text.intermediate_size", 2560);
-  hp.text_num_layers = gguf_get_u32(gguf, "smolvla.text.num_layers", 16);
-  hp.text_num_heads = gguf_get_u32(gguf, "smolvla.text.num_heads", 15);
-  hp.text_num_kv_heads = gguf_get_u32(gguf, "smolvla.text.num_kv_heads", 5);
-  hp.text_head_dim = gguf_get_u32(gguf, "smolvla.text.head_dim", 64);
+      ggufGetU32Or(gguf, "smolvla.text.intermediate_size", 2560);
+  hp.text_num_layers = ggufGetU32Or(gguf, "smolvla.text.num_layers", 16);
+  hp.text_num_heads = ggufGetU32Or(gguf, "smolvla.text.num_heads", 15);
+  hp.text_num_kv_heads = ggufGetU32Or(gguf, "smolvla.text.num_kv_heads", 5);
+  hp.text_head_dim = ggufGetU32Or(gguf, "smolvla.text.head_dim", 64);
 
-  hp.expert_hidden_size = gguf_get_u32(gguf, "smolvla.expert.hidden_size", 720);
+  hp.expert_hidden_size = ggufGetU32Or(gguf, "smolvla.expert.hidden_size", 720);
   hp.expert_intermediate =
-      gguf_get_u32(gguf, "smolvla.expert.intermediate_size", 2048);
-  hp.expert_num_layers = gguf_get_u32(gguf, "smolvla.expert.num_layers", 16);
-  hp.expert_num_heads = gguf_get_u32(gguf, "smolvla.expert.num_heads", 15);
-  hp.expert_num_kv_heads = gguf_get_u32(gguf, "smolvla.expert.num_kv_heads", 5);
+      ggufGetU32Or(gguf, "smolvla.expert.intermediate_size", 2048);
+  hp.expert_num_layers = ggufGetU32Or(gguf, "smolvla.expert.num_layers", 16);
+  hp.expert_num_heads = ggufGetU32Or(gguf, "smolvla.expert.num_heads", 15);
+  hp.expert_num_kv_heads = ggufGetU32Or(gguf, "smolvla.expert.num_kv_heads", 5);
   hp.self_attn_every_n =
-      gguf_get_u32(gguf, "smolvla.expert.self_attn_every_n", 2);
+      ggufGetU32Or(gguf, "smolvla.expert.self_attn_every_n", 2);
 
-  hp.num_ode_steps = gguf_get_u32(gguf, "smolvla.flow.num_ode_steps", 10);
-  hp.chunk_size = gguf_get_u32(gguf, "smolvla.flow.chunk_size", 50);
-  hp.max_action_dim = gguf_get_u32(gguf, "smolvla.flow.max_action_dim", 32);
-  hp.max_state_dim = gguf_get_u32(gguf, "smolvla.flow.max_state_dim", 32);
-  hp.action_dim = gguf_get_u32(gguf, "smolvla.flow.action_dim", 7);
+  hp.num_ode_steps = ggufGetU32Or(gguf, "smolvla.flow.num_ode_steps", 10);
+  hp.chunk_size = ggufGetU32Or(gguf, "smolvla.flow.chunk_size", 50);
+  hp.max_action_dim = ggufGetU32Or(gguf, "smolvla.flow.max_action_dim", 32);
+  hp.max_state_dim = ggufGetU32Or(gguf, "smolvla.flow.max_state_dim", 32);
+  hp.action_dim = ggufGetU32Or(gguf, "smolvla.flow.action_dim", 7);
 }
 
 // Sanity-check hparams loaded from GGUF before they feed any sizing

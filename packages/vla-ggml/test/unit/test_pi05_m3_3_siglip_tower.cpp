@@ -182,8 +182,8 @@ TEST(Pi05M3_3, SiglipFullTowerMatchesPytorch) {
   }
   std::memcpy(pixels->data, permuted.data(), per_cam * sizeof(float));
 
-  using qvac_lib_infer_vla_ggml::pi05_build_siglip_tower_graph;
-  auto out = pi05_build_siglip_tower_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildSiglipTowerGraph;
+  auto out = pi05BuildSiglipTowerGraph(
       ctx_g, pixels, tw, N_PATCHES, HIDDEN, PROJ_DIM, N_HEADS, PATCH_SIZE,
       LAYER_NORM_EPS);
   ASSERT_NE(out.head_out, nullptr);

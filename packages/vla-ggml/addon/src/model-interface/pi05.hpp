@@ -17,9 +17,9 @@ namespace qvac_lib_infer_vla_ggml {
 // Forward-declared internal model struct — defined in pi05.cpp. Pi05Model
 // holds it via a unique_ptr so the public header doesn't need to drag in
 // all the per-section weight tables and backend handles. The destructor
-// is intentionally out-of-line (defined in pi05.cpp where pi05_model is
-// complete) so unique_ptr<pi05_model> compiles without leaking the type.
-struct pi05_model;
+// is intentionally out-of-line (defined in pi05.cpp where Pi05ModelInternal is
+// complete) so unique_ptr<Pi05ModelInternal> compiles without leaking the type.
+struct Pi05ModelInternal;
 
 // ── Sub-graph helpers ────────────────────────────────────────────────────
 // Each sub-graph exposes a small C++ entry point so the matching
@@ -65,7 +65,7 @@ struct Pi05PatchPosOutputs {
 // `patch_embed_out` and `pos_embed_out` are graph nodes — the caller is
 // responsible for `ggml_build_forward_expand(&gf, p)` and running the
 // backend.
-Pi05PatchPosOutputs pi05_build_siglip_patch_pos_graph(
+Pi05PatchPosOutputs pi05BuildSiglipPatchPosGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* pixel_values,
     struct ggml_tensor* patch_embed_w,
@@ -107,7 +107,7 @@ struct Pi05SiglipBlockWeights {
 // state with the same ne — feedable straight into the next block.
 //
 // Returns nullptr if any required weight in `w` is missing.
-struct ggml_tensor* pi05_build_siglip_block_graph(
+struct ggml_tensor* pi05BuildSiglipBlockGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,
     const Pi05SiglipBlockWeights& w,
@@ -151,7 +151,7 @@ struct Pi05VisionTowerOutputs {
 // pixel tensor. `w.blocks.size()` determines depth (27 for SigLIP-
 // So400m). Returns `{nullptr}` if any required weight is missing or
 // the block list is empty.
-Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
+Pi05VisionTowerOutputs pi05BuildSiglipTowerGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* pixel_values,
     const Pi05VisionTowerWeights& w,
@@ -176,7 +176,7 @@ Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
 // `tokens` must be a GGML_TYPE_I32 tensor of shape (n_tokens,) and
 // `embed_tokens` must have ne[0] == hidden. Returns nullptr on
 // missing weights.
-struct ggml_tensor* pi05_build_vlm_embed_graph(
+struct ggml_tensor* pi05BuildVlmEmbedGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* tokens,
     struct ggml_tensor* embed_tokens,
@@ -218,7 +218,7 @@ struct Pi05GemmaBlockWeights {
 // end-to-end path tap the post-RoPE per-layer K/V cache (ne=
 // [head_dim, seq_len, n_kv_heads]) for downstream joint attention.
 // They default to nullptr so M3.5/M3.6's tests don't pay anything.
-struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
+struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,            // ne=[hidden, seq_len]
     struct ggml_tensor* positions,    // I32 (seq_len,) — RoPE indices
@@ -237,14 +237,14 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
 // M3.7 — time-step → adaRMSNorm conditioning vector.
 //
 // Two pieces:
-//   * `pi05_compute_time_sincos`: plain C++ that fills a `(dim,)`
+//   * `pi05ComputeTimeSincos`: plain C++ that fills a `(dim,)`
 //     float buffer with `[sin(2π·t/period_0), ..., sin(2π·t/period_{N-1}),
 //                          cos(2π·t/period_0), ..., cos(2π·t/period_{N-1})]`
 //     where `period_i = min_period · (max_period/min_period)^(i/(N-1))`
 //     and `N = dim/2`. Exact port of openpi's
 //     `create_sinusoidal_pos_embedding` (lerobot/pi05/modeling_pi05.py:81)
 //     including the float64 internal precision.
-//   * `pi05_build_time_mlp_graph`: ggml graph for
+//   * `pi05BuildTimeMlpGraph`: ggml graph for
 //     `silu(Linear(silu(Linear(time_emb))))`, producing the (dim,)
 //     vector the expert path uses as `adarms_cond`.
 //
@@ -252,14 +252,14 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
 // sin-cos table is tiny (1024 floats per ODE step) and trivially
 // computed CPU-side once per step. For pi05_base, `dim` is 1024 and
 // `min_period`/`max_period` are 4e-3 and 4.0 (plan §2).
-void pi05_compute_time_sincos(
+void pi05ComputeTimeSincos(
     float t,
     int dim,
     float min_period,
     float max_period,
     float* out);
 
-struct ggml_tensor* pi05_build_time_mlp_graph(
+struct ggml_tensor* pi05BuildTimeMlpGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* time_emb,        // (dim,) F32
     struct ggml_tensor* time_mlp_in_w,   // (dim, dim)
@@ -289,7 +289,7 @@ struct Pi05AdaSplit {
   struct ggml_tensor* gate;
 };
 
-Pi05AdaSplit pi05_build_adarms_split_graph(
+Pi05AdaSplit pi05BuildAdarmsSplitGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* cond,         // (cond_dim,) F32
     struct ggml_tensor* ada_dense_w,  // (cond_dim, 3·hidden)
@@ -351,7 +351,7 @@ struct Pi05ExpertBlockWeights {
 // Returns nullptr on missing weights. Shape of the returned tensor
 // is ne=[expert_hidden, n_act] — feedable straight into the next
 // expert block (M3.10) or `action_out_proj` (M3.10).
-struct ggml_tensor* pi05_build_expert_block_graph(
+struct ggml_tensor* pi05BuildExpertBlockGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x_exp,
     struct ggml_tensor* act_positions,
@@ -395,17 +395,17 @@ struct Pi05ExpertODEStepOutputs {
 //   x ← x + dt · v_t
 //
 // Trivial scalar update, factored out as its own helper so the
-// caller (M3.12's loop) reads as `x = pi05_build_euler_step_graph
+// caller (M3.12's loop) reads as `x = pi05BuildEulerStepGraph
 // (ctx, x, v_t, dt)` rather than open-coding two ggml ops inline.
 // `dt` is typically `-1/N_steps` (negative — integrating from the
 // noise side `t=1` down to the action side `t=0`).
-struct ggml_tensor* pi05_build_euler_step_graph(
+struct ggml_tensor* pi05BuildEulerStepGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x_t,
     struct ggml_tensor* v_t,
     float dt);
 
-Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
+Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x_exp,                                  // (expert_hidden, n_act)
     struct ggml_tensor* act_positions,                          // I32 (n_act,)
@@ -441,7 +441,7 @@ Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
 // post-RoPE K/V tensor pointers — exactly the shape and layout the
 // expert-side ODE step's joint attention consumes
 // (ne=[head_dim, seq_len, n_kv_heads]).
-struct ggml_tensor* pi05_build_vlm_prefill_graph(
+struct ggml_tensor* pi05BuildVlmPrefillGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,
     struct ggml_tensor* positions,
@@ -476,7 +476,7 @@ public:
       bool forceCpu,
       const std::string& backendsDir);
 
-  // Out-of-line because `pi05_model` is forward-declared above;
+  // Out-of-line because `Pi05ModelInternal` is forward-declared above;
   // unique_ptr's destructor needs the complete type, which lives in
   // pi05.cpp.
   ~Pi05Model() override;
@@ -505,7 +505,7 @@ public:
 
 private:
   VlaHparamsGeneric hparams_{};
-  std::unique_ptr<pi05_model> impl_;
+  std::unique_ptr<Pi05ModelInternal> impl_;
 };
 
 } // namespace qvac_lib_infer_vla_ggml

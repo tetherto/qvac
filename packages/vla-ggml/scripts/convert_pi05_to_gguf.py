@@ -53,7 +53,6 @@ import logging
 import re
 import sys
 import time
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -61,7 +60,6 @@ from typing import Any
 import numpy as np
 import torch
 
-import gguf  # gguf-py — bundled with llama.cpp
 from gguf import GGMLQuantizationType, GGUFWriter
 from gguf.quants import quantize as gguf_quantize
 

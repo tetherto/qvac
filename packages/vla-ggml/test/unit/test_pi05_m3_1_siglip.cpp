@@ -1,7 +1,7 @@
 // M3.1 parity test: SigLIP patch_embed + pos_embed.
 //
 // Loads the three vision tensors from a real pi05_base.gguf, builds the
-// M3.1 sub-graph via `pi05_build_siglip_patch_pos_graph`, runs it on the
+// M3.1 sub-graph via `pi05BuildSiglipPatchPosGraph`, runs it on the
 // CPU backend, and asserts the result matches the PyTorch reference's
 // `vision.patch_embed_out[cam0]` and `vision.pos_embed_out[cam0]`.
 //
@@ -177,8 +177,8 @@ TEST(Pi05M3_1, SiglipPatchAndPosEmbedMatchPytorch) {
   }
   std::memcpy(pixels->data, permuted.data(), per_cam * sizeof(float));
 
-  using qvac_lib_infer_vla_ggml::pi05_build_siglip_patch_pos_graph;
-  auto outs = pi05_build_siglip_patch_pos_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildSiglipPatchPosGraph;
+  auto outs = pi05BuildSiglipPatchPosGraph(
       ctx_g, pixels, w_patch, b_patch, pos_embed, PATCH_SIZE);
   ASSERT_NE(outs.patch_embed_out, nullptr);
   ASSERT_NE(outs.pos_embed_out, nullptr);

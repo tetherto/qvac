@@ -7,6 +7,7 @@
 #include <ggml.h>
 #include <gguf.h>
 
+#include "model-interface/gguf_helpers.hpp"
 #include "model-interface/pi05.hpp"
 #include "model-interface/smolvla_adapter.hpp"
 
@@ -33,16 +34,6 @@ std::string toLowerAscii(std::string s) {
   return s;
 }
 
-// Try to read a string-typed metadata key from a GGUF context. Returns an
-// empty string if the key is missing or has a non-string type — the caller
-// is responsible for the fallback chain.
-std::string readGgufString(gguf_context* ctx, const char* key) {
-  const int64_t idx = gguf_find_key(ctx, key);
-  if (idx < 0) return {};
-  if (gguf_get_kv_type(ctx, idx) != GGUF_TYPE_STRING) return {};
-  const char* val = gguf_get_val_str(ctx, idx);
-  return val != nullptr ? std::string(val) : std::string{};
-}
 
 } // namespace
 
@@ -61,11 +52,11 @@ std::string sniffGgufArchitecture(const std::string& ggufPath) {
         "sniffGgufArchitecture: failed to open GGUF file: " + ggufPath);
   }
 
-  std::string arch = readGgufString(handle.get(), "general.architecture");
+  std::string arch = ggufGetStrOr(handle.get(), "general.architecture", "");
   if (arch.empty()) {
     // Be lenient: some early converters used `model_type`. Mirrors
     // llama.cpp's fallback chain in src/llama-model.cpp.
-    arch = readGgufString(handle.get(), "model_type");
+    arch = ggufGetStrOr(handle.get(), "model_type", "");
   }
   if (arch.empty()) {
     // Existing SmolVLA GGUFs predate the architecture key altogether —

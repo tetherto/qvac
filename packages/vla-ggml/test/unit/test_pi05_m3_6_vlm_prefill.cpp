@@ -156,8 +156,8 @@ TEST(Pi05M3_6, VlmFullPrefillMatchesPytorchOverValidPrefix) {
       ctx_g, GGML_TYPE_I32, VALID_PREFIX_LEN);
   ggml_set_name(pos, "input.pos");
 
-  using qvac_lib_infer_vla_ggml::pi05_build_vlm_prefill_graph;
-  struct ggml_tensor* out = pi05_build_vlm_prefill_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildVlmPrefillGraph;
+  struct ggml_tensor* out = pi05BuildVlmPrefillGraph(
       ctx_g, x, pos, /*attn_mask=*/nullptr, blocks, final_norm,
       VLM_HIDDEN, VLM_N_HEADS, VLM_N_KV_HEADS, VLM_HEAD_DIM,
       VALID_PREFIX_LEN, VLM_RMS_EPS, VLM_ROPE_BASE);

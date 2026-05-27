@@ -232,7 +232,7 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
   for (int step = 0; step < N_STEPS; ++step) {
     const float t = 1.0f + step * STEP_DT;
 
-    qvac_lib_infer_vla_ggml::pi05_compute_time_sincos(
+    qvac_lib_infer_vla_ggml::pi05ComputeTimeSincos(
         t, COND_DIM, MIN_PERIOD, MAX_PERIOD, sincos_buf.data());
 
     // Build the per-step graph.
@@ -265,8 +265,8 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
     }
 
     // time_mlp(sincos) → cond.
-    using qvac_lib_infer_vla_ggml::pi05_build_time_mlp_graph;
-    struct ggml_tensor* cond = pi05_build_time_mlp_graph(
+    using qvac_lib_infer_vla_ggml::pi05BuildTimeMlpGraph;
+    struct ggml_tensor* cond = pi05BuildTimeMlpGraph(
         ctx_g, sincos_t, time_in_w, time_in_b, time_out_w, time_out_b);
     ASSERT_NE(cond, nullptr);
 
@@ -277,8 +277,8 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
     x_exp_t = ggml_add(ctx_g, x_exp_t, action_in_b_f32);
 
     // 18 expert blocks + final norm + action_out.
-    using qvac_lib_infer_vla_ggml::pi05_build_expert_ode_step_graph;
-    auto outs = pi05_build_expert_ode_step_graph(
+    using qvac_lib_infer_vla_ggml::pi05BuildExpertOdeStepGraph;
+    auto outs = pi05BuildExpertOdeStepGraph(
         ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
         blocks, final_norm_ada_w, final_norm_ada_b,
         action_out_w, action_out_b,
@@ -288,8 +288,8 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
     ASSERT_NE(outs.v_t, nullptr);
 
     // Euler step inside the same graph.
-    using qvac_lib_infer_vla_ggml::pi05_build_euler_step_graph;
-    struct ggml_tensor* x_next = pi05_build_euler_step_graph(
+    using qvac_lib_infer_vla_ggml::pi05BuildEulerStepGraph;
+    struct ggml_tensor* x_next = pi05BuildEulerStepGraph(
         ctx_g, x_t_t, outs.v_t, STEP_DT);
     ASSERT_NE(x_next, nullptr);
 

@@ -75,7 +75,7 @@ void runOne(float t,
 
   // Sin-cos embedding (CPU-side, F64 internal).
   std::vector<float> sincos(COND_DIM);
-  qvac_lib_infer_vla_ggml::pi05_compute_time_sincos(
+  qvac_lib_infer_vla_ggml::pi05ComputeTimeSincos(
       t, COND_DIM, MIN_PERIOD, MAX_PERIOD, sincos.data());
 
   // Tiny graph — fits comfortably in the bump allocator.
@@ -94,8 +94,8 @@ void runOne(float t,
   std::memcpy(time_emb->data, sincos.data(),
               COND_DIM * sizeof(float));
 
-  using qvac_lib_infer_vla_ggml::pi05_build_time_mlp_graph;
-  struct ggml_tensor* out = pi05_build_time_mlp_graph(
+  using qvac_lib_infer_vla_ggml::pi05BuildTimeMlpGraph;
+  struct ggml_tensor* out = pi05BuildTimeMlpGraph(
       ctx_g, time_emb, w_in_w, w_in_b, w_out_w, w_out_b);
   ASSERT_NE(out, nullptr);
 

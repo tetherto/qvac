@@ -105,7 +105,7 @@ TEST(VlaModelFactory, SniffThrowsOnMissingFile) {
 // tensor, so the real load path will fail. We observe which subclass the
 // factory chose by inspecting the exception message: the SmolVLA adapter
 // throws "failed to load SmolVLA model …" while the Pi05Model loader
-// throws "pi05_load_model: tensor missing from GGUF: …".
+// throws "pi05LoadModel: tensor missing from GGUF: …".
 
 TEST(VlaModelFactory, DispatchesPi05ArchitectureToPi05Loader) {
   // The metadata-only GGUF doesn't carry any of the 848 tensors pi05
@@ -120,7 +120,7 @@ TEST(VlaModelFactory, DispatchesPi05ArchitectureToPi05Loader) {
     FAIL() << "pi05 factory dispatch should have thrown (no tensors)";
   } catch (const std::runtime_error& e) {
     const std::string what = e.what();
-    EXPECT_NE(what.find("pi05_load_model"), std::string::npos)
+    EXPECT_NE(what.find("pi05LoadModel"), std::string::npos)
         << "exception did not come from Pi05Model: " << what;
     EXPECT_NE(what.find("tensor missing"), std::string::npos) << what;
   }

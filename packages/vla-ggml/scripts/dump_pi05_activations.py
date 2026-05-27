@@ -496,8 +496,9 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
     mask_np = fixture["fixture.mask"]  # (200,)
     noise_np = fixture["fixture.noise"]  # (50, 32)
 
+    dtype = next(policy_model.parameters()).dtype
     images = [
-        torch.from_numpy(images_np[i]).unsqueeze(0).to(device=device, dtype=torch.float32)
+        torch.from_numpy(images_np[i]).unsqueeze(0).to(device=device, dtype=dtype)
         for i in range(NUM_CAMERAS)
     ]
     img_masks = [
@@ -506,7 +507,7 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
     ]
     tokens = torch.from_numpy(tokens_np).unsqueeze(0).long().to(device=device)
     mask = torch.from_numpy(mask_np).unsqueeze(0).to(device=device)
-    noise = torch.from_numpy(noise_np).unsqueeze(0).to(device=device, dtype=torch.float32)
+    noise = torch.from_numpy(noise_np).unsqueeze(0).to(device=device, dtype=dtype)
 
     # ---- Vision: embed every camera, one at a time, so the per-camera hooks
     # fire deterministically. We then concat the features into a (3*256, 2048)
@@ -528,9 +529,11 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
     vision_concat = torch.cat(image_features, dim=1)  # (1, 768, 2048)
     store.put("vision.concat", vision_concat[0])
 
+    gc.collect()
+
     # ---- Language tokens: embed + scale by sqrt(width) ---------------------
     lang_emb = pawe.embed_language_tokens(tokens)
-    lang_emb = lang_emb * math.sqrt(lang_emb.shape[-1])  # *sqrt(2048)
+    lang_emb = lang_emb * torch.tensor(math.sqrt(lang_emb.shape[-1]), dtype=dtype)
     store.put("vlm.embed_out", lang_emb[0])
 
     # ---- Build prefix: cat(vision tokens, lang tokens) ---------------------
@@ -558,7 +561,8 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
     position_ids = torch.cumsum(pad_masks, dim=1) - 1
 
     att_2d_masks_4d = att_2d_masks[:, None, :, :]
-    att_2d_masks_4d = torch.where(att_2d_masks_4d, 0.0, OPENPI_ATTENTION_MASK_VALUE)
+    mask_fill = torch.tensor(OPENPI_ATTENTION_MASK_VALUE, dtype=dtype)
+    att_2d_masks_4d = torch.where(att_2d_masks_4d, torch.zeros(1, dtype=dtype), mask_fill)
 
     # Ensure eager attention.
     policy_model.paligemma_with_expert.paligemma.model.language_model.config._attn_implementation = "eager"  # noqa: SLF001
@@ -608,6 +612,8 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
         store.put("vlm.blk_17.kv_keys", kv_keys_full[17])
         store.put("vlm.blk_17.kv_vals", kv_vals_full[17])
 
+    gc.collect()
+
     # ---- ODE loop ---------------------------------------------------------
     expert_hooks, set_capture_t1 = install_expert_hooks(policy_model, store)
 
@@ -616,22 +622,20 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
     dt = -1.0 / NUM_INFERENCE_STEPS
     x_t = noise  # (1, 50, 32)
 
-    # Time-MLP submodule references — needed for the per-t cond dumps.
     action_in_proj = policy_model.action_in_proj
     time_mlp_in = policy_model.time_mlp_in
     time_mlp_out = policy_model.time_mlp_out
 
-    # Reference `create_sinusoidal_pos_embedding` for exact parity with LeRobot.
     from lerobot.policies.pi05.modeling_pi05 import create_sinusoidal_pos_embedding
 
+    print(f"[ode] starting {NUM_INFERENCE_STEPS}-step ODE loop")
     for step in range(NUM_INFERENCE_STEPS):
         t_val = 1.0 + step * dt
-        capture_this_step = abs(t_val - 1.0) < 1e-6  # only t=1.0 captures expert internals
+        capture_this_step = abs(t_val - 1.0) < 1e-6
         set_capture_t1(capture_this_step)
 
-        time_tensor = torch.tensor(t_val, dtype=torch.float32, device=device).expand(bsize)
+        time_tensor = torch.tensor(t_val, dtype=dtype, device=device).expand(bsize)
 
-        # Compute and dump `expert.cond[t=...]` for the requested t values.
         time_emb = create_sinusoidal_pos_embedding(
             time_tensor,
             action_in_proj.out_features,
@@ -643,27 +647,31 @@ def run_oracle(policy_model, fixture: dict[str, np.ndarray], store: ActivationSt
         cond = time_mlp_in(time_emb)
         cond = F.silu(cond)
         cond = time_mlp_out(cond)
-        cond = F.silu(cond)  # (1, 1024)
+        cond = F.silu(cond)
         for probe_t in EXPERT_COND_TIME_PROBES:
             if abs(t_val - probe_t) < 1e-6:
                 store.put(f"expert.cond[t={probe_t:.1f}]", cond[0])
 
-        # Run denoise_step using the policy's own method — we re-deepcopy the
-        # KV cache each step exactly as PI05Pytorch.sample_actions does.
         past_key_values_copy = _copy.deepcopy(past_key_values)
         v_t = policy_model.denoise_step(
             prefix_pad_masks=pad_masks,
             past_key_values=past_key_values_copy,
             x_t=x_t,
             timestep=time_tensor,
-        )  # (1, 50, 32)
+        )
+        del past_key_values_copy
         if capture_this_step:
             store.put("expert.v_t[t=1.0]", v_t[0])
 
         x_t = x_t + dt * v_t
+        del v_t
 
         if step in T10_INDICES_TO_DUMP:
             store.put(f"ode.step_{step}.x_next", x_t[0])
+
+        if step % 3 == 0:
+            gc.collect()
+        print(f"  step {step}/{NUM_INFERENCE_STEPS} t={t_val:.2f} done")
 
     for h in expert_hooks:
         h.remove()
@@ -722,10 +730,10 @@ def main() -> int:
     from lerobot.policies.pi05.configuration_pi05 import PI05Config
     from lerobot.policies.pi05.modeling_pi05 import PI05Policy
 
-    # Build a default float32 config — that bypasses bfloat16 toggling and
-    # keeps the oracle deterministic on CPU. Disable compile.
+    # Load in bfloat16 (the model's native dtype) to halve memory from ~15 GB
+    # to ~7.7 GB. Activations are still saved as float32 via to_numpy().
     cfg = PI05Config(
-        dtype="float32",
+        dtype="bfloat16",
         compile_model=False,
         device="cpu",
     )
@@ -734,8 +742,8 @@ def main() -> int:
     policy.eval()
     inner = policy.model  # PI05Pytorch
 
-    # Force float32 on everything we'll touch (defensive — config already says so).
-    inner.to(torch.float32)
+    inner.to(torch.bfloat16)
+    gc.collect()
 
     # --- 3. Run the deterministic forward pass with breakpoints ----------
     store = ActivationStore()

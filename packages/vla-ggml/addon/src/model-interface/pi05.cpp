@@ -22,6 +22,7 @@
 #include <ggml-cpu.h>
 #include <gguf.h>
 
+#include "model-interface/gguf_helpers.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
 
@@ -36,7 +37,7 @@ namespace qvac_lib_infer_vla_ggml {
 // at lower precision in the GGUF (bias, pos_embed, etc.) has to be
 // promoted on the graph side before participating in arithmetic with an
 // F32 activation. Mirrors `smolvla.cpp::to_f32`.
-static struct ggml_tensor* to_f32(
+static struct ggml_tensor* toF32(
     struct ggml_context* ctx, struct ggml_tensor* x) {
   if (x != nullptr && x->type != GGML_TYPE_F32) {
     return ggml_cast(ctx, x, GGML_TYPE_F32);
@@ -45,7 +46,7 @@ static struct ggml_tensor* to_f32(
 }
 
 // ── M3.1: SigLIP patch + position embed ──────────────────────────────────
-Pi05PatchPosOutputs pi05_build_siglip_patch_pos_graph(
+Pi05PatchPosOutputs pi05BuildSiglipPatchPosGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* pixel_values,
     struct ggml_tensor* patch_embed_w,
@@ -95,7 +96,7 @@ Pi05PatchPosOutputs pi05_build_siglip_patch_pos_graph(
     // it post-reshape; numerically identical for an additive bias.
     // The bias is stored F16 in the GGUF — promote on-graph so the F32
     // conv output and the bias share a dtype.
-    x = ggml_add(ctx, x, to_f32(ctx, patch_embed_b));
+    x = ggml_add(ctx, x, toF32(ctx, patch_embed_b));
   }
 
   // Parity gate #1 from plan §5: `vision.patch_embed_out[cam_i]`.
@@ -105,39 +106,39 @@ Pi05PatchPosOutputs pi05_build_siglip_patch_pos_graph(
   // converter writes it as numpy (n_patches, C), which the ggml loader
   // re-interprets with the last numpy dim as the fast ggml dim). It's
   // stored F16; promote before the add for the same reason as the bias.
-  out.pos_embed_out = ggml_add(ctx, x, to_f32(ctx, pos_embed));
+  out.pos_embed_out = ggml_add(ctx, x, toF32(ctx, pos_embed));
   return out;
 }
 
 // ── Small shared helpers, mirrored from smolvla.cpp's static defs ────────
 // LayerNorm with weight + bias.
-static struct ggml_tensor* pi05_layer_norm(
+static struct ggml_tensor* pi05LayerNorm(
     struct ggml_context* ctx, struct ggml_tensor* x,
     struct ggml_tensor* weight, struct ggml_tensor* bias, float eps) {
   x = ggml_norm(ctx, x, eps);
   if (weight != nullptr) {
-    x = ggml_mul(ctx, x, to_f32(ctx, weight));
+    x = ggml_mul(ctx, x, toF32(ctx, weight));
   }
   if (bias != nullptr) {
-    x = ggml_add(ctx, x, to_f32(ctx, bias));
+    x = ggml_add(ctx, x, toF32(ctx, bias));
   }
   return x;
 }
 
 // Linear: y = x @ W^T (+ b). ggml_mul_mat takes (weight, input) and
 // produces (out_features, ...) so the caller treats `x` as (..., in_feat).
-static struct ggml_tensor* pi05_linear(
+static struct ggml_tensor* pi05Linear(
     struct ggml_context* ctx, struct ggml_tensor* x,
     struct ggml_tensor* weight, struct ggml_tensor* bias) {
   struct ggml_tensor* out = ggml_mul_mat(ctx, weight, x);
   if (bias != nullptr) {
-    out = ggml_add(ctx, out, to_f32(ctx, bias));
+    out = ggml_add(ctx, out, toF32(ctx, bias));
   }
   return out;
 }
 
 // ── M3.2: one SigLIP transformer block ──────────────────────────────────
-struct ggml_tensor* pi05_build_siglip_block_graph(
+struct ggml_tensor* pi05BuildSiglipBlockGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,
     const Pi05SiglipBlockWeights& w,
@@ -168,11 +169,11 @@ struct ggml_tensor* pi05_build_siglip_block_graph(
   // ── Pre-attention LayerNorm + MHSA + residual ───────────────────────
   struct ggml_tensor* residual = x;
   struct ggml_tensor* h =
-      pi05_layer_norm(ctx, x, w.ln1_w, w.ln1_b, layer_norm_eps);
+      pi05LayerNorm(ctx, x, w.ln1_w, w.ln1_b, layer_norm_eps);
 
-  struct ggml_tensor* q = pi05_linear(ctx, h, w.attn_q_w, w.attn_q_b);
-  struct ggml_tensor* k = pi05_linear(ctx, h, w.attn_k_w, w.attn_k_b);
-  struct ggml_tensor* v = pi05_linear(ctx, h, w.attn_v_w, w.attn_v_b);
+  struct ggml_tensor* q = pi05Linear(ctx, h, w.attn_q_w, w.attn_q_b);
+  struct ggml_tensor* k = pi05Linear(ctx, h, w.attn_k_w, w.attn_k_b);
+  struct ggml_tensor* v = pi05Linear(ctx, h, w.attn_v_w, w.attn_v_b);
 
   // Reshape (hidden, n_patches) → (head_dim, n_heads, n_patches).
   q = ggml_reshape_3d(ctx, q, head_dim, n_heads, n_patches);
@@ -200,24 +201,24 @@ struct ggml_tensor* pi05_build_siglip_block_graph(
   attn_out = ggml_reshape_2d(ctx, attn_out, hidden, n_patches);
 
   // Output projection + residual.
-  struct ggml_tensor* proj = pi05_linear(ctx, attn_out, w.attn_out_w, w.attn_out_b);
+  struct ggml_tensor* proj = pi05Linear(ctx, attn_out, w.attn_out_w, w.attn_out_b);
   h = ggml_add(ctx, proj, residual);
 
   // ── Post-attention LayerNorm + MLP + residual ───────────────────────
   residual = h;
-  h = pi05_layer_norm(ctx, h, w.ln2_w, w.ln2_b, layer_norm_eps);
-  h = pi05_linear(ctx, h, w.fc1_w, w.fc1_b);
+  h = pi05LayerNorm(ctx, h, w.ln2_w, w.ln2_b, layer_norm_eps);
+  h = pi05Linear(ctx, h, w.fc1_w, w.fc1_b);
   // HF SigLIP uses GELU (default activation in SiglipMLP for the So400m
   // checkpoint). ggml_gelu is the tanh approximation, which matches
   // pytorch's `nn.functional.gelu(approximate="tanh")` to within F32
   // rounding noise.
   h = ggml_gelu(ctx, h);
-  h = pi05_linear(ctx, h, w.fc2_w, w.fc2_b);
+  h = pi05Linear(ctx, h, w.fc2_w, w.fc2_b);
   return ggml_add(ctx, h, residual);
 }
 
 // ── M3.3: full SigLIP-So400m/14 vision tower ────────────────────────────
-Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
+Pi05VisionTowerOutputs pi05BuildSiglipTowerGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* pixel_values,
     const Pi05VisionTowerWeights& w,
@@ -235,7 +236,7 @@ Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
   }
 
   // Patch + pos embed (M3.1).
-  Pi05PatchPosOutputs pp = pi05_build_siglip_patch_pos_graph(
+  Pi05PatchPosOutputs pp = pi05BuildSiglipPatchPosGraph(
       ctx, pixel_values, w.patch_embed_w, w.patch_embed_b,
       w.pos_embed, patch_size);
   if (pp.pos_embed_out == nullptr) {
@@ -245,7 +246,7 @@ Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
 
   // Transformer stack (M3.2 × N).
   for (const auto& bw : w.blocks) {
-    x = pi05_build_siglip_block_graph(
+    x = pi05BuildSiglipBlockGraph(
         ctx, x, bw, n_patches, hidden, n_heads, layer_norm_eps);
     if (x == nullptr) {
       return out;
@@ -255,19 +256,19 @@ Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
   // Post-LayerNorm — the LeRobot SigLIP wrapper applies this
   // immediately before the head Linear; HF naming is
   // `vision_model.post_layernorm`.
-  x = pi05_layer_norm(ctx, x, w.post_ln_w, w.post_ln_b, layer_norm_eps);
+  x = pi05LayerNorm(ctx, x, w.post_ln_w, w.post_ln_b, layer_norm_eps);
 
   // "Connector" head — Linear(hidden → proj_dim). For pi05_base this
   // is the `_siglip.Module(num_classes=2048, pool_type="none")` head,
   // i.e. just a single Linear, no pixel-shuffle (plan §2).
-  out.head_out = pi05_linear(ctx, x, w.head_w, w.head_b);
+  out.head_out = pi05Linear(ctx, x, w.head_w, w.head_b);
   (void)proj_dim; // shape is inferred from head_w — kept in the signature
                   //  for documentation + caller-side sanity-checking.
   return out;
 }
 
 // ── M3.4: PaliGemma token embedder + sqrt(hidden) scaling ────────────────
-struct ggml_tensor* pi05_build_vlm_embed_graph(
+struct ggml_tensor* pi05BuildVlmEmbedGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* tokens,
     struct ggml_tensor* embed_tokens,
@@ -290,20 +291,20 @@ struct ggml_tensor* pi05_build_vlm_embed_graph(
 // copies the raw PyTorch tensor as `.scale`, so the `+1` happens
 // here on the graph side. We compute `normed * scale + normed` to
 // avoid needing a one-tensor.
-static struct ggml_tensor* pi05_gemma_rms_norm(
+static struct ggml_tensor* pi05GemmaRmsNorm(
     struct ggml_context* ctx, struct ggml_tensor* x,
     struct ggml_tensor* scale, float eps) {
   struct ggml_tensor* normed = ggml_rms_norm(ctx, x, eps);
   if (scale == nullptr) {
     return normed;
   }
-  struct ggml_tensor* scale_f32 = to_f32(ctx, scale);
+  struct ggml_tensor* scale_f32 = toF32(ctx, scale);
   // (1 + scale) * normed = normed + normed * scale
   return ggml_add(ctx, normed, ggml_mul(ctx, normed, scale_f32));
 }
 
 // ── M3.5: one Gemma-1 VLM block ─────────────────────────────────────────
-struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
+struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,
     struct ggml_tensor* positions,
@@ -330,12 +331,12 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
   // ── Pre-attn RMSNorm ───────────────────────────────────────────────
   struct ggml_tensor* residual = x;
   struct ggml_tensor* h =
-      pi05_gemma_rms_norm(ctx, x, w.pre_attn_norm_scale, rms_norm_eps);
+      pi05GemmaRmsNorm(ctx, x, w.pre_attn_norm_scale, rms_norm_eps);
 
   // ── Q, K, V projections (Gemma-1 has no attn bias) ────────────────
-  struct ggml_tensor* q = pi05_linear(ctx, h, w.attn_q_w, nullptr);
-  struct ggml_tensor* k = pi05_linear(ctx, h, w.attn_k_w, nullptr);
-  struct ggml_tensor* v = pi05_linear(ctx, h, w.attn_v_w, nullptr);
+  struct ggml_tensor* q = pi05Linear(ctx, h, w.attn_q_w, nullptr);
+  struct ggml_tensor* k = pi05Linear(ctx, h, w.attn_k_w, nullptr);
+  struct ggml_tensor* v = pi05Linear(ctx, h, w.attn_v_w, nullptr);
 
   // Reshape to per-head views. MQA: Q is split into n_heads, K/V into
   // n_kv_heads (1 for pi05). ggml broadcasts the kv-head dim against
@@ -369,7 +370,7 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
 
   // Expose post-RoPE K/V to callers that want to cache them for the
   // expert path's joint attention. Layout is ne=[head_dim, seq,
-  // n_kv_heads] — identical to what `pi05_build_expert_block_graph`
+  // n_kv_heads] — identical to what `pi05BuildExpertBlockGraph`
   // accepts as cached_k/cached_v. `ggml_set_output` is critical: it
   // prevents `ggml_gallocr` from reusing the K/V buffers after their
   // last in-graph consumer (the joint softmax / attn matmul), which
@@ -399,24 +400,24 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
   attn_out = ggml_reshape_2d(ctx, attn_out, hidden, seq_len);
 
   // O proj + residual.
-  struct ggml_tensor* proj = pi05_linear(ctx, attn_out, w.attn_o_w, nullptr);
+  struct ggml_tensor* proj = pi05Linear(ctx, attn_out, w.attn_o_w, nullptr);
   h = ggml_add(ctx, proj, residual);
 
   // ── Pre-FFW RMSNorm + GeGLU MLP + residual ────────────────────────
   residual = h;
-  h = pi05_gemma_rms_norm(ctx, h, w.pre_ffw_norm_scale, rms_norm_eps);
-  struct ggml_tensor* gate = pi05_linear(ctx, h, w.mlp_gate_w, nullptr);
-  struct ggml_tensor* up = pi05_linear(ctx, h, w.mlp_up_w, nullptr);
+  h = pi05GemmaRmsNorm(ctx, h, w.pre_ffw_norm_scale, rms_norm_eps);
+  struct ggml_tensor* gate = pi05Linear(ctx, h, w.mlp_gate_w, nullptr);
+  struct ggml_tensor* up = pi05Linear(ctx, h, w.mlp_up_w, nullptr);
   // GeGLU: gelu(gate) * up. ggml_gelu is the tanh approximation —
   // matches PyTorch's `gelu_pytorch_tanh` (lerobot pi05 hidden_act).
   gate = ggml_gelu(ctx, gate);
   struct ggml_tensor* ff = ggml_mul(ctx, gate, up);
-  struct ggml_tensor* down = pi05_linear(ctx, ff, w.mlp_down_w, nullptr);
+  struct ggml_tensor* down = pi05Linear(ctx, ff, w.mlp_down_w, nullptr);
   return ggml_add(ctx, down, residual);
 }
 
 // ── M3.6: full VLM prefill (18 blocks + final RMSNorm) ──────────────────
-struct ggml_tensor* pi05_build_vlm_prefill_graph(
+struct ggml_tensor* pi05BuildVlmPrefillGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,
     struct ggml_tensor* positions,
@@ -446,7 +447,7 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
   for (size_t i = 0; i < blocks.size(); ++i) {
     struct ggml_tensor* k_out = nullptr;
     struct ggml_tensor* v_out = nullptr;
-    h = pi05_build_gemma_vlm_block_graph(
+    h = pi05BuildGemmaVlmBlockGraph(
         ctx, h, positions, attn_mask, blocks[i],
         hidden, n_heads, n_kv_heads, head_dim,
         seq_len, rms_norm_eps, rope_freq_base,
@@ -462,7 +463,7 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
       (*out_values)[i] = v_out;
     }
   }
-  return pi05_gemma_rms_norm(ctx, h, final_norm_scale, rms_norm_eps);
+  return pi05GemmaRmsNorm(ctx, h, final_norm_scale, rms_norm_eps);
 }
 
 // ── M3.7a: sin-cos time embedding ───────────────────────────────────────
@@ -473,7 +474,7 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
 // to avoid F32 cancellation between `t / period` and
 // `2π · t / period` at the tiniest periods (4 ms × 1 → tens of
 // thousands of radians, where F32 loses precision).
-void pi05_compute_time_sincos(
+void pi05ComputeTimeSincos(
     float t, int dim, float min_period, float max_period, float* out) {
   if (out == nullptr || dim <= 0 || (dim & 1) != 0) {
     return;
@@ -495,7 +496,7 @@ void pi05_compute_time_sincos(
 }
 
 // ── M3.7b: MLP + swish chain ────────────────────────────────────────────
-struct ggml_tensor* pi05_build_time_mlp_graph(
+struct ggml_tensor* pi05BuildTimeMlpGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* time_emb,
     struct ggml_tensor* time_mlp_in_w,
@@ -510,15 +511,15 @@ struct ggml_tensor* pi05_build_time_mlp_graph(
   // Linear → SiLU → Linear → SiLU. SiLU is swish (x * sigmoid(x)) —
   // openpi uses `nn.swish` which is JAX's alias for SiLU; ggml_silu
   // matches.
-  struct ggml_tensor* h = pi05_linear(ctx, time_emb, time_mlp_in_w, time_mlp_in_b);
+  struct ggml_tensor* h = pi05Linear(ctx, time_emb, time_mlp_in_w, time_mlp_in_b);
   h = ggml_silu(ctx, h);
-  h = pi05_linear(ctx, h, time_mlp_out_w, time_mlp_out_b);
+  h = pi05Linear(ctx, h, time_mlp_out_w, time_mlp_out_b);
   h = ggml_silu(ctx, h);
   return h;
 }
 
 // ── M3.8: adaRMSNorm split (scale, shift, gate) ─────────────────────────
-Pi05AdaSplit pi05_build_adarms_split_graph(
+Pi05AdaSplit pi05BuildAdarmsSplitGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* cond,
     struct ggml_tensor* ada_dense_w,
@@ -530,7 +531,7 @@ Pi05AdaSplit pi05_build_adarms_split_graph(
     return out;
   }
   // modulation = cond @ W^T + b  →  (3*hidden,)
-  struct ggml_tensor* mod = pi05_linear(ctx, cond, ada_dense_w, ada_dense_b);
+  struct ggml_tensor* mod = pi05Linear(ctx, cond, ada_dense_w, ada_dense_b);
   // Chunk into three contiguous (hidden,) slices. `mod` is 1-D
   // (ne[0] = 3*hidden), so a 1-D view with the right offset suffices.
   const size_t es = ggml_element_size(mod);
@@ -546,7 +547,7 @@ Pi05AdaSplit pi05_build_adarms_split_graph(
 // adaptive branch (the formula doesn't reference it). For pi05_base the
 // converter writes that weight as zeros anyway — see the rationale in
 // `_optional_pt_keys_with_shape` in convert_pi05_to_gguf.py.
-static struct ggml_tensor* pi05_adarms_apply(
+static struct ggml_tensor* pi05AdarmsApply(
     struct ggml_context* ctx, struct ggml_tensor* x,
     struct ggml_tensor* ada_scale, struct ggml_tensor* ada_shift,
     float eps) {
@@ -558,7 +559,7 @@ static struct ggml_tensor* pi05_adarms_apply(
 }
 
 // ── M3.9: one expert block (Gemma-1 300M) with joint attention ──────────
-struct ggml_tensor* pi05_build_expert_block_graph(
+struct ggml_tensor* pi05BuildExpertBlockGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x_exp,
     struct ggml_tensor* act_positions,
@@ -586,19 +587,19 @@ struct ggml_tensor* pi05_build_expert_block_graph(
   }
 
   // ── Pre-attn adaRMSNorm + per-block ada split ──────────────────────
-  Pi05AdaSplit a = pi05_build_adarms_split_graph(
+  Pi05AdaSplit a = pi05BuildAdarmsSplitGraph(
       ctx, cond, w.pre_attn_ada_w, w.pre_attn_ada_b, expert_hidden);
   if (a.scale == nullptr) {
     return nullptr;
   }
 
   struct ggml_tensor* h =
-      pi05_adarms_apply(ctx, x_exp, a.scale, a.shift, rms_norm_eps);
+      pi05AdarmsApply(ctx, x_exp, a.scale, a.shift, rms_norm_eps);
 
   // ── Q, K, V projections (Gemma-1 expert has no attn bias) ─────────
-  struct ggml_tensor* q = pi05_linear(ctx, h, w.attn_q_w, nullptr);
-  struct ggml_tensor* k_exp = pi05_linear(ctx, h, w.attn_k_w, nullptr);
-  struct ggml_tensor* v_exp = pi05_linear(ctx, h, w.attn_v_w, nullptr);
+  struct ggml_tensor* q = pi05Linear(ctx, h, w.attn_q_w, nullptr);
+  struct ggml_tensor* k_exp = pi05Linear(ctx, h, w.attn_k_w, nullptr);
+  struct ggml_tensor* v_exp = pi05Linear(ctx, h, w.attn_v_w, nullptr);
 
   // Reshape to per-head layout. Q goes through 8-head expansion; K/V
   // stay at 1 head (MQA).
@@ -654,29 +655,29 @@ struct ggml_tensor* pi05_build_expert_block_graph(
       ctx, attn_out, n_heads * head_dim, n_act);
 
   // O-proj + gated residual.
-  struct ggml_tensor* proj = pi05_linear(ctx, attn_out, w.attn_o_w, nullptr);
+  struct ggml_tensor* proj = pi05Linear(ctx, attn_out, w.attn_o_w, nullptr);
   // Gated residual: x + ada_gate * proj  (per-channel multiply,
   // broadcasts the (expert_hidden,) gate across n_act).
   h = ggml_add(ctx, x_exp, ggml_mul(ctx, proj, a.gate));
 
   // ── Pre-FFW adaRMSNorm + GeGLU MLP + gated residual ────────────────
-  Pi05AdaSplit b = pi05_build_adarms_split_graph(
+  Pi05AdaSplit b = pi05BuildAdarmsSplitGraph(
       ctx, cond, w.pre_ffw_ada_w, w.pre_ffw_ada_b, expert_hidden);
   if (b.scale == nullptr) {
     return nullptr;
   }
   struct ggml_tensor* normed_ffw =
-      pi05_adarms_apply(ctx, h, b.scale, b.shift, rms_norm_eps);
-  struct ggml_tensor* gate = pi05_linear(ctx, normed_ffw, w.mlp_gate_w, nullptr);
-  struct ggml_tensor* up = pi05_linear(ctx, normed_ffw, w.mlp_up_w, nullptr);
+      pi05AdarmsApply(ctx, h, b.scale, b.shift, rms_norm_eps);
+  struct ggml_tensor* gate = pi05Linear(ctx, normed_ffw, w.mlp_gate_w, nullptr);
+  struct ggml_tensor* up = pi05Linear(ctx, normed_ffw, w.mlp_up_w, nullptr);
   gate = ggml_gelu(ctx, gate);
   struct ggml_tensor* ff = ggml_mul(ctx, gate, up);
-  struct ggml_tensor* down = pi05_linear(ctx, ff, w.mlp_down_w, nullptr);
+  struct ggml_tensor* down = pi05Linear(ctx, ff, w.mlp_down_w, nullptr);
   return ggml_add(ctx, h, ggml_mul(ctx, down, b.gate));
 }
 
 // ── M3.10: full expert pass (18 blocks + final adaRMSNorm + action_out) ─
-Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
+Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x_exp,
     struct ggml_tensor* act_positions,
@@ -707,7 +708,7 @@ Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
   }
   struct ggml_tensor* h = x_exp;
   for (size_t i = 0; i < blocks.size(); ++i) {
-    h = pi05_build_expert_block_graph(
+    h = pi05BuildExpertBlockGraph(
         ctx, h, act_positions, cached_k[i], cached_v[i], cond,
         blocks[i],
         expert_hidden, n_heads, n_kv_heads, head_dim,
@@ -717,22 +718,22 @@ Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
     }
   }
   // Final adaRMSNorm — same modulation form as the per-block norms.
-  Pi05AdaSplit fin = pi05_build_adarms_split_graph(
+  Pi05AdaSplit fin = pi05BuildAdarmsSplitGraph(
       ctx, cond, final_norm_ada_w, final_norm_ada_b, expert_hidden);
   if (fin.scale == nullptr) {
     return out;
   }
-  out.final_out = pi05_adarms_apply(
+  out.final_out = pi05AdarmsApply(
       ctx, h, fin.scale, fin.shift, rms_norm_eps);
 
   // action_out_proj — Linear(expert_hidden → action_dim).
-  out.v_t = pi05_linear(
+  out.v_t = pi05Linear(
       ctx, out.final_out, action_out_proj_w, action_out_proj_b);
   return out;
 }
 
 // ── M3.11: explicit-Euler ODE step ──────────────────────────────────────
-struct ggml_tensor* pi05_build_euler_step_graph(
+struct ggml_tensor* pi05BuildEulerStepGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* x_t,
     struct ggml_tensor* v_t,
@@ -765,7 +766,7 @@ struct ggml_tensor* pi05_build_euler_step_graph(
 //     for the desktop integration test, will revisit for mobile.
 // ─────────────────────────────────────────────────────────────────────────
 
-struct pi05_model {
+struct Pi05ModelInternal {
   // hparams (also mirrored into Pi05Model::hparams_)
   int vision_image_size = 224;
   int vision_patch_size = 14;
@@ -841,7 +842,7 @@ struct pi05_model {
   // valid through the free callback.
   std::vector<ggml_backend_buffer_t> bufs_w;
 
-  ~pi05_model() {
+  ~Pi05ModelInternal() {
     // Free weight buffers FIRST — they reference ctx_w's tensors.
     for (ggml_backend_buffer_t buf : bufs_w) {
       if (buf != nullptr) {
@@ -877,15 +878,15 @@ namespace {
 // CPU. On CPU-only configs we use the simpler gallocr path to avoid
 // scheduler overhead.
 
-struct pi05_staged_graph {
+struct Pi05StagedGraph {
   struct ggml_context* ctx = nullptr;
   struct ggml_cgraph* gf = nullptr;
   ggml_gallocr_t allocr = nullptr;
   ggml_backend_sched_t sched = nullptr;
 };
 
-static pi05_staged_graph pi05_build_staged(size_t ctx_bytes, int max_nodes) {
-  pi05_staged_graph sg{};
+static Pi05StagedGraph pi05BuildStaged(size_t ctx_bytes, int max_nodes) {
+  Pi05StagedGraph sg{};
   struct ggml_init_params params{ctx_bytes, nullptr, /*no_alloc=*/true};
   sg.ctx = ggml_init(params);
   if (sg.ctx == nullptr) return sg;
@@ -893,15 +894,15 @@ static pi05_staged_graph pi05_build_staged(size_t ctx_bytes, int max_nodes) {
   return sg;
 }
 
-static bool pi05_alloc_staged_simple(
-    pi05_staged_graph& sg, ggml_backend_t backend) {
+static bool pi05AllocStagedSimple(
+    Pi05StagedGraph& sg, ggml_backend_t backend) {
   sg.allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
   if (sg.allocr == nullptr) return false;
   return ggml_gallocr_alloc_graph(sg.allocr, sg.gf);
 }
 
-static bool pi05_alloc_staged_sched(
-    pi05_staged_graph& sg, ggml_backend_t gpu, ggml_backend_t cpu) {
+static bool pi05AllocStagedSched(
+    Pi05StagedGraph& sg, ggml_backend_t gpu, ggml_backend_t cpu) {
   ggml_backend_t backends[] = {gpu, cpu};
   sg.sched = ggml_backend_sched_new(
       backends, nullptr, 2, GGML_DEFAULT_GRAPH_SIZE, false, true);
@@ -909,8 +910,8 @@ static bool pi05_alloc_staged_sched(
   return ggml_backend_sched_alloc_graph(sg.sched, sg.gf);
 }
 
-static bool pi05_compute_staged(
-    pi05_staged_graph& sg, ggml_backend_t backend) {
+static bool pi05ComputeStaged(
+    Pi05StagedGraph& sg, ggml_backend_t backend) {
   if (sg.sched != nullptr) {
     return ggml_backend_sched_graph_compute(sg.sched, sg.gf) ==
            GGML_STATUS_SUCCESS;
@@ -918,7 +919,7 @@ static bool pi05_compute_staged(
   return ggml_backend_graph_compute(backend, sg.gf) == GGML_STATUS_SUCCESS;
 }
 
-static void pi05_free_staged(pi05_staged_graph& sg) {
+static void pi05FreeStaged(Pi05StagedGraph& sg) {
   if (sg.sched != nullptr) ggml_backend_sched_free(sg.sched);
   if (sg.allocr != nullptr) ggml_gallocr_free(sg.allocr);
   if (sg.ctx != nullptr) ggml_free(sg.ctx);
@@ -926,12 +927,12 @@ static void pi05_free_staged(pi05_staged_graph& sg) {
 }
 
 // RAII wrapper so the four graph-compute sites stay readable.
-struct pi05_staged_guard {
-  pi05_staged_graph sg;
-  ~pi05_staged_guard() { pi05_free_staged(sg); }
+struct Pi05StagedGuard {
+  Pi05StagedGraph sg;
+  ~Pi05StagedGuard() { pi05FreeStaged(sg); }
 };
 
-void load_backends_once(const std::string& backends_dir) {
+void loadBackendsOnce(const std::string& backends_dir) {
   static std::once_flag s_flag;
   std::call_once(s_flag, [&backends_dir]() {
     if (!backends_dir.empty()) {
@@ -942,23 +943,6 @@ void load_backends_once(const std::string& backends_dir) {
   });
 }
 
-uint32_t gguf_get_u32_or(
-    struct gguf_context* g, const char* key, uint32_t dflt) {
-  int64_t idx = gguf_find_key(g, key);
-  if (idx < 0) {
-    return dflt;
-  }
-  return gguf_get_val_u32(g, idx);
-}
-
-std::string gguf_get_str_or(
-    struct gguf_context* g, const char* key, const std::string& dflt) {
-  int64_t idx = gguf_find_key(g, key);
-  if (idx < 0) {
-    return dflt;
-  }
-  return std::string(gguf_get_val_str(g, idx));
-}
 
 // alloc+copy weight loader. Allocates a backend buffer of the right
 // type for every tensor metadata in ctx_w, then reads each tensor's
@@ -970,8 +954,8 @@ std::string gguf_get_str_or(
 // produces a host-side buffer). On GPU backends (Vulkan / Metal / OpenCL)
 // the buffer lives in device memory so the scheduler can run weighted
 // ops directly without per-op host→device copies.
-static bool pi05_load_weights_alloc_copy(
-    pi05_model& m, const char* path, gguf_context* gguf,
+static bool pi05LoadWeightsAllocCopy(
+    Pi05ModelInternal& m, const char* path, gguf_context* gguf,
     ggml_backend_buffer_type_t buft, size_t data_offset,
     int64_t n_tensors_in_gguf) {
   size_t total_size = 0;
@@ -981,7 +965,7 @@ static bool pi05_load_weights_alloc_copy(
   }
   QLOG_IF(
       Priority::INFO,
-      "pi05_load_model: alloc+copy path, total weights " +
+      "pi05LoadModel: alloc+copy path, total weights " +
           std::to_string((int)(total_size / (1024 * 1024))) + " MB");
 
   ggml_backend_buffer_t buf =
@@ -991,7 +975,7 @@ static bool pi05_load_weights_alloc_copy(
     QLOG_IF(
         Priority::ERROR,
         std::string(
-            "pi05_load_model: ggml_backend_alloc_ctx_tensors_from_buft "
+            "pi05LoadModel: ggml_backend_alloc_ctx_tensors_from_buft "
             "FAILED for ") +
             std::to_string((int)(total_size / (1024 * 1024))) +
             " MB on backend '" + (bname != nullptr ? bname : "?") + "'");
@@ -1004,7 +988,7 @@ static bool pi05_load_weights_alloc_copy(
   if (f == nullptr) {
     QLOG_IF(
         Priority::ERROR,
-        std::string("pi05_load_model: fopen failed for '") + path + "'");
+        std::string("pi05LoadModel: fopen failed for '") + path + "'");
     return false;
   }
   std::vector<uint8_t> read_buf;
@@ -1028,7 +1012,7 @@ static bool pi05_load_weights_alloc_copy(
     if (seek_err != 0 || std::fread(read_buf.data(), 1, nbytes, f) != nbytes) {
       QLOG_IF(
           Priority::ERROR,
-          std::string("pi05_load_model: failed to read tensor '") + name +
+          std::string("pi05LoadModel: failed to read tensor '") + name +
               "' at offset " + std::to_string(off));
       std::fclose(f);
       return false;
@@ -1040,7 +1024,7 @@ static bool pi05_load_weights_alloc_copy(
   const char* bname = ggml_backend_name(m.backend);
   QLOG_IF(
       Priority::INFO,
-      "pi05_load_model: alloc+copy buffer ready, " +
+      "pi05LoadModel: alloc+copy buffer ready, " +
           std::to_string(n_copied) + " tensors, backend='" +
           (bname != nullptr ? bname : "?") + "'");
   return true;
@@ -1048,26 +1032,27 @@ static bool pi05_load_weights_alloc_copy(
 
 } // namespace
 
-// pi05_load_model — opens the GGUF, allocates backends, populates the
+// pi05LoadModel — opens the GGUF, allocates backends, populates the
 // model struct's tensor pointers. Throws std::runtime_error on any
 // missing tensor or wrong architecture key.
-static std::unique_ptr<pi05_model> pi05_load_model(
+static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
     const std::string& ggufPath, bool forceCpu,
     const std::string& backendsDir) {
-  load_backends_once(backendsDir);
-  auto m = std::make_unique<pi05_model>();
+  loadBackendsOnce(backendsDir);
+  auto m = std::make_unique<Pi05ModelInternal>();
 
   ggml_backend_dev_t cpu_dev =
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   if (cpu_dev == nullptr) {
-    throw std::runtime_error("pi05_load_model: no CPU backend available");
+    throw std::runtime_error("pi05LoadModel: no CPU backend available");
   }
   m->backend_cpu = ggml_backend_dev_init(cpu_dev, nullptr);
   if (m->backend_cpu == nullptr) {
-    throw std::runtime_error("pi05_load_model: failed to init CPU backend");
+    throw std::runtime_error("pi05LoadModel: failed to init CPU backend");
   }
   m->backend = m->backend_cpu;
-  m->backend_name = "cpu";
+  const char* cpuName = ggml_backend_name(m->backend_cpu);
+  m->backend_name = cpuName != nullptr ? cpuName : "CPU";
   m->has_gpu = false;
 
   // Try to upgrade to a GPU device unless the caller forced CPU.
@@ -1088,28 +1073,28 @@ static std::unique_ptr<pi05_model> pi05_load_model(
         m->backend_name = bname != nullptr ? bname : "gpu";
         QLOG_IF(
             Priority::INFO,
-            std::string("pi05_load_model: using GPU backend: ") +
+            std::string("pi05LoadModel: using GPU backend: ") +
                 (bname != nullptr ? bname : "?") + " (" +
                 (ddesc != nullptr ? ddesc : "?") + ")");
       } else {
         QLOG_IF(
             Priority::WARNING,
-            "pi05_load_model: ggml_backend_dev_init returned null; "
+            "pi05LoadModel: ggml_backend_dev_init returned null; "
             "staying on CPU");
       }
     } else {
       QLOG_IF(
           Priority::INFO,
-          "pi05_load_model: no GPU device picked; using CPU");
+          "pi05LoadModel: no GPU device picked; using CPU");
     }
   } else {
     QLOG_IF(
         Priority::INFO,
-        "pi05_load_model: forceCpu=true — skipping GPU selection");
+        "pi05LoadModel: forceCpu=true — skipping GPU selection");
   }
 
   // GPU path: no_alloc=true so the GGUF loader doesn't mmap; we then
-  // allocate a backend (device) buffer via pi05_load_weights_alloc_copy
+  // allocate a backend (device) buffer via pi05LoadWeightsAllocCopy
   // and read the weights into it. Required for GPU compute — without
   // it the scheduler would copy weights per-op every step.
   //
@@ -1118,7 +1103,7 @@ static std::unique_ptr<pi05_model> pi05_load_model(
   // cache. Zero extra heap allocation, lazy paging, low resident
   // footprint. Critical for iOS pi05 — iPhone 16/17 have 8 GB RAM
   // and iOS jetsam kills foreground apps that hit ~3–4 GB resident.
-  // The previous code path called pi05_load_weights_alloc_copy
+  // The previous code path called pi05LoadWeightsAllocCopy
   // unconditionally, which allocated a CPU-heap buffer of ~4 GB
   // for the GGUF data even on CPU backend — that copy was tripping
   // the jetsam kill mid-load (confirmed via bare_console.log in run
@@ -1130,38 +1115,38 @@ static std::unique_ptr<pi05_model> pi05_load_model(
   m->gguf = gguf_init_from_file(ggufPath.c_str(), gp);
   if (m->gguf == nullptr) {
     throw std::runtime_error(
-        "pi05_load_model: gguf_init_from_file failed for " + ggufPath);
+        "pi05LoadModel: gguf_init_from_file failed for " + ggufPath);
   }
 
   const std::string arch =
-      gguf_get_str_or(m->gguf, "general.architecture", "");
+      ggufGetStrOr(m->gguf, "general.architecture", "");
   if (arch != "pi05") {
     throw std::runtime_error(
-        "pi05_load_model: expected general.architecture=pi05, got '" +
+        "pi05LoadModel: expected general.architecture=pi05, got '" +
         arch + "'");
   }
 
   // hparams (all keys per the converter's stamp_metadata).
   m->vision_image_size =
-      gguf_get_u32_or(m->gguf, "pi05.image_resolution", 224);
+      ggufGetU32Or(m->gguf, "pi05.image_resolution", 224);
   m->vision_n_layers =
-      gguf_get_u32_or(m->gguf, "pi05.vision.num_layers", 27);
-  m->vlm_n_layers = gguf_get_u32_or(m->gguf, "pi05.vlm.num_layers", 18);
-  m->vlm_hidden = gguf_get_u32_or(m->gguf, "pi05.vlm.hidden_size", 2048);
-  m->vlm_n_heads = gguf_get_u32_or(m->gguf, "pi05.vlm.num_heads", 8);
+      ggufGetU32Or(m->gguf, "pi05.vision.num_layers", 27);
+  m->vlm_n_layers = ggufGetU32Or(m->gguf, "pi05.vlm.num_layers", 18);
+  m->vlm_hidden = ggufGetU32Or(m->gguf, "pi05.vlm.hidden_size", 2048);
+  m->vlm_n_heads = ggufGetU32Or(m->gguf, "pi05.vlm.num_heads", 8);
   m->vlm_n_kv_heads =
-      gguf_get_u32_or(m->gguf, "pi05.vlm.num_kv_heads", 1);
-  m->vlm_head_dim = gguf_get_u32_or(m->gguf, "pi05.vlm.head_dim", 256);
-  m->vlm_vocab_size = gguf_get_u32_or(m->gguf, "pi05.vocab_size", 257152);
+      ggufGetU32Or(m->gguf, "pi05.vlm.num_kv_heads", 1);
+  m->vlm_head_dim = ggufGetU32Or(m->gguf, "pi05.vlm.head_dim", 256);
+  m->vlm_vocab_size = ggufGetU32Or(m->gguf, "pi05.vocab_size", 257152);
   m->expert_hidden =
-      gguf_get_u32_or(m->gguf, "pi05.expert.hidden_size", 1024);
+      ggufGetU32Or(m->gguf, "pi05.expert.hidden_size", 1024);
   m->expert_n_layers =
-      gguf_get_u32_or(m->gguf, "pi05.expert.num_layers", 18);
-  m->action_dim = gguf_get_u32_or(m->gguf, "pi05.action_dim", 32);
-  m->action_horizon = gguf_get_u32_or(m->gguf, "pi05.action_horizon", 50);
+      ggufGetU32Or(m->gguf, "pi05.expert.num_layers", 18);
+  m->action_dim = ggufGetU32Or(m->gguf, "pi05.action_dim", 32);
+  m->action_horizon = ggufGetU32Or(m->gguf, "pi05.action_horizon", 50);
   m->max_token_len =
-      gguf_get_u32_or(m->gguf, "pi05.max_token_len", 200);
-  m->num_cameras = gguf_get_u32_or(m->gguf, "pi05.num_cameras", 3);
+      ggufGetU32Or(m->gguf, "pi05.max_token_len", 200);
+  m->num_cameras = ggufGetU32Or(m->gguf, "pi05.num_cameras", 3);
   m->vision_n_patches =
       (m->vision_image_size / m->vision_patch_size) *
       (m->vision_image_size / m->vision_patch_size);
@@ -1174,14 +1159,14 @@ static std::unique_ptr<pi05_model> pi05_load_model(
       m->expert_hidden > 16384 || m->vlm_vocab_size > 1048576 ||
       m->vision_n_patches == 0) {
     throw std::runtime_error(
-        "pi05_load_model: one or more GGUF hparams are out of expected range");
+        "pi05LoadModel: one or more GGUF hparams are out of expected range");
   }
 
   // The ODE loop indexes k_cache (sized vlm_n_layers) with expert_n_layers.
   // Both are 18 for pi05_base; reject any checkpoint where they differ.
   if (m->vlm_n_layers != m->expert_n_layers) {
     throw std::runtime_error(
-        "pi05_load_model: vlm_n_layers (" + std::to_string(m->vlm_n_layers) +
+        "pi05LoadModel: vlm_n_layers (" + std::to_string(m->vlm_n_layers) +
         ") != expert_n_layers (" + std::to_string(m->expert_n_layers) +
         "); this implementation requires them to match");
   }
@@ -1190,7 +1175,7 @@ static std::unique_ptr<pi05_model> pi05_load_model(
     struct ggml_tensor* t = ggml_get_tensor(m->ctx_w, name.c_str());
     if (t == nullptr) {
       throw std::runtime_error(
-          "pi05_load_model: tensor missing from GGUF: " + name);
+          "pi05LoadModel: tensor missing from GGUF: " + name);
     }
     return t;
   };
@@ -1288,22 +1273,22 @@ static std::unique_ptr<pi05_model> pi05_load_model(
         ggml_backend_get_default_buffer_type(m->backend);
     const size_t data_offset = gguf_get_data_offset(m->gguf);
     const int64_t n_tensors_in_gguf = gguf_get_n_tensors(m->gguf);
-    if (!pi05_load_weights_alloc_copy(
+    if (!pi05LoadWeightsAllocCopy(
             *m, ggufPath.c_str(), m->gguf, buft, data_offset,
             n_tensors_in_gguf)) {
       throw std::runtime_error(
-          "pi05_load_model: failed to load weights into backend buffer");
+          "pi05LoadModel: failed to load weights into backend buffer");
     }
   }
 
   return m;
 }
 
-// pi05_inference — composes M3.1 (vision per cam) + M3.4 (embedder)
+// pi05Inference — composes M3.1 (vision per cam) + M3.4 (embedder)
 // + M3.6 (VLM prefill with KV taps) + M3.12 (ODE loop) into a single
 // pass. Returns true on success.
-static bool pi05_inference(
-    pi05_model& m,
+static bool pi05Inference(
+    Pi05ModelInternal& m,
     const float** images,
     int n_images,
     const int32_t* lang_tokens,
@@ -1359,15 +1344,15 @@ static bool pi05_inference(
     // CHW row-major is already ggml's (W, H, C, 1) layout for square images.
     const float* img_data = images[cam];
 
-    pi05_staged_guard vg;
-    vg.sg = pi05_build_staged(size_t{32} * 1024 * 1024, 8192);
+    Pi05StagedGuard vg;
+    vg.sg = pi05BuildStaged(size_t{32} * 1024 * 1024, 8192);
     if (vg.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* pixels =
         ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, H, H, 3, 1);
 
-    auto outs = pi05_build_siglip_tower_graph(
+    auto outs = pi05BuildSiglipTowerGraph(
         vg.sg.ctx, pixels, tw, m.vision_n_patches, m.vision_hidden,
         m.vision_proj_dim, m.vision_n_heads, m.vision_patch_size,
         m.vision_layer_norm_eps);
@@ -1381,14 +1366,14 @@ static bool pi05_inference(
     // older Vulkan). The scheduler routes Conv2d to CPU if the GPU
     // doesn't support it; rest of the SigLIP tower stays on GPU.
     const bool ok = m.has_gpu
-        ? pi05_alloc_staged_sched(vg.sg, m.backend, m.backend_cpu)
-        : pi05_alloc_staged_simple(vg.sg, m.backend_cpu);
+        ? pi05AllocStagedSched(vg.sg, m.backend, m.backend_cpu)
+        : pi05AllocStagedSimple(vg.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
     ggml_backend_tensor_set(pixels, img_data, 0,
                             img_floats * sizeof(float));
-    if (!pi05_compute_staged(vg.sg, m.backend)) {
+    if (!pi05ComputeStaged(vg.sg, m.backend)) {
       return false;
     }
     image_features[cam].resize(per_image_out);
@@ -1401,30 +1386,30 @@ static bool pi05_inference(
   std::vector<float> lang_embeds(
       static_cast<size_t>(valid_lang) * m.vlm_hidden);
   {
-    pi05_staged_guard eg;
-    eg.sg = pi05_build_staged(size_t{32} * 1024 * 1024,
+    Pi05StagedGuard eg;
+    eg.sg = pi05BuildStaged(size_t{32} * 1024 * 1024,
                               GGML_DEFAULT_GRAPH_SIZE);
     if (eg.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* tok =
         ggml_new_tensor_1d(eg.sg.ctx, GGML_TYPE_I32, valid_lang);
-    struct ggml_tensor* emb = pi05_build_vlm_embed_graph(
+    struct ggml_tensor* emb = pi05BuildVlmEmbedGraph(
         eg.sg.ctx, tok, m.vlm_embed_tokens, m.vlm_hidden);
     if (emb == nullptr) {
       return false;
     }
     ggml_build_forward_expand(eg.sg.gf, emb);
     const bool ok = m.has_gpu
-        ? pi05_alloc_staged_sched(eg.sg, m.backend, m.backend_cpu)
-        : pi05_alloc_staged_simple(eg.sg, m.backend_cpu);
+        ? pi05AllocStagedSched(eg.sg, m.backend, m.backend_cpu)
+        : pi05AllocStagedSimple(eg.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
     ggml_backend_tensor_set(tok, lang_tokens, 0,
                             static_cast<size_t>(valid_lang) *
                                 sizeof(int32_t));
-    if (!pi05_compute_staged(eg.sg, m.backend)) {
+    if (!pi05ComputeStaged(eg.sg, m.backend)) {
       return false;
     }
     ggml_backend_tensor_get(emb, lang_embeds.data(), 0,
@@ -1453,8 +1438,8 @@ static bool pi05_inference(
   std::vector<float> k_cache(static_cast<size_t>(m.vlm_n_layers) * per_layer_kv);
   std::vector<float> v_cache(static_cast<size_t>(m.vlm_n_layers) * per_layer_kv);
   {
-    pi05_staged_guard pg;
-    pg.sg = pi05_build_staged(size_t{64} * 1024 * 1024, 65536);
+    Pi05StagedGuard pg;
+    pg.sg = pi05BuildStaged(size_t{64} * 1024 * 1024, 65536);
     if (pg.sg.ctx == nullptr) {
       return false;
     }
@@ -1465,7 +1450,7 @@ static bool pi05_inference(
 
     std::vector<struct ggml_tensor*> out_keys;
     std::vector<struct ggml_tensor*> out_values;
-    struct ggml_tensor* final_out = pi05_build_vlm_prefill_graph(
+    struct ggml_tensor* final_out = pi05BuildVlmPrefillGraph(
         pg.sg.ctx, x, pos, /*attn_mask=*/nullptr, m.vlm_blocks,
         m.vlm_final_norm_w, m.vlm_hidden, m.vlm_n_heads,
         m.vlm_n_kv_heads, m.vlm_head_dim, prefix_len, m.rms_norm_eps,
@@ -1481,8 +1466,8 @@ static bool pi05_inference(
       ggml_build_forward_expand(pg.sg.gf, v_t);
     }
     const bool ok = m.has_gpu
-        ? pi05_alloc_staged_sched(pg.sg, m.backend, m.backend_cpu)
-        : pi05_alloc_staged_simple(pg.sg, m.backend_cpu);
+        ? pi05AllocStagedSched(pg.sg, m.backend, m.backend_cpu)
+        : pi05AllocStagedSimple(pg.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
@@ -1494,7 +1479,7 @@ static bool pi05_inference(
                             prefix.size() * sizeof(float));
     ggml_backend_tensor_set(pos, pos_data.data(), 0,
                             pos_data.size() * sizeof(int32_t));
-    if (!pi05_compute_staged(pg.sg, m.backend)) {
+    if (!pi05ComputeStaged(pg.sg, m.backend)) {
       return false;
     }
     for (int L = 0; L < m.vlm_n_layers; ++L) {
@@ -1512,8 +1497,10 @@ static bool pi05_inference(
   const auto t_ode_start = std::chrono::steady_clock::now();
   const float dt = -1.0f / m.n_inference_steps;
   std::vector<float> x_t(
-      static_cast<size_t>(m.action_horizon) * m.action_dim);
-  std::memcpy(x_t.data(), noise, x_t.size() * sizeof(float));
+      static_cast<size_t>(m.action_horizon) * m.action_dim, 0.0f);
+  if (noise != nullptr) {
+    std::memcpy(x_t.data(), noise, x_t.size() * sizeof(float));
+  }
   std::vector<float> sincos_buf(m.cond_dim);
   std::vector<int32_t> act_pos_data(m.action_horizon);
   for (int i = 0; i < m.action_horizon; ++i) {
@@ -1523,11 +1510,11 @@ static bool pi05_inference(
 
   for (int step = 0; step < m.n_inference_steps; ++step) {
     const float t = 1.0f + step * dt;
-    pi05_compute_time_sincos(t, m.cond_dim, m.min_period, m.max_period,
+    pi05ComputeTimeSincos(t, m.cond_dim, m.min_period, m.max_period,
                              sincos_buf.data());
 
-    pi05_staged_guard og;
-    og.sg = pi05_build_staged(size_t{96} * 1024 * 1024, 32768);
+    Pi05StagedGuard og;
+    og.sg = pi05BuildStaged(size_t{96} * 1024 * 1024, 32768);
     if (og.sg.ctx == nullptr) {
       return false;
     }
@@ -1548,7 +1535,7 @@ static bool pi05_inference(
           m.expert_n_kv_heads);
     }
 
-    struct ggml_tensor* cond = pi05_build_time_mlp_graph(
+    struct ggml_tensor* cond = pi05BuildTimeMlpGraph(
         og.sg.ctx, sincos_t, m.time_mlp_in_w, m.time_mlp_in_b,
         m.time_mlp_out_w, m.time_mlp_out_b);
 
@@ -1558,7 +1545,7 @@ static bool pi05_inference(
         og.sg.ctx, x_exp_t,
         ggml_cast(og.sg.ctx, m.action_in_b, GGML_TYPE_F32));
 
-    auto outs = pi05_build_expert_ode_step_graph(
+    auto outs = pi05BuildExpertOdeStepGraph(
         og.sg.ctx, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
         m.expert_blocks, m.expert_final_norm_ada_w,
         m.expert_final_norm_ada_b, m.action_out_w, m.action_out_b,
@@ -1569,12 +1556,12 @@ static bool pi05_inference(
       return false;
     }
     struct ggml_tensor* x_next =
-        pi05_build_euler_step_graph(og.sg.ctx, x_t_t, outs.v_t, dt);
+        pi05BuildEulerStepGraph(og.sg.ctx, x_t_t, outs.v_t, dt);
     ggml_build_forward_expand(og.sg.gf, x_next);
 
     const bool ok = m.has_gpu
-        ? pi05_alloc_staged_sched(og.sg, m.backend, m.backend_cpu)
-        : pi05_alloc_staged_simple(og.sg, m.backend_cpu);
+        ? pi05AllocStagedSched(og.sg, m.backend, m.backend_cpu)
+        : pi05AllocStagedSimple(og.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
@@ -1592,7 +1579,7 @@ static bool pi05_inference(
                               v_cache.data() + static_cast<size_t>(L) * per_layer_kv,
                               0, per_layer_kv * sizeof(float));
     }
-    if (!pi05_compute_staged(og.sg, m.backend)) {
+    if (!pi05ComputeStaged(og.sg, m.backend)) {
       return false;
     }
     ggml_backend_tensor_get(x_next, x_next_buf.data(), 0,
@@ -1621,7 +1608,7 @@ static bool pi05_inference(
 Pi05Model::Pi05Model(
     const std::string& ggufPath, bool forceCpu,
     const std::string& backendsDir) {
-  impl_ = pi05_load_model(ggufPath, forceCpu, backendsDir);
+  impl_ = pi05LoadModel(ggufPath, forceCpu, backendsDir);
   hparams_.chunk_size = impl_->action_horizon;
   hparams_.action_dim = impl_->action_dim;
   hparams_.max_action_dim = impl_->action_dim;
@@ -1658,7 +1645,7 @@ bool Pi05Model::infer(
   if (!impl_) {
     return false;
   }
-  return pi05_inference(*impl_, images, n_images, lang_tokens, lang_mask,
+  return pi05Inference(*impl_, images, n_images, lang_tokens, lang_mask,
                          lang_len, noise, actions_out, n_actions_out,
                          timing_out);
 }
