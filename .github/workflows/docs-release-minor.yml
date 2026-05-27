@@ -8,8 +8,9 @@
 #   1. label-gate authorises secret access (mirrors the other release workflows).
 #   2. `docs-release-setup` composite action sets up the dual checkout
 #      (main-tree + release-tree), installs Bun + deps, and extracts version.
-#   3. `release-version-minor.ts` freezes the outgoing latest as
-#      `vX.Y.Z.mdx`, generates the new API summary + release notes (Fonte B:
+#   3. `release-version-minor.ts` freezes the outgoing latest as the
+#      series sibling `v<X.Y>.x.mdx` (one permanent page per minor line),
+#      generates the new API summary + release notes (Fonte B:
 #      `packages/sdk/changelog/<new>/CHANGELOG_LLM.md`), and refreshes the
 #      version manifest.
 #   4. TSDoc audit (warning mode) + link validation tests.
@@ -135,16 +136,16 @@ jobs:
           body: |
             ## Auto-generated minor release docs
 
-            Promotes **v${{ steps.setup.outputs.version }}** to latest and freezes the previous latest as a sibling MDX.
+            Promotes **v${{ steps.setup.outputs.version }}** to latest and freezes the previous latest as a permanent series-named sibling MDX (`v<outgoingMajor>.<outgoingMinor>.x.mdx`).
 
             Generated files:
 
             - `docs/website/content/docs/reference/api/index.mdx` (new latest API summary)
-            - `docs/website/content/docs/reference/api/v<outgoing>.mdx` (frozen previous latest)
+            - `docs/website/content/docs/reference/api/v<outgoingMajor>.<outgoingMinor>.x.mdx` (frozen previous latest series)
             - `docs/website/content/docs/reference/release-notes/index.mdx` (new latest release notes)
-            - `docs/website/content/docs/reference/release-notes/v<outgoing>.mdx` (frozen previous latest)
+            - `docs/website/content/docs/reference/release-notes/v<outgoingMajor>.<outgoingMinor>.x.mdx` (frozen previous latest series)
             - `docs/website/src/lib/versions.ts` (refreshed dropdown manifest)
 
-            Release notes were generated from `packages/sdk/changelog/${{ steps.setup.outputs.version }}/CHANGELOG_LLM.md`.
+            Release notes were generated from `packages/sdk/changelog/${{ steps.setup.outputs.version }}/CHANGELOG_LLM.md` (and the matching folder in every other SDK pod package that released at the same version).
 
             Produced by the `Docs Release - Minor` workflow.

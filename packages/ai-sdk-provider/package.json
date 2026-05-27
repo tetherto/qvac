@@ -16,10 +16,12 @@
       "types": "./dist/models/index.d.ts",
       "import": "./dist/models/index.js"
     },
+    "./assets/logo.svg": "./assets/logo.svg",
     "./package.json": "./package.json"
   },
   "files": [
     "dist/**/*",
+    "assets/**/*",
     "README.md",
     "LICENSE",
     "NOTICE"
@@ -71,6 +73,7 @@
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "^2.0",
+    "@qvac/registry-client": "^0.5.0",
     "@types/node": "^24.2.1",
     "ai": "^6.0",
     "tsx": "^4.21.0",

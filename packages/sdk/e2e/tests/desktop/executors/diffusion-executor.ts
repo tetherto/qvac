@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { DiffusionExecutor as SharedDiffusionExecutor } from "../../shared/executors/diffusion-executor.js";
+import {
+  DiffusionExecutor as SharedDiffusionExecutor,
+  type DiffusionParams,
+} from "../../shared/executors/diffusion-executor.js";
 
 function readImageBytes(name: string): Uint8Array {
   const fileName = name.split("/").pop()!;
@@ -9,39 +12,27 @@ function readImageBytes(name: string): Uint8Array {
 }
 
 export class DesktopDiffusionExecutor extends SharedDiffusionExecutor {
+  // Resolve string filenames declared in test params to bytes via Node fs.
   protected override async resolveParams(
-    p: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
-    const out: Record<string, unknown> = { ...p };
+    p: DiffusionParams,
+  ): Promise<DiffusionParams> {
+    const out: DiffusionParams = { ...p };
 
-    if (p.init_image !== undefined) {
-      if (typeof p.init_image !== "string") {
-        throw new Error(
-          `init_image in test params must be a string filename, got: ${typeof p.init_image}`,
-        );
-      }
+    if (typeof p.init_image === "string") {
       out.init_image = readImageBytes(p.init_image);
     }
 
-    if (p.image !== undefined) {
-      if (typeof p.image !== "string") {
-        throw new Error(
-          `image in test params must be a string filename, got: ${typeof p.image}`,
-        );
-      }
+    if (typeof p.image === "string") {
       out.image = readImageBytes(p.image);
     }
 
-    if (p.init_images !== undefined) {
-      if (
-        !Array.isArray(p.init_images) ||
-        !p.init_images.every((v) => typeof v === "string")
-      ) {
+    if (Array.isArray(p.init_images)) {
+      if (!p.init_images.every((v): v is string => typeof v === "string")) {
         throw new Error(
           "init_images in test params must be a string[] of image filenames",
         );
       }
-      out.init_images = (p.init_images as string[]).map(readImageBytes);
+      out.init_images = p.init_images.map(readImageBytes);
     }
 
     return out;

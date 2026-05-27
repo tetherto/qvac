@@ -24,6 +24,9 @@ import {
   sameMinor,
   readLatestFromVersionsTs,
   resolveArchivedSibling,
+  resolveSeriesSibling,
+  seriesName,
+  seriesFileName,
 } from '../scripts/lib/release-shared'
 
 function makeTempDir(): string {
@@ -135,7 +138,7 @@ describe('readLatestFromVersionsTs', () => {
 // resolveArchivedSibling
 // ---------------------------------------------------------------------------
 
-describe('resolveArchivedSibling', () => {
+describe('resolveArchivedSibling (legacy, deprecated)', () => {
   it('returns the highest patch for the requested minor', async () => {
     const dir = makeTempDir()
     try {
@@ -180,7 +183,7 @@ describe('resolveArchivedSibling', () => {
     }
   })
 
-  it('does not match malformed names like v0.8.x.mdx or v0.8.mdx', async () => {
+  it('does not match series names like v0.8.x.mdx or v0.8.mdx (legacy lookup is full-semver-only)', async () => {
     const dir = makeTempDir()
     try {
       writeFileSync(path.join(dir, 'v0.8.x.mdx'), '')
@@ -191,5 +194,83 @@ describe('resolveArchivedSibling', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// seriesName / seriesFileName — series-based naming helpers
+// ---------------------------------------------------------------------------
+
+describe('seriesName', () => {
+  it('formats series as vX.Y.x (literal "x")', () => {
+    expect(seriesName({ major: 0, minor: 11 })).toBe('v0.11.x')
+    expect(seriesName({ major: 1, minor: 2 })).toBe('v1.2.x')
+  })
+
+  it('does not depend on the patch number (works with full SemVer too)', () => {
+    expect(seriesName({ major: 0, minor: 11, patch: 3 } as never)).toBe('v0.11.x')
+  })
+})
+
+describe('seriesFileName', () => {
+  it('returns vX.Y.x.mdx', () => {
+    expect(seriesFileName(0, 11)).toBe('v0.11.x.mdx')
+    expect(seriesFileName(2, 0)).toBe('v2.0.x.mdx')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveSeriesSibling — series-based lookup with legacy fallback
+// ---------------------------------------------------------------------------
+
+describe('resolveSeriesSibling', () => {
+  it('returns the series file name when v<X.Y>.x.mdx exists', async () => {
+    const dir = makeTempDir()
+    try {
+      writeFileSync(path.join(dir, 'v0.11.x.mdx'), '')
+      const sibling = await resolveSeriesSibling(dir, 0, 11)
+      expect(sibling).toBe('v0.11.x.mdx')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to the highest full-semver patch when series file is missing (migration shim)', async () => {
+    const dir = makeTempDir()
+    try {
+      writeFileSync(path.join(dir, 'v0.9.0.mdx'), '')
+      writeFileSync(path.join(dir, 'v0.9.1.mdx'), '')
+      const sibling = await resolveSeriesSibling(dir, 0, 9)
+      expect(sibling).toBe('v0.9.1.mdx')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('prefers the series file over the legacy full-semver siblings when both exist', async () => {
+    const dir = makeTempDir()
+    try {
+      writeFileSync(path.join(dir, 'v0.9.0.mdx'), '')
+      writeFileSync(path.join(dir, 'v0.9.x.mdx'), '')
+      const sibling = await resolveSeriesSibling(dir, 0, 9)
+      expect(sibling).toBe('v0.9.x.mdx')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('returns null when nothing matches', async () => {
+    const dir = makeTempDir()
+    try {
+      writeFileSync(path.join(dir, 'v0.7.5.mdx'), '')
+      const sibling = await resolveSeriesSibling(dir, 0, 9)
+      expect(sibling).toBeNull()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('returns null when the directory does not exist', async () => {
+    expect(await resolveSeriesSibling('/no/such/dir', 0, 9)).toBeNull()
   })
 })

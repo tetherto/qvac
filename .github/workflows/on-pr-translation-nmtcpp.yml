@@ -27,6 +27,10 @@ permissions:
 env:
   PKG_DIR: packages/translation-nmtcpp
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   label-gate:
     name: Authorise (label-gate)
@@ -80,7 +84,7 @@ jobs:
               - ".github/workflows/*nmtcpp*.yml"
   verify-fabric-lockstep:
     needs: [authorize, changes]
-    if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -99,7 +103,7 @@ jobs:
       - changes
       - verify-fabric-lockstep
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch'))
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -117,7 +121,7 @@ jobs:
 
   ts-checks:
     needs: [authorize, changes, sanity-checks]
-    if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -144,7 +148,7 @@ jobs:
       - sanity-checks
       - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
+      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -164,7 +168,7 @@ jobs:
       pull-requests: write
       id-token: write
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
+      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
     secrets: inherit
     with:
@@ -183,7 +187,7 @@ jobs:
       - sanity-checks
       - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
+      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     secrets: inherit
     with:
@@ -198,7 +202,7 @@ jobs:
       - prebuild
       - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
+      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: read
       packages: read
@@ -222,7 +226,7 @@ jobs:
       - prebuild
       - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
+      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
     secrets: inherit
     with:
@@ -231,7 +235,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, changes, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, run-integration-tests, run-mobile-integration-tests]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
