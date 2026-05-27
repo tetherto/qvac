@@ -14,7 +14,9 @@ on:
       - tmp-*
     paths:
       - "packages/llm-llamacpp/**"
-      - ".github/workflows/*llamacpp-llm*.yml"
+      - ".github/workflows/*llm-llamacpp*.yml"
+      - ".github/actions/cache-models/**"
+
   workflow_dispatch:
   workflow_call:
 
@@ -26,6 +28,10 @@ permissions:
 
 env:
   PKG_DIR: packages/llm-llamacpp
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   label-gate:
@@ -235,7 +241,7 @@ jobs:
   combine-perf-reports:
     name: Combined Performance Report
     needs: [authorize, run-integration-tests, run-mobile-integration-tests]
-    if: always() && needs.authorize.outputs.allowed == 'true'
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -345,7 +351,7 @@ jobs:
             --output combined-output/performance-report-combined.md
 
       - name: Generate per-device HTML reports
-        if: always()
+        if: always() && !cancelled()
         shell: bash
         run: |
           # SECURITY: `aggregate.js` runs from the base branch (see
@@ -385,7 +391,7 @@ jobs:
           ls -la per-device-reports/ 2>/dev/null || echo "No per-device reports"
 
       - name: Upload combined HTML report
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: HTML-Report-All-Platforms-${{ github.run_number }}
@@ -394,7 +400,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload per-device HTML reports
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: HTML-Reports-Per-Device-${{ github.run_number }}
@@ -403,7 +409,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Write combined summary
-        if: always()
+        if: always() && !cancelled()
         shell: bash
         run: |
           set +e
@@ -440,7 +446,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
-    if: always()
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}

@@ -1,0 +1,82 @@
+{
+  "name": "@qvac/ai-sdk-provider",
+  "version": "0.1.0",
+  "description": "Vercel AI SDK provider for the QVAC local AI runtime (chat, embeddings, transcription, translation, speech, OCR, image)",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./models": {
+      "types": "./dist/models/index.d.ts",
+      "import": "./dist/models/index.js"
+    },
+    "./assets/logo.svg": "./assets/logo.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*",
+    "assets/**/*",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "ai",
+    "ai-sdk",
+    "vercel-ai-sdk",
+    "openai-compatible",
+    "local-ai",
+    "on-device",
+    "offline",
+    "edge-ai",
+    "private-ai",
+    "qvac",
+    "tether",
+    "llm",
+    "embeddings",
+    "transcription",
+    "tts",
+    "ocr",
+    "image-generation",
+    "p2p",
+    "provider"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/ai-sdk-provider"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ai-sdk-provider#readme",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "lint": "tsc -p tsconfig.test.json",
+    "check-models": "tsx ./models/update-models/index.ts --check",
+    "update-models": "tsx ./models/update-models/index.ts",
+    "test": "tsx --test test/*.test.ts",
+    "test:unit": "tsx --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@ai-sdk/openai-compatible": "^2.0",
+    "ai": "^6.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai-compatible": "^2.0",
+    "@qvac/registry-client": "^0.5.0",
+    "@types/node": "^24.2.1",
+    "ai": "^6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

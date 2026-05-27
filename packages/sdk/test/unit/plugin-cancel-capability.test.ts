@@ -170,16 +170,18 @@ bareTest(
       { ocrPlugin },
       { diffusionPlugin },
       { vlaPlugin },
+      { classificationPlugin },
     ] = await Promise.all([
       import("@/server/bare/plugins/llamacpp-completion/plugin"),
       import("@/server/bare/plugins/llamacpp-embedding/plugin"),
       import("@/server/bare/plugins/whispercpp-transcription/plugin"),
       import("@/server/bare/plugins/parakeet-transcription/plugin"),
       import("@/server/bare/plugins/nmtcpp-translation/plugin"),
-      import("@/server/bare/plugins/onnx-tts/plugin"),
+      import("@/server/bare/plugins/tts-ggml/plugin"),
       import("@/server/bare/plugins/onnx-ocr/plugin"),
       import("@/server/bare/plugins/sdcpp-generation/plugin"),
       import("@/server/bare/plugins/ggml-vla/plugin"),
+      import("@/server/bare/plugins/ggml-classification/plugin"),
     ]);
 
     const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {
@@ -207,8 +209,8 @@ bareTest(
         translate: { scope: "none" },
       },
       [ttsPlugin.modelType]: {
-        textToSpeech: { scope: "none" },
-        textToSpeechStream: { scope: "none" },
+        textToSpeech: { scope: "model", hard: true },
+        textToSpeechStream: { scope: "model", hard: true },
       },
       [ocrPlugin.modelType]: {
         ocrStream: { scope: "none" },
@@ -221,6 +223,9 @@ bareTest(
       [vlaPlugin.modelType]: {
         vlaRun: { scope: "model", hard: true },
         vlaHparams: { scope: "none" },
+      },
+      [classificationPlugin.modelType]: {
+        classify: { scope: "none" },
       },
     };
 
@@ -242,6 +247,7 @@ bareTest(
       ocrPlugin as unknown as BuiltinPlugin,
       diffusionPlugin as unknown as BuiltinPlugin,
       vlaPlugin as unknown as BuiltinPlugin,
+      classificationPlugin as unknown as BuiltinPlugin,
     ];
 
     for (const plugin of builtins) {

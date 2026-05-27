@@ -24,6 +24,10 @@ permissions:
   packages: read
   id-token: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   label-gate:
     name: Authorise (label-gate)
@@ -207,7 +211,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, changes, sanity-checks, prebuild]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}

@@ -221,6 +221,10 @@ jobs:
           key: tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/tts-ggml/scripts/convert-models.sh', 'packages/tts-ggml/scripts/setup-venv.sh', 'packages/tts-ggml/scripts/requirements.txt', 'packages/tts-ggml/scripts/convert-t3-turbo-to-gguf.py', 'packages/tts-ggml/scripts/convert-t3-mtl-to-gguf.py', 'packages/tts-ggml/scripts/convert-s3gen-to-gguf.py', 'packages/tts-ggml/scripts/convert-supertonic2-to-gguf.py') }}
           restore-keys: |
             tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-
+          # No-op today (key still includes platform/arch because of the
+          # venv); kept for a follow-up split of venv (OS-keyed) vs
+          # GGUFs (cross-OS).
+          enableCrossOsArchive: true
 
       - name: Stage GGUF models (npm run setup-models)
         if: steps.cache-tts-ggml-models.outputs.cache-hit != 'true'

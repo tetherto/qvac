@@ -56,7 +56,7 @@
     "@aws-sdk/client-s3": "^3.998.0",
     "@huggingface/gguf": "^0.3.3",
     "@huggingface/hub": "^2.11.0",
-    "@qvac/registry-schema": "^0.1.2",
+    "@qvac/registry-schema": "^0.3.0",
     "autobase": "^7.18.1",
     "b4a": "^1.6.7",
     "blind-peer": "^2.9.4",

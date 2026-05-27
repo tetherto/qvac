@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
+      - ".github/actions/cache-models/**"
   workflow_dispatch:
 
   workflow_call:
@@ -27,6 +28,10 @@ permissions:
 
 env:
   PKG_DIR: packages/diffusion-cpp
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   label-gate:
@@ -190,7 +195,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
-    if: always()
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     permissions:
       contents: read

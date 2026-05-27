@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.1] - 2026-05-26
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2`.
+
 ## [0.22.0] - 2026-05-23
 
 ### Added
