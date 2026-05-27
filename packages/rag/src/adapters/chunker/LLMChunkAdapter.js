@@ -1,10 +1,11 @@
 'use strict'
 
+const { split } = require('llm-splitter')
+
 const BaseChunkAdapter = require('./BaseChunkAdapter')
 const { QvacErrorRAG, ERR_CODES } = require('../../errors')
 const { generateId } = require('../../utils/helper')
 const { tokenizeText } = require('./Tokenizer')
-const { split } = require('llm-splitter')
 
 /**
  * Predefined splitter strategies for common tokenization needs.
