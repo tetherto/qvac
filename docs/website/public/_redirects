@@ -13,11 +13,11 @@
 # only `/reference/api/vX.Y.Z[/]` (and the release-notes sibling) is
 # affected — anything deeper is left untouched.
 
-/reference/api/:version/   /reference/api/:version/index.html   200
-/reference/api/:version    /reference/api/:version/index.html   200
+# /reference/api/:version/   /reference/api/:version/index.html   200
+# /reference/api/:version    /reference/api/:version/index.html   200
 
-/reference/release-notes/:version/   /reference/release-notes/:version/index.html   200
-/reference/release-notes/:version    /reference/release-notes/:version/index.html   200
+# /reference/release-notes/:version/   /reference/release-notes/:version/index.html   200
+# /reference/release-notes/:version    /reference/release-notes/:version/index.html   200
 
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
