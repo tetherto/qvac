@@ -44,20 +44,8 @@ interface HandlerParams {
   previousResponseId: string | null
 }
 
-const plugin: FastifyPluginAsyncZod = async (app) => {
-  app.addHook('onSend', async (req, reply, payload) => {
-    if (req.url.startsWith('/v1/responses')) {
-      reply.header(VOLATILE_HEADER, RESPONSES_VOLATILE_STUB)
-    }
-    return payload
-  })
-
-  app.post('/v1/responses', {
-    schema: {
-      body: responsesBody,
-      tags: ['Responses'],
-      summary: 'Create a model response',
-      description: `
+const descriptions = {
+  create: `
 OpenAI Responses API — stateful chat completion that can be retrieved /
 deleted later via the returned \`id\`.
 
@@ -81,7 +69,26 @@ addressable via GET / DELETE / input_items.
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
 (\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
 and terminates **without** a \`[DONE]\` sentinel (per the spec).
-      `.trim()
+`.trim(),
+  getById: 'Fetch a previously-created response. **In-memory only** — 404 once expired or after a restart. Reply carries `X-QVAC-Stub: responses-volatile`.',
+  deleteById: 'Remove a stored response from memory. Subsequent chains via `previous_response_id` that referenced this one will return `404 previous_response_not_found`.',
+  listInputItems: 'Paginate over a stored response\'s normalized input items (the request that produced it). `limit` and `after` work as on the OpenAI cursor-paginated endpoints.'
+}
+
+const plugin: FastifyPluginAsyncZod = async (app) => {
+  app.addHook('onSend', async (req, reply, payload) => {
+    if (req.url.startsWith('/v1/responses')) {
+      reply.header(VOLATILE_HEADER, RESPONSES_VOLATILE_STUB)
+    }
+    return payload
+  })
+
+  app.post('/v1/responses', {
+    schema: {
+      body: responsesBody,
+      tags: ['Responses'],
+      summary: 'Create a model response',
+      description: descriptions.create
     },
     config: { unsupportedParams: [...RESPONSES_UNSUPPORTED_PARAMS], sseSentinel: false },
     preHandler: [requireModel('chat'), logUnsupported]
@@ -197,7 +204,7 @@ and terminates **without** a \`[DONE]\` sentinel (per the spec).
       params: responsesIdParams,
       tags: ['Responses'],
       summary: 'Retrieve a stored response',
-      description: 'Fetch a previously-created response. **In-memory only** — 404 once expired or after a restart. Reply carries `X-QVAC-Stub: responses-volatile`.'
+      description: descriptions.getById
     }
   }, async (req, reply) => {
     const rec = app.qvac.responsesStore.get(req.params.id)
@@ -210,7 +217,7 @@ and terminates **without** a \`[DONE]\` sentinel (per the spec).
       params: responsesIdParams,
       tags: ['Responses'],
       summary: 'Delete a stored response',
-      description: 'Remove a stored response from memory. Subsequent chains via `previous_response_id` that referenced this one will return `404 previous_response_not_found`.'
+      description: descriptions.deleteById
     }
   }, async (req) => {
     const ok = app.qvac.responsesStore.delete(req.params.id)
@@ -224,7 +231,7 @@ and terminates **without** a \`[DONE]\` sentinel (per the spec).
       querystring: responsesListInputItemsQuery,
       tags: ['Responses'],
       summary: 'List input items for a stored response',
-      description: 'Paginate over a stored response\'s normalized input items (the request that produced it). `limit` and `after` work as on the OpenAI cursor-paginated endpoints.'
+      description: descriptions.listInputItems
     }
   }, async (req, reply) => {
     const opts: { limit?: number; after?: string } = {}

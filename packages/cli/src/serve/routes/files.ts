@@ -16,7 +16,8 @@ function toOpenAIFile (id: string, record: EphemeralFileRecord): Record<string, 
   }
 }
 
-const UPLOAD_DESCRIPTION = `
+const descriptions = {
+  upload: `
 Upload bytes into an **ephemeral in-memory store**. The returned file id can
 be used immediately with \`POST /v1/vector_stores/{id}/files\` to attach the
 content into a RAG workspace, at which point the file is removed from the
@@ -27,19 +28,16 @@ beyond the request's body limit.
 
 **\`purpose\`** is recorded verbatim from the multipart field; defaults to
 \`"assistants"\` if omitted.
-`.trim()
-
-const LIST_DESCRIPTION = `
+`.trim(),
+  list: `
 List files currently held in the ephemeral in-memory store. Files removed
 by a vector-store attach or by TTL eviction do not appear.
-`.trim()
-
-const GET_DESCRIPTION = `
+`.trim(),
+  getById: `
 Fetch metadata for a single ephemeral file. 404 \`file_not_found\` if the
 file has been attached/evicted or never existed.
-`.trim()
-
-const CONTENT_DESCRIPTION = `
+`.trim(),
+  getByIdContent: `
 Stream the raw bytes of an ephemeral file with the stored \`Content-Type\`.
 Used by \`/v1/images/generations\` with \`response_format=url\` to back the
 minted download URLs.
@@ -48,6 +46,7 @@ minted download URLs.
 when the file has a TTL, otherwise \`private, no-store\`. Downstream proxies
 will not serve stale bytes after the store has evicted the entry.
 `.trim()
+}
 
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/files', {
@@ -55,7 +54,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       body: filesUploadBody,
       tags: ['Files'],
       summary: 'Upload an ephemeral file',
-      description: UPLOAD_DESCRIPTION,
+      description: descriptions.upload,
       consumes: ['multipart/form-data']
     },
     preValidation: multipartToBody
@@ -82,7 +81,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.get('/v1/files', {
-    schema: { tags: ['Files'], summary: 'List ephemeral files', description: LIST_DESCRIPTION }
+    schema: { tags: ['Files'], summary: 'List ephemeral files', description: descriptions.list }
   }, async () => ({
     object: 'list' as const,
     data: app.qvac.ephemeralFiles.list().map(({ id, record }) => toOpenAIFile(id, record)),
@@ -90,7 +89,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   }))
 
   app.get('/v1/files/:id', {
-    schema: { params: fileIdParams, tags: ['Files'], summary: 'Get an ephemeral file', description: GET_DESCRIPTION }
+    schema: { params: fileIdParams, tags: ['Files'], summary: 'Get an ephemeral file', description: descriptions.getById }
   }, async (req) => {
     const id = decodeURIComponent(req.params.id)
     const record = app.qvac.ephemeralFiles.get(id)
@@ -99,7 +98,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.get('/v1/files/:id/content', {
-    schema: { params: fileIdParams, tags: ['Files'], summary: 'Get raw bytes of an ephemeral file', description: CONTENT_DESCRIPTION }
+    schema: { params: fileIdParams, tags: ['Files'], summary: 'Get raw bytes of an ephemeral file', description: descriptions.getByIdContent }
   }, async (req, reply) => {
     const id = decodeURIComponent(req.params.id)
     const record = app.qvac.ephemeralFiles.get(id)

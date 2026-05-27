@@ -15,34 +15,34 @@ function toModelObject (entry: ModelEntry): { id: string; object: 'model'; creat
   }
 }
 
-const LIST_DESCRIPTION = `
+const descriptions = {
+  list: `
 List all currently-loaded (READY) models. Models that are configured under
 \`serve.models\` but not yet loaded — or that failed to load — do not appear.
 \`owned_by\` is always \`"qvac"\`.
-`.trim()
-
-const GET_DESCRIPTION = `
+`.trim(),
+  getById: `
 Fetch a single model by alias. Returns 404 \`model_not_found\` if the model
 is not registered OR is registered but not READY (e.g. still loading).
-`.trim()
-
-const DELETE_DESCRIPTION = `
+`.trim(),
+  deleteById: `
 Unload a model from the SDK and remove its alias from the in-process
 registry. Subsequent inference requests targeting this alias will return
 \`model_not_found\` until it is reloaded (e.g. via a server restart with
 \`preload: true\` in the config).
 `.trim()
+}
 
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.get('/v1/models', {
-    schema: { tags: ['Models'], summary: 'List ready models', description: LIST_DESCRIPTION }
+    schema: { tags: ['Models'], summary: 'List ready models', description: descriptions.list }
   }, async () => ({
     object: 'list' as const,
     data: app.qvac.registry.getReady().map(toModelObject)
   }))
 
   app.get('/v1/models/:id', {
-    schema: { params: modelIdParams, tags: ['Models'], summary: 'Get a model', description: GET_DESCRIPTION }
+    schema: { params: modelIdParams, tags: ['Models'], summary: 'Get a model', description: descriptions.getById }
   }, async (req) => {
     const entry = app.qvac.registry.getEntry(decodeURIComponent(req.params.id))
     if (!entry || entry.state !== app.qvac.registry.STATES.READY) {
@@ -52,7 +52,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   })
 
   app.delete('/v1/models/:id', {
-    schema: { params: modelIdParams, tags: ['Models'], summary: 'Unload a model', description: DELETE_DESCRIPTION }
+    schema: { params: modelIdParams, tags: ['Models'], summary: 'Unload a model', description: descriptions.deleteById }
   }, async (req) => {
     const id = decodeURIComponent(req.params.id)
     const entry = app.qvac.registry.getEntry(id)

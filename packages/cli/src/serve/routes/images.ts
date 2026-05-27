@@ -166,7 +166,8 @@ async function runAndRespond (
 
 const EDIT_IMAGE_FIELD_NAMES = new Set(['image', 'image[]'])
 
-const GENERATIONS_DESCRIPTION = `
+const descriptions = {
+  generate: `
 Generate one or more images from a text prompt via the Stable Diffusion-cpp backend.
 
 **Output**: PNG only. \`output_format=jpeg\`/\`webp\` are rejected with
@@ -186,9 +187,8 @@ streams step ticks, not image bytes).
 **Validation order**: schema → model resolution (\`model_not_found\` /
 \`invalid_model_type\` / \`model_not_ready\`) → param assertions
 (\`unsupported_output_format\`, \`invalid_size\`, \`invalid_n\`, etc.).
-`.trim()
-
-const EDITS_DESCRIPTION = `
+`.trim(),
+  edit: `
 Edit an input image conditioned on a text prompt (img2img) via Stable Diffusion-cpp.
 
 **Multipart body**. Required fields: \`model\`, \`image\` (or \`image[]\`).
@@ -204,6 +204,7 @@ the rest produce a warning log line.
 Same output / \`response_format=url\` / streaming caveats as
 \`POST /v1/images/generations\`.
 `.trim()
+}
 
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/images/generations', {
@@ -211,7 +212,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       body: imagesGenerationsBody,
       tags: ['Images'],
       summary: 'Image generation',
-      description: GENERATIONS_DESCRIPTION
+      description: descriptions.generate
     },
     preHandler: requireModel('image')
   }, async (req, reply) => {
@@ -248,7 +249,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       body: imagesEditsBody,
       tags: ['Images'],
       summary: 'Image editing (img2img)',
-      description: EDITS_DESCRIPTION,
+      description: descriptions.edit,
       consumes: ['multipart/form-data']
     },
     preValidation: multipartToBody,
