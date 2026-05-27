@@ -120,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p models
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q4_0.gguf models/
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf models/
           ls -lh models/sortformer-4spk-v1.q4_0.gguf
 
       - name: Verify GGUF for C++ tests

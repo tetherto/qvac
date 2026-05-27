@@ -12,7 +12,7 @@ if [ -z "$REGISTRY_BUCKET" ]; then
   exit 1
 fi
 
-REGISTRY_PREFIX="qvac_models_compiled/ggml/parakeet/2026-05-11"
+REGISTRY_PREFIX="qvac_models_compiled/ggml/parakeet/2026-05-27"
 MODELS_DIR="models"
 TEST_ASSETS_DIR="test/mobile/testAssets"
 Q4_FILES=(

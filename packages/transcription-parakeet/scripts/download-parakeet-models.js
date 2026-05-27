@@ -5,13 +5,8 @@ const fs = require('fs')
 const path = require('path')
 const { QVACRegistryClient } = require('@qvac/registry-client')
 
-// TODO(QVAC-19265): confirm REGISTRY_DATE with Ishan once the q4_0 GGUFs
-// (parakeet-tdt-0.6b-v3.q4_0.gguf, parakeet-eou-120m-v1.q4_0.gguf,
-// sortformer-4spk-v1.q4_0.gguf) land in S3. The convention used for the
-// existing q8_0 entries is qvac_models_compiled/ggml/parakeet/2026-05-11/;
-// keep this constant aligned with whatever Ishan picks. The streaming
-// Sortformer v2.1 already lives under 2026-05-20/ and is unaffected.
-const REGISTRY_DATE = '2026-05-11'
+const REGISTRY_DATE_Q8_0 = '2026-05-11'
+const REGISTRY_DATE_Q4_0 = '2026-05-27'
 const REGISTRY_DATE_STREAMING = '2026-05-20'
 const REGISTRY_SOURCE = 's3'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
@@ -21,20 +16,20 @@ const ALL_QUANTS = ['f16', 'q8_0', 'q4_0']
 
 const MODELS = {
   ctc: {
-    q8_0: filenameAt(REGISTRY_DATE, 'parakeet-ctc-0.6b.q8_0.gguf'),
-    q4_0: filenameAt(REGISTRY_DATE, 'parakeet-ctc-0.6b.q4_0.gguf')
+    q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-ctc-0.6b.q8_0.gguf'),
+    q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-ctc-0.6b.q4_0.gguf')
   },
   tdt: {
-    q8_0: filenameAt(REGISTRY_DATE, 'parakeet-tdt-0.6b-v3.q8_0.gguf'),
-    q4_0: filenameAt(REGISTRY_DATE, 'parakeet-tdt-0.6b-v3.q4_0.gguf')
+    q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-tdt-0.6b-v3.q8_0.gguf'),
+    q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-tdt-0.6b-v3.q4_0.gguf')
   },
   eou: {
-    q8_0: filenameAt(REGISTRY_DATE, 'parakeet-eou-120m-v1.q8_0.gguf'),
-    q4_0: filenameAt(REGISTRY_DATE, 'parakeet-eou-120m-v1.q4_0.gguf')
+    q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-eou-120m-v1.q8_0.gguf'),
+    q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-eou-120m-v1.q4_0.gguf')
   },
   sortformer: {
-    q8_0: filenameAt(REGISTRY_DATE, 'sortformer-4spk-v1.q8_0.gguf'),
-    q4_0: filenameAt(REGISTRY_DATE, 'sortformer-4spk-v1.q4_0.gguf')
+    q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'sortformer-4spk-v1.q8_0.gguf'),
+    q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'sortformer-4spk-v1.q4_0.gguf')
   },
   'sortformer-streaming-v2.1': {
     f16: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.f16.gguf'),

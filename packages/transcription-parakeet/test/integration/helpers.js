@@ -782,16 +782,16 @@ async function runTranscription (params, expectation = {}) {
 // `registryPath` / `mobileRegistryPath` point at the canonical S3
 // keys served by the QVAC model registry. The desktop / mobile
 // runtime falls back to these when no local copy can be resolved.
-// TODO(QVAC-19265): keep the date prefix below aligned with whatever
-// Ishan picks once the q4_0 GGUFs land in S3 (the existing q8_0
-// entries live under 2026-05-11/; streaming Sortformer v2.1 lives
-// under 2026-05-20/ and is unaffected).
 const REGISTRY_SOURCE = 's3'
-const REGISTRY_PREFIX = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
+const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
+const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
 
-function _registry (file) {
-  return `${REGISTRY_PREFIX}/${file}`
+function _registryQ8 (file) {
+  return `${REGISTRY_PREFIX_Q8_0}/${file}`
+}
+function _registryQ4 (file) {
+  return `${REGISTRY_PREFIX_Q4_0}/${file}`
 }
 function _registryStreaming (file) {
   return `${REGISTRY_PREFIX_STREAMING}/${file}`
@@ -801,32 +801,32 @@ const MODEL_CONFIGS = {
   ctc: {
     file: 'parakeet-ctc-0.6b.q8_0.gguf',
     mobileFile: 'parakeet-ctc-0.6b.q4_0.gguf',
-    registryPath: _registry('parakeet-ctc-0.6b.q8_0.gguf'),
-    mobileRegistryPath: _registry('parakeet-ctc-0.6b.q4_0.gguf'),
+    registryPath: _registryQ8('parakeet-ctc-0.6b.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('parakeet-ctc-0.6b.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   tdt: {
     file: 'parakeet-tdt-0.6b-v3.q8_0.gguf',
     mobileFile: 'parakeet-tdt-0.6b-v3.q4_0.gguf',
-    registryPath: _registry('parakeet-tdt-0.6b-v3.q8_0.gguf'),
-    mobileRegistryPath: _registry('parakeet-tdt-0.6b-v3.q4_0.gguf'),
+    registryPath: _registryQ8('parakeet-tdt-0.6b-v3.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('parakeet-tdt-0.6b-v3.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   eou: {
     file: 'parakeet-eou-120m-v1.q8_0.gguf',
     mobileFile: 'parakeet-eou-120m-v1.q4_0.gguf',
-    registryPath: _registry('parakeet-eou-120m-v1.q8_0.gguf'),
-    mobileRegistryPath: _registry('parakeet-eou-120m-v1.q4_0.gguf'),
+    registryPath: _registryQ8('parakeet-eou-120m-v1.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('parakeet-eou-120m-v1.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   sortformer: {
     file: 'sortformer-4spk-v1.q8_0.gguf',
     mobileFile: 'sortformer-4spk-v1.q4_0.gguf',
-    registryPath: _registry('sortformer-4spk-v1.q8_0.gguf'),
-    mobileRegistryPath: _registry('sortformer-4spk-v1.q4_0.gguf'),
+    registryPath: _registryQ8('sortformer-4spk-v1.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('sortformer-4spk-v1.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
