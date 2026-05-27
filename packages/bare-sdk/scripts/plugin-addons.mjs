@@ -9,8 +9,9 @@ export const PLUGIN_ADDONS = new Set([
   "@qvac/transcription-whispercpp",
   "@qvac/transcription-parakeet",
   "@qvac/translation-nmtcpp",
-  "@qvac/tts-onnx",
+  "@qvac/tts-ggml",
   "@qvac/ocr-onnx",
   "@qvac/diffusion-cpp",
   "@qvac/vla-ggml",
+  "@qvac/classification-ggml",
 ]);

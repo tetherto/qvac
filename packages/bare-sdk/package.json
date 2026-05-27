@@ -82,9 +82,13 @@
       "types": "./dist/_sdk/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
       "import": "./dist/_sdk/server/bare/plugins/nmtcpp-translation/plugin.js"
     },
+    "./tts-ggml/plugin": {
+      "types": "./dist/_sdk/server/bare/plugins/tts-ggml/plugin.d.ts",
+      "import": "./dist/_sdk/server/bare/plugins/tts-ggml/plugin.js"
+    },
     "./onnx-tts/plugin": {
-      "types": "./dist/_sdk/server/bare/plugins/onnx-tts/plugin.d.ts",
-      "import": "./dist/_sdk/server/bare/plugins/onnx-tts/plugin.js"
+      "types": "./dist/_sdk/server/bare/plugins/tts-ggml/plugin.d.ts",
+      "import": "./dist/_sdk/server/bare/plugins/tts-ggml/plugin.js"
     },
     "./onnx-ocr/plugin": {
       "types": "./dist/_sdk/server/bare/plugins/onnx-ocr/plugin.d.ts",
@@ -97,6 +101,10 @@
     "./ggml-vla/plugin": {
       "types": "./dist/_sdk/server/bare/plugins/ggml-vla/plugin.d.ts",
       "import": "./dist/_sdk/server/bare/plugins/ggml-vla/plugin.js"
+    },
+    "./ggml-classification/plugin": {
+      "types": "./dist/_sdk/server/bare/plugins/ggml-classification/plugin.d.ts",
+      "import": "./dist/_sdk/server/bare/plugins/ggml-classification/plugin.js"
     },
     "./plugin-utils": {
       "types": "./dist/_sdk/schemas/plugin.d.ts",
@@ -146,10 +154,11 @@
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
-    "@qvac/rag": "^0.5.0",
-    "@qvac/registry-client": "^0.5.0",
+    "@qvac/rag": "^0.6.0",
+    "@qvac/registry-client": "^0.6.0",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.13.4",
+    "bare-events": "^2.8.0",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
     "bare-net": "^2.2.0",
