@@ -21,8 +21,7 @@ const TRUSTED_EVENTS = new Set([
   // with `repo` scope on the target repo, so the dispatcher is by
   // construction trusted; no PR review/label flow applies. Without this
   // entry, any workflow that gates on label-gate but triggers via
-  // repository_dispatch (e.g. docs-generate-api.yml) would fail closed
-  // and never run.
+  // repository_dispatch would fail closed and never run.
   'repository_dispatch',
 ]);
 
