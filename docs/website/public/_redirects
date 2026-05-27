@@ -18,11 +18,11 @@
 #   /store/:category/:item   /products/:category/:item
 # No explicit status code — defaults to 301 redirect.
 
-/reference/api/:version/   /reference/api/:version/index.html
-/reference/api/:version    /reference/api/:version/index.html
+/reference/api/:version/   /reference/api/:version/index.html   200
+/reference/api/:version    /reference/api/:version/index.html   200
 
-/reference/release-notes/:version/   /reference/release-notes/:version/index.html
-/reference/release-notes/:version    /reference/release-notes/:version/index.html
+/reference/release-notes/:version/   /reference/release-notes/:version/index.html   200
+/reference/release-notes/:version    /reference/release-notes/:version/index.html   200
 
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
