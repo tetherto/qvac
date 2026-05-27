@@ -18,23 +18,11 @@
 #   /store/:category/:item   /products/:category/:item
 # No explicit status code — defaults to 301 redirect.
 
-/reference/api/v0.7.x/    /reference/api/v0.7.x/index.html    200
-/reference/api/v0.7.x     /reference/api/v0.7.x/index.html    200
-/reference/api/v0.8.x/    /reference/api/v0.8.x/index.html    200
-/reference/api/v0.8.x     /reference/api/v0.8.x/index.html    200
-/reference/api/v0.9.x/    /reference/api/v0.9.x/index.html    200
-/reference/api/v0.9.x     /reference/api/v0.9.x/index.html    200
-/reference/api/v0.10.x/   /reference/api/v0.10.x/index.html   200
-/reference/api/v0.10.x    /reference/api/v0.10.x/index.html   200
+/reference/api/:version/   /reference/api/:version/index.html
+/reference/api/:version    /reference/api/:version/index.html
 
-/reference/release-notes/v0.7.x/    /reference/release-notes/v0.7.x/index.html    200
-/reference/release-notes/v0.7.x     /reference/release-notes/v0.7.x/index.html    200
-/reference/release-notes/v0.8.x/    /reference/release-notes/v0.8.x/index.html    200
-/reference/release-notes/v0.8.x     /reference/release-notes/v0.8.x/index.html    200
-/reference/release-notes/v0.9.x/    /reference/release-notes/v0.9.x/index.html    200
-/reference/release-notes/v0.9.x     /reference/release-notes/v0.9.x/index.html    200
-/reference/release-notes/v0.10.x/   /reference/release-notes/v0.10.x/index.html   200
-/reference/release-notes/v0.10.x    /reference/release-notes/v0.10.x/index.html   200
+/reference/release-notes/:version/   /reference/release-notes/:version/index.html
+/reference/release-notes/:version    /reference/release-notes/:version/index.html
 
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
