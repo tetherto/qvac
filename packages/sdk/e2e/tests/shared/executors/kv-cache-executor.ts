@@ -240,6 +240,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       secondUserMessage: string;
       expectedAnswerContains: string;
       cancelAfterTokens?: number;
+      generationParams?: Record<string, unknown>;
     },
     _expectation: Expectation,
   ): Promise<TestResult> {
@@ -306,20 +307,25 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         };
       }
 
-      const secondRun = completion({
-        modelId,
-        history: [
-          { role: "system", content: "You are a helpful assistant." },
-          { role: "user", content: params.secondUserMessage },
-        ],
-        stream: true,
-        kvCache: params.cacheKey,
+      // Wrap in callWhenAddonIdle: after cancel() the slot frees asynchronously,
+      // so calling completion() directly can race with the cancelled job's cleanup.
+      const secondText = await callWhenAddonIdle(async () => {
+        const run = completion({
+          modelId,
+          history: [
+            { role: "system", content: "You are a helpful assistant." },
+            { role: "user", content: params.secondUserMessage },
+          ],
+          stream: true,
+          kvCache: params.cacheKey,
+          ...(params.generationParams && { generationParams: params.generationParams }),
+        } as never);
+        let text = "";
+        for await (const token of run.tokenStream) {
+          text += token;
+        }
+        return text;
       });
-
-      let secondText = "";
-      for await (const token of secondRun.tokenStream) {
-        secondText += token;
-      }
 
       const trimmed = secondText.trim();
       if (trimmed.length === 0) {

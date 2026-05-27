@@ -1,9 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "test/**/*", "models/update-models/**/*"],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": "."
+    "rootDir": ".",
+    "allowImportingTsExtensions": true
   }
 }

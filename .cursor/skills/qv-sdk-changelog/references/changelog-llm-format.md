@@ -16,7 +16,16 @@ Read all files from `{PACKAGE_ROOT}/changelog/{VERSION}/`:
 
 ## Step 3: Generate CHANGELOG_LLM.md
 
-Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines:
+Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines.
+
+> **Downstream rendering:** the docs site inlines this file **verbatim**
+> under a `### @qvac/<pkg>` subsection of a per-minor-series page
+> (`v<X.Y>.x.mdx`). The H1 banner is stripped and every remaining
+> heading is demoted by two levels — `##` becomes `####`, `###` becomes
+> `#####`, etc. Multiple SDK pod packages contribute siblings under
+> the same `## v<X.Y.Z>` section, so prose should stand on its own
+> without assuming surrounding category context.
+
 
 ### Format Requirements
 

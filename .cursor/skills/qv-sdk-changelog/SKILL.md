@@ -117,6 +117,14 @@ After writing the file, re-run the raw generator (or rebuild the root aggregate)
 `packages/<package>/CHANGELOG.md` picks up the new `CHANGELOG_LLM.md` (the aggregator
 prefers it over `CHANGELOG.md`). Easiest way: re-run the script from Step 3 — it's idempotent.
 
+**Downstream rendering note:** the docs site reads `CHANGELOG_LLM.md`
+**verbatim** and inlines it under a `### @qvac/<pkg>` subsection of the
+minor series page (one permanent `v<X.Y>.x.mdx` per minor line — see
+`docs/website/docs-workflow.md`). Each headline you write becomes a
+section header on the public docs site (with two levels of demotion to
+fit the nesting), so phrase them as standalone reader-facing prose, not
+internal categories.
+
 ### Step 5: Generate `announcement-post.txt` (mandatory)
 
 Always run this step after Step 4. It produces a Slack-ready copy-paste post at
