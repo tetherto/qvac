@@ -338,6 +338,8 @@ export const executor = createExecutor({
       "lifecycle-suspend-during-inference",
     ], "suspend() hangs the runner on mobile"),
     ...(Platform.OS === "ios" ? [
+      // flaky on iOS Device Farm under current memory budget.
+      skipTests(["tts-chatterbox-short-text"], "Chatterbox short-text TTS is flaky on iOS under Device Farm memory pressure"),
       skipTests([
         "ocr-sign-image",
         "ocr-chart-image",
