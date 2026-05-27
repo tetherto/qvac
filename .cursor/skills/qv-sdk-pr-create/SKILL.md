@@ -25,8 +25,9 @@ Generate PR titles and descriptions for SDK pod packages, following the team's t
 5. Generate title: `TICKET prefix[tags]: subject`
 6. Fill template sections based on changes
 7. Validate tag requirements ([bc]/[api]/[mod])
-8. Output complete PR description
-9. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
+8. **If diff touches `packages/sdk/package.json` version or dep blocks**, chain into the `qv-sdk-bare-sdk-sync` skill (see "SDK ↔ bare-SDK Sync Trigger" below)
+9. Output complete PR description
+10. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
 ## Inference Strategy
 
@@ -114,6 +115,27 @@ gh pr view --repo UPSTREAM_ORG/REPO BRANCH --web
 6. If gh not available, output the copy-ready markdown format above
 7. As part of the output, provide a clickable hyperlink (not plain text) to the PR on GitHub.
 
+## SDK ↔ bare-SDK Sync Trigger
+
+**Trigger:** the PR diff (`<base>...origin/<branch>`) touches `packages/sdk/package.json` and modifies one of: `version`, `dependencies`, `optionalDependencies`, `peerDependencies`.
+
+When triggered, prompt the user to run `qv-sdk-bare-sdk-sync` so the same change is mirrored into `packages/bare-sdk/package.json` (with bare-sdk's NOTICE regenerated) in the same commit/PR. `@qvac/sdk` and `@qvac/bare-sdk` ship in lockstep — letting them drift in a PR creates work for the next release.
+
+### Steps (after Step 7 of Workflow above)
+
+1. Detect the trigger condition by inspecting the diff:
+   - `git diff <base>...origin/<branch> -- packages/sdk/package.json` shows changes
+   - Changes touch the `version` line OR any `dependencies` / `optionalDependencies` / `peerDependencies` block
+2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-bare-sdk-sync` to mirror into bare-sdk?" [Yes / No (skip)]
+3. If yes, read `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md` and follow it inline. The skill writes to `packages/bare-sdk/package.json` and regenerates `packages/bare-sdk/NOTICE`.
+4. Verify with `cd packages/bare-sdk && bun run check:deps-vs-sdk` — must pass.
+5. Stage and commit the bare-sdk changes onto the same branch BEFORE proceeding to Output step. The PR should ship the sdk and bare-sdk updates atomically.
+6. If `qv-notice-generate bare-sdk` fails (missing env tokens, etc.), STOP and surface the error. Do not output the PR description until bare-sdk is in sync.
+
+### Opt-out
+
+To skip the bare-sdk sync for a single run, the user can invoke `/qv-sdk-pr-create --no-sync`. The skill proceeds normally and emits a reminder at the end: "Reminder: sdk deps changed but bare-sdk was not synced. Run `/qv-sdk-bare-sdk-sync` before merge or expect `check:deps-vs-sdk` to fail in CI."
+
 ## Release Target Dual-PR Flow
 
 **Trigger:** the just-created PR's base is `release-<pkg>-<x.y.z>` for any SDK pod package.
@@ -152,6 +174,7 @@ Before outputting the PR description, verify:
 - [ ] `[api]` tag has usage example
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
+- [ ] If diff touches `packages/sdk/package.json` deps/version, the sync skill ran (or `--no-sync` was set with a reminder emitted), and `check:deps-vs-sdk` passes
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 
 ## References
@@ -160,4 +183,5 @@ Before outputting the PR description, verify:
 - PR template: `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - Backmerge skill: `.cursor/skills/qv-sdk-backmerge/SKILL.md`
+- sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`
 - GitFlow: `docs/gitflow.md`

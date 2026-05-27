@@ -447,10 +447,6 @@ jobs:
           name: dist-bare-sdk
           path: ${{ env.WORKDIR_BARE }}/dist/
 
-      - name: Sync NOTICE from sibling @qvac/sdk
-        shell: bash
-        run: cp packages/sdk/NOTICE packages/bare-sdk/NOTICE
-
       - name: Modify bare-sdk package name for branch-based test publishing
         working-directory: ${{ env.WORKDIR_BARE }}
         run: |
@@ -571,10 +567,6 @@ jobs:
         with:
           name: dist-bare-sdk
           path: ${{ env.WORKDIR_BARE }}/dist/
-
-      - name: Sync NOTICE from sibling @qvac/sdk
-        shell: bash
-        run: cp packages/sdk/NOTICE packages/bare-sdk/NOTICE
 
       - name: Publish to NPM Package Registry
         id: publish
