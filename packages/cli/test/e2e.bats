@@ -88,9 +88,9 @@ CONF
       echo "  server pid ${server_pid:-<unknown>} is NOT alive" >&2
     fi
 
-    # GET /v1/models with curl bounds so this diagnostic can't hang.
-    # curl prints '000' via -w on connection failures; the [[ -z ]] fallback
-    # only fires when curl itself is missing.
+    # GET /v1/models with curl --connect-timeout/--max-time bounds. curl
+    # prints '000' via -w when the request fails; the [[ -z ]] fallback only
+    # fires when curl itself is missing.
     local diag_body diag_status diag_body_file
     diag_body_file="${FILE_TMPDIR}/diag-models.body"
     diag_status=$(curl -s --connect-timeout 2 --max-time 5 \

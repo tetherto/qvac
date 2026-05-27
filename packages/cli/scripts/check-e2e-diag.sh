@@ -92,7 +92,7 @@ rm -rf "${TMP}"
 SCENARIO="3: non-responsive listener (curl --max-time bound)"
 echo "── ${SCENARIO} ─────────────────────────────────────" >&2
 TMP=$(mktemp -d)
-printf 'server is wedged on /v1/models\n' > "${TMP}/serve.log"
+printf 'listener accepts but does not reply\n' > "${TMP}/serve.log"
 
 # Python http.server with a handler that sleeps forever: accepts the
 # connection and reads the request, then blocks. Tests the read-side bound,
