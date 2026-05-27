@@ -3,6 +3,25 @@
 const BaseLlmAdapter = require('./BaseLlmAdapter')
 const { QvacErrorRAG, ERR_CODES } = require('../../errors')
 
+function getFetch () {
+  try {
+    const fetchMod = require('#fetch')
+    return fetchMod.default || fetchMod
+  } catch (error) {
+    if (error instanceof QvacErrorRAG) {
+      throw error
+    }
+    if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DEPENDENCY_REQUIRED,
+        adds: 'Fetch unavailable: #fetch could not resolve. Bare: install bare-fetch; otherwise ensure globalThis.fetch exists and your bundler supports package imports.',
+        cause: error
+      })
+    }
+    throw error
+  }
+}
+
 /**
  * HTTP-based LLM adapter that can work with various HTTP LLM APIs.
  * Requires bare-fetch as an optional dependency for HTTP requests.
@@ -78,31 +97,20 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * @private
    */
   async _makeHttpRequest (requestBody) {
-    try {
-      const fetch = await import('#fetch').then(module => module.default || module)
+    const fetch = getFetch()
 
-      const response = await fetch(this.httpConfig.apiUrl, {
-        method: this.httpConfig.method,
-        headers: this.httpConfig.headers,
-        body: JSON.stringify(requestBody)
-      })
+    const response = await fetch(this.httpConfig.apiUrl, {
+      method: this.httpConfig.method,
+      headers: this.httpConfig.headers,
+      body: JSON.stringify(requestBody)
+    })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
-      }
-
-      return response.json()
-    } catch (error) {
-      if ((error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') && (error.message.includes('bare-fetch') || error.message.includes('#fetch'))) {
-        throw new QvacErrorRAG({
-          code: ERR_CODES.DEPENDENCY_REQUIRED,
-          adds: 'Fetch unavailable: #fetch could not resolve. Bare: install bare-fetch; otherwise ensure globalThis.fetch exists and your bundler supports package imports.',
-          cause: error
-        })
-      }
-      throw error
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`HTTP ${response.status}: ${errorText}`)
     }
+
+    return response.json()
   }
 
   /**
