@@ -219,7 +219,15 @@ export function AskAIChatShell() {
         // grabbing focus while invisible.
         inert={!isModalOpen && barChromeHidden ? true : undefined}
         className={cn(
-          'fixed z-50 flex flex-col overflow-hidden rounded-2xl border bg-fd-popover text-fd-popover-foreground shadow-2xl',
+          'fixed flex flex-col overflow-hidden rounded-2xl border bg-fd-popover text-fd-popover-foreground shadow-2xl',
+          // Stacking: when the modal is OPEN we sit above everything
+          // (`z-50`), including the Fumadocs notebook mobile drawer
+          // (which uses `z-40`). When the modal is CLOSED — i.e. only
+          // the bottom "Ask AI…" bar is visible — we drop below the
+          // drawer (`z-30`) so the user's mobile hamburger menu can
+          // render on top of us; otherwise the bar covers the social
+          // icons at the end of the menu.
+          isModalOpen ? 'z-50' : 'z-30',
           'transition-[height,inset,opacity,transform] duration-300 ease-out',
           // Geometry per state. Width is the same in `closed` and
           // `open` (the bar and modal align edge-to-edge - that's

@@ -53,7 +53,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-sdk-pr-status`](../qv-sdk-pr-status/SKILL.md) | Team SDK pod PR dashboard. | SDK pod PR queue. **Manual:** `/qv-sdk-pr-status` |
 | [`qv-sdk-changelog`](../qv-sdk-changelog/SKILL.md) | Changelogs for SDK pod packages (tag-based GitFlow). | Release prep, `CHANGELOG_LLM.md`. **Auto** |
 | [`qv-sdk-backmerge`](../qv-sdk-backmerge/SKILL.md) | Open backmerge PR (release version bump + changelog → `main`). | After SDK release PR; often chained from `qv-sdk-pr-create`. **Auto** |
-| [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk/tests-qvac` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
+| [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk/e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
 
 ---
 

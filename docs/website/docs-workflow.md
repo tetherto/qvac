@@ -48,10 +48,10 @@ Content falls into two categories:
 | Category | Path | Committed? |
 |---|---|---|
 | Manual content (guides, tutorials, addons) | `content/docs/sdk/`, `content/docs/addons/`, `content/docs/about-qvac/`, etc. | Yes |
-| SDK API summary (generated) | `content/docs/reference/api/index.mdx`, `content/docs/reference/api/v<X.Y.Z>.mdx` | Yes (committed once per release) |
-| SDK release notes (generated) | `content/docs/reference/release-notes/index.mdx`, `content/docs/reference/release-notes/v<X.Y.Z>.mdx` | Yes (committed once per release) |
+| SDK API summary (generated) | `content/docs/reference/api/index.mdx`, `content/docs/reference/api/v<X.Y>.x.mdx` | Yes (committed once per minor release) |
+| SDK release notes (generated) | `content/docs/reference/release-notes/index.mdx`, `content/docs/reference/release-notes/v<X.Y>.x.mdx` | Yes (committed on every minor and patch release) |
 
-The SDK API summary and release notes are **generated from TypeScript source / package CHANGELOGs** via [TypeDoc](https://typedoc.org/) and Nunjucks. They live as a single MDX file per version (latest at `index.mdx`, frozen older versions as sibling `vX.Y.Z.mdx` files). Generation is triggered by the release pipeline; locally a maintainer can regenerate to preview.
+The SDK API summary and release notes are **generated from TypeScript source / package CHANGELOGs** via [TypeDoc](https://typedoc.org/) and Nunjucks. They live as a single MDX file **per minor series** — the latest minor at `index.mdx`, older minors as sibling `v<X.Y>.x.mdx` files (literal `x` marker; one permanent page per minor line, accumulating patch sections inside). Generation is triggered by the release pipeline; locally a maintainer can regenerate to preview.
 
 ### How the Pipeline Works
 
@@ -67,16 +67,18 @@ SDK source (packages/sdk)
 Phase 1: TypeDoc extraction  ──►  api-data.json
   │
   ▼
-Phase 2: Nunjucks rendering  ──►  content/docs/reference/api/index.mdx        (latest)
-                              ──►  content/docs/reference/api/v<X.Y.Z>.mdx     (frozen older versions)
+Phase 2: Nunjucks rendering  ──►  content/docs/reference/api/index.mdx        (latest minor)
+                              ──►  content/docs/reference/api/v<X.Y>.x.mdx     (frozen older minor series)
                               ──►  src/lib/versions.ts                          (version switcher)
 ```
 
-Release notes follow the same Nunjucks rendering path but read from a
-different source — `packages/sdk/changelog/<version>/CHANGELOG_LLM.md`
-(Fonte B, per-version) rather than the aggregated root `CHANGELOG.md`
-(Fonte A). The pipeline always uses Fonte B because its trigger gate is
-the very folder it reads.
+Release notes are **per minor series** too — each minor line owns one
+permanent MDX page that accumulates patch sections as `## vX.Y.Z`
+directly under the `## vX.Y.0` minor block. The body of each section is
+inlined verbatim from each SDK pod package's
+`packages/<pkg>/changelog/<version>/CHANGELOG_LLM.md` under a per-package
+`### @qvac/<pkg>` subsection (heading levels demoted so they nest under
+the page hierarchy).
 
 ---
 
@@ -131,21 +133,22 @@ Examples:
 
 ```bash
 # Re-render the latest summary into content/docs/reference/api/index.mdx
-bun run scripts/generate-api-docs.ts 0.9.1 --latest
+bun run scripts/generate-api-docs.ts 0.11.0 --latest
 
-# Render an older version into content/docs/reference/api/v0.8.0.mdx (no --latest)
-bun run scripts/generate-api-docs.ts 0.8.0
+# Render an older minor series into content/docs/reference/api/v0.10.x.mdx (no --latest)
+bun run scripts/generate-api-docs.ts 0.10.0
 
-# Bump only the frontmatter title (patch flow): no TypeDoc, no render
-bun run scripts/generate-api-docs.ts 0.10.3 --latest --title-only
+# Bump only the frontmatter title (called by the minor freeze flow):
+# no TypeDoc, no render
+bun run scripts/generate-api-docs.ts 0.10.0 --target=v0.10.x.mdx --title-only
 ```
 
 This will:
 1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`) and write `api-data.json`
 2. Render a single MDX via the Nunjucks `single-page.njk` template:
    - `--latest` → `content/docs/reference/api/index.mdx`
-   - `--target=<file>` → `content/docs/reference/api/<file>` (override; used by patch-archived)
-   - otherwise → `content/docs/reference/api/v<version>.mdx`
+   - `--target=<file>` → `content/docs/reference/api/<file>` (explicit override)
+   - otherwise → `content/docs/reference/api/v<X.Y>.x.mdx` (series-named)
 3. Run a smoke test that checks for `## Functions` and `## Errors` headings
 
 `--title-only` short-circuits this: it skips TypeDoc + render and only
@@ -156,9 +159,9 @@ same smoke test.
 
 | Flag | Description |
 |---|---|
-| `--latest` | Write to `index.mdx` instead of `v<version>.mdx`. |
+| `--latest` | Write to `index.mdx` instead of `v<X.Y>.x.mdx`. |
 | `--target=<file>` | Override the output filename inside `api/` (mutually exclusive with `--latest`). |
-| `--title-only` | Rewrite the frontmatter title in-place (skips TypeDoc + render). Patch flow only. |
+| `--title-only` | Rewrite the frontmatter title in-place (skips TypeDoc + render). Used by the minor-release freeze step to relabel the outgoing snapshot. |
 | `--force-extract` | Bypass the mtime cache and re-run TypeDoc extraction. |
 
 **2. Release a new version end-to-end (freeze outgoing, generate incoming, refresh dropdown):**
@@ -182,7 +185,7 @@ After generating docs, refresh `src/lib/versions.ts` from disk:
 bun run scripts/update-versions-list.ts [--latest=X.Y.Z]
 ```
 
-This walks `content/docs/reference/api/` and `content/docs/reference/release-notes/` for `vX.Y.Z.mdx` siblings and rebuilds the section manifests (`API_SECTION`, `RELEASE_NOTES_SECTION`). The optional `--latest=X.Y.Z` flag overrides which version is shown as `(latest)` in the dropdown labels (defaults to the SDK's `package.json` version).
+This walks `content/docs/reference/api/` and `content/docs/reference/release-notes/` for `vX.Y.x.mdx` siblings (series-named) and rebuilds the section manifests (`API_SECTION`, `RELEASE_NOTES_SECTION`). The optional `--latest=X.Y.Z` flag overrides which precise patch is recorded as `section.latest` (used for the page title's latest-patch range); the selector itself only shows series labels (`v0.11.x (latest)`, `v0.10.x`, ...). Defaults to the SDK's `package.json` version when `--latest` is omitted.
 
 ### Full Generation (Orchestrated)
 
@@ -200,7 +203,7 @@ This runs `generate-api-docs.ts --latest` followed by `update-versions-list.ts` 
 
 Only the API summary and release notes are versioned. Every other content surface (about-qvac, getting-started, examples, tutorials, addons, cli, http-server, home) lives at a single bare path that always reflects the current SDK.
 
-Each versioned section is one folder under `content/docs/reference/` containing one MDX per version:
+Each versioned section is one folder under `content/docs/reference/` containing one MDX **per minor series** (literal `x` marker in the filename):
 
 ```
 content/docs/
@@ -215,44 +218,47 @@ content/docs/
 │   └── tutorials/                           -> not versioned
 └── reference/
     ├── api/
-    │   ├── index.mdx                        -> latest API summary (current SDK)
-    │   ├── v0.8.0.mdx                       -> frozen older version
-    │   └── v0.7.0.mdx
+    │   ├── index.mdx                        -> latest minor series (current SDK)
+    │   ├── v0.10.x.mdx                      -> archived minor series
+    │   ├── v0.9.x.mdx
+    │   ├── v0.8.x.mdx
+    │   └── v0.7.x.mdx
     └── release-notes/
-        ├── index.mdx                        -> latest release notes
-        ├── v0.9.0.mdx
-        ├── v0.8.0.mdx
-        └── v0.7.0.mdx
+        ├── index.mdx                        -> latest minor series
+        ├── v0.10.x.mdx                      -> accumulates ## vX.Y.Z patch sections under the minor
+        ├── v0.9.x.mdx
+        ├── v0.8.x.mdx
+        └── v0.7.x.mdx
 ```
 
-- **Format**: `vX.Y.Z` (always 3-part semver with `v` prefix). Only the latest patch per minor is kept.
-- **`index.mdx`**: The current latest version, served from the bare basePath (e.g. `/reference/api`, `/reference/release-notes`).
-- **`vX.Y.Z.mdx`**: Frozen snapshots of previous versions, served from `<basePath>/v<X.Y.Z>` (e.g. `/reference/api/v0.8.0`). Created by `scripts/create-version-bundle.ts` (called from `release-version-minor.ts`) when a newer minor replaces the outgoing one — it just copies `index.mdx` to a sibling.
-- **Version list**: Two `VersionedSection` records (`API_SECTION`, `RELEASE_NOTES_SECTION`) in `src/lib/versions.ts`, refreshed by `scripts/update-versions-list.ts` from disk.
-- **Sidebar tree**: Single `customTree` in `src/lib/custom-tree.ts`. The `JS API` and `Release notes` entries are flat single-page links; the version selector beside the page title (only on `/reference/api*` and `/reference/release-notes*`) handles version switching via full-page reload.
+- **Format**: `vX.Y.x` (literal `x` for the patch component). One permanent page per minor line.
+- **`index.mdx`**: The current latest minor series, served from the bare basePath (e.g. `/reference/api`, `/reference/release-notes`).
+- **`vX.Y.x.mdx`**: Archived minor series, served from `<basePath>/v<X.Y>.x` (e.g. `/reference/api/v0.10.x`). Created by `scripts/create-version-bundle.ts` (called from `release-version-minor.ts`) when a newer minor replaces the outgoing one — it just copies `index.mdx` to a series-named sibling.
+- **Version list**: Two `VersionedSection` records (`API_SECTION`, `RELEASE_NOTES_SECTION`) in `src/lib/versions.ts`, refreshed by `scripts/update-versions-list.ts` from disk. Each carries both `latest` (precise patch, e.g. `v0.11.3`) and `latestSeries` (e.g. `v0.11.x`). The selector labels and URLs use the series form; the precise patch only surfaces in titles / description ranges.
+- **Sidebar tree**: Single `customTree` in `src/lib/custom-tree.ts`. The `API` and `Release notes` entries are flat single-page links; the version selector beside the page title (only on `/reference/api*` and `/reference/release-notes*`) handles series switching via full-page reload.
 
-The single **Docs Release** workflow handles every SDK release branch (`release-sdk-*` with changes under `packages/sdk/changelog/**`). The `release-version.ts` dispatcher reads the version, picks minor (full freeze + regenerate) for `X.Y.0` and patch (title-only API update + appended release-notes section) for `X.Y.Z` with `Z >= 1`, and forwards to the focused orchestrator.
+The single **Docs Release** workflow handles every SDK release branch (`release-sdk-*` with changes under `packages/sdk/changelog/**`). The `release-version.ts` dispatcher reads the version, picks minor (freeze outgoing → regenerate) for `X.Y.0` and patch (insert `## vX.Y.Z` section under the minor block — API summary untouched) for `X.Y.Z` with `Z >= 1`, and forwards to the focused orchestrator.
 
 ### Minor vs patch release behavior
 
 | Trigger | API summary | Release notes | Versions list |
 |---|---|---|---|
-| `release-sdk-X.Y.0` (minor) | Re-run TypeDoc → new `index.mdx`. Outgoing minor frozen as `v<old>.mdx`. | Full render from `packages/sdk/changelog/X.Y.0/CHANGELOG_LLM.md` → new `index.mdx`. Outgoing minor frozen as `v<old>.mdx`. | `latest = X.Y.0`. |
-| `release-sdk-X.Y.Z` matching current latest minor (`patch-latest`) | Title-only rewrite of `index.mdx` (no TypeDoc, by definition no public API change in a patch). | Append `## v<X.Y.Z>` section to `index.mdx`, preserving the minor's existing body. | `latest = X.Y.Z`. |
-| `release-sdk-X.Y.Z` for an archived minor (`patch-archived`) | `git mv v<old>.mdx → v<X.Y.Z>.mdx`, then title-only rewrite of the renamed file. | Same rename, then append `## v<X.Y.Z>` section inside the renamed file. | `latest` unchanged (script omits `--latest`); discoverer picks up the rename from disk. |
+| `release-sdk-X.Y.0` (minor) | Re-run TypeDoc → new `index.mdx`. Outgoing minor frozen as `v<outgoingMajor>.<outgoingMinor>.x.mdx`. | Full render of the new minor's `## vX.Y.0` block (per-package verbatim `CHANGELOG_LLM.md` under `### @qvac/<pkg>`) into `index.mdx`. Outgoing minor frozen as `v<outgoingMajor>.<outgoingMinor>.x.mdx`. | `latest = X.Y.0`, `latestSeries = vX.Y.x`. |
+| `release-sdk-X.Y.Z` matching current latest minor (`patch-latest`) | **Not touched.** Patches by definition don't change public API. | Insert `## v<X.Y.Z>` section directly after the existing `## v<X.Y>.0` block in `index.mdx`. Re-runs are idempotent (the section is replaced in place). Description range bumps to include the new patch. | `latest = X.Y.Z` (selector label unchanged — still `vX.Y.x (latest)`). |
+| `release-sdk-X.Y.Z` for an archived minor (`patch-archived`) | **Not touched.** | Insert the same section into the existing `v<X.Y>.x.mdx` page. No rename. | `latest` unchanged (script omits `--latest`). |
 
-The patch-archived branch deliberately renames rather than copies — keeping only one `v<X.Y.Z>.mdx` per minor on disk matches the manifest's "latest patch per minor" invariant. Deep links to the old patch URL 404 by design; tracked as a follow-up if a redirect proves necessary.
+Re-running a patch is **idempotent** — the existing `## vX.Y.Z` block is detected and replaced in place rather than appended again. The newest patch always sits directly below the minor block; older patches stay further down.
 
 ### Release notes data source
 
-Two sources exist for the same content:
-
-- **Fonte B — per-version folder** (`packages/sdk/changelog/<version>/CHANGELOG_LLM.md`, falling back to `CHANGELOG.md` when the LLM-curated copy isn't present). This is what the release pipeline reads, because the pipeline's trigger is gated on changes to this folder.
-- **Fonte A — aggregated root** (`packages/sdk/CHANGELOG.md`). Used only for one-off manual regenerations via `--aggregate-minor` when you need to recover the cumulative minor narrative across multiple patches.
-
-The pipeline never uses Fonte A: a fresh minor has exactly one folder
-(`X.Y.0`) at trigger time, so there is nothing to aggregate, and a patch
-appends its own section directly from its own folder.
+Each `## vX.Y.Z` section's body is read **verbatim** from each SDK pod
+package's per-version folder (`packages/<pkg>/changelog/<X.Y.Z>/CHANGELOG_LLM.md`,
+falling back to raw `CHANGELOG.md`). The H1 release-notes banner is
+stripped and every surviving heading is demoted by two levels so it
+nests cleanly under the page's `### @qvac/<pkg>` subsection. Packages
+without a folder for that version are skipped (the SDK typically lists
+all five pod packages; in practice only `@qvac/sdk` shares the version
+namespace with the SDK pod's release cadence).
 
 ### Release-version orchestrators
 
@@ -261,12 +267,13 @@ A thin dispatcher (`release-version.ts`) auto-detects minor vs patch from the ve
 **`release-version-minor.ts`** — for `X.Y.0` releases.
 
 1. Reads the current `latest` from `src/lib/versions.ts` (the outgoing version).
-2. Calls `scripts/create-version-bundle.ts <outgoing>` — copies `reference/api/index.mdx` to `reference/api/v<outgoing>.mdx` and the same for release notes.
-3. Calls `scripts/generate-api-docs.ts <new> --latest` — overwrites `reference/api/index.mdx` with the new version's content.
-4. Calls `scripts/generate-release-notes.ts <new> --latest` — same for release notes, reading from Fonte B.
-5. Calls `scripts/update-versions-list.ts --latest=<new>` — refreshes `versions.ts` so the dropdown lists the new latest plus the now-frozen older sibling.
+2. Calls `scripts/create-version-bundle.ts <outgoing>` — copies `reference/api/index.mdx` to the series sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx` and the same for release notes.
+3. Title-only relabel: rewrites the frozen snapshots' titles to drop the `(latest)` marker.
+4. Calls `scripts/generate-api-docs.ts <new> --latest` — overwrites `reference/api/index.mdx` with the new minor's content.
+5. Calls `scripts/generate-release-notes.ts <new> --latest` — same for release notes, reading per-package CHANGELOG_LLM.md verbatim.
+6. Calls `scripts/update-versions-list.ts --latest=<new>` — refreshes `versions.ts` so the dropdown picks up the new latest series plus the frozen older sibling.
 
-**`release-version-patch.ts`** — for `X.Y.Z` releases with `Z >= 1`. Inspects `src/lib/versions.ts` to choose between `patch-latest` and `patch-archived`. See the table above for the per-mode behavior.
+**`release-version-patch.ts`** — for `X.Y.Z` releases with `Z >= 1`. Inspects `src/lib/versions.ts` to choose between `patch-latest` (write to `index.mdx`) and `patch-archived` (write to the existing `vX.Y.x.mdx`). The script never invokes the API summary generator.
 
 All three modules are pure file mutations — they never `git commit` or `gh pr create`. The wrapping GitHub workflow opens the PR.
 
@@ -377,8 +384,8 @@ The API summary `index.mdx` lives at `content/docs/reference/api/` and is commit
    `SDK_PATH` and `CHANGELOG_REPO_ROOT` both point at `release-tree/`, so TypeDoc and the release-notes generator only see the released state. The action also installs Bun + deps and extracts the version.
 3. **Detects release kind** — a small inline step matches the version against `^[0-9]+\.[0-9]+\.0$` and exposes `kind=minor|patch` for downstream steps.
 4. Runs `release-version.ts <version> --force-extract`, which dispatches:
-   - **Minor (`X.Y.0`)** — full flow: freezes the outgoing `index.mdx` into a sibling `vX.Y.Z.mdx`, generates the new API summary into `index.mdx` (TypeDoc + render — output is deterministic by construction), generates the new release notes from Fonte B into `index.mdx`, refreshes `src/lib/versions.ts`.
-   - **Patch (`X.Y.Z`, `Z >= 1`)** — `release-version-patch.ts` inspects `src/lib/versions.ts` and picks `patch-latest` (incoming `X.Y` == latest `X.Y`: title-only API update + appended release-notes section) or `patch-archived` (older minor: `git mv v<old>.mdx → v<new>.mdx`, then title-only + append-patch inside the renamed file).
+   - **Minor (`X.Y.0`)** — full flow: freezes the outgoing `index.mdx` into a series sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx`, generates the new API summary into `index.mdx` (TypeDoc + render — output is deterministic by construction), generates the new release notes into `index.mdx` (per-package verbatim `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block), refreshes `src/lib/versions.ts`.
+   - **Patch (`X.Y.Z`, `Z >= 1`)** — `release-version-patch.ts` inspects `src/lib/versions.ts` and picks `patch-latest` (incoming `X.Y` == latest `X.Y`: insert `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block of `index.mdx`) or `patch-archived` (older minor: insert the same section into the existing `v<X.Y>.x.mdx`, no rename). The API summary page is never touched by patches.
 5. Runs TSDoc audit in warning mode (non-fatal, **minor only**) and link validation tests (always).
 6. **Opens a PR** `docs/release-sdk-v<X.Y.Z>` against `main` via `peter-evans/create-pull-request`. `add-paths` restricts the commit to the generated surfaces only. The PR title carries `(minor)` or `(patch)` for human readers.
 
@@ -403,18 +410,18 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | Script | npm alias | Description |
 |---|---|---|
 | `release-version.ts` | `docs:release-version` | Unified release dispatcher: parses the version and forwards to the minor or patch orchestrator. Called by `docs-release.yml`. |
-| `release-version-minor.ts` | -- | Minor (X.Y.0) orchestrator: freeze outgoing → generate new latest from Fonte B → refresh `versions.ts`. Importable from `release-version.ts`. |
-| `release-version-patch.ts` | -- | Patch (X.Y.Z, Z>=1) orchestrator: title-only API update + append-patch release notes; rename archived sibling when on an older minor. Importable from `release-version.ts`. |
-| `generate-api-docs.ts` | `docs:generate-api` | Renders one version's API summary MDX. `--title-only` rewrites only the frontmatter title (patch flow); `--target=<file>` overrides the output filename. |
+| `release-version-minor.ts` | -- | Minor (X.Y.0) orchestrator: freeze outgoing series → generate new latest from per-package `CHANGELOG_LLM.md` → refresh `versions.ts`. Importable from `release-version.ts`. |
+| `release-version-patch.ts` | -- | Patch (X.Y.Z, Z>=1) orchestrator: insert `## v<X.Y.Z>` after the existing minor block on the appropriate series page. Never touches the API summary. Importable from `release-version.ts`. |
+| `generate-api-docs.ts` | `docs:generate-api` | Renders one minor series' API summary MDX. `--title-only` rewrites only the frontmatter title (called from the minor freeze flow); `--target=<file>` overrides the output filename. |
 | `api-docs/extract.ts` | -- | Phase 1: TypeDoc analysis, writes `api-data.json` |
 | `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
 | `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
-| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates release notes MDX. Defaults to Fonte B (`packages/sdk/changelog/<version>/CHANGELOG_LLM.md`); supports `--aggregate-minor` for manual regen from Fonte A and `--append-patch` for the patch flow. |
-| `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from `reference/api/v*.mdx` and `reference/release-notes/v*.mdx` siblings on disk |
+| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates / augments the release-notes series MDX. Default mode renders the page from scratch with a `## v<X.Y.0>` block; `--append-patch` inserts a `## v<X.Y.Z>` block directly after the minor; `--title-only` relabels the frontmatter title only. |
+| `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from `reference/api/v*.x.mdx` and `reference/release-notes/v*.x.mdx` siblings on disk. `--latest=X.Y.Z` records the precise patch in `latest` (the selector still labels series-only). |
 | `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the latest summary + refreshes `versions.ts` using the monorepo SDK's `package.json` version (no version bump) |
-| `create-version-bundle.ts` | `docs:create-version` | Copies the current `index.mdx` of each versioned section to `vX.Y.Z.mdx` (called from `release-version-minor.ts`) |
-| `lib/release-shared.ts` | -- | Shared helpers for the release orchestrators (version parsing, `versions.ts` reader, archived-sibling resolver, `git mv` wrapper) |
-| `lib/changelog-parser.ts` | -- | Changelog parsing (Fonte A via `parseChangelog` + Fonte B via `parseChangelogFolder`) shared by `generate-release-notes.ts` and tests |
+| `create-version-bundle.ts` | `docs:create-version` | Copies the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx` (called from `release-version-minor.ts`) |
+| `lib/release-shared.ts` | -- | Shared helpers for the release orchestrators (version parsing, `versions.ts` reader, series-sibling resolver, series-name helpers) |
+| `lib/changelog-parser.ts` | -- | Changelog parsing — `readChangelogLLMVerbatim` for the verbatim per-package render plus legacy `parseChangelog` / `parseChangelogFolder` / `mergeChangelogs` exports kept for unit-test fixtures and ad-hoc tooling |
 | `lib/link-validator.ts` | -- | Internal link extraction + resolution (used by the link-integrity test) |
 
 > AI-assisted authoring (drafting descriptions or examples) happens
@@ -436,7 +443,7 @@ To customize the generated release notes page for a specific version, create a m
 docs/website/release-notes-overrides/<version>.md
 ```
 
-For example, `release-notes-overrides/0.8.1.md`. The file should contain `## Heading` sections that are injected before the auto-generated changelog categories. This is useful for adding highlights, migration guides, or breaking change callouts that don't fit in the standard changelog format.
+For example, `release-notes-overrides/0.11.0.md`. The file should contain `## Heading` sections that are injected at the top of the page (after frontmatter, before the per-version `## vX.Y.Z` blocks). Useful for highlights, migration guides, or breaking-change callouts that don't fit inside any single package's `CHANGELOG_LLM.md`. Overrides only apply to full minor renders (default mode), not to the patch append flow.
 
 ---
 

@@ -64,6 +64,8 @@ import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
   diffusionStreamRequestSchema,
   diffusionStreamResponseSchema,
+  videoStreamRequestSchema,
+  videoStreamResponseSchema,
   upscaleStreamRequestSchema,
   upscaleStreamResponseSchema,
 } from "./sdcpp-config";
@@ -89,6 +91,10 @@ import {
 import { suspendRequestSchema, suspendResponseSchema } from "./suspend";
 import { resumeRequestSchema, resumeResponseSchema } from "./resume";
 import { stateRequestSchema, stateResponseSchema } from "./state";
+import {
+  classifyRequestSchema,
+  classifyResponseSchema,
+} from "./classification";
 
 export const requestSchema = z.union([
   heartbeatRequestSchema,
@@ -112,6 +118,7 @@ export const requestSchema = z.union([
   getLoadedModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
+  videoStreamRequestSchema,
   upscaleStreamRequestSchema,
   finetuneRequestSchema,
   pluginInvokeRequestSchema,
@@ -122,6 +129,7 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
+  classifyRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -149,6 +157,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   getLoadedModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
+  videoStreamResponseSchema,
   upscaleStreamResponseSchema,
   finetuneResponseSchema,
   finetuneProgressResponseSchema,
@@ -160,6 +169,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
+  classifyResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

@@ -6,28 +6,30 @@
  *   - Incoming version must end in `.0` (defensive: the workflow's branch
  *     glob already guarantees this, but local invocations could violate
  *     it).
- *   - The current latest (read from `versions.ts`) is frozen as a sibling
- *     `vX.Y.Z.mdx` before any new content is generated, so the version
- *     selector never loses the outgoing snapshot.
+ *   - The current latest (read from `versions.ts`) is frozen as a series
+ *     sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx` before any new
+ *     content is generated, so the version selector never loses the
+ *     outgoing snapshot.
  *
  * Steps (each delegated to the existing focused scripts):
  *   1. `create-version-bundle.ts <outgoing>` — copies `index.mdx` into a
- *      `v<outgoing>.mdx` sibling for both API and release-notes sections.
- *  1a. `generate-api-docs.ts <outgoing> --target=v<outgoing>.mdx --title-only`
- *  1b. `generate-release-notes.ts <outgoing> --target=v<outgoing>.mdx --title-only`
+ *      `v<outgoingMajor>.<outgoingMinor>.x.mdx` sibling for both API and
+ *      release-notes sections.
+ *  1a. `generate-api-docs.ts <outgoing> --target=v<X.Y>.x.mdx --title-only`
+ *  1b. `generate-release-notes.ts <outgoing> --target=v<X.Y>.x.mdx --title-only`
  *      The freeze in step 1 is a raw file copy, so each snapshot inherits
  *      the outgoing `index.mdx` title verbatim — which still advertises
- *      `(latest)` and may carry a stale version label. Steps 1a / 1b
- *      relabel the snapshots to the canonical archived form (`vX.Y.Z`
- *      without `(latest)`) without re-rendering their bodies.
+ *      `(latest)`. Steps 1a / 1b relabel the snapshots to the canonical
+ *      archived series form (no `(latest)`) without re-rendering
+ *      their bodies.
  *   2. `generate-api-docs.ts <new> --latest` — runs TypeDoc + render
  *      and writes the new `index.mdx`. The output is deterministic by
  *      construction: AI augmentation is no longer part of the pipeline
  *      (moved to local skills) so every input produces the same MDX.
  *   3. `generate-release-notes.ts <new> --latest` — reads the per-version
- *      changelog folder (Fonte B: `packages/sdk/changelog/<new>/CHANGELOG_LLM.md`)
- *      and writes the new `index.mdx`. No `--aggregate-minor` here because
- *      a fresh minor has exactly one folder.
+ *      changelog folder (Fonte B: `packages/<pkg>/changelog/<new>/CHANGELOG_LLM.md`)
+ *      and writes the new `index.mdx` with a single `## v<new>` block
+ *      per-package verbatim.
  *   4. `update-versions-list.ts --latest=<new>` — refreshes `versions.ts`
  *      from disk.
  *
@@ -43,6 +45,7 @@ import {
   parseVersion,
   readLatestFromVersionsTs,
   runStep,
+  seriesFileName,
 } from "./lib/release-shared.js";
 import * as path from "path";
 
@@ -85,20 +88,22 @@ export async function releaseMinor(newVersion: string, options: MinorOptions) {
 
   if (outgoing) {
     const outgoingNumeric = outgoing.replace(/^v/, "");
+    const outgoingParsed = parseVersion(outgoingNumeric);
+    const snapshotTarget = seriesFileName(
+      outgoingParsed.major,
+      outgoingParsed.minor,
+    );
     runStep(
-      `1️⃣  Freezing outgoing ${outgoing}...`,
+      `1️⃣  Freezing outgoing ${outgoing} → ${snapshotTarget}...`,
       `bun run scripts/create-version-bundle.ts ${outgoingNumeric}`,
     );
 
     // The freeze above is a raw `fs.copyFile` of `index.mdx` into the
     // sibling snapshot, so the snapshot inherits the outgoing index's
     // frontmatter title verbatim. That title still advertises the
-    // outgoing as `(latest)` and may even carry a stale version label
-    // (e.g. when the index was hand-edited between releases). Relabel
-    // both snapshots to the canonical archived form (`vX.Y.Z`, no
-    // `(latest)`) using the dedicated title-only mode so the body is
-    // preserved byte-for-byte.
-    const snapshotTarget = `v${outgoingNumeric}.mdx`;
+    // outgoing as `(latest)`. Relabel both snapshots to the canonical
+    // archived series form using the dedicated title-only mode so the
+    // body is preserved byte-for-byte.
     runStep(
       `1️⃣a Relabeling archived API snapshot title (${snapshotTarget})...`,
       `bun run scripts/generate-api-docs.ts ${outgoingNumeric} --target=${snapshotTarget} --title-only`,
@@ -121,9 +126,6 @@ export async function releaseMinor(newVersion: string, options: MinorOptions) {
     `bun run scripts/generate-api-docs.ts ${newVersion} ${apiFlags.join(" ")}`,
   );
 
-  // Per-minor reads the per-version changelog folder (Fonte B). No
-  // `--aggregate-minor` flag: a fresh minor has exactly one folder
-  // (X.Y.0) at this point — there are no patches to roll up yet.
   runStep(
     `3️⃣  Generating ${incoming} release notes (Fonte B: per-version folder)...`,
     `bun run scripts/generate-release-notes.ts ${newVersion} --latest`,
@@ -152,7 +154,7 @@ if (import.meta.main) {
     console.log("");
     console.log("Promotes a minor release to latest:");
     console.log(
-      "  - Freezes the outgoing latest as vX.Y.Z.mdx for both API + release notes.",
+      "  - Freezes the outgoing latest as v<X.Y>.x.mdx for both API + release notes.",
     );
     console.log(
       "  - Generates new API summary + release notes (Fonte B per-version folder).",

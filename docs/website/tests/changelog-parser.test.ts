@@ -12,6 +12,8 @@ import {
   parseChangelogFolder,
   mergeChangelogs,
   parseOverridesContent,
+  readChangelogLLMVerbatim,
+  shiftHeadings,
   CATEGORY_ORDER,
   type PackageChangelog,
 } from '../scripts/lib/changelog-parser'
@@ -872,6 +874,225 @@ describe('parseChangelogFolder', () => {
       const parsed = parseChangelogFolder(folder, 'sdk')!
       expect(parsed.preamble).toBe('Body content.')
       expect(parsed.sections[0].category).toBe('Bug Fixes')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// shiftHeadings — heading-level demotion for verbatim nesting
+// ---------------------------------------------------------------------------
+
+describe('shiftHeadings', () => {
+  it('demotes every ATX heading by shiftBy levels (h1 → h3, h2 → h4, …)', () => {
+    const input = [
+      '# Top',
+      '',
+      '## Section',
+      '',
+      '### Subsection',
+      '',
+      'body',
+    ].join('\n')
+    const out = shiftHeadings(input, 2)
+    expect(out).toContain('### Top')
+    expect(out).toContain('#### Section')
+    expect(out).toContain('##### Subsection')
+    expect(out).toContain('body')
+  })
+
+  it('clamps demotion at h6 (markdown maximum)', () => {
+    const input = [
+      '#### Level 4',
+      '',
+      '##### Level 5',
+      '',
+      '###### Level 6',
+    ].join('\n')
+    const out = shiftHeadings(input, 5)
+    // h4 + 5 = h9 → clamp h6; h5 + 5 = h10 → clamp h6; h6 stays h6.
+    expect(out).toContain('###### Level 4')
+    expect(out).toContain('###### Level 5')
+    expect(out).toContain('###### Level 6')
+  })
+
+  it('returns input unchanged when shiftBy is 0', () => {
+    const input = '# Top\n\n## Section\n'
+    expect(shiftHeadings(input, 0)).toBe(input)
+  })
+
+  it('does NOT shift `#` inside fenced code blocks', () => {
+    const input = [
+      '## Real heading',
+      '',
+      '```bash',
+      '# shell comment',
+      'echo hi',
+      '```',
+      '',
+      '### Another real heading',
+    ].join('\n')
+    const out = shiftHeadings(input, 2)
+    expect(out).toContain('#### Real heading')
+    expect(out).toContain('# shell comment') // unchanged
+    expect(out).toContain('##### Another real heading')
+  })
+
+  it('handles tilde-fenced code blocks too', () => {
+    const input = ['## Heading', '', '~~~', '# inside fence', '~~~'].join('\n')
+    const out = shiftHeadings(input, 1)
+    expect(out).toContain('### Heading')
+    expect(out).toContain('# inside fence')
+  })
+
+  it('does not touch lines that look like `#NNN` (issue refs) at start of line', () => {
+    // `#NNN` has no space after the `#`, so the heading regex `^#{1,6}\s.*$`
+    // does not match. The line passes through unchanged.
+    const input = ['## Heading', '', '#123 not a heading', ''].join('\n')
+    const out = shiftHeadings(input, 1)
+    expect(out).toContain('### Heading')
+    expect(out).toContain('#123 not a heading')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// readChangelogLLMVerbatim — Fonte B inlined verbatim under ### @qvac/<pkg>
+// ---------------------------------------------------------------------------
+
+describe('readChangelogLLMVerbatim', () => {
+  function makeFolder(): string {
+    return mkdtempSync(path.join(os.tmpdir(), 'qvac-verbatim-'))
+  }
+
+  it('returns null when neither CHANGELOG_LLM.md nor CHANGELOG.md exists', () => {
+    const folder = makeFolder()
+    try {
+      expect(readChangelogLLMVerbatim(folder, 'sdk')).toBeNull()
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('strips the leading `# QVAC SDK v… Release Notes` H1 and shifts remaining headings', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        [
+          '# QVAC SDK v0.10.2 Release Notes',
+          '',
+          '📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.10.2',
+          '',
+          'Hotfix release.',
+          '',
+          '## Bug Fixes',
+          '',
+          '### Delegated connect',
+          '',
+          'Body of the fix.',
+        ].join('\n'),
+      )
+      const parsed = readChangelogLLMVerbatim(folder, 'sdk')!
+      expect(parsed.pkg).toBe('sdk')
+      // H1 is stripped.
+      expect(parsed.body).not.toContain('QVAC SDK v0.10.2 Release Notes')
+      // h2 → h4, h3 → h5 (default shiftBy = 2)
+      expect(parsed.body).toContain('#### Bug Fixes')
+      expect(parsed.body).toContain('##### Delegated connect')
+      // NPM line, preamble prose, and body are preserved verbatim.
+      expect(parsed.body).toContain('📦 **NPM:**')
+      expect(parsed.body).toContain('Hotfix release.')
+      expect(parsed.body).toContain('Body of the fix.')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to CHANGELOG.md when CHANGELOG_LLM.md is missing', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG.md'),
+        ['## Features', '', '- Raw feature'].join('\n'),
+      )
+      const parsed = readChangelogLLMVerbatim(folder, 'sdk')!
+      // No `# QVAC SDK …` H1 in the raw file → strip is a no-op.
+      // h2 → h4 with default shift.
+      expect(parsed.body).toContain('#### Features')
+      expect(parsed.body).toContain('- Raw feature')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('prefers CHANGELOG_LLM.md when both files exist', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        ['# QVAC SDK v0.10.0 Release Notes', '', 'LLM body.'].join('\n'),
+      )
+      writeFileSync(
+        path.join(folder, 'CHANGELOG.md'),
+        'Raw body (should be ignored).',
+      )
+      const parsed = readChangelogLLMVerbatim(folder, 'sdk')!
+      expect(parsed.body).toContain('LLM body.')
+      expect(parsed.body).not.toContain('Raw body')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('accepts a custom shiftBy', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        ['# QVAC SDK v0.10.0 Release Notes', '', '## Heading'].join('\n'),
+      )
+      const parsed = readChangelogLLMVerbatim(folder, 'sdk', 1)!
+      // h2 + 1 = h3
+      expect(parsed.body).toContain('### Heading')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('handles H1 variants beyond "Release Notes" suffix', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        [
+          '# QVAC SDK v0.11.0 — Hotfix release',
+          '',
+          'Body content.',
+          '',
+          '## Bug Fixes',
+          '',
+          '- A fix.',
+        ].join('\n'),
+      )
+      const parsed = readChangelogLLMVerbatim(folder, 'sdk')!
+      expect(parsed.body).not.toContain('QVAC SDK v0.11.0')
+      expect(parsed.body).toContain('Body content.')
+      expect(parsed.body).toContain('#### Bug Fixes')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('trims trailing whitespace from the body', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        ['# QVAC SDK v0.10.0 Release Notes', '', 'Body line.', '', '', ''].join('\n'),
+      )
+      const parsed = readChangelogLLMVerbatim(folder, 'sdk')!
+      expect(parsed.body).toBe('Body line.')
     } finally {
       rmSync(folder, { recursive: true, force: true })
     }

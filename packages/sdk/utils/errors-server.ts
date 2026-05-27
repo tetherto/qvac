@@ -185,6 +185,18 @@ export class LegacyParakeetModelDeprecatedError extends QvacErrorBase {
   }
 }
 
+export class LegacyTtsModelDeprecatedError extends QvacErrorBase {
+  constructor(legacyFields: readonly string[], cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LEGACY_TTS_MODEL_DEPRECATED,
+        [legacyFields.join(", ")],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Model Unloading Errors ==============
 
 export class ModelUnloadFailedError extends QvacErrorBase {

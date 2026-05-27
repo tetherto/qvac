@@ -58,7 +58,7 @@ export const deviceConfigDefaultsSchema = z
       .partial()
       .optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
-    [ModelType.onnxTts]: z.record(z.string(), z.unknown()).optional(),
+    [ModelType.ttsGgml]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.onnxOcr]: ocrConfigSchema.partial().optional(),
     [ModelType.sdcppGeneration]: sdcppConfigSchema.partial().optional(),
     [ModelType.ggmlVla]: vlaConfigSchema.partial().optional(),
@@ -180,6 +180,19 @@ export const qvacConfigSchema = z.object({
    * ```
    */
   deviceDefaults: z.array(devicePatternSchema).optional(),
+
+  /**
+   * List of plugin specifiers to include in the worker bundle.
+   * Each entry must end with /plugin (e.g. "@qvac/sdk/llamacpp-completion/plugin").
+   * When omitted, all built-in plugins are included.
+   */
+  plugins: z.array(z.string()).optional(),
+
+  /**
+   * Bare runtime version for native addon ABI verification during bundling.
+   * When omitted, verify auto-detects from node_modules (bare-runtime, then bare).
+   */
+  bareRuntimeVersion: z.string().optional(),
 });
 
 export type QvacConfig = z.infer<typeof qvacConfigSchema>;

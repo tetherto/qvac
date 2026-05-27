@@ -151,6 +151,8 @@ The `__init_config` message carries `config` (QvacConfig) and optional `runtimeC
 | `httpDownloadConcurrency` | `number` (positive int) | No | `3` | Yes | Max concurrent HTTP downloads for sharded models |
 | `httpConnectionTimeoutMs` | `number` (positive int) | No | `10000` | **No** | Timeout in ms for HTTP connection establishment. **Bug:** Validated in schema but `setSDKConfig()` does not copy it to `configRegistry`. Server code falls back to `DEFAULT_HTTP_CONNECTION_TIMEOUT_MS`. User-configured value is effectively ignored. |
 | `deviceDefaults` | `DevicePattern[]` | No | `undefined` | Yes | Device-specific config defaults. First matching pattern wins. See `schemas/sdk-config.ts` for schema. |
+| `plugins` | `string[]` | No | `undefined` | Yes | Plugin specifiers for worker bundling (`bundleSdk`). Each entry must end with `/plugin`. When omitted, all built-in plugins are included. |
+| `bareRuntimeVersion` | `string` | No | `undefined` | Yes | Bare runtime semver for native addon ABI verification (`verifyBundle`). When omitted, auto-detected from `node_modules`. |
 
 ## Debugging Config Issues
 
