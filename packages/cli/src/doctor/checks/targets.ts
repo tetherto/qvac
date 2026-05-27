@@ -1,4 +1,4 @@
-import { DEFAULT_HOSTS } from '../../bundle-sdk/constants.js'
+import { DEFAULT_HOSTS } from '../constants.js'
 import type { Check } from '../check.js'
 
 // Deploy targets — the full matrix of platforms the SDK can deploy to,

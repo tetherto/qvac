@@ -16,10 +16,12 @@
       "types": "./dist/models/index.d.ts",
       "import": "./dist/models/index.js"
     },
+    "./assets/logo.svg": "./assets/logo.svg",
     "./package.json": "./package.json"
   },
   "files": [
     "dist/**/*",
+    "assets/**/*",
     "README.md",
     "LICENSE",
     "NOTICE"
