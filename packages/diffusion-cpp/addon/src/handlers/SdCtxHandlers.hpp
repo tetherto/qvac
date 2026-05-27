@@ -64,7 +64,7 @@ struct SdCtxConfig {
   int nThreads = -1; // n_threads:            -1 = auto-detect physical cores
   bool flashAttn = false; // flash_attn:           full-model flash attention
   bool diffusionFlashAttn =
-      false; // diffusion_flash_attn: flash attention on diffusion only
+      true; // diffusion_flash_attn: flash attention on diffusion only
 
   // -- Memory management -----------------------------------------------------
   bool mmap = false;         // enable_mmap:           memory-map the GGUF file
@@ -105,8 +105,8 @@ struct SdCtxConfig {
   float flowShift = std::numeric_limits<float>::infinity();
 
   // -- Convolution kernel options --------------------------------------------
-  bool diffusionConvDirect = false; // ggml_conv2d_direct in diffusion model
-  bool vaeConvDirect = false;       // ggml_conv2d_direct in VAE
+  bool diffusionConvDirect = true; // ggml_conv2d_direct in diffusion model
+  bool vaeConvDirect = true;       // ggml_conv2d_direct in VAE
 
   // -- SDXL compatibility ----------------------------------------------------
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)

@@ -275,32 +275,37 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 
     // -- Preview callback
     // ------------------------------------------------------------
-    // GATED: preview_mode is parsed but not wired to sd_set_preview_callback().
-    // Until the callback machinery is implemented end-to-end (C++/JS plumbing,
-    // queueing PNG events), these options are silently ignored.
-    // See C2: preview_mode feature gate.
-
-    // NOTE: remove this gate once preview_mode -> sd_set_preview_callback
-    // wiring is completed. For now, callers may pass these keys; they are
-    // parsed for forward compatibility but do not change behavior.
     {"preview_mode",
-     [](SdCtxConfig&, const std::string&) {
-       // Silently ignore; reserved for future use.
+     [](SdCtxConfig& c, const std::string& v) {
+       static const std::unordered_map<std::string, preview_t> kMap{
+           {"", PREVIEW_NONE},
+           {"none", PREVIEW_NONE},
+           {"proj", PREVIEW_PROJ},
+           {"tae", PREVIEW_TAE},
+           {"vae", PREVIEW_VAE},
+       };
+       const auto it = kMap.find(v);
+       if (it == kMap.end())
+         throw StatusError(
+             general_error::InvalidArgument,
+             "preview_mode: unknown value '" + v +
+                 "'. Valid: none, proj, tae, vae");
+       c.previewMode = it->second;
      }},
 
     {"preview_interval",
-     [](SdCtxConfig&, const std::string&) {
-       // Silently ignore; reserved for future use (C2 gate).
+     [](SdCtxConfig& c, const std::string& v) {
+       c.previewInterval = parsePositiveInt(v, "preview_interval");
      }},
 
     {"preview_denoised",
-     [](SdCtxConfig&, const std::string&) {
-       // Silently ignore; reserved for future use (C2 gate).
+     [](SdCtxConfig& c, const std::string& v) {
+       c.previewDenoised = parseBool(v, "preview_denoised");
      }},
 
     {"preview_noisy",
-     [](SdCtxConfig&, const std::string&) {
-       // Silently ignore; reserved for future use (C2 gate).
+     [](SdCtxConfig& c, const std::string& v) {
+       c.previewNoisy = parseBool(v, "preview_noisy");
      }},
 
     // -- ESRGAN upscaler

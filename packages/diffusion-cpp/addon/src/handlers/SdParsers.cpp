@@ -179,7 +179,19 @@ sd_cache_mode_t parseCacheMode(const std::string& name) {
 
 std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
   if (v.is<double>()) {
-    int sz = static_cast<int>(v.get<double>());
+    const double raw = v.get<double>();
+    if (!std::isfinite(raw) || std::floor(raw) != raw ||
+        raw > static_cast<double>(std::numeric_limits<int>::max()) ||
+        raw < static_cast<double>(std::numeric_limits<int>::min()))
+      throw StatusError(
+          general_error::InvalidArgument,
+          "vae_tile_size must be a positive integer");
+    const int sz = static_cast<int>(raw);
+    if (sz <= 0)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "vae_tile_size must be a positive integer, got: " +
+              std::to_string(sz));
     return {sz, sz};
   }
   if (!v.is<std::string>()) {
@@ -208,6 +220,11 @@ std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
         "vae_tile_size: could not parse dimensions from '" + std::string(s) +
             "'");
   }
+  if (w <= 0 || h <= 0)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size dimensions must be positive, got: '" + std::string(s) +
+            "'");
   return {w, h};
 }
 
