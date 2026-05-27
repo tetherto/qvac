@@ -370,7 +370,7 @@ jobs:
 
       - name: Run tests (consumer + producer)
         working-directory: ${{ inputs.working-directory }}
-        timeout-minutes: 45
+        timeout-minutes: 60
         shell: node {0}
         run: |
           (async () => {
