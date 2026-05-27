@@ -41,10 +41,7 @@ export async function runOpenAiCoverage (
     !options.consumerPrimary
   if (listOnlyUnsupported) {
     for (const row of filtered) {
-      const caveat = row.caveats.length
-        ? `  (${row.caveats.join('; ')})`
-        : ''
-      process.stdout.write(`${row.method} ${row.path}${caveat}\n`)
+      process.stdout.write(`${row.method} ${row.path}\n`)
     }
     return
   }
