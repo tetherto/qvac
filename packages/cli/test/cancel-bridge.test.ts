@@ -3,32 +3,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Logger } from '../src/logger.js'
-
-/**
- * The cancel-bridge module pulls in `core/sdk.ts`, which imports `@qvac/sdk`
- * at module load time. We don't want to drag the entire SDK into a unit test,
- * so we re-implement the helper here in-line and assert on the same contract.
- * The actual implementation under `src/serve/core/cancel-bridge.ts` is one
- * import away (`sdkCancel`) and identical in shape — any drift between the
- * test and the implementation surfaces when this file is updated alongside
- * any cancel-bridge change in the same PR.
- */
-function bindClientDisconnectCancel (
-  req: IncomingMessage,
-  res: ServerResponse,
-  requestId: string,
-  logger: Logger,
-  sdkCancel: (opts: { requestId: string }) => Promise<void>
-): void {
-  const onClose = () => {
-    if (res.writableEnded) return
-    sdkCancel({ requestId }).catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err)
-      logger.debug(`  cancel-on-disconnect failed for requestId=${requestId}: ${message}`)
-    })
-  }
-  req.once('close', onClose)
-}
+import { bindClientDisconnectCancel } from '../src/serve/core/cancel-bridge.js'
 
 function makeLogger (): Logger & { debugs: string[] } {
   const debugs: string[] = []
@@ -52,7 +27,7 @@ function makeRes (initial: { writableEnded?: boolean } = {}): ServerResponse {
 }
 
 describe('bindClientDisconnectCancel', () => {
-  it('fires sdkCancel with the bound requestId on req close', async () => {
+  it('fires cancel with the bound requestId on req close', async () => {
     const req = makeReq()
     const res = makeRes()
     const cancels: { requestId: string }[] = []
@@ -61,7 +36,7 @@ describe('bindClientDisconnectCancel', () => {
     })
 
     req.emit('close')
-    // sdkCancel is awaited inside the .catch; let the microtask queue drain
+    // cancel is awaited inside the .catch; let the microtask queue drain
     await Promise.resolve()
     await Promise.resolve()
 
@@ -69,7 +44,7 @@ describe('bindClientDisconnectCancel', () => {
     assert.equal(cancels[0]?.requestId, 'rid-1')
   })
 
-  it('skips sdkCancel when the response already finished', async () => {
+  it('skips cancel when the response already finished', async () => {
     const req = makeReq()
     const res = makeRes({ writableEnded: true })
     let called = 0
@@ -83,7 +58,7 @@ describe('bindClientDisconnectCancel', () => {
     assert.equal(called, 0, 'natural completion should not log a benign no-op cancel')
   })
 
-  it('swallows sdkCancel rejections without propagating', async () => {
+  it('swallows cancel rejections without propagating', async () => {
     const req = makeReq()
     const res = makeRes()
     const logger = makeLogger()
@@ -100,7 +75,7 @@ describe('bindClientDisconnectCancel', () => {
     assert.match(logger.debugs[0]!, /cancel race lost/)
   })
 
-  it('binds via req.once so a second close event does not fire sdkCancel twice', async () => {
+  it('binds via req.once so a second close event does not fire cancel twice', async () => {
     const req = makeReq()
     const res = makeRes()
     let called = 0

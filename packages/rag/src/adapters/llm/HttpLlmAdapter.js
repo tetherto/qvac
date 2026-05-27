@@ -2,6 +2,7 @@
 
 const BaseLlmAdapter = require('./BaseLlmAdapter')
 const { QvacErrorRAG, ERR_CODES } = require('../../errors')
+const resolveFetch = require('../../shims/resolve-fetch')
 
 /**
  * HTTP-based LLM adapter that can work with various HTTP LLM APIs.
@@ -78,31 +79,20 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * @private
    */
   async _makeHttpRequest (requestBody) {
-    try {
-      const fetch = await import('#fetch').then(module => module.default || module)
+    const fetch = resolveFetch()
 
-      const response = await fetch(this.httpConfig.apiUrl, {
-        method: this.httpConfig.method,
-        headers: this.httpConfig.headers,
-        body: JSON.stringify(requestBody)
-      })
+    const response = await fetch(this.httpConfig.apiUrl, {
+      method: this.httpConfig.method,
+      headers: this.httpConfig.headers,
+      body: JSON.stringify(requestBody)
+    })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
-      }
-
-      return response.json()
-    } catch (error) {
-      if ((error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') && (error.message.includes('bare-fetch') || error.message.includes('#fetch'))) {
-        throw new QvacErrorRAG({
-          code: ERR_CODES.DEPENDENCY_REQUIRED,
-          adds: 'Fetch unavailable: #fetch could not resolve. Bare: install bare-fetch; otherwise ensure globalThis.fetch exists and your bundler supports package imports.',
-          cause: error
-        })
-      }
-      throw error
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`HTTP ${response.status}: ${errorText}`)
     }
+
+    return response.json()
   }
 
   /**
