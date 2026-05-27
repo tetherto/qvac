@@ -8,12 +8,33 @@
 # /*               /:splat.md     301   Header:Accept=text/markdown
 
 # Sevalla CDN does not resolve directory-to-index.html for path segments
-# containing dots (e.g. `v0.7.x`). The splat `*` captures the version
-# segment (and any subpath) and rewrites it to its `index.html` explicitly.
-# Splat docs: https://docs.sevalla.com/static-sites/redirects#splats
+# containing dots (e.g. `v0.7.x`). Each version is rewritten to its
+# `index.html` explicitly, with and without trailing slash.
+#
+# IMPORTANT: do NOT use `:placeholder` here — placeholders in status-200
+# rewrites crash Sevalla's Worker globally (error 1101). Splats avoid the
+# 1101 crash but capture the trailing slash into `:splat`, producing
+# `/reference/api/v0.9.x//index.html` (double slash) for URLs ending in
+# `/`, which then misses and falls through to the catch-all 404. Hardcoded
+# rules sidestep both issues at the cost of one new entry per release.
 
-/reference/api/*             /reference/api/:splat/index.html             200
-/reference/release-notes/*   /reference/release-notes/:splat/index.html   200
+/reference/api/v0.7.x/    /reference/api/v0.7.x/index.html    200
+/reference/api/v0.7.x     /reference/api/v0.7.x/index.html    200
+/reference/api/v0.8.x/    /reference/api/v0.8.x/index.html    200
+/reference/api/v0.8.x     /reference/api/v0.8.x/index.html    200
+/reference/api/v0.9.x/    /reference/api/v0.9.x/index.html    200
+/reference/api/v0.9.x     /reference/api/v0.9.x/index.html    200
+/reference/api/v0.10.x/   /reference/api/v0.10.x/index.html   200
+/reference/api/v0.10.x    /reference/api/v0.10.x/index.html   200
+
+/reference/release-notes/v0.7.x/    /reference/release-notes/v0.7.x/index.html    200
+/reference/release-notes/v0.7.x     /reference/release-notes/v0.7.x/index.html    200
+/reference/release-notes/v0.8.x/    /reference/release-notes/v0.8.x/index.html    200
+/reference/release-notes/v0.8.x     /reference/release-notes/v0.8.x/index.html    200
+/reference/release-notes/v0.9.x/    /reference/release-notes/v0.9.x/index.html    200
+/reference/release-notes/v0.9.x     /reference/release-notes/v0.9.x/index.html    200
+/reference/release-notes/v0.10.x/   /reference/release-notes/v0.10.x/index.html   200
+/reference/release-notes/v0.10.x    /reference/release-notes/v0.10.x/index.html   200
 
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
