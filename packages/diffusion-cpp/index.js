@@ -272,8 +272,9 @@ class ImgStableDiffusion {
     // against the multiple-of-8 constraint.
     const isSingleImage = params.init_image != null
     const maybeInitImages = Array.isArray(params.init_images) && params.init_images.length > 0
-    if ((isSingleImage || maybeInitImages) && params.prediction) {
-      params = applyFluxImg2ImgDimDefaults(params, params.prediction, maybeInitImages)
+    const predictionForDefaults = params.prediction || (this._config && this._config.prediction)
+    if ((isSingleImage || maybeInitImages) && predictionForDefaults) {
+      params = applyFluxImg2ImgDimDefaults(params, predictionForDefaults, maybeInitImages)
     }
 
     // ── Dimension validation ────────────────────────────────────────────────
