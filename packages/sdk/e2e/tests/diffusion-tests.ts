@@ -1,21 +1,34 @@
 // Diffusion test definitions
 import type { TestDefinition, TestResult } from "@tetherto/qvac-test-suite";
 
+type ExpectationLike =
+  | { validation: "type"; expectedType: "string" | "number" | "array" }
+  | { validation: "throws-error"; errorContains: string }
+  | { validation: "function"; fn: (result: unknown) => TestResult };
+
 type DiffusionTestOptions = {
   estimatedDurationMs?: number;
   suites?: string[];
   dependency?: string;
 };
 
-const createDiffusionTest = (
-  testId: string,
-  params: Record<string, unknown>,
-  expectation:
-    | { validation: "type"; expectedType: "string" | "number" | "array" }
-    | { validation: "throws-error"; errorContains: string }
-    | { validation: "function"; fn: (result: unknown) => TestResult },
+// Generic so `typeof someTest.testId`/`typeof someTest.params` keep their literal
+// types — that's what feeds `BaseExecutor`'s typed handlers map and lets each
+// handler method see real `params` instead of `any`.
+export type DiffusionTestDef<
+  TId extends string,
+  P extends Record<string, unknown>,
+> = TestDefinition & { testId: TId; params: P };
+
+function createDiffusionTest<
+  const TId extends string,
+  const P extends Record<string, unknown>,
+>(
+  testId: TId,
+  params: P,
+  expectation: ExpectationLike,
   options: DiffusionTestOptions = {},
-): TestDefinition => {
+): DiffusionTestDef<TId, P> {
   const {
     estimatedDurationMs = 300000,
     suites,
@@ -31,8 +44,49 @@ const createDiffusionTest = (
       dependency,
       estimatedDurationMs,
     },
+  } as DiffusionTestDef<TId, P>;
+}
+
+// Read PNG IHDR width/height: 8-byte signature, 4-byte chunk length, 4-byte
+// "IHDR" tag, then big-endian uint32 width and uint32 height at offsets 16/20.
+function readPngDims(
+  buf: Uint8Array,
+): { width: number; height: number } | null {
+  if (buf.length < 24) return null;
+  const sig = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  if (!sig) return null;
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  return { width: view.getUint32(16, false), height: view.getUint32(20, false) };
+}
+
+// Shared PNG-dimension validator: asserts first output is a PNG of expected size.
+// `label` lets callers identify themselves in the failure message.
+function validatePngDims(
+  expectedWidth: number,
+  expectedHeight: number,
+  label: string,
+) {
+  return (result: unknown): TestResult => {
+    if (!Array.isArray(result) || result.length === 0) {
+      return { passed: false, output: "No outputs generated" };
+    }
+    const out = result[0];
+    if (!(out instanceof Uint8Array)) {
+      return { passed: false, output: "First output is not a Uint8Array" };
+    }
+    const dims = readPngDims(out);
+    if (!dims) {
+      return { passed: false, output: "Output is not a valid PNG" };
+    }
+    const passed = dims.width === expectedWidth && dims.height === expectedHeight;
+    return {
+      passed,
+      output: passed
+        ? `${label} OK: ${dims.width}x${dims.height}`
+        : `${label}: expected ${expectedWidth}x${expectedHeight}, got ${dims.width}x${dims.height}`,
+    };
   };
-};
+}
 
 // ---- txt2img ----
 
@@ -154,6 +208,9 @@ export const diffusionBatchCount = createDiffusionTest(
 );
 
 // ---- img2img ----
+// Source asset is 256x256 to match request width/height: FLUX.2 auto-resize is
+// a no-op and SD 2.1 SDEdit emits source-sized output, so output is 256x256 on
+// both engines.
 
 export const diffusionBasicImg2img = createDiffusionTest(
   "diffusion-basic-img2img",
@@ -167,6 +224,59 @@ export const diffusionBasicImg2img = createDiffusionTest(
     seed: 42,
   },
   { validation: "type", expectedType: "array" },
+);
+
+// FLUX.2 ignores img_cfg_scale (in-context conditioning); SD 2.1 honors it via
+// SDEdit. Schema accept + PNG size check is the strongest cross-platform
+// assertion without per-engine branching.
+export const diffusionImg2imgImgCfgScale = createDiffusionTest(
+  "diffusion-img2img-img-cfg-scale",
+  {
+    prompt: "oil painting style",
+    init_image: "diffusion-img2img-source-256.png",
+    strength: 0.5,
+    img_cfg_scale: 5.0,
+    width: 256,
+    height: 256,
+    steps: 4,
+    seed: 42,
+  },
+  { validation: "function", fn: validatePngDims(256, 256, "img2img PNG") },
+);
+
+export const diffusionImg2imgVsTxt2imgBaseline = createDiffusionTest(
+  "diffusion-img2img-vs-txt2img-baseline",
+  {
+    prompt: "watercolor style",
+    init_image: "diffusion-img2img-source-256.png",
+    strength: 0.5,
+    width: 256,
+    height: 256,
+    steps: 4,
+    seed: 42,
+  },
+  // Required by TestDefinition but effectively ignored — DiffusionExecutor.img2imgVsTxt2imgBaseline gates the result.
+  { validation: "type", expectedType: "array" },
+  { estimatedDurationMs: 600000 },
+);
+
+export const diffusionImg2imgInvalidStrength = createDiffusionTest(
+  "diffusion-img2img-invalid-strength",
+  {
+    prompt: "test",
+    init_image: "diffusion-img2img-source-256.png",
+    strength: 1.5,
+    width: 256,
+    height: 256,
+    steps: 4,
+  },
+  {
+    validation: "throws-error",
+    // Match the field path rather than the Zod message — stable across version
+    // bumps that rephrase numeric-bound messages.
+    errorContains: "strength",
+  },
+  { estimatedDurationMs: 60000 },
 );
 
 // ---- streaming ----
@@ -263,46 +373,6 @@ const ESRGAN_SOURCE_HEIGHT = 128;
 const STANDALONE_UPSCALER_SOURCE_WIDTH = 64;
 const STANDALONE_UPSCALER_SOURCE_HEIGHT = 64;
 
-// Decode the IHDR chunk (width/height as big-endian uint32 at offsets 16 and 20)
-// and assert dimensions are source * scale.
-function validateEsrganUpscale(result: unknown): TestResult {
-  if (!Array.isArray(result) || result.length === 0) {
-    return { passed: false, output: "No outputs generated" };
-  }
-  const output = result[0] as Uint8Array;
-  const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
-  const width = view.getUint32(16, false);
-  const height = view.getUint32(20, false);
-  const expectedWidth = ESRGAN_SOURCE_WIDTH * ESRGAN_SCALE;
-  const expectedHeight = ESRGAN_SOURCE_HEIGHT * ESRGAN_SCALE;
-  const passed = width === expectedWidth && height === expectedHeight;
-  return {
-    passed,
-    output: passed
-      ? `ESRGAN x${ESRGAN_SCALE} upscale OK: ${ESRGAN_SOURCE_WIDTH}x${ESRGAN_SOURCE_HEIGHT} -> ${width}x${height}`
-      : `Expected ${expectedWidth}x${expectedHeight} from ${ESRGAN_SOURCE_WIDTH}x${ESRGAN_SOURCE_HEIGHT} input, got ${width}x${height} (upscale not applied?)`,
-  };
-}
-
-function validateStandaloneUpscale(result: unknown): TestResult {
-  if (!Array.isArray(result) || result.length === 0) {
-    return { passed: false, output: "No outputs generated" };
-  }
-  const output = result[0] as Uint8Array;
-  const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
-  const width = view.getUint32(16, false);
-  const height = view.getUint32(20, false);
-  const expectedWidth = STANDALONE_UPSCALER_SOURCE_WIDTH * ESRGAN_SCALE;
-  const expectedHeight = STANDALONE_UPSCALER_SOURCE_HEIGHT * ESRGAN_SCALE;
-  const passed = width === expectedWidth && height === expectedHeight;
-  return {
-    passed,
-    output: passed
-      ? `Standalone upscaler x${ESRGAN_SCALE} OK: ${STANDALONE_UPSCALER_SOURCE_WIDTH}x${STANDALONE_UPSCALER_SOURCE_HEIGHT} -> ${width}x${height}`
-      : `Expected ${expectedWidth}x${expectedHeight} from ${STANDALONE_UPSCALER_SOURCE_WIDTH}x${STANDALONE_UPSCALER_SOURCE_HEIGHT} input, got ${width}x${height}`,
-  };
-}
-
 export const diffusionEsrganUpscaleX4 = createDiffusionTest(
   "diffusion-esrgan-upscale-x4",
   {
@@ -313,7 +383,14 @@ export const diffusionEsrganUpscaleX4 = createDiffusionTest(
     seed: 42,
     upscale: true,
   },
-  { validation: "function", fn: validateEsrganUpscale },
+  {
+    validation: "function",
+    fn: validatePngDims(
+      ESRGAN_SOURCE_WIDTH * ESRGAN_SCALE,
+      ESRGAN_SOURCE_HEIGHT * ESRGAN_SCALE,
+      `ESRGAN x${ESRGAN_SCALE}`,
+    ),
+  },
   { estimatedDurationMs: 600000, dependency: "diffusion-esrgan" },
 );
 
@@ -323,7 +400,14 @@ export const diffusionStandaloneUpscalerX4 = createDiffusionTest(
     image: "small-64.jpg",
     repeats: 1,
   },
-  { validation: "function", fn: validateStandaloneUpscale },
+  {
+    validation: "function",
+    fn: validatePngDims(
+      STANDALONE_UPSCALER_SOURCE_WIDTH * ESRGAN_SCALE,
+      STANDALONE_UPSCALER_SOURCE_HEIGHT * ESRGAN_SCALE,
+      `Standalone upscaler x${ESRGAN_SCALE}`,
+    ),
+  },
   { estimatedDurationMs: 600000, dependency: "upscaler" },
 );
 
@@ -352,6 +436,9 @@ export const diffusionTests = [
   diffusionSeedReproducibility,
   diffusionBatchCount,
   diffusionBasicImg2img,
+  diffusionImg2imgImgCfgScale,
+  diffusionImg2imgVsTxt2imgBaseline,
+  diffusionImg2imgInvalidStrength,
   diffusionStreaming,
   diffusionStreamingProgress,
   diffusionStatsPresent,
@@ -361,4 +448,4 @@ export const diffusionTests = [
   diffusionEsrganUpscaleX4,
   diffusionStandaloneUpscalerX4,
   diffusionEmptyPrompt,
-];
+] as const;

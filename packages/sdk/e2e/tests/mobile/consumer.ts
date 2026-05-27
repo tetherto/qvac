@@ -28,7 +28,6 @@ import {
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
   AFRICAN_4B_TRANSLATION_Q4_K_M,
-  SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { collectTestDeps } from "../shared/collect-test-deps.js";
@@ -58,7 +57,6 @@ import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.j
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
-import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { MobileCancellationExecutor } from "./executors/cancellation-executor.js";
@@ -296,17 +294,6 @@ resources.define("vision", {
   },
 });
 
-resources.define("diffusion", {
-  constant: SD_V2_1_1B_Q8_0,
-  type: "diffusion",
-  config: {
-    device: "gpu",
-    threads: 4,
-    prediction: "v",
-    vae_on_cpu: true,
-  },
-});
-
 function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
@@ -335,7 +322,7 @@ export const executor = createExecutor({
       /^video-/,
       "Video mode works on mobile but SDK-shipped Wan models are too large to load on-device; mobile apps should pass a `delegate` to loadModel(...), desktop covers local-load coverage",
     ),
-    new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
+    new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)"),
     new SkipExecutor(
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
@@ -396,7 +383,6 @@ export const executor = createExecutor({
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
