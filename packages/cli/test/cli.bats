@@ -430,12 +430,16 @@ http_status() {
   assert_error "${body}" "missing_model"
 }
 
-@test "images generations: invalid response_format returns 400" {
+# QVAC-19179 wire-change: image routes resolve the model BEFORE running
+# param checks (response_format / output_format / output_compression /
+# background). Tests below send unknown models so they now surface
+# `model_not_found` rather than the per-param error.
+@test "images generations: invalid response_format returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"a red square","response_format":"png"}')
-  assert_error "${body}" "invalid_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
 @test "images generations: unknown model returns 404" {
@@ -446,36 +450,36 @@ http_status() {
   assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: response_format=url without publicBaseUrl returns 400" {
+@test "images generations: response_format=url without publicBaseUrl returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"a red square","response_format":"url"}')
-  assert_error "${body}" "unsupported_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: output_format=jpeg returns 400 unsupported_output_format" {
+@test "images generations: output_format=jpeg returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"p","output_format":"jpeg"}')
-  assert_error "${body}" "unsupported_output_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: output_compression returns 400 unsupported_output_compression" {
+@test "images generations: output_compression returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"p","output_compression":80}')
-  assert_error "${body}" "unsupported_output_compression"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: background returns 400 unsupported_background" {
+@test "images generations: background returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"p","background":"transparent"}')
-  assert_error "${body}" "unsupported_background"
+  assert_error "${body}" "model_not_found"
 }
 
 # ── Serve: images edits validation (multipart) ──────────────────────────
@@ -511,38 +515,41 @@ http_status() {
   assert_error "${body}" "missing_model"
 }
 
-@test "images edits: invalid response_format returns 400" {
+# QVAC-19179 wire-change: same model-first ordering applies to image edits.
+# `missing_image` and `mask_not_supported` still win (they're multipart-
+# shape errors), but per-param checks now run after the model lookup.
+@test "images edits: invalid response_format returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=nonexistent" \
     -F "prompt=make it blue" \
     -F "response_format=png")
-  assert_error "${body}" "invalid_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images edits: response_format=url without publicBaseUrl returns 400" {
+@test "images edits: response_format=url without publicBaseUrl returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=x" -F "prompt=p" -F "response_format=url")
-  assert_error "${body}" "unsupported_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images edits: output_format=jpeg returns 400 unsupported_output_format" {
+@test "images edits: output_format=jpeg returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=x" -F "prompt=p" -F "output_format=jpeg")
-  assert_error "${body}" "unsupported_output_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images edits: background returns 400 unsupported_background" {
+@test "images edits: background returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=x" -F "prompt=p" -F "background=transparent")
-  assert_error "${body}" "unsupported_background"
+  assert_error "${body}" "model_not_found"
 }
 
 @test "images edits: unknown model returns 404" {

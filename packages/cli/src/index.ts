@@ -249,6 +249,7 @@ function setupCli (): void {
     .option('--api-key <key>', 'Require Bearer token authentication')
     .option('--cors', 'Enable CORS headers')
     .option('--public-base-url <url>', 'Externally reachable origin (required for image response_format=url)')
+    .option('--docs', 'Expose Swagger UI at /docs (JSON spec is always at /openapi.json)')
     .option('-v, --verbose', 'Detailed output')
     .action(async (options: {
       config?: string
@@ -258,6 +259,7 @@ function setupCli (): void {
       apiKey?: string
       cors?: boolean
       publicBaseUrl?: string
+      docs?: boolean
       verbose?: boolean
     }) => {
       try {
@@ -271,6 +273,7 @@ function setupCli (): void {
           apiKey: options.apiKey,
           cors: options.cors,
           publicBaseUrl: options.publicBaseUrl,
+          docs: options.docs,
           verbose: options.verbose
         })
       } catch (error: unknown) {

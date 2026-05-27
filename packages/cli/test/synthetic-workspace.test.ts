@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { syntheticFromWorkspace } from '../src/serve/adapters/openai/routes/vector-stores.js'
+import { syntheticFromWorkspace } from '../src/serve/routes/vector-stores.js'
 
 describe('syntheticFromWorkspace', () => {
   const workspaces = [{ name: 'vs_known', open: false }]

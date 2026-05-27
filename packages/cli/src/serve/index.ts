@@ -1,19 +1,37 @@
-import http from 'node:http'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import Fastify from 'fastify'
+import type { FastifyInstance } from 'fastify'
+import autoload from '@fastify/autoload'
+import cors from '@fastify/cors'
+import multipart from '@fastify/multipart'
+import swagger from '@fastify/swagger'
+import swaggerUi from '@fastify/swagger-ui'
+import {
+  jsonSchemaTransform,
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider
+} from 'fastify-type-provider-zod'
+import closeWithGrace from 'close-with-grace'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { createLogger } from '../logger.js'
 import type { Logger } from '../logger.js'
 import { findConfigFile, loadConfig } from '../config.js'
 import { parseServeConfig } from './config.js'
 import { createModelRegistry } from './core/model-registry.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
-import { handleCors, sendError } from './http.js'
 import { createResponsesStore } from './adapters/openai/responses-store.js'
-import { createOpenAIAdapter } from './adapters/openai/index.js'
 import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
 import { createEphemeralFilesStore } from './adapters/openai/ephemeral-files-store.js'
 import { createVectorStoresStore } from './adapters/openai/vector-stores-store.js'
-import type { APIAdapter, RouteContext } from './adapters/types.js'
-import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
+import type { QvacContext } from './lib/types.js'
+import contextPlugin from './plugins/context.js'
+import errorHandlerPlugin from './plugins/error-handler.js'
+import authPlugin from './plugins/auth.js'
+import cancelBridgePlugin from './plugins/cancel-bridge.js'
+
+import './lib/types.js'
 
 export interface StartServerOptions {
   projectRoot: string
@@ -25,25 +43,19 @@ export interface StartServerOptions {
   cors?: boolean | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
+  docs?: boolean | undefined
+  transcribeOverride?: QvacContext['transcribeOverride']
 }
 
-export async function startServer (options: StartServerOptions): Promise<http.Server> {
+export async function buildServer (options: StartServerOptions): Promise<FastifyInstance> {
   const logger = createLogger(options.verbose ? 'debug' : 'info')
-  const host = options.host ?? '127.0.0.1'
-  const port = options.port ?? 11434
 
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? await loadConfig(configPath) as Record<string, unknown> : {}
   const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
   const registry = createModelRegistry()
 
-  await preloadModels(serveConfig, registry, logger)
-
   const responsesStore = createResponsesStore()
-  const adapters: APIAdapter[] = [
-    createOpenAIAdapter()
-  ]
-
   const vectorStores = createVectorStoresStore()
   const ephemeralFiles = createEphemeralFilesStore(undefined, {
     onEvict: (id, reason) => {
@@ -51,166 +63,139 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
     }
   })
   const chunkAttributions = createChunkAttributionStore()
-  const ctx: RouteContext = { registry, serveConfig, logger, vectorStores, ephemeralFiles, chunkAttributions, responsesStore }
-  logger.warn(responsesStore.bannerLine())
 
-  const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    const start = performance.now()
-    const method = req.method ?? ''
-    const path = (req.url ?? '').split('?')[0] ?? ''
+  const qvacContext: QvacContext = {
+    registry,
+    serveConfig,
+    logger,
+    vectorStores,
+    ephemeralFiles,
+    chunkAttributions,
+    responsesStore,
+    ...(options.transcribeOverride !== undefined ? { transcribeOverride: options.transcribeOverride } : {})
+  }
 
-    if (method === 'OPTIONS') {
-      if (options.cors) handleCors(req, res)
-      else {
-        res.writeHead(204)
-        res.end()
-      }
-      return
-    }
+  const app = Fastify({
+    logger: false,
+    disableRequestLogging: true,
+    bodyLimit: 100 * 1024 * 1024,
+    ajv: { customOptions: { allErrors: false } }
+  }).withTypeProvider<ZodTypeProvider>()
 
-    logger.info(`→ ${method} ${path}`)
+  app.setValidatorCompiler(validatorCompiler)
+  app.setSerializerCompiler(serializerCompiler)
 
-    if (options.cors) handleCors(req, res)
+  await app.register(errorHandlerPlugin)
+  await app.register(contextPlugin, { context: qvacContext })
 
-    if (options.apiKey) {
-      const auth = req.headers['authorization']
-      if (!auth || auth !== `Bearer ${options.apiKey}`) {
-        sendError(res, 401, 'invalid_api_key', 'Invalid or missing API key.')
-        logResponse(logger, method, path, 401, start)
-        return
-      }
-    }
-
-    try {
-      for (const adapter of adapters) {
-        const handled = await adapter.route(req, res, ctx)
-        if (handled) {
-          logResponse(logger, method, path, res.statusCode, start)
-          return
+  await app.register(swagger, {
+    openapi: {
+      openapi: '3.1.0',
+      info: {
+        title: 'QVAC OpenAI-compatible API',
+        description: 'OpenAI-compatible REST API served by `qvac serve openai`.',
+        version: '1.0.0'
+      },
+      servers: [
+        { url: `http://${options.host}:${options.port}`, description: 'this server' }
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer' }
         }
-      }
+      },
+      ...(options.apiKey ? { security: [{ bearerAuth: [] }] } : {})
+    },
+    transform: jsonSchemaTransform
+  })
 
-      sendError(res, 404, 'not_found', `Unknown endpoint: ${method} ${path}`)
-      logResponse(logger, method, path, 404, start)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      logger.error(`Unhandled error: ${message}`)
-      sendError(res, 500, 'internal_error', 'An internal error occurred.')
-      logResponse(logger, method, path, 500, start)
+  app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger())
+
+  if (options.docs) {
+    await app.register(swaggerUi, {
+      routePrefix: '/docs',
+      uiConfig: { docExpansion: 'list', deepLinking: true }
+    })
+  }
+
+  if (options.cors) {
+    await app.register(cors, {
+      origin: '*',
+      methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      strictPreflight: false
+    })
+  }
+
+  await app.register(multipart, {
+    limits: {
+      fileSize: 100 * 1024 * 1024,
+      files: 10
     }
   })
 
-  const shutdown = (): void => {
-    logger.info('Shutting down...')
-    server.close(async () => {
-      await shutdownSDK(logger)
-      logger.info('Server stopped.')
-      process.exit(0)
-    })
-    setTimeout(() => process.exit(1), 10000)
+  await app.register(cancelBridgePlugin)
+
+  if (options.apiKey) {
+    await app.register(authPlugin, { apiKey: options.apiKey })
   }
 
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
-
-  return new Promise((resolve, reject) => {
-    server.on('error', reject)
-    server.listen(port, host, () => {
-      logger.info(`QVAC API server listening on http://${host}:${port}`)
-      logStartupSummary(serveConfig, logger)
-      resolve(server)
-    })
-  })
-}
-
-const CATEGORY_ENDPOINTS: Record<string, string[]> = {
-  chat: ['POST /v1/chat/completions', 'POST /v1/completions', 'POST /v1/responses'],
-  embedding: ['POST /v1/embeddings'],
-  transcription: ['POST /v1/audio/transcriptions'],
-  'audio-translation': ['POST /v1/audio/translations'],
-  speech: ['POST /v1/audio/speech'],
-  image: ['POST /v1/images/generations', 'POST /v1/images/edits']
-}
-
-const VECTOR_STORE_ENDPOINTS = [
-  'POST /v1/files',
-  'GET  /v1/files',
-  'GET  /v1/files/:id',
-  'GET  /v1/vector_stores',
-  'POST /v1/vector_stores',
-  'GET  /v1/vector_stores/:id',
-  'POST /v1/vector_stores/:id',
-  'DELETE /v1/vector_stores/:id',
-  'POST /v1/vector_stores/:id/search',
-  'POST /v1/vector_stores/:id/files'
-]
-
-const MANAGEMENT_ENDPOINTS = [
-  'GET  /v1/models',
-  'GET  /v1/models/:id',
-  'DELETE /v1/models/:id',
-  'GET  /v1/responses/:id',
-  'DELETE /v1/responses/:id',
-  'GET  /v1/responses/:id/input_items'
-]
-
-const CATEGORY_LABELS: Record<string, string> = {
-  chat: 'chat',
-  embedding: 'embedding',
-  transcription: 'transcription',
-  'audio-translation': 'audio translation',
-  translation: 'translation',
-  speech: 'speech',
-  ocr: 'ocr',
-  image: 'image'
-}
-
-function logStartupSummary (serveConfig: ServeConfig, logger: Logger): void {
-  const categories = new Set<string>()
-  const grouped = new Map<string, ResolvedModelEntry[]>()
-
-  for (const [, entry] of serveConfig.models) {
-    categories.add(entry.endpointCategory)
-    const list = grouped.get(entry.endpointCategory) ?? []
-    list.push(entry)
-    grouped.set(entry.endpointCategory, list)
-  }
-
-  logger.info('')
-  logger.info('Models:')
-  if (grouped.size === 0) {
-    logger.info('  (none configured)')
-  } else {
-    for (const [category, entries] of grouped) {
-      const label = CATEGORY_LABELS[category] ?? category
-      logger.info(`  ${label}:`)
-      for (const entry of entries) {
-        const tags: string[] = []
-        if (entry.isDefault) tags.push('default')
-        if (entry.preload) tags.push('preload')
-        const tagStr = tags.length > 0 ? ` (${tags.join(', ')})` : ''
-        logger.info(`    ${entry.alias}${tagStr}`)
-      }
+  app.addHook('onRequest', async (req) => {
+    if (!isIntrospectionPath(req.url)) {
+      logger.info(`→ ${req.method} ${req.url.split('?')[0]}`)
     }
-  }
+    ;(req as unknown as { qvacStart: number }).qvacStart = performance.now()
+  })
+  app.addHook('onResponse', async (req, reply) => {
+    if (isIntrospectionPath(req.url)) return
+    const start = (req as unknown as { qvacStart?: number }).qvacStart
+    const ms = start !== undefined ? performance.now() - start : 0
+    const duration = ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(2)}s`
+    logger.info(`← ${reply.statusCode} ${req.method} ${req.url.split('?')[0]} (${duration})`)
+  })
 
+  app.addHook('onReady', async () => {
+    await preloadModels(serveConfig, registry, logger)
+    logger.warn(responsesStore.bannerLine())
+  })
+  app.addHook('onClose', async () => {
+    await shutdownSDK(logger)
+  })
+
+  const __dirname = dirname(fileURLToPath(import.meta.url))
+  await app.register(autoload, {
+    dir: join(__dirname, 'routes'),
+    forceESM: true,
+    encapsulate: false
+  })
+
+  return app as unknown as FastifyInstance
+}
+
+export async function startServer (options: StartServerOptions): Promise<FastifyInstance> {
+  const app = await buildServer(options)
+
+  closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
+    app.log.info?.({ signal }, 'shutdown signal received')
+    await app.close()
+  })
+
+  await app.listen({ port: options.port, host: options.host })
+  app.qvac.logger.info(`QVAC API server listening on http://${options.host}:${options.port}`)
+  logStartupSummary(app, app.qvac.logger)
+  return app
+}
+
+function isIntrospectionPath (url: string): boolean {
+  return url === '/openapi.json' || url === '/docs' || url.startsWith('/docs/')
+}
+
+function logStartupSummary (app: FastifyInstance, logger: Logger): void {
   logger.info('')
   logger.info('Endpoints:')
-  for (const cat of categories) {
-    const endpoints = CATEGORY_ENDPOINTS[cat]
-    if (endpoints) {
-      for (const ep of endpoints) logger.info(`  ${ep}`)
-    }
+  const routes = app.printRoutes({ commonPrefix: false }).split('\n').filter((l) => l.trim().length > 0)
+  for (const line of routes) {
+    logger.info(`  ${line}`)
   }
-  if (categories.has('embedding')) {
-    for (const ep of VECTOR_STORE_ENDPOINTS) logger.info(`  ${ep}`)
-  }
-  for (const ep of MANAGEMENT_ENDPOINTS) logger.info(`  ${ep}`)
   logger.info('')
-}
-
-function logResponse (logger: Logger, method: string, path: string, status: number, start: number): void {
-  const ms = performance.now() - start
-  const duration = ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(2)}s`
-  logger.info(`← ${status} ${method} ${path} (${duration})`)
 }

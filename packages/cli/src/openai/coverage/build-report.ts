@@ -16,14 +16,7 @@ import type {
 
 const COVERAGE_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI_ROOT = join(COVERAGE_DIR, '..', '..', '..')
-const DEFAULT_ROUTER = join(
-  CLI_ROOT,
-  'src',
-  'serve',
-  'adapters',
-  'openai',
-  'index.ts'
-)
+const DEFAULT_ROUTER = join(CLI_ROOT, 'src', 'serve', 'routes')
 
 function percent (n: number, total: number): number {
   if (total === 0) return 0

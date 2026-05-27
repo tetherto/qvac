@@ -1,30 +1,35 @@
-import { META as filesMeta } from '../../serve/adapters/openai/routes/files.js'
-import { META as imagesMeta } from '../../serve/adapters/openai/routes/images.js'
-import { META as responsesMeta } from '../../serve/adapters/openai/routes/responses.js'
-import { META as responsesIdMeta } from '../../serve/adapters/openai/routes/responses-id.js'
-import { META as speechMeta } from '../../serve/adapters/openai/routes/speech.js'
-import { META as vectorStoresMeta } from '../../serve/adapters/openai/routes/vector-stores.js'
+// Keys must match the OpenAPI spec's path templates (e.g. `{file_id}` not `{id}`).
+const ROUTE_CAVEATS: Record<string, readonly string[]> = {
+  'GET /v1/files': ['ephemeral in-memory store'],
+  'POST /v1/files': ['ephemeral in-memory store'],
+  'GET /v1/files/{file_id}': ['ephemeral in-memory store'],
+  'GET /v1/files/{file_id}/content': ['ephemeral in-memory store'],
 
-type RouteMetaBlock = {
-  endpoints: readonly string[]
-  caveats: readonly string[]
+  'POST /v1/images/generations': ['response_format=url requires --public-base-url on the server'],
+  'POST /v1/images/edits': ['response_format=url requires --public-base-url on the server'],
+
+  'POST /v1/responses': [
+    'in-memory store for retrieve/delete/input_items; not durable across restarts'
+  ],
+  'GET /v1/responses/{response_id}': ['in-memory only', 'X-QVAC-Stub: responses-volatile'],
+  'DELETE /v1/responses/{response_id}': ['in-memory only', 'X-QVAC-Stub: responses-volatile'],
+  'GET /v1/responses/{response_id}/input_items': ['in-memory only', 'X-QVAC-Stub: responses-volatile'],
+
+  'POST /v1/audio/speech': ['response is raw audio bytes (wav/pcm/etc.)'],
+
+  'GET /v1/vector_stores': ['in-memory metadata; survives process lifetime only'],
+  'POST /v1/vector_stores': ['in-memory metadata; survives process lifetime only'],
+  'GET /v1/vector_stores/{vector_store_id}': ['in-memory metadata; survives process lifetime only'],
+  'POST /v1/vector_stores/{vector_store_id}': ['in-memory metadata; survives process lifetime only'],
+  'DELETE /v1/vector_stores/{vector_store_id}': ['in-memory metadata; survives process lifetime only'],
+  'POST /v1/vector_stores/{vector_store_id}/search': ['in-memory metadata; survives process lifetime only'],
+  'POST /v1/vector_stores/{vector_store_id}/files': ['in-memory metadata; survives process lifetime only']
 }
-
-const META_BLOCKS: RouteMetaBlock[] = [
-  filesMeta,
-  imagesMeta,
-  responsesMeta,
-  responsesIdMeta,
-  speechMeta,
-  vectorStoresMeta
-]
 
 export function collectMeta (): Map<string, string[]> {
   const map = new Map<string, string[]>()
-  for (const block of META_BLOCKS) {
-    for (const endpoint of block.endpoints) {
-      map.set(endpoint, [...block.caveats])
-    }
+  for (const [endpoint, caveats] of Object.entries(ROUTE_CAVEATS)) {
+    map.set(endpoint, [...caveats])
   }
   return map
 }
