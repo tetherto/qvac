@@ -1,33 +1,31 @@
+# Markdown content negotiation — serve the .md sibling of a page when the
+# client asks for it via `Accept: text/markdown`. Home maps to `/index.md`;
+# every other page `/foo/bar/` maps to `/foo/bar.md`. We need both the
+# trailing-slash and no-slash variants so the `:splat` placeholder doesn't
+# produce `/foo/.md`.
+/                /index.md      301   Header:Accept=text/markdown
+/*/              /:splat.md     301   Header:Accept=text/markdown
+/*               /:splat.md     301   Header:Accept=text/markdown
+
 # Sevalla CDN does not resolve directory-to-index.html for path segments
-# containing dots (e.g. `v0.7.0`). The new versioning model serves each
-# older version as a single sibling MDX (`/reference/api/v0.7.0`), so we
-# rewrite those paths to their `index.html` explicitly.
+# containing dots (e.g. `v0.7.0`). Each `:version` segment is rewritten to
+# its index.html explicitly. `:version` matches a single path segment, so
+# only `/reference/api/vX.Y.Z[/]` (and the release-notes sibling) is
+# affected — anything deeper is left untouched.
 
-/reference/api/v0.7.0/   /reference/api/v0.7.0/index.html   200
-/reference/api/v0.7.0    /reference/api/v0.7.0/index.html   200
+/reference/api/:version/   /reference/api/:version/index.html   200
+/reference/api/:version    /reference/api/:version/index.html   200
 
-/reference/api/v0.8.0/   /reference/api/v0.8.0/index.html   200
-/reference/api/v0.8.0    /reference/api/v0.8.0/index.html   200
+/reference/release-notes/:version/   /reference/release-notes/:version/index.html   200
+/reference/release-notes/:version    /reference/release-notes/:version/index.html   200
 
-/reference/api/v0.9.1/   /reference/api/v0.9.1/index.html   200
-/reference/api/v0.9.1    /reference/api/v0.9.1/index.html   200
-
-/reference/api/v0.10.0/   /reference/api/v0.10.0/index.html   200
-/reference/api/v0.10.0    /reference/api/v0.10.0/index.html   200
-
-/reference/release-notes/v0.7.0/   /reference/release-notes/v0.7.0/index.html   200
-/reference/release-notes/v0.7.0    /reference/release-notes/v0.7.0/index.html   200
-
-/reference/release-notes/v0.8.0/   /reference/release-notes/v0.8.0/index.html   200
-/reference/release-notes/v0.8.0    /reference/release-notes/v0.8.0/index.html   200
-
-/reference/release-notes/v0.9.1/   /reference/release-notes/v0.9.1/index.html   200
-/reference/release-notes/v0.9.1    /reference/release-notes/v0.9.1/index.html   200
-
-/reference/release-notes/v0.10.0/   /reference/release-notes/v0.10.0/index.html   200
-/reference/release-notes/v0.10.0    /reference/release-notes/v0.10.0/index.html   200
-
-# Legacy paths — links from qvac.tether.io and older bookmarks (301 → current IA).
+# ======================================================================
+# PERMANENT REDIRECTS DUE TO CONTENT MOVE
+# ----------------------------------------------------------------------
+# Everything above is pattern-based (wildcards / :placeholders).
+# Everything below is a 1:1 path move kept for backward compatibility
+# with links from qvac.tether.io and older bookmarks (301 → current IA).
+# ======================================================================
 
 # Section rename: /about-qvac/* → /about/* (+ deletions folded into home)
 /about-qvac/welcome/         /                            301

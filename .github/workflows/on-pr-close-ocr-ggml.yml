@@ -1,0 +1,75 @@
+name: Unpublish GPR (OCR-GGML)
+on:
+  pull_request:
+    types:
+      - closed
+    paths:
+      - "packages/ocr-ggml/**"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific version to target for deletion"
+        required: false
+        type: string
+      pr-number:
+        description: "PR number to target for deletion"
+        required: false
+        type: string
+      pattern:
+        description: "Pattern to target for deletion"
+        required: false
+        type: string
+      packages:
+        description: "Packages to target for deletion, space separated"
+        required: false
+        type: string
+        default: "ocr-ggml"
+      dry-run:
+        description: "Is dry run? If true, lists versions without deleting."
+        type: boolean
+        default: true
+run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  delete-npm-versions-trigger:
+    needs:
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true'
+    permissions:
+      packages: write
+    uses: ./.github/workflows/public-delete-npm-versions.yml
+    with:
+      version: ${{ inputs.version }}
+      pr-number: ${{ inputs.pr-number }}
+      pattern: ${{ inputs.pattern }}
+      packages: ${{ inputs.packages }}
+      dry-run: ${{ inputs.dry-run || true }}

@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-Text-to-Speech uses [ONNX runtime](https://onnxruntime.ai) as inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio.
+Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) (GGML) as the inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio.
 
 `textToSpeech()` returns an object containing `buffer` and, when streaming is enabled, a `bufferStream` for incremental audio output.
 
@@ -21,9 +21,45 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ## Models
 
-You can load any [**Chatterbox**](https://www.resemble.ai/chatterbox/) or [**Supertonic**](https://supertonictts.com) model bundle compatible with ONNX Runtime. Required files: an `onnx/` directory with one or more `*.onnx` graphs (and optional `*.onnx_data`) plus the model assets required by the bundle (tokenizer/config files and voice assets such as `voices/*.bin` or a reference `*.wav`).
+### Chatterbox
 
-For models available as constants, see [SDK — Models](/introduction#models).
+Chatterbox uses a **T3 GGUF** as the top-level `modelSrc` and an **S3Gen companion GGUF** via `modelConfig.s3genModelSrc`. Optional `referenceAudioSrc` supplies a WAV for voice cloning.
+
+```ts
+await loadModel({
+  modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+  },
+});
+```
+
+Omitting `ttsEngine` defaults to Chatterbox (same as the former ONNX plugin).
+
+### Supertonic
+
+Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language` — not a separate runtime flag.
+
+```ts
+await loadModel({
+  modelSrc: TTS_EN_SUPERTONIC_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "supertonic",
+    language: "en",
+    voice: "F1",
+  },
+});
+```
+
+For model constants, see [SDK — Models](/introduction#models).
+
+<Callout type="info">
+**Migrating from `@qvac/tts-onnx` (multi-file ONNX):** the legacy `modelConfig` shape (`ttsSpeechEncoderSrc`, `ttsEmbedTokensSrc`, `ttsConditionalDecoderSrc`, `ttsLanguageModelSrc`, `ttsTokenizerSrc`, Supertonic `ttsTextEncoderSrc` / `ttsDurationPredictorSrc` / …, and `ttsSupertonicMultilingual`) is no longer supported. Passing any of those fields raises a structured `LegacyTtsModelDeprecatedError` with a migration message. Plugin import path: `@qvac/sdk/tts-ggml/plugin` (a temporary `@qvac/sdk/onnx-tts/plugin` alias exists for older CLI bundles). Legacy ONNX model constants remain exported for one minor cycle for codemod migrations only.
+</Callout>
 
 ## Example
 

@@ -40,6 +40,36 @@ test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", 
   t.is(loadModelSrcRequestSchema.safeParse(validOcrRequest).success, true);
 });
 
+test("loadModelSrcRequestSchema: accepts classification load with empty modelSrc (bundled weights)", (t) => {
+  // Classification ships bundled GGUF weights, so callers can omit modelSrc.
+  // The client-side transform produces modelSrc: "" in that case; the server
+  // schema must accept it without falling through to the custom-plugin arm.
+  const bundledLoad = {
+    type: "loadModel",
+    modelType: ModelType.ggmlClassification,
+    modelSrc: "",
+    modelConfig: {},
+  };
+
+  const bundledWithTopK = {
+    type: "loadModel",
+    modelType: ModelType.ggmlClassification,
+    modelSrc: "",
+    modelConfig: { topK: 3 },
+  };
+
+  const customGguf = {
+    type: "loadModel",
+    modelType: ModelType.ggmlClassification,
+    modelSrc: "/path/to/my-classifier.gguf",
+    modelConfig: {},
+  };
+
+  t.is(loadModelSrcRequestSchema.safeParse(bundledLoad).success, true);
+  t.is(loadModelSrcRequestSchema.safeParse(bundledWithTopK).success, true);
+  t.is(loadModelSrcRequestSchema.safeParse(customGguf).success, true);
+});
+
 test("loadModelRequestSchema: custom plugin allows unknown modelConfig keys", (t) => {
   const customPluginRequest = {
     type: "loadModel",

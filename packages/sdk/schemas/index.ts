@@ -38,6 +38,7 @@ export * from "./rag";
 export * from "./ocr";
 export * from "./sdcpp-config";
 export * from "./vla";
+export * from "./classification";
 export * from "./shard";
 export * from "./suspend";
 export * from "./resume";

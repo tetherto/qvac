@@ -362,10 +362,10 @@ export const PLUGIN_PARAKEET =
 export const PLUGIN_NMT = "@qvac/sdk/nmtcpp-translation/plugin" as const;
 
 /**
- * Text-to-speech synthesis plugin (ONNX).
+ * Text-to-speech synthesis plugin (GGML).
  * Provides: speech synthesis from text.
  */
-export const PLUGIN_TTS = "@qvac/sdk/onnx-tts/plugin" as const;
+export const PLUGIN_TTS = "@qvac/sdk/tts-ggml/plugin" as const;
 
 /**
  * Optical character recognition plugin (ONNX).
@@ -388,6 +388,13 @@ export const PLUGIN_DIFFUSION =
 export const PLUGIN_VLA = "@qvac/sdk/ggml-vla/plugin" as const;
 
 /**
+ * Image classification plugin (GGML / MobileNetV3-Small).
+ * Provides: image classification with bundled 3-class model (food / report / other).
+ */
+export const PLUGIN_CLASSIFICATION =
+  "@qvac/sdk/ggml-classification/plugin" as const;
+
+/**
  * All built-in SDK plugins.
  *
  * @example
@@ -406,6 +413,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
   PLUGIN_VLA,
+  PLUGIN_CLASSIFICATION,
 ] as const;
 
 export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];
@@ -429,8 +437,8 @@ export const ADDON_PARAKEET = "@qvac/transcription-parakeet" as const;
 /** Native addon package for NMT translation (nmt.cpp) */
 export const ADDON_NMT = "@qvac/translation-nmtcpp" as const;
 
-/** Native addon package for TTS (ONNX) */
-export const ADDON_TTS = "@qvac/tts-onnx" as const;
+/** Native addon package for TTS (GGML) */
+export const ADDON_TTS = "@qvac/tts-ggml" as const;
 
 /** Native addon package for OCR (ONNX) */
 export const ADDON_OCR = "@qvac/ocr-onnx" as const;
@@ -440,3 +448,6 @@ export const ADDON_DIFFUSION = "@qvac/diffusion-cpp" as const;
 
 /** Native addon package for vision-language-action inference (SmolVLA on ggml) */
 export const ADDON_VLA = "@qvac/vla-ggml" as const;
+
+/** Native addon package for image classification (GGML / MobileNetV3) */
+export const ADDON_CLASSIFICATION = "@qvac/classification-ggml" as const;

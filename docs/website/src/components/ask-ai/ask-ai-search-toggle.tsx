@@ -68,17 +68,18 @@ function SmallSearchTrigger({ className }: { className?: string }) {
 
 /**
  * Drop-in replacement for the Fumadocs `searchToggle.components.lg`
- * slot. Stacks the Search pill and the Ask AI pill vertically so both
- * controls get the full sidebar column width - no cramping, no
- * two-line wrap of "Ask AI". The Ask AI pill carries its label, a
- * `Ctrl I` keyboard hint that mirrors Search's `Ctrl K`, and a
- * primary-tinted surface so it stays visually distinct.
+ * slot. Renders the Search pill alongside a compact "Ask AI" button
+ * inside a `w-full` flex row so they share the notebook top-nav slot:
+ * the Search pill takes the remaining space (via `flex-1`) and
+ * shrinks just enough to make room for the Ask AI button on its
+ * right. The button uses the default `header` variant weight
+ * (`font-medium` from the shared base classes).
  */
 export function AskAISearchToggleLarge() {
   return (
-    <div className="flex w-full flex-col gap-2">
+    <div className="flex w-full items-center gap-2">
       <LargeSearchTrigger />
-      <AskAIButton variant="sidebar-full" ariaLabel="Ask the AI assistant" />
+      <AskAIButton variant="header" className="font-normal" />
     </div>
   );
 }

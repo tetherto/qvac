@@ -4,7 +4,7 @@
     "node_modules",
     "dist",
     "../dist",
-    "../tests-qvac",
+    "../e2e",
     "../examples"
   ],
   "compilerOptions": {

@@ -9,7 +9,7 @@ import { GithubInfo } from 'fumadocs-ui/components/github-info';
 import { Cards } from 'fumadocs-ui/components/card';
 import { CustomTabs, CustomTabsItem } from "@/components/custom-tabs";
 import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
-import { AskAICodeBlock } from "@/components/ask-ai";
+// import { AskAICodeBlock } from "@/components/ask-ai"; // disabled while we sort out the legacy fallback
 import { FeaturesInfographic } from "@/components/features-infographic";
 import { SmartAnchor, SmartCard } from "@/components/mdx-smart-card";
 
@@ -49,10 +49,12 @@ function ButtonLink({
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
-    // Replace the default `pre` (which Fumadocs maps to `CodeBlock` +
-    // `Pre`) with a wrapper that injects an "Ask AI" trigger into every
-    // code block alongside the existing copy button.
-    pre: AskAICodeBlock,
+    // AskAICodeBlock disabled — the wrapper that injected the "Ask AI"
+    // sparkles trigger into every code block is parked alongside the
+    // other legacy-fallback steps. Re-enable by uncommenting the
+    // import above and the `pre:` override below; the component itself
+    // is preserved in `@/components/ask-ai/ask-ai-code-block.tsx`.
+    // pre: AskAICodeBlock,
     // Override the default `Card` with one that flags its subtree as
     // "inside an anchor" so `SmartAnchor` below knows to degrade.
     // `Cards` is re-exported as-is (it's just a layout grid).

@@ -171,7 +171,7 @@ jobs:
           max-wait-time-seconds: '10800'
 
       - name: Collect and upload Device Farm logs
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
         with:
           platform: ${{ matrix.platform }}
@@ -181,7 +181,7 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
 
       - name: Extract and report TTS-ONNX performance
-        if: always() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        if: always() && !cancelled() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
         uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
           platform: ${{ matrix.platform }}
@@ -190,7 +190,7 @@ jobs:
           artifact-name: perf-report-onnx-tts-${{ matrix.platform }}-${{ matrix.variant }}-${{ github.run_number }}
 
       - name: Comment results on PR
-        if: always()
+        if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
         with:
           addon-npm-name: '@qvac/tts-onnx'
