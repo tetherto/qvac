@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { transcribe } from '@qvac/sdk'
 import { sendJson, sendText, sendError } from '../../../http.js'
 import { readMultipart } from '../../../multipart.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkTranscribe } from '../../../core/sdk.js'
 import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import type { RouteContext } from '../../types.js'
 
@@ -88,11 +88,10 @@ export async function handleTranscriptions (req: IncomingMessage, res: ServerRes
   ctx.logger.info(`  transcribe model=${alias} file=${file.fileName} size=${fileSizeKB}KB format=${responseFormat}${prompt ? ' prompt=yes' : ''}`)
 
   try {
-    const op = await sdkTranscribe({
+    const op = transcribe({
       modelId: sdkModelId,
       audioChunk: file.data,
-      fileName: file.fileName,
-      prompt
+      ...(prompt !== undefined ? { prompt } : {})
     })
 
     // Bind the disconnect bridge before awaiting — long audio files
@@ -100,7 +99,7 @@ export async function handleTranscriptions (req: IncomingMessage, res: ServerRes
     // value cancel targets in the CLI.
     bindClientDisconnectCancel(req, res, op.requestId, ctx.logger)
 
-    const text = await op.result
+    const text = await op
 
     ctx.logger.info(`  transcribe done chars=${text.length}`)
 

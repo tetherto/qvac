@@ -14,13 +14,12 @@ export interface RouteContext {
   ephemeralFiles: EphemeralFilesStore
   chunkAttributions: ChunkAttributionStore
   responsesStore: ResponsesStore
-  /** @internal Unit tests only — replaces sdkTranscribe when set */
+  /** @internal Unit tests only — replaces the SDK `transcribe` when set */
   transcribeOverride?: (opts: {
     modelId: string
     audioChunk: Buffer
-    fileName: string
     prompt?: string | undefined
-  }) => Promise<{ requestId: string; result: Promise<string> }>
+  }) => Promise<string> & { requestId: string }
 }
 
 export type RouteHandler = (req: IncomingMessage, res: ServerResponse, ctx: RouteContext) => Promise<void> | void

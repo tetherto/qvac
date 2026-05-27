@@ -1,8 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { diffusion } from '@qvac/sdk'
+import type { DiffusionClientParams } from '@qvac/sdk'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { readMultipart, type MultipartFile } from '../../../multipart.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkDiffusion, type SDKDiffusionParams } from '../../../core/sdk.js'
 import {
   extractImageGenerationParams,
   logImageUnsupportedParams,
@@ -153,7 +154,7 @@ interface RunImageJobOptions {
   errorCode: 'image_generation_error' | 'image_edit_error'
   errorVerb: 'generation' | 'editing'
   alias: string
-  params: SDKDiffusionParams
+  params: DiffusionClientParams
   responseFormat: string
   wantsStream: boolean
 }
@@ -172,12 +173,26 @@ async function runDiffusionAndRespond (
   ctx.logger.info(`  ${logLabel} model=${alias} prompt_chars=${params.prompt.length} size=${dims} n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`)
 
   try {
-    const { buffers, stats } = await sdkDiffusion({
-      params,
-      onProgress: (tick) => {
-        ctx.logger.debug?.(`    diffusion step=${tick.step}/${tick.totalSteps} elapsed=${tick.elapsedMs}ms`)
+    const result = diffusion(params)
+
+    // Drain the progress stream concurrently with the outputs/stats promises.
+    // Sequentially awaiting outputs first would block progress callbacks
+    // behind the final image resolution.
+    const drainProgress = async (): Promise<void> => {
+      try {
+        for await (const tick of result.progressStream) {
+          ctx.logger.debug?.(`    diffusion step=${tick.step}/${tick.totalSteps} elapsed=${tick.elapsedMs}ms`)
+        }
+      } catch {
+        // Progress drain errors surface via outputs/stats below.
       }
-    })
+    }
+
+    const [buffers, stats] = await Promise.all([
+      result.outputs,
+      result.stats,
+      drainProgress()
+    ])
 
     if (stats?.seed != null) {
       ctx.logger.info(`  ${logLabel} done images=${buffers.length} seed=${stats.seed} ms=${stats.totalGenerationMs ?? stats.totalWallMs ?? 0}`)
