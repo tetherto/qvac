@@ -1,16 +1,8 @@
 ---
-title: SDK Release Notes — {{ versionLabel }}
-description: QVAC SDK release notes
+title: {{ pageTitle }}
+description: {{ pageDescription }}
 ---
 
-{% if not hasPreambleNpmLink %}
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{{ version }}
-
-{% endif %}
-{% for p in preambles %}
-{{ p.content }}
-
-{% endfor %}
 {% for section in overrides %}
 ## {{ section.heading }}
 
@@ -21,13 +13,13 @@ description: QVAC SDK release notes
 ---
 
 {% endif %}
-{% for category in categories %}
-## {{ category.name }}
+{% for v in versions %}
+## v{{ v.version }}
 
-{% for entry in category.packages %}
+{% for entry in v.packages %}
 ### @qvac/{{ entry.pkg }}
 
-{{ entry.content }}
+{{ entry.body }}
 
 {% endfor %}
 {% endfor %}
