@@ -270,8 +270,8 @@ describe('sdkToolCallsToOpenai', () => {
     assert.equal(sdkToolCallsToOpenai([]), undefined)
   })
 
-  it('converts tool calls with string arguments', () => {
-    const calls = [{ id: 'call_1', name: 'fn_a', arguments: '{"x":1}' }]
+  it('converts tool calls with object arguments to JSON string', () => {
+    const calls = [{ id: 'call_1', name: 'fn_a', arguments: { x: 1 } }]
     const result = sdkToolCallsToOpenai(calls)
     assert.ok(result)
     assert.equal(result.length, 1)
@@ -281,7 +281,7 @@ describe('sdkToolCallsToOpenai', () => {
     assert.equal(result[0]!.function.arguments, '{"x":1}')
   })
 
-  it('converts tool calls with object arguments to JSON string', () => {
+  it('serializes nested object arguments', () => {
     const calls = [{ id: 'call_2', name: 'fn_b', arguments: { key: 'value' } }]
     const result = sdkToolCallsToOpenai(calls)
     assert.ok(result)
@@ -296,8 +296,8 @@ describe('sdkToolCallsToOpenaiDeltas', () => {
 
   it('includes index in delta output', () => {
     const calls = [
-      { id: 'c1', name: 'fn_a', arguments: '{}' },
-      { id: 'c2', name: 'fn_b', arguments: '{}' }
+      { id: 'c1', name: 'fn_a', arguments: {} },
+      { id: 'c2', name: 'fn_b', arguments: {} }
     ]
     const result = sdkToolCallsToOpenaiDeltas(calls)
     assert.ok(result)
@@ -366,16 +366,16 @@ describe('extractGenerationParams', () => {
     assert.equal(params.presence_penalty, 0.1)
   })
 
-  it('extracts reasoning_budget true', () => {
+  it('extracts reasoning_budget true → SDK-native -1', () => {
     const params = extractGenerationParams({ reasoning_budget: true })
     assert.ok(params)
-    assert.equal(params.reasoning_budget, true)
+    assert.equal(params.reasoning_budget, -1)
   })
 
-  it('extracts reasoning_budget false', () => {
+  it('extracts reasoning_budget false → SDK-native 0', () => {
     const params = extractGenerationParams({ reasoning_budget: false })
     assert.ok(params)
-    assert.equal(params.reasoning_budget, false)
+    assert.equal(params.reasoning_budget, 0)
   })
 
   it('ignores non-boolean reasoning_budget', () => {

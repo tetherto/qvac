@@ -241,6 +241,7 @@ export const kvCacheCancelThenNewPrompt: TestDefinition = {
     secondUserMessage: "What is 2+2? Answer with just the number.",
     expectedAnswerContains: "4",
     cancelAfterTokens: 3,
+    generationParams: { temp: 0, top_k: 1, seed: 42 },
   },
   expectation: { validation: "function", fn: () => true },
   metadata: {

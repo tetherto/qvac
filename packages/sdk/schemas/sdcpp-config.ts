@@ -633,6 +633,14 @@ export const upscaleStatsSchema = z.object({
     .number()
     .optional()
     .describe("Number of ESRGAN passes used by the most recent upscale job."),
+  backendDevice: z
+    .enum(["cpu", "gpu"])
+    .optional()
+    .describe(
+      "Actual compute device used by the ESRGAN upscaler. " +
+      "Reflects the backend stable-diffusion.cpp selected (e.g. Android `gpu` " +
+      "falls back to `cpu` because the mobile GPU/OpenCL path is unstable).",
+    ),
 });
 
 export type UpscaleStats = z.infer<typeof upscaleStatsSchema>;
