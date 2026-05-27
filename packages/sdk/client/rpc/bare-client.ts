@@ -11,7 +11,6 @@ import { handlers } from "@/server/rpc/handlers";
 import { registry } from "@/server/rpc/handler-registry";
 import { createErrorResponse } from "@/schemas";
 import {
-  PearWorkerEntryRequiredError,
   RPCNoHandlerError,
   RPCRequestNotSentError,
 } from "@/utils/errors-client";
@@ -20,57 +19,18 @@ import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
-import { getClientLogger } from "@/logging";
-import { getAllPlugins } from "@/server/plugins";
 import {
   initializeWorkerCore,
   shutdownBareDirectWorker,
   cleanupForTerminate,
 } from "@/server/worker-core";
 import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
+import { ensurePluginsRegistered } from "@/client/rpc/ensure-worker-ready";
 
-const logger = getClientLogger();
-
-/**
- * Load worker entry to register plugins before any SDK calls.
- *
- * If plugins are already registered (e.g., by a Pear worker bootstrap),
- * skip loading the default worker but still initialize worker core.
- *
- * NOTE: For Pear apps, the fallback (loading default worker) cannot work.
- *
- * The default worker is intentionally excluded from `pear stage --compact`
- * to enable tree-shaking of unused built-in plugins. When a Pear app tries
- * to dynamically import it at runtime, the path resolves to a pear:// URL.
- * The default worker imports built-in plugins, which load native addons
- * (.bare files). Native addons cannot be loaded from pear:// URLs, causing
- * UNSUPPORTED_PROTOCOL errors.
- *
- * Instead, we detect Pear runtime and throw a clear error directing users
- * to use the generated worker entry (qvac/worker.pear.entry.mjs).
- *
- * The fallback only works in non-Pear environments.
- */
-async function loadWorkerEntry() {
+async function ensureWorkerReady() {
   initializeWorkerCore();
-
-  if (getAllPlugins().length > 0) {
-    logger.info("📦 Plugins already registered, worker core initialized");
-    return;
-  }
-
-  const { isPear } = await import("which-runtime");
-  if (isPear) {
-    throw new PearWorkerEntryRequiredError("qvac/worker.pear.entry.mjs");
-  }
-
-  // Fallback: load default worker (all built-in plugins)
-  logger.info("📦 Loading default worker (all built-in plugins)");
-  const workerPath = "../../server/" + "worker.js";
-  await import(workerPath);
+  await ensurePluginsRegistered();
 }
-
-let workerEntryLoaded = false;
 
 // Handler function types
 type Handler =
@@ -268,10 +228,7 @@ function createMockRPCRequest() {
 let configInitialized = false;
 
 export async function getRPC() {
-  if (!workerEntryLoaded) {
-    await loadWorkerEntry();
-    workerEntryLoaded = true;
-  }
+  await ensureWorkerReady();
 
   const mockRPC = {
     request() {
