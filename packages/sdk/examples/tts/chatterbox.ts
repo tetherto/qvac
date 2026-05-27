@@ -3,11 +3,8 @@ import {
   textToSpeech,
   unloadModel,
   type ModelProgressUpdate,
-  TTS_TOKENIZER_EN_CHATTERBOX,
-  TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
-  TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
-  TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
-  TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+  TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
+  TTS_S3GEN_EN_CHATTERBOX,
 } from "@qvac/sdk";
 import {
   createWav,
@@ -16,32 +13,22 @@ import {
   createWavHeader,
 } from "./utils";
 
-// Chatterbox TTS: voice cloning with reference audio.
-// Uses registry model constants - downloads automatically from QVAC Registry.
-// Only reference audio WAV needs to be provided by the user.
-// Usage: node chatterbox-filesystem.js <referenceAudioSrc>
+// Chatterbox TTS (GGML): voice cloning with optional reference audio.
+// Uses registry model constants — downloads automatically from QVAC Registry.
+// Usage: node chatterbox.ts [referenceAudioSrc]
 const [referenceAudioSrc] = process.argv.slice(2);
-
-if (!referenceAudioSrc) {
-  console.error("Usage: node chatterbox-filesystem.js <referenceAudioSrc>");
-  process.exit(1);
-}
 
 const CHATTERBOX_SAMPLE_RATE = 24000;
 
 try {
   const modelId = await loadModel({
-    modelSrc: TTS_TOKENIZER_EN_CHATTERBOX.src,
+    modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0.src,
     modelType: "tts",
     modelConfig: {
       ttsEngine: "chatterbox",
       language: "en",
-      ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX.src,
-      ttsSpeechEncoderSrc: TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32.src,
-      ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32.src,
-      ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32.src,
-      ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32.src,
-      referenceAudioSrc,
+      s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX.src,
+      ...(referenceAudioSrc ? { referenceAudioSrc } : {}),
     },
     onProgress: (progress: ModelProgressUpdate) => {
       console.log(progress);

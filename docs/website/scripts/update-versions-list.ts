@@ -4,20 +4,30 @@
  * and `content/docs/reference/release-notes/`.
  *
  * The site has two versioned sections (API summary, release notes), each
- * served as a single MDX file per version:
- *   - `<basePath>/index.mdx`            — current latest
- *   - `<basePath>/v<X.Y.Z>.mdx`         — older versions
+ * served as a single MDX file **per minor series**:
+ *   - `<basePath>/index.mdx`        — current latest minor series
+ *   - `<basePath>/vX.Y.x.mdx`       — archived minor series (literal `x`,
+ *                                     accumulates patches as `## vX.Y.Z`
+ *                                     sections inside the file)
  *
- * This script discovers all `vX.Y.Z.mdx` siblings, sorts them descending,
- * and rewrites `versions.ts` so the version selector dropdowns always
- * reflect what's actually on disk.
+ * This script discovers all `vX.Y.x.mdx` siblings, sorts them descending
+ * by major/minor, and rewrites `versions.ts` so the version selector
+ * dropdowns always reflect what's on disk.
+ *
+ * Two fields encode the "latest" pointer:
+ *   - `latest`        — precise current patch (e.g. `v0.11.3`). Used for
+ *                       page titles ("v0.11.x (latest)") and description
+ *                       ranges ("Lists all releases from v0.11.0 to v0.11.3").
+ *   - `latestSeries`  — series form (e.g. `v0.11.x`). URL slug + selector
+ *                       value for the current-latest entry; `index.mdx`
+ *                       is served at `latestSeries`.
  *
  * Usage:
  *   bun run scripts/update-versions-list.ts [--latest=X.Y.Z]
  *
- * The `--latest=X.Y.Z` flag controls the version label rendered as
- * "vX.Y.Z (latest)" — both for the API summary and release notes. If
- * omitted, the script reads the SDK's own `package.json` version.
+ * `--latest=X.Y.Z` (full semver) overrides which patch is marked latest
+ * in the manifest. When omitted the script reads the SDK's `package.json`
+ * version, which is the source of truth in normal release flows.
  */
 
 import * as fs from "fs/promises";
@@ -36,16 +46,25 @@ const SDK_PKG_JSON = path.resolve(
   "package.json",
 );
 
-function compareSemverDesc(a: string, b: string): number {
-  const aVer = a.replace(/^v/, "").split(".").map(Number);
-  const bVer = b.replace(/^v/, "").split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if (aVer[i] !== bVer[i]) return bVer[i] - aVer[i];
-  }
-  return 0;
+/** Match `v<major>.<minor>.x` (series form). */
+const SERIES_VALUE_RE = /^v(\d+)\.(\d+)\.x$/;
+
+/** Match `v<major>.<minor>.x.mdx` (on-disk series snapshot). */
+const SERIES_FILENAME_RE = /^v(\d+)\.(\d+)\.x\.mdx$/;
+
+function compareSeriesDesc(a: string, b: string): number {
+  const aMatch = SERIES_VALUE_RE.exec(a);
+  const bMatch = SERIES_VALUE_RE.exec(b);
+  if (!aMatch || !bMatch) return 0;
+  const aMajor = Number(aMatch[1]);
+  const bMajor = Number(bMatch[1]);
+  if (aMajor !== bMajor) return bMajor - aMajor;
+  const aMinor = Number(aMatch[2]);
+  const bMinor = Number(bMatch[2]);
+  return bMinor - aMinor;
 }
 
-async function discoverSectionVersions(sectionDir: string): Promise<string[]> {
+async function discoverSectionSeries(sectionDir: string): Promise<string[]> {
   let entries;
   try {
     entries = await fs.readdir(sectionDir, { withFileTypes: true });
@@ -53,10 +72,11 @@ async function discoverSectionVersions(sectionDir: string): Promise<string[]> {
     return [];
   }
   return entries
-    .filter((e) => e.isFile() && e.name.endsWith(".mdx") && e.name !== "index.mdx")
-    .map((e) => e.name.replace(/\.mdx$/, ""))
-    .filter((name) => /^v\d+\.\d+\.\d+$/.test(name))
-    .sort(compareSemverDesc);
+    .filter((e) => e.isFile() && e.name !== "index.mdx")
+    .map((e) => SERIES_FILENAME_RE.exec(e.name))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => `v${m[1]}.${m[2]}.x`)
+    .sort(compareSeriesDesc);
 }
 
 async function readSdkVersion(): Promise<string> {
@@ -68,20 +88,39 @@ async function readSdkVersion(): Promise<string> {
   return `v${pkg.version}`;
 }
 
+/** Parse `v<major>.<minor>.<patch>` and return the series form. */
+function seriesOf(fullSemver: string): string {
+  const match = /^v(\d+)\.(\d+)\.(\d+)$/.exec(fullSemver);
+  if (!match) {
+    throw new Error(
+      `Latest version must be full semver (vX.Y.Z), got: ${fullSemver}`,
+    );
+  }
+  return `v${match[1]}.${match[2]}.x`;
+}
+
 function buildSectionLiteral(
   basePath: string,
   latest: string,
-  olderVersions: string[],
+  latestSeries: string,
+  olderSeries: string[],
 ): string {
+  // Strip latestSeries from the olderSeries set so we don't double-list
+  // the current latest minor as both the (latest) entry and an archived
+  // sibling — useful when the index.mdx has already been frozen as
+  // v<latestSeries>.mdx during a release flow.
+  const filteredOlder = olderSeries.filter((s) => s !== latestSeries);
+
   const lines: string[] = [];
   lines.push(`{`);
   lines.push(`  basePath: '${basePath}',`);
   lines.push(`  latest: '${latest}',`);
+  lines.push(`  latestSeries: '${latestSeries}',`);
   lines.push(`  versions: [`);
   lines.push(
-    `    { label: '${latest} (latest)', value: '${latest}', isLatest: true },`,
+    `    { label: '${latestSeries} (latest)', value: '${latestSeries}', isLatest: true },`,
   );
-  for (const v of olderVersions) {
+  for (const v of filteredOlder) {
     lines.push(`    { label: '${v}', value: '${v}' },`);
   }
   lines.push(`  ],`);
@@ -112,21 +151,29 @@ async function updateVersionsList(latestOverride?: string) {
       ? latestOverride
       : `v${latestOverride}`
     : await readSdkVersion();
+  const latestSeries = seriesOf(latest);
   console.log(`   Latest: ${latest}`);
+  console.log(`   Latest series: ${latestSeries}`);
 
-  const apiOlder = await discoverSectionVersions(apiDir);
-  const releaseNotesOlder = await discoverSectionVersions(releaseNotesDir);
+  const apiOlder = await discoverSectionSeries(apiDir);
+  const releaseNotesOlder = await discoverSectionSeries(releaseNotesDir);
   console.log(
-    `   API older versions: ${apiOlder.join(", ") || "(none)"}`,
+    `   API series on disk: ${apiOlder.join(", ") || "(none)"}`,
   );
   console.log(
-    `   Release notes older versions: ${releaseNotesOlder.join(", ") || "(none)"}`,
+    `   Release notes series on disk: ${releaseNotesOlder.join(", ") || "(none)"}`,
   );
 
-  const apiSection = buildSectionLiteral("/reference/api", latest, apiOlder);
+  const apiSection = buildSectionLiteral(
+    "/reference/api",
+    latest,
+    latestSeries,
+    apiOlder,
+  );
   const releaseNotesSection = buildSectionLiteral(
     "/reference/release-notes",
     latest,
+    latestSeries,
     releaseNotesOlder,
   );
 
@@ -137,9 +184,11 @@ async function updateVersionsList(latestOverride?: string) {
  * a single bare path that always reflects the current SDK.
  *
  * Each section is a single content folder under \`content/docs/<basePath>/\`:
- *   - The latest version is served from \`index.mdx\` at the bare basePath.
- *   - Older versions are served from \`<basePath>/v<X.Y.Z>\` via a sibling
- *     MDX file (\`v<X.Y.Z>.mdx\`).
+ *   - The latest minor series is served from \`index.mdx\` at the bare
+ *     basePath.
+ *   - Older minor series are served from \`<basePath>/v<X.Y>.x\` via a
+ *     sibling MDX file (\`v<X.Y>.x.mdx\`, literal "x"). The sibling
+ *     accumulates patch sections (\`## vX.Y.Z\`) for that minor line.
  *
  * Auto-generated by \`scripts/update-versions-list.ts\` — do not edit by
  * hand for routine releases.
@@ -153,7 +202,18 @@ export interface VersionEntry {
 
 export interface VersionedSection {
   basePath: string;
+  /**
+   * Precise current patch (e.g. \`v0.11.3\`). Used by page renderers to
+   * advertise the latest-patch number in titles / description ranges.
+   * Not used for URL routing — that goes through \`latestSeries\`.
+   */
   latest: string;
+  /**
+   * Series form of the current latest minor (e.g. \`v0.11.x\`). This is
+   * the URL slug + version-selector value of the (latest) entry, and
+   * the path \`index.mdx\` is served from at the bare \`basePath\`.
+   */
+  latestSeries: string;
   versions: VersionEntry[];
 }
 
@@ -168,7 +228,8 @@ const VERSIONED_SECTIONS: VersionedSection[] = [
 
 /**
  * Re-exported for backward compatibility with consumers that advertise the
- * latest SDK version in plain text (e.g. the \`llms.txt\` route).
+ * latest SDK version in plain text (e.g. the \`llms.txt\` route). Carries
+ * the precise patch number, not the series.
  */
 export const LATEST_VERSION = API_SECTION.latest;
 
@@ -190,8 +251,9 @@ export function getVersionedSection(
 }
 
 /**
- * Extract the current version slug from a versioned-section pathname.
- * Returns \`section.latest\` when on the bare \`basePath\` (\`index.mdx\`).
+ * Extract the current series slug from a versioned-section pathname.
+ * Returns \`section.latestSeries\` when on the bare \`basePath\`
+ * (\`index.mdx\` — the current latest minor series).
  */
 export function getCurrentVersion(
   pathname: string,
@@ -200,20 +262,20 @@ export function getCurrentVersion(
   const tail = pathname
     .slice(section.basePath.length)
     .replace(/^\\/+|\\/+$/g, '');
-  if (!tail) return section.latest;
+  if (!tail) return section.latestSeries;
   return tail.split('/')[0];
 }
 
 /**
- * Build the URL to navigate to when the user picks a target version inside
- * a section. The latest version maps to the bare \`basePath\`; any other
- * version maps to \`basePath/<value>\`.
+ * Build the URL to navigate to when the user picks a target series inside
+ * a section. The current latest series maps to the bare \`basePath\`; any
+ * other series maps to \`basePath/<value>\`.
  */
 export function computeSectionVersionUrl(
   section: VersionedSection,
   targetVersion: string,
 ): string {
-  if (targetVersion === section.latest) return section.basePath;
+  if (targetVersion === section.latestSeries) return section.basePath;
   return \`\${section.basePath}/\${targetVersion}\`;
 }
 
@@ -277,7 +339,7 @@ if (args.includes("--help") || args.includes("-h")) {
   console.log("Usage: bun run scripts/update-versions-list.ts [--latest=X.Y.Z]");
   console.log("");
   console.log(
-    "  --latest=X.Y.Z  Override which version is marked as latest. Defaults",
+    "  --latest=X.Y.Z  Override which patch is marked latest. Defaults",
   );
   console.log(
     "                  to the SDK package.json version.",

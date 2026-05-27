@@ -1,0 +1,33 @@
+.vs/
+build/
+node_modules/
+config.cmake
+.idea/
+prebuilds/
+package-lock.json
+.npmrc
+model/
+models/
+
+.cache
+test/unit/all.js
+test/integration/all.js
+.idea
+.vscode
+
+# Python dev tooling (scripts/setup-venv.sh creates ./venv).
+# venv/ is the local dev venv for the .pth -> .gguf converter (~1.4 GiB
+# of torch + easyocr binaries); never commit it.
+venv/
+__pycache__/
+.pytest_cache/
+
+# Added by lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp
+
+# Benchmark / debug artifacts
+out/
+*.profraw
+*.profdata

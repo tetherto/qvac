@@ -1,12 +1,17 @@
 #!/usr/bin/env bun
 /**
- * Generate the API summary MDX for one SDK version.
+ * Generate the API summary MDX for one SDK version's minor series.
  *
  * Output target:
  *   - latest:  content/docs/reference/api/index.mdx
- *   - older:   content/docs/reference/api/v<X.Y.Z>.mdx
- *   - --target=<file>: content/docs/reference/api/<file> (override; used by
- *     the patch-archived flow to write into a renamed sibling).
+ *   - older:   content/docs/reference/api/v<X.Y>.x.mdx  (literal "x" — one
+ *              permanent page per minor line)
+ *   - --target=<file>: content/docs/reference/api/<file> (explicit override)
+ *
+ * Patches never re-render or relabel the API summary: the public API is
+ * frozen at the minor boundary, so a patch by definition adds nothing
+ * here. The page's title and content reflect the minor series, not the
+ * latest patch (`v0.11.x`, never `v0.11.3`).
  *
  * The pipeline is:
  *   1. Phase 1 — Extract: TypeDoc walks the SDK and writes api-data.json
@@ -18,10 +23,10 @@
  *   3. Phase 2 — Render: writes a single MDX through `single-page.njk`.
  *
  * Title-only mode (`--title-only`) skips Phase 1 + Phase 1.5 + the full
- * render. It opens the existing target MDX, rewrites only the frontmatter
- * `title:` line to the new version label, and keeps the body verbatim.
- * Used by the patch flow so we never re-run TypeDoc for a patch (patches
- * must not change the public API surface — that would be a minor).
+ * render. It opens the existing target MDX and rewrites only the
+ * frontmatter `title:` line — used by the minor orchestrator to relabel
+ * a freshly-frozen series snapshot (which inherits the outgoing
+ * `index.mdx` title verbatim, still carrying the `(latest)` marker).
  *
  * Usage:
  *   bun run scripts/generate-api-docs.ts <version> [--no-ai] [--force-extract]
@@ -30,9 +35,9 @@
  *
  * Flags:
  *   --latest          Mark this version as the latest. Writes to index.mdx
- *                     instead of v<X.Y.Z>.mdx.
+ *                     instead of v<X.Y>.x.mdx.
  *   --target=<file>   Override the output filename inside the API section
- *                     directory (e.g. `--target=v0.8.2.mdx`). Mutually
+ *                     directory (e.g. `--target=v0.10.x.mdx`). Mutually
  *                     exclusive with `--latest`.
  *   --title-only      Skip TypeDoc + AI + render. Only rewrite the
  *                     frontmatter title of the existing target file.
@@ -52,7 +57,12 @@ import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { extractApiData } from "./api-docs/extract.js";
 import { renderApiDocs } from "./api-docs/render.js";
-import { rewriteFrontmatterTitleLine } from "./lib/release-shared.js";
+import {
+  parseVersion,
+  rewriteFrontmatterTitleLine,
+  seriesFileName,
+  seriesName,
+} from "./lib/release-shared.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-docs", "api-data.json");
@@ -76,7 +86,7 @@ interface GenerateOptions {
 async function generateApiDocs(version: string, options: GenerateOptions) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(
-      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.9.1)`,
+      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.11.0)`,
     );
   }
 
@@ -86,7 +96,11 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
     );
   }
 
-  const versionLabel = options.isLatest ? `v${version} (latest)` : `v${version}`;
+  const parsed = parseVersion(version);
+  const series = seriesName(parsed);
+  // Series-only labels: patches don't change the API summary, so the
+  // title never carries a precise patch number — only the minor line.
+  const versionLabel = options.isLatest ? `${series} (latest)` : series;
 
   const apiDir = path.join(
     DOCS_WEBSITE_DIR,
@@ -99,7 +113,7 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
   const outputFile = path.join(
     apiDir,
     options.target ??
-      (options.isLatest ? "index.mdx" : `v${version}.mdx`),
+      (options.isLatest ? "index.mdx" : seriesFileName(parsed.major, parsed.minor)),
   );
 
   if (options.titleOnly) {
@@ -229,7 +243,7 @@ if (import.meta.main) {
     console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
     console.error("Flags:");
     console.error(
-      "  --latest          Write to index.mdx instead of v<version>.mdx",
+      "  --latest          Write to index.mdx instead of v<X.Y>.x.mdx",
     );
     console.error(
       "  --target=<file>   Override output filename inside api/ (mutually exclusive with --latest)",
@@ -242,10 +256,10 @@ if (import.meta.main) {
       "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
     );
     console.error("Examples:");
-    console.error("  bun run scripts/generate-api-docs.ts 0.9.1 --latest");
-    console.error("  bun run scripts/generate-api-docs.ts 0.8.0 --no-ai");
+    console.error("  bun run scripts/generate-api-docs.ts 0.11.0 --latest");
+    console.error("  bun run scripts/generate-api-docs.ts 0.10.0 --no-ai");
     console.error(
-      "  bun run scripts/generate-api-docs.ts 0.8.2 --target=v0.8.2.mdx --title-only",
+      "  bun run scripts/generate-api-docs.ts 0.10.2 --target=v0.10.x.mdx --title-only",
     );
     process.exit(1);
   } else {

@@ -12,6 +12,7 @@
     "packages/cli/",
     "packages/rag/",
     "packages/logging/",
-    "packages/error/"
+    "packages/error/",
+    "packages/ai-sdk-provider/"
   ]
 }

@@ -88,9 +88,13 @@
       "types": "./dist/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
       "import": "./dist/server/bare/plugins/nmtcpp-translation/plugin.js"
     },
+    "./tts-ggml/plugin": {
+      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
+    },
     "./onnx-tts/plugin": {
-      "types": "./dist/server/bare/plugins/onnx-tts/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/onnx-tts/plugin.js"
+      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
     },
     "./onnx-ocr/plugin": {
       "types": "./dist/server/bare/plugins/onnx-ocr/plugin.d.ts",
@@ -103,6 +107,10 @@
     "./ggml-vla/plugin": {
       "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
       "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
+    },
+    "./ggml-classification/plugin": {
+      "types": "./dist/server/bare/plugins/ggml-classification/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/ggml-classification/plugin.js"
     },
     "./plugin-utils": {
       "types": "./dist/schemas/plugin.d.ts",
@@ -159,13 +167,13 @@
     "test:unit": "bun run scripts/run-unit-tests.ts",
     "test:security": "bun run scripts/run-security-tests.ts",
     "test:security:bare": "bun run scripts/run-security-tests-bare.ts",
-    "lint": "eslint . --max-warnings=0 && bun run typecheck",
+    "lint": "eslint . --max-warnings=0 && npm run typecheck",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "postcompile:aliases": "node ./scripts/resolve-aliases.mjs",
-    "build": "rm -rf dist && bun run lint && tsc --project tsconfig.json && bun run postcompile:aliases",
+    "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
@@ -180,6 +188,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
+    "@qvac/classification-ggml": "^0.2.0",
     "@qvac/decoder-audio": "^0.3.7",
     "@qvac/diffusion-cpp": "^0.9.1",
     "@qvac/embed-llamacpp": "^0.17.0",
@@ -193,10 +202,11 @@
     "@qvac/transcription-parakeet": "^0.6.0",
     "@qvac/transcription-whispercpp": "^0.7.0",
     "@qvac/translation-nmtcpp": "^4.0.0",
-    "@qvac/tts-onnx": "^0.9.0",
+    "@qvac/tts-ggml": "^0.1.2",
     "@qvac/vla-ggml": "^0.2.0",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.13.4",
+    "bare-events": "^2.8.0",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
     "bare-net": "^2.2.0",
