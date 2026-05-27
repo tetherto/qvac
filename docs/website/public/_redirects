@@ -104,3 +104,15 @@
 # Section rename: /http-server → /cli/http-server
 /http-server/   /cli/http-server/   301
 /http-server    /cli/http-server/   301
+
+# ======================================================================
+# CATCH-ALL 404 — MUST BE THE LAST RULE
+# ----------------------------------------------------------------------
+# Sevalla serves /404.html automatically for unresolved paths, but with
+# HTTP 200, which breaks SEO, link checkers, analytics and HTTP clients.
+# This explicit rule forces a real `404 Not Found` status while still
+# rendering the same /404.html body. Only reached when no static file and
+# no rule above matches.
+# ======================================================================
+
+/*   /404.html   404
