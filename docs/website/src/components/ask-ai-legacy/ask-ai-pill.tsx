@@ -102,10 +102,15 @@ export function AskAIPill() {
         // fade-out, which is exactly the horizontal "jump" the user
         // saw - the pill still partially visible while its layout
         // box was sliding right.
-        'fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 transition-[opacity,transform] duration-200 sm:px-6 sm:pb-4',
-        isHidden
-          ? 'pointer-events-none translate-y-4 opacity-0'
-          : 'translate-y-0 opacity-100',
+        // `pointer-events-none` on the outer wrapper is critical: this
+        // element is `fixed inset-x-0 bottom-0` and spans the full
+        // viewport width as a thin strip. Without it, the empty padding
+        // areas on either side of the centered pill (`max-w-3xl`) sit
+        // on top of the sidebar's bottom entries (and the main content
+        // edges) and swallow clicks. The inner pill container restores
+        // `pointer-events-auto` so the actual control stays clickable.
+        'pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 transition-[opacity,transform] duration-200 sm:px-6 sm:pb-4',
+        isHidden ? 'translate-y-4 opacity-0' : 'translate-y-0 opacity-100',
       )}
     >
       <div className="pointer-events-auto w-full max-w-3xl">
