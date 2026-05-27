@@ -12315,5 +12315,20 @@
     ],
     "notes": "Vision tower linear weights Q8_0; SmolLM2 / action expert / flow-matching projections F32. Converted from HuggingFaceVLA/smolvla_libero.",
     "link": "https://huggingface.co/HuggingFaceVLA/smolvla_libero"
+  },
+  {
+    "source": "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/593b5a2e04c8f3e4ee880263f93e0bd2901ad47f/smollm2-360m-instruct-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "SmolLM2 360M instruction-tuned GGUF model from Hugging Face, useful as a small text-generation canary.",
+    "quantization": "q8",
+    "params": "360M",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "smollm2",
+      "canary"
+    ],
+    "notes": ""
   }
 ]

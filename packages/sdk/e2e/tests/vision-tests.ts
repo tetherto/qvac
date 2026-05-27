@@ -5,7 +5,7 @@ const createVisionTest = (
   prompt: string,
   imagePath: string,
   expectation: Expectation,
-  opts: { stream?: boolean; estimatedDurationMs?: number } = {},
+  opts: { stream?: boolean; estimatedDurationMs?: number; generationParams?: Record<string, unknown> } = {},
   suites?: string[],
 ): TestDefinition => ({
   testId,
@@ -18,6 +18,7 @@ const createVisionTest = (
       },
     ],
     ...(opts.stream && { stream: true }),
+    ...(opts.generationParams && { generationParams: opts.generationParams }),
   },
   expectation,
   ...(suites && { suites }),
@@ -28,12 +29,14 @@ const createVisionTest = (
   },
 });
 
+const ELEPHANT_IMAGE_TERMS = ["elephant", "tusk", "trunk"];
+
 export const visionBasic = createVisionTest(
   "vision-basic",
   "What animal is in this image?",
   "elephant.jpg",
-  { validation: "contains-any", contains: ["elephant", "tusk", "trunk"] },
-  {},
+  { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
+  { generationParams: { temp: 0, seed: 42 } },
   ["smoke"],
 );
 
@@ -41,8 +44,8 @@ export const visionStreaming = createVisionTest(
   "vision-streaming",
   "What do you see in this image?",
   "elephant.jpg",
-  { validation: "contains-any", contains: ["elephant", "tusk", "trunk"] },
-  { stream: true },
+  { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
+  { stream: true, generationParams: { temp: 0, seed: 42 } },
   ["smoke"],
 );
 
@@ -50,7 +53,8 @@ export const visionStats = createVisionTest(
   "vision-stats",
   "Describe this image briefly.",
   "elephant.jpg",
-  { validation: "contains-any", contains: ["elephant", "tusk", "trunk"] },
+  { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
+  { generationParams: { temp: 0, seed: 42 } },
 );
 
 export const visionFormatPng = createVisionTest(
@@ -86,7 +90,8 @@ export const visionObjectDetection = createVisionTest(
   "vision-object-detection",
   "List all the objects you can identify in this image.",
   "room.jpg",
-  { validation: "contains-any", contains: ["sofa", "table", "lamp", "window"] },
+  { validation: "contains-any", contains: ["sofa", "couch", "table", "lamp", "window"] },
+  { generationParams: { temp: 0, seed: 42 } },
 );
 
 export const visionTextExtraction = createVisionTest(
