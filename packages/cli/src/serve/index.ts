@@ -120,7 +120,11 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     })
   }
 
-  if (options.cors) {
+  // `--docs` implies CORS: the Swagger UI's "Try it out" feature always issues
+  // cross-origin requests (browser origin vs spec `servers` URL often differ —
+  // localhost vs 127.0.0.1, port forwards, etc.), and the UI is unusable
+  // without `Access-Control-Allow-Origin`.
+  if (options.cors || options.docs) {
     await app.register(cors, {
       origin: '*',
       methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
