@@ -861,31 +861,6 @@ struct gguf_deleter {
 using gguf_unique_ptr = std::unique_ptr<gguf_context, gguf_deleter>;
 } // namespace
 
-// Discover ggml backend plugins (Vulkan / Metal / OpenCL / …) shipped next to
-// the addon. Both `ggml_backend_load_all*` registrations are global state
-// inside the ggml plugin loader; running them more than once is wasteful and,
-// on some platforms (qvac-fabric Android OpenCL build), races the .so init.
-// Wrapping the registration in std::call_once gives an explicit one-thread
-// init contract instead of the previous read-act-update on a plain bool.
-// backendsDir must be the absolute path to the prebuilds folder (the JS layer
-// defaults it to path.join(__dirname, 'prebuilds')). BACKENDS_SUBDIR is then
-// appended as a relative sub-path so dlopen resolves from an absolute base
-// instead of the process CWD — critical on mobile where CWD is unpredictable.
-static void load_backends_once(const std::string& backendsDir) {
-  static std::once_flag s_backends_once;
-  std::call_once(s_backends_once, [backendsDir]() {
-    if (!backendsDir.empty()) {
-      std::filesystem::path p(backendsDir);
-#ifdef BACKENDS_SUBDIR
-      p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-      QLOG_IF(Priority::INFO, "Loading backends from: " + p.string());
-      ggml_backend_load_all_from_path(p.string().c_str());
-    } else {
-      ggml_backend_load_all();
-    }
-  });
-}
 
 // Initialise the CPU backend — always required, both as a primary on
 // CPU-only platforms and as a fallback target for ops the GPU backend
@@ -1522,7 +1497,7 @@ bool smolvla_load_model(
       std::string("smolvla_load_model: loading model from '") + path +
           "' (force_cpu=" + (force_cpu ? "true" : "false") + ")");
 
-  load_backends_once(backendsDir);
+  vla_backend_selection::loadBackendsOnce(backendsDir);
   if (!init_cpu_backend(model)) {
     return false;
   }

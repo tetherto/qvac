@@ -402,12 +402,9 @@ jobs:
           # /tmp permissions from cross-job leftover dirs.
           echo "📥 Downloading pi05 parity dump for fixture extraction..."
           PI05_BASE_PATH="qvac_models_compiled/vla/pi05-base"
-          LATEST_DATE=$(aws s3 ls "s3://${MODEL_S3_BUCKET}/${PI05_BASE_PATH}/" --region "$AWS_REGION" \
-            | grep "PRE" | awk '{print $2}' | sed 's/\///' | sort | tail -1)
-          if [[ ! "$LATEST_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-            echo "ERROR: unexpected LATEST_DATE format: '$LATEST_DATE'"
-            exit 1
-          fi
+          # Pin to the same oracle date as the desktop workflow to ensure
+          # model + fixture + activations are from the same sweep.
+          LATEST_DATE="2026-05-21"
           echo "   Using date: $LATEST_DATE"
           ORACLE_DIR="${RUNNER_TEMP}/pi05-oracle"
           mkdir -p "$ORACLE_DIR"

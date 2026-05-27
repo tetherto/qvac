@@ -16,6 +16,9 @@ inline uint32_t ggufGetU32Or(
   if (idx < 0) {
     return dflt;
   }
+  if (gguf_get_kv_type(g, idx) != GGUF_TYPE_UINT32) {
+    return dflt;
+  }
   return gguf_get_val_u32(g, idx);
 }
 

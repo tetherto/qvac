@@ -11,6 +11,7 @@ set -e
 # Apache-2.0 weights → quantised GGUF is a derivative work that's
 # explicitly allowed to mirror. Public on purpose so HF's CDN serves it.
 
+# Override with PI05_HF_REPO to point at a project-owned mirror when available.
 HF_REPO="${PI05_HF_REPO:-olyas/vla-ggml-models}"
 MODEL_NAME="pi05-base-q-aggressive.gguf"
 MODEL_URL="https://huggingface.co/${HF_REPO}/resolve/main/${MODEL_NAME}"

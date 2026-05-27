@@ -787,11 +787,12 @@ def main() -> int:
     import transformers as _tr
     import lerobot as _lr
 
-    from huggingface_hub import HfApi
-
-    api = HfApi()
-    ckpt_info = api.model_info(args.checkpoint)
-    ckpt_revision = ckpt_info.sha
+    ckpt_path = Path(args.checkpoint)
+    if ckpt_path.exists():
+        ckpt_revision = f"local:{sha256_file(next(ckpt_path.glob('*.safetensors')))[:12]}"
+    else:
+        from huggingface_hub import HfApi
+        ckpt_revision = HfApi().model_info(args.checkpoint).sha
 
     fixtures_payload = {
         "checkpoint": args.checkpoint,

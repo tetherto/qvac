@@ -11,7 +11,6 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -932,16 +931,6 @@ struct Pi05StagedGuard {
   ~Pi05StagedGuard() { pi05FreeStaged(sg); }
 };
 
-void loadBackendsOnce(const std::string& backends_dir) {
-  static std::once_flag s_flag;
-  std::call_once(s_flag, [&backends_dir]() {
-    if (!backends_dir.empty()) {
-      ggml_backend_load_all_from_path(backends_dir.c_str());
-    } else {
-      ggml_backend_load_all();
-    }
-  });
-}
 
 
 // alloc+copy weight loader. Allocates a backend buffer of the right
@@ -1038,7 +1027,7 @@ static bool pi05LoadWeightsAllocCopy(
 static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
     const std::string& ggufPath, bool forceCpu,
     const std::string& backendsDir) {
-  loadBackendsOnce(backendsDir);
+  vla_backend_selection::loadBackendsOnce(backendsDir);
   auto m = std::make_unique<Pi05ModelInternal>();
 
   ggml_backend_dev_t cpu_dev =
@@ -1151,13 +1140,27 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
       (m->vision_image_size / m->vision_patch_size) *
       (m->vision_image_size / m->vision_patch_size);
 
-  // Sanity-check hparams to prevent OOM / integer overflow from crafted GGUFs.
-  if (m->vision_n_layers > 512 || m->vlm_n_layers > 512 ||
-      m->expert_n_layers > 512 || m->action_horizon > 1024 ||
-      m->max_token_len > 8192 || m->num_cameras > 16 ||
-      m->action_dim > 512 || m->vision_image_size > 2048 ||
-      m->expert_hidden > 16384 || m->vlm_vocab_size > 1048576 ||
-      m->vision_n_patches == 0) {
+  // Sanity-check hparams — reject zeros (division/scaling UB), unreasonable
+  // upper bounds (OOM / integer overflow from crafted GGUFs), and
+  // consistency constraints (head_dim compatibility, patch divisibility).
+  if (m->vision_n_layers == 0 || m->vision_n_layers > 512 ||
+      m->vlm_n_layers == 0 || m->vlm_n_layers > 512 ||
+      m->expert_n_layers == 0 || m->expert_n_layers > 512 ||
+      m->action_horizon == 0 || m->action_horizon > 1024 ||
+      m->max_token_len == 0 || m->max_token_len > 8192 ||
+      m->num_cameras == 0 || m->num_cameras > 16 ||
+      m->action_dim == 0 || m->action_dim > 512 ||
+      m->vision_image_size == 0 || m->vision_image_size > 2048 ||
+      m->expert_hidden == 0 || m->expert_hidden > 16384 ||
+      m->vlm_hidden == 0 || m->vlm_n_heads == 0 ||
+      m->vlm_n_kv_heads == 0 || m->vlm_head_dim == 0 ||
+      m->expert_n_heads == 0 || m->expert_n_kv_heads == 0 ||
+      m->expert_head_dim == 0 ||
+      m->vlm_vocab_size == 0 || m->vlm_vocab_size > 1048576 ||
+      m->vision_n_patches == 0 ||
+      m->vision_image_size % m->vision_patch_size != 0 ||
+      m->vlm_hidden % m->vlm_n_heads != 0 ||
+      m->expert_hidden % m->expert_n_heads != 0) {
     throw std::runtime_error(
         "pi05LoadModel: one or more GGUF hparams are out of expected range");
   }
@@ -1169,6 +1172,18 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
         "pi05LoadModel: vlm_n_layers (" + std::to_string(m->vlm_n_layers) +
         ") != expert_n_layers (" + std::to_string(m->expert_n_layers) +
         "); this implementation requires them to match");
+  }
+
+  // VLM prefill K/V cache is copied into expert-sized KV tensors. Reject
+  // mismatched geometry to prevent buffer overflows.
+  if (m->vlm_head_dim != m->expert_head_dim ||
+      m->vlm_n_kv_heads != m->expert_n_kv_heads) {
+    throw std::runtime_error(
+        "pi05LoadModel: VLM/expert KV geometry mismatch (vlm_head_dim=" +
+        std::to_string(m->vlm_head_dim) + " expert_head_dim=" +
+        std::to_string(m->expert_head_dim) + " vlm_n_kv_heads=" +
+        std::to_string(m->vlm_n_kv_heads) + " expert_n_kv_heads=" +
+        std::to_string(m->expert_n_kv_heads) + ")");
   }
 
   auto must_get = [&](const std::string& name) -> struct ggml_tensor* {
@@ -1276,8 +1291,27 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
     if (!pi05LoadWeightsAllocCopy(
             *m, ggufPath.c_str(), m->gguf, buft, data_offset,
             n_tensors_in_gguf)) {
-      throw std::runtime_error(
-          "pi05LoadModel: failed to load weights into backend buffer");
+      QLOG_IF(
+          Priority::WARNING,
+          "pi05LoadModel: GPU weight alloc failed — falling back to CPU");
+      ggml_backend_free(m->backend);
+      m->backend = m->backend_cpu;
+      m->has_gpu = false;
+      const char* cpuName = ggml_backend_name(m->backend_cpu);
+      m->backend_name = cpuName != nullptr ? cpuName : "CPU";
+      // Reopen GGUF with no_alloc=false so tensor data is mmap'd.
+      gguf_free(m->gguf);
+      ggml_free(m->ctx_w);
+      m->ctx_w = nullptr;
+      m->gguf = nullptr;
+      struct gguf_init_params gp2{};
+      gp2.no_alloc = false;
+      gp2.ctx = &m->ctx_w;
+      m->gguf = gguf_init_from_file(ggufPath.c_str(), gp2);
+      if (m->gguf == nullptr) {
+        throw std::runtime_error(
+            "pi05LoadModel: gguf re-open for CPU fallback failed");
+      }
     }
   }
 
@@ -1301,12 +1335,28 @@ static bool pi05Inference(
   if (actions_out == nullptr || n_actions_out == nullptr) {
     return false;
   }
+  if (images == nullptr || lang_tokens == nullptr || lang_mask == nullptr) {
+    return false;
+  }
+  if (noise == nullptr) {
+    return false;
+  }
   const auto t_start = std::chrono::steady_clock::now();
   if (n_images < 1 || n_images > m.num_cameras) {
     return false;
   }
+  for (int i = 0; i < n_images; ++i) {
+    if (images[i] == nullptr) {
+      return false;
+    }
+  }
   if (lang_len != m.max_token_len) {
     return false;
+  }
+  for (int i = 0; i < lang_len; ++i) {
+    if (lang_tokens[i] < 0 || lang_tokens[i] >= m.vlm_vocab_size) {
+      return false;
+    }
   }
   // Find leading-contiguous valid range; reject holes.
   int valid_lang = 0;
@@ -1497,10 +1547,8 @@ static bool pi05Inference(
   const auto t_ode_start = std::chrono::steady_clock::now();
   const float dt = -1.0f / m.n_inference_steps;
   std::vector<float> x_t(
-      static_cast<size_t>(m.action_horizon) * m.action_dim, 0.0f);
-  if (noise != nullptr) {
-    std::memcpy(x_t.data(), noise, x_t.size() * sizeof(float));
-  }
+      static_cast<size_t>(m.action_horizon) * m.action_dim);
+  std::memcpy(x_t.data(), noise, x_t.size() * sizeof(float));
   std::vector<float> sincos_buf(m.cond_dim);
   std::vector<int32_t> act_pos_data(m.action_horizon);
   for (int i = 0; i < m.action_horizon; ++i) {
@@ -1631,8 +1679,8 @@ bool Pi05Model::hasGpu() const { return impl_ && impl_->has_gpu; }
 bool Pi05Model::infer(
     const float** images,
     int n_images,
-    int /*img_width*/,
-    int /*img_height*/,
+    int img_width,
+    int img_height,
     const float* /*state*/, // pi05 uses discrete state in the prompt
     int /*state_dim*/,
     const int32_t* lang_tokens,
@@ -1643,6 +1691,10 @@ bool Pi05Model::infer(
     int* n_actions_out,
     VlaTimingGeneric* timing_out) {
   if (!impl_) {
+    return false;
+  }
+  const int expected = impl_->vision_image_size;
+  if (img_width != expected || img_height != expected) {
     return false;
   }
   return pi05Inference(*impl_, images, n_images, lang_tokens, lang_mask,

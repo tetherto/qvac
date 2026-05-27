@@ -495,10 +495,13 @@ async function _verifyCachedModel (filePath, urlConfig) {
   }
   if (urlConfig && typeof urlConfig.sha256 === 'string' && urlConfig.sha256.length === 64) {
     const got = await _sha256File(filePath)
-    if (got && got !== urlConfig.sha256.toLowerCase()) {
+    if (got === null) {
+      return { ok: false, reason: 'sha256 configured but bare-crypto unavailable — cannot verify integrity' }
+    }
+    if (got !== urlConfig.sha256.toLowerCase()) {
       return { ok: false, reason: `sha256 ${got} != expected ${urlConfig.sha256}` }
     }
-    if (got) console.log(`[pi05-mobile] sha256 verified: ${got.slice(0, 12)}…`)
+    console.log(`[pi05-mobile] sha256 verified: ${got.slice(0, 12)}…`)
   }
   return { ok: true }
 }

@@ -71,6 +71,28 @@ function validateRunInput (input, hparams) {
   if (input.noise !== undefined && input.noise !== null && !(input.noise instanceof Float32Array)) {
     throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.noise must be a Float32Array when provided' })
   }
+
+  if (hparams && hparams.stateInputMode === 'discrete') {
+    if (Number.isInteger(hparams.numCameras) && input.images.length !== hparams.numCameras) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `pi05 requires exactly ${hparams.numCameras} camera images (got ${input.images.length})`
+      })
+    }
+    if (Number.isInteger(hparams.tokenizerMaxLength) && input.tokens.length !== hparams.tokenizerMaxLength) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `pi05 requires tokens.length === ${hparams.tokenizerMaxLength} (got ${input.tokens.length})`
+      })
+    }
+    if (!input.noise || !(input.noise instanceof Float32Array) || input.noise.length === 0) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'pi05 requires input.noise (Float32Array) — flow matching needs a noise prior at t=1'
+      })
+    }
+  }
+
   return { imgWidth, imgHeight }
 }
 

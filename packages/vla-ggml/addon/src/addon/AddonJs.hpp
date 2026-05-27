@@ -280,7 +280,7 @@ inline js_value_t* setVerbosity(js_env_t* env, js_callback_info_t* info) try {
   if (level >= 0 && level <= static_cast<int32_t>(Priority::OFF)) {
     p = static_cast<Priority>(level);
   }
-  qvac_lib_infer_vla_ggml::logging::g_verbosityLevel = p;
+  qvac_lib_infer_vla_ggml::logging::g_verbosityLevel.store(p, std::memory_order_relaxed);
 
   js_value_t* undef = nullptr;
   js_get_undefined(env, &undef);
