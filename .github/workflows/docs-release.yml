@@ -1,33 +1,38 @@
-# Release-driven docs pipeline for **minor** SDK releases.
+# Release-driven docs pipeline for SDK releases.
 #
-# Triggers on `release-sdk-X.Y.0` pushes that touch the SDK's changelog
-# folder. The "ends in .0" glob mutually excludes patch releases — those
-# are owned by `docs-release-patch.yml`, which uses the negation glob.
+# Triggers on `release-sdk-*` pushes that touch the SDK's changelog folder.
+# A single workflow handles both minor (X.Y.0) and patch (X.Y.Z, Z>=1)
+# releases — the dispatch decision is made at runtime by
+# `release-version.ts`, which inspects the incoming version and forwards to
+# the appropriate orchestrator.
 #
 # Flow:
-#   1. label-gate authorises secret access (mirrors the other release workflows).
+#   1. label-gate authorises secret access.
 #   2. `docs-release-setup` composite action sets up the dual checkout
 #      (main-tree + release-tree), installs Bun + deps, and extracts version.
-#   3. `release-version-minor.ts` freezes the outgoing latest as the
-#      series sibling `v<X.Y>.x.mdx` (one permanent page per minor line),
-#      generates the new API summary + release notes (Fonte B:
-#      `packages/sdk/changelog/<new>/CHANGELOG_LLM.md`), and refreshes the
-#      version manifest.
-#   4. TSDoc audit (warning mode) + link validation tests.
+#   3. `release-version.ts` runs the appropriate flow:
+#        - minor: freezes the outgoing latest as the series sibling
+#          `v<X.Y>.x.mdx` (one permanent page per minor line), then
+#          generates the new API summary + release notes from Fonte B
+#          (`packages/sdk/changelog/<new>/CHANGELOG_LLM.md`) and refreshes
+#          the version manifest.
+#        - patch: title-only API update + appended release-notes section
+#          inside the current series file.
+#   4. TSDoc audit (warning mode, minor only) + link validation tests.
 #   5. `peter-evans/create-pull-request` opens a PR `docs/release-sdk-v<V>`
 #      against `main` so review is human-gated before staging deploys.
-name: Docs Release - Minor
+name: Docs Release
 
 on:
   push:
     branches:
-      - 'release-sdk-*.*.0'
+      - 'release-sdk-*'
     paths:
       - 'packages/sdk/changelog/**'
   workflow_dispatch:
     inputs:
       version:
-        description: 'SDK version (semver X.Y.0, e.g. 0.11.0)'
+        description: 'SDK version (semver X.Y.Z, e.g. 0.11.0 or 0.10.3)'
         required: true
         type: string
 
@@ -35,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-release-minor-${{ github.ref }}
+  group: docs-release-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -86,25 +91,38 @@ jobs:
         with:
           input-version: ${{ inputs.version }}
 
-      - name: Release minor docs version
-        # release-version-minor.ts runs the full minor flow:
-        #   1. Freezes outgoing index.mdx into v<outgoing>.mdx
-        #   2. Generates new API summary into index.mdx (TypeDoc + render)
-        #   3. Generates new release notes from changelog-llm.md
-        #   4. Refreshes src/lib/versions.ts
-        # SDK_PATH + CHANGELOG_REPO_ROOT pin reads to release-tree so a PR
-        # that lands on main mid-pipeline can't influence rendered output.
-        # VERSION goes through env so the run block has zero `${{ }}`
-        # interpolation in shell context.
+      - name: Detect release kind
+        id: kind
+        env:
+          VERSION: ${{ steps.setup.outputs.version }}
+        # The script is the source of truth for the minor/patch decision,
+        # but a few subsequent steps (TSDoc audit, PR title suffix) need to
+        # know the kind too. Mirror the decision here so we don't have to
+        # plumb it back out of the script.
+        run: |
+          if echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.0$'; then
+            echo "kind=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "kind=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release docs version
+        # release-version.ts auto-detects minor vs patch from the version
+        # and forwards to the focused orchestrator. SDK_PATH +
+        # CHANGELOG_REPO_ROOT pin reads to release-tree so a PR that
+        # lands on main mid-pipeline can't influence rendered output.
+        # `--force-extract` is a no-op on patch flows; we pass it
+        # unconditionally for call-site uniformity.
         working-directory: main-tree/${{ env.DOCS_DIR }}
         env:
           SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
           CHANGELOG_REPO_ROOT: ${{ github.workspace }}/release-tree
           VERSION: ${{ steps.setup.outputs.version }}
         run: |
-          bun run scripts/release-version-minor.ts "$VERSION" --force-extract
+          bun run scripts/release-version.ts "$VERSION" --force-extract
 
-      - name: Run TSDoc audit (warning mode)
+      - name: Run TSDoc audit (warning mode, minor only)
+        if: steps.kind.outputs.kind == 'minor'
         working-directory: main-tree/${{ env.DOCS_DIR }}
         env:
           SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
@@ -123,10 +141,12 @@ jobs:
           branch: docs/release-sdk-v${{ steps.setup.outputs.version }}
           base: main
           delete-branch: true
-          commit-message: "doc[notask]: release docs v${{ steps.setup.outputs.version }} (minor)"
-          title: "doc[notask]: release docs v${{ steps.setup.outputs.version }} (minor)"
+          commit-message: "doc[notask]: release docs v${{ steps.setup.outputs.version }} (${{ steps.kind.outputs.kind }})"
+          title: "doc[notask]: release docs v${{ steps.setup.outputs.version }} (${{ steps.kind.outputs.kind }})"
           # `add-paths` restricts what gets staged to the generated surfaces;
           # anything else accidentally modified by the run is dropped.
+          # Minor releases also touch `api-data.json`; patch releases don't,
+          # but listing the path here is harmless when nothing changed.
           add-paths: |
             docs/website/content/docs/reference/api/**
             docs/website/content/docs/reference/release-notes/**
@@ -134,18 +154,22 @@ jobs:
             docs/website/scripts/api-docs/api-data.json
           labels: documentation, auto-generated
           body: |
-            ## Auto-generated minor release docs
+            ## Auto-generated ${{ steps.kind.outputs.kind }} release docs
 
-            Promotes **v${{ steps.setup.outputs.version }}** to latest and freezes the previous latest as a permanent series-named sibling MDX (`v<outgoingMajor>.<outgoingMinor>.x.mdx`).
+            Updates docs for SDK **v${{ steps.setup.outputs.version }}** (${{ steps.kind.outputs.kind }}).
+
+            For **minor** releases, the previous latest is frozen as a permanent series-named sibling MDX (`v<outgoingMajor>.<outgoingMinor>.x.mdx`) and the new version's API summary + release notes replace `index.mdx`.
+
+            For **patch** releases, the API summary's frontmatter title is bumped in place (no TypeDoc rerun) and a new release-notes section is appended to the current series file (`index.mdx` when on the latest minor, the archived `v<X.Y>.x.mdx` otherwise).
 
             Generated files:
 
-            - `docs/website/content/docs/reference/api/index.mdx` (new latest API summary)
-            - `docs/website/content/docs/reference/api/v<outgoingMajor>.<outgoingMinor>.x.mdx` (frozen previous latest series)
-            - `docs/website/content/docs/reference/release-notes/index.mdx` (new latest release notes)
-            - `docs/website/content/docs/reference/release-notes/v<outgoingMajor>.<outgoingMinor>.x.mdx` (frozen previous latest series)
+            - `docs/website/content/docs/reference/api/index.mdx` (latest API summary)
+            - `docs/website/content/docs/reference/api/v<X.Y>.x.mdx` (frozen previous series, minor only)
+            - `docs/website/content/docs/reference/release-notes/index.mdx` (latest release notes)
+            - `docs/website/content/docs/reference/release-notes/v<X.Y>.x.mdx` (frozen previous series, minor only)
             - `docs/website/src/lib/versions.ts` (refreshed dropdown manifest)
 
             Release notes were generated from `packages/sdk/changelog/${{ steps.setup.outputs.version }}/CHANGELOG_LLM.md` (and the matching folder in every other SDK pod package that released at the same version).
 
-            Produced by the `Docs Release - Minor` workflow.
+            Produced by the `Docs Release` workflow.

@@ -411,6 +411,26 @@ export const diffusionStandaloneUpscalerX4 = createDiffusionTest(
   { estimatedDurationMs: 600000, dependency: "upscaler" },
 );
 
+export const diffusionStandaloneUpscalerBackendDevice = createDiffusionTest(
+  "diffusion-standalone-upscaler-backend-device",
+  {
+    image: "small-64.jpg",
+    repeats: 1,
+  },
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 1000, dependency: "upscaler" },
+);
+
+export const diffusionStandaloneUpscalerCpu = createDiffusionTest(
+  "diffusion-standalone-upscaler-cpu",
+  {
+    image: "small-64.jpg",
+    repeats: 1,
+  },
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 2000, dependency: "upscaler-cpu", suites: ["smoke"] },
+);
+
 // ---- error cases ----
 
 export const diffusionEmptyPrompt = createDiffusionTest(
@@ -447,5 +467,7 @@ export const diffusionTests = [
   diffusionFusionFlux2Basic,
   diffusionEsrganUpscaleX4,
   diffusionStandaloneUpscalerX4,
+  diffusionStandaloneUpscalerBackendDevice,
+  diffusionStandaloneUpscalerCpu,
   diffusionEmptyPrompt,
 ] as const;

@@ -1,21 +1,21 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { completion } from '@qvac/sdk'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkCompletion } from '../../../core/sdk.js'
-import type { SDKGenerationParams } from '../../../core/sdk.js'
 import {
   parseLegacyPrompt,
   legacyPromptToHistory,
   extractGenerationParams,
   logLegacyUnsupportedParams,
-  InvalidPromptError
+  InvalidPromptError,
+  type GenerationParams
 } from '../translate.js'
 import type { RouteContext } from '../../types.js'
 
 interface RouteParams {
   sdkModelId: string
   modelAlias: string
-  generationParams: SDKGenerationParams | undefined
+  generationParams: GenerationParams | undefined
   logger: import('../../../../logger.js').Logger
 }
 
@@ -153,11 +153,11 @@ interface ChoiceResult {
 }
 
 async function runOne (params: RouteParams, prompt: string, index: number): Promise<ChoiceResult> {
-  const result = await sdkCompletion({
+  const result = completion({
     modelId: params.sdkModelId,
     history: legacyPromptToHistory(prompt),
     stream: false,
-    generationParams: params.generationParams
+    ...(params.generationParams !== undefined ? { generationParams: params.generationParams } : {})
   })
 
   const text = await result.text
@@ -175,11 +175,11 @@ async function runOne (params: RouteParams, prompt: string, index: number): Prom
 }
 
 async function handleStreamingCompletion (res: ServerResponse, params: RouteParams, prompt: string): Promise<void> {
-  const result = await sdkCompletion({
+  const result = completion({
     modelId: params.sdkModelId,
     history: legacyPromptToHistory(prompt),
     stream: true,
-    generationParams: params.generationParams
+    ...(params.generationParams !== undefined ? { generationParams: params.generationParams } : {})
   })
 
   initSSE(res)
