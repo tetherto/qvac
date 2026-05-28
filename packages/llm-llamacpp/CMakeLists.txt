@@ -47,7 +47,26 @@ find_package(nlohmann_json CONFIG REQUIRED)
 if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
 endif()
-
+# After find_package(llama) around line 39, add:
+if(ANDROID)
+  message(STATUS "=== DEBUG: Finding libomp.so ===")
+  message(STATUS "ANDROID_NDK from env: $ENV{ANDROID_NDK}")
+  
+  execute_process(
+  COMMAND bash -c "find $ENV{ANDROID_NDK} -name libomp.so 2>/dev/null"
+  OUTPUT_VARIABLE LIBOMP_FIND_RESULT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+  )
+  message(STATUS "find result: ${LIBOMP_FIND_RESULT}")
+  
+  # Try glob
+  file(GLOB_RECURSE LIBOMP_CANDIDATES 
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/*/lib*/**/libomp.so"
+  )
+  message(STATUS "GLOB results: ${LIBOMP_CANDIDATES}")
+  message(STATUS "=== END DEBUG ===")
+endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
