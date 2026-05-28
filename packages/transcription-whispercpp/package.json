@@ -27,10 +27,11 @@
     "test:integration:corrupted-model": "brittle-bare test/integration/corrupted-model.test.js",
     "test:integration:model-file-validation": "brittle-bare test/integration/model-file-validation.test.js",
     "test:integration:accuracy": "brittle-bare test/integration/accuracy-multilang.test.js",
+    "test:integration:gpu": "brittle-bare test/integration/gpu.test.js",
     "test:unit:reload:esraw": "brittle-bare test/stand-alone/addon.reload.esraw.test.js",
     "test:stand-alone:gpu": "brittle-bare test/stand-alone/seed-vulkan-gpu-speed.test.js",
     "test:stand-alone:gpu-speed": "brittle-bare test/stand-alone/seed-vulkan-gpu-speed.test.js",
-    "test": "npm run test:unit && npm run test:integration && npm run test:integration:multiple && npm run test:integration:chunking && npm run test:integration:live-stream-simultion && npm run test:integration:corrupted-model && npm run test:integration:model-file-validation",
+    "test": "npm run test:unit && npm run test:integration && npm run test:integration:multiple && npm run test:integration:chunking && npm run test:integration:live-stream-simultion && npm run test:integration:corrupted-model && npm run test:integration:model-file-validation && npm run test:integration:gpu",
     "test:dts": "tsc index.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
     "download-models": "./scripts/download-models.sh",
     "prepare:husky": "husky"

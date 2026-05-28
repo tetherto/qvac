@@ -63,6 +63,7 @@ jobs:
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
 
     permissions:
       contents: read
@@ -76,6 +77,7 @@ jobs:
             platform: linux
             arch: x64
             runner: qvac-ubuntu2204-x64
+            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
           - os: ubuntu-24.04
@@ -87,16 +89,19 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
+            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
+            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
+            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
           - os: windows-2025
@@ -224,6 +229,22 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Run integration GPU test (Unix)
+        if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:integration:gpu
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Run integration GPU test (Windows)
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: npm run test:integration:gpu
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 

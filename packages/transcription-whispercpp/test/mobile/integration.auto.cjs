@@ -19,6 +19,10 @@ async function runCorruptedModelTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/corrupted-model.test.js', options)
 }
 
+async function runGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/gpu.test.js', options)
+}
+
 async function runLiveStreamSimulationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/live-stream-simulation.test.js', options)
 }
