@@ -75,6 +75,13 @@ const plugin: FastifyPluginAsync = async (app) => {
   })
 
   app.setNotFoundHandler((req, reply) => {
+    // Bare OPTIONS (no `--cors`, so @fastify/cors didn't claim it) must still
+    // return 204 to match the legacy node:http server's behavior — browsers
+    // and HTTP clients rely on it as a preflight no-op even when CORS is off.
+    if (req.method === 'OPTIONS') {
+      reply.code(204).send()
+      return
+    }
     reply.code(404).send({
       error: {
         message: `Unknown endpoint: ${req.method} ${req.url}`,
