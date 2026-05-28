@@ -163,10 +163,12 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     logger.info(`← ${reply.statusCode} ${req.method} ${req.url.split('?')[0]} (${duration})`)
   })
 
-  app.addHook('onReady', async () => {
-    await preloadModels(serveConfig, registry, logger)
-    logger.warn(responsesStore.bannerLine())
-  })
+  // Preload is intentionally NOT registered as an `onReady` hook: Fastify
+  // bounds those hooks by `pluginTimeout` (default 10 s) and model preload
+  // routinely takes minutes (a single uncached LLM blob is hundreds of MB
+  // over the P2P registry). `startServer()` drives preload imperatively
+  // between `app.ready()` and `app.listen()`, matching the legacy
+  // pre-Fastify behavior: port doesn't open until models are loaded.
   app.addHook('onClose', async () => {
     await shutdownSDK(logger)
   })
@@ -183,6 +185,14 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
 
 export async function startServer (options: StartServerOptions): Promise<FastifyInstance> {
   const app = await buildServer(options)
+
+  // Resolve plugin registrations (decorators, route table) but DON'T listen
+  // yet — that way the imperative preload below can use `app.qvac` while
+  // keeping the port closed until models are ready, matching the pre-Fastify
+  // semantics that the e2e suite depends on.
+  await app.ready()
+  await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
+  app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
 
   closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
     app.log.info?.({ signal }, 'shutdown signal received')
