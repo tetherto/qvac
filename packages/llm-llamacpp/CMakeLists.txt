@@ -121,29 +121,6 @@ if(ANDROID)
   if(LIBOMP_FOUND_PATH)
     file(APPEND ${DEBUG_LOG} "LIBOMP_FOUND_PATH: ${LIBOMP_FOUND_PATH}\n")
     file(APPEND ${DEBUG_LOG} "Status: SUCCESS - Will install libomp.so\n")
-    
-    # Copy to build directory
-    add_custom_command(TARGET ${inference-addon-llama}_module POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${LIBOMP_FOUND_PATH}
-        $<TARGET_FILE_DIR:${inference-addon-llama}_module>/libomp.so
-      COMMENT "Copying libomp.so to build directory"
-    )
-    
-    # Install to prebuilds
-    install(FILES ${LIBOMP_FOUND_PATH} 
-      DESTINATION ${CMAKE_INSTALL_PREFIX}/${BACKENDS_SUBDIR_VALUE}
-      RENAME libomp.so
-    )
-    
-    # Link for build
-    target_link_libraries(${inference-addon-llama} PRIVATE ${LIBOMP_FOUND_PATH})
-    target_compile_options(${inference-addon-llama} PRIVATE -fopenmp)
-    
-    if(BUILD_CLI)
-      target_link_libraries(cli_tool PRIVATE ${LIBOMP_FOUND_PATH})
-      target_compile_options(cli_tool PRIVATE -fopenmp)
-    endif()
   else()
     file(APPEND ${DEBUG_LOG} "LIBOMP_FOUND_PATH: (empty)\n")
     file(APPEND ${DEBUG_LOG} "Status: FAILED - libomp.so not found!\n")
@@ -171,6 +148,28 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()
 
 add_bare_module(inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
+
+if(ANDROID AND LIBOMP_FOUND_PATH)
+  message(STATUS "Installing libomp.so from: ${LIBOMP_FOUND_PATH}")
+  
+  # Install to prebuilds (this works immediately)
+  install(FILES ${LIBOMP_FOUND_PATH} 
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/${BACKENDS_SUBDIR_VALUE}
+    RENAME libomp.so
+  )
+  
+  # Link to main target
+  target_link_libraries(${inference-addon-llama} PRIVATE ${LIBOMP_FOUND_PATH})
+  target_compile_options(${inference-addon-llama} PRIVATE -fopenmp)
+  
+  # Copy to build dir after build (target now exists!)
+  add_custom_command(TARGET ${inference-addon-llama}_module POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      ${LIBOMP_FOUND_PATH}
+      $<TARGET_FILE_DIR:${inference-addon-llama}_module>/libomp.so
+    COMMENT "Copying libomp.so to build directory"
+  )
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
