@@ -152,8 +152,8 @@ if(ANDROID AND LIBOMP_FOUND_PATH)
   
   # Install to prebuilds (this works immediately)
   install(FILES ${LIBOMP_FOUND_PATH} 
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/${BACKENDS_SUBDIR_VALUE}
-    RENAME libomp.so
+  DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
+  RENAME libomp.so
   )
   
   # Link to main target
