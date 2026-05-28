@@ -4,7 +4,7 @@ description: A local AI SDK for building cross-platform, P2P applications and sy
 ogImage: /og-home.png
 ---
 
-import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
+import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, Video, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
 
 ## Why QVAC?
 
@@ -37,6 +37,9 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   </Card>
   <Card href="/ai-capabilities/image-generation" title={<span className="inline-flex items-center gap-2"><ImageIcon className="size-4 text-[var(--color-fd-primary)]" />Image generation</span>}>
     Text-to-image and image-to-image generation via a customized Diffusion backend.
+  </Card>
+  <Card href="/ai-capabilities/video-generation" title={<span className="inline-flex items-center gap-2"><Video className="size-4 text-[var(--color-fd-primary)]" />Video generation</span>}>
+    Text-to-video generation via a customized Diffusion backend.
   </Card>
   <Card href="/ai-capabilities/transcription" title={<span className="inline-flex items-center gap-2"><Speech className="size-4 text-[var(--color-fd-primary)]" />Transcription</span>}>
     Automatic speech recognition (ASR) via a customized Whisper backend or NVIDIA Parakeet.

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { textToSpeech } from '@qvac/sdk'
 import { readBody, sendError } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkTextToSpeech } from '../../../core/sdk.js'
 import {
   buildWavBuffer,
   int16SamplesToBuffer,
@@ -143,7 +143,27 @@ export async function handleAudioSpeech (req: IncomingMessage, res: ServerRespon
   try {
     // TODO(QVAC-18181): wire client disconnect → cancel SDK call. Currently
     // this awaits to completion even if the HTTP client closed the socket.
-    const { samples } = await sdkTextToSpeech({ modelId: sdkModelId, text: input })
+    //
+    // We stream from the SDK so synthesis can start producing samples while
+    // we accumulate them into a single buffer for the HTTP response. WAV
+    // needs a header with the total sample length, so the CLI currently
+    // buffers the full audio payload; chunked HTTP streaming is tracked as
+    // a follow-up.
+    const result = textToSpeech({
+      modelId: sdkModelId,
+      text: input,
+      inputType: 'text',
+      stream: true
+    })
+
+    const samples: number[] = []
+    for await (const sample of result.bufferStream) {
+      samples.push(sample)
+    }
+    // Surface any pipeline error that the bufferStream may have settled
+    // through .done rather than the iterator (the SDK may resolve done after
+    // the iterator returns cleanly).
+    await result.done
 
     if (samples.length === 0) {
       ctx.logger.warn(`  speech empty model=${alias} voice=${voice} chars=${charCount}`)
