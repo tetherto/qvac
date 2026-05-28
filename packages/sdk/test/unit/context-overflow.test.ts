@@ -40,6 +40,50 @@ test("isAddonContextOverflowError: ignores unrelated errors", (t) => {
   t.is(isAddonContextOverflowError(42), false);
 });
 
+test("isAddonContextOverflowError: codeString anchored — sibling names don't match", (t) => {
+  // The detector should fire ONLY when the codeString ends in
+  // `:: ContextOverflow ]` — a future addon-side rename like
+  // `ContextOverflowRecovered` or `PostContextOverflow` must not
+  // silently route here.
+  t.is(
+    isAddonContextOverflowError(
+      Object.assign(new Error("x"), { code: "[ TextLlmAddon :: ContextOverflowRecovered ]" }),
+    ),
+    false,
+  );
+  t.is(
+    isAddonContextOverflowError(
+      Object.assign(new Error("x"), { code: "[ TextLlmAddon :: PostContextOverflow ]" }),
+    ),
+    false,
+  );
+  // The exact form still matches.
+  t.is(
+    isAddonContextOverflowError(
+      Object.assign(new Error("x"), { code: "[ TextLlmAddon :: ContextOverflow ]" }),
+    ),
+    true,
+  );
+});
+
+test("isAddonContextOverflowError: message fallback is anchored to known C++ formats", (t) => {
+  // Permissive matching on `/context overflow/i` would fire on
+  // wrapper / log lines like "recovering from context overflow"
+  // — anchor to the two literal C++ emitted strings.
+  t.is(
+    isAddonContextOverflowError(new Error("recovering from context overflow upstream")),
+    false,
+  );
+  t.is(
+    isAddonContextOverflowError(new Error("context overflow at prefill step (5 tokens, max 4)")),
+    true,
+  );
+  t.is(
+    isAddonContextOverflowError(new Error("processPromptImpl: context overflow\n")),
+    true,
+  );
+});
+
 test("parseContextOverflowMessage: extracts from long-form TextLlm message", (t) => {
   // The long form comes from
   // `TextLlmContext.cpp` when it formats both numbers explicitly:
