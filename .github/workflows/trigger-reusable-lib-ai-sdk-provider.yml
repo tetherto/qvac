@@ -136,10 +136,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm run lint
 
-      - name: Verify generated model constants are current
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run check-models
-
       - name: Run tests
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:unit

@@ -6,6 +6,8 @@ Release Date: 2026-05-27
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.1.0
 
+> **Catalog snapshot.** The `src/models/constants.ts` shipped here is a snapshot of the QVAC P2P registry captured at release-prep time, not whatever the live registry returns at publish time. New models that land between prep and publish ship in the next release. This matches how `@qvac/sdk` ships its `models/registry/models.ts` — the codegen drift check is a developer / pre-commit tool, not a release gate.
+
 The first public release of `@qvac/ai-sdk-provider` — the [Vercel AI SDK](https://ai-sdk.dev) provider for the QVAC local AI runtime. Point it at a running `qvac serve openai` HTTP server and you get the full AI SDK surface (`streamText`, `generateText`, `embed`, `transcribe`, `generateImage`, …) backed by on-device chat, embeddings, transcription, translation, speech, OCR, and image-generation models. The package ships a typed catalog of every model in the QVAC P2P registry that has an OpenAI-shaped endpoint, so callers can introspect models without an HTTP round-trip to `/v1/models`.
 
 ---
