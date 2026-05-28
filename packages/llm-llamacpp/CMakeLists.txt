@@ -49,23 +49,113 @@ if(WIN32)
 endif()
 # After find_package(llama) around line 39, add:
 if(ANDROID)
-  message(STATUS "=== DEBUG: Finding libomp.so ===")
-  message(STATUS "ANDROID_NDK from env: $ENV{ANDROID_NDK}")
+  set(DEBUG_LOG "${CMAKE_BINARY_DIR}/openmp_search_debug.txt")
+  file(WRITE ${DEBUG_LOG} "=== OpenMP Search Debug ===\n\n")
+  file(APPEND ${DEBUG_LOG} "Timestamp: ${CMAKE_CURRENT_DATE}\n")
+  file(APPEND ${DEBUG_LOG} "HOST: ${CMAKE_HOST_SYSTEM_NAME}\n")
+  file(APPEND ${DEBUG_LOG} "NDK: $ENV{ANDROID_NDK}\n")
+  file(APPEND ${DEBUG_LOG} "CMAKE_ANDROID_NDK: ${CMAKE_ANDROID_NDK}\n")
+  file(APPEND ${DEBUG_LOG} "ANDROID_ABI: ${ANDROID_ABI}\n\n")
   
-  execute_process(
-  COMMAND bash -c "find $ENV{ANDROID_NDK} -name libomp.so 2>/dev/null"
-  OUTPUT_VARIABLE LIBOMP_FIND_RESULT
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-  )
-  message(STATUS "find result: ${LIBOMP_FIND_RESULT}")
+  # Determine host platform
+  if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+    set(NDK_HOST "windows-x86_64")
+  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    set(NDK_HOST "linux-x86_64")
+  else()
+    set(NDK_HOST "darwin-x86_64")
+  endif()
+  file(APPEND ${DEBUG_LOG} "NDK_HOST: ${NDK_HOST}\n\n")
   
-  # Try glob
-  file(GLOB_RECURSE LIBOMP_CANDIDATES 
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/*/lib*/**/libomp.so"
+  # List of paths to check
+  set(LIBOMP_PATHS
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/20/lib/linux/aarch64/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/20/lib/linux/arm/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/19/lib/linux/aarch64/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/19/lib/linux/arm/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/18/lib/linux/aarch64/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/18/lib/linux/arm/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/17/lib/linux/aarch64/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/17/lib/linux/arm/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib64/clang/20/lib/linux/aarch64/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib64/clang/19/lib/linux/aarch64/libomp.so"
+    "/usr/lib/llvm-22/lib/libomp.so"
+    "/usr/lib/llvm-21/lib/libomp.so"
+    "/usr/lib/x86_64-linux-gnu/libomp.so.5"
+    "/usr/lib/aarch64-linux-gnu/libomp.so.5"
+    "/usr/lib/libomp.so"
   )
-  message(STATUS "GLOB results: ${LIBOMP_CANDIDATES}")
-  message(STATUS "=== END DEBUG ===")
+  
+  file(APPEND ${DEBUG_LOG} "Checking paths:\n")
+  set(LIBOMP_FOUND_PATH "")
+  foreach(path ${LIBOMP_PATHS})
+    file(TO_CMAKE_PATH "${path}" path_normalized)
+    if(EXISTS ${path_normalized})
+      set(LIBOMP_FOUND_PATH ${path_normalized})
+      file(APPEND ${DEBUG_LOG} "  [FOUND] ${path_normalized}\n")
+      break()
+    else()
+      file(APPEND ${DEBUG_LOG} "  [NOT FOUND] ${path_normalized}\n")
+    endif()
+  endforeach()
+  
+  # Try glob search if not found
+  if(NOT LIBOMP_FOUND_PATH)
+    file(APPEND ${DEBUG_LOG} "\nTrying glob search in NDK...\n")
+    file(GLOB_RECURSE LIBOMP_SEARCH 
+      "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib*/**/libomp.so"
+    )
+    if(LIBOMP_SEARCH)
+      list(GET LIBOMP_SEARCH 0 LIBOMP_FOUND_PATH)
+      file(APPEND ${DEBUG_LOG} "  [FOUND via glob] ${LIBOMP_FOUND_PATH}\n")
+      foreach(found_path ${LIBOMP_SEARCH})
+        file(APPEND ${DEBUG_LOG} "    - ${found_path}\n")
+      endforeach()
+    else()
+      file(APPEND ${DEBUG_LOG} "  [GLOB FOUND NOTHING]\n")
+    endif()
+  endif()
+  
+  # Result
+  file(APPEND ${DEBUG_LOG} "\n=== RESULT ===\n")
+  if(LIBOMP_FOUND_PATH)
+    file(APPEND ${DEBUG_LOG} "LIBOMP_FOUND_PATH: ${LIBOMP_FOUND_PATH}\n")
+    file(APPEND ${DEBUG_LOG} "Status: SUCCESS - Will install libomp.so\n")
+    
+    # Copy to build directory
+    add_custom_command(TARGET ${inference-addon-llama}_module POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${LIBOMP_FOUND_PATH}
+        $<TARGET_FILE_DIR:${inference-addon-llama}_module>/libomp.so
+      COMMENT "Copying libomp.so to build directory"
+    )
+    
+    # Install to prebuilds
+    install(FILES ${LIBOMP_FOUND_PATH} 
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/${BACKENDS_SUBDIR_VALUE}
+      RENAME libomp.so
+    )
+    
+    # Link for build
+    target_link_libraries(${inference-addon-llama} PRIVATE ${LIBOMP_FOUND_PATH})
+    target_compile_options(${inference-addon-llama} PRIVATE -fopenmp)
+    
+    if(BUILD_CLI)
+      target_link_libraries(cli_tool PRIVATE ${LIBOMP_FOUND_PATH})
+      target_compile_options(cli_tool PRIVATE -fopenmp)
+    endif()
+  else()
+    file(APPEND ${DEBUG_LOG} "LIBOMP_FOUND_PATH: (empty)\n")
+    file(APPEND ${DEBUG_LOG} "Status: FAILED - libomp.so not found!\n")
+  endif()
+  
+  file(APPEND ${DEBUG_LOG} "\n=== End Debug ===\n")
+  
+  # Install the debug log file itself!
+  install(FILES ${DEBUG_LOG} 
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/${BACKENDS_SUBDIR_VALUE}
+    RENAME openmp_search_debug.txt
+  )
 endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
