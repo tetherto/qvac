@@ -181,19 +181,19 @@ test('run | throws when mode is an unrecognised string', async (t) => {
 //  run(): dimension alignment
 // ─────────────────────────────────────────────────────────────────────
 
-test('run | throws when width is not a multiple of 8', async (t) => {
+test('run | throws when width is not a multiple of 16', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: 833, height: 480 }),
-    /width and height must be positive multiples of 8/
+    /width and height must be positive multiples of 16/
   )
 })
 
-test('run | throws when height is not a multiple of 8', async (t) => {
+test('run | throws when height is not a multiple of 16', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: 832, height: 481 }),
-    /width and height must be positive multiples of 8/
+    /width and height must be positive multiples of 16/
   )
 })
 
@@ -201,7 +201,7 @@ test('run | width=NaN is rejected (treated as misaligned)', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: Number.NaN }),
-    /multiples of 8/
+    /multiples of 16/
   )
 })
 
@@ -275,7 +275,7 @@ test('run | rejects null prompt', async (t) => {
 //  pass explicit dims" message.
 // ─────────────────────────────────────────────────────────────────────
 
-// 100x100 PNG header -- both axes off the multiple-of-8 grid.
+// 100x100 PNG header -- both axes off the multiple-of-16 grid.
 const OFFGRID_PNG = new Uint8Array([
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
   0x00, 0x00, 0x00, 0x0D,
@@ -288,7 +288,7 @@ test('run | rejects off-grid init_image when width/height are implicit', async (
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'img2vid', prompt: 'hi', init_image: OFFGRID_PNG }),
-    /init_image dimensions 100x100 must be multiples of 8/
+    /init_image dimensions 100x100 must be multiples of 16/
   )
 })
 
@@ -300,7 +300,7 @@ test('run | rejects off-grid control_frames[i] with index when dims implicit', a
       prompt: 'hi',
       control_frames: [FAKE_PNG, OFFGRID_PNG, FAKE_JPEG]
     }),
-    /control_frames\[1\] dimensions 100x100 must be multiples of 8/
+    /control_frames\[1\] dimensions 100x100 must be multiples of 16/
   )
 })
 
