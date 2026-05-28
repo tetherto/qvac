@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { completion } from '@qvac/sdk'
+import type { Tool, CompletionStats } from '@qvac/sdk'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkCompletion } from '../../../core/sdk.js'
-import type { SDKTool, SDKGenerationParams, SDKResponseFormat } from '../../../core/sdk.js'
 import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import {
   openaiMessagesToHistory,
@@ -12,7 +12,9 @@ import {
   extractGenerationParams,
   extractResponseFormat,
   InvalidResponseFormatError,
-  logUnsupportedParams
+  logUnsupportedParams,
+  type GenerationParams,
+  type ResponseFormat
 } from '../translate.js'
 import type { RouteContext } from '../../types.js'
 
@@ -68,7 +70,7 @@ export async function handleChatCompletions (req: IncomingMessage, res: ServerRe
   const tools = openaiToolsToSdk(body['tools'] as Array<{ type: string; function?: { name: string; description?: string; parameters?: Record<string, unknown> } }> | undefined)
   const generationParams = extractGenerationParams(body)
 
-  let responseFormat: SDKResponseFormat | undefined
+  let responseFormat: ResponseFormat | undefined
   try {
     responseFormat = extractResponseFormat(body)
   } catch (err) {
@@ -111,14 +113,14 @@ export async function handleChatCompletions (req: IncomingMessage, res: ServerRe
 interface CompletionParams {
   sdkModelId: string
   history: Array<{ role: string; content: string }>
-  tools?: SDKTool[] | undefined
-  generationParams?: SDKGenerationParams | undefined
-  responseFormat?: SDKResponseFormat | undefined
+  tools?: Tool[] | undefined
+  generationParams?: GenerationParams | undefined
+  responseFormat?: ResponseFormat | undefined
   modelAlias: string
   logger: import('../../../../logger.js').Logger
 }
 
-function completionTokensFromStats (text: string, stats: { generatedTokens?: number } | undefined): number {
+function completionTokensFromStats (text: string, stats: CompletionStats | undefined): number {
   if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
     return stats.generatedTokens
   }
@@ -126,26 +128,26 @@ function completionTokensFromStats (text: string, stats: { generatedTokens?: num
 }
 
 async function handleBlockingCompletion (req: IncomingMessage, res: ServerResponse, params: CompletionParams): Promise<void> {
-  const result = await sdkCompletion({
+  const result = completion({
     modelId: params.sdkModelId,
     history: params.history,
     stream: false,
-    tools: params.tools,
-    generationParams: params.generationParams,
-    responseFormat: params.responseFormat
+    ...(params.tools !== undefined ? { tools: params.tools } : {}),
+    ...(params.generationParams !== undefined ? { generationParams: params.generationParams } : {}),
+    ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
   })
 
-  // Bridge HTTP client disconnect → SDK cancel. Bound after the
-  // wrapper await but before any `await` on the result aggregates,
-  // so a fetch-abort mid-completion lands on the in-flight requestId
-  // before tokens have fully resolved.
+  // Bridge HTTP client disconnect → SDK cancel. `completion()` returns the
+  // `CompletionRun` synchronously, so `requestId` is reachable before any
+  // network round-trip — bind the listener before awaiting any aggregate
+  // so a fetch-abort during inference lands on the in-flight requestId.
   bindClientDisconnectCancel(req, res, result.requestId, params.logger)
 
   const text = await result.text
   const toolCalls = await result.toolCalls
   const stats = await result.stats
 
-  const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
+  const hasToolCalls = toolCalls.length > 0
   const finishReason = hasToolCalls ? 'tool_calls' : 'stop'
 
   const message: Record<string, unknown> = {
@@ -179,13 +181,13 @@ async function handleBlockingCompletion (req: IncomingMessage, res: ServerRespon
 }
 
 async function handleStreamingCompletion (req: IncomingMessage, res: ServerResponse, params: CompletionParams): Promise<void> {
-  const result = await sdkCompletion({
+  const result = completion({
     modelId: params.sdkModelId,
     history: params.history,
     stream: true,
-    tools: params.tools,
-    generationParams: params.generationParams,
-    responseFormat: params.responseFormat
+    ...(params.tools !== undefined ? { tools: params.tools } : {}),
+    ...(params.generationParams !== undefined ? { generationParams: params.generationParams } : {}),
+    ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
   })
 
   // Bridge HTTP client disconnect → SDK cancel. The synchronous
@@ -216,7 +218,7 @@ async function handleStreamingCompletion (req: IncomingMessage, res: ServerRespo
   }
 
   const toolCalls = await result.toolCalls
-  const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
+  const hasToolCalls = toolCalls.length > 0
 
   const stats = await result.stats
   const fullText = await result.text

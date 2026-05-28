@@ -1,23 +1,30 @@
 #!/usr/bin/env bun
 /**
  * Freeze the current `index.mdx` of a versioned section into a sibling
- * `v<X.Y.Z>.mdx` snapshot. Run this BEFORE replacing the index with new
+ * `vX.Y.x.mdx` snapshot. Run this BEFORE replacing the index with new
  * content so the outgoing version remains accessible via the version
  * selector.
  *
+ * The snapshot filename uses the **minor series** form (`vX.Y.x.mdx`,
+ * literal `x`), not the full semver: every minor line has exactly one
+ * permanent archived page that accumulates patches as `## vX.Y.Z`
+ * sections. Pass the outgoing version as full semver — the script
+ * derives the series filename from it.
+ *
  * Sections snapshotted by this script:
- *   - `content/docs/reference/api/index.mdx`           → `v<version>.mdx`
- *   - `content/docs/reference/release-notes/index.mdx` → `v<version>.mdx`
+ *   - `content/docs/reference/api/index.mdx`           → `vX.Y.x.mdx`
+ *   - `content/docs/reference/release-notes/index.mdx` → `vX.Y.x.mdx`
  *
  * Usage:
  *   bun run scripts/create-version-bundle.ts <outgoing-version>
  *
- * Example workflow when releasing v0.10.0 (current latest is v0.9.1):
- *   1. bun run scripts/create-version-bundle.ts 0.9.1
- *      Freezes the outgoing API summary and release notes.
- *   2. Generate v0.10.0 content:
- *      bun run scripts/generate-api-docs.ts 0.10.0 --latest
- *      bun run scripts/generate-release-notes.ts 0.10.0 --latest
+ * Example workflow when releasing v0.11.0 (current latest is v0.10.2):
+ *   1. bun run scripts/create-version-bundle.ts 0.10.2
+ *      Freezes the outgoing API summary and release notes into
+ *      `v0.10.x.mdx` siblings.
+ *   2. Generate v0.11.0 content:
+ *      bun run scripts/generate-api-docs.ts 0.11.0 --latest
+ *      bun run scripts/generate-release-notes.ts 0.11.0 --latest
  *   3. bun run scripts/update-versions-list.ts
  *      Refreshes the version selector dropdowns from disk.
  */
@@ -25,6 +32,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
+import { parseVersion, seriesFileName } from "./lib/release-shared.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
@@ -50,11 +58,11 @@ async function fileExists(p: string): Promise<boolean> {
 async function snapshotSection(
   sectionName: string,
   sectionDir: string,
-  version: string,
+  snapshotFileName: string,
   force: boolean,
 ): Promise<void> {
   const indexFile = path.join(sectionDir, "index.mdx");
-  const snapshotFile = path.join(sectionDir, `v${version}.mdx`);
+  const snapshotFile = path.join(sectionDir, snapshotFileName);
 
   if (!(await fileExists(indexFile))) {
     console.log(`  ⏭️  ${sectionName}: no index.mdx — skipping`);
@@ -76,17 +84,16 @@ async function snapshotSection(
 }
 
 async function createVersionBundle(version: string, force = false) {
-  if (!/^\d+\.\d+\.\d+$/.test(version)) {
-    throw new Error(
-      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.9.1)`,
-    );
-  }
+  const parsed = parseVersion(version);
+  const snapshotFile = seriesFileName(parsed.major, parsed.minor);
 
-  console.log(`📦 Freezing v${version} from current index.mdx files...`);
+  console.log(
+    `📦 Freezing v${version} → ${snapshotFile} (series snapshot)...`,
+  );
   for (const section of SECTIONS) {
-    await snapshotSection(section.name, section.dir, version, force);
+    await snapshotSection(section.name, section.dir, snapshotFile, force);
   }
-  console.log(`✅ Version bundle v${version} created.`);
+  console.log(`✅ Series snapshot ${snapshotFile} created.`);
   console.log(``);
   console.log(`Next steps:`);
   console.log(`  1. Update index.mdx with the new version's content.`);
@@ -103,7 +110,7 @@ if (!versionArg || args.includes("--help") || args.includes("-h")) {
   console.log(
     "Freezes the current index.mdx for both versioned sections (API summary",
   );
-  console.log("and release notes) into vX.Y.Z.mdx siblings.");
+  console.log("and release notes) into vX.Y.x.mdx siblings (series-based).");
   console.log("");
   console.log("Flags:");
   console.log("  --force   Overwrite existing snapshots if present.");

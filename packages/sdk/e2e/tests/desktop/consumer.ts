@@ -1,4 +1,4 @@
-import { createExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
+import { createExecutor, SkipExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -78,6 +78,7 @@ import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
 import { DesktopCancellationExecutor } from "./executors/cancellation-executor.js";
 
 const resources = new ResourceManager();
+const isMacosCi = process.platform === "darwin" && process.env["GITHUB_ACTIONS"] === "true";
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
@@ -396,6 +397,18 @@ resources.define("upscaler", {
   },
 });
 
+resources.define("upscaler-cpu", {
+  constant: REALESRGAN_X4PLUS_ANIME_6B,
+  type: "diffusion",
+  config: {
+    mode: "upscale",
+    device: "cpu",
+    upscaler: {
+      tile_size: 64,
+    },
+  },
+});
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   // Point the SDK at the committed e2e fixture unless the developer
   // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
@@ -415,6 +428,13 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    ...(isMacosCi ? [
+      // QVAC-19555: passes locally on macOS in ~2m, but the current
+      // mac-mini-m4-gpu CI runner crashes in ggml-metal and leaves later
+      // tests timing out. Re-enable when a stronger macOS runner is available.
+      new SkipExecutor(/^video-basic-txt2vid$/, "Quarantined on macOS CI until a stronger runner replaces mac-mini-m4-gpu"),
+    ] : []),
+
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),

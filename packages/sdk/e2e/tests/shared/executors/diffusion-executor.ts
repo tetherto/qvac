@@ -31,6 +31,8 @@ import {
   diffusionEsrganUpscaleX4,
   diffusionStandaloneUpscalerX4,
   diffusionEmptyPrompt,
+  diffusionStandaloneUpscalerBackendDevice,
+  diffusionStandaloneUpscalerCpu,
 } from "../../diffusion-tests.js";
 
 // Min byte divergence vs same-seed/prompt txt2img baseline. Output is
@@ -80,29 +82,31 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
       ExtractTest<typeof diffusionTests, K>
     >;
   }> = {
-    [diffusionBasicTxt2img.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionDefaultSize.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionNegativePrompt.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionCfgScale.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionSamplerEulerA.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionSamplerHeun.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionSchedulerKarras.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionBatchCount.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionBasicImg2img.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionImg2imgImgCfgScale.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionImg2imgInvalidStrength.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionStreaming.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionEmptyPrompt.testId]: this.runBasic.bind(this, "diffusion"),
-    [diffusionFaAccepted.testId]: this.runBasic.bind(this, "diffusion-fa"),
-    [diffusionFaDisabledAccepted.testId]: this.runBasic.bind(this, "diffusion-fa-disabled"),
-    [diffusionEsrganUpscaleX4.testId]: this.runBasic.bind(this, "diffusion-esrgan"),
-    [diffusionSeedReproducibility.testId]: this.seedReproducibility.bind(this),
-    [diffusionStreamingProgress.testId]: this.streamingProgress.bind(this),
-    [diffusionStatsPresent.testId]: this.statsPresent.bind(this),
-    [diffusionImg2imgVsTxt2imgBaseline.testId]: this.img2imgVsTxt2imgBaseline.bind(this),
-    [diffusionFusionFlux2Basic.testId]: this.fusionFlux2Basic.bind(this),
-    [diffusionStandaloneUpscalerX4.testId]: this.standaloneUpscalerX4.bind(this),
-  };
+      [diffusionBasicTxt2img.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionDefaultSize.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionNegativePrompt.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionCfgScale.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionSamplerEulerA.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionSamplerHeun.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionSchedulerKarras.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionBatchCount.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionBasicImg2img.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionImg2imgImgCfgScale.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionImg2imgInvalidStrength.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionStreaming.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionEmptyPrompt.testId]: this.runBasic.bind(this, "diffusion"),
+      [diffusionFaAccepted.testId]: this.runBasic.bind(this, "diffusion-fa"),
+      [diffusionFaDisabledAccepted.testId]: this.runBasic.bind(this, "diffusion-fa-disabled"),
+      [diffusionEsrganUpscaleX4.testId]: this.runBasic.bind(this, "diffusion-esrgan"),
+      [diffusionSeedReproducibility.testId]: this.seedReproducibility.bind(this),
+      [diffusionStreamingProgress.testId]: this.streamingProgress.bind(this),
+      [diffusionStatsPresent.testId]: this.statsPresent.bind(this),
+      [diffusionImg2imgVsTxt2imgBaseline.testId]: this.img2imgVsTxt2imgBaseline.bind(this),
+      [diffusionFusionFlux2Basic.testId]: this.fusionFlux2Basic.bind(this),
+      [diffusionStandaloneUpscalerX4.testId]: this.standaloneUpscalerX4.bind(this),
+      [diffusionStandaloneUpscalerBackendDevice.testId]: this.standaloneUpscalerBackendDevice.bind(this),
+      [diffusionStandaloneUpscalerCpu.testId]: this.standaloneUpscalerCpu.bind(this),
+    };
 
   // Subclasses override this to resolve string filenames in init_image /
   // init_images / image to Uint8Array bytes via their platform's filesystem.
@@ -268,6 +272,109 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
       return ValidationHelpers.validate(buffers, expectation);
     } catch (error) {
       return this.fail("Standalone upscaler", error);
+    }
+  }
+
+  async standaloneUpscalerBackendDevice(
+    params: DiffusionParams,
+    _expectation: unknown,
+  ): Promise<TestResult> {
+    const p = await this.resolveParams(params);
+    const modelId = await this.resources.ensureLoaded("upscaler");
+    const image = p.image;
+
+    if (!(image instanceof Uint8Array)) {
+      return {
+        passed: false,
+        output: "Standalone upscaler backendDevice test requires image bytes",
+      };
+    }
+
+    try {
+      const { outputs, stats } = upscale({
+        modelId,
+        image,
+        ...(p.repeats !== undefined && { repeats: p.repeats as number }),
+      });
+      await outputs;
+      const finalStats = await stats;
+
+      if (!finalStats) {
+        return { passed: false, output: "Stats missing from upscale response" };
+      }
+      const backendDevice = finalStats.backendDevice;
+      if (backendDevice !== "cpu" && backendDevice !== "gpu") {
+        return {
+          passed: false,
+          output: `Expected stats.backendDevice to be "cpu" or "gpu", got ${JSON.stringify(backendDevice)} (stats=${JSON.stringify(finalStats)})`,
+        };
+      }
+
+      return {
+        passed: true,
+        output: `backendDevice round-trips as "${backendDevice}" (stats=${JSON.stringify(finalStats)})`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        passed: false,
+        output: `Standalone upscaler backendDevice test failed: ${errorMsg}`,
+      };
+    }
+  }
+
+  async standaloneUpscalerCpu(
+    params: DiffusionParams,
+    _expectation: unknown,
+  ): Promise<TestResult> {
+    const p = await this.resolveParams(params);
+    const modelId = await this.resources.ensureLoaded("upscaler-cpu");
+    const image = p.image;
+    const configDevice = "cpu";
+    const expectedBackendDevice = "cpu";
+
+    if (!(image instanceof Uint8Array)) {
+      return {
+        passed: false,
+        output: "Standalone upscaler CPU test requires image bytes",
+      };
+    }
+
+    try {
+      const { outputs, stats } = upscale({
+        modelId,
+        image,
+        ...(p.repeats !== undefined && { repeats: p.repeats as number }),
+      });
+      await outputs;
+      const finalStats = await stats;
+
+      if (!finalStats) {
+        return { passed: false, output: "Stats missing from upscale response" };
+      }
+
+      const actual = finalStats.backendDevice;
+      if (actual !== expectedBackendDevice) {
+        return {
+          passed: false,
+          output:
+            `config.device ${configDevice}: expected stats.backendDevice "${expectedBackendDevice}", ` +
+            `got ${JSON.stringify(actual)} (stats=${JSON.stringify(finalStats)})`,
+        };
+      }
+
+      return {
+        passed: true,
+        output:
+          `config.device ${configDevice}: backendDevice "${actual}" matches native CPU path ` +
+          `(stats=${JSON.stringify(finalStats)})`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        passed: false,
+        output: `Standalone upscaler CPU test failed: ${errorMsg}`,
+      };
     }
   }
 

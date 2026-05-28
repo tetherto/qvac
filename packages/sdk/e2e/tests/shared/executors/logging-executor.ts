@@ -39,6 +39,10 @@ const INVALID_ID_TIMEOUT_MS = 3_000;
 const DURING_INFERENCE_DRAIN_MS = 1_000;
 const CONCURRENT_DRAIN_MS = 3_000;
 const RELOAD_DRAIN_MS = 5_000;
+// Bounded wait for a trigger to wind down so the next test doesn't inherit an in-flight job.
+const TRIGGER_JOIN_GRACE_MS = 8_000;
+// Cap completion length — logging tests only need log flow, not a full response.
+const LOGGING_TRIGGER_PREDICT_TOKENS = 20;
 
 const TRIGGER_KEYS = [
   "llm", "embed", "tts", "nmt", "diffusion",
@@ -240,23 +244,15 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
     const reloadedModelId = await this.resources.ensureLoaded(dep);
 
-    // Join the trigger before returning so the next test cannot race the open completion slot.
-    let triggerPromise: Promise<void> = Promise.resolve();
-    const result = await collectLogs({
+    return collectLogs({
       testId,
       targetId: reloadedModelId,
       target: 1,
       postTriggerWaitMs: RELOAD_DRAIN_MS,
-      trigger: () => {
-        triggerPromise = callWhenAddonIdle(() =>
-          runCompletion(reloadedModelId, "Post-reload test", false),
-        );
-        return triggerPromise;
-      },
+      trigger: () => callWhenAddonIdle(() =>
+        runCompletion(reloadedModelId, "Post-reload test", false),
+      ),
     });
-
-    await triggerPromise.catch(() => {});
-    return result;
   }
 
   protected triggerLlm(modelId: string): Promise<void> {
@@ -349,6 +345,22 @@ async function collectLogs(opts: CollectLogsOptions): Promise<CollectLogsResult>
     triggerPromise.then(() => sleep(postTriggerWaitMs)),
   ]);
 
+  // Wait for the trigger to finish; if the grace period expires first the
+  // addon slot is still occupied — fail so dispatch evicts the dependency.
+  let graceFired = false;
+  await Promise.race([
+    triggerPromise.catch(() => undefined),
+    sleep(TRIGGER_JOIN_GRACE_MS).then(() => { graceFired = true; }),
+  ]);
+
+  if (graceFired) {
+    return {
+      logs,
+      passed: false,
+      output: `Trigger still in-flight after ${TRIGGER_JOIN_GRACE_MS}ms grace period; evicting to prevent cascade`,
+    };
+  }
+
   return {
     logs,
     passed: logs.length > 0,
@@ -382,7 +394,8 @@ async function runCompletion(modelId: string, content: string, stream: boolean):
     modelId,
     history: [{ role: "user", content }],
     stream,
-  });
+    generationParams: { predict: LOGGING_TRIGGER_PREDICT_TOKENS },
+  } as never);
   if (stream) {
     for await (const _token of result.tokenStream) { /* drain */ }
     return;

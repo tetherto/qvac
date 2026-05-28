@@ -34,7 +34,7 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
 
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? await loadConfig(configPath) as Record<string, unknown> : {}
-  const serveConfig = await parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
+  const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
   const registry = createModelRegistry()
 
   await preloadModels(serveConfig, registry, logger)
