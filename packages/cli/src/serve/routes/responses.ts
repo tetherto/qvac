@@ -1,4 +1,5 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
@@ -75,14 +76,17 @@ and terminates **without** a \`[DONE]\` sentinel (per the spec).
   listInputItems: 'Paginate over a stored response\'s normalized input items (the request that produced it). `limit` and `after` work as on the OpenAI cursor-paginated endpoints.'
 }
 
-const plugin: FastifyPluginAsyncZod = async (app) => {
-  app.addHook('onSend', async (req, reply, payload) => {
-    if (req.url.startsWith('/v1/responses')) {
-      reply.header(VOLATILE_HEADER, RESPONSES_VOLATILE_STUB)
-    }
-    return payload
-  })
+// Tag every fastify-managed reply for these routes with the volatile-store
+// stub header. Attached per-route (not as a plugin-wide `onSend` keyed on URL
+// prefix), so future siblings like `/v1/responses_export` can't pick it up
+// by accident. Hijacked replies (POST streaming via initSSE, POST blocking
+// via writeBlockingResponse) bypass fastify and inject the header themselves
+// when writing raw response headers.
+async function markVolatile (_req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  reply.header(VOLATILE_HEADER, RESPONSES_VOLATILE_STUB)
+}
 
+const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/responses', {
     schema: {
       body: responsesBody,
@@ -91,6 +95,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       description: descriptions.create
     },
     config: { unsupportedParams: [...RESPONSES_UNSUPPORTED_PARAMS], sseSentinel: false },
+    onRequest: markVolatile,
     preHandler: [requireModel('chat'), logUnsupported]
   }, async (req, reply) => {
     const ctx = app.qvac
@@ -205,7 +210,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       tags: ['Responses'],
       summary: 'Retrieve a stored response',
       description: descriptions.getById
-    }
+    },
+    onRequest: markVolatile
   }, async (req, reply) => {
     const rec = app.qvac.responsesStore.get(req.params.id)
     if (!rec) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
@@ -218,7 +224,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       tags: ['Responses'],
       summary: 'Delete a stored response',
       description: descriptions.deleteById
-    }
+    },
+    onRequest: markVolatile
   }, async (req) => {
     const ok = app.qvac.responsesStore.delete(req.params.id)
     if (!ok) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
@@ -232,7 +239,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       tags: ['Responses'],
       summary: 'List input items for a stored response',
       description: descriptions.listInputItems
-    }
+    },
+    onRequest: markVolatile
   }, async (req, reply) => {
     const opts: { limit?: number; after?: string } = {}
     if (req.query.limit !== undefined) opts.limit = req.query.limit
