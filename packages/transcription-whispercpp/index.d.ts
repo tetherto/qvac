@@ -160,6 +160,66 @@ declare namespace TranscriptionWhispercpp {
     whisperBatchdMs: number
     whisperPromptMs: number
     totalWallMs: number
+    /**
+     * Post-fallback device class of the backend whisper actually
+     * initialised against. `0` = CPU, `1` = GPU. Captured once per
+     * `load()` by `WhisperModel::captureActiveBackendInfo()` — does
+     * not change across `run()` calls on the same instance.
+     *
+     * A `use_gpu: true` request that fell back to CPU at load time
+     * surfaces here as `0` and emits a WARNING through the addon
+     * logger. Mirrors `transcription-parakeet`'s `backendDevice`.
+     */
+    backendDevice: number
+    /**
+     * Numeric identifier of the specific GPU backend ggml picked at
+     * load time, see {@link BackendId} for the integer codes. `0` when
+     * `backendDevice` is `0`. Kept in lock-step with
+     * `transcription-parakeet`'s `BackendId` enum so the same integer
+     * means the same backend across both speech-stack addons.
+     */
+    backendId: number
+    /**
+     * Total memory of the active GPU device in MiB at model load time,
+     * or `-1` if the backend does not expose memory accounting (e.g.
+     * some Vulkan ICDs on Apple silicon). Snapshot only — not a live
+     * counter. Whisper-specific extra; `transcription-parakeet` does
+     * not expose this.
+     */
+    gpuMemTotalMb: number
+    /**
+     * Free memory of the active GPU device in MiB at model load time,
+     * or `-1` if the backend does not expose memory accounting.
+     * Whisper-specific extra.
+     */
+    gpuMemFreeMb: number
+  }
+
+  /**
+   * Numeric code identifying which compute backend whisper.cpp picked
+   * at `load()` time. Captured once by
+   * `WhisperModel::captureActiveBackendInfo()` from the ggml backend
+   * registry and stable for the lifetime of the model.
+   *
+   * Numbering is the same as `transcription-parakeet`'s `BackendId`
+   * (CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, Other=99) so a
+   * device-farm or runtime-stats dashboard can compare the two speech
+   * addons by the same integer.
+   *
+   *   0 = CPU       (use_gpu=false, GPU init refused, or no GPU compiled in)
+   *   1 = Metal     (macOS / iOS)
+   *   2 = CUDA      (NVIDIA)
+   *   3 = Vulkan    (cross-platform GPU; enabled on Linux / Windows / Android via whisper-cpp[vulkan])
+   *   4 = OpenCL    (Adreno on Android)
+   *  99 = other     (a future / unrecognised backend)
+   */
+  export enum BackendId {
+    CPU = 0,
+    Metal = 1,
+    CUDA = 2,
+    Vulkan = 3,
+    OpenCL = 4,
+    Other = 99
   }
 
   /**
@@ -174,6 +234,7 @@ declare namespace TranscriptionWhispercpp {
   export {
     TranscriptionWhispercpp as default,
     TranscriptionWhispercpp,
+    BackendId,
     VadParams,
     WhisperConfig,
     TranscriptionWhispercppArgs,
