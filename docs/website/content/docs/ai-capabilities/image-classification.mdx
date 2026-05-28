@@ -1,0 +1,84 @@
+---
+title: Image classification
+description: Assign one or more class labels to an input image with confidence scores.
+schemaType: HowTo
+---
+
+## Overview
+
+Image classification uses a **GGML** inference engine ([`@qvac/classification-ggml`](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml)). Load a model using `modelType: "classification"`. The addon ships with a bundled MobileNetV3-Small that classifies images into three labels — `"food"`, `"report"`, and `"other"` — so no `modelSrc` and no model download are required out of the box. Custom GGUF classifiers are supported by passing your own `modelSrc`.
+
+Provide an image to `classify()` as a `Uint8Array` of either:
+* an encoded **JPEG or PNG** buffer; or
+* **raw RGB** bytes, alongside `width`, `height`, and `channels: 3`.
+
+`classify()` returns `ClassificationResult[]` — an array of `{ label, confidence }` entries sorted by confidence in descending order. Use `topK` to limit the number of results returned, either as a load-time default (`modelConfig.topK`) or as a per-call override.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`classify()`](/reference/api#classify)
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Models
+
+The `@qvac/classification-ggml` addon bundles **MobileNetV3-Small** inside the package itself, so loading with no `modelSrc` is enough to get started:
+
+```ts
+const modelId = await loadModel({
+  modelType: "classification",
+});
+```
+
+To use a custom GGUF classifier, pass the file path (or any other supported model source) as `modelSrc`:
+
+```ts
+const modelId = await loadModel({
+  modelType: "classification",
+  modelSrc: "/abs/path/to/my-classifier.gguf",
+});
+```
+
+You can also set a load-time default for `topK` via `modelConfig`. Per-call `topK` on `classify()` overrides this default:
+
+```ts
+const modelId = await loadModel({
+  modelType: "classification",
+  modelConfig: { topK: 3 },
+});
+```
+
+For models available as constants, see [SDK — Models](/introduction#models).
+
+<Callout type="info">
+**On labels:** the bundled MobileNetV3-Small emits the fixed labels `"food"`, `"report"`, and `"other"`. Custom GGUF classifiers may emit different labels — the label set is sourced from the GGUF metadata.
+</Callout>
+
+## Example
+
+The following script classifies a JPEG image using the bundled MobileNetV3-Small model:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/classification/classify-image.js title="classify-image.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/classification/classify-image.ts title="classify-image.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>

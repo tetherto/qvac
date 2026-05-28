@@ -173,6 +173,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('ScanText'),
   },
   {
+    name: 'Image classification',
+    url: '/ai-capabilities/image-classification',
+    type: 'page',
+    icon: resolveIcon('Shapes'),
+  },
+  {
     type: 'separator',
     name: 'P2P capabilities',
   },
