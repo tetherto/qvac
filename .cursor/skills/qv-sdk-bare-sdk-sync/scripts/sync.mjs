@@ -9,6 +9,12 @@
  *   - shared optionalDependencies entries (only existing ones, no adds)
  *   - shared peerDependencies entries (only existing ones, no adds)
  *
+ * Prunes:
+ *   - dependencies entries that sdk no longer declares (so dropping a dep
+ *     from sdk doesn't leave bare-sdk with an "extra dep" violation of
+ *     check-deps-vs-sdk). Scoped to `dependencies` only — opt/peer asymmetry
+ *     is intentional (bare-sdk omits Expo/Pear/RN/MCP).
+ *
  * Skips:
  *   - PLUGIN_ADDONS (bare-sdk intentionally excludes addon plugin packages)
  *   - SDK_ONLY_PACKAGES (sdk-only carve-outs declared in check-deps-vs-sdk.mjs)
@@ -73,7 +79,7 @@ if (bareSdkPkg.version !== sdkPkg.version) {
   bareSdkPkg.version = sdkPkg.version;
 }
 
-// 2. Dependency fields
+// 2. Dependency fields — add and update
 for (const field of DEP_FIELDS) {
   const sdkDeps = sdkPkg[field] ?? {};
   const bareDeps = bareSdkPkg[field] ?? {};
@@ -107,6 +113,30 @@ for (const field of DEP_FIELDS) {
   }
 }
 
+// 3. Prune `dependencies` entries sdk no longer declares.
+// Without this, dropping a dep from sdk leaves bare-sdk with an "extra dep"
+// that fails check-deps-vs-sdk and forces a manual cleanup. Scoped to
+// `dependencies` only — opt/peer extras in bare-sdk are by design
+// (bare-sdk omits Expo/Pear/RN/MCP from sdk's opt deps).
+//
+// PLUGIN_ADDONS aren't whitelisted here: if one ever ends up in bare-sdk's
+// deps it's already a check-no-addon-deps violation; pruning it is correct.
+const sdkDepsForPrune = sdkPkg.dependencies ?? {};
+const bareDepsForPrune = bareSdkPkg.dependencies ?? {};
+for (const name of Object.keys(bareDepsForPrune)) {
+  if (name in sdkDepsForPrune) continue;
+  if (SDK_ONLY_PACKAGES.has(name)) continue;
+
+  changes.push({
+    kind: "remove",
+    field: "dependencies",
+    name,
+    from: bareDepsForPrune[name],
+    to: null,
+  });
+  delete bareSdkPkg.dependencies[name];
+}
+
 if (changes.length === 0) {
   console.log("[sync-bare-sdk] OK: no drift between @qvac/sdk and @qvac/bare-sdk.");
   process.exit(0);
@@ -119,6 +149,9 @@ const summary = changes
     }
     if (c.kind === "add") {
       return `  + ${c.field}."${c.name}": "${c.to}"`;
+    }
+    if (c.kind === "remove") {
+      return `  - ${c.field}."${c.name}": "${c.from}" (sdk no longer declares)`;
     }
     return `  ~ ${c.field}."${c.name}": "${c.from}" → "${c.to}"`;
   })

@@ -176,16 +176,24 @@ tree, so every sdk release must also mirror version + shared dep ranges into
 bare-sdk and regenerate bare-sdk's NOTICE. Skip this step for any other
 `--package` value.
 
-Run the sync skill — it handles both the package.json mirror and the bare-sdk
-NOTICE regeneration:
+Two distinct steps — run them in order:
 
-```bash
-node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs
-cd packages/bare-sdk && bun run check:deps-vs-sdk
-cd -
-source .env
-node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk
-```
+1. **Mirror `package.json`** via the sync skill (writes only to
+   `packages/bare-sdk/package.json`):
+
+   ```bash
+   node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs
+   cd packages/bare-sdk && bun run check:deps-vs-sdk && cd -
+   ```
+
+2. **Regenerate `packages/bare-sdk/NOTICE`** against the post-sync dep tree
+   (separate from the sync script; uses the existing `qv-notice-generate`
+   skill which requires env tokens):
+
+   ```bash
+   source .env
+   node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk
+   ```
 
 After this, `git status` should additionally show modifications to
 `packages/bare-sdk/package.json` and `packages/bare-sdk/NOTICE`. Include both

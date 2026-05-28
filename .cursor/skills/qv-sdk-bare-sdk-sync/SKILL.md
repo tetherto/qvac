@@ -15,17 +15,20 @@ Mirror `@qvac/sdk` → `@qvac/bare-sdk` package metadata so the two lockstep-rel
 
 ## What it does
 
-Mirrors the following from `packages/sdk/package.json` into `packages/bare-sdk/package.json`:
+**Scope:** this skill mirrors `packages/sdk/package.json` → `packages/bare-sdk/package.json` only. NOTICE regeneration is a **separate downstream step** the caller runs after sync (see Step 3 below) via `qv-notice-generate bare-sdk`. The two steps are tightly related (every sync run should be followed by a NOTICE refresh) but the script itself never touches NOTICE.
+
+Mirrors the following from sdk's `package.json` into bare-sdk's:
 
 - `version`
 - `dependencies` entries (except `PLUGIN_ADDONS` and `SDK_ONLY_PACKAGES`)
 - `optionalDependencies` entries that already exist in bare-sdk (version range only)
 - `peerDependencies` entries that already exist in bare-sdk (version range only)
 
-Then regenerates `packages/bare-sdk/NOTICE` against bare-sdk's own (post-sync) dep tree so attribution stays accurate.
+Also **prunes** `dependencies` entries that sdk no longer declares. Without this, dropping a dep from sdk leaves bare-sdk with an "extra dep" that fails `check:deps-vs-sdk` and forces a manual cleanup. Prune is scoped to `dependencies` only — `optionalDependencies` / `peerDependencies` extras are by design (bare-sdk omits Expo/Pear/RN/MCP).
 
 ## What it does NOT do
 
+- Does not touch `packages/bare-sdk/NOTICE`. Regenerating NOTICE is a separate `qv-notice-generate` invocation (Step 3 below). The script will not silently re-attribute the package — that requires intent and the right env tokens.
 - Does not mirror `keywords`, `description`, `repository`, `exports`, `imports`, `files`, `scripts`, `devDependencies`, or `peerDependenciesMeta`. These intentionally diverge between the two packages.
 - Does not add new `optionalDependencies` or `peerDependencies` to bare-sdk. bare-sdk's opt/peer shape is intentionally a subset (no Expo/Pear/RN/MCP). The script only updates ranges for entries that already exist.
 - Does not add `PLUGIN_ADDONS` (the 10 `@qvac/*` addon packages bare-sdk excludes by design). The exclusion list lives in `packages/bare-sdk/scripts/plugin-addons.mjs` — single source of truth, shared with `check-deps-vs-sdk.mjs`.
