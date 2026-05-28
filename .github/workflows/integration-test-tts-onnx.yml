@@ -188,8 +188,31 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
+        run: |
+          mkdir -p ${{ inputs.workdir }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/
+          echo "Prebuilds moved from staging area"
+          ls -la ${{ inputs.workdir }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
+      # source path becomes invalid and the copy silently no-ops. Use
+      # PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dst = "${{ inputs.workdir }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
@@ -415,8 +438,31 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
+        run: |
+          mkdir -p ${{ inputs.workdir }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/
+          echo "Prebuilds moved from staging area"
+          ls -la ${{ inputs.workdir }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
+      # source path becomes invalid and the copy silently no-ops. Use
+      # PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dst = "${{ inputs.workdir }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 
       - name: Download prebuilds from package (Unix)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}

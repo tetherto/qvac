@@ -331,7 +331,15 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: dist
-          path: ${{ env.WORKDIR }}/dist/
+          path: ${{ runner.temp }}/dist-staging
+
+      - name: Move dist from staging to workspace
+        shell: bash
+        run: |
+          mkdir -p ${{ env.WORKDIR }}/dist
+          cp -r ${{ runner.temp }}/dist-staging/. ${{ env.WORKDIR }}/dist/
+          echo "Dist moved from staging area"
+          ls -la ${{ env.WORKDIR }}/dist/
 
       - name: Modify package name for branch-based test publishing
         working-directory: ${{ env.WORKDIR }}
@@ -408,7 +416,15 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: dist
-          path: ${{ env.WORKDIR }}/dist/
+          path: ${{ runner.temp }}/dist-staging
+
+      - name: Move dist from staging to workspace
+        shell: bash
+        run: |
+          mkdir -p ${{ env.WORKDIR }}/dist
+          cp -r ${{ runner.temp }}/dist-staging/. ${{ env.WORKDIR }}/dist/
+          echo "Dist moved from staging area"
+          ls -la ${{ env.WORKDIR }}/dist/
 
       - name: Publish to NPM Package Registry
         id: publish
