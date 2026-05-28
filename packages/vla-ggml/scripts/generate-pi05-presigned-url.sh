@@ -13,8 +13,13 @@ set -e
 
 # Override with PI05_HF_REPO to point at a project-owned mirror when available.
 HF_REPO="${PI05_HF_REPO:-olyas/vla-ggml-models}"
+# Pin to a specific HF commit so the mobile GGUF can't drift independently
+# of the desktop parity oracle (which is pinned to s3://.../pi05-base/2026-05-21/
+# in integration-test-vla.yml and integration-mobile-test-vla.yml). Bump this
+# SHA + the S3 oracle date together when re-quantising or re-dumping.
+HF_REVISION="${PI05_HF_REVISION:-44e56dc4e668efa9a90ed782a9e2a543d5a67385}"
 MODEL_NAME="pi05-base-q-aggressive.gguf"
-MODEL_URL="https://huggingface.co/${HF_REPO}/resolve/main/${MODEL_NAME}"
+MODEL_URL="https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/${MODEL_NAME}"
 
 echo "🔑 Using HuggingFace CDN for pi05 model..."
 

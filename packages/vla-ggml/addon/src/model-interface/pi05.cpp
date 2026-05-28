@@ -1186,6 +1186,54 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
         std::to_string(m->expert_n_kv_heads) + ")");
   }
 
+  // GPU only: allocate a backend buffer and copy the GGUF data into
+  // it. Required for GPU compute — without it the tensors' `data`
+  // pointers stay NULL (no_alloc=true) and graph_compute segfaults
+  // the moment a kernel tries to read a weight. (skipping smolvla's
+  // mmap+host_ptr fast path; that's a follow-up optimisation.)
+  //
+  // CPU only: NO buffer copy. `data` pointers are already valid from
+  // the mmap path (no_alloc=false above). Allocating + copying here
+  // would double the resident footprint and trip iOS jetsam on 8 GB
+  // iPhones (see comment on `gp.no_alloc = m->has_gpu` above).
+  //
+  // NOTE: this runs BEFORE the tensor-pointer population below so the
+  // CPU fallback (which frees and reopens ctx_w) doesn't leave any
+  // m->vision_*/vlm_blocks/expert_blocks pointers dangling into a
+  // freed context.
+  if (m->has_gpu) {
+    ggml_backend_buffer_type_t buft =
+        ggml_backend_get_default_buffer_type(m->backend);
+    const size_t data_offset = gguf_get_data_offset(m->gguf);
+    const int64_t n_tensors_in_gguf = gguf_get_n_tensors(m->gguf);
+    if (!pi05LoadWeightsAllocCopy(
+            *m, ggufPath.c_str(), m->gguf, buft, data_offset,
+            n_tensors_in_gguf)) {
+      QLOG_IF(
+          Priority::WARNING,
+          "pi05LoadModel: GPU weight alloc failed — falling back to CPU");
+      ggml_backend_free(m->backend);
+      m->backend = m->backend_cpu;
+      m->has_gpu = false;
+      const char* cpuName = ggml_backend_name(m->backend_cpu);
+      m->backend_name = cpuName != nullptr ? cpuName : "CPU";
+      // Reopen GGUF with no_alloc=false so tensor data is mmap'd.
+      gguf_free(m->gguf);
+      ggml_free(m->ctx_w);
+      m->ctx_w = nullptr;
+      m->gguf = nullptr;
+      struct gguf_init_params gp2{};
+      gp2.no_alloc = false;
+      gp2.ctx = &m->ctx_w;
+      m->gguf = gguf_init_from_file(ggufPath.c_str(), gp2);
+      if (m->gguf == nullptr) {
+        throw std::runtime_error(
+            "pi05LoadModel: gguf re-open for CPU fallback failed");
+      }
+    }
+  }
+
+  // Populate tensor pointers from the final (possibly fallback) ctx_w.
   auto must_get = [&](const std::string& name) -> struct ggml_tensor* {
     struct ggml_tensor* t = ggml_get_tensor(m->ctx_w, name.c_str());
     if (t == nullptr) {
@@ -1272,48 +1320,6 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   m->time_mlp_in_b = must_get("proj.time_mlp_in.bias");
   m->time_mlp_out_w = must_get("proj.time_mlp_out.weight");
   m->time_mlp_out_b = must_get("proj.time_mlp_out.bias");
-
-  // GPU only: allocate a backend buffer and copy the GGUF data into
-  // it. Required for GPU compute — without it the tensors' `data`
-  // pointers stay NULL (no_alloc=true) and graph_compute segfaults
-  // the moment a kernel tries to read a weight. (skipping smolvla's
-  // mmap+host_ptr fast path; that's a follow-up optimisation.)
-  //
-  // CPU only: NO buffer copy. `data` pointers are already valid from
-  // the mmap path (no_alloc=false above). Allocating + copying here
-  // would double the resident footprint and trip iOS jetsam on 8 GB
-  // iPhones (see comment on `gp.no_alloc = m->has_gpu` above).
-  if (m->has_gpu) {
-    ggml_backend_buffer_type_t buft =
-        ggml_backend_get_default_buffer_type(m->backend);
-    const size_t data_offset = gguf_get_data_offset(m->gguf);
-    const int64_t n_tensors_in_gguf = gguf_get_n_tensors(m->gguf);
-    if (!pi05LoadWeightsAllocCopy(
-            *m, ggufPath.c_str(), m->gguf, buft, data_offset,
-            n_tensors_in_gguf)) {
-      QLOG_IF(
-          Priority::WARNING,
-          "pi05LoadModel: GPU weight alloc failed — falling back to CPU");
-      ggml_backend_free(m->backend);
-      m->backend = m->backend_cpu;
-      m->has_gpu = false;
-      const char* cpuName = ggml_backend_name(m->backend_cpu);
-      m->backend_name = cpuName != nullptr ? cpuName : "CPU";
-      // Reopen GGUF with no_alloc=false so tensor data is mmap'd.
-      gguf_free(m->gguf);
-      ggml_free(m->ctx_w);
-      m->ctx_w = nullptr;
-      m->gguf = nullptr;
-      struct gguf_init_params gp2{};
-      gp2.no_alloc = false;
-      gp2.ctx = &m->ctx_w;
-      m->gguf = gguf_init_from_file(ggufPath.c_str(), gp2);
-      if (m->gguf == nullptr) {
-        throw std::runtime_error(
-            "pi05LoadModel: gguf re-open for CPU fallback failed");
-      }
-    }
-  }
 
   return m;
 }

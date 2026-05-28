@@ -72,6 +72,16 @@ function validateRunInput (input, hparams) {
     throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.noise must be a Float32Array when provided' })
   }
 
+  if (hparams && hparams.stateInputMode === 'continuous' &&
+      Number.isInteger(hparams.maxStateDim)) {
+    if (input.state.length === 0 || input.state.length > hparams.maxStateDim) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `state.length (${input.state.length}) must be > 0 and <= hparams.maxStateDim (${hparams.maxStateDim})`
+      })
+    }
+  }
+
   if (hparams && hparams.stateInputMode === 'discrete') {
     if (Number.isInteger(hparams.numCameras) && input.images.length !== hparams.numCameras) {
       throw new QvacErrorAddonVla({
