@@ -46,3 +46,17 @@ async function runModelFileValidationTest (options = {}) { // eslint-disable-lin
 async function runMultipleTranscriptionsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multiple-transcriptions.test.js', options)
 }
+
+module.exports = {
+  runAccuracyMultilangTest,
+  runAudioCtxChunkingTest,
+  runColdStartTimingTest,
+  runCorruptedModelTest,
+  runGpuTest,
+  runLiveStreamSimulationTest,
+  runLongEsTest,
+  runMobilePerfTinyCpuTest,
+  runMobilePerfTinyGpuTest,
+  runModelFileValidationTest,
+  runMultipleTranscriptionsTest
+}
