@@ -187,7 +187,14 @@ type EndpointCategory =
   | 'image'
 ```
 
-> The `0.1.0` release ships an **empty** model catalog as a placeholder. The full catalog lands in the follow-up codegen task — track [QVAC-19194 workstream 2](https://app.asana.com/0/0/1215054644422021). Until then, pass model aliases (e.g. `'qwen3-600m'`) as strings.
+The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package — `0.1.0` ships 729 OpenAI-surface model constants covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`onnx-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
+
+```bash
+npm run update-models     # writes src/models/constants.ts + models/history/<sha>.txt
+npm run check-models      # CI drift check; fails if regen would change anything
+```
+
+Registry entries for engines without an OpenAI-shaped surface (VAD, classification, VLA, …) are filtered out at codegen time. `check-models` runs in CI so the committed catalog cannot drift from the registry without a deliberate regen commit.
 
 ---
 
