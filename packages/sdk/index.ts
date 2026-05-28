@@ -192,6 +192,7 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 export { InferenceCancelledError } from "./utils/errors-server";
 export type { InferenceCancelledPartial } from "./utils/errors-server";
 export {
+  ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
