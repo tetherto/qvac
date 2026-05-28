@@ -1,0 +1,62 @@
+---
+title: Video generation
+description: Text-to-video generation using a customized Diffusion engine.
+schemaType: HowTo
+---
+
+## Overview
+
+Video generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"` with `modelConfig.mode: "video"`. Then call `video()` with `mode: "txt2vid"` and a text `prompt` describing the scene to animate.
+
+`video()` returns `{ progressStream, outputs, stats }`. `outputs` resolves to one or more generated videos as `Uint8Array` buffers (AVI). Use `progressStream` to track generation step-by-step.
+
+WAN-specific knobs control the output: `video_frames` (must satisfy `4k + 1`, e.g. `17`, `33`, `49`, `81`), `fps`, `cfg_scale`, and `flow_shift` (for Wan 2.1 T2V, `3.0` is recommended — higher values can produce near-static frames).
+
+<Callout type="warn">
+Video generation is hardware-intensive: it requires at least **16 GB of video memory** or **20 GB of unified memory**.
+</Callout>
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`video()`](/reference/api#video)
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Models
+
+Supported model families and their file layouts:
+
+- **WAN 2.1 T2V**: split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + VAE (via `vaeModelSrc`). Available constants: `WAN2_1_T2V_1_3B_FP16`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
+
+For models available as constants, see [SDK — Models](/introduction#models).
+
+## Example
+
+### Text-to-video (WAN 2.1)
+
+The following script shows text-to-video generation using Wan 2.1 T2V 1.3B with its split-layout model (separate diffusion model, UMT5-XXL text encoder, and VAE):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid.js title="diffusion-txt2vid.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid.ts title="diffusion-txt2vid.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>
