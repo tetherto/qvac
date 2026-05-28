@@ -76,10 +76,9 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
-            no_gpu: 'true'
+            runner: qvac-ubuntu2204-x64-gpu
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"cuda"}]
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -95,7 +94,6 @@ jobs:
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
-            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
           - os: macos-15-large
