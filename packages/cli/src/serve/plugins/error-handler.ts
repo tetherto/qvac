@@ -99,6 +99,7 @@ const ZOD_PATH_TO_CODE: Record<string, string> = {
   prompt: 'missing_prompt',
   file: 'missing_file',
   image: 'missing_image',
+  'image[]': 'missing_image',
   query: 'missing_query',
   file_id: 'missing_file_id',
   voice: 'missing_voice',

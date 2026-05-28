@@ -17,6 +17,13 @@ export const imagesEditsBody = z.object({
   model: z.string().min(1),
   prompt: z.string().min(1).optional(),
   image: z.instanceof(Buffer).optional(),
+  // `image[]` (with literal brackets) is the OpenAI batch-edit form. Declared
+  // here so a stringified value (e.g. `curl -F "image[]=junk-text"`) is
+  // rejected at the validation layer with code `missing_image` instead of
+  // falling through `.passthrough()` and crashing the handler at
+  // `imageFiles[0]!.buffer`. The error-handler maps the instancePath
+  // `image[]` → `missing_image`.
+  'image[]': z.instanceof(Buffer).optional(),
   size: z.string().optional(),
   response_format: z.string().optional(),
   n: z.union([z.string(), z.number()]).optional(),
