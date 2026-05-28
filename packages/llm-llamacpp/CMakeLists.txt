@@ -131,10 +131,6 @@ if(ANDROID)
   file(COPY ${DEBUG_LOG} 
   DESTINATION ${CMAKE_BINARY_DIR}
 )
-# Write debug log to prebuilds directory (created during configure)
-set(PREBUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64")
-file(MAKE_DIRECTORY ${PREBUILD_DIR})
-file(COPY ${DEBUG_LOG} DESTINATION ${PREBUILD_DIR})
 endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
