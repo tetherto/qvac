@@ -163,7 +163,7 @@ class SdInterface {
    * @returns {Promise<boolean>} true if job was accepted, false if busy
    */
   async runJob (params) {
-    // Pass init_image / init_images / end_image / control_frames Uint8Array(s)
+    // Pass init_image / init_images / control_frames Uint8Array(s)
     // directly to C++ as typed-array properties (avoids JSON-encoding every
     // byte as a number).
     //
@@ -178,15 +178,9 @@ class SdInterface {
     }
 
     // ── Video-specific buffers ───────────────────────────────────────────
-    // `end_image` -- flf2vid (first-last-frame interpolation).
     // `control_frames` -- VACE-guided video generation (array of Uint8Array,
-    //                     one per frame).
-    // These are always forwarded as dedicated typed-array properties to the
-    // native runJob so they bypass JSON serialisation the same way
-    // `initImageBuffer(s)` do. Both are optional and can appear alongside a
-    // single `init_image` (img2vid / flf2vid); SdModel::processVideo()
-    // enforces the final mode-vs-inputs invariants.
-    const endImageBuf = params.end_image
+    //                     one per frame). Forwarded as dedicated typed-array
+    //                     properties to bypass JSON serialisation.
     const controlFramesBufs = Array.isArray(params.control_frames)
       ? params.control_frames
       : null
@@ -200,7 +194,6 @@ class SdInterface {
       const serializable = { ...params }
       const imgBufs = serializable.init_images
       delete serializable.init_images
-      delete serializable.end_image
       delete serializable.control_frames
 
       this._fillDimsFromImage(serializable, imgBufs[0])
@@ -211,26 +204,21 @@ class SdInterface {
         input: paramsJson,
         initImageBuffers: imgBufs
       }
-      if (endImageBuf) jobArgs.endImageBuffer = endImageBuf
       if (controlFramesBufs) jobArgs.controlFramesBuffers = controlFramesBufs
       return this._binding.runJob(this._handle, jobArgs)
     }
 
     // ── Single-image path ──────────────────────────────────────────────────
-    // Used by:
-    //   - image mode: img2img (SDEdit or FLUX.2 single ref)
-    //   - video mode: img2vid (first frame) or flf2vid (first frame; `end_image`
-    //                 provides the last frame)
+    // Used by image mode (img2img) and video mode (img2vid, first frame).
     // Auto-detect width/height from the image header so the C++ tensor
     // dimensions always match the decoded image — without this, generate_image()
     // hits GGML_ASSERT(image.width == tensor->ne[0]). The same auto-detect
-    // is useful for img2vid / flf2vid so Wan's expected video dimensions
-    // match the first frame without the caller having to specify them.
+    // is useful for img2vid so Wan's expected video dimensions match the
+    // first frame without the caller having to specify them.
     if (params.init_image) {
       const serializable = { ...params }
       const imgBuf = serializable.init_image
       delete serializable.init_image
-      delete serializable.end_image
       delete serializable.control_frames
 
       this._fillDimsFromImage(serializable, imgBuf)
@@ -241,7 +229,6 @@ class SdInterface {
         input: paramsJson,
         initImageBuffer: imgBuf
       }
-      if (endImageBuf) jobArgs.endImageBuffer = endImageBuf
       if (controlFramesBufs) jobArgs.controlFramesBuffers = controlFramesBufs
       return this._binding.runJob(this._handle, jobArgs)
     }
@@ -254,11 +241,9 @@ class SdInterface {
     // buffers; passing them inside the JSON would JSON.stringify each byte
     // into a decimal number (~3-4x bloat) and break native deserialization.
     const serializable = { ...params }
-    delete serializable.end_image
     delete serializable.control_frames
     const paramsJson = JSON.stringify(serializable)
     const jobArgs = { type: 'text', input: paramsJson }
-    if (endImageBuf) jobArgs.endImageBuffer = endImageBuf
     if (controlFramesBufs) jobArgs.controlFramesBuffers = controlFramesBufs
     return this._binding.runJob(this._handle, jobArgs)
   }

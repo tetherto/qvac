@@ -133,7 +133,7 @@ class VideoStableDiffusion {
    *        the Wan VAE.
    * @param {string} [args.files.clipVision]              - Absolute path to
    *        clip_vision_h.safetensors (OpenCLIP ViT-H/14). Required for
-   *        img2vid and flf2vid; omit for txt2vid.
+   *        img2vid; omit for txt2vid.
    * @param {string} [args.files.esrgan]                  - Optional; forwarded
    *        to the native ctx as `esrganPath` (empty string when unset). Video
    *        generation does not use ESRGAN — same binding shape as image mode.
@@ -346,7 +346,7 @@ class VideoStableDiffusion {
     // Only validate provided dims; C++ falls back to 480x832 (portrait,
     // phone-screen friendly) when omitted. Override either field for
     // landscape (832x480 is Wan 1.3B's training res).
-    const alignTo = 8
+    const alignTo = 16
     const w = params.width
     const h = params.height
     const wBad = w != null && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
@@ -388,9 +388,9 @@ class VideoStableDiffusion {
       }
       if (dimsImplicit) {
         const dims = peekImageDims(params.init_image)
-        if (dims && (dims.w % 8 !== 0 || dims.h % 8 !== 0)) {
+        if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
           throw new Error(
-            `init_image dimensions ${dims.w}x${dims.h} must be multiples of 8. ` +
+            `init_image dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
             'Pass explicit width/height to override or pre-scale the image.'
           )
         }
@@ -459,9 +459,9 @@ class VideoStableDiffusion {
       if (dimsImplicit) {
         for (let i = 0; i < params.control_frames.length; i++) {
           const dims = peekImageDims(params.control_frames[i])
-          if (dims && (dims.w % 8 !== 0 || dims.h % 8 !== 0)) {
+          if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
             throw new Error(
-              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of 8. ` +
+              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
               'Pass explicit width/height to override or pre-scale the frame.'
             )
           }
@@ -486,11 +486,11 @@ class VideoStableDiffusion {
     // conditioning in Wan 2.1 I2V. Without it the C++ layer cannot build the
     // img_emb projection and will produce garbage or crash.
     if (mode === 'img2vid' && !this._files.clipVision) {
-      this.logger.warn(
+      throw new TypeError(
         `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
         'Download clip_vision_h.safetensors from ' +
         'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +
-        'files.clipVision. Generation will likely fail or produce incorrect output.'
+        'files.clipVision.'
       )
     }
 

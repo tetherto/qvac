@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     // encode the init_image and condition generation on it. Without
     // clipVisionPath this model will fail to build the img_emb projection.
     std::string diffusion_model =
-        models_dir + "/wan2.1_i2v_480p_14B_fp8_scaled.safetensors";
+        models_dir + "/wan2.1-i2v-14b-480p-Q4_K_M.gguf";
     std::string vae_model = models_dir + "/wan_2.1_vae.safetensors";
     std::string t5xxl_model = models_dir + "/umt5_xxl_fp16.safetensors";
     std::string clip_vision = models_dir + "/clip_vision_h.safetensors";
