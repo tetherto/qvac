@@ -1,4 +1,4 @@
-import { sdkLoadModel, sdkUnloadModel, sdkClose } from './sdk.js'
+import { loadModel as sdkLoadModel, unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
 import type { ModelRegistry, ServeConfig } from './model-registry.js'
 import type { Logger } from '../../logger.js'
 
@@ -43,14 +43,15 @@ export async function loadModel (alias: string, registry: ModelRegistry, logger:
     return
   }
 
-  logger.info(`Loading model "${alias}" from ${entry.src}...`)
+  const displaySrc = typeof entry.modelSrc === 'string' ? entry.modelSrc : entry.modelSrc.src
+  logger.info(`Loading model "${alias}" from ${displaySrc}...`)
   registry.setLoading(alias)
 
   try {
     const sdkModelId = await sdkLoadModel({
-      src: entry.src,
-      type: entry.sdkType,
-      config: entry.config
+      modelSrc: entry.modelSrc,
+      modelType: entry.sdkType,
+      modelConfig: entry.config
     })
     registry.setReady(alias, sdkModelId)
     logger.info(`Model "${alias}" loaded (SDK modelId: ${sdkModelId}).`)
@@ -66,7 +67,7 @@ export async function unloadModel (alias: string, registry: ModelRegistry, logge
 
   if (entry.sdkModelId) {
     try {
-      await sdkUnloadModel(entry.sdkModelId)
+      await sdkUnloadModel({ modelId: entry.sdkModelId })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`SDK unload for "${alias}" failed: ${message}`)

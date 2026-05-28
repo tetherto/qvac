@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { transcribe } from '@qvac/sdk'
 import { sendJson, sendText, sendError } from '../../../http.js'
 import { readMultipart } from '../../../multipart.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkTranscribe } from '../../../core/sdk.js'
 import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import type { RouteContext } from '../../types.js'
 
@@ -98,17 +98,16 @@ export async function handleTranslations (req: IncomingMessage, res: ServerRespo
 
   ctx.logger.info(`  translate model=${alias} file=${file.fileName} size=${fileSizeKB}KB format=${responseFormat}${prompt ? ' prompt=yes' : ''}`)
 
-  const transcribe = ctx.transcribeOverride ?? sdkTranscribe
+  const transcribeFn = ctx.transcribeOverride ?? transcribe
 
   try {
-    const op = await transcribe({
+    const op = transcribeFn({
       modelId: sdkModelId,
       audioChunk: file.data,
-      fileName: file.fileName,
-      prompt
+      ...(prompt !== undefined ? { prompt } : {})
     })
     bindClientDisconnectCancel(req, res, op.requestId, ctx.logger)
-    const text = await op.result
+    const text = await op
 
     ctx.logger.info(`  translate done chars=${text.length}`)
 
