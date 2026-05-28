@@ -137,6 +137,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Image'),
   },
   {
+    name: 'Video generation',
+    url: '/ai-capabilities/video-generation',
+    type: 'page',
+    icon: resolveIcon('Video'),
+  },
+  {
     name: 'Transcription',
     url: '/ai-capabilities/transcription',
     type: 'page',

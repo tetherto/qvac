@@ -202,7 +202,7 @@
     "@qvac/transcription-parakeet": "^0.6.0",
     "@qvac/transcription-whispercpp": "^0.7.0",
     "@qvac/translation-nmtcpp": "^4.0.0",
-    "@qvac/tts-ggml": "^0.1.2",
+    "@qvac/tts-ggml": "^0.1.4",
     "@qvac/vla-ggml": "^0.2.0",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.13.4",
