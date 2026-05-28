@@ -79,11 +79,6 @@ if(ANDROID)
     "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/17/lib/linux/arm/libomp.so"
     "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib64/clang/20/lib/linux/aarch64/libomp.so"
     "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib64/clang/19/lib/linux/aarch64/libomp.so"
-    "/usr/lib/llvm-22/lib/libomp.so"
-    "/usr/lib/llvm-21/lib/libomp.so"
-    "/usr/lib/x86_64-linux-gnu/libomp.so.5"
-    "/usr/lib/aarch64-linux-gnu/libomp.so.5"
-    "/usr/lib/libomp.so"
   )
   
   file(APPEND ${DEBUG_LOG} "Checking paths:\n")
