@@ -130,15 +130,20 @@ jobs:
 
       - name: Verify @qvac/sdk and @qvac/bare-sdk version lockstep
         shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # pull_request_target pins the working tree to base.sha; read both
+          # manifests from the PR head SHA so a missed bare-sdk bump fails pre-merge.
           set -euo pipefail
-          SDK_VER=$(jq -r .version packages/sdk/package.json)
-          BARE_VER=$(jq -r .version packages/bare-sdk/package.json)
+          REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
+          SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
+          BARE_VER=$(git show "${REF}":packages/bare-sdk/package.json | jq -r .version)
           if [ "$SDK_VER" != "$BARE_VER" ]; then
-            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER. Both packages must share the same version (lockstep release). Bump both packages together in the release branch."
+            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER at ${REF}. Both packages must share the same version (lockstep release). Bump both packages together in the release branch."
             exit 1
           fi
-          echo "OK: @qvac/sdk and @qvac/bare-sdk both at $SDK_VER"
+          echo "OK: @qvac/sdk and @qvac/bare-sdk both at $SDK_VER (verified at ${REF})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
