@@ -101,6 +101,13 @@ CONF
     echo "FATAL: models did not load within ${max_wait}s" >&2
 
     # ── Failure diagnostics ──────────────────────────────────────────
+    # Disable errexit for the whole block. Any single command failing here
+    # (curl returning non-zero against a dead server, cat on a missing file,
+    # kill -0 on a stale pid) would otherwise abort the block under bats'
+    # `set -eET` and we'd lose everything that comes after — most importantly
+    # the serve.log dump, which is the actual reason we got here.
+    set +e
+
     local server_pid
     server_pid=$(cat "${FILE_TMPDIR}/server_pid" 2>/dev/null || echo "")
     if [[ -n "${server_pid}" ]] && kill -0 "${server_pid}" 2>/dev/null; then
@@ -109,9 +116,6 @@ CONF
       echo "  server pid ${server_pid:-<unknown>} is NOT alive" >&2
     fi
 
-    # GET /v1/models with curl --connect-timeout/--max-time bounds. curl
-    # prints '000' via -w when the request fails; the [[ -z ]] fallback only
-    # fires when curl itself is missing.
     local diag_body diag_status diag_body_file
     diag_body_file="${FILE_TMPDIR}/diag-models.body"
     diag_status=$(curl -s --connect-timeout 2 --max-time 5 \
@@ -130,6 +134,7 @@ CONF
     cat "${FILE_TMPDIR}/serve.log" >&2 || echo "  (serve.log unreadable)" >&2
     echo "── end serve.log ────────────────────────────────────────────" >&2
 
+    set -e
     return 1
   fi
 }
