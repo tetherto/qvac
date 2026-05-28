@@ -86,7 +86,7 @@ function makeLogger (): Logger & { warns: string[] } {
 function resolvedEntry (overrides: Partial<ResolvedModelEntry>): ResolvedModelEntry {
   return {
     alias: 'en',
-    src: 'hyper://example/model',
+    modelSrc: 'hyper://example/model',
     sdkType: 'whispercpp-transcription',
     endpointCategory: 'audio-translation',
     isDefault: false,
@@ -176,7 +176,7 @@ describe('handleTranslations', () => {
     const registry = createModelRegistry()
     const tr: ResolvedModelEntry = {
       alias: 'tr',
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'transcription',
       isDefault: false,
@@ -203,7 +203,7 @@ describe('handleTranslations', () => {
     const res = createMockRes()
     const registry = createModelRegistry()
     registry.register('en', {
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'audio-translation',
       config: {}
@@ -232,7 +232,7 @@ describe('handleTranslations', () => {
     const res = createMockRes()
     const registry = createModelRegistry()
     registry.register('en', {
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'audio-translation',
       config: {}
@@ -262,7 +262,7 @@ describe('handleTranslations', () => {
     const res = createMockRes()
     const registry = createModelRegistry()
     registry.register('en', {
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'audio-translation',
       config: {}
@@ -292,7 +292,7 @@ describe('handleTranslations', () => {
     const res = createMockRes()
     const registry = createModelRegistry()
     registry.register('en', {
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'audio-translation',
       config: {}
@@ -322,7 +322,7 @@ describe('handleTranslations', () => {
     const res = createMockRes()
     const registry = createModelRegistry()
     registry.register('en', {
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'audio-translation',
       config: {}
@@ -337,7 +337,7 @@ describe('handleTranslations', () => {
       registry,
       serveConfig,
       logger,
-      transcribeOverride: async () => ({ requestId: 'rid-test', result: Promise.resolve('hello') })
+      transcribeOverride: () => Object.assign(Promise.resolve('hello'), { requestId: 'rid-test' })
     })
     assert.equal(res.getStatus(), 200)
     const j = JSON.parse(res.getPayload()) as { text: string }
@@ -351,7 +351,7 @@ describe('handleTranslations', () => {
     const res = createMockRes()
     const registry = createModelRegistry()
     registry.register('en', {
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'audio-translation',
       config: {}
@@ -365,7 +365,7 @@ describe('handleTranslations', () => {
       registry,
       serveConfig,
       logger: makeLogger(),
-      transcribeOverride: async () => ({ requestId: 'rid-test', result: Promise.resolve('out') })
+      transcribeOverride: () => Object.assign(Promise.resolve('out'), { requestId: 'rid-test' })
     })
     assert.equal(res.getStatus(), 200)
     const j = JSON.parse(res.getPayload()) as { text: string }
@@ -382,7 +382,7 @@ describe('handleTranslations', () => {
     const res = createMockRes()
     const registry = createModelRegistry()
     registry.register('en', {
-      src: 'hyper://x',
+      modelSrc: 'hyper://x',
       sdkType: 'whispercpp-transcription',
       endpointCategory: 'audio-translation',
       config: {}
@@ -396,7 +396,7 @@ describe('handleTranslations', () => {
       registry,
       serveConfig,
       logger: makeLogger(),
-      transcribeOverride: async () => ({ requestId: 'rid-test', result: Promise.resolve('plain') })
+      transcribeOverride: () => Object.assign(Promise.resolve('plain'), { requestId: 'rid-test' })
     })
     assert.equal(res.getStatus(), 200)
     assert.equal(res.getPayload(), 'plain')

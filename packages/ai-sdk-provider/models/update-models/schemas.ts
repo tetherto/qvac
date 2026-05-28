@@ -17,9 +17,12 @@ export const CANONICAL_ENGINES = [
   'llamacpp-embedding',
   'nmtcpp-translation',
   'onnx-tts',
+  'tts-ggml',
   'onnx-ocr',
   'parakeet-transcription',
   'sdcpp-generation',
+  'ggml-vla',
+  'ggml-classification',
   'onnx-vad'
 ] as const
 
@@ -36,6 +39,8 @@ export const REGISTRY_ADDONS = [
   'ocr',
   'parakeet',
   'diffusion',
+  'vla',
+  'classification',
   'other'
 ] as const
 
@@ -49,9 +54,12 @@ export const ENGINE_TO_ADDON = {
   'llamacpp-embedding': 'embeddings',
   'nmtcpp-translation': 'nmt',
   'onnx-tts': 'tts',
+  'tts-ggml': 'tts',
   'onnx-ocr': 'ocr',
   'parakeet-transcription': 'parakeet',
   'sdcpp-generation': 'diffusion',
+  'ggml-vla': 'vla',
+  'ggml-classification': 'classification',
   'onnx-vad': 'vad'
 } as const satisfies Record<ModelRegistryEngine, ModelRegistryEntryAddon>
 
@@ -63,7 +71,7 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   whisper: 'whispercpp-transcription',
   embeddings: 'llamacpp-embedding',
   nmt: 'nmtcpp-translation',
-  tts: 'onnx-tts',
+  tts: 'tts-ggml',
   ocr: 'onnx-ocr',
   parakeet: 'parakeet-transcription',
   vad: 'onnx-vad',
@@ -72,13 +80,27 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   embedding: 'llamacpp-embedding',
   translation: 'nmtcpp-translation',
   diffusion: 'sdcpp-generation',
+  vla: 'ggml-vla',
+  classification: 'ggml-classification',
+  '@qvac/llm-llamacpp': 'llamacpp-completion',
+  '@qvac/transcription-whispercpp': 'whispercpp-transcription',
+  '@qvac/embed-llamacpp': 'llamacpp-embedding',
+  '@qvac/translation-nmtcpp': 'nmtcpp-translation',
   '@qvac/translation-llamacpp': 'nmtcpp-translation',
   '@qvac/vad-silero': 'onnx-vad',
-  '@qvac/tts': 'onnx-tts'
+  '@qvac/tts': 'tts-ggml',
+  '@qvac/tts-onnx': 'tts-ggml',
+  '@qvac/tts-ggml': 'tts-ggml',
+  '@qvac/ocr-onnx': 'onnx-ocr',
+  '@qvac/transcription-parakeet': 'parakeet-transcription',
+  '@qvac/diffusion-cpp': 'sdcpp-generation',
+  '@qvac/vla-ggml': 'ggml-vla',
+  '@qvac/classification-ggml': 'ggml-classification'
 }
 
 export function resolveCanonicalEngine (engine: string): ModelRegistryEngine | null {
   if ((CANONICAL_ENGINES as readonly string[]).includes(engine)) {
+    if (engine === 'onnx-tts') return 'tts-ggml'
     return engine as ModelRegistryEngine
   }
   return LEGACY_ENGINE_TO_CANONICAL[engine] ?? null

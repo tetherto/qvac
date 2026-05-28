@@ -159,6 +159,9 @@ function setupCli (): void {
       quiet?: boolean
     }) => {
       try {
+        // verifyBundle in @qvac/sdk/commands already emits an `invalid-source`
+        // issue with message "At least one host is required." when hosts is
+        // empty — no need to duplicate the guard here.
         const {
           formatVerifyBundleResult,
           hasErrors,

@@ -54,6 +54,7 @@ export {
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
+export { plugins } from "./client/plugins-factory";
 export {
   type LifecycleState,
   type ModelProgressUpdate,
@@ -97,6 +98,7 @@ export {
   type RagSaveStage,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
+  RAG_ERROR_CODES,
   type QvacConfig,
   type ModelInfo,
   type GetModelInfoParams,

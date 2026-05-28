@@ -76,6 +76,47 @@ export function sameMinor(a: SemVer, b: SemVer): boolean {
 }
 
 /**
+ * Format the series label for a minor line — `vX.Y.x` with a literal `x`
+ * marker for the patch component. This is the on-disk filename stem,
+ * the URL slug, and the version-selector label for the entire minor.
+ *
+ * One file per minor line — `v0.11.0`, `v0.11.1`, `v0.11.2` all live
+ * inside `v0.11.x.mdx`.
+ */
+export function seriesName(v: { major: number; minor: number }): string {
+  return `v${v.major}.${v.minor}.x`;
+}
+
+/** Convenience: `seriesName({ major, minor }) + ".mdx"`. */
+export function seriesFileName(major: number, minor: number): string {
+  return `${seriesName({ major, minor })}.mdx`;
+}
+
+/**
+ * Series-based variant of {@link resolveArchivedSibling}. Looks for the
+ * single permanent `vX.Y.x.mdx` page for the given minor and returns its
+ * basename (or `null` when missing).
+ *
+ * Falls back to the legacy full-semver lookup so a patch landing on a
+ * minor that hasn't been migrated yet still finds its archived sibling
+ * — the patch orchestrator then writes through `--target=v<old>.mdx`
+ * without renaming. The migration PR removes the legacy files in one
+ * shot; after that the fallback path is dead code (kept here for one
+ * release as a safety net).
+ */
+export async function resolveSeriesSibling(
+  sectionDir: string,
+  major: number,
+  minor: number,
+): Promise<string | null> {
+  const seriesFile = seriesFileName(major, minor);
+  if (await fileExists(path.join(sectionDir, seriesFile))) {
+    return seriesFile;
+  }
+  return resolveArchivedSibling(sectionDir, major, minor);
+}
+
+/**
  * Reads the `latest` field out of `src/lib/versions.ts` without importing
  * the module (which would require resolving the React/Next deps tree).
  * Returns the `vX.Y.Z` string verbatim, or `null` when the file is missing
@@ -125,15 +166,19 @@ export function runStep(
 }
 
 /**
- * Scan `sectionDir` for an archived `vX.Y.<any>.mdx` sibling that matches
- * the given (major, minor) tuple. Returns the basename (e.g. `v0.8.1.mdx`)
- * of the highest patch number found, or `null` when nothing matches.
+ * Legacy full-semver sibling resolver, kept exported for one release as
+ * a one-shot migration shim and as the fallback path inside
+ * {@link resolveSeriesSibling}.
  *
- * Used by the patch orchestrator's `patch-archived` branch to find the
- * file we need to rename. We pick the **highest** patch (rather than
- * erroring on multiple matches) so a re-run of the same workflow stays
- * idempotent — first run produces `v0.8.1.mdx`, second `v0.8.2.mdx`,
- * etc.
+ * Scans `sectionDir` for an archived `vX.Y.<any>.mdx` sibling that
+ * matches the given (major, minor) tuple. Returns the basename (e.g.
+ * `v0.8.1.mdx`) of the highest patch number found, or `null` when
+ * nothing matches.
+ *
+ * @deprecated Use {@link resolveSeriesSibling}. The release pipeline no
+ * longer maintains one file per patch — each minor line has a single
+ * permanent `vX.Y.x.mdx` page that accumulates patches as `## vX.Y.Z`
+ * sections.
  */
 export async function resolveArchivedSibling(
   sectionDir: string,

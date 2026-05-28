@@ -1,7 +1,42 @@
 import crypto from 'node:crypto'
 import type { Logger } from '../../../logger.js'
-import type { SDKTool, SDKToolCall, SDKGenerationParams, SDKResponseFormat, SDKDiffusionParams } from '../../core/sdk.js'
+import type { Tool, ToolCall, DiffusionClientParams } from '@qvac/sdk'
 import type { VectorStoreExpiresAfter, VectorStoreMeta } from './vector-stores-store.js'
+
+/**
+ * SDK `GenerationParams` shape used by the OpenAI adapter. Mirrors the SDK's
+ * `generationParamsSchema` in `packages/sdk/schemas/completion-stream.ts`; the
+ * SDK does not export this type from its public surface, so we redeclare a
+ * matching structural type here.
+ */
+export interface GenerationParams {
+  temp?: number
+  top_p?: number
+  top_k?: number
+  predict?: number
+  seed?: number
+  frequency_penalty?: number
+  presence_penalty?: number
+  repeat_penalty?: number
+  reasoning_budget?: -1 | 0
+}
+
+/**
+ * SDK `ResponseFormat` shape used by the OpenAI adapter. Mirrors the SDK's
+ * `responseFormatSchema`. Same rationale as {@link GenerationParams}.
+ */
+export type ResponseFormat =
+  | { type: 'text' }
+  | { type: 'json_object' }
+  | {
+      type: 'json_schema'
+      json_schema: {
+        name: string
+        description?: string
+        schema: Record<string, unknown>
+        strict?: boolean
+      }
+    }
 
 interface OpenAIMessage {
   role: string
@@ -65,21 +100,21 @@ function synthesizeToolCallContent (toolCalls: NonNullable<OpenAIMessage['tool_c
   }).join('\n')
 }
 
-export function openaiToolsToSdk (tools: OpenAITool[] | undefined): SDKTool[] | undefined {
+export function openaiToolsToSdk (tools: OpenAITool[] | undefined): Tool[] | undefined {
   if (!tools || tools.length === 0) return undefined
 
   return tools
-    .map((t): SDKTool | null => {
+    .map((t): Tool | null => {
       if (t.type !== 'function' || !t.function) return null
       const fn = t.function
       return {
         type: 'function',
         name: fn.name,
         description: fn.description ?? '',
-        parameters: normalizeToolParameters(fn.parameters ?? { type: 'object', properties: {} })
+        parameters: normalizeToolParameters(fn.parameters ?? { type: 'object', properties: {} }) as Tool['parameters']
       }
     })
-    .filter((t): t is SDKTool => t !== null)
+    .filter((t): t is Tool => t !== null)
 }
 
 const VALID_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'object', 'array'])
@@ -105,7 +140,7 @@ function normalizeType (type: unknown): string {
   return 'string'
 }
 
-export function sdkToolCallsToOpenai (toolCalls: SDKToolCall[] | null | undefined): OpenAIToolCall[] | undefined {
+export function sdkToolCallsToOpenai (toolCalls: ToolCall[] | null | undefined): OpenAIToolCall[] | undefined {
   if (!toolCalls || toolCalls.length === 0) return undefined
 
   return toolCalls.map((tc) => ({
@@ -113,14 +148,12 @@ export function sdkToolCallsToOpenai (toolCalls: SDKToolCall[] | null | undefine
     type: 'function',
     function: {
       name: tc.name,
-      arguments: typeof tc.arguments === 'string'
-        ? tc.arguments
-        : JSON.stringify(tc.arguments)
+      arguments: JSON.stringify(tc.arguments)
     }
   }))
 }
 
-export function sdkToolCallsToOpenaiDeltas (toolCalls: SDKToolCall[] | null | undefined): OpenAIToolCallDelta[] | undefined {
+export function sdkToolCallsToOpenaiDeltas (toolCalls: ToolCall[] | null | undefined): OpenAIToolCallDelta[] | undefined {
   if (!toolCalls || toolCalls.length === 0) return undefined
 
   return toolCalls.map((tc, i) => ({
@@ -129,15 +162,13 @@ export function sdkToolCallsToOpenaiDeltas (toolCalls: SDKToolCall[] | null | un
     type: 'function',
     function: {
       name: tc.name,
-      arguments: typeof tc.arguments === 'string'
-        ? tc.arguments
-        : JSON.stringify(tc.arguments)
+      arguments: JSON.stringify(tc.arguments)
     }
   }))
 }
 
-export function extractGenerationParams (body: Record<string, unknown>): SDKGenerationParams | undefined {
-  const params: SDKGenerationParams = {}
+export function extractGenerationParams (body: Record<string, unknown>): GenerationParams | undefined {
+  const params: GenerationParams = {}
 
   if (typeof body['temperature'] === 'number') params.temp = body['temperature']
   if (typeof body['top_p'] === 'number') params.top_p = body['top_p']
@@ -148,7 +179,9 @@ export function extractGenerationParams (body: Record<string, unknown>): SDKGene
   if (typeof body['max_tokens'] === 'number') params.predict = body['max_tokens']
   if (typeof body['max_completion_tokens'] === 'number') params.predict = body['max_completion_tokens']
 
-  if (typeof body['reasoning_budget'] === 'boolean') params.reasoning_budget = body['reasoning_budget']
+  if (typeof body['reasoning_budget'] === 'boolean') {
+    params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
+  }
 
   return Object.keys(params).length > 0 ? params : undefined
 }
@@ -160,7 +193,7 @@ export class InvalidResponseFormatError extends Error {
   }
 }
 
-export function extractResponseFormat (body: Record<string, unknown>): SDKResponseFormat | undefined {
+export function extractResponseFormat (body: Record<string, unknown>): ResponseFormat | undefined {
   const raw = body['response_format']
   if (raw === undefined || raw === null) return undefined
 
@@ -188,7 +221,7 @@ export function extractResponseFormat (body: Record<string, unknown>): SDKRespon
     if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
       throw new InvalidResponseFormatError('"response_format.json_schema.schema" must be an object.')
     }
-    const result: SDKResponseFormat = {
+    const result: ResponseFormat = {
       type: 'json_schema',
       json_schema: {
         name,
@@ -311,13 +344,13 @@ export function parseImageSize (size: unknown): ParsedImageSize {
 export function extractImageGenerationParams (
   body: Record<string, unknown>,
   modelId: string
-): SDKDiffusionParams {
+): DiffusionClientParams {
   const prompt = body['prompt']
   if (typeof prompt !== 'string' || prompt.length === 0) {
     throw new InvalidImagePromptError('"prompt" is required and must be a non-empty string.')
   }
 
-  const params: SDKDiffusionParams = { modelId, prompt }
+  const params: DiffusionClientParams = { modelId, prompt }
 
   const parsedSize = parseImageSize(body['size'])
   if (parsedSize && 'width' in parsedSize) {
@@ -641,8 +674,8 @@ export function validateResponsesStatefulOptions (body: Record<string, unknown>)
   return { previousResponseId, storeEnabled }
 }
 
-export function extractResponsesGenerationParams (body: Record<string, unknown>): SDKGenerationParams | undefined {
-  const params: SDKGenerationParams = {}
+export function extractResponsesGenerationParams (body: Record<string, unknown>): GenerationParams | undefined {
+  const params: GenerationParams = {}
 
   if (typeof body['temperature'] === 'number') params.temp = body['temperature']
   if (typeof body['top_p'] === 'number') params.top_p = body['top_p']
@@ -653,12 +686,14 @@ export function extractResponsesGenerationParams (body: Record<string, unknown>)
   if (typeof body['max_tokens'] === 'number') params.predict = body['max_tokens']
   if (typeof body['max_output_tokens'] === 'number') params.predict = body['max_output_tokens']
 
-  if (typeof body['reasoning_budget'] === 'boolean') params.reasoning_budget = body['reasoning_budget']
+  if (typeof body['reasoning_budget'] === 'boolean') {
+    params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
+  }
 
   return Object.keys(params).length > 0 ? params : undefined
 }
 
-export function extractResponsesResponseFormat (body: Record<string, unknown>): SDKResponseFormat | undefined {
+export function extractResponsesResponseFormat (body: Record<string, unknown>): ResponseFormat | undefined {
   const top = body['response_format']
   if (top !== undefined && top !== null) {
     return extractResponseFormat({ response_format: top } as Record<string, unknown>)
@@ -680,11 +715,11 @@ interface ResponsesFunctionTool {
   parameters?: Record<string, unknown>
 }
 
-export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | undefined): SDKTool[] | undefined {
+export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | undefined): Tool[] | undefined {
   if (!tools || tools.length === 0) return undefined
 
   return tools
-    .map((t): SDKTool | null => {
+    .map((t): Tool | null => {
       if (t.type === 'function') {
         const name = typeof t.name === 'string' ? t.name : ''
         if (!name) return null
@@ -692,7 +727,7 @@ export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | unde
           type: 'function',
           name,
           description: typeof t.description === 'string' ? t.description : '',
-          parameters: normalizeToolParameters(t.parameters ?? { type: 'object', properties: {} })
+          parameters: normalizeToolParameters(t.parameters ?? { type: 'object', properties: {} }) as Tool['parameters']
         }
       }
       if (t.type === 'web_search' || t.type === 'file_search' || t.type === 'code_interpreter') {
@@ -700,7 +735,7 @@ export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | unde
       }
       throw new UnsupportedToolTypeError(t.type)
     })
-    .filter((t): t is SDKTool => t !== null)
+    .filter((t): t is Tool => t !== null)
 }
 
 function inputTextPart (text: string): Record<string, unknown> {
@@ -988,7 +1023,7 @@ export function extractImageEditParams (
   body: Record<string, unknown>,
   imageBuffer: Uint8Array,
   modelId: string
-): SDKDiffusionParams {
+): DiffusionClientParams {
   const params = extractImageGenerationParams(body, modelId)
   params.init_image = imageBuffer
 

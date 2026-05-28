@@ -1,7 +1,11 @@
 ---
-title: SDK Release Notes — v0.11.0 (latest)
-description: QVAC SDK release notes
+title: SDK Release Notes — v0.11.x (latest)
+description: Release notes for QVAC SDK v0.11.0.
 ---
+
+## v0.11.0
+
+### @qvac/sdk
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.11.0
 
@@ -23,11 +27,9 @@ worker bundle through `qvac verify bundle`, and the model registry was regenerat
 against the upstream `base-memory` Bergamot fix (dropping the deprecated Marian Opus
 constants on the way).
 
-## Breaking Changes
+#### Breaking Changes
 
-### @qvac/sdk
-
-### `unloadModel` no longer auto-closes the Bare worker
+##### `unloadModel` no longer auto-closes the Bare worker
 
 On Bare, `unloadModel` used to call `close()` whenever no models or providers were
 left, which terminated the worker host on every routine unload. Long-lived Bare
@@ -57,7 +59,7 @@ await unloadModel({ modelId });
 await unloadModel({ modelId, autoClose: true });
 ```
 
-### Parakeet plugin moves to the 0.4.0 single-file GGUF API
+##### Parakeet plugin moves to the 0.4.0 single-file GGUF API
 
 `@qvac/transcription-parakeet` 0.4.0 replaced the legacy multi-file ONNX bundle
 (encoder + decoder + vocab + preprocessor, plus the CTC / Sortformer variants)
@@ -109,7 +111,7 @@ The new GGUF constants (`PARAKEET_TDT_0_6B_V3_Q8_0`, `PARAKEET_CTC_0_6B_Q8_0`,
 `PARAKEET_SORTFORMER_4SPK_V1_Q8_0`, `PARAKEET_EOU_120M_V1_Q8_0`) are added in
 this release; the legacy multi-file constants are gone.
 
-### Two legacy `cancel(...)` call shapes are removed
+##### Two legacy `cancel(...)` call shapes are removed
 
 `cancel({ operation: "downloadAsset", downloadKey, clearCache })` and
 `cancel({ operation: "rag", workspace })` are removed because neither carried a
@@ -169,9 +171,9 @@ modelId })`, `cancel({ operation: "embeddings", modelId })`, `cancel({ modelId
 })`, `cancel({ modelId, kind })`, and `cancel({ requestId })` are all preserved
 by the client-side normalisation layer.
 
-## New APIs and Capabilities
+#### New APIs and Capabilities
 
-### `requestId` exposed synchronously on every cancellable call
+##### `requestId` exposed synchronously on every cancellable call
 
 Every long-running SDK call now returns a decorated promise (or run handle) that
 carries a `requestId` you can read on the same tick the call is dispatched.
@@ -215,7 +217,7 @@ The non-cancellable RAG ops (`ragChunk`, `ragSearch`, `ragDeleteEmbeddings`,
 not decorate — they're fast-path operations that don't register with the
 server-side request registry, so a `requestId` would point at nothing.
 
-### Typed errors that survive the RPC boundary
+##### Typed errors that survive the RPC boundary
 
 `InferenceCancelledError`, `RequestRejectedByPolicyError`,
 `RequestIdConflictError`, and `RequestNotFoundError` are now re-exported from
@@ -245,7 +247,7 @@ try {
 }
 ```
 
-### New broad-cancel sugar and consolidated wire envelope
+##### New broad-cancel sugar and consolidated wire envelope
 
 The `cancel` wire envelope shrinks to two shapes — request-targeted (`{
 operation: "request", requestId }`) and broad-by-model (`{ operation: "broad",
@@ -259,7 +261,7 @@ await cancel({ modelId: "llama-3.2-1b", kind: "completion" });
 await cancel({ modelId: "llama-3.2-1b" });
 ```
 
-### Plugin authors: declare cancel scope per handler
+##### Plugin authors: declare cancel scope per handler
 
 `PluginHandlerDefinition` gains an optional `cancel: { scope, hard? }` field so
 plugin authors can declare upfront whether each handler accepts a per-request
@@ -288,7 +290,7 @@ definePlugin({
 });
 ```
 
-### Multi-GPU `split-mode`, `tensor-split`, and `main-gpu` on LLM and embed
+##### Multi-GPU `split-mode`, `tensor-split`, and `main-gpu` on LLM and embed
 
 LLM and embed model configs now expose the underlying llamacpp multi-GPU knobs.
 LLM uses the canonical hyphenated keys (`"split-mode"`, `"tensor-split"`,
@@ -319,7 +321,7 @@ await loadModel({
 });
 ```
 
-### Whisper VAD and end-of-turn events on `transcribeStream`
+##### Whisper VAD and end-of-turn events on `transcribeStream`
 
 `transcribeStream` gains a conversational mode opted into via `emitVadEvents:
 true`. The session yields a discriminated event stream that includes live
@@ -350,7 +352,7 @@ session.end();
 `TranscribeStreamConversationSession` are new exported types. The existing
 text-only, segment, and audio-chunk overloads are unchanged.
 
-### Parakeet duplex streaming with EOU events
+##### Parakeet duplex streaming with EOU events
 
 The new parakeet plugin (see Breaking Changes) ships a duplex
 `transcribeStream` session that mirrors the whisper one. EOU model checkpoints
@@ -385,7 +387,7 @@ Per-call streaming overrides — `chunkMs`, `historyMs`, `leftContextMs`,
 `parakeetStreamingConfig` and fall back to their `parakeetConfig.streaming*`
 load-time counterparts.
 
-### Harmony, Qwen3.5, and Gemma4 tool-call dialects
+##### Harmony, Qwen3.5, and Gemma4 tool-call dialects
 
 `toolDialect` now covers `"hermes" | "pythonic" | "json" | "harmony"`, plus
 auto-detected `qwen35` and `gemma4` parsers. Harmony adds first-class support
@@ -416,7 +418,7 @@ ship without any caller-side wiring. The `harmony` parser also surfaces
 malformed-JSON, unknown-tool, and non-object payloads as structured
 `ToolCallError`s instead of silently dropping the event.
 
-### `reasoning_budget` knob for thinking models
+##### `reasoning_budget` knob for thinking models
 
 `@qvac/llm-llamacpp@0.20.0` introduced a `reasoning_budget` parameter that gates
 how much "thinking" a reasoning model is allowed to produce: `-1` =
@@ -444,7 +446,7 @@ The same bump fixes a regression where `system_prompt` (a JS-only
 `--system-prompt`, which had been removed in llamacpp 8189+ — model loads were
 failing outright until this fix landed.
 
-### FLUX.2 multi-reference fusion and per-call LoRA for diffusion
+##### FLUX.2 multi-reference fusion and per-call LoRA for diffusion
 
 The diffusion API gains FLUX.2 multi-reference fusion (`init_images:
 Uint8Array[]`, mutually exclusive with the existing single `init_image`), FLUX.2
@@ -480,7 +482,7 @@ Relative LoRA paths are rejected: the SDK runs across processes with differing
 cwds, so absolute paths (POSIX, Windows drive-letter, or UNC) are the only safe
 shape.
 
-### ESRGAN upscaling — post-step and standalone
+##### ESRGAN upscaling — post-step and standalone
 
 Two new paths land for ESRGAN upscalers. The first attaches an upscaler to a
 diffusion model and runs it as a post-step on every generated image. The second
@@ -540,7 +542,7 @@ with `modelConfig.upscaler` set but `model_src` missing fails fast with a
 structured `ModelLoadFailedError` instead of letting the native addon error
 mid-load.
 
-### Mobile build flow auto-verifies the worker bundle
+##### Mobile build flow auto-verifies the worker bundle
 
 Expo prebuild now runs `qvac verify bundle` against the emitted
 `worker.mobile.bundle.js` before copying it into the SDK's `dist/`. The flow is
@@ -560,7 +562,7 @@ Pear consumers aren't auto-wired yet — run `qvac verify bundle --addons-source
 ./node_modules --host <host> --config qvac.config.json` manually before `pear
 stage` / `pear run`.
 
-### `cancelFinetune` is now fire-and-forget
+##### `cancelFinetune` is now fire-and-forget
 
 `cancelFinetune(modelId)` used to await the addon's cancel flip before
 resolving. It now fires a synchronous registry cancel and returns immediately;
@@ -570,22 +572,9 @@ populated), but workbench / CLI / external consumers that gated subsequent
 calls on cancel-resolution timing should switch to `await cancel({ requestId
 })`, which has been synchronous-after-abort since the lifecycle work began.
 
-## Added
+#### Bug Fixes
 
-### @qvac/sdk
-
-```
-PARAKEET_TDT_0_6B_V3_Q8_0
-PARAKEET_CTC_0_6B_Q8_0
-PARAKEET_SORTFORMER_4SPK_V1_Q8_0
-PARAKEET_EOU_120M_V1_Q8_0
-```
-
-## Bug Fixes
-
-### @qvac/sdk
-
-### Delegated inference connect is fast again
+##### Delegated inference connect is fast again
 
 The `loadModel.delegation.connection` regression introduced in 0.10.0 — where
 `@qvac/sdk` 0.9.0 → 0.10.0 took the consumer-side connect from ≈2.5s to ≈8.3s
@@ -596,7 +585,7 @@ table via `getSwarm()` during registry initialisation, so the explicit guard
 was redundant. Measured cold-start connect mean drops from 3.82s back down to
 1.18s (≈3.2× faster) on the same hardware and network.
 
-### KV cache priming no longer wastes a token
+##### KV cache priming no longer wastes a token
 
 `initSystemPromptCache` used to start generation and then race the first output
 token against a cancel. That always produced one token of unnecessary work and
@@ -605,21 +594,21 @@ relied on a fragile output/cancel race. The SDK now uses the addon's new
 ingests the prompt and tools into the KV cache without producing any output
 tokens. `initSystemPromptCache` resolves as soon as priming finishes.
 
-### React Native duplex RPC no longer uses Node-only `Buffer`
+##### React Native duplex RPC no longer uses Node-only `Buffer`
 
 The RN duplex RPC path was using Node's `Buffer` global, which isn't available
 on Hermes. The path now uses `Uint8Array` end-to-end so mobile consumers can
 use duplex streaming (transcribe, parakeet, tts) without hitting `Buffer is
 not defined`.
 
-### SDK bundles its own `worker.js` for packaged consumers
+##### SDK bundles its own `worker.js` for packaged consumers
 
 Apps consuming the SDK from a bundler (Metro, esbuild, webpack) were missing
 `worker.js` from the published package, so consumers had to hand-copy it. The
 package now ships `worker.js` alongside `worker.mobile.bundle.js` so packaged
 consumers no longer need extra bundling steps.
 
-### Dedup of stateful Holepunch singletons
+##### Dedup of stateful Holepunch singletons
 
 The SDK and `@qvac/registry-client` had drifting declarations for
 `corestore`, `hyperblobs`, `hyperdb`, and `hyperswarm`: the SDK declared them
@@ -630,7 +619,7 @@ connectivity. Bumping `@qvac/registry-client` to `^0.5.0` (where those libs
 move to `peerDependencies`) and `@qvac/embed-llamacpp` to `^0.16.0` and
 `@qvac/transcription-whispercpp` to `^0.7.0` completes the dedup chain.
 
-## Model Registry Changes
+#### Model Registry Changes
 
 The Bergamot translation pairs `BERGAMOT_EN_IT` and `BERGAMOT_ES_EN` were
 pinned to the buggy `tiny` variant, which caused leading `"- "` hallucinations
@@ -646,9 +635,16 @@ that were superseded earlier in the release line. A separate fix corrects the
 Bergamot vocab being re-downloaded on every `loadModel` for shared-vocab pairs
 — the shared vocab is now cached and reused.
 
-## Removed
+##### Added
 
-### @qvac/sdk
+```
+PARAKEET_TDT_0_6B_V3_Q8_0
+PARAKEET_CTC_0_6B_Q8_0
+PARAKEET_SORTFORMER_4SPK_V1_Q8_0
+PARAKEET_EOU_120M_V1_Q8_0
+```
+
+##### Removed
 
 ```
 NMT_Q0F16 through NMT_Q0F16_9 (10 entries)
@@ -660,7 +656,7 @@ The legacy multi-file Parakeet constants (`PARAKEET_TDT_ENCODER_INT8`,
 `PARAKEET_CTC_FP32`, `PARAKEET_CTC_TOKENIZER`, etc.) are gone alongside the
 plugin migration — see Breaking Changes above for the migration path.
 
-## Tests and Infrastructure
+#### Tests and Infrastructure
 
 - E2E bootstrap was scoped down to only the dependencies required by the
   filtered test set, shortening cold CI runs.
