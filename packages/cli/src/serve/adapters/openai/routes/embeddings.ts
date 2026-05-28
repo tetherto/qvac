@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { embed } from '@qvac/sdk'
 import { readBody, sendJson, sendError } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkEmbed } from '../../../core/sdk.js'
 import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import type { RouteContext } from '../../types.js'
 
@@ -61,20 +61,22 @@ export async function handleEmbeddings (req: IncomingMessage, res: ServerRespons
   ctx.logger.info(`  embed model=${modelAlias} inputs=${inputs.length}`)
 
   try {
-    const op = await sdkEmbed({
-      modelId: sdkModelId,
-      text: inputs.length === 1 ? inputs[0]! : inputs
-    })
+    // The SDK's `embed()` is overloaded on `text: string` vs `text: string[]`,
+    // so route through the matching overload at the callsite to keep the
+    // result-shape narrowing precise.
+    const op = inputs.length === 1
+      ? embed({ modelId: sdkModelId, text: inputs[0]! })
+      : embed({ modelId: sdkModelId, text: inputs })
 
     // Bind the disconnect bridge before awaiting the result so a
     // client-abort during a long batch embed lands on the in-flight
     // requestId rather than completing the whole batch.
     bindClientDisconnectCancel(req, res, op.requestId, ctx.logger)
 
-    const embeddings = await op.result
+    const { embedding } = await op
 
-    const isBatch = Array.isArray(embeddings[0])
-    const vectors = isBatch ? embeddings as number[][] : [embeddings as number[]]
+    const isBatch = Array.isArray(embedding[0])
+    const vectors = isBatch ? embedding as number[][] : [embedding as number[]]
 
     const data = vectors.map((vec, index) => ({
       object: 'embedding',
