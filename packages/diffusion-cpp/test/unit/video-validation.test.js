@@ -14,6 +14,7 @@ const FAKE_MODEL = '/tmp/wan2.1_t2v_1.3B_fp16.safetensors'
 const FAKE_T5XXL = '/tmp/umt5_xxl_fp16.safetensors'
 const FAKE_VAE = '/tmp/wan_2.1_vae.safetensors'
 const FAKE_HIGH_NOISE = '/tmp/wan2.2_t2v_high_noise.safetensors'
+const FAKE_CLIP_VISION = '/tmp/clip_vision_h.safetensors'
 
 // Minimal valid PNG header (24 bytes — magic + IHDR width/height).
 const FAKE_PNG = new Uint8Array([
@@ -53,7 +54,12 @@ function makeRecording () {
 
 function makeWanModel ({ files, config, logger } = {}) {
   return new VideoStableDiffusion({
-    files: files || { model: FAKE_MODEL, t5Xxl: FAKE_T5XXL, vae: FAKE_VAE },
+    files: files || {
+      model: FAKE_MODEL,
+      t5Xxl: FAKE_T5XXL,
+      vae: FAKE_VAE,
+      clipVision: FAKE_CLIP_VISION
+    },
     config: config || { threads: 1 },
     logger: logger || makeQuiet()
   })
@@ -315,8 +321,8 @@ test('run | accepts off-grid init_image when caller passes explicit aligned widt
       mode: 'img2vid',
       prompt: 'hi',
       init_image: OFFGRID_PNG,
-      width: 104,
-      height: 104
+      width: 112,
+      height: 112
     }),
     /Addon not initialized/
   )
