@@ -54,9 +54,11 @@ qvac.imageModel('flux-schnell')        // image generation
 
 ## Using with coding agents
 
-The HTTP server's primary use case is integrating local AI with coding agents (OpenCode, Cline, Aider, Continue, and Roo). Although the API is OpenAI-compatible, _the following behaviors require explicit configuration for this use case._
+The HTTP server's primary use case is integrating local AI with coding agents (e.g., OpenCode, Cline, Aider, Continue, and Roo). Although the API is OpenAI-compatible, _the following behaviors require explicit configuration for this use case._
 
 ### Concurrent requests collide on a single model instance
+
+The underlying `llm-llamacpp` addon serializes inference per native model context and rejects concurrent requests rather than queuing them. The server log `shows Cannot set new job: a job is already set or being processed`; clients see `500 An internal error occurred`.
 
 Coding agents routinely fire concurrent requests — typically a main chat completion plus a "title generation" call for the conversation panel. _To get parallel inference you need two different model files loaded under two aliases_. For example:
 
@@ -124,7 +126,7 @@ The default `apiKey` is the literal string `'qvac'`. The HTTP server does not va
 
 ## Model metadata
 
-`@qvac/ai-sdk-provider` ships QVAC model metadata, _so you can introspect models without making an HTTP call to /v1/models._. For example:
+`@qvac/ai-sdk-provider` ships QVAC model metadata, _so you can introspect models without making an HTTP call to /v1/models._ For example:
 
 ```ts
 import { models, allModels } from '@qvac/ai-sdk-provider'
@@ -151,12 +153,6 @@ type EndpointCategory =
   | 'image'
 ```
 
-To update model metadata against our live model registry, run:
-
-```bash
-npm run update-models
-```
-
 ## API
 
 ### `createQvac(options?: QvacOptions): QvacProvider`
@@ -175,6 +171,10 @@ interface QvacOptions {
 ### `qvac`
 
 A default `createQvac()` instance with all defaults. Convenient for quick scripts; explicit `createQvac({ baseURL })` is recommended.
+
+<Callout type="warn" title="Default provider port does not match HTTP server's default port.">
+The provider defaults to `http://127.0.0.1:11435/v1`, while `qvac serve openai` listens on `11434` by default. This mismatch is intentional — `11434` collides with Ollama, so the provider ships a placeholder port until the CLI default is changed. Until then, **always pass `baseURL` explicitly** when calling `createQvac({ baseURL })`, matching the port your `qvac serve openai` instance is bound to (e.g. `http://127.0.0.1:11434/v1` for the CLI default).
+</Callout>
 
 ### `models`, `allModels`, `ModelConstant`, `EndpointCategory`
 
