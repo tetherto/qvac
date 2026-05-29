@@ -232,11 +232,7 @@ class QvacResponse extends EventEmitter {
     }
 
     if (signal.aborted) {
-      // Defer to a microtask so callers can attach `onError` listeners and
-      // createJobHandler's bindCleanup can register its cleanup before the
-      // response settles. The `await()` path stays correct either way because
-      // `_finishPromise` rejection is replayable.
-      queueMicrotask(() => this.failed(buildError()))
+      this._markAbortPending(buildError())
       return
     }
 
@@ -244,6 +240,33 @@ class QvacResponse extends EventEmitter {
     this._abortSignal = signal
     this._onAbort = onAbort
     signal.addEventListener('abort', onAbort, { once: true })
+  }
+
+  /**
+   * Reserves the errored terminal state synchronously for an already-aborted
+   * signal, but defers the observable notification (error event + finish-promise
+   * rejection) to a microtask.
+   *
+   * Reserving `_status`/`_error` synchronously closes the race where a synchronous
+   * terminal callback (e.g. `ended()` from a synchronous native `runJob` callback)
+   * fired right after construction would otherwise settle the response with success
+   * before the abort failure ran. Deferring the notification still lets callers and
+   * `createJobHandler.bindCleanup()` attach listeners before `error` is emitted.
+   *
+   * @param {Error} error - The abort error to settle with.
+   */
+  _markAbortPending (error) {
+    if (this._status !== statuses.RUNNING) return
+    this._status = statuses.ERRORED
+    this._error = error
+    this._teardownAbort()
+
+    queueMicrotask(() => {
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', error)
+      }
+      this._rejectFinish(error)
+    })
   }
 
   _teardownAbort () {

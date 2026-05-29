@@ -302,6 +302,26 @@ test('constructor signal — already-aborted signal fires onError listeners atta
   t.is(received.message, 'precancel', 'error listener received the abort reason')
 })
 
+test('constructor signal — synchronous ended() after already-aborted construction does not win the race', async t => {
+  const controller = makeAbortable()
+  controller.abort(new Error('precancel'))
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    signal: controller.signal
+  })
+
+  // Synchronous terminal callback fired before the deferred notification runs
+  // must not settle the response with success — the abort reserved the state.
+  response.ended('success')
+
+  try {
+    await response.await()
+    t.fail('await should reject')
+  } catch (err) {
+    t.is(err.message, 'precancel', 'await rejects with the abort reason despite synchronous ended()')
+  }
+})
+
 test('constructor signal — non-Error abort reason is wrapped in a default Error', async t => {
   const controller = makeAbortable()
   const response = new QvacResponse({
