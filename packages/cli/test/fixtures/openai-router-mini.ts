@@ -1,24 +1,14 @@
 // Minimal router slice for coverage tests (parsed as text only).
-export function route (): void {
-  const method = 'POST'
-  const path = '/v1/chat/completions'
-  if (method === 'POST' && path === '/v1/chat/completions') {
-    return
-  }
-  if (method === 'POST' && path === '/v1/embeddings') {
-    return
-  }
-  if (method === 'GET' && path === '/v1/models') {
-    return
-  }
-  if (method === 'GET' && path === '/v1/files') {
-    return
-  }
-  if (method === 'POST' && path === '/v1/files') {
-    return
-  }
-  const fileIdMatch = path.match(/^\/v1\/files\/([^/]+)$/)
-  if (fileIdMatch && method === 'GET') {
-    return
-  }
+// Mirrors the Fastify route plugin shape used under `serve/routes/`.
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
+
+const plugin: FastifyPluginAsyncZod = async (app) => {
+  app.post('/v1/chat/completions', {}, async () => ({}))
+  app.post('/v1/embeddings', {}, async () => ({}))
+  app.get('/v1/models', {}, async () => ({}))
+  app.get('/v1/files', {}, async () => ({}))
+  app.post('/v1/files', {}, async () => ({}))
+  app.get('/v1/files/:id', {}, async () => ({}))
 }
+
+export default plugin

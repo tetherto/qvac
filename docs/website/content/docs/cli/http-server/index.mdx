@@ -29,6 +29,10 @@ The following tools have been verified to work as drop-in replacements by pointi
 | [Continue.dev](https://continue.dev) | `/v1/chat/completions` (streaming SSE), `/v1/models` |
 | [LangChain](https://langchain.com) | `/v1/chat/completions`, `/v1/embeddings`, `/v1/models` |
 | [Open Interpreter](https://openinterpreter.com) | `/v1/chat/completions` (streaming, tool calls), `/v1/models` |
+| [Cline](https://github.com/cline/cline) | `/v1/chat/completions` (streaming, tool calls) |
+| [Roo Code](https://roomote.dev) | `/v1/chat/completions` (streaming, tool calls) |
+| [Aider](https://aider.chat) | `/v1/chat/completions` (streaming) |
+| [OpenCode](https://opencode.ai) | `/v1/chat/completions` (streaming, tool calls) |
 
 ## Running the server
 
@@ -122,6 +126,14 @@ Models are declared in `qvac.config.*` under the `serve.models` key. The server 
 <Callout type="warn">
 `default` field **does not** act as a fallback when an API request omits `model`. Requests must still include a `model` field; otherwise, the server returns `400`.
 </Callout>
+
+## Integration
+
+To create a client, you can use any OpenAI-compatible AI SDK provider, such as [Vercel AI SDK](https://ai-sdk.dev). For a better developer experience, use our npm package `@qvac/ai-sdk-provider`.
+
+<Card href="/cli/http-server/integration" title="Use @qvac/ai-sdk-provider">
+  Vercel AI SDK provider for QVAC: introspection of supported models, automatic configuration, branded export, and more.
+</Card>
 
 ## CLI
 
