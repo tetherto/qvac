@@ -286,6 +286,21 @@ export const llmPlugin = definePlugin({
             },
             modelExecutionMs,
           );
+        } catch (err) {
+          // Same addon, same overflow path as `completionStream`. Wrap so
+          // translate consumers can `instanceof ContextOverflowError` too.
+          if (isAddonContextOverflowError(err)) {
+            const { promptTokens, ctxSize } = parseContextOverflowMessage(
+              err instanceof Error ? err.message : "",
+            );
+            throw new ContextOverflowError(
+              promptTokens,
+              ctxSize,
+              request.modelId,
+              err,
+            );
+          }
+          throw err;
         } finally {
           await stream.return?.(undefined as never);
         }
