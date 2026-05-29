@@ -123,7 +123,10 @@ minor series page (one permanent `v<X.Y>.x.mdx` per minor line — see
 `docs/website/docs-workflow.md`). Each headline you write becomes a
 section header on the public docs site (with two levels of demotion to
 fit the nesting), so phrase them as standalone reader-facing prose, not
-internal categories.
+internal categories. **Keep headings emoji-free** (e.g. `## Breaking
+Changes`, not `## 💥 Breaking Changes`) — emoji prefixes leak verbatim
+into the public headers; the only allowed emoji is the `📦 **NPM:**`
+line. See the format guide for the full rule.
 
 ### Step 5: Generate `announcement-post.txt` (mandatory)
 
