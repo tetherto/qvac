@@ -3,6 +3,7 @@ import test from "brittle";
 import { reconstructError, RPCError } from "@/client/rpc/rpc-error";
 import { createErrorResponse } from "@/schemas/error";
 import {
+  ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -54,6 +55,43 @@ test("reconstructError: RequestNotFoundError round-trips", (t) => {
   t.ok(reconstructed instanceof RequestNotFoundError);
   t.is((reconstructed as RequestNotFoundError).requestId, "rid-3");
   t.is((reconstructed as RequestNotFoundError).code, 52418);
+});
+
+test("reconstructError: ContextOverflowError round-trips with all fields", (t) => {
+  const original = new ContextOverflowError(5432, 4096, "qwen3-4b");
+  const envelope = createErrorResponse(original);
+
+  const reconstructed = reconstructError(envelope);
+
+  t.ok(
+    reconstructed instanceof ContextOverflowError,
+    "instanceof ContextOverflowError must hold across the envelope",
+  );
+  const r = reconstructed as ContextOverflowError;
+  t.is(r.promptTokens, 5432);
+  t.is(r.ctxSize, 4096);
+  t.is(r.modelId, "qwen3-4b");
+  t.is(r.code, 52421);
+  t.ok(r instanceof Error, "reconstructed must still satisfy instanceof Error");
+});
+
+test("reconstructError: ContextOverflowError tolerates missing fields", (t) => {
+  // The bare `LlamaModel::processPromptImpl` overflow path doesn't
+  // include prompt-token or ctx-size numbers in the addon message, so
+  // the server may throw `ContextOverflowError` with both fields
+  // `undefined`. The reconstructor must accept that and not throw, and
+  // `instanceof` must still hold.
+  const original = new ContextOverflowError();
+  const envelope = createErrorResponse(original);
+
+  const reconstructed = reconstructError(envelope);
+
+  t.ok(reconstructed instanceof ContextOverflowError);
+  const r = reconstructed as ContextOverflowError;
+  t.is(r.promptTokens, undefined);
+  t.is(r.ctxSize, undefined);
+  t.is(r.modelId, undefined);
+  t.is(r.code, 52421);
 });
 
 test("reconstructError: unknown error name falls through to RPCError", (t) => {
