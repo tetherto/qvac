@@ -88,23 +88,6 @@ export const completionMultiTurn = createCompletionTest(
   ["smoke"],
 );
 
-export const completionSpecialChars: TestDefinition = {
-  testId: "completion-special-chars",
-  params: {
-    history: [
-      {
-        role: "user",
-        content:
-          "What is 50 + 50? Special chars: @#$% 👋 你好 🌍. Answer with just the number.",
-      },
-    ],
-    stream: false,
-  },
-  expectation: { validation: "contains-all", contains: ["100"] },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
-  skip: { reason: "Flaky: 1B model unreliable on math with emoji distractions" },
-};
-
 // Temperature variations
 export const completionTemperature00 = createCompletionTest(
   "completion-temperature-00",
@@ -524,17 +507,6 @@ export const completionQaFromContext = createCompletionTest(
   ["smoke"],
 );
 
-export const completionSimpleYesNo: TestDefinition = {
-  testId: "completion-simple-yes-no",
-  params: {
-    history: [{ role: "user", content: "Is 2+2=4? Answer yes or no." }],
-    stream: false,
-  },
-  expectation: { validation: "contains-any", contains: ["yes", "Yes"] },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
-  skip: { reason: "Flaky: 1B model sometimes answers 'no' to trivial yes/no questions" },
-};
-
 export const completionSentenceCompletion = createCompletionTest(
   "completion-sentence-completion",
   {
@@ -674,7 +646,6 @@ export const completionTests = [
   completionEmptyPrompt,
   completionMultiTurn,
   completionMaxTokens,
-  completionSpecialChars,
   completionStopSequences,
   completionTopP,
   completionRepeatPenalty,
@@ -704,7 +675,6 @@ export const completionTests = [
   completionSingleWord,
   completionListGeneration,
   completionQaFromContext,
-  completionSimpleYesNo,
   completionSentenceCompletion,
   completionResponseFormatText,
   completionResponseFormatJsonObject,
