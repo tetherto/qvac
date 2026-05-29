@@ -4,7 +4,7 @@
 # trailing-slash and no-slash variants so the `:splat` placeholder doesn't
 # produce `/foo/.md`.
 /                /index.md      301!   Header:Accept=text/markdown
-# /*/              /:splat.md     301!   Header:Accept=text/markdown
+/*/              /:splat.md     301!   Header:Accept=text/markdown
 # /*               /:splat.md     301!   Header:Accept=text/markdown
 
 # Sevalla CDN does not resolve directory-to-index.html for path segments
