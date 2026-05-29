@@ -4,7 +4,7 @@ description: A local AI SDK for building cross-platform, P2P applications and sy
 ogImage: /og-home.png
 ---
 
-import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, Video, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
+import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, Video, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
 
 ## Why QVAC?
 
@@ -53,8 +53,14 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   <Card href="/ai-capabilities/translation" title={<span className="inline-flex items-center gap-2"><Languages className="size-4 text-[var(--color-fd-primary)]" />Translation</span>}>
     Text-to-text neural machine translation (NMT), via Fabric LLM and Bergamot.
   </Card>
+  <Card href="/ai-capabilities/vla" title={<span className="inline-flex items-center gap-2"><Eye className="size-4 text-[var(--color-fd-primary)]" />VLA</span>}>
+    Vision-language-action for robot control via a customized GGML backend.
+  </Card>
   <Card href="/ai-capabilities/ocr" title={<span className="inline-flex items-center gap-2"><ScanText className="size-4 text-[var(--color-fd-primary)]" />OCR</span>}>
     Optical character recognition for extracting text from images via ONNX Runtime.
+  </Card>
+  <Card href="/ai-capabilities/image-classification" title={<span className="inline-flex items-center gap-2"><Shapes className="size-4 text-[var(--color-fd-primary)]" />Image classification</span>}>
+    Classify images into labels with confidence scores via a customized GGML backend.
   </Card>
 </Cards>
 

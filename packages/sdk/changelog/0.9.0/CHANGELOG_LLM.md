@@ -6,7 +6,7 @@ This release significantly expands the SDK's capabilities with finetuning suppor
 
 ---
 
-## 💥 Breaking Changes
+## Breaking Changes
 
 ### `ping()` Replaced by `heartbeat()`
 
@@ -35,7 +35,7 @@ await heartbeat({
 
 ---
 
-## 🔌 New APIs
+## New APIs
 
 ### Finetuning
 
@@ -163,7 +163,7 @@ console.log(stats?.backendDevice); // "cpu" | "gpu"
 
 ---
 
-## ✨ Features
+## Features
 
 - **CLD2 language detection** is now integrated into the SDK for automatic language identification.
 - **OCR plugin updated** to work with `@qvac/ocr-onnx@0.4.0`.
@@ -171,7 +171,7 @@ console.log(stats?.backendDevice); // "cpu" | "gpu"
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 - **KV cache preserved across tool-call round-trips** — multi-turn tool-calling completions no longer lose context between rounds.
 - **KV cache save race condition** fixed in tool-calling completions — concurrent saves no longer corrupt the cache.
@@ -188,7 +188,7 @@ console.log(stats?.backendDevice); // "cpu" | "gpu"
 
 ---
 
-## 📦 Model Changes
+## Model Changes
 
 Model registry updated: 312 → 653 (+341). See [model changes](./models.md) for the full list.
 
@@ -200,7 +200,7 @@ Model registry updated: 312 → 653 (+341). See [model changes](./models.md) for
 
 ---
 
-## 🧹 Other Changes
+## Other Changes
 
 - Updated addon dependencies: `@qvac/tts-onnx` to v0.6.7, `@qvac/transcription-whispercpp` to latest, Parakeet to v0.2.7, `@qvac/diffusion-cpp` to ^0.1.3.
 - Replaced FeatureBase support links with Discord channel.
