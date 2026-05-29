@@ -7,7 +7,7 @@ tocMaxDepth: 3
 
 ## Overview
 
-To run the server, you need the `@qvac/sdk` and `@qvac/cli` npm packages installed in your project. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls. As a result, any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can point to `http://localhost:11434/v1/` and work without changes.
+To run the server, install the `@qvac/cli` npm package — it depends on `@qvac/sdk` directly, so the SDK is installed automatically. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls. As a result, any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can point to `http://localhost:11434/v1/` and work without changes.
 
 ### AI capabilities
 
@@ -38,13 +38,13 @@ The following tools have been verified to work as drop-in replacements by pointi
 
 <Steps>
 <Step>
-Install the SDK and CLI in your project:
+Install the CLI globally (this also installs `@qvac/sdk` as a transitive dependency):
 
 ```bash
-npm install @qvac/sdk @qvac/cli
+npm install -g @qvac/cli
 ```
 
-See [Installation](/installation) for environment-specific instructions of the SDK.
+See [Installation](/installation) for environment-specific instructions of the SDK (e.g., Linux Vulkan runtime, Windows GPU drivers).
 </Step>
 
 <Step>
@@ -145,6 +145,7 @@ qvac serve openai [options]
   --model <alias>              Model alias to preload (repeatable, must be in config)
   --api-key <key>              Require Bearer token authentication
   --cors                       Enable CORS headers
+  --docs                       Mount Swagger UI at /docs (auto-enables CORS)
   --public-base-url <url>      Externally reachable origin (required for image response_format=url)
   -v, --verbose                Detailed output
 ```
@@ -157,6 +158,8 @@ All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-refer
 
 | Resource | Method | Path |
 | --- | --- | --- |
+| [OpenAPI](#openapi--swagger-ui) | `GET` | [`/openapi.json`](#openapi--swagger-ui) |
+| | `GET` | [`/docs`](#openapi--swagger-ui) |
 | [Models](#models) | `GET` | [`/v1/models`](#get-v1models) |
 | | `GET` | [`/v1/models/:id`](#get-v1modelsid) |
 | | `DELETE` | [`/v1/models/:id`](#delete-v1modelsid) |
@@ -185,7 +188,7 @@ All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-refer
 | | `POST` | [`/v1/vector_stores/:id/files`](#post-v1vector_storesidfiles) |
 
 <Callout type="info">
-All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the request body at **25 MB**.
+All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the request body at **100 MB**.
 </Callout>
 
 ### Models
@@ -796,7 +799,15 @@ The server is intentionally loud about every OpenAI image-API field it cannot ho
 | `invalid_size` | `size` is not `WIDTHxHEIGHT` (multiples of 8) or `auto`. |
 | `invalid_n` | `n` is not a positive integer. |
 
+<Callout type="warn">
+**Validation order.** For `/v1/images/generations` and `/v1/images/edits`, the server resolves the model **before** running the per-param checks above. A request with an unknown `model` therefore returns `404 model_not_found` even when `response_format`, `output_format`, `output_compression`, or `background` would otherwise be rejected with a `400`. Multipart-shape checks on edits (`missing_image`, `mask_not_supported`) still fire before model resolution since they are inherent to the request shape.
+</Callout>
+
 The following OpenAI fields are accepted and silently ignored (warning logged) because they are advisory: `quality`, `style`, `moderation`, `partial_images`, `user`, `input_fidelity`.
+
+<Callout type="info">
+Validation error response envelopes now include the failing-field path in the `message` to make debugging easier. The `error.code` values are unchanged and continue to match the documented error contracts.
+</Callout>
 
 #### `POST /v1/images/edits`
 
@@ -963,3 +974,46 @@ Requests without a valid token receive a `401` response.
 <Callout type="warn">
 **`--api-key` and image `response_format=url`:** browsers do not attach `Authorization` headers to `<img src="...">` requests, so URLs returned by `/v1/images/generations` and `/v1/images/edits` cannot render directly when bearer auth is enabled. Either run the server without `--api-key` for URL mode, or have the client fetch the bytes itself (with the `Authorization` header) and re-host them. The simpler workaround is to use `response_format=b64_json` instead.
 </Callout>
+
+### OpenAPI & Swagger UI
+
+The server exposes a machine-readable OpenAPI 3.1.0 document derived from the same schemas it uses to validate requests, so the spec is always in sync with the running server.
+
+#### `GET /openapi.json`
+
+Always exposed (no flag required). Returns the full OpenAPI 3.1.0 document as JSON.
+
+```bash
+curl http://localhost:11434/openapi.json
+```
+
+Each operation in the document carries `summary`, `tags`, a full markdown `description`, the request body schema, and the response schema. Tags group endpoints by domain (Chat, Completions, Embeddings, Responses, Audio, Images, Files, Vector Stores, Models).
+
+#### `GET /docs`
+
+Swagger UI, opt-in via the `--docs` flag. Off by default to keep the production surface minimal.
+
+```bash
+qvac serve openai --docs
+open http://localhost:11434/docs
+```
+
+`--docs` automatically enables CORS so the Swagger UI's "Try it out" button works (the spec's `servers` URL rarely matches the browser origin — for example, `localhost` vs `127.0.0.1`, or a port-forwarded host). Servers started without `--docs` still need `--cors` to opt in explicitly.
+
+#### Emit the spec without starting the server
+
+The CLI command `qvac openai spec` emits the same document without binding a port. Useful for piping into offline documentation generators or for shipping a stable spec file with your project.
+
+```bash
+qvac openai spec                       # JSON → stdout (pipe-safe)
+qvac openai spec -o spec.json          # write JSON to file
+qvac openai spec --yaml                # YAML → stdout
+qvac openai spec --yaml -o spec.yaml   # write YAML to file
+```
+
+Pairs cleanly with offline doc generators:
+
+```bash
+qvac openai spec --yaml > openapi.yaml
+npx @redocly/cli build-docs openapi.yaml -o api.html
+```
