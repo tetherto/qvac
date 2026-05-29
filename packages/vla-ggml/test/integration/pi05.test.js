@@ -733,32 +733,32 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
   }
 }
 
-// iOS skip rationale: pi05's q_aggressive GGUF is 3.93 GB. iOS jetsam
-// kills foreground apps that exceed the per-process memory limit on
-// 8 GB iPhones (iPhone 16/17), which lands at ~3 GB resident — and
-// inference touches the full weight set so we can't stay under that
-// cap regardless of mmap vs heap, CPU vs Metal. Confirmed in run
-// 26305222976 syslog:
+// Mobile skip rationale:
+//
+// iOS: pi05's q_aggressive GGUF is 3.93 GB. iOS jetsam kills foreground
+// apps that exceed the per-process memory limit on 8 GB iPhones (iPhone
+// 16/17), which lands at ~3 GB resident — and inference touches the
+// full weight set so we can't stay under that cap regardless of mmap vs
+// heap, CPU vs Metal. Confirmed in run 26305222976 syslog:
 //
 //   ReportSystemMemory: Process QvacAddonTester [541] killed by
 //   jetsam reason per-process-limit
 //
-// Same pattern qvac uses everywhere else for 4 GB+ models on mobile:
-// `packages/diffusion-cpp/test/integration/generate-image-flux2.test.js`
-// gates its 5 GB FLUX.2 + 2.5 GB Qwen3-4B test with `skip = isMobile`,
-// and no test in `llm-llamacpp` exercises a model over ~1.6 GB on
-// mobile either. We only skip iOS — Android pi05 fits because Pixel 9
-// Pro / Galaxy S25/S26 have 12-16 GB RAM and much higher per-process
-// limits (verified passing on all 3 Android device classes with
-// cos=0.9994–0.9997).
+// Android: technically fits on Pixel 9 Pro / Galaxy S25/S26 (12-16 GB
+// RAM), but mobile coverage is deferred until the 4 GB GGUF lives on a
+// project-owned CDN-fronted mirror. AWS Device Farm runs in us-west-2
+// and the existing S3 bucket in eu-central-1 caps cross-region
+// throughput at ~0.5-3 MB/s through the NAT gateway, well past the
+// wdio polling window. Tracking the CDN-fronted mirror provisioning
+// as a follow-up; desktop pi05 e2e (CPU + Vulkan + Metal + Windows)
+// still runs against the S3 oracle directly.
 //
-// Follow-up to lift this: ship a smaller iOS-specific quant
-// variant (~1.5 GB target) OR sign the test app with
-// com.apple.developer.kernel.increased-memory-limit, which raises
-// the per-process budget enough to fit q_aggressive on iPhone.
-const _skipIOSPi05 = _isMobile && _platform === 'ios'
+// Follow-up paths to lift the iOS skip specifically: ship a smaller
+// iOS-specific quant variant (~1.5 GB target) OR sign the test app
+// with com.apple.developer.kernel.increased-memory-limit.
+const _skipMobilePi05 = _isMobile
 
-test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 1200000, skip: _skipIOSPi05 }, async (t) => {
+test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 1200000, skip: _skipMobilePi05 }, async (t) => {
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
@@ -837,7 +837,7 @@ test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
   t.ok(err, 'expected an error for missing GGUF')
 })
 
-test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000, skip: _skipIOSPi05 }, async (t) => {
+test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000, skip: _skipMobilePi05 }, async (t) => {
   if (_assetsState.state === 'SKIP') {
     t.comment('skipping: ' + SKIP_REASON)
     return
