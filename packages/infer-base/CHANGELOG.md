@@ -1,6 +1,6 @@
 ## [0.6.0] - 2026-05-28
 
-Threads an optional `AbortSignal` into `QvacResponse` so addons can settle a job from external cancel / timeout / crash paths without polling.
+Threads an optional `AbortSignal` into `QvacResponse` so addons can settle a job from external timeout / crash paths without polling.
 
 ## New APIs
 

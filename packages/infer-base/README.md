@@ -41,8 +41,8 @@ const active = jobs.active      // current QvacResponse | null
 // QvacResponse can also be constructed directly when not using createJobHandler.
 const r = new QvacResponse({
   cancelHandler: () => addon.cancel(jobId),
-  // Optional: forward the caller-supplied AbortSignal so cancel /
-  // timeout / crash settles the response without polling. The abort
+  // Optional: forward the caller-supplied AbortSignal so timeout /
+  // crash settles the response without polling. The abort
   // `reason` becomes the response error — pass an Error reason
   // (e.g. `controller.abort(new AddonCrashedError(...))`) to surface
   // a structured failure unchanged.
