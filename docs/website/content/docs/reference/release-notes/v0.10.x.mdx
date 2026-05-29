@@ -1,7 +1,11 @@
 ---
 title: SDK Release Notes — v0.10.x
-description: Release notes for QVAC SDK v0.10.0.
+description: Lists all releases from v0.10.0 to v0.10.2.
 ---
+
+## v0.10.0
+
+### @qvac/sdk
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.10.0
 
@@ -12,11 +16,9 @@ delegated inference to direct DHT connections, expands the addon surface (img2im
 structured output, dynamic tools, tool dialects, per-segment whisper metadata,
 sentence-streaming TTS), and reshapes the model registry around companion sets.
 
-## Breaking Changes
+#### Breaking Changes
 
-### @qvac/sdk
-
-### Unified `CompletionEvent` stream
+##### Unified `CompletionEvent` stream
 
 `completion()` now returns a `CompletionRun` with a single canonical `events` stream that
 carries content, thinking, tool calls, stats, and completion in one ordered, sequenced
@@ -44,7 +46,7 @@ const result = await run.final;
 // result.contentText, result.thinkingText, result.toolCalls, result.stats, result.raw.fullText
 ```
 
-### Model type & capability system overhaul
+##### Model type & capability system overhaul
 
 `LoadModelOptions` is no longer a single catch-all. Custom plugins must use the new
 `LoadCustomPluginModelOptions<"plugin-name">` generic so the literal plugin string is
@@ -99,7 +101,7 @@ try {
 }
 ```
 
-### Companion-set download progress field
+##### Companion-set download progress field
 
 Multi-file model downloads (ONNX, future formats) now report progress through a generic
 `fileSetInfo` field instead of the ONNX-specific `onnxInfo`. The shape is identical, only
@@ -125,7 +127,7 @@ onProgress: (progress) => {
 }
 ```
 
-### Delegated inference uses direct DHT connect
+##### Delegated inference uses direct DHT connect
 
 Delegation no longer rendezvous over a shared topic. Consumers connect directly to a
 provider's public key via `swarm.dht.connect(publicKey)`, and providers bind the DHT
@@ -134,15 +136,15 @@ discovery-flake failures and shortens connect time. Callers using the high-level
 delegation API see no surface change; integrators driving Hyperswarm directly should
 update their join/listen logic.
 
-### Plugin constructor migration
+##### Plugin constructor migration
 
 SDK plugins (`definePlugin`) now use the new addon constructor shape. Plugin authors
 need to migrate their `createModel` implementation to match — the SDK in this release
 ships with all first-party plugins already migrated.
 
-## New APIs and Capabilities
+#### New APIs and Capabilities
 
-### `getLoadedModelInfo` for runtime introspection
+##### `getLoadedModelInfo` for runtime introspection
 
 A new `getLoadedModelInfo` API returns metadata for a loaded `modelId`, discriminated on
 `isDelegated`. Local models expose their authoritative handler list and `modelType`;
@@ -159,7 +161,7 @@ if (info.isDelegated || info.handlers.includes("transcribeStream")) {
 }
 ```
 
-### Structured output (`responseFormat`)
+##### Structured output (`responseFormat`)
 
 `completion()` now accepts a `responseFormat` option that constrains the model to emit
 schema-valid JSON. The output is guaranteed to parse against the supplied JSON Schema.
@@ -194,7 +196,7 @@ const final = await run.final;
 JSON.parse(final.contentText); // schema-valid
 ```
 
-### Dynamic tools mode
+##### Dynamic tools mode
 
 LLM models can now opt into a `dynamic` tools mode at load time. Subsequent
 `completion()` calls can pass an entirely different `tools` array on each turn, and the
@@ -227,7 +229,7 @@ const turn2 = completion({
 });
 ```
 
-### Tool-call dialect routing
+##### Tool-call dialect routing
 
 Tool-call parsing is now dialect-aware. The SDK auto-detects between `hermes`,
 `pythonic`, and `json` framings, and a new `toolDialect` parameter lets you force a
@@ -244,7 +246,7 @@ const result = completion({
 });
 ```
 
-### img2img for diffusion models
+##### img2img for diffusion models
 
 The diffusion API now accepts an `init_image` for SDEdit-style image-to-image on
 SD/SDXL, and in-context conditioning on FLUX.2. `strength` controls how much of the
@@ -260,7 +262,7 @@ const { outputs } = diffusion({
 });
 ```
 
-### Sentence-level TTS streaming
+##### Sentence-level TTS streaming
 
 Onnx text-to-speech can now stream output one sentence at a time, either as a
 self-contained `textToSpeech({ stream: true, sentenceStream: true })` call or via a
@@ -289,7 +291,7 @@ for await (const chunk of session) {
 }
 ```
 
-### Per-segment whisper metadata
+##### Per-segment whisper metadata
 
 Both `transcribe` (batch) and `transcribeStream` (duplex) now return structured
 `TranscribeSegment` objects with start/end timestamps, segment IDs, and an `append`
@@ -303,7 +305,7 @@ for (const s of segments) {
 }
 ```
 
-### Suspend lifecycle gate and `state()`
+##### Suspend lifecycle gate and `state()`
 
 `suspend()` is now serialized through a lifecycle gate that prevents overlapping
 suspend/resume races. A new `state()` API reports the current lifecycle phase:
@@ -319,7 +321,7 @@ if (current !== "active") {
 }
 ```
 
-### Registry download retries and configurable stream timeout
+##### Registry download retries and configurable stream timeout
 
 Two new SDK config knobs cover slow/unstable links: `registryDownloadMaxRetries` retries
 `REQUEST_TIMEOUT` failures (set to `0` to disable), and `registryStreamTimeoutMs`
@@ -334,7 +336,7 @@ setSDKConfig({
 });
 ```
 
-### Auto KV-cache: replay the canonical assistant turn
+##### Auto KV-cache: replay the canonical assistant turn
 
 When auto KV-cache is enabled, the completion result now exposes
 `final.cacheableAssistantContent` — the exact assistant string the SDK persisted to the
@@ -353,13 +355,13 @@ const nextHistory = [
 ];
 ```
 
-### LLM-addon cache API plumbed through SDK
+##### LLM-addon cache API plumbed through SDK
 
 The SDK now wires through the LLM addon's first-class cache API — including explicit
 `deleteCache({ kvCacheKey })` for evicting a named cache key — so consumers can manage
 KV-cache lifetimes alongside `loadModel`/`unloadModel`.
 
-### NMTcpp 2.0.1 surface
+##### NMTcpp 2.0.1 surface
 
 The SDK NMT plugin now targets `@qvac/translation-nmtcpp 2.0.1` with a structured
 constructor that distinguishes primary and pivot model files, vocab files, and pivot
@@ -367,11 +369,9 @@ config (beam size, top-k). Bergamot models are also picked up via path-based voc
 resolution and grouped into companion sets, which lets the cache and download paths
 treat them like any other multi-file model.
 
-## Features
+#### Features
 
-### @qvac/sdk
-
-### Parallel orchestration and download dedupe
+##### Parallel orchestration and download dedupe
 
 Model loading is now genuinely parallel where it can be: the primary model and any
 companion files (vision projection, vocab, etc.) download concurrently, and concurrent
@@ -386,47 +386,12 @@ and adding a new multi-file format is a matter of dropping in a detection functi
 registering it with `groupCompanionSets`. Everything downstream — codegen, resolver,
 cache probing, storage cleanup — handles it automatically.
 
-### Real-time voice assistant example
+##### Real-time voice assistant example
 
 A new end-to-end example demonstrates a real-time voice assistant pipeline (whisper →
 LLM → TTS) wired together using the SDK's streaming primitives.
 
-## Added
-
-### @qvac/sdk
-
-```
-NMT_Q0F16 through NMT_Q0F16_9 (10 entries)
-NMT_Q4_0 through NMT_Q4_0_12+ (22 entries)
-```
-
-### Removed (now companion-only or renamed)
-
-```
-*_DATA (32 entries — companion-only, e.g. PARAKEET_TDT_ENCODER_DATA_FP32, TTS_*_DATA)
-BERGAMOT_*_LEX (93 entries — companion-only)
-BERGAMOT_*_VOCAB (93 entries — companion-only)
-BERGAMOT_METADATA_* (87 entries — companion-only)
-MARIAN_OPUS_* (32 entries — renamed to NMT_*)
-```
-
-## Documentation, Tests, and Infrastructure
-
-- Diffusion documentation was extended to cover the new img2img flows (SDEdit on
-  SD/SDXL, in-context conditioning on FLUX.2).
-- Android sharded-model-resume tests no longer trip Scudo OOM — the test harness now
-  bounds memory more conservatively on long-running resume scenarios.
-- The tests-qvac docs, tooling, and CI workflow job names were refreshed for the new
-  suite filtering and PR-triggered e2e workflows. Suite filtering plus PR-trigger labels
-  let CI run targeted SDK e2e subsets on demand instead of always running the full grid.
-- A pre-terminate cleanup hook stabilises mobile smoke: the mobile auto-close path now
-  awaits worker cleanup acknowledgement before terminating the worklet.
-- `DataLoader` cleanup logic was scoped down to `packages/rag` so the SDK no longer
-  carries that surface.
-
-## Bug Fixes
-
-### @qvac/sdk
+#### Bug Fixes
 
 - RPC initialization in the Node runtime now has an explicit timeout, so a wedged
   transport can no longer hang `loadModel`/`unloadModel` indefinitely.
@@ -445,10 +410,170 @@ MARIAN_OPUS_* (32 entries — renamed to NMT_*)
 - Inflight delegation requests that get rejected now run their cleanup chain to
   completion instead of leaking pending promises.
 
-## Model Registry Changes
+#### Model Registry Changes
 
 The model registry was regenerated around companion-set metadata. The user-facing surface
 is leaner: families that used to live as separate `*_DATA`, `*_LEX`, `*_VOCAB`, and
 `METADATA_*` constants are now companion-only — they're still downloaded, but they're
 not addressable as standalone model sources. Marian Opus models were renamed under the
 `NMT_*` namespace to match the rest of the NMT family.
+
+##### Added
+
+```
+NMT_Q0F16 through NMT_Q0F16_9 (10 entries)
+NMT_Q4_0 through NMT_Q4_0_12+ (22 entries)
+```
+
+##### Removed (now companion-only or renamed)
+
+```
+*_DATA (32 entries — companion-only, e.g. PARAKEET_TDT_ENCODER_DATA_FP32, TTS_*_DATA)
+BERGAMOT_*_LEX (93 entries — companion-only)
+BERGAMOT_*_VOCAB (93 entries — companion-only)
+BERGAMOT_METADATA_* (87 entries — companion-only)
+MARIAN_OPUS_* (32 entries — renamed to NMT_*)
+```
+
+#### Documentation, Tests, and Infrastructure
+
+- Diffusion documentation was extended to cover the new img2img flows (SDEdit on
+  SD/SDXL, in-context conditioning on FLUX.2).
+- Android sharded-model-resume tests no longer trip Scudo OOM — the test harness now
+  bounds memory more conservatively on long-running resume scenarios.
+- The tests-qvac docs, tooling, and CI workflow job names were refreshed for the new
+  suite filtering and PR-triggered e2e workflows. Suite filtering plus PR-trigger labels
+  let CI run targeted SDK e2e subsets on demand instead of always running the full grid.
+- A pre-terminate cleanup hook stabilises mobile smoke: the mobile auto-close path now
+  awaits worker cleanup acknowledgement before terminating the worklet.
+- `DataLoader` cleanup logic was scoped down to `packages/rag` so the SDK no longer
+  carries that surface.
+
+## v0.10.2
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.10.2
+
+This is a hotfix release that restores delegated-inference connection performance to the level it was at in v0.9.0. No API or model changes — drop-in replacement for v0.10.1.
+
+#### Bug Fixes
+
+##### Delegated connect no longer waits for full DHT bootstrap
+
+Consumers using `loadModel({ delegate: true, ... })` against a remote provider were spending ~2.5–3s longer per connection in v0.10.0/0.10.1 than in v0.9.0. Profiler traces from the Workbench team showed `loadModel.delegation.connection` regressing from ~2.5s (v0.9.0) to ~8.3s (v0.10.0) on the same machine and network.
+
+The cause was a serial `await swarm.dht.fullyBootstrapped()` call that was added to the consumer's connect path in the v0.10.0 redesign. `dht.fullyBootstrapped()` only resolves once Hyperdht has populated its full routing table, which is a slow process from a cold swarm — and on a hot swarm `dht.connect(publicKey)` already drives the lookups it needs internally, so the explicit wait is redundant. Removing it lets the connection use the DHT in whatever state it's in at call time, exactly the way it did in v0.9.0.
+
+The DHT routing table is still populated lazily as `dht.connect()` issues lookups, so cold-swarm correctness is unchanged — `PEER_NOT_FOUND` for non-existent peers and connection timeouts for unreachable ones both still fire on the same code path. The fallback-to-local behaviour for `loadModel` is unaffected; only the hot-path latency improves.
+
+Local benchmarks (10 consumer↔provider runs each, against the published v0.10.1 baseline):
+
+| Build              | Mean connection time | p50    | p95    |
+| ------------------ | -------------------- | ------ | ------ |
+| v0.10.1 (baseline) | 3.82s                | 3.71s  | 4.94s  |
+| v0.10.2 (this fix) | 1.18s                | 1.12s  | 1.49s  |
+
+That's ~3.2× faster on average and brings cold delegated `loadModel` back below the v0.9.0 numbers.
+
+If you were on v0.10.0 or v0.10.1 and had pinned around the regression (custom timeouts, retry shims, falling back to local inference earlier than necessary), you can drop those workarounds.
+
+## v0.10.1
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.10.1
+
+This patch release adds a new tool-call dialect for OpenAI's `gpt-oss` (Harmony) models, fixes a regression that caused Bergamot translation models to re-download their vocab files on every `loadModel`, and refreshes the model registry with updated Bergamot translation pairs and the removal of deprecated Marian Opus entries.
+
+#### New APIs
+
+##### Harmony tool-call dialect for `gpt-oss`
+
+`completion()` now supports a fourth tool-call dialect, `"harmony"`, used by OpenAI's `gpt-oss` family of models. The new dialect is wired into the same streaming/event surface as the existing dialects (`hermes`, `pythonic`, `json`), so tool calls emitted in Harmony frames are parsed and surfaced through the standard `CompletionEvent` stream. `gpt-oss-20b-Q4_K_M` auto-routes to the Harmony dialect; the `toolDialect` parameter is available as an explicit override on any model.
+
+```typescript
+import { completion, type ToolDialect } from "@qvac/sdk";
+
+const run = completion({
+  modelId,                 // gpt-oss-20b-Q4_K_M auto-routes to "harmony"
+  history,
+  tools,
+  toolDialect: "harmony",  // optional explicit override
+});
+
+const dialect: ToolDialect = "harmony";
+// ToolDialect is now "hermes" | "pythonic" | "json" | "harmony"
+```
+
+This release also picks up `@qvac/llm-llamacpp` 0.17.2, which stops the addon from suppressing the `<|call|>` end-of-generation token — required for Harmony tool-call parsing to work end-to-end.
+
+#### Bug Fixes
+
+##### Bergamot vocab no longer re-downloaded on every `loadModel`
+
+Bergamot translation pairs that share a vocab blob across two file paths (the same SHA-256 under different names) were being collapsed by registry deduplication, which deleted their standalone vocab entries and forced the plugin to re-download the vocab file every time a model was loaded. This release adjusts the dedup pass to preserve any registry entry that is referenced as a companion file in a companion set, restoring the seven shared-vocab entries (`BERGAMOT_FR_EN_VOCAB`, `BERGAMOT_EN_DE_VOCAB`, `BERGAMOT_EN_CS_VOCAB`, `BERGAMOT_ET_EN_VOCAB`, `BERGAMOT_FI_EN_VOCAB`, `BERGAMOT_PL_EN_VOCAB`, `BERGAMOT_PT_EN_VOCAB`) along with their correct `expectedSize`/`sha` lookups.
+
+For `registry://` Bergamot loads with auto-derived vocabs (both non-pivot and pivot), the plugin now skips the separate per-vocab `resolveModelPath` call entirely — the companion-set download already colocates vocabs under `sets/<setKey>/`, and `createModel` derives those paths via `deriveColocatedBergamotVocabPaths`. This eliminates redundant flat-cache downloads without changing the contract for `pear://` sources or user-supplied vocab overrides, and is locked behind unit tests in `nmtcpp-resolve-vocab.test.ts`.
+
+#### Model Changes
+
+##### Updated translation pairs
+
+`BERGAMOT_EN_IT` and `BERGAMOT_ES_EN` are bumped to the `base-memory` variant (`bergamot-enit/2026-04-28/`, `bergamot-esen/2026-04-28/`). This fixes leading `"- "` hallucinations on short inputs and an en→it quality regression that affected the previous build.
+
+##### Restored shared-vocab Bergamot entries
+
+The vocab fix above restores seven Bergamot vocab constants that had been incorrectly removed by registry dedup:
+
+```
+BERGAMOT_EN_CS_VOCAB
+BERGAMOT_EN_DE_VOCAB
+BERGAMOT_ET_EN_VOCAB
+BERGAMOT_FI_EN_VOCAB
+BERGAMOT_FR_EN_VOCAB
+BERGAMOT_PL_EN_VOCAB
+BERGAMOT_PT_EN_VOCAB
+```
+
+##### Removed Marian Opus models
+
+The legacy Marian Opus translation entries are dropped from the registry. They were auto-deprecated upstream and superseded by the Bergamot family.
+
+```
+NMT_Q0F16
+NMT_Q0F16_1
+NMT_Q0F16_2
+NMT_Q0F16_3
+NMT_Q0F16_4
+NMT_Q0F16_5
+NMT_Q0F16_6
+NMT_Q0F16_7
+NMT_Q0F16_8
+NMT_Q0F16_9
+NMT_Q4_0
+NMT_Q4_0_1
+NMT_Q4_0_2
+NMT_Q4_0_3
+NMT_Q4_0_4
+NMT_Q4_0_5
+NMT_Q4_0_6
+NMT_Q4_0_7
+NMT_Q4_0_8
+NMT_Q4_0_9
+NMT_Q4_0_10
+NMT_Q4_0_11
+NMT_Q4_0_12
+NMT_Q4_0_13
+NMT_Q4_0_14
+NMT_Q4_0_15
+NMT_Q4_0_16
+NMT_Q4_0_17
+NMT_Q4_0_18
+NMT_Q4_0_19
+NMT_Q4_0_20
+NMT_Q4_0_21
+```
+
+If you were importing any of these constants, switch to the equivalent `BERGAMOT_*` pair.
+
