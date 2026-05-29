@@ -25,36 +25,14 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ## Models
 
-The `@qvac/classification-ggml` addon bundles **MobileNetV3-Small** inside the package itself, so loading with no `modelSrc` is enough to get started:
+Supported model families and their file layouts:
 
-```ts
-const modelId = await loadModel({
-  modelType: "classification",
-});
-```
-
-To use a custom GGUF classifier, pass the file path (or any other supported model source) as `modelSrc`:
-
-```ts
-const modelId = await loadModel({
-  modelType: "classification",
-  modelSrc: "/abs/path/to/my-classifier.gguf",
-});
-```
-
-You can also set a load-time default for `topK` via `modelConfig`. Per-call `topK` on `classify()` overrides this default:
-
-```ts
-const modelId = await loadModel({
-  modelType: "classification",
-  modelConfig: { topK: 3 },
-});
-```
+- **MobileNetV3-Small**: single all-in-one `*.gguf` file — the base model or any fine-tune of the same architecture (converted to GGUF). Fine-tunes may define their own classes and labels; the label set is sourced from the GGUF metadata.
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
 <Callout type="info">
-**On labels:** the bundled MobileNetV3-Small emits the fixed labels `"food"`, `"report"`, and `"other"`. Custom GGUF classifiers may emit different labels — the label set is sourced from the GGUF metadata.
+**Default model:** alternatively, you can load no model at all. In that case the base **MobileNetV3-Small** classifier is loaded automatically — no `modelSrc` and no download required. It emits the following fixed labels: `"food"`, `"report"`, and `"other"`.
 </Callout>
 
 ## Example

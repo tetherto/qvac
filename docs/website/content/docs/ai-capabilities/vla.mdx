@@ -1,12 +1,12 @@
 ---
 title: VLA
-description: Vision-language-action inference — run a SmolVLA policy that turns camera frames, robot state, and a natural-language instruction into an action chunk.
+description: Vision-language-action inference — turns camera frames, robot state, and a natural-language instruction into an action chunk.
 schemaType: HowTo
 ---
 
 ## Overview
 
-Vision-language-action (VLA) inference uses a **GGML** engine ([`@qvac/vla-ggml`](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml)) to run [SmolVLA](https://huggingface.co/lerobot/smolvla_base) policies. Load a model using `modelType: "vla"`. Then, feed it preprocessed camera frames, the robot's current state, and a tokenized natural-language instruction; the model returns an **action chunk** — `chunkSize` future timesteps of an `actionDim`-dimensional action vector — to drive the robot's actuators.
+Vision-language-action (VLA) inference uses a **GGML** engine ([`@qvac/vla-ggml`](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml)) to run VLA policies. Load a model using `modelType: "vla"`. Then, feed it preprocessed camera frames, the robot's current state, and a tokenized natural-language instruction; the model returns an **action chunk** — `chunkSize` future timesteps of an `actionDim`-dimensional action vector — to drive the robot's actuators.
 
 `vla()` returns `{ actions, actionDim, chunkSize, stats }`, where `actions` is a `Float32Array` of length `chunkSize * actionDim` and `stats` reports per-stage timings (`vision_ms`, `smollm2_total_ms`, `ode_ms`, `total_ms`).
 
@@ -24,33 +24,11 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ## Models
 
-Load SmolVLA-LIBERO directly from our model registry:
+Supported model families and their file layouts:
 
-```ts
-const modelId = await loadModel({
-  modelSrc: SMOLVLA_LIBERO_VISION_Q8,
-  modelType: "vla",
-});
-```
+- **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
 
-To use a custom GGUF, pass the file path as `modelSrc`:
-
-```ts
-const modelId = await loadModel({
-  modelSrc: "/abs/path/to/my-smolvla.gguf",
-  modelType: "vla",
-});
-```
-
-You can also pin the GGML backend at load time via `modelConfig`:
-
-```ts
-const modelId = await loadModel({
-  modelSrc: SMOLVLA_LIBERO_VISION_Q8,
-  modelType: "vla",
-  modelConfig: { backend: "auto" }, // "auto" | "cpu"
-});
-```
+More VLA families are planned, and will load through the same `modelType: "vla"` interface.
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
