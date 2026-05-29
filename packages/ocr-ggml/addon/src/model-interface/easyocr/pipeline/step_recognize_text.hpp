@@ -25,6 +25,8 @@
 #include <array>
 #include <atomic>
 #include <codecvt>
+#include <cstddef>
+#include <cstdint>
 #include <locale>
 #include <memory>
 #include <span>
@@ -38,8 +40,13 @@
 #include "steps.hpp"
 
 using ggml_backend_t = struct ggml_backend*;
+using ggml_gallocr_t = struct ggml_gallocr*;
+using OcrGgmlCGraphPtr = struct ggml_cgraph*;
+using OcrGgmlContextPtr = struct ggml_context*;
+// NOLINTNEXTLINE(readability-identifier-naming)
+using OcrGgmlTensorPtr = struct ggml_tensor*;
 
-// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length,readability-redundant-member-init)
 // StepRecognizeText header uses snake_case to mirror upstream EasyOCR
 // recognizer API and contains architecture-defined constants (batch=32,
 // rotation 90/270).
@@ -174,6 +181,20 @@ private:
   std::vector<float> batchBuffer_;
   RecognitionStageTimings lastTimings_{};
 
+  struct RecognizerGraphCache {
+    int height = 0;
+    int width = 0;
+    size_t graphSize = 0;
+    std::vector<std::uint8_t> ctxBuf;
+    OcrGgmlContextPtr gctx = nullptr;
+    ggml_gallocr_t gallocr = nullptr;
+    OcrGgmlCGraphPtr graph = nullptr;
+    OcrGgmlTensorPtr input = nullptr;
+    OcrGgmlTensorPtr output = nullptr;
+  };
+
+  RecognizerGraphCache recognizerGraphCache_{};
+
   void populateImageList(const Input& input);
   void
   expandImgListWithRotatedImgs(std::optional<std::vector<int>>& rotationAngles);
@@ -184,6 +205,10 @@ private:
   cv::Mat runInferenceOnImg(const cv::Mat& img);
   cv::Mat
   runBatchInference(const std::vector<cv::Mat>& images, int dynamicWidth);
+  cv::Mat runRecognizerOneCached(
+      const float* inputData, int height, int width, size_t graphSize);
+  void ensureRecognizerGraph(int height, int width, size_t graphSize);
+  void destroyRecognizerGraph();
 
   std::vector<InferredText> processImgList(const std::atomic<bool>* cancelFlag);
   std::string decodeGreedy(const std::vector<size_t>& textIndex);
@@ -192,4 +217,4 @@ private:
 } // namespace pipeline
 } // namespace easyocr::ggml
 
-// NOLINTEND(readability-identifier-naming,readability-identifier-length)
+// NOLINTEND(readability-identifier-naming,readability-identifier-length,readability-redundant-member-init)

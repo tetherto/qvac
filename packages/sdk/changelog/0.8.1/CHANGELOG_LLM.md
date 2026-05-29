@@ -6,7 +6,7 @@ This release introduces a heartbeat mechanism for proactive provider health moni
 
 ---
 
-## 💥 Breaking Changes
+## Breaking Changes
 
 ### Heartbeat Replaces Ping
 
@@ -35,7 +35,7 @@ await heartbeat({
 
 ---
 
-## 🔌 New APIs
+## New APIs
 
 ### RPC Health Probe for Delegation
 
@@ -72,7 +72,7 @@ await cancel({
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 - **IndicTrans model type unblocked** — The NMT translation plugin no longer incorrectly blocks IndicTrans models from loading, restoring multi-engine translation support.
 - **Accurate download progress** — Registry downloads now report progress from the network layer instead of disk I/O polling, giving real-time progress that reflects actual bytes received.
@@ -82,13 +82,13 @@ await cancel({
 
 ---
 
-## 📘 Documentation
+## Documentation
 
 - All SDK READMEs now reference the `@qvac` npm namespace instead of the legacy `@tetherto` scope.
 
 ---
 
-## 🧪 Testing
+## Testing
 
 - New E2E tests cover parallel download scenarios and cancel isolation to prevent race conditions between concurrent operations.
 - The mobile E2E test executor has been refactored to an asset-based architecture for more reliable cross-platform testing.

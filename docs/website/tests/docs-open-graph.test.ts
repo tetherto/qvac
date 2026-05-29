@@ -35,7 +35,7 @@ describe('isArchivedPage', () => {
     // and cross-version hallucination in LLMs. Each minor line has one
     // archived page (`vX.Y.x`, literal `x`) under the series-versioning
     // model.
-    expect(isArchivedPage(page('/reference/api/v0.7.x'))).toBe(true);
+    expect(isArchivedPage(page('/reference/api/v0.10.x'))).toBe(true);
     expect(isArchivedPage(page('/reference/api/v0.8.x'))).toBe(true);
     expect(isArchivedPage(page('/reference/api/v0.9.x'))).toBe(true);
   });
@@ -46,7 +46,7 @@ describe('isArchivedPage', () => {
     // problem, and excluding them would make "what changed in v0.8.x?"
     // undiscoverable. Kept in sitemap.xml, llms.txt, llms-full.txt, and
     // per-page `.md`.
-    expect(isArchivedPage(page('/reference/release-notes/v0.7.x'))).toBe(false);
+    expect(isArchivedPage(page('/reference/release-notes/v0.10.x'))).toBe(false);
     expect(isArchivedPage(page('/reference/release-notes/v0.8.x'))).toBe(false);
     expect(isArchivedPage(page('/reference/release-notes/v0.9.x'))).toBe(false);
   });
@@ -73,13 +73,13 @@ describe('isArchivedVersionSlug', () => {
   });
 
   it('returns true for archived API summary series', () => {
-    expect(isArchivedVersionSlug(['reference', 'api', 'v0.7.x'])).toBe(true);
+    expect(isArchivedVersionSlug(['reference', 'api', 'v0.10.x'])).toBe(true);
     expect(isArchivedVersionSlug(['reference', 'api', 'v0.9.x'])).toBe(true);
   });
 
   it('returns false for archived release-notes series (kept indexable)', () => {
     expect(
-      isArchivedVersionSlug(['reference', 'release-notes', 'v0.7.x']),
+      isArchivedVersionSlug(['reference', 'release-notes', 'v0.10.x']),
     ).toBe(false);
     expect(
       isArchivedVersionSlug(['reference', 'release-notes', 'v0.9.x']),
@@ -111,8 +111,8 @@ describe('buildCanonicalDocsUrl', () => {
   });
 
   it('returns the self-URL even for archived API pages (used by OG, not <link rel=canonical>)', () => {
-    expect(buildCanonicalDocsUrl(['reference', 'api', 'v0.7.x'])).toBe(
-      `${DOCS_SITE_ORIGIN}/reference/api/v0.7.x`,
+    expect(buildCanonicalDocsUrl(['reference', 'api', 'v0.10.x'])).toBe(
+      `${DOCS_SITE_ORIGIN}/reference/api/v0.10.x`,
     );
   });
 });
@@ -133,7 +133,7 @@ describe('buildPageCanonicalUrl', () => {
   });
 
   it('redirects archived API pages to /reference/api (the section latest)', () => {
-    expect(buildPageCanonicalUrl(['reference', 'api', 'v0.7.x'])).toBe(
+    expect(buildPageCanonicalUrl(['reference', 'api', 'v0.10.x'])).toBe(
       `${DOCS_SITE_ORIGIN}/reference/api`,
     );
     expect(buildPageCanonicalUrl(['reference', 'api', 'v0.8.x'])).toBe(
@@ -146,8 +146,8 @@ describe('buildPageCanonicalUrl', () => {
 
   it('keeps archived release-notes pages as their own canonical', () => {
     expect(
-      buildPageCanonicalUrl(['reference', 'release-notes', 'v0.7.x']),
-    ).toBe(`${DOCS_SITE_ORIGIN}/reference/release-notes/v0.7.x`);
+      buildPageCanonicalUrl(['reference', 'release-notes', 'v0.10.x']),
+    ).toBe(`${DOCS_SITE_ORIGIN}/reference/release-notes/v0.10.x`);
     expect(
       buildPageCanonicalUrl(['reference', 'release-notes', 'v0.9.x']),
     ).toBe(`${DOCS_SITE_ORIGIN}/reference/release-notes/v0.9.x`);
