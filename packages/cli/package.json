@@ -49,10 +49,20 @@
     "dev:unlink": "node scripts/dev-unlink.cjs"
   },
   "dependencies": {
+    "@fastify/autoload": "^6.0.0",
+    "@fastify/cors": "^11.0.0",
+    "@fastify/multipart": "^9.0.0",
+    "@fastify/swagger": "^9.0.0",
+    "@fastify/swagger-ui": "^5.0.0",
     "@qvac/sdk": "file:../sdk",
+    "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",
+    "fastify": "^5.0.0",
+    "fastify-plugin": "^5.0.0",
+    "fastify-type-provider-zod": "^5.0.0",
     "js-yaml": "^4.1.0",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

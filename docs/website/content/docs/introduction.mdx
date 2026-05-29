@@ -52,8 +52,9 @@ The JS SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabi
 * [**Fine-tuning:**](/ai-capabilities/fine-tuning) adapting LLMs to domain-specific tasks via LoRA.
 * [**Multimodal:**](/ai-capabilities/multimodal) LLM inference over text, images, and other media within a single conversation context.
 * [**Image generation:**](/ai-capabilities/image-generation) text-to-image and image-to-image generation via a customized Diffusion engine.
+* [**Video generation:**](/ai-capabilities/video-generation) text-to-video generation via a customized Diffusion engine.
 * [**Transcription:**](/ai-capabilities/transcription) automatic speech recognition (ASR) for speech-to-text via a customized Whisper engine or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
-* [**Text-to-Speech:**](/ai-capabilities/text-to-speech) speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+* [**Text-to-Speech:**](/ai-capabilities/text-to-speech) speech synthesis for text-to-speech (TTS) via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml).
 * [**Voice assistant:**](/ai-capabilities/voice-assistant) real-time voice conversation pipeline chaining transcription, text generation, and text-to-speech.
 * [**Translation:**](/ai-capabilities/translation) text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
 * [**OCR:**](/ai-capabilities/ocr) optical character recognition (OCR) for extracting text from images via ONNX runtime.

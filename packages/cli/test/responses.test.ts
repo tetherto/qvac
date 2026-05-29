@@ -2,10 +2,9 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
 import { buildResponseObject } from '../src/serve/adapters/openai/responses-shape.js'
-import { writeBlockingResponse } from '../src/serve/adapters/openai/routes/responses.js'
-import type { ResponsesHandlerParams } from '../src/serve/adapters/openai/routes/responses.js'
-import type { CompletionResult } from '../src/serve/core/sdk.js'
-import type { RouteContext } from '../src/serve/adapters/types.js'
+import { writeBlockingResponse } from '../src/serve/adapters/openai/response-writers.js'
+import type { ResponsesHandlerParams, ResponseWriterContext } from '../src/serve/adapters/openai/response-writers.js'
+import type { CompletionRun, ToolCall, CompletionStats } from '@qvac/sdk'
 
 const uuidSuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -15,7 +14,7 @@ describe('buildResponseObject', () => {
       id: 'resp_test',
       modelAlias: 'my-model',
       text: 'hello world',
-      toolCalls: null,
+      toolCalls: [],
       createdAtSec: 42,
       metadata: undefined,
       temperature: 0.1,
@@ -41,7 +40,7 @@ describe('buildResponseObject', () => {
       id: 'resp_t',
       modelAlias: 'm',
       text: 'hi',
-      toolCalls: [{ id: 'call_1', name: 'fn', arguments: '{}' }],
+      toolCalls: [{ id: 'call_1', name: 'fn', arguments: {} }],
       createdAtSec: 1,
       metadata: undefined,
       temperature: undefined,
@@ -76,8 +75,8 @@ describe('buildResponseObject', () => {
       modelAlias: 'm',
       text: '',
       toolCalls: [
-        { id: 'c1', name: 'a', arguments: '{}' },
-        { id: 'c2', name: 'b', arguments: '{}' }
+        { id: 'c1', name: 'a', arguments: {} },
+        { id: 'c2', name: 'b', arguments: {} }
       ],
       createdAtSec: 1,
       metadata: undefined,
@@ -101,7 +100,7 @@ describe('buildResponseObject', () => {
       id: 'resp_u',
       modelAlias: 'm',
       text: 'one two three',
-      toolCalls: null,
+      toolCalls: [],
       createdAtSec: 1,
       metadata: undefined,
       temperature: undefined,
@@ -122,7 +121,7 @@ describe('buildResponseObject', () => {
       id: 'resp_test',
       modelAlias: 'm',
       text: 'x',
-      toolCalls: [{ id: 'c1', name: 'f', arguments: '{}' }],
+      toolCalls: [{ id: 'c1', name: 'f', arguments: {} }],
       createdAtSec: 1,
       metadata: undefined,
       temperature: undefined,
@@ -140,16 +139,9 @@ describe('buildResponseObject', () => {
   })
 })
 
-function minimalRouteContext (): RouteContext {
+function minimalRouteContext (): ResponseWriterContext {
   return {
-    registry: {} as RouteContext['registry'],
-    serveConfig: {} as RouteContext['serveConfig'],
-    logger: {
-      info: (): void => {},
-      warn: (): void => {},
-      error: (): void => {},
-      debug: (): void => {}
-    },
+    logger: { info: (): void => {} },
     responsesStore: {
       put: (): void => {},
       get: (): undefined => undefined,
@@ -157,7 +149,7 @@ function minimalRouteContext (): RouteContext {
       listInputItems: (): null => null,
       size: (): number => 0,
       bannerLine: (): string => ''
-    }
+    } as ResponseWriterContext['responsesStore']
   }
 }
 
@@ -182,12 +174,15 @@ function baseHandlerParams (): ResponsesHandlerParams {
 
 function fakeCompletion (opts: {
   text: string
-  toolCalls: import('../src/serve/core/sdk.js').SDKToolCall[] | null
-  stats?: import('../src/serve/core/sdk.js').CompletionRunStats
-}): CompletionResult {
+  toolCalls: ToolCall[]
+  stats?: CompletionStats
+}): CompletionRun {
   return {
+    requestId: 'test',
+    events: (async function * empty (): AsyncGenerator<never> {})(),
+    final: Promise.resolve(undefined) as unknown as CompletionRun['final'],
     text: Promise.resolve(opts.text),
-    toolCalls: Promise.resolve(opts.toolCalls),
+    toolCalls: Promise.resolve(opts.toolCalls) as unknown as CompletionRun['toolCalls'],
     stats: Promise.resolve(opts.stats),
     tokenStream: (async function * empty (): AsyncGenerator<string> {})(),
     toolCallStream: (async function * empty (): AsyncGenerator<never> {})()
@@ -216,7 +211,7 @@ describe('writeBlockingResponse', () => {
     const p = baseHandlerParams()
     const result = fakeCompletion({
       text: 'hello',
-      toolCalls: null,
+      toolCalls: [],
       stats: { generatedTokens: 42 }
     })
 
@@ -246,7 +241,7 @@ describe('writeBlockingResponse', () => {
     const p = baseHandlerParams()
     const result = fakeCompletion({
       text: '',
-      toolCalls: [{ id: 'call_x', name: 'fn', arguments: '{}' }],
+      toolCalls: [{ id: 'call_x', name: 'fn', arguments: {} }],
       stats: { generatedTokens: 1 }
     })
 
