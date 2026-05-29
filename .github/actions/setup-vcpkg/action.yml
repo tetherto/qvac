@@ -31,9 +31,6 @@ runs:
       run: |
         set -euo pipefail
         cd ..
-        # Remove any stale vcpkg directory left by a previous run (self-hosted
-        # runners persist the parent directory between jobs).
-        rm -rf vcpkg
         # Shallow + blobless + sparse clone; ports/ and versions/ are not
         # needed when consuming the S3 binary cache, so skip them to cut
         # the download to ~a few MB.
