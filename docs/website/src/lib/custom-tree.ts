@@ -74,9 +74,16 @@ export const customTree: Node[] = [
     children: [
       {
         name: 'HTTP server',
-        url: '/cli/http-server',
-        type: 'page',
+        type: 'folder',
+        index: { type: 'page', name: 'HTTP server', url: '/cli/http-server' },
         icon: resolveIcon('Server'),
+        children: [
+          {
+            name: 'Integration',
+            url: '/cli/http-server/integration',
+            type: 'page',
+          },
+        ],
       },
     ],
   },
@@ -167,10 +174,22 @@ export const customTree: Node[] = [
     icon: resolveIcon('Languages'),
   },
   {
+    name: 'VLA',
+    url: '/ai-capabilities/vla',
+    type: 'page',
+    icon: resolveIcon('Eye'),
+  },
+  {
     name: 'OCR',
     url: '/ai-capabilities/ocr',
     type: 'page',
     icon: resolveIcon('ScanText'),
+  },
+  {
+    name: 'Image classification',
+    url: '/ai-capabilities/image-classification',
+    type: 'page',
+    icon: resolveIcon('Shapes'),
   },
   {
     type: 'separator',

@@ -6,6 +6,6 @@ Patch release with a minor documentation fix to the SDK README quickstart exampl
 
 ---
 
-## 📘 Docs
+## Docs
 
 - Remove trailing comma in quickstart import example.
