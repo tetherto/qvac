@@ -53,8 +53,8 @@ export interface VideoStableDiffusionArgs {
  *
  * Mode is required (no auto-detect). Every mode enforces its own input
  * invariants both in the JS wrapper and in C++ `SdModel::processVideo()`:
- *   - `txt2vid` rejects `init_image` and `end_image`.
- *   - `img2vid` requires `init_image`, rejects `end_image`.
+ *   - `txt2vid` rejects `init_image`.
+ *   - `img2vid` requires `init_image`.
  */
 export interface VideoGenerationParams {
   /** Required. Selects the generation branch. */

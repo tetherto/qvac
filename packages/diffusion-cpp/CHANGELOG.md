@@ -58,13 +58,12 @@ const response = await model.run({
 })
 ```
 
-#### Three video modes: `txt2vid`, `img2vid`, `flf2vid`
+#### Two video modes: `txt2vid`, `img2vid`
 
 `run()` requires an explicit `mode` (no auto-detect):
 
-- `txt2vid` — pure text-to-video; rejects `init_image` / `end_image`.
-- `img2vid` — animate a single first frame; requires `init_image` (PNG/JPEG bytes), rejects `end_image`.
-- `flf2vid` — interpolate between a first and last frame; requires both `init_image` and `end_image` at matching dimensions.
+- `txt2vid` — pure text-to-video; rejects `init_image`.
+- `img2vid` — animate a single first frame; requires `init_image` (PNG/JPEG bytes).
 
 Each mode enforces its own invariants twice — once in the JS wrapper and again in C++ `SdModel::processVideo()` — so misuse fails fast with a typed error instead of crashing native code.
 
@@ -84,7 +83,7 @@ Each mode enforces its own invariants twice — once in the JS wrapper and again
 - `fps` — AVI framerate metadata, `(0, 120]`; default 16.
 - `flow_shift` — flow-matching noise schedule shift. Sentinel `0` (default) falls through to the ctx-level `SdConfig.flow_shift`; pass `> 0` to override per-job. Wan 2.1 T2V 1.3B sweet spot is `3.0` (higher values flatten the motion trajectory).
 - `width` / `height` — multiples of 8, default `480 × 832` (phone-portrait). Wan 2.1 T2V 1.3B handles both portrait and landscape.
-- `strength` — img2vid / flf2vid denoise strength `[0, 1]`.
+- `strength` — img2vid denoise strength `[0, 1]`.
 - `vace_strength` — VACE control-frame guidance strength `[0, 1]`.
 - `control_frames` — optional array of `Uint8Array` PNG/JPEG frames for VACE guidance.
 
@@ -102,8 +101,6 @@ New npm scripts:
 
 - `generate:video` → `examples/generate-video-wan.js`
 - `generate:img2vid` → `examples/img2vid-wan.js`
-- `generate:flf2vid` → `examples/flf2vid-wan.js`
-
 Each example streams progress ticks to stdout as a progress bar and writes a `.avi` to `output/`.
 
 #### Refactored download scripts
@@ -112,9 +109,9 @@ All `scripts/download-model-*.sh` helpers now share a single retry/resume utilit
 
 #### Test coverage
 
-- JS integration: `test/integration/generate-video-wan.test.js` — end-to-end Wan generation across all three modes plus AVI validation.
+- JS integration: `test/integration/generate-video-wan.test.js` — end-to-end Wan generation across both modes plus AVI validation.
 - JS unit: `test/unit/video-validation.test.js` — ~800 lines covering every documented input invariant (mode gating, frame-count law, dimension multiples, image-buffer typing, fps range, MoE param routing).
-- C++ unit: `test_avi_writer.cpp`, `test_sd_ctx_handlers.cpp`, `test_sd_vid_gen_handlers.cpp`, `test_sd_video_frames.cpp`, `test_wan_video.cpp` — AVI muxer corner cases, ctx parser, video-gen parameter parser, frame helpers, full Wan dispatch path including img2vid / flf2vid input validation.
+- C++ unit: `test_avi_writer.cpp`, `test_sd_ctx_handlers.cpp`, `test_sd_vid_gen_handlers.cpp`, `test_sd_video_frames.cpp`, `test_wan_video.cpp` — AVI muxer corner cases, ctx parser, video-gen parameter parser, frame helpers, full Wan dispatch path including img2vid input validation.
 
 ### Changed
 

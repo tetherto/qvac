@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
     config.diffusionModelPath = diffusion_model;
     config.vaePath = vae_model;
     config.t5XxlPath = t5xxl_model;
-    // clipVisionPath is required for Wan 2.1 I2V and FLF2V. It loads
+    // clipVisionPath is required for Wan 2.1 I2V. It loads
     // clip_vision_h.safetensors (OpenCLIP ViT-H/14) at context init and
     // wires it into generate_video() via the init_image conditioning path.
     config.clipVisionPath = clip_vision;

@@ -170,7 +170,6 @@ TEST_F(SdWanValidationTest, UnknownModeFallsThroughToImagePath) {
         << msg;
     EXPECT_EQ(msg.find("txt2vid"), std::string::npos);
     EXPECT_EQ(msg.find("img2vid"), std::string::npos);
-    EXPECT_EQ(msg.find("flf2vid"), std::string::npos);
   }
 }
 
@@ -251,8 +250,8 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
 }
 
 // ---------------------------------------------------------------------------
-// Dimension validation (added in QVAC-18026 follow-up): init_image, end_image,
-// and every control_frames entry must all match the video width/height before
+// Dimension validation (added in QVAC-18026 follow-up): init_image and every
+// control_frames entry must all match the video width/height before
 // we hand pointers to generate_video(), which would otherwise see mismatched
 // stride and either segfault inside the VAE or silently produce garbage.
 // All three checks compare against vid.width / vid.height as the single

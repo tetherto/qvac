@@ -104,8 +104,8 @@ function peekImageDims (buf) {
 }
 
 /**
- * Text-to-video, image-to-video, and first-last-frame video generation
- * using stable-diffusion.cpp's `generate_video()` path. Supports Wan 2.1
+ * Text-to-video and image-to-video generation using stable-diffusion.cpp's
+ * `generate_video()` path. Supports Wan 2.1
  * (single expert) and Wan 2.2 (mixture-of-experts with low- and high-noise
  * denoisers).
  *
@@ -378,7 +378,7 @@ class VideoStableDiffusion {
       }
     }
 
-    // ── init_image / end_image type checks ───────────────────────────────
+    // ── init_image type checks ────────────────────────────────────────────
     // Accept Buffer / Uint8ClampedArray / ArrayBuffer in addition to plain
     // Uint8Array; see _coerceToUint8 above for the contract.
     if (params.init_image != null) {
@@ -412,21 +412,11 @@ class VideoStableDiffusion {
           "txt2vid does not accept init_image. Use mode='img2vid' instead."
         )
       }
-      if (params.end_image != null) {
-        throw new Error(
-          'txt2vid does not accept end_image.'
-        )
-      }
     } else if (mode === 'img2vid') {
       // After coercion above, init_image is either a normalized Uint8Array
       // or null/undefined.
       if (!(params.init_image instanceof Uint8Array)) {
         throw new Error('img2vid requires init_image (Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes).')
-      }
-      if (params.end_image != null) {
-        throw new Error(
-          'img2vid does not accept end_image.'
-        )
       }
     }
 

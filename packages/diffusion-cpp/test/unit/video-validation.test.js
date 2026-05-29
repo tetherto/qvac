@@ -446,7 +446,7 @@ test('run | accepts moe_boundary at the endpoints (0 and 1)', async (t) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────
-//  run(): init_image / end_image
+//  run(): init_image
 // ─────────────────────────────────────────────────────────────────────
 
 test('run | rejects non-Uint8Array init_image', async (t) => {
@@ -489,32 +489,11 @@ test('run | txt2vid rejects init_image', async (t) => {
   )
 })
 
-test('run | txt2vid rejects end_image', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', end_image: FAKE_PNG }),
-    /txt2vid does not accept end_image/
-  )
-})
-
 test('run | img2vid requires init_image', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'img2vid', prompt: 'hi' }),
     /img2vid requires init_image/
-  )
-})
-
-test('run | img2vid rejects end_image', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({
-      mode: 'img2vid',
-      prompt: 'hi',
-      init_image: FAKE_PNG,
-      end_image: FAKE_JPEG
-    }),
-    /img2vid does not accept end_image/
   )
 })
 
