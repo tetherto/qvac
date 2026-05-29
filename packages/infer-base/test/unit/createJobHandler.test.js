@@ -257,6 +257,23 @@ test('createJobHandler - aborted signal does not clobber a newer active response
   t.is(job.active, second, 'late abort on the stale response must not clear the new active')
 })
 
+test('createJobHandler - already-aborted signal clears active once settled', async t => {
+  const job = createJobHandler({ cancel: () => {} })
+  const controller = makeAbortable()
+  controller.abort(new Error('aborted before start'))
+
+  const response = job.start({ signal: controller.signal })
+
+  try {
+    await response.await()
+    t.fail('await should reject')
+  } catch (err) {
+    t.is(err.message, 'aborted before start', 'await rejects with the abort reason')
+  }
+
+  t.is(job.active, null, 'active should be cleared once the already-aborted response settles')
+})
+
 test('createJobHandler - is exported from package root', t => {
   const { createJobHandler: exported } = require('../..')
   t.is(typeof exported, 'function', 'should be exported as a function')

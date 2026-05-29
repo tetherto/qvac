@@ -232,7 +232,11 @@ class QvacResponse extends EventEmitter {
     }
 
     if (signal.aborted) {
-      this.failed(buildError())
+      // Defer to a microtask so callers can attach `onError` listeners and
+      // createJobHandler's bindCleanup can register its cleanup before the
+      // response settles. The `await()` path stays correct either way because
+      // `_finishPromise` rejection is replayable.
+      queueMicrotask(() => this.failed(buildError()))
       return
     }
 

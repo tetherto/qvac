@@ -268,7 +268,7 @@ test('constructor signal — abort after construction fails the response with th
   }
 })
 
-test('constructor signal — already-aborted signal fails synchronously at construction', async t => {
+test('constructor signal — already-aborted signal fails the response with the abort reason', async t => {
   const controller = makeAbortable()
   controller.abort(new Error('precancel'))
   const response = new QvacResponse({
@@ -282,6 +282,24 @@ test('constructor signal — already-aborted signal fails synchronously at const
   } catch (err) {
     t.is(err.message, 'precancel', 'await rejects with the abort reason')
   }
+})
+
+test('constructor signal — already-aborted signal fires onError listeners attached after construction', async t => {
+  const controller = makeAbortable()
+  controller.abort(new Error('precancel'))
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    signal: controller.signal
+  })
+
+  // Settlement is deferred to a microtask so a listener attached here still fires.
+  let received = null
+  response.onError(err => { received = err })
+
+  await response.await().catch(() => {})
+
+  t.ok(received instanceof Error, 'error listener fired')
+  t.is(received.message, 'precancel', 'error listener received the abort reason')
 })
 
 test('constructor signal — non-Error abort reason is wrapped in a default Error', async t => {
