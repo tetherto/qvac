@@ -60,7 +60,7 @@ const WAN_I2V_FILES = [
   {
     key: 'model',
     name: 'wan2.1-i2v-14b-480p-Q4_K_M.gguf',
-    url: 'https://huggingface.co/bartowski/wan2.1-i2v-14b-480p-GGUF/resolve/main/wan2.1-i2v-14b-480p-Q4_K_M.gguf'
+    url: 'https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_M.gguf'
   },
   {
     key: 'vae',
