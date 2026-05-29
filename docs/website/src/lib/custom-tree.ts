@@ -74,9 +74,16 @@ export const customTree: Node[] = [
     children: [
       {
         name: 'HTTP server',
-        url: '/cli/http-server',
-        type: 'page',
+        type: 'folder',
+        index: { type: 'page', name: 'HTTP server', url: '/cli/http-server' },
         icon: resolveIcon('Server'),
+        children: [
+          {
+            name: 'Integration',
+            url: '/cli/http-server/integration',
+            type: 'page',
+          },
+        ],
       },
     ],
   },

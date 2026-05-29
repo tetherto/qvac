@@ -43,6 +43,7 @@ export const SDK_SERVER_ERROR_CODES = {
   REQUEST_NOT_FOUND: 52418,
   INFERENCE_CANCELLED: 52419,
   REQUEST_REJECTED_BY_POLICY: 52420,
+  CONTEXT_OVERFLOW: 52421,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -319,6 +320,15 @@ const serverErrorDefinitions: ErrorCodesMap = {
       reason: string,
     ) =>
       `Request "${requestId}" (kind: ${kind}, modelId: ${modelId}) was rejected by registry concurrency policy: ${reason}`,
+  },
+  [SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW]: {
+    name: "CONTEXT_OVERFLOW",
+    message: (promptTokens: string, ctxSize: string, modelId: string) => {
+      const prompt = promptTokens ? `${promptTokens} prompt tokens` : "prompt";
+      const ctx = ctxSize ? ` exceeds the ${ctxSize}-token context window` : " exceeds the model's context window";
+      const model = modelId ? ` for model "${modelId}"` : "";
+      return `${prompt}${ctx}${model}. Reduce the prompt size or start a new conversation.`;
+    },
   },
 
   // RAG Operations (52,800-52,999)
