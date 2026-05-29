@@ -7,7 +7,7 @@ const process = require('bare-process')
 
 const TRANSIENT_ERROR_CODES = new Set([
   'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE', 'ENOENT'
 ])
 
 function isTransientError (err) {
