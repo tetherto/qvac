@@ -84,6 +84,8 @@ safeTest('bitnet model can run simple inference', { timeout: 900_000, skip: !isA
     ctx_size: '1024',
     device: 'gpu',
     n_predict: '32',
+    temp: '0',
+    seed: '42',
     verbosity: '2'
   }
 
