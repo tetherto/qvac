@@ -3,9 +3,9 @@
 # every other page `/foo/bar/` maps to `/foo/bar.md`. We need both the
 # trailing-slash and no-slash variants so the `:splat` placeholder doesn't
 # produce `/foo/.md`.
-/                  /index.md       301!   Header:Accept=text/markdown
-/:slug/            /:slug.md       301!   Header:Accept=text/markdown
-/:slug             /:slug.md       301!   Header:Accept=text/markdown
+/                  /index.md       200!   Header:Accept=text/markdown
+/:slug/            /:slug.md       200!   Header:Accept=text/markdown
+/:slug             /:slug.md       200!   Header:Accept=text/markdown
 # /*/              /:splat.md      301!   Header:Accept=text/markdown
 # /*               /:splat.md      301!   Header:Accept=text/markdown
 
