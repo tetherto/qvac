@@ -478,6 +478,32 @@ const SUPERTONIC_MTL_GGUFS = [
   }
 ]
 
+// Compiled MeCab + IPAdic dictionary for Japanese ("ja") morphological
+// segmentation inside the multilingual Chatterbox engine.  tts-cpp reads
+// this directory via EngineOptions::mecab_dict_path; without it kanji
+// degrade to [UNK] (hallucinated audio).  The six files are the standard
+// `mecab-dict-index` output and are byte-identical across all target
+// platforms (same endianness), so one published copy works everywhere.
+//
+// S3: bucket tether-ai-dev, region eu-central-1,
+//     prefix qvac_models_compiled/chatterbox/mecab-ipadic/
+// minSize values are loose truncation guards (a couple of the files are
+// only a few hundred bytes); MeCab itself rejects a malformed dictionary
+// at init.
+const MECAB_IPADIC_DIRNAME = 'mecab-ipadic'
+const MECAB_IPADIC_FILES = [
+  { name: 'char.bin', minSize: 100_000 },
+  { name: 'dicrc', minSize: 100 },
+  { name: 'matrix.bin', minSize: 1_000_000 },
+  { name: 'mecabrc', minSize: 50 },
+  { name: 'sys.dic', minSize: 10_000_000 },
+  { name: 'unk.dic', minSize: 1_000 }
+].map((f) => ({
+  ...f,
+  registryPath: `qvac_models_compiled/chatterbox/${MECAB_IPADIC_DIRNAME}/${f.name}`,
+  registrySource: REGISTRY_SOURCE
+}))
+
 /** Directories searched on Android (in order) when the caller-supplied
  *  `targetDir` doesn't already have both GGUFs.  All of these are
  *  `adb push`-friendly locations on a standard (non-rooted) device. */
@@ -769,11 +795,62 @@ async function ensureSupertonicMtlModel (options = {}) {
   return { success: false, path: null, targetDir: requestedDir }
 }
 
+/**
+ * Ensure the compiled MeCab/IPAdic dictionary is staged in a directory
+ * the native addon can read, and return that directory.  Mirrors the
+ * `ensureChatterbox*` helpers: prefer an already-staged local copy,
+ * otherwise fetch the six files from the QVAC model registry (S3).
+ *
+ * Pass the returned `dir` to the TTSGgml constructor as
+ * `files: { mecabDictDir: dir }` (or top-level `mecabDictPath`) so it
+ * reaches tts-cpp's EngineOptions::mecab_dict_path.  Japanese ("ja")
+ * synthesis needs it; other languages ignore it.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - where to stage / look for the dict.
+ * @returns {Promise<{ success: boolean, dir: string }>}
+ */
+async function ensureMecabDict (options = {}) {
+  const targetDir = options.targetDir ||
+    path.join(getBaseDir(), 'models', MECAB_IPADIC_DIRNAME)
+  console.log(`Ensuring MeCab/IPAdic dictionary (dir: ${targetDir})...`)
+
+  const candidateDirs = [targetDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      const md = path.join(d, MECAB_IPADIC_DIRNAME)
+      if (!candidateDirs.includes(md)) candidateDirs.push(md)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      const md = path.join(d, MECAB_IPADIC_DIRNAME)
+      if (!candidateDirs.includes(md)) candidateDirs.push(md)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, MECAB_IPADIC_FILES)) {
+      console.log(` ✓ using MeCab dictionary at ${dir}`)
+      return { success: true, dir }
+    }
+  }
+
+  if (await tryFetchGgufsFromRegistry(MECAB_IPADIC_FILES, targetDir)) {
+    return { success: true, dir: targetDir }
+  }
+
+  console.log(' MeCab/IPAdic dictionary not found locally and registry fetch failed.')
+  console.log(` Expected these files under ${targetDir}:`)
+  for (const f of MECAB_IPADIC_FILES) console.log(`   ${f.name}`)
+  return { success: false, dir: targetDir }
+}
+
 module.exports = {
   ensureFileDownloaded,
   ensureWhisperModel,
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
-  ensureSupertonicMtlModel
+  ensureSupertonicMtlModel,
+  ensureMecabDict
 }
