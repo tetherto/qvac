@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.12.x (latest)
+title: API Summary — v0.11.x
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,7 +12,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 45 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 39 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -59,30 +59,6 @@ await cancel({ requestId: run.requestId });
 ```ts
 // Broad-cancel every inference running on a model
 await cancel({ modelId: "model-123", kind: "completion" });
-```
-
----
-
-### `classify`
-
-Classifies an image using a loaded classification model.
-
-The bundled MobileNetV3-Small model produces 3 labels: `"food"`, `"report"`, `"other"`.
-Custom models may emit different labels sourced from the GGUF metadata.
-
-**Signature**:
-
-```ts
-function classify(params: ClassifyClientParams): Promise<ClassificationResult[]>;
-```
-
-**Example**:
-```ts
-const modelId = await loadModel({ modelType: "ggml-classification" });
-const jpeg = fs.readFileSync("photo.jpg");
-const results = await classify({ modelId, image: jpeg });
-// [ { label: "food", confidence: 0.93 }, { label: "other", confidence: 0.05 }, ... ]
-await unloadModel({ modelId });
 ```
 
 ---
@@ -396,7 +372,7 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
 ```
 
 **Throws**:
@@ -1258,7 +1234,7 @@ removed in the next major version.
 Streaming transcription with upfront audio: sends full audio, yields text
 chunks as they arrive.
 
-Has 6 overloads.
+Has 5 overloads.
 
 #### Overload 1 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
@@ -1310,23 +1286,10 @@ chunks as they arrive.
 **Signature**:
 
 ```ts
-function transcribeStream(params: TranscribeStreamClientParams & { parakeetStreamingConfig: { chunkLeftContextMs?: number; chunkMs?: number; chunkRightContextMs?: number; emitEnergyVad?: boolean; emitPartials?: boolean; fifoLen?: number; historyMs?: number; leftContextMs?: number; rightLookaheadMs?: number; spkCacheEnable?: boolean; spkCacheLen?: number; spkCacheUpdatePeriod?: number } }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
-```
-
-#### Overload 5 — Upfront audio (deprecated)
-> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
-removed in the next major version.
-
-Streaming transcription with upfront audio: sends full audio, yields text
-chunks as they arrive.
-
-**Signature**:
-
-```ts
 function transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
 ```
 
-#### Overload 6 — Upfront audio (deprecated)
+#### Overload 5 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
 removed in the next major version.
 
@@ -1450,136 +1413,6 @@ console.log(await stats);
 
 ---
 
-### `video`
-
-Generates a video using a loaded video diffusion model.
-
-**Signature**:
-
-```ts
-function video(params: VideoClientParams): VideoResult;
-```
-
-**Example**:
-```ts
-// Basic txt2vid generation
-const { outputs, stats } = video({
-  modelId,
-  mode: "txt2vid",
-  prompt: "a cat surfing a wave at sunset",
-  width: 480,
-  height: 832,
-  video_frames: 17, // must satisfy (4*k + 1)
-  fps: 16,
-});
-const buffers = await outputs;
-fs.writeFileSync("output.avi", buffers[0]);
-
-// With progress tracking
-const { progressStream, outputs } = video({
-  modelId,
-  mode: "txt2vid",
-  prompt: "a sunset over the ocean",
-});
-for await (const { step, totalSteps } of progressStream) {
-  console.log(`${step}/${totalSteps}`);
-}
-const buffers = await outputs;
-
-// With control frames (e.g. for guided generation)
-const frameA = fs.readFileSync("frame-a.png");
-const frameB = fs.readFileSync("frame-b.png");
-const { outputs } = video({
-  modelId,
-  mode: "txt2vid",
-  prompt: "smooth transition between scenes",
-  control_frames: [frameA, frameB],
-});
-
-// Cancellation via requestId
-const { requestId, outputs } = video({ modelId, mode: "txt2vid", prompt: "..." });
-// ...later
-await cancel(requestId);
-```
-
----
-
-### `vla`
-
-Run SmolVLA inference on a loaded VLA model and return the produced action
-chunk plus per-stage timings.
-
-**Signature**:
-
-```ts
-function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;
-```
-
-**Example**:
-```ts
-import { loadModel, vla, vlaPreprocessImage, vlaPadState, vlaHparams } from "@qvac/sdk";
-
-const modelId = await loadModel({ modelSrc: "/path/to/smolvla.gguf", modelType: "vla" });
-const { hparams } = await vlaHparams({ modelId });
-const size = hparams.visionImageSize;
-const front = vlaPreprocessImage(frontPixels, frontW, frontH, { size });
-const wrist = vlaPreprocessImage(wristPixels, wristW, wristH, { size });
-const state = vlaPadState(robotState, hparams.maxStateDim);
-const tokens = new Int32Array(hparams.tokenizerMaxLength);
-const mask = new Uint8Array(hparams.tokenizerMaxLength);
-// ...tokenize the instruction into tokens/mask...
-const { actions } = await vla({
-  modelId, images: [front, wrist], imgWidth: size, imgHeight: size,
-  state, tokens, mask,
-});
-```
-
----
-
-### `vlaHparams`
-
-Fetch the loaded VLA model's hyperparameters and the active ggml backend
-name. Useful to size token / state / noise buffers before calling `vla()`.
-
-**Signature**:
-
-```ts
-function vlaHparams(params: { modelId: string }): Promise<{ hparams: VlaHparams; backendName: string | null }>;
-```
-
----
-
-### `vlaPadState`
-
-Zero-pad a state vector to `targetDim`. Extra entries are zero-initialised;
-input longer than `targetDim` raises. Mirrors how smolvla.cpp expects the
-state tensor (`max_state_dim` = 32 by default).
-
-**Signature**:
-
-```ts
-function vlaPadState(state: ArrayLike<number>, targetDim: number): Float32Array;
-```
-
----
-
-### `vlaPreprocessImage`
-
-Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32
-in `[-1, 1]`. Drop-in equivalent of `@qvac/vla-ggml`'s `preprocessImage`.
-
-Letterbox places the resized content at the **bottom-right** with padding
-at top/left (`padLeft = size - newW`, `padTop = size - newH`), matching
-the reference smolvla.cpp behavior.
-
-**Signature**:
-
-```ts
-function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, opts: VlaPreprocessImageOptions): Float32Array;
-```
-
----
-
 ## Objects
 
 ### `profiler`
@@ -1645,7 +1478,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided |
 | `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema: … |
 | `OCR_FAILED` | 50007 | OCR operation failed… |
-| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
+| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "onnx-tts", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
 | `MODEL_SRC_TYPE_MISMATCH` | 50009 | modelSrc describes "…", but modelType resolves to "…". Omit modelType to infer it automatically, or pass a matching modelType. |
 | `RPC_NO_HANDLER` | 50200 | No handler function registered for request type: … |
 | `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
@@ -1665,12 +1498,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed: … |
 | `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered. Pear apps must spawn … as the worker entry. Run \\ |
 | `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found: …. Remove all but one to avoid conflicts. |
-| `WORKER_PLUGINS_NOT_REGISTERED` | 50608 | plugins([...]) |
 | `BUNDLE_VERIFICATION_FAILED` | 50609 | qvac verify bundle reported error-level issues for …. See the CLI output above for the failing addons/hosts; resolve them before shipping. |
-| `BARE_PACK_NOT_INSTALLED` | 50610 | bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack |
-| `BARE_PACK_ERROR` | 50611 | bare-pack exited with code …\\n\\n Entry file: …\\n Output file: …\\n\\n Run bare-pack manually for more details. |
-| `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
-| `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
 | `PROFILER_INVALID_CAPACITY` | 50800 | Ring buffer capacity must be at least … |
 
 ### Server errors
@@ -1688,10 +1516,10 @@ and read `error.code` / `error.cause`. Code ranges:
 | `MODEL_FILE_LOCATE_FAILED` | 52203 | Failed to locate … model file: … |
 | `PROJECTION_MODEL_REQUIRED` | 52204 | Projection model source is required for multimodal LLM models |
 | `VAD_MODEL_REQUIRED` | 52205 | VAD model source is required for this configuration |
-| `TTS_ARTIFACTS_REQUIRED` | 52208 | TTS (Chatterbox) requires s3genModelSrc in modelConfig (companion S3Gen GGUF) and the primary T3 GGUF via modelSrc |
+| `TTS_ARTIFACTS_REQUIRED` | 52208 | TTS (Chatterbox) requires `s3genModelSrc` in `modelConfig` (companion S3Gen GGUF) and the primary T3 GGUF via `modelSrc` |
 | `TTS_REFERENCE_AUDIO_REQUIRED` | 52209 | TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning) |
-| `LEGACY_PARAKEET_MODEL_DEPRECATED` | 52210 | Legacy parakeet ONNX modelConfig fields are no longer supported (…). As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level modelSrc (e.g. loadModel(\{ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" \})). |
-| `LEGACY_TTS_MODEL_DEPRECATED` | 52211 | Legacy ONNX TTS modelConfig fields are no longer supported (…). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel(\{ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: \{ ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX \} \})). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual. |
+| `LEGACY_PARAKEET_MODEL_DEPRECATED` | 52210 | Legacy parakeet ONNX modelConfig fields are no longer supported. As of `@qvac/transcription-parakeet` 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level `modelSrc` (e.g. `loadModel({ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" })`). |
+| `LEGACY_TTS_MODEL_DEPRECATED` | 52211 | Legacy ONNX TTS `modelConfig` fields are no longer supported. As of `@qvac/tts-ggml` use GGUF bundles: primary GGUF via `modelSrc`, `language` in `modelConfig`, and for Chatterbox add `s3genModelSrc` (e.g. `loadModel({ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: { ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX } })`). Supertonic multilingual mode is selected by the GGUF plus `language`. |
 | `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model… |
 | `EMBED_FAILED` | 52401 | Failed to generate embeddings… |
 | `EMBED_NO_EMBEDDINGS` | 52402 | No embeddings returned from model |
@@ -1713,7 +1541,6 @@ and read `error.code` / `error.cause`. Code ranges:
 | `REQUEST_NOT_FOUND` | 52418 | No in-flight request with id "…" |
 | `INFERENCE_CANCELLED` | 52419 | Inference request "…" was cancelled before it could complete |
 | `REQUEST_REJECTED_BY_POLICY` | 52420 | Request "…" (kind: …, modelId: …) was rejected by registry concurrency policy: … |
-| `CONTEXT_OVERFLOW` | 52421 | … prompt tokens |
 | `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
 | `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
 | `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |
