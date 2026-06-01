@@ -13,7 +13,11 @@ import { fileURLToPath } from "node:url";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
-import { RPCInitTimeoutError } from "@/utils/errors-client";
+import {
+  RPCInitTimeoutError,
+  WorkerCrashedError,
+  WorkerShutdownError,
+} from "@/utils/errors-client";
 import type { RuntimeContext } from "@/schemas";
 
 const RPC_INIT_TIMEOUT_MS = 30_000;
@@ -26,6 +30,14 @@ let bareWorkerProc: BareChildProcess | null = null;
 let ipcServer: ReturnType<typeof createServer> | null = null;
 let currentSocketPath: string | null = null;
 let closePromise: Promise<void> | null = null;
+// Aborted when the bare worker goes away — either crash
+// (WorkerCrashedError) or planned shutdown (WorkerShutdownError).
+// rpc-client races each in-flight reply against this signal. Without it,
+// bare-rpc leaves pending `req.reply()` promises unrejected when the
+// socket dies (its `_onerror` does not iterate `_outgoingRequests`), and
+// callers hang. The exit handler distinguishes the two cases by
+// inspecting whether close() pre-aborted the controller.
+let workerLifeController: AbortController | null = null;
 
 /**
  * Find project root by looking for package.json (sync version)
@@ -178,11 +190,60 @@ function snapshotAndResetState() {
   bareWorkerProc = null;
   ipcServer = null;
   currentSocketPath = null;
+  workerLifeController = null;
 
   return { workerToClose, serverToClose, socketPathToClose };
 }
 
+export function getWorkerLifeSignal(): AbortSignal | null {
+  return workerLifeController?.signal ?? null;
+}
+
+function teardownIPCResources(): { socketPathToClose: string | null } {
+  const { serverToClose, socketPathToClose } = snapshotAndResetState();
+  if (serverToClose) {
+    try {
+      serverToClose.close();
+    } catch (err) {
+      logger.debug("Failed to close IPC server after worker exit", { err });
+    }
+  }
+  return { socketPathToClose };
+}
+
+function handlePostHandshakeExit(
+  code: number | null,
+  exitSignal: NodeJS.Signals | null,
+  controller: AbortController,
+): void {
+  // `controller` is captured at spawn time, so it survives
+  // `snapshotAndResetState` clearing the module-level `workerLifeController`.
+  // If close() pre-aborted it, this is a planned shutdown.
+  if (controller.signal.aborted) {
+    logger.debug(
+      `Bare worker exited after planned shutdown (code=${code}, signal=${exitSignal})`,
+    );
+    const { socketPathToClose } = teardownIPCResources();
+    bestEffortUnlinkSocket(socketPathToClose);
+    return;
+  }
+
+  logger.info(
+    `🪦 Bare worker exited post-handshake (code=${code}, signal=${exitSignal})`,
+  );
+  // Teardown before abort so a re-entrant ensureRPC() from an abort
+  // listener sees a clean slate and respawns.
+  const { socketPathToClose } = teardownIPCResources();
+  controller.abort(new WorkerCrashedError(code, exitSignal));
+  bestEffortUnlinkSocket(socketPathToClose);
+}
+
 function closeSyncForExit() {
+  // Abort first so the exit handler observes planned intent (via the
+  // controller's aborted state, which survives state-reset because the
+  // handler closure holds a direct reference).
+  workerLifeController?.abort(new WorkerShutdownError());
+
   const { workerToClose, serverToClose, socketPathToClose } =
     snapshotAndResetState();
 
@@ -215,6 +276,11 @@ async function ensureRPC(): Promise<RPC> {
   const socketPath = createSocketPath();
   currentSocketPath = socketPath;
 
+  // Allocated up here so the initializeConfig race and the exit-handler
+  // closure both reference the same controller.
+  const spawnController = new AbortController();
+  workerLifeController = spawnController;
+
   rpcPromise = new Promise((resolve, reject) => {
     let settled = false;
 
@@ -226,6 +292,7 @@ async function ensureRPC(): Promise<RPC> {
       bareWorkerProc = null;
       ipcServer = null;
       currentSocketPath = null;
+      workerLifeController = null;
       reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS));
     }, RPC_INIT_TIMEOUT_MS);
 
@@ -249,6 +316,7 @@ async function ensureRPC(): Promise<RPC> {
       bareWorkerProc = null;
       ipcServer = null;
       currentSocketPath = null;
+      workerLifeController = null;
       reject(error);
     });
 
@@ -268,24 +336,36 @@ async function ensureRPC(): Promise<RPC> {
       });
 
       if (bareWorkerProc) {
-        bareWorkerProc.on("exit", (code: number | null) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          rpcPromise = null;
-          rpcInstance = null;
-          bareWorkerProc = null;
-          ipcServer = null;
-          currentSocketPath = null;
-          reject(
-            new RPCInitTimeoutError(
-              RPC_INIT_TIMEOUT_MS,
-              new Error(
-                `Worker process exited with code ${code} before IPC connection was established`,
+        bareWorkerProc.on(
+          "exit",
+          (code: number | null, exitSignal: string | null) => {
+            if (settled) {
+              handlePostHandshakeExit(
+                code,
+                exitSignal as NodeJS.Signals | null,
+                spawnController,
+              );
+              return;
+            }
+            // Worker died before handshake — reject the init promise.
+            settled = true;
+            clearTimeout(timer);
+            rpcPromise = null;
+            rpcInstance = null;
+            bareWorkerProc = null;
+            ipcServer = null;
+            currentSocketPath = null;
+            workerLifeController = null;
+            reject(
+              new RPCInitTimeoutError(
+                RPC_INIT_TIMEOUT_MS,
+                new Error(
+                  `Worker process exited with code ${code} before IPC connection was established`,
+                ),
               ),
-            ),
-          );
-        });
+            );
+          },
+        );
       }
     });
   });
@@ -296,9 +376,31 @@ async function ensureRPC(): Promise<RPC> {
     runtime: "node",
     platform: process.platform as "darwin" | "linux" | "win32",
   };
-  await initializeConfig(rpc, resolveConfig, runtimeContext);
+
+  // initializeConfig uses bare-rpc directly (init-hooks.ts) and bypasses
+  // rpc-client's life-signal race; do the race here instead.
+  await Promise.race([
+    initializeConfig(rpc, resolveConfig, runtimeContext),
+    rejectOnAbort(spawnController.signal),
+  ]);
 
   return rpc;
+}
+
+function rejectOnAbort(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    const fail = () =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new WorkerCrashedError(null, null),
+      );
+    if (signal.aborted) {
+      fail();
+      return;
+    }
+    signal.addEventListener("abort", fail, { once: true });
+  });
 }
 
 export async function getRPC() {
@@ -311,6 +413,26 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const requestStream = req.createRequestStream();
   const responseStream = req.createResponseStream({ encoding: "utf-8" });
   requestStream.write(payload, "utf-8");
+
+  // Destroy both streams when the worker dies so consumers' for-await
+  // loops throw the abort reason instead of hanging on dead reads.
+  const lifeSignal = workerLifeController?.signal;
+  if (lifeSignal && !lifeSignal.aborted) {
+    const onAbort = () => {
+      const err =
+        lifeSignal.reason instanceof Error
+          ? lifeSignal.reason
+          : new WorkerCrashedError(null, null);
+      try {
+        (requestStream as { destroy?: (err?: Error) => void }).destroy?.(err);
+      } catch {}
+      try {
+        (responseStream as { destroy?: (err?: Error) => void }).destroy?.(err);
+      } catch {}
+    };
+    lifeSignal.addEventListener("abort", onAbort, { once: true });
+  }
+
   return { requestStream, responseStream };
 }
 
@@ -323,6 +445,12 @@ export async function close() {
   if (!rpcInstance && !rpcPromise && !bareWorkerProc && !ipcServer) return;
 
   logger.info("🧹 Closing RPC client");
+
+  // Abort first so the exit handler observes planned intent. Any
+  // in-flight caller (contract violators) rejects with
+  // WorkerShutdownError instead of hanging forever; if no callers are
+  // listening, this is a no-op.
+  workerLifeController?.abort(new WorkerShutdownError());
 
   const { workerToClose, serverToClose, socketPathToClose } =
     snapshotAndResetState();
