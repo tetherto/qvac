@@ -73,7 +73,7 @@ jobs:
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@80fdb7885fd371bef24dc3bb4d15b60957980e75
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@6e8d3c306a462a58589396cda428d65e015f0d8b
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:

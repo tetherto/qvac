@@ -88,7 +88,7 @@ jobs:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
-        if: ${{ !startsWith(matrix.runner, 'ubuntu-') && !startsWith(matrix.runner, 'macos-') && !startsWith(matrix.runner, 'windows-') }}
+        if: runner.environment != 'github-hosted'
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -287,24 +287,6 @@ jobs:
           OBJC
           clang -x objective-c -framework Metal -framework Foundation \
                 -o /tmp/metal_check /tmp/metal_check.m 2>/dev/null && /tmp/metal_check || echo "(Metal check failed to compile/run)"
-
-      - name: Debug - Show environment and test configuration
-        if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          echo "=== Integration Test Configuration ==="
-          echo "Platform: ${{ matrix.platform }}"
-          echo "Arch: ${{ matrix.arch }}"
-          echo "NO_GPU: ${NO_GPU}"
-          echo "WAN_DEVICE: ${WAN_DEVICE}"
-          echo ""
-          echo "=== Expected Skip Behavior ==="
-          if [ "${NO_GPU}" = "true" ]; then
-            echo "✓ NO_GPU is true → Wan tests SHOULD be skipped"
-          else
-            echo "✗ NO_GPU is false → Wan tests WILL run"
-          fi
-        shell: bash
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
