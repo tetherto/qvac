@@ -1,21 +1,13 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
-import { writeStreamingResponse } from '../src/serve/adapters/openai/routes/responses.js'
-import type { ResponsesHandlerParams } from '../src/serve/adapters/openai/routes/responses.js'
+import { writeStreamingResponse } from '../src/serve/adapters/openai/response-writers.js'
+import type { ResponsesHandlerParams, ResponseWriterContext } from '../src/serve/adapters/openai/response-writers.js'
 import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
-import type { RouteContext } from '../src/serve/adapters/types.js'
 
-function minimalRouteContext (): RouteContext {
+function minimalRouteContext (): ResponseWriterContext {
   return {
-    registry: {} as RouteContext['registry'],
-    serveConfig: {} as RouteContext['serveConfig'],
-    logger: {
-      info: (): void => {},
-      warn: (): void => {},
-      error: (): void => {},
-      debug: (): void => {}
-    },
+    logger: { info: (): void => {} },
     responsesStore: {
       put: (): void => {},
       get: (): undefined => undefined,
@@ -23,7 +15,7 @@ function minimalRouteContext (): RouteContext {
       listInputItems: (): null => null,
       size: (): number => 0,
       bannerLine: (): string => ''
-    }
+    } as ResponseWriterContext['responsesStore']
   }
 }
 

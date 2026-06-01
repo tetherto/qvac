@@ -47,7 +47,6 @@ export const API_SECTION: VersionedSection = {
     { label: 'v0.10.x', value: 'v0.10.x' },
     { label: 'v0.9.x', value: 'v0.9.x' },
     { label: 'v0.8.x', value: 'v0.8.x' },
-    { label: 'v0.7.x', value: 'v0.7.x' },
   ],
 };
 
@@ -60,7 +59,6 @@ export const RELEASE_NOTES_SECTION: VersionedSection = {
     { label: 'v0.10.x', value: 'v0.10.x' },
     { label: 'v0.9.x', value: 'v0.9.x' },
     { label: 'v0.8.x', value: 'v0.8.x' },
-    { label: 'v0.7.x', value: 'v0.7.x' },
   ],
 };
 
