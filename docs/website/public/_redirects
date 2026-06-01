@@ -138,8 +138,21 @@
 # Sevalla serves /404.html automatically for unresolved paths, but with
 # HTTP 200, which breaks SEO, link checkers, analytics and HTTP clients.
 # This explicit rule forces a real `404 Not Found` status while still
-# rendering the same /404.html body. Only reached when no static file and
-# no rule above matches.
+# rendering the same /404.html body. Reached in two distinct cases:
+#
+#   1. No static file matches the request AND no earlier rule matches.
+#   2. An earlier `200` rewrite points at a target that doesn't exist
+#      (e.g. `/reference/api/notaversion/` → rewrite to
+#      `/reference/api/notaversion/index.html` which isn't built).
+#      Sevalla's pipeline continues evaluating rules in this case, and
+#      this catch-all gives those orphaned rewrites a clean 404 instead
+#      of falling back to Sevalla's soft-200 default.
+#
+# Known edge case (intentionally not fixed): a direct request to
+# `/404.html` returns 200 because Sevalla's static-file resolution runs
+# before `_redirects` and serves the file as-is, bypassing this rule.
+# `/404.html` is not in the sitemap, not linked from any page, and not
+# referenced in any external surface; practical traffic to it is zero.
 # ======================================================================
 
 /*   /404.html   404
