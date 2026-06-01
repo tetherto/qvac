@@ -145,13 +145,11 @@ const SMOKE_FPS = 16
 const SMOKE_SEED = 7
 const SMOKE_PROMPT = 'a red fox running through snow at dusk'
 
-// I2V smoke-test configuration.  2 denoising steps at 480×272 is the
-// smallest valid (all dims multiples of 16) resolution for Wan I2V 14B and
-// keeps wall-clock comfortably under 5 minutes on a GPU runner.
+// I2V smoke-test configuration.  2 denoising steps at 512×512 (the init_image
+// resolution, which will be inferred from the image header when width/height
+// are omitted) keeps wall-clock comfortably under 5 minutes on a GPU runner.
 const I2V_SMOKE_FRAMES = 5
 const I2V_SMOKE_STEPS = 2
-const I2V_SMOKE_WIDTH = 480
-const I2V_SMOKE_HEIGHT = 272
 const I2V_SMOKE_FPS = 16
 const I2V_SMOKE_SEED = 42
 const I2V_SMOKE_PROMPT = 'a scientist walking through a sunlit laboratory'
@@ -336,7 +334,7 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
     console.log('='.repeat(60))
     console.log(` Platform   : ${platform}`)
     console.log(` Frames     : ${I2V_SMOKE_FRAMES} @ ${I2V_SMOKE_FPS}fps`)
-    console.log(` Size       : ${I2V_SMOKE_WIDTH}x${I2V_SMOKE_HEIGHT}`)
+    console.log(` Size       : inferred from init_image (512x512)`)
     console.log(` Steps      : ${I2V_SMOKE_STEPS}`)
     console.log(` Seed       : ${I2V_SMOKE_SEED}`)
     console.log(` Init image : ${I2V_INIT_IMAGE_PATH}`)
@@ -407,8 +405,6 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
         mode: 'img2vid',
         prompt: I2V_SMOKE_PROMPT,
         init_image: initImage,
-        width: I2V_SMOKE_WIDTH,
-        height: I2V_SMOKE_HEIGHT,
         video_frames: I2V_SMOKE_FRAMES,
         fps: I2V_SMOKE_FPS,
         steps: I2V_SMOKE_STEPS,
