@@ -223,11 +223,17 @@ class VlaModel {
 
   get backendName () { return this._backendName }
 
-  async run (input) {
-    return this._run(() => this._runInternal(input))
+  /**
+   * @param {Object} input - VLA inference input (images, state, tokens, mask, …).
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
+   * @returns {Promise<QvacResponse>}
+   */
+  async run (input, runOptions = {}) {
+    return this._run(() => this._runInternal(input, runOptions))
   }
 
-  async _runInternal (input) {
+  async _runInternal (input, runOptions = {}) {
     if (!this._handle) {
       throw new QvacErrorAddonVla({ code: ERR_CODES.INSTANCE_NOT_INITIALIZED })
     }
@@ -239,7 +245,7 @@ class VlaModel {
 
     this.logger.info('Starting inference')
 
-    const response = this._job.start()
+    const response = this._job.start({ signal: runOptions && runOptions.signal })
     // Per-job accumulator. Two events flow through _onAddonEvent: the
     // Float32Array action chunk lands first, then the RuntimeStats object —
     // we resolve the response only when both have arrived.

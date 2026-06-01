@@ -240,13 +240,15 @@ class ImgStableDiffusion {
    *                                                   conditioning. Addressed in the prompt as
    *                                                   `@image1 … @imageN`. Mutually exclusive
    *                                                   with `init_image`.
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
-  async run (params) {
-    return this._run(() => this._runInternal(params))
+  async run (params, runOptions = {}) {
+    return this._run(() => this._runInternal(params, runOptions))
   }
 
-  async _runInternal (params) {
+  async _runInternal (params, runOptions = {}) {
     // Validate inputs first so callers get precise errors before any
     // readiness/busy checks.
 
@@ -447,8 +449,9 @@ class ImgStableDiffusion {
     }
 
     const runParams = applyFluxImg2ImgDimDefaults(params, pred, hasInitImages)
+    const signal = runOptions && runOptions.signal
 
-    const response = this._job.start()
+    const response = this._job.start({ signal })
 
     let accepted
     try {
@@ -614,6 +617,7 @@ class EsrganUpscaler {
    * @param {Uint8Array} imageBytes - Encoded PNG/JPEG input image bytes
    * @param {object} [options]
    * @param {number} [options.repeats=1] - Number of ESRGAN passes
+   * @param {AbortSignal} [options.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
   async upscale (imageBytes, options) {
@@ -635,7 +639,7 @@ class EsrganUpscaler {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
-    const response = this._job.start()
+    const response = this._job.start({ signal: options && options.signal })
 
     let accepted
     try {

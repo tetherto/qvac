@@ -404,8 +404,11 @@ class TTSGgml {
    * @param {boolean} [input.streamOutput=false] - Chunked streaming output
    * @param {string} [input.locale] - BCP-47 locale for chunking when `streamOutput`
    * @param {number} [input.maxChunkScalars] - Max graphemes per chunk when `streamOutput`
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    */
-  async run (input) {
+  async run (input, runOptions = {}) {
+    const signal = runOptions && runOptions.signal
     if (input && typeof input === 'object' && input.streamOutput === true) {
       if (typeof input.input !== 'string' || input.input.trim().length === 0) {
         throw new QvacErrorAddonTTSGgml({
@@ -415,7 +418,8 @@ class TTSGgml {
       }
       const streamOpts = {
         locale: input.locale,
-        maxChunkScalars: input.maxChunkScalars
+        maxChunkScalars: input.maxChunkScalars,
+        signal
       }
       if (this.exclusiveRun) {
         return await this._enqueueExclusiveTtsResponse(() =>
@@ -424,7 +428,7 @@ class TTSGgml {
       }
       return this._runStreamOrchestrator(input.input, streamOpts)
     }
-    return this._runExclusive(() => this._runInternal(input))
+    return this._runExclusive(() => this._runInternal(input, signal))
   }
 
   /**
@@ -454,7 +458,7 @@ class TTSGgml {
    * Equivalent to `run({ input: text, streamOutput: true, ...options })`.
    *
    * @param {string} text
-   * @param {{ locale?: string, maxChunkScalars?: number }} [options]
+   * @param {{ locale?: string, maxChunkScalars?: number, signal?: AbortSignal }} [options]
    */
   async runStream (text, options = {}) {
     const opts = options == null || typeof options !== 'object' ? {} : options
@@ -463,7 +467,7 @@ class TTSGgml {
       streamOutput: true,
       locale: opts.locale,
       maxChunkScalars: opts.maxChunkScalars
-    })
+    }, { signal: opts.signal })
   }
 
   /**
@@ -499,10 +503,10 @@ class TTSGgml {
     }
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveTtsResponse(() =>
-        this._runTextStreamOrchestrator(normalized)
+        this._runTextStreamOrchestrator(normalized, options && options.signal)
       )
     }
-    return this._runTextStreamOrchestrator(normalized)
+    return this._runTextStreamOrchestrator(normalized, options && options.signal)
   }
 
   _resolveRunStreamingOptions (textStream, options) {
@@ -567,8 +571,8 @@ class TTSGgml {
     })
   }
 
-  _runTextStreamOrchestrator (asyncTextSource) {
-    const response = this._job.start()
+  _runTextStreamOrchestrator (asyncTextSource, signal) {
+    const response = this._job.start({ signal })
     this._sentenceStreamCtx = {
       textStreamMode: true,
       asyncTextSource,
@@ -670,7 +674,7 @@ class TTSGgml {
       })
     }
 
-    const response = this._job.start()
+    const response = this._job.start({ signal: options && options.signal })
     this._sentenceStreamCtx = {
       chunks,
       chunkIdx: 0,
@@ -810,8 +814,8 @@ class TTSGgml {
     this.state.destroyed = true
   }
 
-  async _runInternal (input) {
-    const response = this._job.start()
+  async _runInternal (input, signal) {
+    const response = this._job.start({ signal })
     try {
       // Per-request overrides (e.g. input.outputSampleRate) are not
       // honoured by the native engine today — all synthesis knobs are

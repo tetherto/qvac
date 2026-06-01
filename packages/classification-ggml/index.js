@@ -108,6 +108,7 @@ class ImageClassifier {
    * @param {number} [options.width]   raw RGB width (required for raw input)
    * @param {number} [options.height]  raw RGB height (required for raw input)
    * @param {number} [options.channels] raw RGB channel count (must be 3)
+   * @param {AbortSignal} [options.signal] when aborted, the in-flight inference rejects with the abort reason
    * @returns {Promise<Array<{label: string, confidence: number}>>}
    *          sorted by `confidence` descending. Always returns all classes
    *          unless `options.topK` is set.
@@ -132,7 +133,7 @@ class ImageClassifier {
       if (options.topK !== undefined) job.topK = options.topK
     }
 
-    const response = this._job.start()
+    const response = this._job.start({ signal: options && options.signal })
 
     let accepted
     try {

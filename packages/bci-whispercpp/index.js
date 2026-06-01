@@ -206,9 +206,9 @@ class BCIWhispercpp {
    * @param {string} filePath - path to .bin neural signal file
    * @returns {Promise<QvacResponse>}
    */
-  async transcribeFile (filePath) {
+  async transcribeFile (filePath, runOptions = {}) {
     const data = fs.readFileSync(filePath)
-    return this.transcribe(new Uint8Array(data))
+    return this.transcribe(new Uint8Array(data), runOptions)
   }
 
   /**
@@ -216,12 +216,14 @@ class BCIWhispercpp {
    * Returns a QvacResponse; use response.await() for the final output array,
    * response.onUpdate() for streaming updates, response.stats for runtime stats.
    * @param {Uint8Array} neuralData - binary neural signal
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
-  async transcribe (neuralData) {
+  async transcribe (neuralData, runOptions = {}) {
     this._assertReadyForInference()
     return await this._enqueueInference(async () => {
-      const response = this._job.start()
+      const response = this._job.start({ signal: runOptions && runOptions.signal })
 
       let accepted
       try {
@@ -293,11 +295,13 @@ class BCIWhispercpp {
 
     const opts = this._validateStreamOpts(streamOpts)
     const iterable = this._normalizeNeuralStream(neuralStream)
+    const signal = streamOpts && streamOpts.signal
 
     return await this._enqueueInference(async () => {
       this._streamAborted = false
       const response = new QvacResponse({
-        cancelHandler: async () => { await this.cancel() }
+        cancelHandler: async () => { await this.cancel() },
+        signal
       })
       this._streamResponse = response
 

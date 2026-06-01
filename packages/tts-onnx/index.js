@@ -346,8 +346,11 @@ class ONNXTTS {
    * @param {boolean} [input.streamOutput=false] - When true, chunked streaming output (optional `locale`, `maxChunkScalars`; same as `runStream`)
    * @param {string} [input.locale] - BCP-47 locale for chunking when `streamOutput`
    * @param {number} [input.maxChunkScalars] - Max graphemes per chunk when `streamOutput`
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    */
-  async run (input) {
+  async run (input, runOptions = {}) {
+    const signal = runOptions && runOptions.signal
     if (input && typeof input === 'object' && input.streamOutput === true) {
       if (typeof input.input !== 'string' || input.input.trim().length === 0) {
         throw new QvacErrorAddonTTS({
@@ -357,7 +360,8 @@ class ONNXTTS {
       }
       const streamOpts = {
         locale: input.locale,
-        maxChunkScalars: input.maxChunkScalars
+        maxChunkScalars: input.maxChunkScalars,
+        signal
       }
       if (this.exclusiveRun) {
         return await this._enqueueExclusiveTtsResponse(() =>
@@ -366,7 +370,7 @@ class ONNXTTS {
       }
       return this._runStreamOrchestrator(input.input, streamOpts)
     }
-    return this._runExclusive(() => this._runInternal(input))
+    return this._runExclusive(() => this._runInternal(input, signal))
   }
 
   /**
@@ -396,7 +400,7 @@ class ONNXTTS {
    * Equivalent to `run({ input: text, streamOutput: true, ...options })`.
    *
    * @param {string} text
-   * @param {{ locale?: string, maxChunkScalars?: number }} [options]
+   * @param {{ locale?: string, maxChunkScalars?: number, signal?: AbortSignal }} [options]
    */
   async runStream (text, options = {}) {
     const opts = options == null || typeof options !== 'object' ? {} : options
@@ -405,7 +409,7 @@ class ONNXTTS {
       streamOutput: true,
       locale: opts.locale,
       maxChunkScalars: opts.maxChunkScalars
-    })
+    }, { signal: opts.signal })
   }
 
   /**
@@ -439,10 +443,10 @@ class ONNXTTS {
     }
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveTtsResponse(() =>
-        this._runTextStreamOrchestrator(normalized)
+        this._runTextStreamOrchestrator(normalized, options && options.signal)
       )
     }
-    return this._runTextStreamOrchestrator(normalized)
+    return this._runTextStreamOrchestrator(normalized, options && options.signal)
   }
 
   /**
@@ -515,8 +519,8 @@ class ONNXTTS {
    * Starts a {@link QvacResponse} and schedules chunk synthesis without awaiting completion
    * (so callers can attach `onUpdate` before audio callbacks run).
    */
-  _runTextStreamOrchestrator (asyncTextSource) {
-    const response = this._job.start()
+  _runTextStreamOrchestrator (asyncTextSource, signal) {
+    const response = this._job.start({ signal })
     this._sentenceStreamCtx = {
       textStreamMode: true,
       asyncTextSource,
@@ -622,7 +626,7 @@ class ONNXTTS {
       })
     }
 
-    const response = this._job.start()
+    const response = this._job.start({ signal: options && options.signal })
     this._sentenceStreamCtx = {
       chunks,
       chunkIdx: 0,
@@ -772,8 +776,8 @@ class ONNXTTS {
     this.state.destroyed = true
   }
 
-  async _runInternal (input) {
-    const response = this._job.start()
+  async _runInternal (input, signal) {
+    const response = this._job.start({ signal })
     try {
       const jobData = {
         type: input.type || 'text',

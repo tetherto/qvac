@@ -59,10 +59,12 @@ class ONNXOcr {
   /**
    * Runs inference on the given input.
    * @param {{ path: string, options?: Object }} input - Image input
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
-  async run (input) {
-    return this._runInternal(input)
+  async run (input, runOptions = {}) {
+    return this._runInternal(input, runOptions)
   }
 
   _getDiagnosticsJSON () {
@@ -189,9 +191,9 @@ class ONNXOcr {
     this.state.destroyed = true
   }
 
-  async _runInternal (input) {
+  async _runInternal (input, runOptions = {}) {
     this.logger.info('Starting OCR inference')
-    const response = this._job.start()
+    const response = this._job.start({ signal: runOptions && runOptions.signal })
     try {
       const imageInput = this.getImage(input.path)
       await this.addon.runJob({

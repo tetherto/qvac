@@ -132,9 +132,11 @@ class FFmpegDecoder {
   /**
    * Run the decoder on an audio stream
    * @param {Readable} audioStream - Input audio stream
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {QvacResponse} Response with decoded audio
    */
-  run (audioStream) {
+  run (audioStream, runOptions = {}) {
     if (!this.isLoaded) {
       throw new QvacErrorDecoderAudio({ code: ERR_CODES.DECODER_NOT_LOADED })
     }
@@ -142,7 +144,7 @@ class FFmpegDecoder {
     this.logger.info('Starting new audio stream processing')
 
     this._cancelled = false
-    const response = this._job.start()
+    const response = this._job.start({ signal: runOptions && runOptions.signal })
 
     this._processStream(audioStream)
       .then(() => {

@@ -245,13 +245,15 @@ class VideoStableDiffusion {
    * @param {string} [params.cache_mode]
    * @param {string} [params.cache_preset]
    * @param {number} [params.cache_threshold]
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
-  async run (params) {
-    return this._run(() => this._runInternal(params))
+  async run (params, runOptions = {}) {
+    return this._run(() => this._runInternal(params, runOptions))
   }
 
-  async _runInternal (params) {
+  async _runInternal (params, runOptions = {}) {
     if (!params || typeof params !== 'object') {
       throw new TypeError('run(params): params must be an object')
     }
@@ -506,7 +508,9 @@ class VideoStableDiffusion {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
-    const response = this._job.start()
+    const signal = runOptions && runOptions.signal
+
+    const response = this._job.start({ signal })
 
     let accepted
     try {

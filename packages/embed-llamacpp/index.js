@@ -94,11 +94,17 @@ class GGMLBert {
     }
   }
 
-  async run (input) {
-    return this._run(() => this._runInternal(input))
+  /**
+   * @param {string|string[]} input - Text (or array of texts) to embed.
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
+   * @returns {Promise<QvacResponse>}
+   */
+  async run (input, runOptions = {}) {
+    return this._run(() => this._runInternal(input, runOptions))
   }
 
-  async _runInternal (text) {
+  async _runInternal (text, runOptions = {}) {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
@@ -112,7 +118,7 @@ class GGMLBert {
       ? { type: 'sequences', input: text }
       : { type: 'text', input: text }
 
-    const response = this._job.start()
+    const response = this._job.start({ signal: runOptions && runOptions.signal })
 
     // addon-cpp guarantees no output events until runJob is fully accepted.
     // If runJob throws or returns false, no events will fire for this job.

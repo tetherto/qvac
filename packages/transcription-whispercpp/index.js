@@ -218,11 +218,17 @@ class TranscriptionWhispercpp {
     return response
   }
 
-  async run (input) {
+  /**
+   * @param {*} input - audio input (stream, Uint8Array, or chunk array)
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
+   * @returns {Promise<QvacResponse>}
+   */
+  async run (input, runOptions = {}) {
     if (this.exclusiveRun) {
-      return await this._enqueueExclusiveRunResponse(() => this._runInternal(input))
+      return await this._enqueueExclusiveRunResponse(() => this._runInternal(input, runOptions))
     }
-    return await this._runInternal(input)
+    return await this._runInternal(input, runOptions)
   }
 
   async runStreaming (audioStream, opts = {}) {
@@ -241,17 +247,17 @@ class TranscriptionWhispercpp {
       return this._runStreaming(normalizedAudioStream, opts)
     }
 
-    return this._runBatchTranscription(normalizedAudioStream)
+    return this._runBatchTranscription(normalizedAudioStream, opts.signal)
   }
 
   /** Batch runJob path: `_job` / response setup; audio via {@link #_handleAudioStream}. */
-  async _runBatchTranscription (normalizedAudioStream) {
+  async _runBatchTranscription (normalizedAudioStream, signal) {
     this._pendingWhisperJobId = await this.addon.append({
       type: 'audio',
       input: new Uint8Array()
     })
 
-    const response = this._job.start()
+    const response = this._job.start({ signal })
     const finalized = response.await()
     finalized.catch(() => {})
     response.await = () => finalized
@@ -291,7 +297,7 @@ class TranscriptionWhispercpp {
     this.addon.startStreaming(streamingConfig)
 
     this._pendingWhisperJobId = null
-    const response = this._job.start()
+    const response = this._job.start({ signal: streamingOpts && streamingOpts.signal })
     const finalized = response.await().finally(() => {
       this.addon._activeJobId = null
       this.addon._setState('listening')
