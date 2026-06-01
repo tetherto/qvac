@@ -5,7 +5,7 @@ const test = require('brittle')
 const { isMobile, getImagePath, ensureModelPath } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
-const DESKTOP_TIMEOUT = 180 * 1000 // 3 minutes for desktop
+const DESKTOP_TIMEOUT = 600 * 1000 // 10 minutes: dense page is heavy on slow CI runners
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
 // Regression for QVAC-19340: dense high-resolution pages drove CRAFT detection
@@ -35,9 +35,12 @@ test('canvasSize bounds the detection canvas and still recognizes a dense page',
   t.pass('Loaded with reduced canvasSize=1280')
 
   try {
+    // Disable rotation retry: it triples recognition work on this dense page
+    // (each box re-run at 90/270) without adding value to the memory-cap
+    // assertion, and would otherwise blow the desktop test budget on slow CI.
     const response = await ocrGgml.run({
       path: imagePath,
-      options: { paragraph: false }
+      options: { paragraph: false, rotationAngles: [] }
     })
 
     let texts = []
