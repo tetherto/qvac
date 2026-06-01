@@ -1,32 +1,12 @@
-{#- Render a single patch's section to be appended at the bottom of an
-    existing release-notes page. Mirrors the category formatting of
-    `release-notes-page.njk` but emits NO frontmatter. The NPM badge is
-    omitted when the per-version preamble already carries one (mirror of
-    `hasPreambleNpmLink` in the full page template) so we don't render
-    it twice. -#}
+{#- Render a single patch's section to be inserted directly after the
+    minor block of an existing release-notes series page. Mirrors the
+    per-package layout of `release-notes-page.njk` but emits NO
+    frontmatter — caller stitches it in. -#}
 ## v{{ version }}
 
-{% if not hasPreambleNpmLink %}
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{{ version }}
+{% for entry in packages %}
+### @qvac/{{ entry.pkg }}
 
-{% endif %}
-{% for p in preambles %}
-{{ p.content }}
+{{ entry.body }}
 
-{% endfor %}
-{% for section in overrides %}
-### {{ section.heading }}
-
-{{ section.content }}
-
-{% endfor %}
-{% for category in categories %}
-### {{ category.name }}
-
-{% for entry in category.packages %}
-#### @qvac/{{ entry.pkg }}
-
-{{ entry.content }}
-
-{% endfor %}
 {% endfor %}

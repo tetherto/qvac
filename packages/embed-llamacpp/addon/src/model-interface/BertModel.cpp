@@ -53,10 +53,10 @@ void batchDecode(
           .c_str(),
       nullptr);
   if (llama_decode(ctx, batch) < 0) {
-    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-        GGML_LOG_LEVEL_ERROR,
-        string_format("%s : failed to process\n", __func__).c_str(),
-        nullptr);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(DecodeFailed),
+        string_format("%s: llama_decode failed", __func__));
   }
 
   std::span<const int8_t> logitsSpan{
@@ -705,15 +705,6 @@ BertEmbeddings BertModel::processBatched(
   std::size_t numStoredEmbeddings = 0; // number of embeddings already stored
   std::size_t numPromptsInBatch = 0;   // number of prompts in current batch
 
-  auto earlyReturn = [&]() {
-    stopCancelled_.store(false);
-    return BertEmbeddings(
-        std::move(embeddings),
-        BertEmbeddings::Layout{
-            .embeddingCount = numStoredEmbeddings,
-            .embeddingSize = static_cast<std::size_t>(n_embd)});
-  };
-
   for (std::size_t k = 0; k < nPrompts && !stopCancelled_.load(); k++) {
     // clamp to n_batch tokens
     const auto& inp = inputs[k];
@@ -727,13 +718,20 @@ BertEmbeddings BertModel::processBatched(
           embSpan
               .subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd))
               .data();
-      batchDecode(
-          ctx_,
-          batch_,
-          out,
-          static_cast<int>(numPromptsInBatch),
-          n_embd,
-          init_.params.embd_normalize);
+      try {
+        batchDecode(
+            ctx_,
+            batch_,
+            out,
+            static_cast<int>(numPromptsInBatch),
+            n_embd,
+            init_.params.embd_normalize);
+      } catch (...) {
+        if (stopCancelled_.load()) {
+          throw std::runtime_error("Job cancelled");
+        }
+        throw;
+      }
       numStoredEmbeddings +=
           (pooling_type == LLAMA_POOLING_TYPE_NONE ? batch_.n_tokens
                                                    : numPromptsInBatch);
@@ -747,7 +745,7 @@ BertEmbeddings BertModel::processBatched(
   }
 
   if (stopCancelled_.load()) {
-    return earlyReturn();
+    throw std::runtime_error("Job cancelled");
   }
 
   // final batch
@@ -755,13 +753,20 @@ BertEmbeddings BertModel::processBatched(
   float* out =
       embSpan.subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd))
           .data();
-  batchDecode(
-      ctx_,
-      batch_,
-      out,
-      static_cast<int>(numPromptsInBatch),
-      n_embd,
-      init_.params.embd_normalize);
+  try {
+    batchDecode(
+        ctx_,
+        batch_,
+        out,
+        static_cast<int>(numPromptsInBatch),
+        n_embd,
+        init_.params.embd_normalize);
+  } catch (...) {
+    if (stopCancelled_.load()) {
+      throw std::runtime_error("Job cancelled");
+    }
+    throw;
+  }
   return BertEmbeddings(
       std::move(embeddings),
       BertEmbeddings::Layout{

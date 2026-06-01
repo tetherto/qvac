@@ -2,6 +2,27 @@
 
 # CLI smoke tests + serve validation (no models needed, fast).
 # Requires: npm run build (tests run against dist/index.js), jq
+#
+# ⚠ BASH 3.2 COMPATIBILITY (macOS default) ⚠
+#
+# Assertions in this file must work under macOS's stock bash 3.2 (where
+# `set -e` does NOT propagate failures from a standalone `[[ ... ]]` — the
+# test silently continues past the failed assertion). CI runs bash 5.x and
+# *does* propagate, so a local-vs-CI green/red divergence is the symptom.
+#
+# Required pattern: every `[[ ... ]]` assertion must be the LAST command of
+# the @test, OR chained so that its exit code reaches the test's last line:
+#
+#   ✅  [[ "${a}" == 1 ]] \
+#         && [[ "${b}" == 2 ]] \
+#         && [[ "${c}" == 3 ]]
+#
+#   ✅  [[ "${status}" -eq 1 ]] || return 1
+#       <followup non-assertion commands>
+#
+#   ❌  [[ "${a}" == 1 ]]
+#       [[ "${b}" == 2 ]]              # bash 3.2 hides failure of line above
+#       <followup commands>            # also hide failures of [[ ]] above
 
 # Intentionally unquoted on use — BATS `run` needs word splitting for the command.
 QVAC="node ${BATS_TEST_DIRNAME}/../dist/index.js"
@@ -82,74 +103,74 @@ http_status() {
 
 @test "qvac --version prints semver" {
   run ${QVAC} --version
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]
 }
 
 @test "qvac --help lists commands" {
   run ${QVAC} --help
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ "bundle" ]]
-  [[ "${output}" =~ "verify" ]]
-  [[ "${output}" =~ "serve" ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ "bundle" ]] \
+    && [[ "${output}" =~ "verify" ]] \
+    && [[ "${output}" =~ "serve" ]]
 }
 
 @test "qvac serve openai --help shows options" {
   run ${QVAC} serve openai --help
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ "--port" ]]
-  [[ "${output}" =~ "--api-key" ]]
-  [[ "${output}" =~ "--cors" ]]
-  [[ "${output}" =~ "OpenAI-compatible" ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ "--port" ]] \
+    && [[ "${output}" =~ "--api-key" ]] \
+    && [[ "${output}" =~ "--cors" ]] \
+    && [[ "${output}" =~ "OpenAI-compatible" ]]
 }
 
 @test "qvac bundle sdk --help shows options" {
   run ${QVAC} bundle sdk --help
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ "--config" ]]
-  [[ "${output}" =~ "--sdk-path" ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ "--config" ]] \
+    && [[ "${output}" =~ "--sdk-path" ]]
 }
 
 @test "qvac verify deps --help shows options" {
   run ${QVAC} verify deps --help
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ "--base" ]]
-  [[ "${output}" =~ "--head" ]]
-  [[ "${output}" =~ "--lockfile" ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ "--base" ]] \
+    && [[ "${output}" =~ "--head" ]] \
+    && [[ "${output}" =~ "--lockfile" ]]
 }
 
 @test "qvac verify deps requires base and head" {
   run ${QVAC} verify deps --base HEAD
-  [[ "${status}" -eq 2 ]]
-  [[ "${output}" =~ "--head" ]]
+  [[ "${status}" -eq 2 ]] \
+    && [[ "${output}" =~ "--head" ]]
 }
 
 @test "qvac verify deps rejects unsupported lockfiles" {
   run ${QVAC} verify deps --base HEAD --head HEAD --lockfile bun.lock
-  [[ "${status}" -eq 2 ]]
-  [[ "${output}" =~ "Unsupported lockfile" ]]
-  [[ "${output}" =~ "package-lock.json" ]]
+  [[ "${status}" -eq 2 ]] \
+    && [[ "${output}" =~ "Unsupported lockfile" ]] \
+    && [[ "${output}" =~ "package-lock.json" ]]
 }
 
 @test "qvac verify bundle --help shows options" {
   run ${QVAC} verify bundle --help
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ "--addons-source" ]]
-  [[ "${output}" =~ "--host" ]]
-  [[ "${output}" =~ "--bare-runtime-version" ]]
-  [[ "${output}" =~ "--config" ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ "--addons-source" ]] \
+    && [[ "${output}" =~ "--host" ]] \
+    && [[ "${output}" =~ "--bare-runtime-version" ]] \
+    && [[ "${output}" =~ "--config" ]]
 }
 
 @test "qvac verify bundle requires --addons-source" {
   run ${QVAC} verify bundle --host android-arm64
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "--addons-source" ]]
+  [[ "${status}" -eq 1 ]] \
+    && [[ "${output}" =~ "--addons-source" ]]
 }
 
 @test "qvac verify bundle rejects missing --addons-source path" {
   run ${QVAC} verify bundle --addons-source /nonexistent/path --host android-arm64
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "not a readable file or directory" ]]
+  [[ "${status}" -eq 1 ]] \
+    && [[ "${output}" =~ "not a readable file or directory" ]]
 }
 
 @test "qvac verify bundle rejects empty --host list" {
@@ -157,8 +178,8 @@ http_status() {
   dir=$(mktemp -d)
   mkdir -p "${dir}/node_modules"
   run ${QVAC} verify bundle --addons-source "${dir}/node_modules"
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "--host" ]]
+  [[ "${status}" -eq 1 ]] \
+    && [[ "${output}" =~ "host is required" ]]
   rm -rf "${dir}"
 }
 
@@ -167,8 +188,8 @@ http_status() {
   dir=$(mktemp -d)
   mkdir -p "${dir}/node_modules"
   run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ "verification passed" ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ "verification passed" ]]
   rm -rf "${dir}"
 }
 
@@ -177,9 +198,9 @@ http_status() {
   dir=$(mktemp -d)
   mkdir -p "${dir}/node_modules"
   run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --bare-runtime-version not-a-version
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "Invalid Bare runtime version" ]]
-  [[ "${output}" =~ "not-a-version" ]]
+  [[ "${status}" -eq 1 ]] \
+    && [[ "${output}" =~ "Invalid Bare runtime version" ]] \
+    && [[ "${output}" =~ "not-a-version" ]]
   rm -rf "${dir}"
 }
 
@@ -189,9 +210,9 @@ http_status() {
   mkdir -p "${dir}/node_modules"
   printf '{"bareRuntimeVersion": "garbage"}' > "${dir}/qvac.config.json"
   run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --project-root "${dir}"
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "Invalid Bare runtime version" ]]
-  [[ "${output}" =~ "garbage" ]]
+  [[ "${status}" -eq 1 ]] \
+    && [[ "${output}" =~ "Invalid Bare runtime version" ]] \
+    && [[ "${output}" =~ "garbage" ]]
   rm -rf "${dir}"
 }
 
@@ -199,14 +220,14 @@ http_status() {
 
 @test "qvac doctor --help shows options" {
   run ${QVAC} doctor --help
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" =~ "--json" ]]
-  [[ "${output}" =~ "QVAC SDK system requirements" ]]
+  [[ "${status}" -eq 0 ]] \
+    && [[ "${output}" =~ "--json" ]] \
+    && [[ "${output}" =~ "QVAC SDK system requirements" ]]
 }
 
 @test "qvac doctor --json emits valid JSON with ok boolean" {
   run ${QVAC} doctor --json
-  [[ "${status}" -eq 0 || "${status}" -eq 1 ]]
+  [[ "${status}" -eq 0 || "${status}" -eq 1 ]] || return 1
   echo "${output}" | jq -e '.ok | type == "boolean"' >/dev/null
   echo "${output}" | jq -e '.sections | length >= 1' >/dev/null
 }
@@ -215,8 +236,8 @@ http_status() {
 
 @test "cli: missing config file exits 1" {
   run ${QVAC} serve openai -c nonexistent.json
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "Config file not found" ]]
+  [[ "${status}" -eq 1 ]] \
+    && [[ "${output}" =~ "Config file not found" ]]
 }
 
 @test "cli: invalid config file exits 1" {
@@ -225,7 +246,7 @@ http_status() {
   echo "not json" > "${dir}/qvac.config.json"
   cd "${dir}"
   run ${QVAC} serve openai
-  [[ "${status}" -eq 1 ]]
+  [[ "${status}" -eq 1 ]] || return 1
   rm -rf "${dir}"
 }
 
@@ -241,7 +262,7 @@ http_status() {
 @test "GET /v1/models/:id returns 404 for unknown model" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/models/nonexistent")
-  [[ $(http_status "http://127.0.0.1:19920/v1/models/nonexistent") == "404" ]]
+  [[ $(http_status "http://127.0.0.1:19920/v1/models/nonexistent") == "404" ]] || return 1
   assert_error "${body}" "model_not_found"
 }
 
@@ -430,12 +451,16 @@ http_status() {
   assert_error "${body}" "missing_model"
 }
 
-@test "images generations: invalid response_format returns 400" {
+# QVAC-19179 wire-change: image routes resolve the model BEFORE running
+# param checks (response_format / output_format / output_compression /
+# background). Tests below send unknown models so they now surface
+# `model_not_found` rather than the per-param error.
+@test "images generations: invalid response_format returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"a red square","response_format":"png"}')
-  assert_error "${body}" "invalid_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
 @test "images generations: unknown model returns 404" {
@@ -446,36 +471,36 @@ http_status() {
   assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: response_format=url without publicBaseUrl returns 400" {
+@test "images generations: response_format=url without publicBaseUrl returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"a red square","response_format":"url"}')
-  assert_error "${body}" "unsupported_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: output_format=jpeg returns 400 unsupported_output_format" {
+@test "images generations: output_format=jpeg returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"p","output_format":"jpeg"}')
-  assert_error "${body}" "unsupported_output_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: output_compression returns 400 unsupported_output_compression" {
+@test "images generations: output_compression returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"p","output_compression":80}')
-  assert_error "${body}" "unsupported_output_compression"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images generations: background returns 400 unsupported_background" {
+@test "images generations: background returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
     -H "Content-Type: application/json" \
     -d '{"model":"x","prompt":"p","background":"transparent"}')
-  assert_error "${body}" "unsupported_background"
+  assert_error "${body}" "model_not_found"
 }
 
 # ── Serve: images edits validation (multipart) ──────────────────────────
@@ -511,38 +536,41 @@ http_status() {
   assert_error "${body}" "missing_model"
 }
 
-@test "images edits: invalid response_format returns 400" {
+# QVAC-19179 wire-change: same model-first ordering applies to image edits.
+# `missing_image` and `mask_not_supported` still win (they're multipart-
+# shape errors), but per-param checks now run after the model lookup.
+@test "images edits: invalid response_format returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=nonexistent" \
     -F "prompt=make it blue" \
     -F "response_format=png")
-  assert_error "${body}" "invalid_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images edits: response_format=url without publicBaseUrl returns 400" {
+@test "images edits: response_format=url without publicBaseUrl returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=x" -F "prompt=p" -F "response_format=url")
-  assert_error "${body}" "unsupported_response_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images edits: output_format=jpeg returns 400 unsupported_output_format" {
+@test "images edits: output_format=jpeg returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=x" -F "prompt=p" -F "output_format=jpeg")
-  assert_error "${body}" "unsupported_output_format"
+  assert_error "${body}" "model_not_found"
 }
 
-@test "images edits: background returns 400 unsupported_background" {
+@test "images edits: background returns 404 model_not_found (model resolves first)" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
     -F "image=@${FILE_TMPDIR}/tiny.png" \
     -F "model=x" -F "prompt=p" -F "background=transparent")
-  assert_error "${body}" "unsupported_background"
+  assert_error "${body}" "model_not_found"
 }
 
 @test "images edits: unknown model returns 404" {
@@ -587,12 +615,12 @@ http_status() {
     -F "file=@${FILE_TMPDIR}/tiny.png" -F "purpose=image_generation")
   local id
   id=$(echo "${upload}" | jq -r '.id')
-  [[ "${id}" =~ ^file- ]]
+  [[ "${id}" =~ ^file- ]] || return 1
 
   local out="${FILE_TMPDIR}/dl-${RANDOM}.bin"
   local code
   code=$(curl -s -o "${out}" -w "%{http_code}" "http://127.0.0.1:19920/v1/files/${id}/content")
-  [[ "${code}" == "200" ]]
+  [[ "${code}" == "200" ]] || return 1
   cmp -s "${out}" "${FILE_TMPDIR}/tiny.png"
 }
 
@@ -604,10 +632,10 @@ http_status() {
   id=$(echo "${upload}" | jq -r '.id')
   local headers
   headers=$(curl -s -D- -o /dev/null "http://127.0.0.1:19920/v1/files/${id}/content")
-  [[ "${headers}" =~ [Cc]ache-[Cc]ontrol:\ private,\ max-age=([0-9]+) ]]
+  [[ "${headers}" =~ [Cc]ache-[Cc]ontrol:\ private,\ max-age=([0-9]+) ]] || return 1
   local max_age=${BASH_REMATCH[1]}
-  [[ "${max_age}" -gt 0 ]]
-  [[ "${max_age}" -le 3600 ]]
+  [[ "${max_age}" -gt 0 ]] \
+    && [[ "${max_age}" -le 3600 ]]
 }
 
 # ── Serve: speech (text-to-speech) validation ─────────────────────────
@@ -738,9 +766,9 @@ http_status() {
 @test "OPTIONS /v1/models returns 204 with CORS headers" {
   local headers
   headers=$(curl -sf -D- -o /dev/null -X OPTIONS "http://127.0.0.1:19920/v1/models")
-  [[ "${headers}" =~ "204" ]]
-  [[ "${headers}" =~ [Aa]ccess-[Cc]ontrol-[Aa]llow-[Oo]rigin ]]
-  [[ "${headers}" =~ "POST" ]]
+  [[ "${headers}" =~ "204" ]] \
+    && [[ "${headers}" =~ [Aa]ccess-[Cc]ontrol-[Aa]llow-[Oo]rigin ]] \
+    && [[ "${headers}" =~ "POST" ]]
 }
 
 @test "CORS headers present on regular GET" {
@@ -752,8 +780,8 @@ http_status() {
 @test "no-CORS: OPTIONS returns 204 without CORS headers" {
   local headers
   headers=$(curl -s -D- -o /dev/null -X OPTIONS "http://127.0.0.1:19922/v1/models")
-  [[ "${headers}" =~ "204" ]]
-  ! [[ "${headers}" =~ [Aa]ccess-[Cc]ontrol-[Aa]llow-[Oo]rigin ]]
+  [[ "${headers}" =~ "204" ]] \
+    && ! [[ "${headers}" =~ [Aa]ccess-[Cc]ontrol-[Aa]llow-[Oo]rigin ]]
 }
 
 @test "no-CORS: regular GET has no CORS headers" {

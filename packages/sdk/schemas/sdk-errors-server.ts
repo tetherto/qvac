@@ -19,6 +19,7 @@ export const SDK_SERVER_ERROR_CODES = {
   TTS_ARTIFACTS_REQUIRED: 52208,
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
   LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
+  LEGACY_TTS_MODEL_DEPRECATED: 52211,
 
   // Model Operations (52,400-52,799)
   MODEL_UNLOAD_FAILED: 52400,
@@ -42,6 +43,7 @@ export const SDK_SERVER_ERROR_CODES = {
   REQUEST_NOT_FOUND: 52418,
   INFERENCE_CANCELLED: 52419,
   REQUEST_REJECTED_BY_POLICY: 52420,
+  CONTEXT_OVERFLOW: 52421,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -180,7 +182,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.TTS_ARTIFACTS_REQUIRED]: {
     name: "TTS_ARTIFACTS_REQUIRED",
     message:
-      "TTS (Chatterbox) requires ttsTokenizerSrc, ttsSpeechEncoderSrc, ttsEmbedTokensSrc, ttsConditionalDecoderSrc, and ttsLanguageModelSrc",
+      "TTS (Chatterbox) requires s3genModelSrc in modelConfig (companion S3Gen GGUF) and the primary T3 GGUF via modelSrc",
   },
   [SDK_SERVER_ERROR_CODES.TTS_REFERENCE_AUDIO_REQUIRED]: {
     name: "TTS_REFERENCE_AUDIO_REQUIRED",
@@ -191,6 +193,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "LEGACY_PARAKEET_MODEL_DEPRECATED",
     message: (legacyFields?: string) =>
       `Legacy parakeet ONNX modelConfig fields are no longer supported (${legacyFields ?? "unknown fields"}). As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level modelSrc (e.g. loadModel({ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" })).`,
+  },
+  [SDK_SERVER_ERROR_CODES.LEGACY_TTS_MODEL_DEPRECATED]: {
+    name: "LEGACY_TTS_MODEL_DEPRECATED",
+    message: (legacyFields?: string) =>
+      `Legacy ONNX TTS modelConfig fields are no longer supported (${legacyFields ?? "unknown fields"}). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel({ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: { ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX } })). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual.`,
   },
 
   // Model Operations (52,400-52,799)
@@ -313,6 +320,15 @@ const serverErrorDefinitions: ErrorCodesMap = {
       reason: string,
     ) =>
       `Request "${requestId}" (kind: ${kind}, modelId: ${modelId}) was rejected by registry concurrency policy: ${reason}`,
+  },
+  [SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW]: {
+    name: "CONTEXT_OVERFLOW",
+    message: (promptTokens: string, ctxSize: string, modelId: string) => {
+      const prompt = promptTokens ? `${promptTokens} prompt tokens` : "prompt";
+      const ctx = ctxSize ? ` exceeds the ${ctxSize}-token context window` : " exceeds the model's context window";
+      const model = modelId ? ` for model "${modelId}"` : "";
+      return `${prompt}${ctx}${model}. Reduce the prompt size or start a new conversation.`;
+    },
   },
 
   // RAG Operations (52,800-52,999)

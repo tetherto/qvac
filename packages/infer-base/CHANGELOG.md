@@ -1,3 +1,22 @@
+## [0.6.0] - 2026-05-28
+
+Threads an optional `AbortSignal` into `QvacResponse` so addons can settle a job from external timeout / crash paths without polling.
+
+## New APIs
+
+`QvacResponse` and `createJobHandler().start()` accept an optional `signal`. When aborted, the response is failed with the abort `reason` — an `Error` reason is passed through unchanged, anything else is wrapped in `Error('Aborted: ...')`. Addons typically forward the signal they received from `model.run(input, { signal })`:
+
+```js
+const response = jobs.start({ signal: opts.signal })
+```
+
+The abort listener is detached when the response settles, so sharing a long-lived signal (e.g. a process-wide crash controller) does not leak listeners.
+
+## Features
+
+- `failed()` / `ended()` are now idempotent — repeat calls after settlement are no-ops, so the abort path can race the addon's own settlement without double-rejects or double-emits.
+- `iterate()` wakes immediately on `output` / `end` / `error` events instead of polling out `pollInterval`, and attaches a single pair of listeners for the iterator's lifetime instead of per yielded chunk.
+
 ## [0.5.0] - 2026-05-05
 
 Breaking release: `@qvac/infer-base` is slimmed down to `QvacResponse` and the standalone utilities introduced in `0.4.0`. The `BaseInference` class, the `WeightsProvider` helper, and the deprecated `pause` / `continue` / `getStatus` surface on `QvacResponse` are all removed. Addons that extended `BaseInference` should now compose `exclusiveRunQueue`, `getApiDefinition`, and `createJobHandler` directly.

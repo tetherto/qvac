@@ -159,6 +159,9 @@ function setupCli (): void {
       quiet?: boolean
     }) => {
       try {
+        // verifyBundle in @qvac/sdk/commands already emits an `invalid-source`
+        // issue with message "At least one host is required." when hosts is
+        // empty — no need to duplicate the guard here.
         const {
           formatVerifyBundleResult,
           hasErrors,
@@ -232,6 +235,24 @@ function setupCli (): void {
       }
     })
 
+  openaiCmd
+    .command('spec')
+    .description('Emit the OpenAPI spec for qvac serve openai (without starting the server)')
+    .option('-o, --output <path>', 'Write to file instead of stdout')
+    .option('--yaml', 'Emit YAML instead of JSON')
+    .action(async (options: { output?: string; yaml?: boolean }) => {
+      try {
+        const { emitOpenApiSpec } = await import('./openai/spec.js')
+        const specOpts: Parameters<typeof emitOpenApiSpec>[0] = {}
+        if (options.output) specOpts.output = options.output
+        if (options.yaml) specOpts.format = 'yaml'
+        await emitOpenApiSpec(specOpts)
+      } catch (error: unknown) {
+        handleError(error)
+        process.exit(1)
+      }
+    })
+
   const serveCmd = program
     .command('serve')
     .description('Start an API server backed by QVAC')
@@ -246,6 +267,7 @@ function setupCli (): void {
     .option('--api-key <key>', 'Require Bearer token authentication')
     .option('--cors', 'Enable CORS headers')
     .option('--public-base-url <url>', 'Externally reachable origin (required for image response_format=url)')
+    .option('--docs', 'Expose Swagger UI at /docs (JSON spec is always at /openapi.json)')
     .option('-v, --verbose', 'Detailed output')
     .action(async (options: {
       config?: string
@@ -255,6 +277,7 @@ function setupCli (): void {
       apiKey?: string
       cors?: boolean
       publicBaseUrl?: string
+      docs?: boolean
       verbose?: boolean
     }) => {
       try {
@@ -268,6 +291,7 @@ function setupCli (): void {
           apiKey: options.apiKey,
           cors: options.cors,
           publicBaseUrl: options.publicBaseUrl,
+          docs: options.docs,
           verbose: options.verbose
         })
       } catch (error: unknown) {

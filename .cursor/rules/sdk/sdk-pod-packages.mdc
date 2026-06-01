@@ -12,6 +12,7 @@ The following packages belong to the SDK pod:
 - `packages/rag`
 - `packages/logging`
 - `packages/error`
+- `packages/ai-sdk-provider`
 
 When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
 
@@ -26,6 +27,7 @@ globs:
   - packages/rag/**
   - packages/logging/**
   - packages/error/**
+  - packages/ai-sdk-provider/**
 ```
 
 ## Skill Naming Convention

@@ -40,7 +40,13 @@ const active = jobs.active      // current QvacResponse | null
 
 // QvacResponse can also be constructed directly when not using createJobHandler.
 const r = new QvacResponse({
-  cancelHandler: () => addon.cancel(jobId)
+  cancelHandler: () => addon.cancel(jobId),
+  // Optional: forward the caller-supplied AbortSignal so timeout /
+  // crash settles the response without polling. The abort
+  // `reason` becomes the response error — pass an Error reason
+  // (e.g. `controller.abort(new AddonCrashedError(...))`) to surface
+  // a structured failure unchanged.
+  signal: opts.signal
 })
 
 r.onUpdate(chunk => { /* incremental output */ })
@@ -58,10 +64,11 @@ const finalOutput = await r.await()
 Response object returned from inference jobs.
 
 ```javascript
-new QvacResponse({ cancelHandler })
+new QvacResponse({ cancelHandler, signal })
 ```
 
-- `cancelHandler` (optional): `() => Promise<void>` invoked when `cancel()` is called.
+- `cancelHandler`: `() => Promise<void>` invoked when `cancel()` is called.
+- `signal` (optional): `AbortSignal` typically forwarded from the addon's `model.run(input, { signal })` call. When aborted, the response is failed with the abort `reason` — passed through unchanged when it's an Error, otherwise wrapped in a default `Error('Aborted: ...')`. Callers that want a structured error should attach it as the abort reason (e.g. `controller.abort(new AddonCrashedError(...))`). The abort listener is automatically detached when the response settles, so passing a long-lived / shared signal (e.g. a process-wide crash controller) does not leak listeners.
 
 Listeners and lifecycle:
 
@@ -70,9 +77,11 @@ Listeners and lifecycle:
 - `onError(cb)` — fires on failure
 - `onCancel(cb)` — fires on cancellation
 - `await()` — resolves with the final output, or rejects on error
-- `iterate()` — async iterator over output chunks
+- `iterate()` — async iterator over output chunks; wakes up immediately on output/end/error events instead of polling out the remaining `pollInterval` window. A single pair of EventEmitter listeners is attached for the lifetime of the iterator, so high-frequency token streams do not churn listener registrations.
 - `getLatest()` — most recent output chunk
 - `cancel()` — invokes `cancelHandler` and emits cancellation
+
+Terminal settlement (`failed()` / `ended()`) is idempotent — repeated calls after the response has already settled are no-ops, so the abort-signal wiring can race with the addon's own settlement without producing double-rejects or double-emits.
 
 ### `exclusiveRunQueue()`
 
@@ -91,7 +100,7 @@ Returns the graphics API identifier for the current platform: `'metal'`, `'vulka
 
 Single-job lifecycle helper that replaces the per-addon `_jobToResponse` Map / `_saveJobToResponseMapping` / `_deleteJobMapping` boilerplate.
 
-- `start()` — creates a new `QvacResponse` and registers it as active; fails any stale active response
+- `start(runOpts?)` — creates a new `QvacResponse` and registers it as active; fails any stale active response. `runOpts.signal` is forwarded into the response (see [`QvacResponse`](#qvacresponse)) so the per-call abort signal from `model.run(input, { signal })` settles the job without polling
 - `startWith(response)` — registers a pre-built response (e.g. a custom subclass) as active
 - `output(data)` — routes output data to the active response (no-op if idle)
 - `end(stats?, result?)` — ends the active response, optionally forwarding stats first

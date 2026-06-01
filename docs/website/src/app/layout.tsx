@@ -42,12 +42,13 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       {gtmId && <GoogleTagManager gtmId={gtmId} />}
       <body className="flex flex-col min-h-screen">
         {/*
-         * `AskAIProvider` stays at root so the URL deep-link handler
-         * and the `Cmd/Ctrl+I` hotkey are reachable from every route.
-         * `AskAIShell` is mounted inside the `(docs)` layout so the
-         * desktop sidebar lands as a direct grid child of
-         * `#nd-docs-layout` and can claim `grid-area: toc` to push
-         * the page content (see `ask-ai-shell.tsx` + `global.css`).
+         * `AskAIProvider` stays at the root layout (and not inside
+         * `(docs)/layout.tsx`) so the `Cmd/Ctrl+I` hotkey and the
+         * `?assistant=...` deep-link handler are reachable from
+         * every route, including non-docs pages. The actual UI
+         * (Inkeep modal + bottom pill) is mounted by the `(docs)`
+         * layout because it only makes sense on docs routes; see
+         * `AskAILegacyShell` and `AskAIPill`.
          */}
         <AskAIProvider>
           <Provider>{children}</Provider>

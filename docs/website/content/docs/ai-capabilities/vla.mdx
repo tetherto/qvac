@@ -1,0 +1,63 @@
+---
+title: VLA
+description: Vision-language-action inference — run a VLA policy that turns camera frames, robot state, and a natural-language instruction into an action chunk.
+schemaType: HowTo
+---
+
+## Overview
+
+Vision-language-action (VLA) inference uses a **GGML** engine ([`@qvac/vla-ggml`](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml)) to run VLA policies. Load a model using `modelType: "vla"`. Then, feed it preprocessed camera frames, the robot's current state, and a tokenized natural-language instruction; the model returns an **action chunk** — `chunkSize` future timesteps of an `actionDim`-dimensional action vector — to drive the robot's actuators.
+
+`vla()` returns `{ actions, actionDim, chunkSize, stats }`, where `actions` is a `Float32Array` of length `chunkSize * actionDim` and `stats` reports per-stage timings (`vision_ms`, `smollm2_total_ms`, `ode_ms`, `total_ms`).
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`vlaHparams()`](/reference/api#vlahparams) — to size your input buffers
+3. [`vla()`](/reference/api#vla)
+4. [`unloadModel()`](/reference/api#unloadmodel)
+
+The SDK also exposes two pure-JS input helpers — `vlaPreprocessImage()` and `vlaPadState()` — to prepare the wire-format tensors expected by `vla()`. They are inlined client-side (no native binding required), so they work under Node, Bun, and Expo even without VLA prebuilds.
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Models
+
+Supported model families and their file layouts:
+
+- **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
+
+More VLA families are planned, and will load through the same `modelType: "vla"` interface.
+
+For models available as constants, see [SDK — Models](/introduction#models).
+
+<Callout type="info">
+**On the input buffers:** `vla()` expects typed-array inputs sized exactly to the model's hparams — images of `hparams.visionImageSize × hparams.visionImageSize`, state of `hparams.maxStateDim`, tokens / mask of `hparams.tokenizerMaxLength`, and an optional noise prior of `hparams.chunkSize × hparams.maxActionDim`. Always call `vlaHparams()` first to size your buffers, and use `vlaPreprocessImage()` / `vlaPadState()` to produce the correct CHW image layout in `[-1, 1]` and zero-padded state vector. The instruction is tokenized on the consumer side using the **SmolVLM2** tokenizer.
+</Callout>
+
+## Example
+
+The following script loads SmolVLA-LIBERO from the registry, builds synthetic inputs (zero-filled gray images + BOS-only tokens + zero state), and runs a single inference pass — printing the produced action chunk and per-stage timings:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/vla-smolvla.js title="vla-smolvla.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/vla-smolvla.ts title="vla-smolvla.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>

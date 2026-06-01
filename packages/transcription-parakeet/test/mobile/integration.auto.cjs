@@ -22,6 +22,10 @@ async function runCorruptedModelTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/corrupted-model.test.js', options)
 }
 
+async function runDuplexStreamingEouTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/duplex-streaming-eou.test.js', options)
+}
+
 async function runDuplexStreamingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/duplex-streaming.test.js', options)
 }
@@ -70,11 +74,16 @@ async function runMultipleTranscriptionsTest (options = {}) { // eslint-disable-
   return runIntegrationModule('../integration/multiple-transcriptions.test.js', options)
 }
 
+async function runSortformerAoscStreamingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/sortformer-aosc-streaming.test.js', options)
+}
+
 module.exports = {
   runAccuracyMultilangTest,
   runAddonMultimodelTest,
   runColdStartTimingTest,
   runCorruptedModelTest,
+  runDuplexStreamingEouTest,
   runDuplexStreamingTest,
   runEouStreamingTest,
   runGpuSmokeTest,
@@ -86,5 +95,6 @@ module.exports = {
   runMobilePerfSortformerCpuTest,
   runMobilePerfSortformerGpuTest,
   runModelFileValidationTest,
-  runMultipleTranscriptionsTest
+  runMultipleTranscriptionsTest,
+  runSortformerAoscStreamingTest
 }

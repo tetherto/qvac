@@ -4,7 +4,129 @@ import {
   ttsRequestSchema,
   ttsResponseSchema,
   textToSpeechStreamResponseSchema,
+  ttsConfigSchema,
+  ttsSupertonicRuntimeConfigSchema,
+  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
 } from "@/schemas/text-to-speech";
+import { LegacyTtsModelDeprecatedError } from "@/utils/errors-server";
+
+const isBunUnitTestRunner =
+  typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+// @ts-ignore Bare global only exists in Bare runtime
+const isBareRuntime =
+  !isBunUnitTestRunner && typeof globalThis.Bare !== "undefined";
+
+function bareTest(name: string, fn: (t: BrittleT) => Promise<void> | void) {
+  if (isBareRuntime) {
+    test(name, fn);
+  } else {
+    test.skip(`[bare-only] ${name}`, () => {});
+  }
+}
+
+type BrittleT = {
+  is: (actual: unknown, expected: unknown, msg?: string) => void;
+  ok: (value: unknown, msg?: string) => void;
+  exception: (fn: () => unknown, expected?: unknown, msg?: string) => void;
+};
+
+test("ttsConfigSchema: accepts GGML chatterbox load config", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf",
+  });
+  t.is(r.success, true);
+});
+
+test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "supertonic",
+    language: "en",
+    voice: "F1",
+  });
+  t.is(r.success, true);
+});
+
+test("ttsSupertonicRuntimeConfigSchema: strips removed ttsSupertonicMultilingual", (t) => {
+  const r = ttsSupertonicRuntimeConfigSchema.safeParse({
+    ttsEngine: "supertonic",
+    language: "es",
+    ttsSupertonicMultilingual: true,
+  });
+  t.is(r.success, true);
+  if (r.success) {
+    t.is("ttsSupertonicMultilingual" in r.data, false);
+  }
+});
+
+test("ttsConfigSchema: accepts real legacy ONNX Chatterbox shape without s3genModelSrc", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "en",
+    ttsSpeechEncoderSrc: "s3:///legacy/speech_encoder.onnx",
+    ttsEmbedTokensSrc: "s3:///legacy/embed_tokens.onnx",
+    ttsConditionalDecoderSrc: "s3:///legacy/conditional_decoder.onnx",
+    ttsLanguageModelSrc: "s3:///legacy/language_model.onnx",
+  });
+  t.is(
+    r.success,
+    true,
+    "legacy ONNX Chatterbox config must pass schema (plugin rejects at resolveConfig)",
+  );
+});
+
+test("ttsConfigSchema: accepts legacy ONNX field names for migration errors", (t) => {
+  for (const name of LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: "chatterbox",
+      language: "en",
+      s3genModelSrc: "s3:///example/s3gen.gguf",
+      [name]: "legacy-value",
+    });
+    t.is(r.success, true, `${name} should parse (plugin rejects at resolveConfig)`);
+  }
+});
+
+test("ttsConfigSchema: rejects truly unknown fields under .strict()", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: "s3:///example/s3gen.gguf",
+    notATtsField: "anything",
+  });
+  t.is(r.success, false, "non-legacy unknown fields remain strictly rejected");
+});
+
+bareTest(
+  "ttsPlugin resolveConfig: legacy ONNX Chatterbox shape throws LegacyTtsModelDeprecatedError",
+  async (t: BrittleT) => {
+    const { ttsPlugin } = await import("@/server/bare/plugins/tts-ggml/plugin");
+    const legacyConfig = {
+      ttsEngine: "chatterbox",
+      language: "en",
+      ttsSpeechEncoderSrc: "s3:///legacy/speech_encoder.onnx",
+      ttsEmbedTokensSrc: "s3:///legacy/embed_tokens.onnx",
+      ttsConditionalDecoderSrc: "s3:///legacy/conditional_decoder.onnx",
+      ttsLanguageModelSrc: "s3:///legacy/language_model.onnx",
+    };
+
+    const parsed = ttsConfigSchema.safeParse(legacyConfig);
+    t.is(parsed.success, true, "schema must accept legacy shape before resolveConfig");
+
+    try {
+      await ttsPlugin.resolveConfig!(legacyConfig, {
+        resolveModelPath: async () => "",
+      });
+      t.ok(false, "expected LegacyTtsModelDeprecatedError");
+    } catch (err) {
+      t.ok(
+        err instanceof LegacyTtsModelDeprecatedError,
+        "resolveConfig must throw LegacyTtsModelDeprecatedError for legacy ONNX config",
+      );
+    }
+  },
+);
 
 test("ttsRequestSchema: accepts sentenceStream options", (t) => {
   const r = ttsRequestSchema.safeParse({

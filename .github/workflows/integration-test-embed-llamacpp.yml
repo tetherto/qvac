@@ -81,6 +81,13 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Cache integration test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: embed-llamacpp
+
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |

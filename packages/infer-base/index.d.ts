@@ -13,8 +13,13 @@ export function exclusiveRunQueue(): (fn: () => Promise<any>) => Promise<any>
 export function getApiDefinition(): string
 
 export interface JobHandler {
-  /** Creates a new QvacResponse and stores it as active. Fails any stale active response. */
-  start(): QvacResponse
+  /**
+   * Creates a new QvacResponse and stores it as active. Fails any stale active response.
+   * Optionally accepts an abort signal forwarded into the response — typically the per-call
+   * signal the addon received from `model.run(input, { signal })`. The abort `reason`
+   * becomes the response error (passed through unchanged when it's an Error).
+   */
+  start(runOpts?: { signal?: AbortSignal }): QvacResponse
   /** Registers a pre-built response (e.g. a custom subclass) as active. Fails any stale active response. */
   startWith(response: QvacResponse): QvacResponse
   /** Routes output data to the active response. No-op if idle. */

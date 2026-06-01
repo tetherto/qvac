@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0]
+
+### Added
+- New runtime stat keys for the active backend, populated once per
+  `load()` and reported in every `runtimeStats()` snapshot (used by
+  Android device-farm assertions):
+  - `backendDevice` — post-fallback device class: `0` CPU, `1` GPU.
+    Mirrors `transcription-parakeet`'s `backendDevice`.
+  - `backendId` — `BackendId` enum: `0` CPU, `1` Metal, `2` CUDA, `3`
+    Vulkan, `4` OpenCL, `99` other. Kept in lock-step with
+    `transcription-parakeet`'s `BackendId` so the same integer means
+    the same backend family across both speech-stack addons.
+  - `gpuMemTotalMb` — total memory of the active GPU device in MiB (or
+    `-1` if the backend does not expose memory accounting).
+    Whisper-specific extra; parakeet does not expose this.
+  - `gpuMemFreeMb` — free memory of the active GPU device in MiB (or
+    `-1` if the backend does not expose memory accounting).
+- `WhisperModel::captureActiveBackendInfo()` mirrors
+  `whisper.cpp`'s own `whisper_backend_init_gpu()` selection (only
+  `GGML_BACKEND_DEVICE_TYPE_GPU`, honour `gpu_device` index when
+  set, otherwise first GPU in enumeration order) instead of a generic
+  "first GPU/IGPU" walk, so the reported backend matches what
+  whisper actually initialised against. Emits a `WARNING` through the
+  addon logger when `use_gpu=true` was requested but no GPU device
+  registered (silent CPU fallback case, parity with
+  `ParakeetModel::loadModel()`).
+- `BackendId` enum exported from `index.d.ts` (CPU / Metal / CUDA /
+  Vulkan / OpenCL / Other), backing the new `RuntimeStats.backendDevice`
+  / `backendId` fields.
+- `metal` feature on the consumed `whisper-cpp` port (QVAC-19236). The
+  `vcpkg.json` `osx | ios` dep entry now reads
+  `whisper-cpp[metal]` for `osx` so the Apple GPU backend selection
+  is declarative just like `[vulkan]` (linux/windows) and `[vulkan,
+  opencl]` (android). iOS continues to ship without the `[metal]`
+  feature until the separate iOS Metal/MTLCompiler XPC crash is
+  resolved.
+
+### Changed
+- Bumped `whisper-cpp` to `1.8.5#0`:
+  - Pure upstream-sync of `whisper.cpp` + bundled `ggml` to
+    `ggml-org/whisper.cpp` master (~149 upstream commits, no
+    tetherto-specific behavior change). Lands the v1.8.5 version
+    string.
+  - Switches the port from `add_subdirectory(ggml)` to
+    `find_package(ggml CONFIG REQUIRED)` via
+    `WHISPER_USE_SYSTEM_GGML=ON`, so `whisper-cpp`, `parakeet-cpp` and
+    `tts-cpp` all link the **same** `ggml-speech` instance instead of
+    bringing three separate ggml builds (QVAC-18992). The bundled
+    `qvac-ext-lib-whisper.cpp/ggml/` directory is no longer walked at
+    configure time.
+  - GPU backend selection, dynamic-backend `.so` packaging on Android,
+    per-arch CPU MODULE variants, Vulkan-Headers download and the
+    spirv-headers `-isystem` shim are all owned by the `ggml-speech`
+    port now; the whisper-cpp portfile shrank from ~160 lines to ~55.
+- The `WhisperModel` native addon now `#include <ggml-backend.h>`
+  unconditionally (was: `#if defined(__ANDROID__)` only) so the new
+  `captureActiveBackendInfo()` enumerates devices on every platform,
+  not just Android.
+
+### Removed
+- `transcription-whispercpp`-side `spirv-headers` / `vulkan-headers` /
+  `vulkan-loader` registry routings related to whisper-cpp are no
+  longer required by this addon's deps (parakeet/tts already routed
+  them and they remain for those consumers). `whisper-cpp` now pulls
+  Vulkan deps transitively through `ggml-speech[vulkan]`.
+
 ## [0.8.0]
 
 ### Added
