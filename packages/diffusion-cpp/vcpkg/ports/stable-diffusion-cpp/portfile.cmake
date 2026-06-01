@@ -19,8 +19,6 @@ vcpkg_from_github(
     REF c28ed2ab58ff849b1a09e1cd8ca6953fd6a7b418
     SHA512 7e02f264a2d52cbaed3b20012d8facede494a1cea4e2beda7ad70d4b477db00ca5f7b92725428f1b405585faf688b1fc3e6770c35c7a755127037a15b40e3d16
     HEAD_REF 2026-03-01
-    PATCHES
-        wan-i2v-encode-video-bypass-tiling.patch
 )
 
 set(SD_FLASH_ATTN OFF)
