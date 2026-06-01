@@ -49,17 +49,28 @@
 # Sevalla's Pretty URLs feature normally 301-redirects bare paths to the
 # trailing-slash form, but empirically it SKIPS paths whose final segment
 # contains a dot (treats them as file requests). So we cannot rely on it
-# for `vX.Y.Z` segments — the bare→with-slash 301 must be expressed
-# explicitly here, placed BEFORE the 200 rewrite (first-match-wins).
+# for `vX.Y.Z` segments — we provide an explicit bare→with-slash 301
+# below.
+#
+# ORDER MATTERS (first-match-wins). The `200` rewrites for the
+# with-slash source MUST come before the `301` redirects for the bare
+# source. Sevalla's placeholder matcher is lenient about trailing slash
+# in the source pattern: a source ending in `:version` (no slash) will
+# match both `/foo/X` AND `/foo/X/`. If the `301` rule appeared first,
+# it would match the with-slash request too and 301 to itself — an
+# infinite redirect loop (verified empirically). Putting the `:version/`
+# rule first, with literal trailing slash, makes the more-specific
+# pattern win for with-slash requests, leaving the `301` rule to handle
+# only the bare form.
 #
 # Syntax mirrors the doc example
 # (https://docs.sevalla.com/static-sites/redirects#placeholders):
 #   /store/:category/:item   /products/:category/:item
 
-/reference/api/:version              /reference/api/:version/                       301
-/reference/release-notes/:version    /reference/release-notes/:version/             301
 /reference/api/:version/             /reference/api/:version/index.html             200
 /reference/release-notes/:version/   /reference/release-notes/:version/index.html   200
+/reference/api/:version              /reference/api/:version/                       301
+/reference/release-notes/:version    /reference/release-notes/:version/             301
 
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
