@@ -394,16 +394,6 @@ class VideoStableDiffusion {
             'Pass explicit width/height to override or pre-scale the image.'
           )
         }
-      } else {
-        // When explicit width/height are provided, init_image dimensions must match exactly
-        const dims = peekImageDims(params.init_image)
-        if (dims && (dims.w !== w || dims.h !== h)) {
-          throw new Error(
-            `init_image dimensions ${dims.w}x${dims.h} do not match requested ` +
-            `dimensions ${w}x${h}. Either: (1) omit width/height to infer from ` +
-            `the image, or (2) pre-scale the image to ${w}x${h} before passing it.`
-          )
-        }
       }
     }
 
