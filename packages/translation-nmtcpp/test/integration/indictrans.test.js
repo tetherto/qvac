@@ -746,7 +746,12 @@ test('IndicTrans [CPU] - cancel mid-inference leaves model reusable', { timeout:
 })
 
 // ---------------------------------------------------------------------------
-// #8 — getActiveBackendName() reports 'Unloaded' after unload
+// #8 — backend introspection reports 'Unloaded'/'' after unload
+//
+// Checks both public backend-introspection getters reset on teardown:
+// getActiveBackendName() is the resource-release proof; getActiveBackendDescription()
+// is verified alongside so the cosmetic GPU-name getter can't silently retain
+// a stale device string after unload.
 // ---------------------------------------------------------------------------
 
 test('IndicTrans [CPU] - backend reports Unloaded after unload', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -762,11 +767,13 @@ test('IndicTrans [CPU] - backend reports Unloaded after unload', { timeout: TEST
 
     const loadedBackend = model.getActiveBackendName()
     t.comment(`Backend while loaded: ${loadedBackend}`)
+    t.comment(`Backend description while loaded: "${model.getActiveBackendDescription()}"`)
     t.not(loadedBackend, 'Unloaded', 'backend should not report Unloaded while loaded')
 
     await model.unload()
 
     t.is(model.getActiveBackendName(), 'Unloaded', 'backend reports Unloaded after unload')
+    t.is(model.getActiveBackendDescription(), '', 'backend description is empty after unload')
   } finally {
     if (model) {
       try { await model.unload() } catch (_) {}

@@ -371,11 +371,13 @@ test('Bergamot [CPU] - run after unload throws', { timeout: TEST_TIMEOUT }, asyn
 })
 
 // ---------------------------------------------------------------------------
-// #8 — getActiveBackendName() reports 'Unloaded' after unload
+// #8 — backend introspection reports 'Unloaded'/'' after unload
 //
 // WHY: This is the cheapest probe that the native backend was actually
-// released (not just a JS flag flipped). If it still reports a live backend
-// after unload, GPU/native resources are leaking.
+// released (not just a JS flag flipped). If getActiveBackendName() still
+// reports a live backend after unload, GPU/native resources are leaking.
+// getActiveBackendDescription() is checked alongside it so both public
+// backend-introspection getters are proven to reset on teardown.
 // ---------------------------------------------------------------------------
 
 test('Bergamot [CPU] - backend reports Unloaded after unload', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -389,11 +391,13 @@ test('Bergamot [CPU] - backend reports Unloaded after unload', { timeout: TEST_T
 
     const loadedBackend = model.getActiveBackendName()
     t.comment(`Backend while loaded: ${loadedBackend}`)
+    t.comment(`Backend description while loaded: "${model.getActiveBackendDescription()}"`)
     t.not(loadedBackend, 'Unloaded', 'backend should not report Unloaded while loaded')
 
     await model.unload()
 
     t.is(model.getActiveBackendName(), 'Unloaded', 'backend reports Unloaded after unload')
+    t.is(model.getActiveBackendDescription(), '', 'backend description is empty after unload')
   } finally {
     if (model) {
       try { await model.unload() } catch (_) {}
