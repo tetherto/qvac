@@ -26,13 +26,13 @@
 #include "model-interface/OcrLazyInitializeBackend.hpp"
 #include "steps.hpp"
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 using ggml_backend_t = struct ggml_backend*;
 using ggml_gallocr_t = struct ggml_gallocr*;
 struct ggml_cgraph;
 struct ggml_context;
 struct ggml_tensor;
 
-// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 // StepDetectionInference header uses snake_case (gguf_path) to mirror the
 // upstream EasyOCR API and contains CRAFT magic numbers (mag_ratio=1.5,
 // warmup_per_tap=1, runs_per_tap=3).

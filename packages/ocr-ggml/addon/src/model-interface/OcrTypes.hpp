@@ -22,7 +22,7 @@ namespace qvac_lib_infer_ocr_ggml {
 
 // Selects which backend the `Pipeline` constructs at load time. Mirrors
 // `qvac_lib_inference_addon_onnx_ocr_fasttext::PipelineMode`.
-enum class PipelineMode {
+enum class PipelineMode : std::uint8_t {
   EASYOCR, // CRAFT detection + bounding-box extraction + CRNN gen-2 recognition
   DOCTR    // DBNet detection + DocTR recognition
 };
@@ -33,6 +33,7 @@ enum class PipelineMode {
 struct OcrInput {
   int imageWidth{};
   int imageHeight{};
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   int bitsPerPixel{24};
   std::vector<uint8_t> data;
   bool isEncoded{false};
