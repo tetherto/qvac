@@ -11,11 +11,7 @@ test("RPC call rejects when bare workers are killed mid-call", async function (t
   delete process.env["QVAC_WORKER_PATH"];
 
   const { heartbeat } = await import("@/client/api/heartbeat");
-  // The SDK reaches node-rpc-client via the `#rpc` imports map, which
-  // resolves to dist. Importing `@/client/rpc/node-rpc-client` directly
-  // would load a second copy of the module from source with its own
-  // (empty) state — close() there would not tear down the worker the
-  // SDK is actually using. rpc-client re-exports close() through `#rpc`.
+  // See worker-crash-doomed.test.ts for why we route through rpc-client.
   const { close } = await import("@/client/rpc/rpc-client");
 
   t.teardown(async () => {

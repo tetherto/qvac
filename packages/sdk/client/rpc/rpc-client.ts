@@ -50,12 +50,9 @@ function getNextCommandId() {
   return commandCounter;
 }
 
-// bare-rpc's `req.reply()` and `req.createResponseStream()` never reject
-// when the socket dies — its `_onerror` does not iterate
-// `_outgoingRequests`. These helpers race the worker-life signal against
-// each in-flight reply / stream pull so callers reject with
-// WorkerCrashedError instead of hanging. Platforms without a child
-// worker return null from getWorkerLifeSignal() and short-circuit.
+// Race in-flight reply/stream pulls against the worker-life signal —
+// bare-rpc's `_onerror` does not iterate `_outgoingRequests`, so without
+// this they hang on a dead socket.
 
 function lifeSignalAbortError(signal: AbortSignal): Error {
   if (signal.reason instanceof Error) return signal.reason;
@@ -63,8 +60,7 @@ function lifeSignalAbortError(signal: AbortSignal): Error {
 }
 
 async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
-  // Null on Bare-direct / Expo and before any worker has spawned — no
-  // crash detection to do, return the promise unchanged.
+  // Null on Bare-direct / Expo and pre-spawn.
   const lifeSignal = getWorkerLifeSignal();
   if (!lifeSignal) return p;
   if (lifeSignal.aborted) throw lifeSignalAbortError(lifeSignal);
@@ -88,7 +84,7 @@ async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
         if (settled) return;
         settled = true;
         lifeSignal.removeEventListener("abort", onAbort);
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is so callers see the original error class (e.g. RPCInitTimeoutError)
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is
         reject(err);
       },
     );
@@ -98,8 +94,7 @@ async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
 async function* iterateWithLifeSignal<T>(
   source: AsyncGenerator<T>,
 ): AsyncGenerator<T> {
-  // Null on Bare-direct / Expo and before any worker has spawned — no
-  // crash detection to do, pass the stream through unchanged.
+  // Null on Bare-direct / Expo and pre-spawn.
   const lifeSignal = getWorkerLifeSignal();
   if (!lifeSignal) {
     yield* source;
@@ -161,10 +156,7 @@ async function getRPCInstance(): Promise<RPCResult> {
   rpcInstance = getRPC();
   const rpc = await rpcInstance;
 
-  // Invalidate the cached promise when the worker dies, so the next
-  // SDK call triggers a fresh ensureRPC() spawn instead of reusing the
-  // dead RPC. Without this, post-crash recovery is broken — the cache
-  // would hand back the dead reference forever.
+  // Drop the cache on worker death so the next call respawns.
   const lifeSignal = getWorkerLifeSignal();
   if (lifeSignal && !lifeSignal.aborted) {
     lifeSignal.addEventListener(

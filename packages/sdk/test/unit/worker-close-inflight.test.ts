@@ -5,10 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// close() with an in-flight RPC call must reject the call with
-// WorkerShutdownError instead of hanging silently. The host contract is
-// "no in-flight inference at close time" — this test verifies what
-// happens when a caller violates the contract.
+// Contract-violator path: in-flight call during close() must reject
+// with WorkerShutdownError, not hang.
 test("close() rejects in-flight RPC calls with WorkerShutdownError", async function (t) {
   t.timeout(15_000);
 
@@ -24,11 +22,10 @@ test("close() rejects in-flight RPC calls with WorkerShutdownError", async funct
     delete process.env["QVAC_WORKER_PATH"];
   });
 
-  // Stalling worker handshakes but never replies — embed() stays pending.
   const call = embed({ modelId: "irrelevant", text: "hi" });
   call.catch(() => {});
 
-  // Let ensureRPC complete its handshake before close() fires.
+  // Let the handshake complete before close() runs.
   await new Promise((r) => setTimeout(r, 250));
 
   await close();

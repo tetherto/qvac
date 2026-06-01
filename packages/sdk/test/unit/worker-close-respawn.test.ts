@@ -1,11 +1,8 @@
 // @ts-ignore brittle has no type declarations
 import test from "brittle";
 
-// After close() the old worker's exit event may fire asynchronously,
-// while a new ensureRPC() has already started and assigned a fresh
-// socket path to module state. If the exit handler reads module state
-// it will unlink the *new* socket — the next worker then fails to
-// connect with ENOENT. Each cycle here exercises that race.
+// Exercises the close-vs-respawn race: a stale exit handler must not
+// unlink the new worker's socket.
 test("close() followed by a new SDK call spawns a fresh worker", async function (t) {
   t.timeout(60_000);
 

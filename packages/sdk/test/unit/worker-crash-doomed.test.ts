@@ -17,11 +17,9 @@ test("embed() rejects when bare worker dies post-handshake (doomed worker)", asy
   );
 
   const { embed } = await import("@/client/api/embed");
-  // The SDK reaches node-rpc-client via the `#rpc` imports map, which
-  // resolves to dist. Importing `@/client/rpc/node-rpc-client` directly
-  // would load a second copy of the module from source with its own
-  // (empty) state — close() there would not tear down the worker the
-  // SDK is actually using. rpc-client re-exports close() through `#rpc`.
+  // Use rpc-client's close(): it routes through `#rpc` → dist, hitting
+  // the same module instance the SDK uses. Importing node-rpc-client
+  // directly would load a separate source copy with empty state.
   const { close } = await import("@/client/rpc/rpc-client");
 
   t.teardown(async () => {
@@ -53,7 +51,6 @@ test("embed() rejects when bare worker dies post-handshake (doomed worker)", asy
     if (hangTimer) clearTimeout(hangTimer);
   }
 
-  // Suppress unhandledRejection from the late-arriving call rejection.
   call.catch(() => {});
 
   t.ok(raceError, "expected embed() to reject");

@@ -30,13 +30,10 @@ let bareWorkerProc: BareChildProcess | null = null;
 let ipcServer: ReturnType<typeof createServer> | null = null;
 let currentSocketPath: string | null = null;
 let closePromise: Promise<void> | null = null;
-// Aborted when the bare worker goes away — either crash
-// (WorkerCrashedError) or planned shutdown (WorkerShutdownError).
-// rpc-client races each in-flight reply against this signal. Without it,
-// bare-rpc leaves pending `req.reply()` promises unrejected when the
-// socket dies (its `_onerror` does not iterate `_outgoingRequests`), and
-// callers hang. The exit handler distinguishes the two cases by
-// inspecting whether close() pre-aborted the controller.
+// Aborted when the worker dies (crash) or close() runs (planned). Used
+// to unblock in-flight `req.reply()` callers — bare-rpc's `_onerror`
+// does not iterate `_outgoingRequests`, so without this signal they
+// would hang on the dead socket.
 let workerLifeController: AbortController | null = null;
 
 /**
@@ -205,20 +202,15 @@ interface SpawnResources {
   socketPath: string;
 }
 
+// `spawn` carries this listener's own captured resources. Module-level
+// state may belong to a newer ensureRPC() by the time we fire.
 function handlePostHandshakeExit(
   code: number | null,
   exitSignal: NodeJS.Signals | null,
   spawn: SpawnResources,
 ): void {
-  // Operate on the *spawn's own* resources, captured at spawn time.
-  // Reading module-level state here is unsafe: this listener may fire
-  // after close() has cleared state AND a new ensureRPC() has populated
-  // it with a different spawn's resources, in which case touching
-  // module state would corrupt the new spawn.
   if (spawn.controller.signal.aborted) {
-    // Planned shutdown — close()/closeSyncForExit() handled its own
-    // teardown (snapshot + server.close + socket unlink). Nothing more
-    // to do here.
+    // close() already handled teardown.
     logger.debug(
       `Bare worker exited after planned shutdown (code=${code}, signal=${exitSignal})`,
     );
@@ -229,8 +221,7 @@ function handlePostHandshakeExit(
     `🪦 Bare worker exited post-handshake (code=${code}, signal=${exitSignal})`,
   );
 
-  // Only clear module state if we're still the active spawn. A newer
-  // ensureRPC() may have replaced these fields already.
+  // Only clear module state if we're still the active spawn.
   if (workerLifeController === spawn.controller) {
     rpcInstance = null;
     rpcPromise = null;
@@ -250,9 +241,7 @@ function handlePostHandshakeExit(
 }
 
 function closeSyncForExit() {
-  // Abort first so the exit handler observes planned intent (via the
-  // controller's aborted state, which survives state-reset because the
-  // handler closure holds a direct reference).
+  // Abort before kill so the exit handler sees planned intent.
   workerLifeController?.abort(new WorkerShutdownError());
 
   const { workerToClose, serverToClose, socketPathToClose } =
@@ -287,8 +276,7 @@ async function ensureRPC(): Promise<RPC> {
   const socketPath = createSocketPath();
   currentSocketPath = socketPath;
 
-  // Allocated up here so the initializeConfig race and the exit-handler
-  // closure both reference the same controller.
+  // Allocated here so the init race and exit handler share one controller.
   const spawnController = new AbortController();
   workerLifeController = spawnController;
 
@@ -332,9 +320,6 @@ async function ensureRPC(): Promise<RPC> {
     });
 
     ipcServer.listen(socketPath, () => {
-      // Capture *this* spawn's resources for the exit handler. Reading
-      // module-level state from the handler would be unsafe — by the
-      // time it fires, a newer spawn may have replaced everything.
       const spawnResources: SpawnResources = {
         controller: spawnController,
         server: ipcServer!,
@@ -397,8 +382,7 @@ async function ensureRPC(): Promise<RPC> {
     platform: process.platform as "darwin" | "linux" | "win32",
   };
 
-  // initializeConfig uses bare-rpc directly (init-hooks.ts) and bypasses
-  // rpc-client's life-signal race; do the race here instead.
+  // init-hooks calls bare-rpc directly, bypassing rpc-client's race.
   await Promise.race([
     initializeConfig(rpc, resolveConfig, runtimeContext),
     rejectOnAbort(spawnController.signal),
@@ -434,8 +418,7 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const responseStream = req.createResponseStream({ encoding: "utf-8" });
   requestStream.write(payload, "utf-8");
 
-  // Destroy both streams when the worker dies so consumers' for-await
-  // loops throw the abort reason instead of hanging on dead reads.
+  // Destroy on worker death so consumers' for-await throws instead of hangs.
   const lifeSignal = workerLifeController?.signal;
   if (lifeSignal && !lifeSignal.aborted) {
     const onAbort = () => {
@@ -466,10 +449,8 @@ export async function close() {
 
   logger.info("🧹 Closing RPC client");
 
-  // Abort first so the exit handler observes planned intent. Any
-  // in-flight caller (contract violators) rejects with
-  // WorkerShutdownError instead of hanging forever; if no callers are
-  // listening, this is a no-op.
+  // Abort before kill: exit handler sees planned intent; any in-flight
+  // caller (contract violators) rejects with WorkerShutdownError.
   workerLifeController?.abort(new WorkerShutdownError());
 
   const { workerToClose, serverToClose, socketPathToClose } =

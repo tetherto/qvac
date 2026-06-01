@@ -2,8 +2,7 @@
 import test from "brittle";
 import { waitForBareChildren } from "./utils/bare-children";
 
-// After a worker crash, the next SDK call must spawn a fresh worker and
-// succeed rather than reusing a stale cached Promise<RPC>.
+// Post-crash recovery: next call must respawn, not reuse a dead RPC.
 test("RPC client recovers from worker crash and serves the next call", async function (t) {
   t.timeout(30_000);
 
@@ -28,7 +27,6 @@ test("RPC client recovers from worker crash and serves the next call", async fun
     } catch {}
   }
 
-  // First post-kill call surfaces the crash.
   let crashError: Error | undefined;
   try {
     await heartbeat();
@@ -41,7 +39,6 @@ test("RPC client recovers from worker crash and serves the next call", async fun
     `expected first post-kill call to fail with WORKER_CRASHED, got name=${(crashError as { name?: string } | undefined)?.name}`,
   );
 
-  // Second call must spawn a new worker and succeed.
   const result = await heartbeat();
   t.ok(result, "second post-kill call succeeded on a fresh worker");
 
