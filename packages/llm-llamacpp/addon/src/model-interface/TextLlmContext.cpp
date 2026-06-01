@@ -13,6 +13,7 @@
 #include "addon/LlmErrors.hpp"
 #include "common/common.h"
 #include "common/log.h"
+#include "common/speculative.h"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -46,6 +47,47 @@ TextLlmContext::TextLlmContext(
     }
 
     vocab_ = llama_model_get_vocab(model_);
+
+    // Multi-Token Prediction (MTP) draft setup.
+    const bool wantMtpDraft = std::find(params_.speculative.types.begin(),
+                                        params_.speculative.types.end(),
+                                        COMMON_SPECULATIVE_TYPE_DRAFT_MTP) !=
+                              params_.speculative.types.end();
+    if (wantMtpDraft) {
+      try {
+        auto cparamsMtp = common_context_params_to_llama(params_);
+        cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+        cparamsMtp.type_k   = params_.speculative.draft.cache_type_k;
+        cparamsMtp.type_v   = params_.speculative.draft.cache_type_v;
+        cparamsMtp.n_rs_seq = 0;
+        ctxDraft_.reset(llama_init_from_model(model_, cparamsMtp));
+        if (!ctxDraft_) {
+          QLOG_IF(
+              Priority::WARNING,
+              "[TextLlm] MTP draft context could not be created for this "
+              "model; spec-type=draft-mtp will be inert\n");
+        } else {
+          params_.speculative.draft.ctx_tgt = lctx_;
+          params_.speculative.draft.ctx_dft = ctxDraft_.get();
+          spec_.reset(common_speculative_init(
+              params_.speculative,
+              std::max<uint32_t>(1, params_.n_parallel)));
+          QLOG_IF(
+              Priority::INFO,
+              "[TextLlm] MTP draft context + common_speculative initialized "
+              "(Phase 1: load-time only; not yet consulted by decode)\n");
+        }
+      } catch (const std::exception& e) {
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[TextLlm] MTP draft setup failed (%s); continuing without "
+                "speculative decoding\n",
+                e.what()));
+        ctxDraft_.reset();
+        spec_.reset();
+      }
+    }
 
     isQwen3Model_ = qvac_lib_inference_addon_llama::utils::isQwen3Model(model_);
     if (isQwen3Model_) {
@@ -414,7 +456,7 @@ bool TextLlmContext::evalMessageWithTools(
       textBatch->logits[textBatch->n_tokens - 1] = static_cast<int8_t>(true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
-    int ret = llama_decode(lctx_, *textBatch);
+    int ret = decodeAndSpecProcess(*textBatch);
     if (ret != 0) {
       std::string errorMsg = string_format(
           "[TextLlm] %s: failed to decode input tokens\n", __func__);
@@ -471,7 +513,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
       nPast_++,
       {0},
       true);
-  if (llama_decode(lctx_, *batch) != 0) {
+  if (decodeAndSpecProcess(*batch) != 0) {
     const char* errorMsg = "[TextLlm] failed to decode EOT token\n";
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
@@ -481,8 +523,20 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
 bool TextLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
+  // Protocol: common_speculative_begin runs once at the start of generation.
+  // For MTP it validates that the draft context's KV cache lines up with
+  // the target's after prefill; passing an empty prompt skips that validation.
+  if (spec_ && !specBeganGenerate_) {
+    common_speculative_begin(spec_.get(), /*seq_id=*/0, {});
+    specBeganGenerate_ = true;
+  }
+  // Carryover from a prior generation must not leak into this one — every
+  // call starts by sampling fresh from the post-prefill logits.
+  pendingSampled_ = LLAMA_TOKEN_NULL;
+
   int nRemain = params_.n_predict;
-  LlamaBatch batch(1, 0, 1); // batch for next token generation
+  const int kSpecMaxDraft = spec_ ? params_.speculative.draft.n_max : 0;
+  LlamaBatch batch(1 + kSpecMaxDraft, 0, 1);
 
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
@@ -526,8 +580,17 @@ bool TextLlmContext::generateResponse(
     }
     applyContextDiscard();
 
-    llama_token tokenId = common_sampler_sample(smpl_.get(), lctx_, -1);
-    common_sampler_accept(smpl_.get(), tokenId, true);
+    // In speculative mode, the previous iter's verify pass already sampled
+    // (and accepted into the sampler) the token that follows the last
+    // accepted draft. Reuse it instead of re-sampling from the same logits.
+    llama_token tokenId;
+    if (pendingSampled_ != LLAMA_TOKEN_NULL) {
+      tokenId = pendingSampled_;
+      pendingSampled_ = LLAMA_TOKEN_NULL;
+    } else {
+      tokenId = common_sampler_sample(smpl_.get(), lctx_, -1);
+      common_sampler_accept(smpl_.get(), tokenId, true);
+    }
     --nRemain;
 
     std::string tokenStr =
@@ -580,16 +643,149 @@ bool TextLlmContext::generateResponse(
     }
     common_batch_add(*batch, tokenId, nPast_++, {0}, true);
 
+    // Speculative draft path: append up to n_max draft tokens onto the same
+    // ubatch, capped by remaining context room and budget. MTP's draft()
+    // reads only id_last / n_past / n_max — the .prompt vector is required
+    // by the API (the wrapper dereferences ->size() for logging) but never
+    // consulted by the impl, so we hand it the always-empty specDummyPrompt_.
+    llama_tokens specDraft;
+    if (spec_ && kSpecMaxDraft > 0) {
+      const int ctxRoom =
+          static_cast<int>(llama_n_ctx(lctx_)) - static_cast<int>(nPast_) - 1;
+      const int budget = nRemain > 0 ? nRemain - 1 : kSpecMaxDraft;
+      const int nMaxThisIter = std::min({kSpecMaxDraft, ctxRoom, budget});
+      if (nMaxThisIter > 0) {
+        const llama_pos preDraftPast = nPast_ - 1;
+        const llama_state_seq_flags dftFlags =
+            LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY | LLAMA_STATE_SEQ_FLAGS_ON_DEVICE;
+        if (ctxDraft_) {
+          const size_t snapSize =
+              llama_state_seq_get_size_ext(ctxDraft_.get(), /*seq_id=*/0, dftFlags);
+          specCkptDft_.resize(snapSize);
+          llama_state_seq_get_data_ext(
+              ctxDraft_.get(),
+              specCkptDft_.data(),
+              snapSize,
+              /*seq_id=*/0,
+              dftFlags);
+        }
+        common_speculative_get_draft_params(spec_.get(), /*seq_id=*/0) = {
+          /*.drafting = */ true,
+          /*.n_max    = */ nMaxThisIter,
+          /*.n_past   = */ nPast_,
+          /*.id_last  = */ tokenId,
+          /*.prompt   = */ &specDummyPrompt_,
+          /*.result   = */ &specDraft,
+        };
+        common_speculative_draft(spec_.get());
+        if (ctxDraft_ && !specDraft.empty()) {
+          // Restore the recurrent state to its pre-draft snapshot, then
+          // clear the attn-KV positions draft() AR-decoded onto ctx_dft.
+          llama_state_seq_set_data_ext(
+              ctxDraft_.get(),
+              specCkptDft_.data(),
+              specCkptDft_.size(),
+              /*seq_id=*/0,
+              dftFlags);
+          llama_memory_seq_rm(
+              llama_get_memory(ctxDraft_.get()),
+              /*seq_id=*/0,
+              preDraftPast + 1,
+              -1);
+        }
+        for (auto d : specDraft) {
+          common_batch_add(*batch, d, nPast_++, {0}, true);
+        }
+      }
+    }
+
     // NOLINT(clang-analyzer-core.CallAndMessage)
-    if (llama_decode(lctx_, *batch) != 0) {
+    if (decodeAndSpecProcess(*batch) != 0) {
       const char* errorMsg = "[TextLlm] failed to decode next token\n";
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
+    }
+
+    // Verify the speculatively-decoded positions:
+    //   sample_and_accept_n walks idxs 0..draft.size(), at each position
+    //   samples from the target's logits and stops at the first draft that
+    //   disagrees. Returns ids[0..n_accepted] where n_accepted = ids.size()-1
+    //   matched, and ids.back() is the new "real" sample from the position
+    //   after the last accepted draft.
+    if (!specDraft.empty()) {
+      if (spec_) {
+        const auto ids =
+            common_sampler_sample_and_accept_n(smpl_.get(), lctx_, specDraft);
+        const size_t nAccepted = ids.size() - 1;
+        common_speculative_accept(
+            spec_.get(), /*seq_id=*/0, static_cast<uint16_t>(nAccepted));
+
+        bool earlyStopSpec = false;
+        for (size_t i = 0; i < nAccepted; ++i) {
+          const llama_token id = ids[i];
+          --nRemain;
+
+          const std::string str =
+              common_token_to_piece(lctx_, id, params_.special);
+          if (outputCallback) {
+            std::string completeChars = utf8Buffer_.addToken(str);
+            if (!completeChars.empty()) {
+              outputCallback(completeChars);
+            }
+          }
+
+          if (isQwen3Model_) {
+            qvac_lib_inference_addon_llama::utils::updateQwen3ReasoningBuffer(
+                str, reasoningState_);
+          }
+
+          // Accepted-draft path intentionally.
+          const bool isEos = llama_vocab_is_eog(vocab_, id);
+          if (isEos || checkAntiprompt()) {
+            flushPendingUtf8ToCallback(outputCallback);
+            earlyStopSpec = true;
+            break;
+          }
+          if (nRemain == 0) {
+            earlyStopSpec = true;
+            break;
+          }
+        }
+
+        // Roll back KV for any rejected draft positions.
+        if (nAccepted < specDraft.size()) {
+          const llama_pos newPast =
+              nPast_ - static_cast<llama_pos>(specDraft.size() - nAccepted);
+          llama_memory_seq_rm(
+              llama_get_memory(lctx_), /*seq_id=*/0, newPast, -1);
+          nPast_ = newPast;
+        }
+
+        if (earlyStopSpec) {
+          break;
+        }
+
+        // Carry the verify's "extra" sample to the next iteration's tokenId.
+        pendingSampled_ = ids.back();
+      } else {
+        // spec_ was reset mid-decode by decodeAndSpecProcess (process()
+        // returned false).
+        const llama_pos newPast =
+            nPast_ - static_cast<llama_pos>(specDraft.size());
+        llama_memory_seq_rm(
+            llama_get_memory(lctx_), /*seq_id=*/0, newPast, -1);
+        nPast_ = newPast;
+      }
     }
   }
 
   if (nRemain == 0) {
     flushPendingUtf8ToCallback(outputCallback);
+  }
+  // Surface MTP draft/accept counts in the addon log so tests + perf runs can
+  // verify speculative decoding is actually doing useful work.
+  if (spec_) {
+    common_speculative_print_stats(spec_.get());
   }
   return true;
 }
@@ -597,6 +793,28 @@ bool TextLlmContext::generateResponse(
 std::function<void()>
 TextLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   return applyGenerationParamsToContext(params_, smpl_, model_, overrides);
+}
+
+int TextLlmContext::decodeAndSpecProcess(const llama_batch& batch) {
+  const int ret = llama_decode(lctx_, batch);
+  if (ret != 0) {
+    return ret;
+  }
+  if (spec_) {
+    // MTP head's KV must track the target on every batch (prefill + gen)
+    // so common_speculative_begin's validation log stays clean and drafts
+    // are coherent. Soft-fail: log + drop the spec impl + fall back to the
+    // single-token path for the rest of this model's lifetime.
+    if (!common_speculative_process(spec_.get(), batch)) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[TextLlm] common_speculative_process failed; disabling spec for "
+          "the rest of this model lifetime\n");
+      spec_.reset();
+      ctxDraft_.reset();
+    }
+  }
+  return ret;
 }
 
 void TextLlmContext::stop() { stopGeneration_.store(true); }
@@ -719,7 +937,7 @@ bool TextLlmContext::handleQwen3ReasoningEOS(
   // Decode closing tag
   common_batch_clear(batch);
   common_batch_add(batch, tokenId, nPast++, {0}, true);
-  if (llama_decode(lctx_, batch) != 0) {
+  if (decodeAndSpecProcess(batch) != 0) {
     QLOG_IF(
         Priority::ERROR,
         "[TextLlm] Failed to decode closing tag during replacement\n");
@@ -732,7 +950,7 @@ bool TextLlmContext::handleQwen3ReasoningEOS(
       common_batch_add(
           batch, reasoningState_.cached_newline_token, nPast++, {0}, true);
 
-      if (llama_decode(lctx_, batch) != 0) {
+      if (decodeAndSpecProcess(batch) != 0) {
         QLOG_IF(
             Priority::ERROR,
             "[TextLlm] Failed to decode newline token during forced "

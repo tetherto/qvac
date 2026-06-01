@@ -11,6 +11,7 @@
     "heavy9": ["runGemma4Test"],
     "heavy10": ["runOcrPaddleTest"],
     "heavy11": ["runQuantizedKvcacheTest"],
+    "heavy12": ["runMtpTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -58,7 +59,8 @@
     "groupImagesPerf": [
       "runImageElephantTest",
       "runImageFruitPlateTest",
-      "runImageHighResAuroraTest"
+      "runImageHighResAuroraTest",
+      "runMtpTest"
     ]
   }
 }
