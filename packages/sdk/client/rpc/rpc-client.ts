@@ -149,6 +149,12 @@ interface RPCResult {
   connectionMs?: number;
 }
 
+function invalidateRPCInstance(): void {
+  rpcInstance = null;
+  firstConnectionPending = true;
+  resetConnectionTracking();
+}
+
 async function getRPCInstance(): Promise<RPCResult> {
   if (rpcInstance) return { rpc: await rpcInstance };
 
@@ -156,18 +162,15 @@ async function getRPCInstance(): Promise<RPCResult> {
   rpcInstance = getRPC();
   const rpc = await rpcInstance;
 
-  // Drop the cache on worker death so the next call respawns.
+  // Drop the cache on worker death so the next call respawns and
+  // records connectionMs again as a "first" connection.
   const lifeSignal = getWorkerLifeSignal();
-  if (lifeSignal && !lifeSignal.aborted) {
-    lifeSignal.addEventListener(
-      "abort",
-      () => {
-        rpcInstance = null;
-      },
-      { once: true },
-    );
-  } else if (lifeSignal?.aborted) {
-    rpcInstance = null;
+  if (lifeSignal?.aborted) {
+    invalidateRPCInstance();
+  } else if (lifeSignal) {
+    lifeSignal.addEventListener("abort", invalidateRPCInstance, {
+      once: true,
+    });
   }
 
   if (connectionStart !== null && firstConnectionPending) {
@@ -662,8 +665,6 @@ async function duplexProfiled<T extends Request>(
 
 export async function close() {
   if (!rpcInstance) return;
-  rpcInstance = null;
-  firstConnectionPending = true;
-  resetConnectionTracking();
+  invalidateRPCInstance();
   await closeRPC();
 }
