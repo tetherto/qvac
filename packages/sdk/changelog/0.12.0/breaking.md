@@ -5,8 +5,6 @@
 PR: [#2116](https://github.com/tetherto/qvac/pull/2116)
 
 **BEFORE:**
-**
-
 ```json
 // consumer package.json
 {
@@ -17,10 +15,16 @@ PR: [#2116](https://github.com/tetherto/qvac/pull/2116)
 }
 ```
 
-**
-
 **AFTER:**
-**
+```json
+// consumer package.json
+{
+  "dependencies": {
+    "@qvac/sdk": "^0.12.0",
+    "react-native-bare-kit": "^0.14.0"
+  }
+}
+```
 
 ---
 
@@ -29,8 +33,6 @@ PR: [#2116](https://github.com/tetherto/qvac/pull/2116)
 PR: [#2184](https://github.com/tetherto/qvac/pull/2184)
 
 **BEFORE:**
-**
-
 ```typescript
 await loadModel({
   modelType: "parakeet",
@@ -44,10 +46,19 @@ await loadModel({
 });
 ```
 
-**
-
 **AFTER:**
-**
+```typescript
+await loadModel({
+  modelType: "parakeet",
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelConfig: {
+    streaming: true,
+    streamingChunkMs: 500,
+  },
+});
+```
+
+Legacy ONNX keys in `modelConfig` still parse but raise `LegacyParakeetModelDeprecatedError` with a migration message.
 
 ---
 
@@ -56,8 +67,6 @@ await loadModel({
 PR: [#2244](https://github.com/tetherto/qvac/pull/2244)
 
 **BEFORE:**
-**
-
 ```typescript
 await loadModel({
   modelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
@@ -73,10 +82,20 @@ await loadModel({
 });
 ```
 
-**
-
 **AFTER:**
-**
+```typescript
+await loadModel({
+  modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0.src,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX.src,
+  },
+});
+```
+
+Plugin import path: `@qvac/sdk/onnx-tts/plugin` → `@qvac/sdk/tts-ggml/plugin` (compat alias retained temporarily).
 
 ---
 
@@ -85,8 +104,6 @@ await loadModel({
 PR: [#2261](https://github.com/tetherto/qvac/pull/2261)
 
 **BEFORE:**
-**
-
 ```json
 {
   "devDependencies": {
@@ -104,11 +121,7 @@ if (sdkVersion && !satisfiesMinVersion(sdkVersion, MIN_SDK_VERSION)) {
 }
 ```
 
-**
-
 **AFTER:**
-**
-
 ```json
 {
   "dependencies": {
@@ -147,16 +160,18 @@ The `prepublishOnly` gate enforces all of these — it will fail `npm publish` w
 PR: [#2292](https://github.com/tetherto/qvac/pull/2292)
 
 **BEFORE:**
-**
-
 ```typescript
 await getRPC();
 ```
 
-**
-
 **AFTER:**
-**
+```typescript
+import { plugins } from "@qvac/bare-sdk";
+import { nmtPlugin } from "@qvac/bare-sdk/nmtcpp-translation/plugin";
+
+plugins([nmtPlugin]);
+await getRPC();
+```
 
 ---
 
