@@ -29,9 +29,10 @@ const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const { detectPlatform, setupJsLogger, ensureModelPath } = require('./utils')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
-const isDarwin = os.platform() === 'darwin'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-const skip = isMobile || isDarwin || noGpu
+// Skip Wan tests on mobile, or on any CPU-only runner (including darwin-x64).
+// This allows Wan tests to run on GPU-enabled darwin-arm64 and other GPU runners.
+const skip = isMobile || noGpu
 
 const platform = detectPlatform()
 
