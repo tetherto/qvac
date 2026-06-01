@@ -33,11 +33,11 @@ struct ProgressCtx {
   std::chrono::steady_clock::time_point startTime;
 };
 
-thread_local ProgressCtx tl_progressCtx;
+thread_local ProgressCtx g_progressCtx;
 // Thread-local model pointer for abort callback routing -- same pattern as
-// tl_progressCtx for progress.  Avoids relying on the process-global
+// g_progressCtx for progress.  Avoids relying on the process-global
 // sd_abort_cb_data when multiple SdModel instances could coexist.
-thread_local const SdModel* tl_abortModel = nullptr;
+thread_local const SdModel* g_abortModel = nullptr;
 
 std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   switch (pref) {
@@ -53,27 +53,27 @@ std::string preferredBackendToString(enum sd_backend_preference_t pref) {
 }
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
-  if (!tl_progressCtx.job || !tl_progressCtx.job->progressCallback)
+  if (!g_progressCtx.job || !g_progressCtx.job->progressCallback)
     return;
 
   const auto elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now() - tl_progressCtx.startTime)
+          std::chrono::steady_clock::now() - g_progressCtx.startTime)
           .count();
 
   std::ostringstream oss;
   oss << R"({"step":)" << step << R"(,"total":)" << steps << R"(,"elapsed_ms":)"
       << elapsed << "}";
 
-  tl_progressCtx.job->progressCallback(oss.str());
+  g_progressCtx.job->progressCallback(oss.str());
 }
 
 // Abort callback -- wired into sd_set_abort_callback() so that
 // generate_image() can be interrupted mid-denoising.
-// Reads from thread-local tl_abortModel (not the global sd_abort_cb_data)
+// Reads from thread-local g_abortModel (not the global sd_abort_cb_data)
 // to avoid concurrency issues when multiple SdModel instances coexist.
 bool sdAbortCallback(void* /*data*/) {
-  return tl_abortModel && tl_abortModel->isCancelRequested();
+  return g_abortModel && g_abortModel->isCancelRequested();
 }
 
 // RAII wrapper for the sd_image_t* array returned by generate_image().
@@ -289,17 +289,17 @@ std::any SdModel::process(const std::any& input) {
   const auto& job = std::any_cast<const GenerationJob&>(input);
 
   cancelRequested_.store(false);
-  tl_progressCtx.job = &job;
-  tl_progressCtx.startTime = std::chrono::steady_clock::now();
+  g_progressCtx.job = &job;
+  g_progressCtx.startTime = std::chrono::steady_clock::now();
   sd_set_progress_callback(sdProgressCallback, nullptr);
-  tl_abortModel = this;
+  g_abortModel = this;
   sd_set_abort_callback(sdAbortCallback, nullptr);
 
   // Scope guard: clear process-global callbacks on any exit path (including
   // early exceptions from parsing/validation before generate_image runs).
   auto clearCallbacks = [&]() {
-    tl_progressCtx.job = nullptr;
-    tl_abortModel = nullptr;
+    g_progressCtx.job = nullptr;
+    g_abortModel = nullptr;
     sd_set_progress_callback(nullptr, nullptr);
     sd_set_abort_callback(nullptr, nullptr);
   };

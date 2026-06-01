@@ -303,7 +303,7 @@ TEST_F(SdWanValidationTest, Img2VidRejectsControlFrameWithWrongDimensions) {
 // Sanity check: the job callbacks are cleared on the validation throw path.
 // ---------------------------------------------------------------------------
 //
-// process() installs a CallbackGuard that clears tl_progressCtx + the
+// process() installs a CallbackGuard that clears g_progressCtx + the
 // sd_set_progress_callback/sd_set_abort_callback hooks on every exit path.
 // If validation throws in processVideo() BEFORE the guard runs, we'd leak
 // a dangling pointer to the freed job. Re-running a second job right after

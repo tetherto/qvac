@@ -38,7 +38,7 @@ bool requireBool(const picojson::value& v, const std::string& key) {
 
 // Largest integer JSON (IEEE 754 double) can losslessly represent. Used by
 // requireInt64 to reject silent precision loss for large seeds.
-inline constexpr double kMaxSafeJsonInt = 9007199254740992.0; // 2^53
+inline constexpr double MAX_SAFE_JSON_INT = 9007199254740992.0; // 2^53
 
 int requireInt(const picojson::value& v, const std::string& key) {
   const double d = requireNum(v, key);
@@ -81,7 +81,7 @@ int64_t requireInt64(const picojson::value& v, const std::string& key) {
         general_error::InvalidArgument,
         key + " must be an integer, got: " + std::to_string(d));
   }
-  if (d < -kMaxSafeJsonInt || d > kMaxSafeJsonInt) {
+  if (d < -MAX_SAFE_JSON_INT || d > MAX_SAFE_JSON_INT) {
     throw StatusError(
         general_error::InvalidArgument,
         key +
