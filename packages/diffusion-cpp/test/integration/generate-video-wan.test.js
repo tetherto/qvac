@@ -338,7 +338,7 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
     console.log('='.repeat(60))
     console.log(` Platform   : ${platform}`)
     console.log(` Frames     : ${I2V_SMOKE_FRAMES} @ ${I2V_SMOKE_FPS}fps`)
-    console.log(` Size       : inferred from init_image (512x512)`)
+    console.log(' Size       : inferred from init_image (512x512)')
     console.log(` Steps      : ${I2V_SMOKE_STEPS}`)
     console.log(` Seed       : ${I2V_SMOKE_SEED}`)
     console.log(` Init image : ${I2V_INIT_IMAGE_PATH}`)
