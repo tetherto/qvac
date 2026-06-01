@@ -7,6 +7,15 @@ declare class QvacResponse<Output = any> extends EventEmitter {
   constructor(
     handlers: {
       cancelHandler: () => Promise<void>
+      /**
+       * Optional abort signal. When aborted, the response is failed with
+       * the abort `reason` — passed through unchanged when it's an Error,
+       * otherwise wrapped in a default `Error('Aborted: ...')`. Wires
+       * external timeout / crash into the response without polling. Addons
+       * typically forward the signal they received from
+       * `model.run(input, { signal })` straight into the response.
+       */
+      signal?: AbortSignal
     },
     pollInterval?: number
   )
