@@ -6,7 +6,7 @@ This is a patch release that fixes a race condition in the KV cache save path du
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 ### KV Cache Save Race Condition in Tool-Calling Completions
 
@@ -22,7 +22,7 @@ The fix ensures the save command receives the correct session path and the SDK a
 
 ---
 
-## 📘 Documentation
+## Documentation
 
 - Added npm keywords to `package.json` for better discoverability on the npm registry, covering AI/ML, inference engines, supported platforms, and P2P capabilities.
 - Added a link to the consolidated plaintext documentation export (`llms-full.txt`) in the SDK README for AI/LLM tool consumption.

@@ -2,6 +2,7 @@
 import test from "brittle";
 import {
   completionEventSchema,
+  completionStatsSchema,
   doneEventSchema,
   seqSchema,
 } from "@/schemas/completion-event";
@@ -53,6 +54,44 @@ test("completionDone: accepts the 'cancelled' stopReason on the success path", (
     seq: 5,
     stopReason: "cancelled",
     error: { message: "spurious" },
+  });
+});
+
+test("completionStatsSchema: all fields optional, promptTokens carries a number", (t) => {
+  const ok = (v: unknown) => t.is(completionStatsSchema.safeParse(v).success, true);
+  const bad = (v: unknown) => t.is(completionStatsSchema.safeParse(v).success, false);
+
+  // Empty stats are valid — every field is optional (older addons may
+  // emit nothing).
+  ok({});
+
+  // promptTokens is the new field — must round-trip a number and
+  // coexist with the rest of the stats fields.
+  ok({ promptTokens: 1234 });
+  ok({
+    timeToFirstToken: 12.5,
+    tokensPerSecond: 42,
+    cacheTokens: 100,
+    promptTokens: 1234,
+    generatedTokens: 56,
+    backendDevice: "gpu",
+  });
+
+  // Non-numeric values are rejected — the schema must enforce the type
+  // so workbench can rely on `stats.promptTokens` being `number |
+  // undefined` after parsing.
+  bad({ promptTokens: "1234" });
+  bad({ promptTokens: null });
+});
+
+test("statsEvent: promptTokens flows through the wire event shape", (t) => {
+  const ok = (v: unknown) =>
+    t.is(completionEventSchema.safeParse(v).success, true);
+
+  ok({
+    type: "completionStats",
+    seq: 7,
+    stats: { promptTokens: 2048, generatedTokens: 64 },
   });
 });
 

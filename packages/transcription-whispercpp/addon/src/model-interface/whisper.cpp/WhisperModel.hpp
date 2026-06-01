@@ -152,6 +152,31 @@ private:
   bool is_loaded_ = false;
   bool is_warmed_up_ = false;
 
+  // Active backend identity + device-memory snapshot, populated once at
+  // load() time (after backends are registered) and reported back via
+  // runtimeStats(). Numeric ids kept in lock-step with transcription-
+  // parakeet's BackendId so the same integer means the same backend
+  // across speech-stack addons (cross-addon device-farm comparability).
+  //   backend_device_:  0 = CPU, 1 = GPU
+  //   backend_id_:      0 = CPU
+  //                     1 = Metal
+  //                     2 = CUDA
+  //                     3 = Vulkan
+  //                     4 = OpenCL
+  //                     99 = other / unknown
+  // gpu_mem_total_mb_ / gpu_mem_free_mb_ are device-reported memory in
+  // megabytes (MiB) at load() time; -1 means "device does not report".
+  int64_t backend_device_ = 0;
+  int64_t backend_id_ = 0;
+  int64_t gpu_mem_total_mb_ = -1;
+  int64_t gpu_mem_free_mb_ = -1;
+  std::string backend_name_ = "CPU";
+  std::string gpu_device_description_;
+  // Populates the active-backend fields above from the ggml device registry,
+  // using the EXACT use_gpu / gpu_device the whisper context was created with
+  // (post Adreno->OpenCL preference), so the report matches whisper's pick.
+  void captureActiveBackendInfo(bool useGpu, int gpuDeviceIndex);
+
   // Runtime stats accumulated over a job (reset() clears these).
   int64_t totalSamples_ = 0;
   int64_t totalTokens_ = 0;

@@ -10,6 +10,7 @@
 
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
+#include <inference-addon-cpp/Logger.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/addon/AddonJs.hpp>
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
@@ -33,8 +34,63 @@ inline std::unordered_map<
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
 
-inline void disableWhisperLogs(
-    enum ggml_log_level /*level*/, const char* /*text*/, void* /*userData*/) {}
+// Forward whisper.cpp / ggml native logs into the addon logger (QLOG -> JS
+// logger) instead of discarding them. whisper_log_set() also installs this
+// as ggml's log sink (whisper calls ggml_log_set() with the same callback),
+// so this surfaces ggml backend-init lines too — e.g.
+// "ggml_vulkan: Found 1 Vulkan devices: Vulkan0: Mali-G715 (...) | uma: 1"
+// and "whisper_backend_init_gpu: using <name> backend" — which are the
+// authoritative source of truth for which compute backend whisper actually
+// initialised against (vs. the addon's own captureActiveBackendInfo()
+// reimplementation). Verbosity is controlled by the JS-side logger level:
+// nothing is shown unless the host raises the level to INFO/DEBUG (e.g. via
+// the addon's setLogger / --native-logs path). JsLogger::log() is
+// thread-safe (mutex-guarded queue + uv_async_send), so it is safe to call
+// from ggml's internal worker threads. This callback must never throw back
+// into ggml's C log path.
+inline void forwardGgmlLog(
+    enum ggml_log_level level, const char* text, void* /*userData*/) {
+  if (text == nullptr) {
+    return;
+  }
+  // ggml terminates each line with '\n' (and uses GGML_LOG_LEVEL_CONT for
+  // continuations); trim trailing newlines so the JS logger gets clean lines.
+  std::string message(text);
+  while (!message.empty() &&
+         (message.back() == '\n' || message.back() == '\r')) {
+    message.pop_back();
+  }
+  if (message.empty()) {
+    return;
+  }
+
+  namespace logp = qvac_lib_inference_addon_cpp::logger;
+  logp::Priority priority = logp::Priority::INFO;
+  switch (level) {
+  case GGML_LOG_LEVEL_ERROR:
+    priority = logp::Priority::ERROR;
+    break;
+  case GGML_LOG_LEVEL_WARN:
+    priority = logp::Priority::WARNING;
+    break;
+  case GGML_LOG_LEVEL_DEBUG:
+    priority = logp::Priority::DEBUG;
+    break;
+  case GGML_LOG_LEVEL_INFO:
+  case GGML_LOG_LEVEL_CONT:
+  case GGML_LOG_LEVEL_NONE:
+  default:
+    priority = logp::Priority::INFO;
+    break;
+  }
+
+  try {
+    QLOG(priority, message);
+  } catch (...) {
+    // A logging failure (e.g. JS logger not yet initialised) must never
+    // propagate back into ggml's C log callback.
+  }
+}
 
 inline WhisperConfig
 createWhisperConfig(js_env_t* env, const js::Object& configurationParams) {
@@ -151,7 +207,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
-  whisper_log_set(disableWhisperLogs, nullptr);
+  whisper_log_set(forwardGgmlLog, nullptr);
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
 

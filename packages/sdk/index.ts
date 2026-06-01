@@ -98,6 +98,7 @@ export {
   type RagSaveStage,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
+  RAG_ERROR_CODES,
   type QvacConfig,
   type ModelInfo,
   type GetModelInfoParams,
@@ -191,6 +192,7 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 export { InferenceCancelledError } from "./utils/errors-server";
 export type { InferenceCancelledPartial } from "./utils/errors-server";
 export {
+  ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,

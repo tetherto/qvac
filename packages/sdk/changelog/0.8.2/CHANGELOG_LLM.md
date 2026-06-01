@@ -6,7 +6,7 @@ This is a maintenance release that refreshes the SDK README with a streamlined q
 
 ---
 
-## 📘 Documentation
+## Documentation
 
 ### README Rewrite
 
@@ -21,6 +21,6 @@ Key changes:
 
 ---
 
-## ⚙️ Infrastructure
+## Infrastructure
 
 - SDK dependency installs in CI publish and pod check workflows are now frozen to prevent unexpected version drift during builds.

@@ -31,7 +31,7 @@ Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelin
 
 1. **Title**: `# QVAC SDK v{VERSION} Release Notes`
 
-2. **NPM Link**: Add `📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{VERSION}` right after the title
+2. **NPM Link**: Add `📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{VERSION}` right after the title. This is the **only** place an emoji is allowed in the document (see the no-emoji rule below).
 
 3. **Introduction**: Write a brief 2-3 sentence summary of what this release brings
 
@@ -52,6 +52,7 @@ Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelin
    - Remove internal jargon, make it accessible
    - **Do NOT include PR links or references to the original CHANGELOG.md** — this is a standalone document
    - **Skip entries with no informational value** — generic entries like "Updated models" or "Bumped dependencies" without specific details should be omitted
+   - **No emoji anywhere except the `📦 **NPM:**` line.** Section headings MUST be plain text — write `## Breaking Changes`, `## New APIs`, `## Bug Fixes`, never `## 💥 Breaking Changes`, `## 🔌 New APIs`, `## 🐞 Bug Fixes`. The docs site inlines this file verbatim, so any emoji prefix leaks straight into the public section headers and breaks consistency with the latest release. Do not add decorative emoji to prose or bullets either.
 
 ### Example Transformation
 

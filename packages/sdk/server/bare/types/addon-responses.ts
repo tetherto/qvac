@@ -2,6 +2,7 @@ export interface LlmStats {
   TTFT?: number;
   TPS?: number;
   CacheTokens?: number;
+  promptTokens?: number;
   generatedTokens?: number;
   backendDevice?: "cpu" | "gpu";
 }

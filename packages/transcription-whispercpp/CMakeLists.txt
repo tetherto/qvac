@@ -50,28 +50,6 @@ if(ANDROID)
   set(ANDROID_NATIVE_API_LEVEL "$ENV{ANDROID_NATIVE_API_LEVEL}")
 endif()
 
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    if(NOT TARGET ggml::${_backend})
-      # GGML_BACKEND_DL=ON ships the per-arch CPU + GPU backends as
-      # standalone MODULE libraries that are dlopen'd at runtime; upstream
-      # ggml's install(TARGETS … EXPORT) skips them, so materialise an
-      # imported target from the .so under vcpkg's bin/.
-      find_library(_${_backend}_LIB
-        NAMES "${_backend}"
-        PATHS "${VCPKG_INSTALLED_PATH}/bin" "${VCPKG_INSTALLED_PATH}/lib"
-        NO_DEFAULT_PATH
-        REQUIRED)
-      add_library(ggml::${_backend} SHARED IMPORTED)
-      set_target_properties(ggml::${_backend} PROPERTIES
-        IMPORTED_LOCATION "${_${_backend}_LIB}"
-        IMPORTED_NO_SONAME TRUE)
-    endif()
-    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-  endforeach()
-endif()
-
 # Subdir bare's runtime installs the dlopenable backend modules into
 # (<addon>/prebuilds/<bare_target>/<module_name>/); WhisperModel joins it
 # with the runtime-supplied backendsDir before
@@ -80,7 +58,55 @@ bare_target(bare_target_value)
 bare_module_target("." _unused_target NAME module_name VERSION _unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
+# Collect every dynamically-loadable ggml backend that the `ggml-speech`
+# port produced ($CURRENT_PACKAGES_DIR/lib/libqvac-speech-ggml-*.so on
+# Android; nothing on Apple/static-only platforms). Mirrors
+# qvac/packages/transcription-parakeet/CMakeLists.txt verbatim — two
+# branches:
+#   1. IMPORTED targets that `find_package(ggml)` already surfaced
+#      (CPU on Android, all backends on Linux desktop).
+#   2. Loose `libqvac-speech-ggml-*.so` MODULE files that ggml-config
+#      deliberately omits from GGML_AVAILABLE_BACKENDS' IMPORTED set
+#      (Vulkan + OpenCL on Android — the loader picks them up at
+#      runtime via `ggml_backend_load_all_from_path()`).
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    if(TARGET ggml::${_backend})
+      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    endif()
+  endforeach()
+endif()
+
+set(BACKEND_DL_LOOSE_SOS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
+    message(WARNING "transcription-whispercpp: VCPKG_INSTALLED_PATH "
+      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
+      "ggml backend .so pickup -- the runtime may fail to find "
+      "Vulkan / OpenCL backends.")
+  else()
+    file(GLOB BACKEND_DL_LOOSE_SOS
+      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so")
+    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
+      message(STATUS "transcription-whispercpp: will stage ggml backend ${_lib}")
+    endforeach()
+  endif()
+endif()
+
 add_bare_module(transcription-whispercpp EXPORTS ${BACKEND_DL_LIBS})
+
+# Stage every loose MODULE backend (Vulkan / OpenCL on Android, ...)
+# into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
+# branch uses for IMPORTED targets — keeping destinations identical so
+# `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`
+# discovers IMPORTED-target CPU + loose-file GPU backends in one scan.
+if(BACKEND_DL_LOOSE_SOS)
+  install(
+    FILES ${BACKEND_DL_LOOSE_SOS}
+    DESTINATION ${bare_target_value}/${module_name}
+  )
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${transcription-whispercpp}_module PRIVATE -Wl,--exclude-libs,ALL)

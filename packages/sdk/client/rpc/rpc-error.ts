@@ -1,5 +1,6 @@
 import type { ErrorResponse } from "@/schemas";
 import {
+  ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -79,6 +80,24 @@ function readStringField(
   return typeof value === "string" ? value : fallback;
 }
 
+/** Read a number field from the `typedFields` envelope, returning `undefined` if missing or non-number. */
+function readOptionalNumberField(
+  fields: Record<string, unknown> | undefined,
+  key: string,
+): number | undefined {
+  const value = fields?.[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+/** Read a string field, returning `undefined` (not a fallback string) if missing. */
+function readOptionalStringField(
+  fields: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  const value = fields?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 type ErrorReconstructor = (response: ErrorResponse) => Error;
 
 /**
@@ -129,6 +148,14 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       readStringField(response.typedFields, "kind", ""),
       readStringField(response.typedFields, "modelId", ""),
       readStringField(response.typedFields, "reason", response.message),
+      response.cause,
+    );
+  },
+  CONTEXT_OVERFLOW: (response) => {
+    return new ContextOverflowError(
+      readOptionalNumberField(response.typedFields, "promptTokens"),
+      readOptionalNumberField(response.typedFields, "ctxSize"),
+      readOptionalStringField(response.typedFields, "modelId"),
       response.cause,
     );
   },
