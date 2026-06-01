@@ -18,12 +18,15 @@
 #     `303` is the semantically correct match for content negotiation
 #     ("the representation you asked for lives at another URI").
 #
-#  3. Placeholder, not splat. The splat form (`/* /:splat.md`) appears
-#     simpler but empirically crashes the Sevalla edge worker (HTTP 1101)
-#     when combined with `Header:Accept` — bug in their parser. The
-#     `:slug` placeholder is treated as greedy across path segments here
-#     (pending empirical confirmation in staging — if it turns out to
-#     match only single segments, we will expand to one rule per depth).
+#  3. One rule per nesting depth, no splat. `_redirects` placeholders
+#     (`:name`) match a single path segment — verified empirically
+#     against Sevalla (a single `/:slug/` rule served HTML, not Markdown,
+#     for `/ai-capabilities/text-generation/`). Covering the site
+#     therefore requires one rule per depth. The splat form
+#     (`/* /:splat.md`) would be greedy but empirically crashes the
+#     Sevalla edge worker (HTTP 1101) when combined with `Header:Accept`
+#     — bug in their parser. Current site max depth is 3 segments; one
+#     extra level is included as headroom.
 #
 # Loop safety: the source pattern always ends in `/`, the rewrite target
 # always ends in `.md` (no slash). Those two URL spaces are disjoint, so
@@ -32,8 +35,11 @@
 # (Sevalla's Pretty URLs normalizes bare paths first) AND because Pretty
 # URLs skips paths whose final segment contains a dot — so `/foo.md` is
 # never normalized into `/foo.md/`, which would otherwise loop.
-/             /index.md     303!   Header:Accept=text/markdown
-/:slug/       /:slug.md     303!   Header:Accept=text/markdown
+/                       /index.md                  303!   Header:Accept=text/markdown
+/:a/                    /:a.md                     303!   Header:Accept=text/markdown
+/:a/:b/                 /:a/:b.md                  303!   Header:Accept=text/markdown
+/:a/:b/:c/              /:a/:b/:c.md               303!   Header:Accept=text/markdown
+/:a/:b/:c/:d/           /:a/:b/:c/:d.md            303!   Header:Accept=text/markdown
 
 # Sevalla CDN does not resolve directory-to-index.html for path segments
 # containing dots (e.g. `v0.7.x`). The `:version` placeholder matches a
