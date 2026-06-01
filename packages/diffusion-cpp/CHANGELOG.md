@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Consume `stable-diffusion-cpp@2026-03-01#6` from `tetherto/qvac-registry-vcpkg`, which pins the merge commit of qvac-ext-stable-diffusion.cpp#10 (bypass spatial VAE tiling for Wan 2.1 I2V video encode/decode).
+- Remove the temporary package-local `stable-diffusion-cpp` vcpkg overlay port (and its `overlay-ports` entry); the addon now resolves the Wan I2V VAE-tiling fix from the registry.
+
 ### Fixed
 
 #### Restore root `VideoStableDiffusion` export
