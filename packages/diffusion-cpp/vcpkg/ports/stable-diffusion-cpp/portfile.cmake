@@ -10,14 +10,14 @@
 #   2. drop the "overlay-ports" entry from vcpkg-configuration.json
 #   3. bump stable-diffusion-cpp version>= in vcpkg.json to the new revision
 #
-# GitHub PR: https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/9
+# GitHub PR: https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/10
 # Fix: Bypass spatial VAE tiling for Wan 2.1 I2V video encode/decode
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 793d3773e925433d1e390a61d60889fdf7dd91f2
-    SHA512 73abbf49f6fc890d46263419922d6466d2269da7209c906aa5b03ab4789084107f3d7705d2e88fe448212c70540ee3db1c8b6f1bb64dd7f0f6ae3ac8b727d855
+    REF c28ed2ab58ff849b1a09e1cd8ca6953fd6a7b418
+    SHA512 d89ec481710b8b7a5505c55d8ce308e0ef1bcef024529a05bc646f36ade35511ced7abda1f6837de2b68f3c90bcb7aff20a3b6acfed0631833cdd212b4ac9889
     HEAD_REF 2026-03-01
     PATCHES
         wan-i2v-encode-video-bypass-tiling.patch
