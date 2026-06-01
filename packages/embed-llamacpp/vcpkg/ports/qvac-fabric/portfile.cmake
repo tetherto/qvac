@@ -5,6 +5,7 @@ vcpkg_from_github(
   SHA512 0ae829a9d62af533d3803a5a67388fe2d3b6dc39a9b0c80a64f893253a37378365c7b3712ad6f6e1216ee63625f12d0e5b26e2cfaea0f2da1a35e65cb3e17b27
 )
 
+# Upstream CMake options only — passed through to vcpkg_cmake_configure.
 vcpkg_check_features(
   OUT_FEATURE_OPTIONS FEATURE_OPTIONS
   FEATURES
@@ -12,64 +13,49 @@ vcpkg_check_features(
     llama BUILD_LLAMA
 )
 
-set(_qvac_gpu_backends OFF)
-if("gpu-backends" IN_LIST FEATURES)
-  set(_qvac_gpu_backends ON)
-else()
+# Portfile-only feature flags (drive PLATFORM_OPTIONS; not upstream cache vars).
+vcpkg_check_features(
+  OUT_FEATURE_OPTIONS _PORTFILE_FEATURE_OPTIONS
+  FEATURES
+    gpu-backends BUILD_GPU_BACKENDS
+    kleidiai BUILD_KLEIDIAI
+)
+
+# gpu-backends is default-on via default-features in vcpkg.json. CPU-only
+# consumers (e.g. @qvac/classification-ggml) disable it with
+# default-features:false (and re-add 'llama' if needed).
+if(NOT BUILD_GPU_BACKENDS)
   message(STATUS "qvac-fabric: gpu-backends feature OFF — building CPU-only ggml (no Metal/Vulkan/CUDA/OpenCL)")
 endif()
 
-if (VCPKG_TARGET_IS_ANDROID AND _qvac_gpu_backends)
-  # NDK only comes with C headers. Pull Vulkan and SPIR-V headers from
-  # Khronos and drop them under ggml/src/ggml-vulkan/vulkan_cpp_wrapper/include,
-  # which ggml-vulkan/CMakeLists.txt adds to the include path. Idempotent —
-  # safe to re-run against an existing local SOURCE_PATH checkout.
+if (VCPKG_TARGET_IS_ANDROID AND BUILD_GPU_BACKENDS)
+  # NDK only comes with C headers.
+  # Make sure C++ header exists, it will be used by ggml tensor library.
+  # Need to determine installed vulkan version and download correct headers
   include(${CMAKE_CURRENT_LIST_DIR}/android-vulkan-version.cmake)
   detect_ndk_vulkan_version()
   message(STATUS "Using Vulkan C++ wrappers from version: ${vulkan_version}")
+  file(DOWNLOAD
+    "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v${vulkan_version}.tar.gz"
+    "${SOURCE_PATH}/vulkan-sdk-${vulkan_version}.tar.gz"
+    TLS_VERIFY ON
+  )
 
-  set(_vk_wrapper "${SOURCE_PATH}/ggml/src/ggml-vulkan/vulkan_cpp_wrapper")
-  if(NOT EXISTS "${_vk_wrapper}/include/vulkan/vulkan.hpp")
-    file(REMOVE_RECURSE "${_vk_wrapper}" "${SOURCE_PATH}/Vulkan-Headers-${vulkan_version}")
-    file(DOWNLOAD
-      "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v${vulkan_version}.tar.gz"
-      "${SOURCE_PATH}/vulkan-sdk-${vulkan_version}.tar.gz"
-      TLS_VERIFY ON
-    )
-    file(ARCHIVE_EXTRACT
-      INPUT "${SOURCE_PATH}/vulkan-sdk-${vulkan_version}.tar.gz"
-      DESTINATION "${SOURCE_PATH}"
-      PATTERNS "*.hpp"
-    )
-    file(RENAME
-      "${SOURCE_PATH}/Vulkan-Headers-${vulkan_version}"
-      "${_vk_wrapper}"
-    )
-    file(REMOVE "${SOURCE_PATH}/vulkan-sdk-${vulkan_version}.tar.gz")
-  endif()
+  file(ARCHIVE_EXTRACT
+    INPUT "${SOURCE_PATH}/vulkan-sdk-${vulkan_version}.tar.gz"
+    DESTINATION "${SOURCE_PATH}"
+    PATTERNS "*.hpp"
+  )
 
-  set(_spv_version "1.3.290.0")
-  if(NOT EXISTS "${_vk_wrapper}/include/spirv/unified1/spirv.hpp")
-    file(REMOVE_RECURSE "${SOURCE_PATH}/SPIRV-Headers-vulkan-sdk-${_spv_version}")
-    file(DOWNLOAD
-      "https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/vulkan-sdk-${_spv_version}.tar.gz"
-      "${SOURCE_PATH}/spirv-headers-${_spv_version}.tar.gz"
-      TLS_VERIFY ON
-    )
-    file(ARCHIVE_EXTRACT
-      INPUT "${SOURCE_PATH}/spirv-headers-${_spv_version}.tar.gz"
-      DESTINATION "${SOURCE_PATH}"
-    )
-    file(COPY "${SOURCE_PATH}/SPIRV-Headers-vulkan-sdk-${_spv_version}/include/spirv"
-         DESTINATION "${_vk_wrapper}/include")
-    file(REMOVE_RECURSE "${SOURCE_PATH}/SPIRV-Headers-vulkan-sdk-${_spv_version}")
-    file(REMOVE "${SOURCE_PATH}/spirv-headers-${_spv_version}.tar.gz")
-  endif()
+  file(RENAME
+    "${SOURCE_PATH}/Vulkan-Headers-${vulkan_version}"
+    "${SOURCE_PATH}/ggml/src/ggml-vulkan/vulkan_cpp_wrapper"
+  )
 endif()
 
 set(PLATFORM_OPTIONS)
 
-if(NOT _qvac_gpu_backends)
+if(NOT BUILD_GPU_BACKENDS)
   # Force every GPU backend off explicitly, in case upstream defaults change.
   list(APPEND PLATFORM_OPTIONS
     -DGGML_METAL=OFF
@@ -91,16 +77,46 @@ else()
   list(APPEND PLATFORM_OPTIONS -DGGML_VULKAN=ON)
 endif()
 
-if(VCPKG_TARGET_IS_ANDROID AND _qvac_gpu_backends)
+# Android: always build CPU variants (NEON_DOTPROD, NEON_I8MM, etc.) and CPU
+# repacking. These are CPU-only runtime optimizations selected based on the
+# device's SIMD capabilities at load time, completely orthogonal to the GPU
+# backends. Bundling them is essential for good CPU inference performance on
+# the wide range of arm64 devices the addons ship to. Requires GGML_BACKEND_DL
+# to dispatch the variants at runtime; the existing #ifdef guard around
+# `ggml_backend_load_all_from_path()` in ggml-backend-reg.cpp keeps the search
+# scoped to the consumer's own prebuilds dir.
+if(VCPKG_TARGET_IS_ANDROID)
   set(DL_BACKENDS ON)
   list(APPEND PLATFORM_OPTIONS
     -DGGML_BACKEND_DL=ON
     -DGGML_CPU_ALL_VARIANTS=ON
-    -DGGML_CPU_REPACK=ON
-    -DGGML_OPENCL=ON
-  )
+    -DGGML_CPU_REPACK=ON)
 else()
   set(DL_BACKENDS OFF)
+endif()
+
+if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
+  message(STATUS "qvac-fabric: kleidiai feature ON — building with ARM KleidiAI optimized kernels")
+  # ggml only vendors KleidiAI via FetchContent; registry vcpkg-cmake sets
+  # FETCHCONTENT_FULLY_DISCONNECTED=ON globally, so allow the download here.
+  list(APPEND PLATFORM_OPTIONS
+    -DGGML_CPU_KLEIDIAI=ON
+    -DFETCHCONTENT_FULLY_DISCONNECTED=OFF
+  )
+endif()
+
+if (VCPKG_TARGET_IS_ANDROID AND BUILD_GPU_BACKENDS)
+  list(APPEND PLATFORM_OPTIONS -DGGML_OPENCL=ON)
+endif()
+
+if(BUILD_GPU_BACKENDS AND NOT VCPKG_TARGET_IS_OSX AND NOT VCPKG_TARGET_IS_IOS)
+  if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
+    string(APPEND VCPKG_C_FLAGS " /I${CURRENT_INSTALLED_DIR}/include")
+    string(APPEND VCPKG_CXX_FLAGS " /I${CURRENT_INSTALLED_DIR}/include")
+  else()
+    string(APPEND VCPKG_C_FLAGS " -isystem ${CURRENT_INSTALLED_DIR}/include")
+    string(APPEND VCPKG_CXX_FLAGS " -isystem ${CURRENT_INSTALLED_DIR}/include")
+  endif()
 endif()
 
 set(LLAMA_OPTIONS)
@@ -158,7 +174,7 @@ endif()
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 
-if (NOT DL_BACKENDS AND VCPKG_LIBRARY_LINKAGE MATCHES "static")
+if (VCPKG_LIBRARY_LINKAGE MATCHES "static")
   file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/bin")
   file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/bin")
 endif()
