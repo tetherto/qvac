@@ -50,7 +50,7 @@ sequenceDiagram
         TW->>WI: new WhisperInterface(binding, config, outputCb, transitionCb)
         WI->>CC: checkConfig(config)
         WI->>Bind: binding.createInstance(this, config, outputCb, transitionCb)
-        Bind->>Bind: whisper_log_set(cb_log_disable) — suppress whisper.cpp logs
+        Bind->>Bind: whisper_log_set(forwardGgmlLog) — forward whisper.cpp/ggml logs to the addon logger
         Bind->>Bind: Parse enableStats, audio_format from top-level config
         Bind->>JSA: loadFromJSObject(configurationParams)
         JSA->>JSA: Load whisperMainCfg from whisperConfig
