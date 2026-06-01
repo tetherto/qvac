@@ -1,6 +1,6 @@
 ---
 name: qv-qip-significance-check
-description: Conservatively checks whether a planned change, implementation, or PR review touches architectural significance triggers such as public SDK API, native dependency, plugin contract, model registry contract, runtime, transport, storage, release flow, npm publishing, deployment schema, security enforcement, NFR, or architecture principles. Recommends drafting a QIP before going deeper when impact is clear. Use during planning, implementation, PR review, or when invoking /qv-qip-significance-check.
+description: Use during planning, implementation, PR review, or /qv-qip-significance-check when a change may affect public SDK API, native dependency, plugin contract, model registry contract, runtime, transport, storage, release flow, deployment, security, NFR, or architecture principles.
 ---
 
 # QIP Significance Check
@@ -35,7 +35,12 @@ Conservatively decide whether a change needs a QIP before deeper implementation 
 4. If no trigger clearly fires, say so briefly and continue normally
 5. If a trigger clearly fires:
    - Name the trigger and why in one or two sentences
-   - Recommend drafting a QIP before going deeper
+   - List the exact points that need a QIP, not the whole requested change
+   - Separate implementation details that do not need a QIP on their own
+   - Recommend how many QIPs are needed:
+     - One QIP when the points are one decision with a shared consequence set
+     - Multiple QIPs when points can be approved, rejected, or shipped independently
+   - Name each proposed QIP scope in plain language
    - Ask whether to hand off to `qv-qip-create`
    - Do not start drafting unless the user confirms
 
@@ -53,7 +58,16 @@ No architectural significance trigger clearly applies. Proceed with normal team 
 Trigger: <trigger name>
 Why: <one or two sentences>
 
-This looks architecturally significant because it changes <trigger>. I recommend drafting a short QIP before we go deeper, so the affected people can review the direction early. Want me to start a QIP draft from what we know?
+QIP-worthy points:
+- <exact point that needs proposal review>
+
+Not QIP-worthy on its own:
+- <implementation detail or ordinary work>
+
+Proposal count:
+<One QIP: <scope name> / Multiple QIPs: <scope names and why split>>
+
+This looks architecturally significant because it changes <trigger>. I recommend drafting the proposal(s) above before going deeper, so the affected people can review the direction early. Want me to start a QIP draft from what we know?
 ```
 
 ## Efficiency rules

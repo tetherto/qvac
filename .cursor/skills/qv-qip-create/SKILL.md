@@ -1,6 +1,6 @@
 ---
 name: qv-qip-create
-description: Guides creation of a Slack Canvas-ready QIP from a clear proposal or a fuzzy idea, including alternatives, consequences, risks, and people to consult before posting. Uses the QIP template and architecture principles as lightweight checks. Use when drafting a QIP, responding to a significance-check recommendation, or invoking /qv-qip-create.
+description: Use when drafting a QIP, responding to qv-qip-significance-check, shaping a fuzzy architecture proposal, or invoking /qv-qip-create.
 ---
 
 # QIP Proposal Create
@@ -68,8 +68,14 @@ Advice is direction plus reasoning, not a vote.
 
 ## Drafting rules
 
-- Output a Canvas-ready draft with only the template sections
+- For non-trivial QIPs or expected iteration, save the draft as a markdown file before presenting it. Prefer `arch/qips/<short-slug>.md` when working in this repo.
+- Keep the saved file Canvas-ready with only the consultation note, template sections, and author checklist
 - Keep wording concrete and short
+- Do a cleanup pass before finalizing: remove non-important details, obvious statements, duplicate or near-duplicate points, and stale context
+- Prefer precise domain terms over long explanations when they are clearer, e.g. `idle timeout`, `whole-stream deadline`, `idempotent`, `terminal failure`
+- Write Solution as an explanation of how the problem is solved. Do not make it just a task list; use bullets only for compact scope boundaries after the reader understands the design.
+- Treat the template's Risks section as consequences and trade-offs for proposal review. Avoid a probable-production-bugs list; state what reviewers must accept, then add mitigation only where it affects whether the proposal should be accepted, changed, or split.
+- Remove "risks" that the proposed design already rules out; keep consequences that remain true after the design is implemented.
 - Fold alternatives and consequences into Solution and Risks when helpful
 - Add a diagram only when runtime, package, or approval boundaries are non-obvious
 - Do not invent approvals, commitments, or team decisions
@@ -77,7 +83,9 @@ Advice is direction plus reasoning, not a vote.
 
 ## Output format
 
-First show `People to consult before posting`, then the draft:
+For file-based drafts, reply with the saved path and a brief summary of what changed. Do not paste the whole QIP unless the user asks.
+
+For chat-only drafts, first show `People to consult before posting`, then the draft:
 
 ```markdown
 People to consult before posting
