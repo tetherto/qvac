@@ -34,6 +34,9 @@ const noGpu = proc.env && proc.env.NO_GPU === 'true'
 // This allows Wan tests to run on GPU-enabled darwin-arm64 and other GPU runners.
 const skip = isMobile || noGpu
 
+// Log skip status for CI visibility
+console.log('[Wan Video Tests] Platform:', os.platform(), 'Arch:', os.arch(), 'NO_GPU:', noGpu, '→ Skip:', skip)
+
 const platform = detectPlatform()
 
 const WAN_FILES = [
