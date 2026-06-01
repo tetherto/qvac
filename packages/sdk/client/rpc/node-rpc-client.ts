@@ -199,43 +199,54 @@ export function getWorkerLifeSignal(): AbortSignal | null {
   return workerLifeController?.signal ?? null;
 }
 
-function teardownIPCResources(): { socketPathToClose: string | null } {
-  const { serverToClose, socketPathToClose } = snapshotAndResetState();
-  if (serverToClose) {
-    try {
-      serverToClose.close();
-    } catch (err) {
-      logger.debug("Failed to close IPC server after worker exit", { err });
-    }
-  }
-  return { socketPathToClose };
+interface SpawnResources {
+  controller: AbortController;
+  server: ReturnType<typeof createServer>;
+  socketPath: string;
 }
 
 function handlePostHandshakeExit(
   code: number | null,
   exitSignal: NodeJS.Signals | null,
-  controller: AbortController,
+  spawn: SpawnResources,
 ): void {
-  // `controller` is captured at spawn time, so it survives
-  // `snapshotAndResetState` clearing the module-level `workerLifeController`.
-  // If close() pre-aborted it, this is a planned shutdown.
-  if (controller.signal.aborted) {
+  // Operate on the *spawn's own* resources, captured at spawn time.
+  // Reading module-level state here is unsafe: this listener may fire
+  // after close() has cleared state AND a new ensureRPC() has populated
+  // it with a different spawn's resources, in which case touching
+  // module state would corrupt the new spawn.
+  if (spawn.controller.signal.aborted) {
+    // Planned shutdown — close()/closeSyncForExit() handled its own
+    // teardown (snapshot + server.close + socket unlink). Nothing more
+    // to do here.
     logger.debug(
       `Bare worker exited after planned shutdown (code=${code}, signal=${exitSignal})`,
     );
-    const { socketPathToClose } = teardownIPCResources();
-    bestEffortUnlinkSocket(socketPathToClose);
     return;
   }
 
   logger.info(
     `🪦 Bare worker exited post-handshake (code=${code}, signal=${exitSignal})`,
   );
-  // Teardown before abort so a re-entrant ensureRPC() from an abort
-  // listener sees a clean slate and respawns.
-  const { socketPathToClose } = teardownIPCResources();
-  controller.abort(new WorkerCrashedError(code, exitSignal));
-  bestEffortUnlinkSocket(socketPathToClose);
+
+  // Only clear module state if we're still the active spawn. A newer
+  // ensureRPC() may have replaced these fields already.
+  if (workerLifeController === spawn.controller) {
+    rpcInstance = null;
+    rpcPromise = null;
+    bareWorkerProc = null;
+    ipcServer = null;
+    currentSocketPath = null;
+    workerLifeController = null;
+  }
+
+  try {
+    spawn.server.close();
+  } catch (err) {
+    logger.debug("Failed to close IPC server after worker crash", { err });
+  }
+  spawn.controller.abort(new WorkerCrashedError(code, exitSignal));
+  bestEffortUnlinkSocket(spawn.socketPath);
 }
 
 function closeSyncForExit() {
@@ -321,6 +332,15 @@ async function ensureRPC(): Promise<RPC> {
     });
 
     ipcServer.listen(socketPath, () => {
+      // Capture *this* spawn's resources for the exit handler. Reading
+      // module-level state from the handler would be unsafe — by the
+      // time it fires, a newer spawn may have replaced everything.
+      const spawnResources: SpawnResources = {
+        controller: spawnController,
+        server: ipcServer!,
+        socketPath,
+      };
+
       bareWorkerProc = spawn("bare", {
         args: [
           WORKER_PATH,
@@ -343,7 +363,7 @@ async function ensureRPC(): Promise<RPC> {
               handlePostHandshakeExit(
                 code,
                 exitSignal as NodeJS.Signals | null,
-                spawnController,
+                spawnResources,
               );
               return;
             }
