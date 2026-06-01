@@ -13,16 +13,14 @@
 #include <thread>
 #include <utility>
 
-#if defined(__ANDROID__)
 #include <ggml-backend.h>
-#endif
 
 #include "WhisperConfig.hpp"
 #include "WhisperHandlers.hpp"
 #include "addon/WhisperErrors.hpp"
-#include "model-interface/WhisperTypes.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/WhisperTypes.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
 
@@ -141,6 +139,8 @@ void WhisperModel::load() {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Whisper model loaded successfully");
 
+    captureActiveBackendInfo();
+
     // Warm up the model on first load to avoid first-segment delay
     if (!is_warmed_up_) {
       QLOG(
@@ -199,6 +199,168 @@ void WhisperModel::endOfStream() {
   stream_ended_ = true;
 }
 
+namespace {
+// Stable numeric mapping from a ggml backend registry name to the
+// integer code surfaced on JS as `RuntimeStats.backendId`. Kept in
+// lock-step with transcription-parakeet's `BackendId` enum (see
+// transcription-parakeet/index.d.ts and ParakeetModel.cpp's
+// `backendIdFromName`) so the same integer means the same backend
+// family across both speech addons.
+//
+// Match by prefix (or by lowercased substring for legacy reg names)
+// because ggml_backend_reg_name() can return indexed strings like
+// "CUDA0" / "Vulkan0" / "MTL0" when multiple GPUs of the same family
+// are present.
+int64_t backendIdFromRegName(const std::string& nameLower) {
+  if (nameLower.find("metal") != std::string::npos ||
+      nameLower.find("mtl") != std::string::npos) {
+    return 1;
+  }
+  if (nameLower.find("cuda") != std::string::npos) {
+    return 2;
+  }
+  if (nameLower.find("vulkan") != std::string::npos) {
+    return 3;
+  }
+  if (nameLower.find("opencl") != std::string::npos) {
+    return 4;
+  }
+  return 99;
+}
+
+// Read whisper_context_params.use_gpu / .gpu_device out of the
+// WhisperConfig variant map so captureActiveBackendInfo() can mirror
+// whisper.cpp's own backend-pick logic. The defaults match
+// WhisperConfig::defaults() (use_gpu=false, gpu_device=-1 i.e. "first
+// GPU device").
+bool configUseGpu(const WhisperConfig& cfg) {
+  const auto it = cfg.whisperContextCfg.find("use_gpu");
+  if (it == cfg.whisperContextCfg.end()) {
+    return false;
+  }
+  if (const auto* asBool = std::get_if<bool>(&it->second)) {
+    return *asBool;
+  }
+  return false;
+}
+
+int configGpuDeviceIndex(const WhisperConfig& cfg) {
+  const auto it = cfg.whisperContextCfg.find("gpu_device");
+  if (it == cfg.whisperContextCfg.end()) {
+    return -1;
+  }
+  if (const auto* asDouble = std::get_if<double>(&it->second)) {
+    return static_cast<int>(*asDouble);
+  }
+  if (const auto* asInt = std::get_if<int>(&it->second)) {
+    return *asInt;
+  }
+  return -1;
+}
+} // namespace
+
+void WhisperModel::captureActiveBackendInfo() {
+  // Reset to "CPU" so we report a sensible default on every load.
+  backend_device_ = 0;
+  backend_id_ = 0;
+  backend_name_ = "CPU";
+  gpu_mem_total_mb_ = -1;
+  gpu_mem_free_mb_ = -1;
+  gpu_device_description_.clear();
+
+  const bool useGpu = configUseGpu(cfg_);
+  const int gpuDeviceIndex = configGpuDeviceIndex(cfg_);
+
+  // Whisper.cpp v1.8.x picks a GPU only when contextParams.use_gpu is
+  // true. Reflect that intent here so a CPU-only load doesn't look
+  // like a silent fallback in the WARNING below.
+  if (!useGpu) {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Active backend: CPU (use_gpu=false)");
+    return;
+  }
+
+  // Mirror whisper.cpp's `whisper_backend_init_gpu()` selection in
+  // src/whisper.cpp: pick the device at `gpu_device` index when set,
+  // otherwise the first `GGML_BACKEND_DEVICE_TYPE_GPU` in ggml's
+  // enumeration order. Whisper does NOT consider IGPU / ACCEL, so we
+  // mustn't either — reporting an IGPU here would lie about what
+  // whisper actually initialized against and confuse the device-farm
+  // assertions on Android (Mali vs Adreno).
+  ggml_backend_dev_t dev = nullptr;
+  if (gpuDeviceIndex >= 0) {
+    dev = ggml_backend_dev_get(static_cast<size_t>(gpuDeviceIndex));
+    if (dev != nullptr &&
+        ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_GPU) {
+      dev = nullptr;
+    }
+  } else {
+    const size_t devCount = ggml_backend_dev_count();
+    for (size_t i = 0; i < devCount; ++i) {
+      ggml_backend_dev_t candidate = ggml_backend_dev_get(i);
+      if (candidate != nullptr &&
+          ggml_backend_dev_type(candidate) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+        dev = candidate;
+        break;
+      }
+    }
+  }
+
+  if (dev == nullptr) {
+    // Parity with parakeet's CPU-fallback WARNING (see
+    // ParakeetModel.cpp's `loadModel()`). On iOS/desktop mobile-perf
+    // paths the integration test only checks that backendId is
+    // present, so a silent CPU fallback here would not stand out in
+    // CI logs without this line.
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "Whisper: use_gpu=true was requested but no GGML GPU device is "
+        "registered (use_gpu fell back to CPU). Likely causes: the GPU "
+        "backend library wasn't loaded (Android: ggml_backend_load_all_"
+        "from_path failed for the backendsDir), the device was rejected "
+        "by the backend (Adreno-tier policy, missing OpenCL ICD, "
+        "iOS/Android simulator without GPU support), or no GPU backend "
+        "was compiled into ggml-speech for this triplet.");
+    return;
+  }
+
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
+  const char* devName = ggml_backend_dev_name(dev);
+  const char* devDesc = ggml_backend_dev_description(dev);
+
+  std::string regNameLower = (regName != nullptr) ? regName : "";
+  std::transform(
+      regNameLower.begin(),
+      regNameLower.end(),
+      regNameLower.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+
+  backend_device_ = 1;
+  backend_id_ = backendIdFromRegName(regNameLower);
+  backend_name_ = (regName != nullptr) ? regName : "";
+  gpu_device_description_ =
+      (devDesc != nullptr) ? devDesc : (devName != nullptr ? devName : "");
+
+  size_t freeBytes = 0;
+  size_t totalBytes = 0;
+  ggml_backend_dev_memory(dev, &freeBytes, &totalBytes);
+  constexpr size_t kBytesPerMb = 1024U * 1024U;
+  gpu_mem_total_mb_ =
+      totalBytes > 0 ? static_cast<int64_t>(totalBytes / kBytesPerMb) : -1;
+  gpu_mem_free_mb_ =
+      freeBytes > 0 ? static_cast<int64_t>(freeBytes / kBytesPerMb) : -1;
+
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      std::string("Active backend: id=") + std::to_string(backend_id_) +
+          " device=" + std::to_string(backend_device_) + " name='" +
+          backend_name_ + "' gpu_device='" + gpu_device_description_ +
+          "' mem_total_mb=" + std::to_string(gpu_mem_total_mb_) +
+          " mem_free_mb=" + std::to_string(gpu_mem_free_mb_));
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
 
@@ -234,6 +396,22 @@ qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() const {
   stats.emplace_back("whisperBatchdMs", whisperBatchdMs_);
   stats.emplace_back("whisperPromptMs", whisperPromptMs_);
   stats.emplace_back("totalWallMs", totalWallMs_);
+
+  // Active backend identity + device memory, captured once at load() by
+  // captureActiveBackendInfo(). Field shape mirrors transcription-
+  // parakeet's RuntimeStats:
+  //   backendDevice : 0 = CPU, 1 = GPU (post-fallback truth)
+  //   backendId     : 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan,
+  //                   4 = OpenCL, 99 = other (same enum as parakeet)
+  // A `use_gpu: true` request that fell back to CPU at load() time
+  // surfaces here as backendDevice=0 / backendId=0 (and the load()
+  // path will have emitted a WARNING explaining why).
+  stats.emplace_back("backendDevice", backend_device_);
+  stats.emplace_back("backendId", backend_id_);
+  // Device-memory snapshot at load() (whisper-specific extras; parakeet
+  // does not expose these). -1 means the device does not report.
+  stats.emplace_back("gpuMemTotalMb", gpu_mem_total_mb_);
+  stats.emplace_back("gpuMemFreeMb", gpu_mem_free_mb_);
   return stats;
 }
 

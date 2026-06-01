@@ -13,7 +13,7 @@ import {
   InvalidImageBatchCountError,
   InvalidImageStrengthError,
   UnsupportedImageOutputError
-} from '../src/serve/adapters/openai/translate.js'
+} from '../src/serve/schemas/images.js'
 
 describe('parseImageSize', () => {
   it('returns null for undefined / null / empty', () => {
