@@ -1,33 +1,22 @@
 # stable-diffusion.cpp vcpkg overlay port (TEMPORARY)
 #
-# This overlay re-introduces the patch machinery that commit c11dfff7
-# ("fix: consume stable diffusion overlay port") removed when the qvac
-# registry took over publishing this port. Its sole purpose is to layer
-# the Wan 2.1 I2V VAE-tiling fix from commit f7c97a8a on top of the same
-# upstream tetherto/qvac-ext-stable-diffusion.cpp@9a0ca29 source the
-# registry's `2026-03-01#4` revision targets.
+# Points to the fix/wan-i2v-vae-tiling branch which adds the Wan 2.1 I2V
+# VAE-tiling fix. This overlay is temporary and will be removed once the
+# fix is merged upstream into the 2026-03-01 branch and published in the
+# qvac registry.
 #
-# Remove this overlay once the patch has been merged upstream into the
-# `2026-03-01` branch and a new port-revision is published in the qvac
-# registry. Cleanup checklist:
+# Cleanup checklist when upstream PR is merged:
 #   1. delete this entire vcpkg/ports/ directory
 #   2. drop the "overlay-ports" entry from vcpkg-configuration.json
 #   3. bump stable-diffusion-cpp version>= in vcpkg.json to the new revision
 #
-# See: vcpkg/ports/stable-diffusion-cpp/wan-i2v-encode-video-bypass-tiling.patch
-# for the upstream-bound fix; that file is the canonical source of truth for
-# the change and should land verbatim in the upstream PR.
+# GitHub PR: https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/9
+# Fix: Bypass spatial VAE tiling for Wan 2.1 I2V video encode/decode
 
-# Pinned to 747a1801 -- the same commit the qvac registry's
-# stable-diffusion-cpp@2026-03-01#5 uses (merge of qvac-ext PR#6 which adds
-# generic ESRGAN upscaler backend init with sd_upscaler_device_t and
-# new_upscaler_ctx_with_device). The wan-i2v VAE-tiling patch is layered on
-# top of this base.
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 747a180119c864e8cde0879f308200f028dfb9fe
-    SHA512 ad3079f2466c9182b465f7b3aca7793d01c25095732fd101a0fd19036938ec0f866b76ecc8dabda30e04c1098e34173f6a62be6c86ffca2745a6f8ecfb30b4fa
+    REF fix/wan-i2v-vae-tiling
     HEAD_REF 2026-03-01
     PATCHES
         wan-i2v-encode-video-bypass-tiling.patch
