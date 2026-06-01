@@ -1,94 +1,35 @@
 ---
-title: SDK Release Notes — v0.11.x (latest)
-description: Release notes for QVAC SDK v0.11.0.
+title: SDK Release Notes — v0.12.x (latest)
+description: Release notes for QVAC SDK v0.12.0.
 ---
 
-## v0.11.0
+## v0.12.0
 
 ### @qvac/sdk
 
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.11.0
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.12.0
 
-This release completes the request-lifecycle and cancellation overhaul that began in
-0.10.0: every long-running SDK call — `completion`, `embed`, `transcribe`,
-`transcribeStream`, `translate`, `finetune`, `loadModel`, `downloadAsset`, and the
-cancellable `rag` operations — now flows through a unified `RequestRegistry`, exposes
-its `requestId` synchronously on the returned promise, and can be cancelled
-individually with `cancel({ requestId })`. The wire envelope for `cancel(...)` is
-consolidated to two shapes, two legacy call signatures are removed, and the SDK gains
-typed `instanceof` for policy/cancel errors across the RPC boundary. Alongside the
-lifecycle work, this release adds Harmony / Qwen3.5 / Gemma4 tool-call dialects,
-FLUX.2 multi-reference fusion and per-call LoRA on diffusion, ESRGAN upscaling (both
-as a post-step and as a standalone `upscale()` API), Whisper VAD and end-of-turn
-events, multi-GPU `split-mode` / `tensor-split` / `main-gpu` on the LLM and embed
-plugins, a `reasoning_budget` knob for Qwen/Gemma reasoning, and a fresh Parakeet
-0.4.0 GGUF backend with duplex streaming. The mobile build flow now auto-verifies the
-worker bundle through `qvac verify bundle`, and the model registry was regenerated
-against the upstream `base-memory` Bergamot fix (dropping the deprecated Marian Opus
-constants on the way).
+This release expands the SDK into new modalities and tightens the Bare distribution story. You can now run vision-language-action inference (SmolVLA), image classification, and text-to-video generation from the same SDK surface that already handles LLMs and diffusion. TTS moves from the ONNX stack to `@qvac/tts-ggml`, Parakeet transcription advances to the 0.6.0 GGUF backend, and a new `@qvac/bare-sdk` package lets Bare workers register only the plugins they need. Tooling consumers get `@qvac/sdk/commands` for bundling and verification, the model registry picks up Gemma 4 and Qwen 3.5/3.6 multimodal constants, and several mobile and delegation fixes land alongside the feature work.
 
 #### Breaking Changes
 
-##### `unloadModel` no longer auto-closes the Bare worker
+##### TTS migrates from ONNX to tts-ggml
 
-On Bare, `unloadModel` used to call `close()` whenever no models or providers were
-left, which terminated the worker host on every routine unload. Long-lived Bare
-workers either had to avoid `unloadModel` or work around the auto-close.
-
-The default now flips by runtime: Node and Electron preserve the existing
-auto-close behaviour (`autoClose: true` by default), while Bare leaves the
-connection open (`autoClose: false` by default). Pass the field explicitly to
-override.
-
-**Before (Bare):**
-
-```typescript
-import { unloadModel } from "@qvac/sdk";
-
-await unloadModel({ modelId });
-// RPC connection closed → Bare worker host terminated.
-```
-
-**After (Bare):**
-
-```typescript
-import { unloadModel } from "@qvac/sdk";
-
-await unloadModel({ modelId });
-// Worker survives; opt in to closing explicitly:
-await unloadModel({ modelId, autoClose: true });
-```
-
-##### Parakeet plugin moves to the 0.4.0 single-file GGUF API
-
-`@qvac/transcription-parakeet` 0.4.0 replaced the legacy multi-file ONNX bundle
-(encoder + decoder + vocab + preprocessor, plus the CTC / Sortformer variants)
-with a single GGUF backed by `qvac-parakeet.cpp`. The SDK plugin now follows
-suit: every per-variant `parakeet*Src` field on `modelConfig` is gone, the
-`modelType` discriminator is gone, and the addon auto-detects TDT / CTC / EOU /
-Sortformer from GGUF metadata.
+The SDK TTS plugin now targets `@qvac/tts-ggml` instead of `@qvac/tts-onnx`. The old multi-file ONNX Chatterbox layout — separate speech encoder, embed tokens, conditional decoder, and language model paths — is replaced by single GGUF constants and a simpler load path.
 
 **Before:**
 
 ```typescript
 await loadModel({
-  modelSrc: PARAKEET_TDT_ENCODER_INT8,
-  modelType: "parakeet",
+  modelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
+  modelType: "tts",
   modelConfig: {
-    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
-    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
-    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8,
-  },
-});
-
-await loadModel({
-  modelSrc: PARAKEET_CTC_FP32,
-  modelType: "parakeet",
-  modelConfig: {
-    modelType: "ctc",
-    parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
+    ttsEngine: "chatterbox",
+    language: "en",
+    ttsSpeechEncoderSrc: TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX.src,
+    ttsEmbedTokensSrc: TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX.src,
+    ttsConditionalDecoderSrc: TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX.src,
+    ttsLanguageModelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
   },
 });
 ```
@@ -96,572 +37,282 @@ await loadModel({
 **After:**
 
 ```typescript
+import { TTS_S3GEN_MULTILINGUAL_CHATTERBOX } from "@qvac/sdk";
+
+await loadModel({
+  modelSrc: TTS_S3GEN_MULTILINGUAL_CHATTERBOX,
+  modelType: "tts",
+});
+```
+
+New registry constants cover Chatterbox and Supertonic variants in GGUF form (`TTS_S3GEN_*`, `TTS_T3_*`, `TTS_*_SUPERTONIC_*`).
+
+##### Parakeet advances to 0.6.0 GGML
+
+Building on the 0.11.0 single-file GGUF migration, Parakeet now targets `@qvac/transcription-parakeet` 0.6.0. Per-variant `modelType` discriminators and multi-file encoder/decoder/vocab fields are gone — pass a single GGUF constant and the addon detects TDT, CTC, EOU, or Sortformer from metadata.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelType: "parakeet",
+  modelConfig: {
+    modelType: "tdt",
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR,
+  },
+});
+```
+
+**After:**
+
+```typescript
+import { PARAKEET_TDT_0_6B_V3_Q8_0 } from "@qvac/sdk";
+
 await loadModel({
   modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
   modelType: "parakeet",
 });
+```
 
-await loadModel({
-  modelSrc: PARAKEET_CTC_0_6B_Q8_0,
-  modelType: "parakeet",
+##### `@qvac/bare-sdk` requires explicit plugin registration
+
+Bare consumers that previously called `getRPC()` against the full `@qvac/sdk` worker must switch to `@qvac/bare-sdk` and register only the plugins their worker uses. The slim package ships no built-in addon dependencies — unregistered calls raise `WorkerPluginsNotRegisteredError`.
+
+**Before:**
+
+```typescript
+import { getRPC } from "@qvac/sdk";
+
+const rpc = await getRPC();
+await rpc.loadModel({ /* any built-in modelType works */ });
+```
+
+**After:**
+
+```typescript
+import { plugins } from "@qvac/bare-sdk";
+import { nmtPlugin } from "@qvac/bare-sdk/nmtcpp-translation/plugin";
+import { llmPlugin } from "@qvac/bare-sdk/llamacpp-completion/plugin";
+
+const sdk = plugins([nmtPlugin, llmPlugin]);
+
+await sdk.loadModel({
+  modelSrc: BERGAMOT_EN_FR,
+  modelType: "nmt",
 });
 ```
 
-The new GGUF constants (`PARAKEET_TDT_0_6B_V3_Q8_0`, `PARAKEET_CTC_0_6B_Q8_0`,
-`PARAKEET_SORTFORMER_4SPK_V1_Q8_0`, `PARAKEET_EOU_120M_V1_Q8_0`) are added in
-this release; the legacy multi-file constants are gone.
+Install matching addon packages (`@qvac/translation-nmtcpp`, `@qvac/llm-llamacpp`, etc.) alongside `@qvac/bare-sdk`. `@qvac/sdk` remains the right choice for Node and Expo apps that want the full default worker.
 
-##### Two legacy `cancel(...)` call shapes are removed
+##### CLI bundle/verify delegates to `@qvac/sdk/commands`
 
-`cancel({ operation: "downloadAsset", downloadKey, clearCache })` and
-`cancel({ operation: "rag", workspace })` are removed because neither carried a
-`requestId` and neither can be mechanically back-mapped onto the new two-arm
-cancel wire envelope. Callers must migrate to the `requestId`-targeted cancel
-path (the primary one in 0.11.0) or to the broad cancel-by-`modelId` escape
-hatch.
+`@qvac/cli` no longer embeds its own bundle and verify implementations. The commands are thin wrappers around `@qvac/sdk/commands`, and `@qvac/cli` now depends on `@qvac/sdk` directly rather than treating it as a dev-only peer with a runtime semver floor.
 
-**Before — downloadAsset:**
+**Before:**
 
 ```typescript
-import { downloadAsset, cancel } from "@qvac/sdk";
-
-const op = downloadAsset({ assetSrc, onProgress });
-await cancel({ operation: "downloadAsset", downloadKey: assetSrc.key, clearCache: true });
+// packages/cli served with its own bundle logic and a runtime MIN_SDK_VERSION check
+const MIN_SDK_VERSION = "0.11.0";
 ```
 
-**After — downloadAsset:** the decorated promise now exposes `op.requestId`
-synchronously, and `clearCache` is honoured on the `requestId` path.
+**After:**
 
 ```typescript
-import { downloadAsset, cancel } from "@qvac/sdk";
+import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
 
-const op = downloadAsset({ assetSrc, onProgress });
-await cancel({ requestId: op.requestId, clearCache: true });
+await bundleSdk({
+  projectRoot: process.cwd(),
+  configPath: "./qvac.config.json",
+  quiet: true,
+});
+
+await verifyBundle({
+  projectRoot: process.cwd(),
+  addonsSource: "./qvac/worker.bundle.js",
+  hosts: ["android-arm64", "ios-arm64"],
+});
 ```
 
-**Before — rag:**
+CLI publishers must confirm `@qvac/sdk@0.12.0` is on npm and flip `packages/cli/package.json` to `"@qvac/sdk": "^0.12.0"` before publishing `@qvac/cli`.
 
-```typescript
-import { ragIngest, cancel } from "@qvac/sdk";
+##### react-native-bare-kit peer widened to ^0.14.0
 
-ragIngest({ workspace: "my-workspace", documents });
-await cancel({ operation: "rag", workspace: "my-workspace" });
-```
+Mobile consumers should upgrade `react-native-bare-kit` to `^0.14.0` alongside `@qvac/sdk@0.12.0`. Pinning `0.12.x` will fail peer resolution.
 
-**After — rag (primary path, by `requestId`):**
+#### New APIs
 
-```typescript
-import { ragIngest, cancel } from "@qvac/sdk";
+##### Vision-language-action with SmolVLA
 
-const op = ragIngest({ workspace: "my-workspace", documents });
-await cancel({ requestId: op.requestId });
-```
-
-**After — rag (broad escape hatch, no `requestId` to hand):**
-
-```typescript
-import { cancel } from "@qvac/sdk";
-
-// Cancel every in-flight RAG operation running on the embedding model:
-await cancel({ modelId: ragEmbeddingModelId, kind: "rag" });
-```
-
-Every other `cancel(...)` shape still works: `cancel({ operation: "inference",
-modelId })`, `cancel({ operation: "embeddings", modelId })`, `cancel({ modelId
-})`, `cancel({ modelId, kind })`, and `cancel({ requestId })` are all preserved
-by the client-side normalisation layer.
-
-#### New APIs and Capabilities
-
-##### `requestId` exposed synchronously on every cancellable call
-
-Every long-running SDK call now returns a decorated promise (or run handle) that
-carries a `requestId` you can read on the same tick the call is dispatched.
-That lets you wire a Stop button to a specific in-flight call without racing the
-network round-trip. The pattern covers `completion`, `loadModel`, `embed`,
-`transcribe`, `transcribeStream`, `translate`, `finetune`, `downloadAsset`, and
-the three cancellable RAG ops (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
+Load a SmolVLA model from the registry and run robot action inference with image preprocessing helpers:
 
 ```typescript
 import {
-  completion,
   loadModel,
-  embed,
-  downloadAsset,
-  ragIngest,
-  cancel,
+  vla,
+  vlaHparams,
+  vlaPreprocessImage,
+  vlaPadState,
+  SMOLVLA_LIBERO_VISION_Q8,
 } from "@qvac/sdk";
 
-const run = completion({ modelId, history });
-console.log(run.requestId);
+const modelId = await loadModel({
+  modelSrc: SMOLVLA_LIBERO_VISION_Q8,
+  modelType: "vla",
+  modelConfig: { backend: "auto" },
+});
 
-const op = loadModel({ modelSrc: "..." });
-console.log(op.requestId);                    // synchronously, before await
-const modelId = await op;                     // legacy unwrap still works
+const { hparams } = await vlaHparams({ modelId });
+const image = vlaPreprocessImage(pixels, width, height, {
+  size: hparams.visionImageSize,
+});
+const state = vlaPadState(robotState, hparams.maxStateDim);
 
-const handle = embed({ modelId, text: "hello" });
-console.log(handle.requestId);
-await handle;
-
-const download = downloadAsset({ assetSrc, onProgress });
-stopButton.onclick = () => cancel({ requestId: download.requestId });
-await download;                                // rejects with InferenceCancelledError if cancelled
-
-const ingest = ragIngest({ workspace: "ws-a", modelId, documents });
-console.log(ingest.requestId);
-await ingest;
+const { actions, actionDim, chunkSize } = await vla({
+  modelId,
+  images: [image],
+  imgWidth: hparams.visionImageSize,
+  imgHeight: hparams.visionImageSize,
+  state,
+  tokens,
+  mask,
+});
 ```
 
-The non-cancellable RAG ops (`ragChunk`, `ragSearch`, `ragDeleteEmbeddings`,
-`ragListWorkspaces`, `ragCloseWorkspace`, `ragDeleteWorkspace`) intentionally do
-not decorate — they're fast-path operations that don't register with the
-server-side request registry, so a `requestId` would point at nothing.
+##### Image classification
 
-##### Typed errors that survive the RPC boundary
-
-`InferenceCancelledError`, `RequestRejectedByPolicyError`,
-`RequestIdConflictError`, and `RequestNotFoundError` are now re-exported from
-`@qvac/sdk` and reconstructed on the client side with their typed fields
-intact, so `err instanceof RequestRejectedByPolicyError` actually narrows and
-`err.modelId` / `err.reason` / `err.requestId` are populated from the
-server-side throw.
-
-`RequestRejectedByPolicyError` (code 52420) fires when an admission policy
-blocks the request — for example, the worker's default
-`oneAtATimePerModel: true` rule for `completion` kind, which promotes the
-llama.cpp addon's opaque "job already set" error into a typed framework-level
-rejection.
+Classify JPEG/PNG buffers or raw RGB bytes with bundled MobileNetV3-Small or a custom GGUF:
 
 ```typescript
-import { completion, RequestRejectedByPolicyError } from "@qvac/sdk";
+import { loadModel, classify } from "@qvac/sdk";
 
+const modelId = await loadModel({
+  modelType: "classification",
+  modelConfig: { topK: 3 },
+});
+
+const results = await classify({ modelId, image: jpegBytes });
+// → [{ label: "food", confidence: 0.91 }, ...]
+```
+
+##### Text-to-video generation
+
+Generate video frames from text prompts using WAN models:
+
+```typescript
+import { video } from "@qvac/sdk";
+
+const run = video({
+  modelId,
+  mode: "txt2vid",
+  prompt: "a cat surfing a wave at sunset",
+  width: 480,
+  height: 832,
+  video_frames: 17,
+  fps: 16,
+  steps: 20,
+});
+
+for await (const tick of run.progressStream) {
+  console.log(`step ${tick.step}/${tick.totalSteps}`);
+}
+
+const frames = await run.outputs;
+```
+
+##### `@qvac/sdk/commands` for bundling and verification
+
+Programmatic access to worker bundling and prebuild verification — the same primitives `qvac bundle` and `qvac verify bundle` use:
+
+```typescript
+import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
+
+await bundleSdk({ projectRoot: process.cwd(), configPath: "./qvac.config.json" });
+await verifyBundle({
+  projectRoot: process.cwd(),
+  addonsSource: "./qvac/worker.bundle.js",
+  hosts: ["android-arm64", "ios-arm64"],
+});
+```
+
+##### RAG cancellation detection
+
+Detect cancelled RAG operations without importing `@qvac/rag/errors`:
+
+```typescript
+import { RAG_ERROR_CODES } from "@qvac/sdk";
+
+if (err.code === RAG_ERROR_CODES.OPERATION_CANCELLED) {
+  // ingest was cancelled
+}
+```
+
+##### Diffusion flash attention toggle
+
+`modelConfig.diffusion_fa` enables per-transformer flash attention on diffusion models (default on as of `@qvac/diffusion-cpp@0.8.0`). The deprecated `flux_flow` prediction mode is removed.
+
+##### Standalone ESRGAN device reporting
+
+The standalone upscaler now forwards `device` from load config and exposes `backendDevice` in upscale stats.
+
+##### Expo plugin hoisted SDK resolution
+
+Expo config plugins resolve `@qvac/sdk` from ancestor `node_modules` directories, fixing monorepo layouts where the SDK is hoisted above the app root.
+
+##### Completion prompt token counts and context overflow
+
+LLM completion now surfaces real input token counts in stats and throws a typed `ContextOverflowError` when the prompt exceeds the model context window — including across the Bare RPC boundary:
+
+```typescript
+import { ContextOverflowError } from "@qvac/sdk";
+
+const run = sdk.completion({ /* ... */ });
 try {
-  const run = completion({ modelId, history });
-  for await (const event of run.events) { /* ... */ }
+  const final = await run.final;
+  console.log(final.stats?.promptTokens);
 } catch (err) {
-  if (err instanceof RequestRejectedByPolicyError) {
-    showBusy({ modelId: err.modelId, reason: err.reason });
-    return;
-  }
-  throw err;
-}
-```
-
-##### New broad-cancel sugar and consolidated wire envelope
-
-The `cancel` wire envelope shrinks to two shapes — request-targeted (`{
-operation: "request", requestId }`) and broad-by-model (`{ operation: "broad",
-modelId, kind? }`). Two new client sugars wrap the broad shape so callers don't
-have to think about the wire representation:
-
-```typescript
-import { cancel } from "@qvac/sdk";
-
-await cancel({ modelId: "llama-3.2-1b", kind: "completion" });
-await cancel({ modelId: "llama-3.2-1b" });
-```
-
-##### Plugin authors: declare cancel scope per handler
-
-`PluginHandlerDefinition` gains an optional `cancel: { scope, hard? }` field so
-plugin authors can declare upfront whether each handler accepts a per-request
-cancel token, whether it cancels by model, or whether it has no addon-level
-cancel surface at all (soft-cancel only — the registry aborts the signal, the
-stream stops yielding, the C++ work runs to completion in the background).
-
-`scope` is `"request" | "model" | "none"`; `hard: true` documents that the
-addon-side cancel actually interrupts compute. Plugin manifests that omit the
-field still load — it's optional.
-
-```typescript
-import { definePlugin, defineHandler } from "@qvac/sdk";
-
-definePlugin({
-  manifestVersion: 1,
-  handlers: {
-    myStream: defineHandler({
-      requestSchema,
-      responseSchema,
-      streaming: true,
-      cancel: { scope: "model", hard: true },
-      handler: async function* (request, ctx) { /* ... */ },
-    }),
-  },
-});
-```
-
-##### Multi-GPU `split-mode`, `tensor-split`, and `main-gpu` on LLM and embed
-
-LLM and embed model configs now expose the underlying llamacpp multi-GPU knobs.
-LLM uses the canonical hyphenated keys (`"split-mode"`, `"tensor-split"`,
-`"main-gpu"`) to mirror the llama.cpp CLI; embed uses the existing camelCase
-convention (`splitMode`, `tensorSplit`, `mainGpu`).
-
-```typescript
-// LLM
-await loadModel({
-  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-  modelType: "llm",
-  modelConfig: {
-    "split-mode": "layer",        // "none" | "layer" | "row"
-    "tensor-split": "1,1",        // proportional split across GPUs
-    "main-gpu": 0,                // integer index or "integrated" | "dedicated"
-  },
-});
-
-// Embed
-await loadModel({
-  modelSrc: EMBEDDING_GEMMA_300M_Q8_0,
-  modelType: "embed",
-  modelConfig: {
-    splitMode: "layer",
-    tensorSplit: "1,1",
-    mainGpu: 0,
-  },
-});
-```
-
-##### Whisper VAD and end-of-turn events on `transcribeStream`
-
-`transcribeStream` gains a conversational mode opted into via `emitVadEvents:
-true`. The session yields a discriminated event stream that includes live
-voice-activity probabilities and turn boundaries, so apps can build push-to-talk
-or barge-in UX without poll-the-text hacks.
-
-```typescript
-import { transcribeStream } from "@qvac/sdk";
-
-const session = await transcribeStream({
-  modelId: "whisper-base",
-  emitVadEvents: true,
-  endOfTurnSilenceMs: 800,
-  vadRunIntervalMs: 100,
-});
-
-for await (const event of session) {
-  if (event.type === "vad") console.log("speaking:", event.speaking, event.probability);
-  else if (event.type === "endOfTurn") console.log("turn ended after", event.silenceDurationMs, "ms");
-  else if (event.type === "text") process.stdout.write(event.text);
-}
-
-session.write(audioChunk);
-session.end();
-```
-
-`TranscribeStreamEvent`, `VadStateEvent`, `EndOfTurnEvent`, and
-`TranscribeStreamConversationSession` are new exported types. The existing
-text-only, segment, and audio-chunk overloads are unchanged.
-
-##### Parakeet duplex streaming with EOU events
-
-The new parakeet plugin (see Breaking Changes) ships a duplex
-`transcribeStream` session that mirrors the whisper one. EOU model checkpoints
-surface as `{ type: "endOfTurn" }` events on the same iterator as `{ type:
-"text" }`.
-
-```typescript
-const session = await transcribeStream({
-  modelId,
-  parakeetStreamingConfig: {
-    chunkMs: 1000,
-    emitPartials: true,
-  },
-});
-
-ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
-
-for await (const event of session) {
-  switch (event.type) {
-    case "text":
-      process.stdout.write(event.text);
-      break;
-    case "endOfTurn":
-      console.log("\n[endOfTurn] turn boundary detected\n");
-      break;
+  if (err instanceof ContextOverflowError) {
+    console.warn(
+      `prompt of ${err.promptTokens} tokens exceeded ${err.ctxSize}`,
+    );
   }
 }
 ```
 
-Per-call streaming overrides — `chunkMs`, `historyMs`, `leftContextMs`,
-`rightLookaheadMs`, `emitPartials`, `emitEnergyVad` — are accepted on
-`parakeetStreamingConfig` and fall back to their `parakeetConfig.streaming*`
-load-time counterparts.
+#### Bug Fixes and Reliability
 
-##### Harmony, Qwen3.5, and Gemma4 tool-call dialects
+- Bare delegated RPC now routes through the model registry instead of ad-hoc connection state.
+- `@qvac/sdk` builds cleanly under both Bun and npm.
+- Suspend/resume lifecycle ordering is corrected in the runtime.
+- Snap-packaged apps use the common directory for QVAC home.
+- SDK `peerDependencies` on Holepunch libraries are removed; CI enforces the expected peer ranges instead.
+- `@qvac/rag` and `@qvac/registry-client` bump to `^0.6.0`.
 
-`toolDialect` now covers `"hermes" | "pythonic" | "json" | "harmony"`, plus
-auto-detected `qwen35` and `gemma4` parsers. Harmony adds first-class support
-for GPT-OSS models — including streaming the final-channel content
-incrementally instead of buffering until `<|return|>`, so long GPT-OSS responses
-no longer stall — and fixes a regression where protocol markers
-(`<|channel|>analysis<|message|>...`, `<|start|>assistant`, `<|return|>`) were
-leaking into `contentDelta`. Qwen3.5 covers the Pythonic-XML
-`<tool_call><function=NAME><parameter=KEY>...</parameter></function></tool_call>`
-framing; Gemma4 covers the native
-`<|tool_call>call:NAME{key:<|"|>val<|"|>,...}<tool_call|>` framing.
+#### Model Registry
 
-```typescript
-import { completion, type ToolDialect } from "@qvac/sdk";
-
-const result = completion({
-  modelId,                         // gpt-oss-20b-Q4_K_M auto-routes to "harmony"
-  history,
-  tools,
-  toolDialect: "harmony",          // optional explicit override
-});
-
-const dialect: ToolDialect = "harmony";
-```
-
-Qwen3.5 / Qwen3.6 and Gemma4 are auto-detected from the model name; the parsers
-ship without any caller-side wiring. The `harmony` parser also surfaces
-malformed-JSON, unknown-tool, and non-object payloads as structured
-`ToolCallError`s instead of silently dropping the event.
-
-##### `reasoning_budget` knob for thinking models
-
-`@qvac/llm-llamacpp@0.20.0` introduced a `reasoning_budget` parameter that gates
-how much "thinking" a reasoning model is allowed to produce: `-1` =
-unrestricted, `0` = disabled. The SDK exposes it both as a load-time default on
-`LlmConfig` and as a per-request override on `GenerationParams`.
-
-```typescript
-import { loadModel, completion } from "@qvac/sdk";
-
-const modelId = await loadModel({
-  modelSrc: "/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf",
-  modelType: "llm",
-  modelConfig: { ctx_size: 4096, reasoning_budget: -1 },
-});
-
-const run = completion({
-  modelId,
-  history: [{ role: "user", content: "Think step by step." }],
-  generationParams: { reasoning_budget: 0 }, // override per-request
-});
-```
-
-The same bump fixes a regression where `system_prompt` (a JS-only
-`completion-stream.ts` field) was being forwarded to the C++ arg parser as
-`--system-prompt`, which had been removed in llamacpp 8189+ — model loads were
-failing outright until this fix landed.
-
-##### FLUX.2 multi-reference fusion and per-call LoRA for diffusion
-
-The diffusion API gains FLUX.2 multi-reference fusion (`init_images:
-Uint8Array[]`, mutually exclusive with the existing single `init_image`), FLUX.2
-reference-image tunables (`increase_ref_index`, `auto_resize_ref_image`), and a
-per-call `lora` field that takes an absolute filesystem path. A new load-time
-`lora_apply_mode` controls whether the adapter is fused permanently into the
-model or applied per-call (`"auto" | "immediately" | "at_runtime"`).
-
-```typescript
-const refA = fs.readFileSync("scientist-a.jpg");
-const refB = fs.readFileSync("scientist-b.jpg");
-const { outputs } = diffusion({
-  modelId,
-  prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
-  init_images: [refA, refB],
-  width: 768,
-  height: 768,
-});
-
-const { outputs: loraOutputs } = diffusion({
-  modelId,
-  prompt: "a watercolor cat",
-  lora: "/home/user/loras/watercolor.safetensors",
-});
-
-await loadModel(modelSrc, {
-  modelType: "diffusion",
-  modelConfig: { prediction: "flux2_flow", lora_apply_mode: "immediately" },
-});
-```
-
-Relative LoRA paths are rejected: the SDK runs across processes with differing
-cwds, so absolute paths (POSIX, Windows drive-letter, or UNC) are the only safe
-shape.
-
-##### ESRGAN upscaling — post-step and standalone
-
-Two new paths land for ESRGAN upscalers. The first attaches an upscaler to a
-diffusion model and runs it as a post-step on every generated image. The second
-loads an ESRGAN file as a standalone `upscale()`-only model so consumers can
-feed an arbitrary PNG or JPEG into the SDK and get an upscaled image back —
-without standing up a full diffusion pipeline.
-
-```typescript
-// Post-step upscale during diffusion
-const modelId = await loadModel({
-  modelSrc: SD_V2_1_1B_Q8_0,
-  modelType: "diffusion",
-  modelConfig: {
-    prediction: "v",
-    upscaler: {
-      type: "esrgan",
-      model_src: "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
-      tile_size: 128,
-    },
-  },
-});
-
-const { outputs } = diffusion({
-  modelId,
-  prompt: "an illustrated red fox portrait",
-  width: 128,
-  height: 128,
-  upscale: { repeats: 2 },
-});
-```
-
-```typescript
-// Standalone upscale — no diffusion model required
-import { upscale, loadModel, REALESRGAN_X4PLUS_ANIME_6B } from "@qvac/sdk";
-
-const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
-  modelType: "diffusion",
-  modelConfig: {
-    mode: "upscale",
-    upscaler: { tile_size: 128 },
-  },
-});
-
-const { outputs, stats } = upscale({
-  modelId,
-  image: pngBytes,        // Uint8Array (PNG/JPEG)
-  repeats: 1,             // each pass multiplies dims by the model's native scale factor
-});
-
-const [upscaledPng] = await outputs;
-console.log(await stats); // { upscaleMs, totalUpscaleMs, width, height, totalPixels, repeats, ... }
-```
-
-Calling `upscale()` against a model that wasn't loaded with `mode: "upscale"`
-raises `ModelOperationNotSupportedError` upfront, and loading a diffusion model
-with `modelConfig.upscaler` set but `model_src` missing fails fast with a
-structured `ModelLoadFailedError` instead of letting the native addon error
-mid-load.
-
-##### Mobile build flow auto-verifies the worker bundle
-
-Expo prebuild now runs `qvac verify bundle` against the emitted
-`worker.mobile.bundle.js` before copying it into the SDK's `dist/`. The flow is
-`runBundler → assert bundle exists → runVerifier → copyFileSync`, so the SDK
-`dist/worker.mobile.bundle.js` only updates when verification passes. Failure
-preserves the last known-good artifact and fails Expo prebuild fast with a new
-`BundleVerificationFailedError` (code 50609).
-
-If a `qvac.config.{json,js,mjs,ts}` is present, ABI checks are pinned to its
-`bareRuntimeVersion`; without config, the CLI auto-detects from `node_modules`
-(`bare-runtime` → `bare`) and falls through to a warning only when neither is
-installed. `@qvac/cli` peer dep range moves from `^0.2.4` to `^0.4.0` — the
-first version that ships `qvac verify bundle` — with the existing npx fallback
-still in place for consumers that don't pin the dep.
-
-Pear consumers aren't auto-wired yet — run `qvac verify bundle --addons-source
-./node_modules --host <host> --config qvac.config.json` manually before `pear
-stage` / `pear run`.
-
-##### `cancelFinetune` is now fire-and-forget
-
-`cancelFinetune(modelId)` used to await the addon's cancel flip before
-resolving. It now fires a synchronous registry cancel and returns immediately;
-the actual `model.cancel()` runs out-of-band via the new context's abort
-listener. The result shape is unchanged (`status: "CANCELLED"` still
-populated), but workbench / CLI / external consumers that gated subsequent
-calls on cancel-resolution timing should switch to `await cancel({ requestId
-})`, which has been synchronous-after-abort since the lifecycle work began.
-
-#### Bug Fixes
-
-##### Delegated inference connect is fast again
-
-The `loadModel.delegation.connection` regression introduced in 0.10.0 — where
-`@qvac/sdk` 0.9.0 → 0.10.0 took the consumer-side connect from ≈2.5s to ≈8.3s
-on first delegated call — is fixed by dropping the explicit `await
-swarm.dht.fullyBootstrapped()` block before `dht.connect()` in
-`ensureRPCConnection`. The SDK's normal init path already warms the routing
-table via `getSwarm()` during registry initialisation, so the explicit guard
-was redundant. Measured cold-start connect mean drops from 3.82s back down to
-1.18s (≈3.2× faster) on the same hardware and network.
-
-##### KV cache priming no longer wastes a token
-
-`initSystemPromptCache` used to start generation and then race the first output
-token against a cancel. That always produced one token of unnecessary work and
-relied on a fragile output/cancel race. The SDK now uses the addon's new
-`prefill: true` runtime option (in `@qvac/llm-llamacpp ^0.17.3`) so priming
-ingests the prompt and tools into the KV cache without producing any output
-tokens. `initSystemPromptCache` resolves as soon as priming finishes.
-
-##### React Native duplex RPC no longer uses Node-only `Buffer`
-
-The RN duplex RPC path was using Node's `Buffer` global, which isn't available
-on Hermes. The path now uses `Uint8Array` end-to-end so mobile consumers can
-use duplex streaming (transcribe, parakeet, tts) without hitting `Buffer is
-not defined`.
-
-##### SDK bundles its own `worker.js` for packaged consumers
-
-Apps consuming the SDK from a bundler (Metro, esbuild, webpack) were missing
-`worker.js` from the published package, so consumers had to hand-copy it. The
-package now ships `worker.js` alongside `worker.mobile.bundle.js` so packaged
-consumers no longer need extra bundling steps.
-
-##### Dedup of stateful Holepunch singletons
-
-The SDK and `@qvac/registry-client` had drifting declarations for
-`corestore`, `hyperblobs`, `hyperdb`, and `hyperswarm`: the SDK declared them
-as `peerDependencies`, the registry client declared them as hard
-`dependencies`, and the version ranges didn't match. The mismatch caused npm
-to install duplicate copies, producing separate DHT nodes and broken
-connectivity. Bumping `@qvac/registry-client` to `^0.5.0` (where those libs
-move to `peerDependencies`) and `@qvac/embed-llamacpp` to `^0.16.0` and
-`@qvac/transcription-whispercpp` to `^0.7.0` completes the dedup chain.
-
-#### Model Registry Changes
-
-The Bergamot translation pairs `BERGAMOT_EN_IT` and `BERGAMOT_ES_EN` were
-pinned to the buggy `tiny` variant, which caused leading `"- "` hallucinations
-on short inputs and an en→it quality regression (~3 pp `chrF++` drop direct,
-~33 pp via Spanish pivot). The registry was regenerated against the upstream
-`base-memory` Bergamot fix (synced to the DHT on 2026-05-05); paths now point
-at `bergamot-{enit,esen}/2026-04-28/...` and `expectedSize` flipped from
-17.1 MB to 30.1 MB on both pairs, confirming the switch landed.
-
-The regeneration also picked up the auto-deprecation of the 32 Marian Opus NMT
-entries (`NMT_Q0F16` through `NMT_Q0F16_9`, `NMT_Q4_0` through `NMT_Q4_0_21`)
-that were superseded earlier in the release line. A separate fix corrects the
-Bergamot vocab being re-downloaded on every `loadModel` for shared-vocab pairs
-— the shared vocab is now cached and reused.
+The registry sync adds Gemma 4 and Qwen 3.5/3.6 multimodal LLM/VLM constants, expands Bergamot translation pairs, introduces Parakeet 0.6.0 GGUF constants, and replaces ONNX TTS constants with tts-ggml equivalents.
 
 ##### Added
 
 ```
+GEMMA4_31B_MULTIMODAL_Q4_K_M
+GEMMA4_2B_MULTIMODAL_Q4_K_M
+QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
+QWEN3_6_27B_MULTIMODAL_Q4_K_XL
+TTS_S3GEN_MULTILINGUAL_CHATTERBOX
+TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0
+TTS_EN_SUPERTONIC_Q8_0
 PARAKEET_TDT_0_6B_V3_Q8_0
-PARAKEET_CTC_0_6B_Q8_0
-PARAKEET_SORTFORMER_4SPK_V1_Q8_0
-PARAKEET_EOU_120M_V1_Q8_0
+(and 60+ more — see models.md)
 ```
 
-##### Removed
+##### Updated
 
 ```
-NMT_Q0F16 through NMT_Q0F16_9 (10 entries)
-NMT_Q4_0 through NMT_Q4_0_21 (22 entries)
+BERGAMOT_EN_BG
+BERGAMOT_EN_HR
+BERGAMOT_EN_NL
+BERGAMOT_METADATA_13
 ```
-
-The legacy multi-file Parakeet constants (`PARAKEET_TDT_ENCODER_INT8`,
-`PARAKEET_TDT_DECODER_INT8`, `PARAKEET_TDT_VOCAB`, `PARAKEET_TDT_PREPROCESSOR_INT8`,
-`PARAKEET_CTC_FP32`, `PARAKEET_CTC_TOKENIZER`, etc.) are gone alongside the
-plugin migration — see Breaking Changes above for the migration path.
-
-#### Tests and Infrastructure
-
-- E2E bootstrap was scoped down to only the dependencies required by the
-  filtered test set, shortening cold CI runs.
-- Multi-GPU integration tests are now skipped on mobile (real multi-GPU hardware
-  isn't represented in the mobile farm; tests are validated against the
-  shared-dev `2× RTX 5090` rig in CI logs).
-- `@qvac/tts-onnx` bumped to `0.9.0` and `@qvac/transcription-parakeet` to
-  `0.5.0` to match the addon-side releases that land in this SDK version.

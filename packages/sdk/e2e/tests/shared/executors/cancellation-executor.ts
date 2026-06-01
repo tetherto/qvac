@@ -8,6 +8,7 @@ import {
   InferenceCancelledError,
   ragDeleteWorkspace,
   ragIngest,
+  RAG_ERROR_CODES,
   RequestRejectedByPolicyError,
   SDK_SERVER_ERROR_CODES,
   transcribe,
@@ -83,8 +84,7 @@ export interface TranscribeCancelParams {
 const INFERENCE_CANCELLED_CODE = SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED;
 const REQUEST_REJECTED_BY_POLICY_CODE =
   SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY;
-// Hardcoded: @qvac/rag is not import-compatible with this consumer runtime.
-const RAG_OPERATION_CANCELLED_CODE = 14016;
+const RAG_OPERATION_CANCELLED_CODE = RAG_ERROR_CODES.OPERATION_CANCELLED;
 const ADDON_CANCEL_MESSAGE = "Job cancelled";
 // Embed addon surfaces this when llama_decode is aborted mid-flight.
 const EMBED_ABORTED_MESSAGE = "Failed to get sequence embeddings";

@@ -82,10 +82,12 @@ export function formatCoverageReportHuman (
       `  ${mark} ${row.method} ${row.path}`.padEnd(52) +
         `${row.category}${tagSuffix}`
     )
-    for (const caveat of row.caveats) {
-      lines.push(`      caveat: ${caveat}`)
-    }
   }
+  lines.push('')
+  lines.push('For per-endpoint behavior notes and caveats:')
+  lines.push('  qvac serve openai --docs     # then open http://<host>:<port>/docs')
+  lines.push('  curl <host>:<port>/openapi.json   # raw spec (always exposed)')
+  lines.push('  curl <host>:<port>/docs/json      # spec via swagger-ui (when --docs is set)')
   return lines.join('\n')
 }
 

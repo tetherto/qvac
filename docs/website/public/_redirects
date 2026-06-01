@@ -3,15 +3,20 @@
 # every other page `/foo/bar/` maps to `/foo/bar.md`. We need both the
 # trailing-slash and no-slash variants so the `:splat` placeholder doesn't
 # produce `/foo/.md`.
-/                /index.md      301   Header:Accept=text/markdown
-/*/              /:splat.md     301   Header:Accept=text/markdown
-/*               /:splat.md     301   Header:Accept=text/markdown
+# /                /index.md      301   Header:Accept=text/markdown
+# /*/              /:splat.md     301   Header:Accept=text/markdown
+# /*               /:splat.md     301   Header:Accept=text/markdown
 
 # Sevalla CDN does not resolve directory-to-index.html for path segments
-# containing dots (e.g. `v0.7.0`). Each `:version` segment is rewritten to
-# its index.html explicitly. `:version` matches a single path segment, so
-# only `/reference/api/vX.Y.Z[/]` (and the release-notes sibling) is
-# affected — anything deeper is left untouched.
+# containing dots (e.g. `v0.7.x`). The `:version` placeholder matches a
+# single path segment between slashes — so the trailing-slash variant
+# captures the version without the trailing slash, avoiding the double-
+# slash issue that the splat (`*`) has.
+#
+# Syntax mirrors the doc example
+# (https://docs.sevalla.com/static-sites/redirects#placeholders):
+#   /store/:category/:item   /products/:category/:item
+# No explicit status code — defaults to 301 redirect.
 
 /reference/api/:version/   /reference/api/:version/index.html   200
 /reference/api/:version    /reference/api/:version/index.html   200
@@ -98,20 +103,6 @@
 # Section rename: /sdk/api → /reference/api, /sdk/release-notes → /reference/release-notes
 /sdk/api/                       /reference/api/                       301
 /sdk/api                        /reference/api/                       301
-/sdk/api/v0.7.0/                /reference/api/v0.7.0/                301
-/sdk/api/v0.7.0                 /reference/api/v0.7.0/                301
-/sdk/api/v0.8.0/                /reference/api/v0.8.0/                301
-/sdk/api/v0.8.0                 /reference/api/v0.8.0/                301
-/sdk/api/v0.9.1/                /reference/api/v0.9.1/                301
-/sdk/api/v0.9.1                 /reference/api/v0.9.1/                301
-/sdk/release-notes/             /reference/release-notes/             301
-/sdk/release-notes              /reference/release-notes/             301
-/sdk/release-notes/v0.7.0/      /reference/release-notes/v0.7.0/      301
-/sdk/release-notes/v0.7.0       /reference/release-notes/v0.7.0/      301
-/sdk/release-notes/v0.8.0/      /reference/release-notes/v0.8.0/      301
-/sdk/release-notes/v0.8.0       /reference/release-notes/v0.8.0/      301
-/sdk/release-notes/v0.9.1/      /reference/release-notes/v0.9.1/      301
-/sdk/release-notes/v0.9.1       /reference/release-notes/v0.9.1/      301
 
 # Section rename: /sdk/tutorials/* → /tutorials/*
 /sdk/tutorials/electron/   /tutorials/electron/   301
@@ -122,3 +113,15 @@
 # Section rename: /http-server → /cli/http-server
 /http-server/   /cli/http-server/   301
 /http-server    /cli/http-server/   301
+
+# ======================================================================
+# CATCH-ALL 404 — MUST BE THE LAST RULE
+# ----------------------------------------------------------------------
+# Sevalla serves /404.html automatically for unresolved paths, but with
+# HTTP 200, which breaks SEO, link checkers, analytics and HTTP clients.
+# This explicit rule forces a real `404 Not Found` status while still
+# rendering the same /404.html body. Only reached when no static file and
+# no rule above matches.
+# ======================================================================
+
+/*   /404.html   404

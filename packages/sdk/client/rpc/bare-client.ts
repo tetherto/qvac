@@ -3,12 +3,17 @@ import type {
   Response,
   RuntimeContext,
   CanonicalModelType,
+  ProfilingRequestMeta,
 } from "@/schemas";
-import { normalizeModelType } from "@/schemas";
+import { normalizeModelType, PROFILING_KEY } from "@/schemas";
 import os from "bare-os";
 import type { Readable } from "bare-stream";
-import { handlers } from "@/server/rpc/handlers";
 import { registry } from "@/server/rpc/handler-registry";
+import type { HandlerEntry } from "@/server/rpc/handler-utils";
+import {
+  handlerSupportsProgress,
+  selectHandler,
+} from "@/server/rpc/handler-selection";
 import { createErrorResponse } from "@/schemas";
 import {
   RPCNoHandlerError,
@@ -34,13 +39,28 @@ async function ensureWorkerReady() {
 
 // Handler function types
 type Handler =
-  | ((req: Request) => Promise<Response>)
-  | ((req: Request) => AsyncGenerator<Response>);
+  | ((
+      req: Request,
+      arg?: ((update: Response) => void) | DirectHandlerOptions,
+    ) => Promise<Response> | Response)
+  | ((
+      req: Request,
+      arg?: ((update: Response) => void) | DirectHandlerOptions,
+    ) => AsyncGenerator<Response>);
 
-// Get the handler for a request type
-function getHandler(type: string): Handler | undefined {
-  const handler = handlers[type as keyof typeof handlers];
-  return typeof handler === "function" ? (handler as Handler) : undefined;
+type HandlerResult = Promise<Response> | Response | AsyncGenerator<Response>;
+
+interface DirectHandlerOptions {
+  progressCallback?: (update: Response) => void;
+  profilingMeta?: ProfilingRequestMeta;
+}
+
+function getHandlerEntry(type: string): HandlerEntry {
+  const entry = registry[type];
+  if (!entry) {
+    throw new RPCNoHandlerError(type);
+  }
+  return entry;
 }
 
 function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
@@ -61,26 +81,79 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
   return { ...request, modelConfig: configWithDefaults };
 }
 
-function supportsProgressStreaming(request: Request) {
+function getProfilingMetaFromRequest(
+  request: Request,
+): ProfilingRequestMeta | undefined {
+  if (PROFILING_KEY in request) {
+    return (request as Record<string, unknown>)[
+      PROFILING_KEY
+    ] as ProfilingRequestMeta;
+  }
+  return undefined;
+}
+
+function createDelegatedOptions(
+  request: Request,
+  progressCallback?: (update: Response) => void,
+): DirectHandlerOptions | undefined {
+  const profilingMeta = getProfilingMetaFromRequest(request);
+  if (!profilingMeta && !progressCallback) {
+    return undefined;
+  }
+
+  const options: DirectHandlerOptions = {};
+  if (progressCallback) {
+    options.progressCallback = progressCallback;
+  }
+  if (profilingMeta) {
+    options.profilingMeta = profilingMeta;
+  }
+  return options;
+}
+
+function executeDirectHandler(
+  request: Request,
+  handler: HandlerEntry["handler"],
+  isDelegated: boolean,
+): HandlerResult {
+  const directHandler = handler as Handler;
+  if (isDelegated) {
+    return directHandler(request, createDelegatedOptions(request));
+  }
+  return directHandler(request);
+}
+
+function isAsyncGenerator(
+  result: HandlerResult,
+): result is AsyncGenerator<Response> {
   return (
-    "withProgress" in request &&
-    request.withProgress &&
-    ["loadModel", "downloadAsset", "rag", "finetune"].includes(request.type)
+    typeof result === "object" &&
+    result !== null &&
+    Symbol.asyncIterator in result
   );
 }
 
 async function* streamWithProgress(
   request: Request,
-  handler: (
-    req: Request,
-    callback: (update: Response) => void,
-  ) => Promise<Response>,
+  handler: HandlerEntry["handler"],
+  isDelegated: boolean,
 ) {
   const queue: Response[] = [];
   const errors: Error[] = [];
   let done = false;
+  function progressCallback(update: Response) {
+    queue.push(update);
+  }
+  const directHandler = handler as Handler;
 
-  handler(request, (update) => queue.push(update))
+  Promise.resolve(
+    directHandler(
+      request,
+      isDelegated
+        ? createDelegatedOptions(request, progressCallback)
+        : progressCallback,
+    ) as Promise<Response> | Response,
+  )
     .then((final) => {
       queue.push(final);
       done = true;
@@ -107,33 +180,30 @@ async function* streamWithProgress(
 export async function send<T extends Request>(request: T): Promise<Response> {
   assertLifecycleAllowed(request);
 
-  const handler = getHandler(request.type);
-  if (!handler) throw new RPCNoHandlerError(request.type);
-
   const processedRequest = applyDeviceDefaultsToLoadModel(request);
-  return (await handler(processedRequest)) as Response;
+  const entry = getHandlerEntry(processedRequest.type);
+  const { handler, isDelegated } = selectHandler(entry, processedRequest);
+  return (await executeDirectHandler(
+    processedRequest,
+    handler,
+    isDelegated,
+  )) as Response;
 }
 
 async function* stream<T extends Request>(request: T) {
   assertLifecycleAllowed(request);
 
-  const handler = getHandler(request.type);
-  if (!handler) throw new RPCNoHandlerError(request.type);
+  const processedRequest = applyDeviceDefaultsToLoadModel(request);
+  const entry = getHandlerEntry(processedRequest.type);
+  const { handler, isDelegated } = selectHandler(entry, processedRequest);
 
-  if (supportsProgressStreaming(request)) {
-    const processedRequest = applyDeviceDefaultsToLoadModel(request);
-    yield* streamWithProgress(
-      processedRequest,
-      handler as (
-        req: Request,
-        callback: (update: Response) => void,
-      ) => Promise<Response>,
-    );
+  if (handlerSupportsProgress(entry, processedRequest)) {
+    yield* streamWithProgress(processedRequest, handler, isDelegated);
   } else {
-    const result = handler(request);
+    const result = executeDirectHandler(processedRequest, handler, isDelegated);
 
     // Check if the handler returns a Promise or AsyncGenerator
-    if (Symbol.asyncIterator in result) {
+    if (isAsyncGenerator(result)) {
       // It's an AsyncGenerator
       yield* result;
     } else {

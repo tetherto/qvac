@@ -18,7 +18,6 @@ export interface CoverageRow {
   category: CoverageCategory
   consumerPrimary: boolean
   implemented: boolean
-  caveats: string[]
   deprecated: boolean
   tags: string[]
   group?: string

@@ -13,16 +13,14 @@
 #include <thread>
 #include <utility>
 
-#if defined(__ANDROID__)
 #include <ggml-backend.h>
-#endif
 
 #include "WhisperConfig.hpp"
 #include "WhisperHandlers.hpp"
 #include "addon/WhisperErrors.hpp"
-#include "model-interface/WhisperTypes.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/WhisperTypes.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
 
@@ -105,6 +103,64 @@ void ensureBackendsLoadedAndroid(const std::string& backendsDir) {
 } // namespace
 #endif // __ANDROID__
 
+namespace {
+// Return the index, within whisper_backend_init_gpu()'s *filtered* GPU/IGPU
+// device list, of a registered *Adreno* OpenCL device — or -1 if none.
+//
+// This is the Adreno guard. On Adreno (Android) ggml registers BOTH a Vulkan
+// device and an OpenCL device for the same physical GPU, and
+// ggml_backend_load_all_from_path() loads Vulkan *before* OpenCL
+// (ggml-backend-reg.cpp), so whisper_backend_init_gpu()'s default
+// (gpu_device=0) lands on the Vulkan device — whose Adreno driver SIGSEGVs in
+// vkCmdBindPipeline during ggml compute. Steering to the Adreno OpenCL device
+// avoids that.
+//
+// Selection mirrors llm-llamacpp's BackendSelection gate (`isOpenCl &&
+// isAdreno`, see packages/llm-llamacpp/addon/src/utils/BackendSelection.cpp):
+// the device's backend must be OpenCL AND its description must be an Adreno
+// GPU. Gating on the Adreno *description* (not merely "some OpenCL device
+// exists") keeps Mali on Vulkan even if a Mali/Intel OpenCL ICD ever
+// enumerates, and leaves desktop (Metal / discrete Vulkan) untouched —
+// returning -1 there so the default selection stands.
+int adrenoOpenclGpuDeviceIndex() {
+  const size_t devCount = ggml_backend_dev_count();
+  int filteredIdx = 0;
+  for (size_t i = 0; i < devCount; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    if (dev == nullptr) {
+      continue;
+    }
+    const enum ggml_backend_dev_type devType = ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
+    const char* devDesc = ggml_backend_dev_description(dev);
+    std::string regNameLower = (regName != nullptr) ? regName : "";
+    std::string devDescLower = (devDesc != nullptr) ? devDesc : "";
+    std::transform(
+        regNameLower.begin(),
+        regNameLower.end(),
+        regNameLower.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+    std::transform(
+        devDescLower.begin(),
+        devDescLower.end(),
+        devDescLower.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+    const bool isOpenCl = regNameLower.find("opencl") != std::string::npos;
+    const bool isAdreno = devDescLower.find("adreno") != std::string::npos;
+    if (isOpenCl && isAdreno) {
+      return filteredIdx;
+    }
+    ++filteredIdx;
+  }
+  return -1;
+}
+} // namespace
+
 void WhisperModel::load() {
   if (!ctx_) {
 
@@ -113,6 +169,28 @@ void WhisperModel::load() {
 #endif
 
     whisper_context_params contextParams = toWhisperContextParams(cfg_);
+
+    // Adreno guard: when ggml registers an Adreno OpenCL device (Android,
+    // where it also registers a Vulkan device for the same GPU and Vulkan is
+    // loaded first), steer whisper to the OpenCL device. The Adreno Vulkan
+    // driver SIGSEGVs in ggml compute (vkCmdBindPipeline), whereas OpenCL is
+    // the supported Adreno backend. No-op on Mali / desktop (no Adreno OpenCL
+    // device registers there), so the proven Mali->Vulkan path is untouched.
+    if (contextParams.use_gpu) {
+      const int adrenoOpenclDeviceIndex = adrenoOpenclGpuDeviceIndex();
+      if (adrenoOpenclDeviceIndex >= 0 &&
+          adrenoOpenclDeviceIndex != contextParams.gpu_device) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            std::string(
+                "Adreno OpenCL GPU device detected; preferring it over "
+                "the default GPU to avoid the Adreno Vulkan compute "
+                "crash (gpu_device ") +
+                std::to_string(contextParams.gpu_device) + " -> " +
+                std::to_string(adrenoOpenclDeviceIndex) + ")");
+        contextParams.gpu_device = adrenoOpenclDeviceIndex;
+      }
+    }
 
     const auto modelPathIt = cfg_.whisperContextCfg.find("model");
     if (modelPathIt == cfg_.whisperContextCfg.end()) {
@@ -140,6 +218,8 @@ void WhisperModel::load() {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Whisper model loaded successfully");
+
+    captureActiveBackendInfo(contextParams.use_gpu, contextParams.gpu_device);
 
     // Warm up the model on first load to avoid first-segment delay
     if (!is_warmed_up_) {
@@ -199,6 +279,148 @@ void WhisperModel::endOfStream() {
   stream_ended_ = true;
 }
 
+namespace {
+// Stable numeric mapping from a ggml backend registry name to the
+// integer code surfaced on JS as `RuntimeStats.backendId`. Kept in
+// lock-step with transcription-parakeet's `BackendId` enum (see
+// transcription-parakeet/index.d.ts and ParakeetModel.cpp's
+// `backendIdFromName`) so the same integer means the same backend
+// family across both speech addons.
+//
+// Match by prefix (or by lowercased substring for legacy reg names)
+// because ggml_backend_reg_name() can return indexed strings like
+// "CUDA0" / "Vulkan0" / "MTL0" when multiple GPUs of the same family
+// are present.
+int64_t backendIdFromRegName(const std::string& nameLower) {
+  if (nameLower.find("metal") != std::string::npos ||
+      nameLower.find("mtl") != std::string::npos) {
+    return 1;
+  }
+  if (nameLower.find("cuda") != std::string::npos) {
+    return 2;
+  }
+  if (nameLower.find("vulkan") != std::string::npos) {
+    return 3;
+  }
+  if (nameLower.find("opencl") != std::string::npos) {
+    return 4;
+  }
+  return 99;
+}
+} // namespace
+
+void WhisperModel::captureActiveBackendInfo(bool useGpu, int gpuDeviceIndex) {
+  // Reset to "CPU" so we report a sensible default on every load.
+  backend_device_ = 0;
+  backend_id_ = 0;
+  backend_name_ = "CPU";
+  gpu_mem_total_mb_ = -1;
+  gpu_mem_free_mb_ = -1;
+  gpu_device_description_.clear();
+
+  // `useGpu` / `gpuDeviceIndex` are the EXACT whisper_context_params values
+  // the context was initialised with (including the Adreno->OpenCL
+  // preference applied in load()), so the reported backend matches what
+  // whisper_init_from_file_with_params() actually selected.
+
+  // Whisper.cpp only attempts a GPU backend when contextParams.use_gpu
+  // is true (see whisper_backend_init_gpu, src/whisper.cpp). Reflect
+  // that here so a CPU-only load doesn't look like a silent fallback in
+  // the WARNING below.
+  if (!useGpu) {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Active backend: CPU (use_gpu=false)");
+    return;
+  }
+
+  // Mirror whisper_backend_init_gpu() (src/whisper.cpp) EXACTLY so the
+  // backend we report is the one whisper actually initialised against:
+  //  - walk devices in ggml registry order,
+  //  - consider BOTH GGML_BACKEND_DEVICE_TYPE_GPU and _IGPU. This is
+  //    essential: ggml-vulkan reports *integrated* GPUs (Mali,
+  //    Adreno-via-Vulkan, Intel iGPU) as IGPU, while ggml-opencl /
+  //    ggml-metal / ggml-cuda report GPU. Skipping IGPU would make
+  //    every Vulkan-on-mobile device (e.g. Pixel/Mali) look like a CPU
+  //    fallback even though whisper is running on the GPU.
+  //  - `gpu_device` is an index into the *filtered* GPU/IGPU list (not
+  //    a raw ggml_backend_dev_get index), matching whisper's `cnt`.
+  ggml_backend_dev_t dev = nullptr;
+  int cnt = 0;
+  const size_t devCount = ggml_backend_dev_count();
+  for (size_t i = 0; i < devCount; ++i) {
+    ggml_backend_dev_t candidate = ggml_backend_dev_get(i);
+    if (candidate == nullptr) {
+      continue;
+    }
+    const enum ggml_backend_dev_type devType = ggml_backend_dev_type(candidate);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    if (cnt == gpuDeviceIndex) {
+      dev = candidate;
+    }
+    if (++cnt > gpuDeviceIndex) {
+      break;
+    }
+  }
+
+  if (dev == nullptr) {
+    // Parity with parakeet's CPU-fallback WARNING (see
+    // ParakeetModel.cpp's `loadModel()`). On iOS/desktop mobile-perf
+    // paths the integration test only checks that backendId is
+    // present, so a silent CPU fallback here would not stand out in
+    // CI logs without this line.
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "Whisper: use_gpu=true was requested but no GGML GPU/IGPU device "
+        "is registered (use_gpu fell back to CPU). Likely causes: the GPU "
+        "backend library wasn't loaded (Android: ggml_backend_load_all_"
+        "from_path failed for the backendsDir), the device was rejected "
+        "by the backend (Adreno pre-700 OpenCL policy, missing OpenCL ICD, "
+        "Vulkan driver without storageBuffer16BitAccess, iOS/Android "
+        "simulator without GPU support), or no GPU backend was compiled "
+        "into ggml-speech for this triplet.");
+    return;
+  }
+
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
+  const char* devName = ggml_backend_dev_name(dev);
+  const char* devDesc = ggml_backend_dev_description(dev);
+
+  std::string regNameLower = (regName != nullptr) ? regName : "";
+  std::transform(
+      regNameLower.begin(),
+      regNameLower.end(),
+      regNameLower.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+
+  backend_device_ = 1;
+  backend_id_ = backendIdFromRegName(regNameLower);
+  backend_name_ = (regName != nullptr) ? regName : "";
+  gpu_device_description_ =
+      (devDesc != nullptr) ? devDesc : (devName != nullptr ? devName : "");
+
+  size_t freeBytes = 0;
+  size_t totalBytes = 0;
+  ggml_backend_dev_memory(dev, &freeBytes, &totalBytes);
+  constexpr size_t kBytesPerMb = 1024U * 1024U;
+  gpu_mem_total_mb_ =
+      totalBytes > 0 ? static_cast<int64_t>(totalBytes / kBytesPerMb) : -1;
+  gpu_mem_free_mb_ =
+      freeBytes > 0 ? static_cast<int64_t>(freeBytes / kBytesPerMb) : -1;
+
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      std::string("Active backend: id=") + std::to_string(backend_id_) +
+          " device=" + std::to_string(backend_device_) + " name='" +
+          backend_name_ + "' gpu_device='" + gpu_device_description_ +
+          "' mem_total_mb=" + std::to_string(gpu_mem_total_mb_) +
+          " mem_free_mb=" + std::to_string(gpu_mem_free_mb_));
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
 
@@ -234,6 +456,22 @@ qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() const {
   stats.emplace_back("whisperBatchdMs", whisperBatchdMs_);
   stats.emplace_back("whisperPromptMs", whisperPromptMs_);
   stats.emplace_back("totalWallMs", totalWallMs_);
+
+  // Active backend identity + device memory, captured once at load() by
+  // captureActiveBackendInfo(). Field shape mirrors transcription-
+  // parakeet's RuntimeStats:
+  //   backendDevice : 0 = CPU, 1 = GPU (post-fallback truth)
+  //   backendId     : 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan,
+  //                   4 = OpenCL, 99 = other (same enum as parakeet)
+  // A `use_gpu: true` request that fell back to CPU at load() time
+  // surfaces here as backendDevice=0 / backendId=0 (and the load()
+  // path will have emitted a WARNING explaining why).
+  stats.emplace_back("backendDevice", backend_device_);
+  stats.emplace_back("backendId", backend_id_);
+  // Device-memory snapshot at load() (whisper-specific extras; parakeet
+  // does not expose these). -1 means the device does not report.
+  stats.emplace_back("gpuMemTotalMb", gpu_mem_total_mb_);
+  stats.emplace_back("gpuMemFreeMb", gpu_mem_free_mb_);
   return stats;
 }
 
