@@ -141,6 +141,18 @@ public:
    */
   llama_pos removeLastNTokens(llama_pos count) override;
 
+  [[nodiscard]] common_chat_format getLastChatFormat() const override {
+    return lastChatFormat_;
+  }
+
+  [[nodiscard]] const std::string& getLastChatParser() const override {
+    return lastChatParser_;
+  }
+
+  [[nodiscard]] const std::string& getLastGenerationPrompt() const override {
+    return lastGenerationPrompt_;
+  }
+
 private:
   /**
    * The check antiprompt method. It checks the antiprompt.
@@ -206,6 +218,14 @@ private:
   // matching "<think>\n" opener to the visible stream so consumers see balanced
   // tags.
   bool thinkingForcedOpen_ = false;
+
+  common_chat_format lastChatFormat_ = COMMON_CHAT_FORMAT_CONTENT_ONLY;
+
+  // Serialized PEG parser and generation prompt from the most recent prompt
+  // template application, needed by post-generation tool-call extraction (see
+  // getLastChatParser / getLastGenerationPrompt).
+  std::string lastChatParser_;
+  std::string lastGenerationPrompt_;
 
   std::atomic<bool> stopGeneration_ = false;
 };

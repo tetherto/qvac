@@ -1,4 +1,6 @@
 {
+  "name": "qvac-embed-llamacpp",
+  "version": "0.16.0",
   "dependencies": [
     {
       "name": "opencl",

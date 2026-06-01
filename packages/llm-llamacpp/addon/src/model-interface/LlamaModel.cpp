@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <mutex>
+#include <regex>
 #include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
@@ -650,6 +651,75 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     out = oss.str();
   }
 
+  // Re-wrap any extracted tool calls as <tool_call>{...}</tool_call> envelopes
+  // so JS-side tests and SDK consumers see a uniform shape regardless of which
+  // template/dialect the model used. Skip models that already emit standard
+  // <tool_call> envelopes natively (e.g. Qwen3): re-wrapping their parsed
+  // calls would append a duplicate envelope after the one already in the raw
+  // output. Gemma 4's dialect uses <|tool_call>/<tool_call|> (no literal
+  // "<tool_call>" substring), so it is unaffected by this guard and still gets
+  // re-wrapped.
+  const std::string assistantText = prompt.outputCallback ? oss.str() : out;
+  if (!resolved.tools.empty() &&
+      assistantText.find("<tool_call>") == std::string::npos) {
+    common_chat_parser_params syntax;
+    syntax.format = state_->llmContext_->getLastChatFormat();
+    syntax.parse_tool_calls = true;
+    syntax.generation_prompt = state_->llmContext_->getLastGenerationPrompt();
+    // The fabric's chat layer builds a dialect-specific PEG parser at
+    // templating time and serializes it into common_chat_params::parser.
+    // Without loading it here, common_chat_parse falls back to a pure-content
+    // parser and extracts zero tool calls (e.g. Gemma 4's
+    // <|tool_call>call:NAME{...}<tool_call|> dialect goes unparsed).
+    const std::string& serializedParser =
+        state_->llmContext_->getLastChatParser();
+    if (!serializedParser.empty()) {
+      syntax.parser.load(serializedParser);
+    }
+    try {
+      common_chat_msg parsed = common_chat_parse(
+          assistantText, /*is_partial=*/false, syntax);
+      if (!parsed.tool_calls.empty()) {
+        const auto normalizeArgsJson =
+            [](const std::string& src) -> std::string {
+          static const std::regex unquotedKeyRe(
+              R"(([{,])(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):)",
+              std::regex::ECMAScript);
+          return std::regex_replace(src, unquotedKeyRe, R"($1$2"$3"$4:)");
+        };
+        std::string envelopes;
+        envelopes.reserve(parsed.tool_calls.size() * 64);
+        for (const auto& tc : parsed.tool_calls) {
+          std::string args = tc.arguments.empty()
+                                 ? std::string("{}")
+                                 : normalizeArgsJson(tc.arguments);
+          envelopes.append("<tool_call>{\"name\":\"");
+          envelopes.append(tc.name);
+          envelopes.append("\",\"arguments\":");
+          envelopes.append(args);
+          envelopes.append("}</tool_call>");
+        }
+        if (prompt.outputCallback) {
+          prompt.outputCallback(envelopes);
+        } else {
+          out.append(envelopes);
+        }
+      }
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[LlamaModel] common_chat_parse failed for tool extraction: "
+              "%s\n",
+              e.what()));
+    } catch (...) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[LlamaModel] common_chat_parse threw an unknown exception during "
+          "tool extraction\n");
+    }
+  }
+
   // Post-generation tools trim decision via controller
   std::string ossStr;
   if (needsOutputCapture && prompt.outputCallback) {
@@ -1097,9 +1167,9 @@ void LlamaModel::commonParamsParse(
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
 
-  postprocess_cpu_params(params.speculative.cpuparams, &params.cpuparams);
+  postprocess_cpu_params(params.speculative.draft.cpuparams, &params.cpuparams);
   postprocess_cpu_params(
-      params.speculative.cpuparams_batch, &params.cpuparams_batch);
+      params.speculative.draft.cpuparams_batch, &params.cpuparams_batch);
 
   if (!params.kv_overrides.empty()) {
     params.kv_overrides.emplace_back();

@@ -294,4 +294,38 @@ public:
    *
    */
   virtual void resetMedia() {};
+
+  /**
+   * Returns the chat format selected by the most recent prompt template
+   * application (e.g. COMMON_CHAT_FORMAT_GEMMA4). Used by post-generation
+   * tool-call extraction to tell common_chat_parse which dialect the
+   * assistant text is in.
+   */
+  [[nodiscard]] virtual common_chat_format getLastChatFormat() const {
+    return COMMON_CHAT_FORMAT_CONTENT_ONLY;
+  }
+
+  /**
+   * Returns the serialized PEG parser produced by the most recent prompt
+   * template application. The fabric's chat layer builds a dialect-specific
+   * parser at templating time and stores it (serialized) in
+   * common_chat_params::parser; common_chat_parse needs it loaded into the
+   * parser arena, otherwise it silently falls back to a pure-content parser
+   * and extracts zero tool calls. Empty when no parser was produced.
+   */
+  [[nodiscard]] virtual const std::string& getLastChatParser() const {
+    static const std::string kEmpty;
+    return kEmpty;
+  }
+
+  /**
+   * Returns the generation prompt from the most recent prompt template
+   * application. common_chat_parse prepends it to the assistant text so the
+   * parser's `start` rule (which bakes in the generation-prompt prefix at
+   * build time) aligns with the input.
+   */
+  [[nodiscard]] virtual const std::string& getLastGenerationPrompt() const {
+    static const std::string kEmpty;
+    return kEmpty;
+  }
 };

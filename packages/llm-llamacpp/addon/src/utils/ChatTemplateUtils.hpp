@@ -69,13 +69,23 @@ std::string getChatTemplate(
  * @brief Applies chat templates to generate a prompt, with fallback handling
  * for models that don't support tools.
  *
+ * @p outFormat (optional) receives the parsed chat format identifier.
  * @p outThinkingForcedOpen (optional) receives the flag indicating that the
  *    template force-opened the reasoning channel in the prompt suffix.
+ * @p outParser (optional) receives the serialized PEG parser
+ *    (common_chat_params::parser) needed for post-generation tool-call
+ *    extraction.
+ * @p outGenerationPrompt (optional) receives the generation prompt
+ *    (common_chat_params::generation_prompt) that the parser expects to be
+ *    prepended to the assistant text.
  */
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs,
-    bool* outThinkingForcedOpen = nullptr);
+    common_chat_format* outFormat = nullptr,
+    bool* outThinkingForcedOpen = nullptr,
+    std::string* outParser = nullptr,
+    std::string* outGenerationPrompt = nullptr);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

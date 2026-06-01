@@ -17,6 +17,8 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
+set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/ports;${VCPKG_OVERLAY_PORTS}")
+
 project(embed-llamacpp C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -56,7 +58,7 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
   endforeach()
-endif()  
+endif()
 
 add_bare_module(embed-llamacpp EXPORTS ${BACKEND_DL_LIBS})
 
@@ -99,7 +101,7 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
-  
+
   add_subdirectory(test/unit)
 endif()
 

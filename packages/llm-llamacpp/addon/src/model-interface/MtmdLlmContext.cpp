@@ -209,7 +209,8 @@ void MtmdLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  formattedChat = getPrompt(tmpls_.get(), inputs, &thinkingForcedOpen_);
+  formattedChat = getPrompt(tmpls_.get(), inputs,
+                            /*outFormat=*/nullptr, &thinkingForcedOpen_);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(

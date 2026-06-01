@@ -1,4 +1,6 @@
 {
+  "name": "qvac-llm-llamacpp",
+  "version": "0.20.0",
   "dependencies": [
     {
       "name": "opencl",

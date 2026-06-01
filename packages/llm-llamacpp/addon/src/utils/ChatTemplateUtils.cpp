@@ -174,11 +174,21 @@ std::string getChatTemplate(
 
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs,
-    bool* outThinkingForcedOpen) {
+    struct common_chat_templates_inputs& inputs, common_chat_format* outFormat,
+    bool* outThinkingForcedOpen, std::string* outParser,
+    std::string* outGenerationPrompt) {
   auto exportParams = [&](const common_chat_params& params) {
+    if (outFormat) {
+      *outFormat = params.format;
+    }
     if (outThinkingForcedOpen) {
       *outThinkingForcedOpen = params.thinking_forced_open;
+    }
+    if (outParser) {
+      *outParser = params.parser;
+    }
+    if (outGenerationPrompt) {
+      *outGenerationPrompt = params.generation_prompt;
     }
   };
   try {
