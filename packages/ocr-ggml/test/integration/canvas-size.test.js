@@ -1,0 +1,68 @@
+'use strict'
+
+const { OcrGgml } = require('../..')
+const test = require('brittle')
+const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+
+const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
+const DESKTOP_TIMEOUT = 180 * 1000 // 3 minutes for desktop
+const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
+
+// Regression for QVAC-19340: dense high-resolution pages drove CRAFT detection
+// peak memory to ~13 GB (canvas capped at the 2560 default), OOM-killing the
+// host on memory-constrained Android devices. `canvasSize` caps the detection
+// canvas (EasyOCR's `canvas_size`) so callers can bound peak memory. A smaller
+// canvas must still configure, run, and return text on a dense page.
+test('canvasSize bounds the detection canvas and still recognizes a dense page', { timeout: TEST_TIMEOUT }, async function (t) {
+  const detectorPath = await ensureModelPath('detector_craft')
+  const recognizerPath = await ensureModelPath('recognizer_latin')
+
+  // lab_results.png is a dense 1414x2000 page (~100+ text regions): the fixture
+  // that triggered the original Android OOM.
+  const imagePath = getImagePath('/test/images/lab_results.png')
+
+  const ocrGgml = new OcrGgml({
+    params: {
+      pathDetector: detectorPath,
+      pathRecognizer: recognizerPath,
+      langList: ['en'],
+      canvasSize: 1280
+    },
+    opts: { stats: true }
+  })
+
+  await ocrGgml.load()
+  t.pass('Loaded with reduced canvasSize=1280')
+
+  try {
+    const response = await ocrGgml.run({
+      path: imagePath,
+      options: { paragraph: false }
+    })
+
+    let texts = []
+    await response
+      .onUpdate(output => {
+        t.ok(Array.isArray(output), 'output should be an array')
+        t.ok(output.length > 0, 'dense page should still produce text regions with a smaller canvas')
+        texts = output.map(o => String(o[1]).toLowerCase())
+        t.comment('Detected ' + output.length + ' regions (canvasSize=1280)')
+      })
+      .onError(error => {
+        t.fail('unexpected error: ' + JSON.stringify(error))
+      })
+      .await()
+
+    // Recognition content varies slightly with canvas size; assert that at
+    // least one stable keyword from this lab report is still recognized.
+    const expected = ['medivista', 'hospital', 'clinical', 'biochemistry', 'patient']
+    const matched = expected.filter(w => texts.some(line => line.includes(w)))
+    t.comment('Matched keywords: ' + JSON.stringify(matched))
+    t.ok(matched.length > 0, 'should still recognize at least one expected keyword with a reduced canvas')
+
+    t.pass('canvasSize regression test completed successfully')
+  } finally {
+    await ocrGgml.unload()
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+})

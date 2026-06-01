@@ -123,7 +123,7 @@ Pipeline::Pipeline(
     easyDetector_ =
         std::make_unique<easyocr::ggml::pipeline::StepDetectionInference>(
             pathDetector, config_.magRatio, config_.nThreads,
-            config_.backendsDir);
+            config_.backendsDir, config_.canvasSize);
 
     easyBoxer_ = std::make_unique<easyocr::ggml::pipeline::StepBoundingBox>();
 

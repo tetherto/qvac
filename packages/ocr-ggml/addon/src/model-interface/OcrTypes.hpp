@@ -49,6 +49,11 @@ struct OcrConfig {
   // DocTR explicitly via `params.pipelineType: 'doctr'`.
   PipelineMode mode{PipelineMode::EASYOCR};
   float magRatio{1.5F};
+  // EasyOCR `canvas_size`: detection canvas cap (long side, px) after magRatio
+  // scaling. Bounds the CRAFT graph's peak memory; default 2560 matches
+  // @qvac/ocr-onnx and EasyOCR. Lower on memory-constrained targets (mobile)
+  // to avoid the dense-page OOM in QVAC-19340. EasyOCR only.
+  int canvasSize{2560};
   std::vector<int> defaultRotationAngles{90, 270};
   bool contrastRetry{false};
   float lowConfidenceThreshold{0.4F};
