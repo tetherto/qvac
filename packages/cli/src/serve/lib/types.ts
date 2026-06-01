@@ -4,6 +4,7 @@ import type { VectorStoresStore } from '../adapters/openai/vector-stores-store.j
 import type { EphemeralFilesStore } from '../adapters/openai/ephemeral-files-store.js'
 import type { ChunkAttributionStore } from '../adapters/openai/chunk-attribution-store.js'
 import type { ResponsesStore } from '../adapters/openai/responses-store.js'
+import type { VideoJobsStore } from '../core/video-jobs-store.js'
 import type { ParsedFile } from './multipart.js'
 
 export interface QvacContext {
@@ -14,6 +15,9 @@ export interface QvacContext {
   ephemeralFiles: EphemeralFilesStore
   chunkAttributions: ChunkAttributionStore
   responsesStore: ResponsesStore
+  videoJobsStore: VideoJobsStore
+  /** Set at server start: `true` when `ffmpeg` is on PATH (probed once). */
+  videoTranscodeAvailable: boolean
   transcribeOverride?: (opts: {
     modelId: string
     audioChunk: Buffer

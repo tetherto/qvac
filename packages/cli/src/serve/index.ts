@@ -25,6 +25,8 @@ import { createResponsesStore } from './adapters/openai/responses-store.js'
 import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
 import { createEphemeralFilesStore } from './adapters/openai/ephemeral-files-store.js'
 import { createVectorStoresStore } from './adapters/openai/vector-stores-store.js'
+import { createVideoJobsStore } from './core/video-jobs-store.js'
+import { probeFfmpegAvailable } from './lib/video-transcode.js'
 import type { QvacContext } from './lib/types.js'
 import contextPlugin from './plugins/context.js'
 import errorHandlerPlugin from './plugins/error-handler.js'
@@ -67,6 +69,11 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     }
   })
   const chunkAttributions = createChunkAttributionStore()
+  const videoJobsStore = createVideoJobsStore()
+  const videoTranscodeAvailable = await probeFfmpegAvailable()
+  if (!videoTranscodeAvailable) {
+    logger.warn('ffmpeg not on PATH — /v1/videos/{id}/content will default to video/avi. Install ffmpeg to serve video/mp4. See: qvac doctor')
+  }
 
   const qvacContext: QvacContext = {
     registry,
@@ -76,6 +83,8 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     ephemeralFiles,
     chunkAttributions,
     responsesStore,
+    videoJobsStore,
+    videoTranscodeAvailable,
     ...(options.transcribeOverride !== undefined ? { transcribeOverride: options.transcribeOverride } : {})
   }
 
@@ -193,6 +202,7 @@ export async function startServer (options: StartServerOptions): Promise<Fastify
   await app.ready()
   await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
   app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
+  app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
 
   closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
     app.log.info?.({ signal }, 'shutdown signal received')
