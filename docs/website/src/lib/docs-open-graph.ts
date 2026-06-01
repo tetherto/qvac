@@ -94,15 +94,22 @@ export interface ArchivePageRef {
  * `SECTIONS_HIDDEN_FROM_INDEXING`). Consumed by:
  *
  * - `sitemap.ts` — to omit hidden archives from `sitemap.xml`.
- * - `llms.txt`, `llms-full.txt`, `llm-md-manifest.json` — to omit them from
- *   the LLM index / dump / per-page `.md` files.
+ * - `llms.txt`, `llms-full.txt` — to omit them from the aggregate AI
+ *   catalogs (training-corpus artefacts where excluding archives
+ *   meaningfully reduces cross-version ingestion).
  * - `page.tsx` (via `isArchivedVersionSlug`) — to add `noindex` metadata.
  * - `docs-json-ld.ts` (via `isArchivedVersionSlug`) — to skip JSON-LD.
  *
+ * NOT consumed by `llm-md-manifest.json`: per-page `.md` files are emitted
+ * for every page regardless of archive status, because they are alternate
+ * representations of already-public HTML pages and gating them only breaks
+ * the "Copy as Markdown" action and the `Accept: text/markdown` content-
+ * negotiation flow without adding SEO/AI protection. See the comment in
+ * `src/app/llm-md-manifest.json/route.ts` for the full rationale.
+ *
  * Returns `false` for archived snapshots of sections that we intentionally
  * keep indexed (e.g. release-notes back-versions): those pages are visible
- * to crawlers, listed in the sitemap, included in llms.txt and have their
- * own per-page `.md` file.
+ * to crawlers and listed in the sitemap / llms.txt / llms-full.txt.
  *
  * Also returns `true` for legacy bundle-style URLs (`/vX.Y.Z/...` with the
  * version slug as the first segment), as a defensive fallback against any

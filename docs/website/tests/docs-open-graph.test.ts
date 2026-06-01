@@ -44,8 +44,9 @@ describe('isArchivedPage', () => {
     // Each archived release-notes series is a unique historical document
     // describing what changed in that minor line — no duplicate-content
     // problem, and excluding them would make "what changed in v0.8.x?"
-    // undiscoverable. Kept in sitemap.xml, llms.txt, llms-full.txt, and
-    // per-page `.md`.
+    // undiscoverable. Kept in sitemap.xml, llms.txt, and llms-full.txt.
+    // (Per-page `.md` is no longer gated by `isArchivedPage` — see
+    // `src/app/llm-md-manifest.json/route.ts` for the rationale.)
     expect(isArchivedPage(page('/reference/release-notes/v0.10.x'))).toBe(false);
     expect(isArchivedPage(page('/reference/release-notes/v0.8.x'))).toBe(false);
     expect(isArchivedPage(page('/reference/release-notes/v0.9.x'))).toBe(false);
