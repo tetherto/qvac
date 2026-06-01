@@ -16,7 +16,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF fix/wan-i2v-vae-tiling
+    REF 793d3773e925433d1e390a61d60889fdf7dd91f2
+    SHA512 73abbf49f6fc890d46263419922d6466d2269da7209c906aa5b03ab4789084107f3d7705d2e88fe448212c70540ee3db1c8b6f1bb64dd7f0f6ae3ac8b727d855
     HEAD_REF 2026-03-01
     PATCHES
         wan-i2v-encode-video-bypass-tiling.patch
