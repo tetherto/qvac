@@ -100,7 +100,7 @@ export class VlaModel {
   pause (): Promise<void>
   cancel (): Promise<void>
   unload (): Promise<void>
-  getState (): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+  getState (): { configLoaded: boolean; weightsLoaded: boolean }
 }
 
 export function preprocessImage (

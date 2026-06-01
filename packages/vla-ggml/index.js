@@ -137,7 +137,7 @@ class VlaModel {
     this._packageVersion = require('./package.json').version
     // Per-run accumulator filled by _onAddonEvent; null between runs.
     this._pending = null
-    this.state = { configLoaded: false, weightsLoaded: false, destroyed: false }
+    this.state = { configLoaded: false, weightsLoaded: false }
   }
 
   _connectNativeLogger () {
