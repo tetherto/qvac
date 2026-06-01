@@ -152,16 +152,15 @@ const SMOKE_FPS = 16
 const SMOKE_SEED = 7
 const SMOKE_PROMPT = 'a red fox running through snow at dusk'
 
-// I2V smoke-test configuration.  2 denoising steps at 256×256 (the init_image
-// resolution, inferred from the image header when width/height are omitted).
-// 256×256 keeps the Wan I2V 14B GPU memory footprint within the Mac mini M4's
-// Metal budget — 512×512 OOMs the diffusion compute on that runner.
+// I2V smoke-test configuration.  2 denoising steps at 512×512 (the init_image
+// resolution, which will be inferred from the image header when width/height
+// are omitted) keeps wall-clock comfortably under 5 minutes on a GPU runner.
 const I2V_SMOKE_FRAMES = 5
 const I2V_SMOKE_STEPS = 2
 const I2V_SMOKE_FPS = 16
 const I2V_SMOKE_SEED = 42
 const I2V_SMOKE_PROMPT = 'a scientist walking through a sunlit laboratory'
-const I2V_INIT_IMAGE_PATH = path.resolve(__dirname, '../../assets/von-neumann-colorized-256.jpg')
+const I2V_INIT_IMAGE_PATH = path.resolve(__dirname, '../../assets/von-neumann-colorized.jpg')
 
 test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
   { timeout: 600000, skip },
@@ -342,7 +341,7 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
     console.log('='.repeat(60))
     console.log(` Platform   : ${platform}`)
     console.log(` Frames     : ${I2V_SMOKE_FRAMES} @ ${I2V_SMOKE_FPS}fps`)
-    console.log(' Size       : inferred from init_image (256x256)')
+    console.log(' Size       : inferred from init_image (512x512)')
     console.log(` Steps      : ${I2V_SMOKE_STEPS}`)
     console.log(` Seed       : ${I2V_SMOKE_SEED}`)
     console.log(` Init image : ${I2V_INIT_IMAGE_PATH}`)
