@@ -98,21 +98,21 @@ describe('buildCanonicalDocsUrl', () => {
     expect(buildCanonicalDocsUrl([])).toBe(`${DOCS_SITE_ORIGIN}/`);
   });
 
-  it('joins slugs with `/`', () => {
+  it('joins slugs with `/` and appends a trailing slash', () => {
     expect(buildCanonicalDocsUrl(['reference', 'api'])).toBe(
-      `${DOCS_SITE_ORIGIN}/reference/api`,
+      `${DOCS_SITE_ORIGIN}/reference/api/`,
     );
   });
 
   it('encodes path components', () => {
     expect(buildCanonicalDocsUrl(['foo bar'])).toBe(
-      `${DOCS_SITE_ORIGIN}/foo%20bar`,
+      `${DOCS_SITE_ORIGIN}/foo%20bar/`,
     );
   });
 
   it('returns the self-URL even for archived API pages (used by OG, not <link rel=canonical>)', () => {
     expect(buildCanonicalDocsUrl(['reference', 'api', 'v0.10.x'])).toBe(
-      `${DOCS_SITE_ORIGIN}/reference/api/v0.10.x`,
+      `${DOCS_SITE_ORIGIN}/reference/api/v0.10.x/`,
     );
   });
 });
@@ -125,31 +125,31 @@ describe('buildPageCanonicalUrl', () => {
 
   it('returns the self-URL for non-versioned pages', () => {
     expect(buildPageCanonicalUrl(['quickstart'])).toBe(
-      `${DOCS_SITE_ORIGIN}/quickstart`,
+      `${DOCS_SITE_ORIGIN}/quickstart/`,
     );
     expect(buildPageCanonicalUrl(['reference', 'api'])).toBe(
-      `${DOCS_SITE_ORIGIN}/reference/api`,
+      `${DOCS_SITE_ORIGIN}/reference/api/`,
     );
   });
 
-  it('redirects archived API pages to /reference/api (the section latest)', () => {
+  it('redirects archived API pages to /reference/api/ (the section latest)', () => {
     expect(buildPageCanonicalUrl(['reference', 'api', 'v0.10.x'])).toBe(
-      `${DOCS_SITE_ORIGIN}/reference/api`,
+      `${DOCS_SITE_ORIGIN}/reference/api/`,
     );
     expect(buildPageCanonicalUrl(['reference', 'api', 'v0.8.x'])).toBe(
-      `${DOCS_SITE_ORIGIN}/reference/api`,
+      `${DOCS_SITE_ORIGIN}/reference/api/`,
     );
     expect(buildPageCanonicalUrl(['reference', 'api', 'v0.9.x'])).toBe(
-      `${DOCS_SITE_ORIGIN}/reference/api`,
+      `${DOCS_SITE_ORIGIN}/reference/api/`,
     );
   });
 
   it('keeps archived release-notes pages as their own canonical', () => {
     expect(
       buildPageCanonicalUrl(['reference', 'release-notes', 'v0.10.x']),
-    ).toBe(`${DOCS_SITE_ORIGIN}/reference/release-notes/v0.10.x`);
+    ).toBe(`${DOCS_SITE_ORIGIN}/reference/release-notes/v0.10.x/`);
     expect(
       buildPageCanonicalUrl(['reference', 'release-notes', 'v0.9.x']),
-    ).toBe(`${DOCS_SITE_ORIGIN}/reference/release-notes/v0.9.x`);
+    ).toBe(`${DOCS_SITE_ORIGIN}/reference/release-notes/v0.9.x/`);
   });
 });
