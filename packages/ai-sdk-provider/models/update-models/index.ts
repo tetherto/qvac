@@ -11,6 +11,8 @@ import {
   separateUpdates
 } from './history.ts'
 import { collectModels } from './registry.ts'
+import { getEndpointCategoryFromAddon } from './schemas.ts'
+import type { ProcessedModel } from './types.ts'
 import { formatSize } from './utils.ts'
 
 // Output path: src/models/constants.ts (vs the SDK's models/registry/models.ts).
@@ -18,6 +20,10 @@ import { formatSize } from './utils.ts'
 // (`allModels` + named constants) so consumers don't notice the swap.
 const OUTPUT_FILE = fileURLToPath(new URL('../../src/models/constants.ts', import.meta.url))
 const HISTORY_DIR = fileURLToPath(new URL('../history', import.meta.url))
+
+function toOpenAIEndpointModels (models: ProcessedModel[]): ProcessedModel[] {
+  return models.filter((model) => getEndpointCategoryFromAddon(model.addon) !== null)
+}
 
 async function checkOnly (nonBlocking = false, showDuplicates = false): Promise<void> {
   const timeoutMs = 30000
@@ -35,7 +41,7 @@ async function checkOnly (nonBlocking = false, showDuplicates = false): Promise<
   try {
     const result = await Promise.race([
       (async () => {
-        const remoteModels = await collectModels({ showDuplicates })
+        const remoteModels = toOpenAIEndpointModels(await collectModels({ showDuplicates }))
         const currentModels = loadCurrentModels(OUTPUT_FILE)
 
         remoteModels.sort(
@@ -116,7 +122,7 @@ async function updateModels (showDuplicates = false, noDedup = false): Promise<v
   console.log('🔄 Fetching models from QVAC Registry...\n')
 
   const currentModels = loadCurrentModels(OUTPUT_FILE)
-  const models = await collectModels({ showDuplicates, noDedup })
+  const models = toOpenAIEndpointModels(await collectModels({ showDuplicates, noDedup }))
   const { added, removed } = compareModels(models, currentModels)
 
   models.sort(

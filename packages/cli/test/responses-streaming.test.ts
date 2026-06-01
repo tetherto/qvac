@@ -1,21 +1,13 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
-import { writeStreamingResponse } from '../src/serve/adapters/openai/routes/responses.js'
-import type { ResponsesHandlerParams } from '../src/serve/adapters/openai/routes/responses.js'
-import type { CompletionResult, SDKToolCall } from '../src/serve/core/sdk.js'
-import type { RouteContext } from '../src/serve/adapters/types.js'
+import { writeStreamingResponse } from '../src/serve/adapters/openai/response-writers.js'
+import type { ResponsesHandlerParams, ResponseWriterContext } from '../src/serve/adapters/openai/response-writers.js'
+import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
 
-function minimalRouteContext (): RouteContext {
+function minimalRouteContext (): ResponseWriterContext {
   return {
-    registry: {} as RouteContext['registry'],
-    serveConfig: {} as RouteContext['serveConfig'],
-    logger: {
-      info: (): void => {},
-      warn: (): void => {},
-      error: (): void => {},
-      debug: (): void => {}
-    },
+    logger: { info: (): void => {} },
     responsesStore: {
       put: (): void => {},
       get: (): undefined => undefined,
@@ -23,7 +15,7 @@ function minimalRouteContext (): RouteContext {
       listInputItems: (): null => null,
       size: (): number => 0,
       bannerLine: (): string => ''
-    }
+    } as ResponseWriterContext['responsesStore']
   }
 }
 
@@ -48,16 +40,19 @@ function baseHandlerParams (rid: string): ResponsesHandlerParams {
 
 function fakeStreamCompletion (opts: {
   tokens: string[]
-  toolCalls: SDKToolCall[] | null
+  toolCalls: ToolCall[]
   text: string
-  stats?: import('../src/serve/core/sdk.js').CompletionRunStats
-}): CompletionResult {
+  stats?: CompletionStats
+}): CompletionRun {
   async function * gen (): AsyncGenerator<string> {
     for (const t of opts.tokens) yield t
   }
   return {
+    requestId: 'test',
+    events: (async function * empty (): AsyncGenerator<never> {})(),
+    final: Promise.resolve(undefined) as unknown as CompletionRun['final'],
     text: Promise.resolve(opts.text),
-    toolCalls: Promise.resolve(opts.toolCalls),
+    toolCalls: Promise.resolve(opts.toolCalls) as unknown as CompletionRun['toolCalls'],
     stats: Promise.resolve(opts.stats),
     tokenStream: gen(),
     toolCallStream: (async function * empty (): AsyncGenerator<never> {})()
@@ -114,7 +109,7 @@ describe('writeStreamingResponse', () => {
     const p = baseHandlerParams('resp_stream_msg')
     const result = fakeStreamCompletion({
       tokens: ['x', 'y'],
-      toolCalls: null,
+      toolCalls: [],
       text: 'xy',
       stats: { generatedTokens: 5 }
     })
@@ -143,8 +138,8 @@ describe('writeStreamingResponse', () => {
     const result = fakeStreamCompletion({
       tokens: [],
       toolCalls: [
-        { id: 'call_a', name: 'fn1', arguments: '{}' },
-        { id: 'call_b', name: 'fn2', arguments: '{"k":1}' }
+        { id: 'call_a', name: 'fn1', arguments: {} },
+        { id: 'call_b', name: 'fn2', arguments: { k: 1 } }
       ],
       text: '',
       stats: { generatedTokens: 3 }

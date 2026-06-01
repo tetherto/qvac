@@ -224,8 +224,8 @@ describe('parseServeConfig — openai.audio.speech.voices', () => {
     assert.equal(cfg.openai.audio.speech.voices?.echo, 'tts-b')
   })
 
-  it('rejects a non-object voices value', async () => {
-    await assert.rejects(
+  it('rejects a non-object voices value', () => {
+    assert.throws(
       () =>
         parseServeConfig(
           {
@@ -263,9 +263,9 @@ describe('parseServeConfig — openai.audio.speech.maxInputChars', () => {
     assert.equal(cfg.openai.audio.speech.maxInputChars, null)
   })
 
-  it('rejects non-integer or non-positive values', async () => {
+  it('rejects non-integer or non-positive values', () => {
     for (const bad of [0, -1, 1.5, '4096', true]) {
-      await assert.rejects(
+      assert.throws(
         () =>
           parseServeConfig(
             {

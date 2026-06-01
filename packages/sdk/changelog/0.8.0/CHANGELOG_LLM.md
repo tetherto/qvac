@@ -6,7 +6,7 @@ This release adds Parakeet as a new transcription engine alongside Whisper, deco
 
 ---
 
-## 💥 Breaking Changes
+## Breaking Changes
 
 ### Embedding Model Config Uses Structured Fields
 
@@ -120,7 +120,7 @@ All existing Parakeet model constants now include a variant prefix (`TDT_`) to d
 
 ---
 
-## 🔌 New APIs
+## New APIs
 
 ### Parakeet Transcription Plugin
 
@@ -210,7 +210,7 @@ await embed(
 
 ---
 
-## ✨ Features
+## Features
 
 ### CTC and Sortformer Transcription Models
 
@@ -257,7 +257,7 @@ The profiler now captures detailed load/download metrics and stream profiling da
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 - **Addon logging fixed across all plugins** — Logging callbacks were not being properly attached to some addon plugins, resulting in missing addon-level logs. All plugins now correctly route native addon logs through the SDK logging system.
 - **Parakeet addon logger** now uses the correct `params.modelId` for log routing.
@@ -267,7 +267,7 @@ The profiler now captures detailed load/download metrics and stream profiling da
 
 ---
 
-## 📦 Model Changes
+## Model Changes
 
 ### Added Models
 
@@ -298,7 +298,7 @@ The following unprefixed Parakeet constants were replaced by their `TDT_` equiva
 
 ---
 
-## 🧹 Other Changes
+## Other Changes
 
 - Consolidated transcription schemas and shared ops into a unified structure.
 - Updated `@qvac/tts-onnx` to v0.6.1 and `@qvac/transcription-whispercpp` addon.

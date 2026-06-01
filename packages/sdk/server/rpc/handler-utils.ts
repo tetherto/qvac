@@ -17,6 +17,10 @@ import { setRuntimeContext } from "@/server/bare/registry/runtime-context-regist
 import { type ServerProfiler } from "./profiling";
 import { isTerminalChunk } from "./rpc-utils";
 import { createProgressThrottle } from "./progress-throttle";
+import {
+  handlerSupportsProgress,
+  selectHandler,
+} from "@/server/rpc/handler-selection";
 
 function getProfilingMetaFromRequest(
   request: Request,
@@ -36,13 +40,20 @@ type ReplyHandler = (
 ) => Promise<Response> | Response;
 type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>;
 type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>;
-type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGenerator<Response>;
+type DuplexStreamHandler = (
+  request: any,
+  inputStream: any,
+) => AsyncGenerator<Response>;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type HandlerEntry = {
   type: "reply" | "stream" | "duplex";
   handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
-  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
+  delegatedHandler?:
+    | ReplyHandler
+    | StreamHandler
+    | ProgressHandler
+    | DuplexStreamHandler;
   isDelegated?: (request: Request) => boolean;
   supportsProgress?: boolean | ((request: Request) => boolean);
 };
@@ -107,7 +118,7 @@ async function executeStreamHandler(
         stream.write(profiler.serialize(response, false) + "\n", "utf-8");
       }
     }
-    
+
     // Fallback
     if (!sentFinalChunk) {
       profiler.endHandler();
@@ -135,9 +146,7 @@ async function executeProgressHandler(
   profiler.startHandler();
 
   const writeBatch = (updates: Response[]) => {
-    const payload = updates
-      .map((u) => profiler.serialize(u, false))
-      .join("\n");
+    const payload = updates.map((u) => profiler.serialize(u, false)).join("\n");
     stream.write(payload + "\n", "utf-8");
   };
 
@@ -177,10 +186,7 @@ export async function executeDuplexHandler(
   outputStream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
   profiler: ServerProfiler,
 ) {
-  const handler =
-    entry.delegatedHandler && entry.isDelegated?.(request)
-      ? entry.delegatedHandler
-      : entry.handler;
+  const { handler } = selectHandler(entry, request);
 
   profiler.startHandler();
 
@@ -189,10 +195,7 @@ export async function executeDuplexHandler(
       request,
       inputStream,
     )) {
-      outputStream.write(
-        profiler.serialize(response, false) + "\n",
-        "utf-8",
-      );
+      outputStream.write(profiler.serialize(response, false) + "\n", "utf-8");
     }
     profiler.endHandler();
     const trailer = profiler.serialize();
@@ -213,17 +216,8 @@ export async function executeHandler(
   entry: HandlerEntry,
   profiler: ServerProfiler,
 ) {
-  const isDelegated = !!(
-    entry.delegatedHandler && entry.isDelegated?.(request)
-  );
-  const handler = isDelegated ? entry.delegatedHandler! : entry.handler;
-
-  const wantsProgress =
-    "withProgress" in request &&
-    request.withProgress &&
-    (typeof entry.supportsProgress === "function"
-      ? entry.supportsProgress(request)
-      : entry.supportsProgress);
+  const { handler, isDelegated } = selectHandler(entry, request);
+  const wantsProgress = handlerSupportsProgress(entry, request);
 
   if (entry.type === "duplex") {
     throw new PluginHandlerTypeMismatchError(

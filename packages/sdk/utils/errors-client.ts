@@ -287,6 +287,18 @@ export class PearWorkerEntryRequiredError extends QvacErrorBase {
   }
 }
 
+export class WorkerPluginsNotRegisteredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED,
+        [],
+        cause,
+      ),
+    );
+  }
+}
+
 export class BundleVerificationFailedError extends QvacErrorBase {
   constructor(bundlePath: string, cause?: unknown) {
     super(

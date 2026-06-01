@@ -22,14 +22,8 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [Production (manual PR)](#production-manual-pr)
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
-  - [Post-Merge Sync](#2-docs-post-merge-sync)
-  - [Generate API Documentation](#3-generate-api-documentation)
-  - [Deploy Notify](#4-docs-deploy-notify)
-  - [CI Doctor](#5-docs-ci-doctor)
-  - [Docs Release — Minor](#6-docs-release--minor)
-  - [Docs Release — Patch](#7-docs-release--patch)
+  - [Docs Release](#2-docs-release)
 - [Script Reference](#script-reference)
-- [AI Augmentation](#ai-augmentation)
 - [Release-Notes Overrides](#release-notes-overrides)
 - [Troubleshooting](#troubleshooting)
 
@@ -61,16 +55,16 @@ The SDK API summary and release notes are **generated from TypeScript source / p
 
 ### How the Pipeline Works
 
-The generation pipeline has two phases (extraction and rendering) with an optional AI augmentation step in between:
+The generation pipeline has two phases — TypeDoc extraction and Nunjucks
+rendering. Output is deterministic: identical SDK input always produces
+identical MDX. (AI-assisted authoring happens locally via Cursor skills,
+never inside this pipeline.)
 
 ```
 SDK source (packages/sdk)
   │
   ▼
 Phase 1: TypeDoc extraction  ──►  api-data.json
-  │
-  ▼
-Phase 1.5: AI augmentation (optional, off by default)
   │
   ▼
 Phase 2: Nunjucks rendering  ──►  content/docs/reference/api/index.mdx        (latest minor)
@@ -139,28 +133,27 @@ Examples:
 
 ```bash
 # Re-render the latest summary into content/docs/reference/api/index.mdx
-bun run scripts/generate-api-docs.ts 0.11.0 --latest --no-ai
+bun run scripts/generate-api-docs.ts 0.11.0 --latest
 
 # Render an older minor series into content/docs/reference/api/v0.10.x.mdx (no --latest)
-bun run scripts/generate-api-docs.ts 0.10.0 --no-ai
+bun run scripts/generate-api-docs.ts 0.10.0
 
 # Bump only the frontmatter title (called by the minor freeze flow):
-# no TypeDoc, no AI, no render
+# no TypeDoc, no render
 bun run scripts/generate-api-docs.ts 0.10.0 --target=v0.10.x.mdx --title-only
 ```
 
 This will:
 1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`) and write `api-data.json`
-2. Optionally run AI augmentation to fill content gaps (skipped with `--no-ai`)
-3. Render a single MDX via the Nunjucks `single-page.njk` template:
+2. Render a single MDX via the Nunjucks `single-page.njk` template:
    - `--latest` → `content/docs/reference/api/index.mdx`
    - `--target=<file>` → `content/docs/reference/api/<file>` (explicit override)
    - otherwise → `content/docs/reference/api/v<X.Y>.x.mdx` (series-named)
-4. Run a smoke test that checks for `## Functions` and `## Errors` headings
+3. Run a smoke test that checks for `## Functions` and `## Errors` headings
 
-`--title-only` short-circuits this: it skips TypeDoc + AI + render and
-only rewrites the `title:` line of the existing target MDX, then runs
-the same smoke test.
+`--title-only` short-circuits this: it skips TypeDoc + render and only
+rewrites the `title:` line of the existing target MDX, then runs the
+same smoke test.
 
 **Flags:**
 
@@ -170,20 +163,18 @@ the same smoke test.
 | `--target=<file>` | Override the output filename inside `api/` (mutually exclusive with `--latest`). |
 | `--title-only` | Rewrite the frontmatter title in-place (skips TypeDoc + render). Used by the minor-release freeze step to relabel the outgoing snapshot. |
 | `--force-extract` | Bypass the mtime cache and re-run TypeDoc extraction. |
-| `--no-ai` | Skip the AI augmentation step (CI default). |
 
 **2. Release a new version end-to-end (freeze outgoing, generate incoming, refresh dropdown):**
 
 ```bash
-# Minor (X.Y.0)
-bun run scripts/release-version-minor.ts <new-version> [--force-extract]
-
-# Patch (X.Y.Z, Z >= 1) — auto-detects patch-latest vs patch-archived
-bun run scripts/release-version-patch.ts <new-version>
+# Auto-detects minor (X.Y.0) vs patch (X.Y.Z, Z >= 1)
+bun run scripts/release-version.ts <new-version> [--force-extract]
 ```
 
-These are the orchestrators the CI pipelines call. They never commit or
-open PRs themselves — the wrapping workflow does that. See
+This is the orchestrator the CI pipeline calls. It dispatches to the
+focused `release-version-minor.ts` / `release-version-patch.ts` modules
+based on the patch number, and never commits or opens PRs itself — the
+wrapping workflow does that. See
 [Release-version orchestrators](#release-version-orchestrators) below.
 
 ### Updating the Versions List
@@ -246,7 +237,7 @@ content/docs/
 - **Version list**: Two `VersionedSection` records (`API_SECTION`, `RELEASE_NOTES_SECTION`) in `src/lib/versions.ts`, refreshed by `scripts/update-versions-list.ts` from disk. Each carries both `latest` (precise patch, e.g. `v0.11.3`) and `latestSeries` (e.g. `v0.11.x`). The selector labels and URLs use the series form; the precise patch only surfaces in titles / description ranges.
 - **Sidebar tree**: Single `customTree` in `src/lib/custom-tree.ts`. The `API` and `Release notes` entries are flat single-page links; the version selector beside the page title (only on `/reference/api*` and `/reference/release-notes*`) handles series switching via full-page reload.
 
-The **Docs Release — Minor** and **Docs Release — Patch** workflows split the release flow by branch glob: pushes to `release-sdk-X.Y.0` invoke the minor orchestrator (freeze outgoing → regenerate), while pushes to `release-sdk-X.Y.Z` (with `Z >= 1`) invoke the patch orchestrator (insert `## vX.Y.Z` section under the minor block; API summary is untouched).
+The single **Docs Release** workflow handles every SDK release branch (`release-sdk-*` with changes under `packages/sdk/changelog/**`). The `release-version.ts` dispatcher reads the version, picks minor (freeze outgoing → regenerate) for `X.Y.0` and patch (insert `## vX.Y.Z` section under the minor block — API summary untouched) for `X.Y.Z` with `Z >= 1`, and forwards to the focused orchestrator.
 
 ### Minor vs patch release behavior
 
@@ -271,7 +262,7 @@ namespace with the SDK pod's release cadence).
 
 ### Release-version orchestrators
 
-Two scripts, one per release type:
+A thin dispatcher (`release-version.ts`) auto-detects minor vs patch from the version's patch number and forwards to one of two focused modules:
 
 **`release-version-minor.ts`** — for `X.Y.0` releases.
 
@@ -284,7 +275,7 @@ Two scripts, one per release type:
 
 **`release-version-patch.ts`** — for `X.Y.Z` releases with `Z >= 1`. Inspects `src/lib/versions.ts` to choose between `patch-latest` (write to `index.mdx`) and `patch-archived` (write to the existing `vX.Y.x.mdx`). The script never invokes the API summary generator.
 
-Both orchestrators are pure file mutations — they never `git commit` or `gh pr create`. The wrapping GitHub workflow opens the PR.
+All three modules are pure file mutations — they never `git commit` or `gh pr create`. The wrapping GitHub workflow opens the PR.
 
 ---
 
@@ -306,7 +297,7 @@ Hosting provider builds     Hosting provider builds
 - **`main`** is the staging environment. The hosting provider watches this branch; any new commit triggers a build and deploy to the staging site.
 - **`docs-production`** is the production environment. The hosting provider watches this branch; any new commit (via merged PR from `main`) triggers a build and deploy to the production site.
 
-With `main` + `docs-production`, every production deploy has a reviewable PR showing exactly what changed. The CI Doctor workflow gates PRs to `docs-production`, verifying all docs CI jobs are green before the merge is allowed.
+With `main` + `docs-production`, every production deploy has a reviewable PR showing exactly what changed.
 
 ### Staging (automatic)
 
@@ -314,7 +305,7 @@ With `main` + `docs-production`, every production deploy has a reviewable PR sho
 SDK release branch pushed (touches packages/sdk/changelog/**)
     │
     ▼
-Docs Release - Minor / Patch workflow runs the orchestrator
+Docs Release workflow dispatches minor/patch and runs the orchestrator
     │
     ▼
 Workflow opens PR: docs/release-sdk-v<X.Y.Z> -> main
@@ -327,9 +318,9 @@ Hosting provider detects new commit on main and rebuilds staging
 ```
 
 The push-to-`main` is mediated by a reviewable PR rather than a bot
-auto-commit — the previous "push directly to main" flow has been retired
-in favour of `peter-evans/create-pull-request`. Any other push to `main`
-(docs content changes, merged PRs from contributors) still triggers the
+auto-commit — generated docs always land on `main` via
+`peter-evans/create-pull-request`. Any other push to `main` (docs
+content changes, merged PRs from contributors) still triggers the
 hosting provider's build the same way.
 
 ### Production (manual PR)
@@ -341,9 +332,6 @@ Staging is verified and ready
 Open PR: main -> docs-production
     │
     ▼
-CI Doctor runs (verifies all docs workflows are green)
-    │
-    ▼
 Review the diff, approve, merge
     │
     ▼
@@ -353,15 +341,16 @@ Hosting provider detects new commit on docs-production
 Hosting provider builds the static site and deploys to production
 ```
 
-**Gate**: The `Docs CI Doctor` workflow (`.github/workflows/docs-ci-doctor.yml`) must pass before the PR can be merged.
-
-When a `release-*` branch is pushed, the **Docs Deploy Notify** workflow creates a GitHub issue reminding the docs owner to open a PR from `main` to `docs-production`.
+The reviewer is responsible for confirming staging is healthy and that
+the docs PR Checks have passed on `main` before merging into
+`docs-production`. There is no automated CI gate on the production PR
+— promotion is fully manual on purpose.
 
 ---
 
 ## CI Workflows
 
-Seven GitHub Actions workflows automate the docs lifecycle:
+Two GitHub Actions workflows automate the docs lifecycle:
 
 ### 1. Docs Website PR Checks
 
@@ -371,156 +360,46 @@ Seven GitHub Actions workflows automate the docs lifecycle:
 
 **What it does:**
 - Installs dependencies with Bun
-- Ensures a placeholder `content/docs/reference/api/index.mdx` exists when the PR doesn't touch generated content (so `next build` doesn't 404 on the API summary page)
 - Runs `bun run build` to validate the site compiles
 - Runs Vitest tests (sidebar consistency, link integrity, single-page rendering, changelog parser) excluding TSDoc completeness tests that require SDK source
+- Optionally installs the SDK and runs the TSDoc completeness audit in warning mode
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
-### 2. Docs Post-Merge Sync (manual-only)
+The API summary `index.mdx` lives at `content/docs/reference/api/` and is committed to the repo (refreshed by the `Docs Release` workflow on SDK release pushes), so PR checkouts always have it on disk — no placeholder step is needed.
 
-**File:** `.github/workflows/docs-post-merge-sync.yml`
+### 2. Docs Release
 
-**Status:** Currently `workflow_dispatch:` only. The original `push:` trigger to `main` is intentionally not wired up — production tracks `main`, so auto-committing regenerated docs back to `main` would loop the workflow back into itself on every push. Restore the `push:` trigger once production moves to `docs-production`.
-
-**Triggers (current):** Manual dispatch from the Actions tab. **Triggers (intended once re-enabled):** Push to `main` when files change in `packages/sdk/**` or `docs/website/scripts/**`.
-
-**What it does (when enabled):**
-1. Checks out the repo
-2. Installs dependencies for both docs and SDK
-3. Runs `bun run docs:generate` (full orchestrated generation)
-4. If generated files changed, commits and pushes to `main` with `[skip ci]`
-
-**Purpose:** Keeps generated API docs and release notes on `main` in sync whenever the SDK source or generation scripts change.
-
-**Required secrets/variables:**
-| Name | Type | Purpose |
-|---|---|---|
-| `DOCS_SYNC_BOT_USER` | Variable (optional) | Bot username to prevent infinite loops |
-| `DOCS_SYNC_BOT_NAME` | Variable (optional) | Git commit author name (default: `docs-sync-bot`) |
-| `DOCS_SYNC_BOT_EMAIL` | Variable (optional) | Git commit author email |
-| `DOCS_SYNC_PAT` | Secret (optional) | PAT for pushing (falls back to `GITHUB_TOKEN`) |
-
-### 3. Generate API Documentation
-
-**File:** `.github/workflows/docs-generate-api.yml`
+**File:** `.github/workflows/docs-release.yml`
 
 **Triggers:**
-- **Manual:** Actions tab → "Generate API Documentation" → enter version (e.g. `0.7.0`)
-- **Dispatch:** `repository_dispatch` event with type `generate-api-docs` and `client_payload.version`
-
-**What it does:**
-1. Resolves the version from input or dispatch payload
-2. Clones the SDK repo (tries branch `release-qvac-sdk-<version>`, then tag `v<version>`, then `main`)
-3. Generates API docs and updates the versions list
-4. Opens a PR on branch `docs/api-v<version>`
-
-**Purpose:** On-demand API docs generation for specific SDK releases, especially useful for cross-repo setups.
-
-**Required secrets/variables:**
-| Name | Type | Purpose |
-|---|---|---|
-| `SDK_REPOSITORY` | Variable (required) | `owner/repo` of the SDK (e.g. `myorg/qvac`) |
-| `SDK_SUBPATH` | Env default | Path to SDK inside the repo (default: `packages/sdk`) |
-
-### 4. Docs Deploy Notify
-
-**File:** `.github/workflows/docs-deploy-notify.yml`
-
-**Triggers:** Push to any `release-*` branch, or manual dispatch.
-
-**What it does:**
-- Creates a `docs-deploy` label (if it doesn't exist)
-- Opens a GitHub issue notifying the docs owner that a release is ready for deploy
-
-**Purpose:** Alerts the team to deploy docs after a release branch is pushed.
-
-**Required secrets/variables:**
-| Name | Type | Purpose |
-|---|---|---|
-| `DOCS_DEPLOY_NOTIFY_USER` | Secret | GitHub username to `@mention` in the deploy issue |
-
-### 5. Docs CI Doctor
-
-**File:** `.github/workflows/docs-ci-doctor.yml`
-
-**Triggers:** Pull requests targeting `docs-production`, or manual dispatch.
-
-**What it does:**
-- Runs `.github/scripts/docs-ci-doctor.sh`
-- Queries the GitHub API for the latest runs of all docs-related workflows on `main`
-- Reports pass/fail status for each and exits non-zero if any are not green
-
-**Purpose:** Gates merges to `docs-production` by verifying all docs CI jobs succeeded.
-
-**Running locally:**
-
-Requires [GitHub CLI](https://cli.github.com) and a token with repo read access:
-
-```bash
-GH_TOKEN=ghp_... bash .github/scripts/docs-ci-doctor.sh
-```
-
-### 6. Docs Release — Minor
-
-**File:** `.github/workflows/docs-release-minor.yml`
-
-**Triggers:**
-- Push to `release-sdk-*.*.0` branches that touch `packages/sdk/changelog/**`
-- Manual dispatch with a version input (must be `X.Y.0`)
+- Push to `release-sdk-*` branches that touch `packages/sdk/changelog/**`
+- Manual dispatch with a version input (`X.Y.Z` — minor when `Z == 0`, patch otherwise)
 
 **What it does:**
 1. **`label-gate`** — authorises secret access via the shared label-gate composite action (PAT required).
-2. **`docs-release-setup` composite action** opens the dual checkout (close a race window where a PR landing on `main` mid-pipeline could smuggle a not-yet-released function into the rendered API summary):
+2. **`docs-release-setup` composite action** opens the dual checkout (closes a race window where a PR landing on `main` mid-pipeline could smuggle a not-yet-released function into the rendered API summary):
    - `main-tree/` — `main` HEAD: docs scripts + commit target.
    - `release-tree/` — frozen at `github.sha`: SDK source + package CHANGELOGs.
    `SDK_PATH` and `CHANGELOG_REPO_ROOT` both point at `release-tree/`, so TypeDoc and the release-notes generator only see the released state. The action also installs Bun + deps and extracts the version.
-3. Runs `release-version-minor.ts <version> --force-extract`, which:
-   - Freezes the outgoing version's `index.mdx` into a series sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx`
-   - Generates the new API summary into `index.mdx` (always `--no-ai` — AI augmentation is intentionally out of the release pipeline; see [AI Augmentation](#ai-augmentation) for ad-hoc manual use)
-   - Generates the new release notes into `index.mdx` (per-package verbatim `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block)
-   - Refreshes `src/lib/versions.ts`
-4. Runs TSDoc audit in warning mode (non-fatal) and link validation tests.
-5. **Opens a PR** `docs/release-sdk-v<X.Y.0>` against `main` via `peter-evans/create-pull-request`. `add-paths` restricts the commit to the generated surfaces only.
+3. **Detects release kind** — a small inline step matches the version against `^[0-9]+\.[0-9]+\.0$` and exposes `kind=minor|patch` for downstream steps.
+4. Runs `release-version.ts <version> --force-extract`, which dispatches:
+   - **Minor (`X.Y.0`)** — full flow: freezes the outgoing `index.mdx` into a series sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx`, generates the new API summary into `index.mdx` (TypeDoc + render — output is deterministic by construction), generates the new release notes into `index.mdx` (per-package verbatim `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block), refreshes `src/lib/versions.ts`.
+   - **Patch (`X.Y.Z`, `Z >= 1`)** — `release-version-patch.ts` inspects `src/lib/versions.ts` and picks `patch-latest` (incoming `X.Y` == latest `X.Y`: insert `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block of `index.mdx`) or `patch-archived` (older minor: insert the same section into the existing `v<X.Y>.x.mdx`, no rename). The API summary page is never touched by patches.
+5. Runs TSDoc audit in warning mode (non-fatal, **minor only**) and link validation tests (always).
+6. **Opens a PR** `docs/release-sdk-v<X.Y.Z>` against `main` via `peter-evans/create-pull-request`. `add-paths` restricts the commit to the generated surfaces only. The PR title carries `(minor)` or `(patch)` for human readers.
 
 Once a reviewer merges the PR, the hosting provider's `main` build picks it up and deploys to staging.
 
-**Purpose:** Automates the full minor release flow — freeze + regenerate + PR.
+Patches never re-run TypeDoc — they touch only the frontmatter title of the API summary and append a section to the release notes — so `api-data.json` only changes on minor releases.
 
-### 7. Docs Release — Patch
-
-**File:** `.github/workflows/docs-release-patch.yml`
-
-**Triggers:**
-- Push to `release-sdk-*` branches **excluding** `release-sdk-*.*.0`, that touch `packages/sdk/changelog/**`
-- Manual dispatch with a version input (must be `X.Y.Z` with `Z >= 1`)
-
-The include/exclude glob pair is mutually exclusive with the minor workflow's `release-sdk-*.*.0` glob, so the two workflows never both fire on the same push.
-
-**What it does:**
-1. **`label-gate`** — same as minor.
-2. **`docs-release-setup` composite action** — same dual checkout, deps install, version extract.
-3. Runs `release-version-patch.ts <version>`. The script inspects `src/lib/versions.ts` and chooses:
-   - **patch-latest** (incoming `X.Y` == latest `X.Y`): insert `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` minor block of `index.mdx`. Bumps the manifest's stored `latest` patch.
-   - **patch-archived** (incoming `X.Y` != latest `X.Y`): insert the same section into the existing `v<X.Y>.x.mdx`. No rename.
-4. Runs link validation tests.
-5. **Opens a PR** `docs/release-sdk-v<X.Y.Z>` against `main`. Same `add-paths` restriction.
-
-Patches never touch the API summary page — the public API surface is
-frozen at the minor boundary, so a patch by definition adds nothing
-there. AI augmentation is correspondingly irrelevant to this flow.
-
-**Purpose:** Automates patch releases without touching unrelated minors. Each minor line owns a single permanent `vX.Y.x.mdx` page that accumulates patch sections forever — the manifest's "one entry per minor series" invariant is maintained by the filename itself, not by renames.
-
-**Required secrets/variables (both 6 and 7):**
+**Required secrets/variables:**
 
 | Name | Type | Purpose |
 |---|---|---|
 | `DOCS_SYNC_BOT_USER` | Variable (optional) | Bot username to short-circuit the workflow if it pushed the trigger commit |
 | `DOCS_SYNC_PAT` | Secret (optional) | PAT used by `peter-evans/create-pull-request` to push the docs branch and have the PR trigger downstream workflow checks (falls back to `GITHUB_TOKEN`, in which case the PR is created but downstream PR checks won't fire) |
 | `PAT_TOKEN` | Secret (required) | PAT used by `label-gate` for team membership lookups |
-
-The release pipeline does **not** consume `AI_AUGMENT_*` secrets. Those are only used when invoking `generate-api-docs.ts` manually with AI on — see [AI Augmentation](#ai-augmentation).
 
 ---
 
@@ -530,47 +409,29 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 
 | Script | npm alias | Description |
 |---|---|---|
-| `release-version-minor.ts` | `docs:release-version-minor` | Minor (X.Y.0) orchestrator: freeze outgoing series → generate new latest from per-package `CHANGELOG_LLM.md` → refresh versions.ts. Called by `docs-release-minor.yml`. |
-| `release-version-patch.ts` | `docs:release-version-patch` | Patch (X.Y.Z, Z>=1) orchestrator: insert `## v<X.Y.Z>` after the existing minor block on the appropriate series page. Never touches the API summary. Called by `docs-release-patch.yml`. |
+| `release-version.ts` | `docs:release-version` | Unified release dispatcher: parses the version and forwards to the minor or patch orchestrator. Called by `docs-release.yml`. |
+| `release-version-minor.ts` | -- | Minor (X.Y.0) orchestrator: freeze outgoing series → generate new latest from per-package `CHANGELOG_LLM.md` → refresh `versions.ts`. Importable from `release-version.ts`. |
+| `release-version-patch.ts` | -- | Patch (X.Y.Z, Z>=1) orchestrator: insert `## v<X.Y.Z>` after the existing minor block on the appropriate series page. Never touches the API summary. Importable from `release-version.ts`. |
 | `generate-api-docs.ts` | `docs:generate-api` | Renders one minor series' API summary MDX. `--title-only` rewrites only the frontmatter title (called from the minor freeze flow); `--target=<file>` overrides the output filename. |
 | `api-docs/extract.ts` | -- | Phase 1: TypeDoc analysis, writes `api-data.json` |
 | `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
-| `api-docs/ai-augment.ts` | -- | Phase 1.5: Optional AI-powered content gap filling |
 | `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
 | `generate-release-notes.ts` | `docs:generate-release-notes` | Generates / augments the release-notes series MDX. Default mode renders the page from scratch with a `## v<X.Y.0>` block; `--append-patch` inserts a `## v<X.Y.Z>` block directly after the minor; `--title-only` relabels the frontmatter title only. |
 | `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from `reference/api/v*.x.mdx` and `reference/release-notes/v*.x.mdx` siblings on disk. `--latest=X.Y.Z` records the precise patch in `latest` (the selector still labels series-only). |
-| `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the latest summary + refreshes versions.ts using the monorepo SDK's `package.json` version (no version bump) |
+| `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the latest summary + refreshes `versions.ts` using the monorepo SDK's `package.json` version (no version bump) |
 | `create-version-bundle.ts` | `docs:create-version` | Copies the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx` (called from `release-version-minor.ts`) |
-| `lib/release-shared.ts` | -- | Shared helpers for the two release orchestrators (version parsing, `versions.ts` reader, series-sibling resolver, series-name helpers) |
+| `lib/release-shared.ts` | -- | Shared helpers for the release orchestrators (version parsing, `versions.ts` reader, series-sibling resolver, series-name helpers) |
 | `lib/changelog-parser.ts` | -- | Changelog parsing — `readChangelogLLMVerbatim` for the verbatim per-package render plus legacy `parseChangelog` / `parseChangelogFolder` / `mergeChangelogs` exports kept for unit-test fixtures and ad-hoc tooling |
 | `lib/link-validator.ts` | -- | Internal link extraction + resolution (used by the link-integrity test) |
 
----
-
-## AI Augmentation
-
-The generation pipeline includes an optional AI step that identifies functions with thin descriptions or missing examples and generates first-draft content using an LLM. This step runs between extraction and rendering, modifying `api-data.json` in place before templates consume it.
-
-**Skipping:** Pass `--no-ai` to `generate-api-docs.ts`, or omit the required environment variables. The step is skipped silently when env vars are not configured.
-
-**Required environment variables:**
-
-| Variable | Description |
-|---|---|
-| `AI_AUGMENT_BASE_URL` | OpenAI-compatible API endpoint (e.g. `https://api.openai.com/v1`) |
-| `AI_AUGMENT_API_KEY` | API key for the provider |
-| `AI_AUGMENT_MODEL` | Model identifier (e.g. `gpt-4o`, `claude-sonnet-4-20250514`) |
-
-**Source tagging:** Every AI-generated field is tagged in `api-data.json` with `"descriptionSource": "ai"` or `"examplesSource": "ai"`. Fields populated by TypeDoc extraction have no source tag (or `"extracted"`). Reviewers can search for `"source": "ai"` in the JSON or look for the AI-generated content on the staging site before promoting to production.
-
-**Determinism:** AI augmentation calls a remote LLM, so the same SDK input produces **different** output across runs. Any workflow that depends on reproducible output (CI byte-identity checks, `docs:validate-e2e`, QA review runs) **must** pass `--no-ai`. Use AI augmentation only for curated manual runs where the author reviews and polishes the AI output before committing.
-
-For fully reproducible `api-data.json` also set `SOURCE_DATE_EPOCH` to a fixed Unix timestamp (reproducible-builds convention). Without it, `ApiData.generatedAt` is the literal string `"unspecified"` so byte-identity checks still pass.
-
-**Prompt templates** live in `scripts/api-docs/prompts/` and use `{{variable}}` placeholders:
-- `function-description.txt` -- generates a 2-4 sentence function description
-- `usage-example.txt` -- generates a TypeScript usage example
-- `release-note-summary.txt` -- generates a release note summary (reserved for future use)
+> AI-assisted authoring (drafting descriptions or examples) happens
+> locally via Cursor skills — never inside this pipeline. Output of
+> every script in this table is deterministic.
+>
+> For fully reproducible `api-data.json` set `SOURCE_DATE_EPOCH` to a
+> fixed Unix timestamp (reproducible-builds convention). Without it,
+> `ApiData.generatedAt` is the literal string `"unspecified"` so
+> byte-identity checks still pass.
 
 ---
 
@@ -633,34 +494,23 @@ Version vX.Y.Z was not found
 
 **Cause:** `update-versions-list.ts` ran but the version's MDX file doesn't exist on disk.
 
-**Fix:** Run `docs:generate-api -- <version> --latest` (writes `index.mdx`) or `docs:generate-api -- <version>` (writes `vX.Y.Z.mdx`) first, then `docs:update-versions`. For a full release flow use `docs:release-version-minor -- <version>` (for `X.Y.0`) or `docs:release-version-patch -- <version>` (for `X.Y.Z` with `Z >= 1`) instead.
+**Fix:** Run `docs:generate-api -- <version> --latest` (writes `index.mdx`) or `docs:generate-api -- <version>` (writes `vX.Y.Z.mdx`) first, then `docs:update-versions`. For a full release flow use `docs:release-version -- <version>` (auto-detects minor vs patch) instead.
 
 ### Build fails in CI (PR checks)
 
-The PR check workflow ensures a placeholder `content/docs/reference/api/index.mdx` exists so `next build` doesn't 404 when a PR doesn't touch generated content. If the build still fails:
+The committed `content/docs/reference/api/index.mdx` is what `next build` reads. If the build still fails:
 
 1. Check that `source.config.ts` and `next.config.mjs` are valid
 2. Run `bun run build` locally to reproduce
 3. Look for broken MDX frontmatter or invalid imports in `content/`
-
-### Post-merge sync creates infinite loop
-
-The post-merge sync workflow is currently `workflow_dispatch:` only — its `push:` trigger to `main` is removed because production tracks `main` and auto-commits would loop. When you wire `push:` back on (after production moves to `docs-production`):
-
-1. Set the `DOCS_SYNC_BOT_USER` repository variable to the bot's GitHub username
-2. The workflow skips runs when `github.actor` matches this variable
-3. Commits also use `[skip ci]` as an additional safeguard
 
 ### Recover a broken `index.mdx` after a bad release
 
 If a release ran but produced a broken `reference/api/index.mdx` or `reference/release-notes/index.mdx`, restore it by re-running the orchestrator against the previous version:
 
 ```bash
-# Minor (X.Y.0): full freeze + regen
-bun run scripts/release-version-minor.ts <previous-X.Y.0> --force-extract
-
-# Patch (X.Y.Z, Z>=1): title-only + append (only useful if the patch flow itself is broken)
-bun run scripts/release-version-patch.ts <previous-X.Y.Z>
+# Auto-detects minor (full freeze + regen) vs patch (title-only + append).
+bun run scripts/release-version.ts <previous-X.Y.Z> --force-extract
 ```
 
 Then revert the bad commit / branch state via `git`. There is no automatic backup directory — versioning is the safety net (every previous version exists as a sibling `vX.Y.Z.mdx`).

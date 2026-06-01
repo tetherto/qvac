@@ -66,7 +66,7 @@ describe('resolveExplicitServeModel', () => {
 describe('resolveModelConstant', () => {
   it('resolves a constant to its registry src and natural addon', () => {
     const r = resolveModelConstant('alias', 'WHISPER_EN_TINY_Q8_0', makeRegistry())
-    assert.equal(r.src, WHISPER_CONST.src)
+    assert.equal(r.modelSrc, WHISPER_CONST)
     assert.equal(r.sdkType, 'whispercpp-transcription')
     assert.equal(r.endpointCategory, 'transcription')
   })
@@ -77,7 +77,7 @@ describe('resolveModelConstant', () => {
       type: 'whispercpp-audio-translation',
       config: { language: 'auto' }
     })
-    assert.equal(r.src, WHISPER_CONST.src)
+    assert.equal(r.modelSrc, WHISPER_CONST)
     assert.equal(r.sdkType, 'whispercpp-transcription')
     assert.equal(r.endpointCategory, 'audio-translation')
     assert.equal(r.config['translate'], true)

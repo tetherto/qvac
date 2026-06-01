@@ -34,13 +34,10 @@ export interface ExpandedType {
   children: ExpandedType[];
 }
 
-export type ContentSource = "extracted" | "ai";
-
 export interface ApiFunction {
   name: string;
   signature: string;
   description: string;
-  descriptionSource?: ContentSource;
   /**
    * One-line summary, used by object-method bullet lists. The single-page
    * renderer uses the first sentence of `description` when this is omitted.
@@ -71,7 +68,6 @@ export interface ApiFunction {
   expandedReturns: ExpandedType[];
   throws?: Array<{ error: string; description: string }>;
   examples?: string[];
-  examplesSource?: ContentSource;
   deprecated?: string;
   /**
    * When the function declares multiple overloads, this is a per-overload
@@ -95,7 +91,6 @@ export interface ApiOverload {
 export interface ApiObject {
   name: string;
   description: string;
-  descriptionSource?: ContentSource;
   /** One-line summary, used by per-object bullet lists. */
   summary?: string;
   /**
@@ -119,7 +114,6 @@ export interface ApiObject {
    */
   methods?: ApiFunction[];
   examples?: string[];
-  examplesSource?: ContentSource;
 }
 
 export interface ErrorEntry {

@@ -1,7 +1,7 @@
 import QvacResponse = require("@qvac/response");
 import ReadyResource = require("ready-resource");
-import { QvacErrorBase } from "@qvac/error";
 import type { LoggerInterface } from "@qvac/logging";
+import { ERR_CODES, QvacErrorRAG } from "./src/errors";
 
 type Logger = LoggerInterface;
 
@@ -534,36 +534,6 @@ declare class LLMChunkAdapter extends BaseChunkAdapter {
    */
   chunkText(input: string | string[], opts?: LLMChunkOpts): Promise<Doc[]>;
 }
-
-/**
- * Custom error class for QVAC RAG library
- * Extends QvacErrorBase for consistent error handling
- */
-export declare class QvacErrorRAG extends QvacErrorBase {}
-
-/**
- * Error codes used throughout the QVAC RAG library
- */
-export declare const ERR_CODES: Readonly<{
-  ABSTRACT_CLASS: 14001;
-  DB_ADAPTER_NOT_INITIALIZED: 14002;
-  DB_ADAPTER_REQUIRED: 14003;
-  CENTROIDS_INITIALIZATION_FAILURE: 14004;
-  LLM_REQUIRED: 14005;
-  EMBEDDING_FUNCTION_REQUIRED: 14006;
-  NOT_IMPLEMENTED: 14007;
-  INVALID_INPUT: 14008;
-  INVALID_PARAMS: 14009;
-  DUPLICATE_DOCUMENT_ID: 14010;
-  GENERATION_FAILED: 14011;
-  CHUNKING_FAILED: 14012;
-  INVALID_CHUNKER: 14013;
-  DB_OPERATION_FAILED: 14014;
-  DEPENDENCY_REQUIRED: 14015;
-  OPERATION_CANCELLED: 14016;
-  EMBEDDING_MODEL_MISMATCH: 14017;
-  EMBEDDING_DIMENSION_MISMATCH: 14018;
-}>;
 
 export {
   RAG,

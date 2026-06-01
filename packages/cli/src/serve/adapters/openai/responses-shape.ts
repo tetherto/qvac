@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
-import type { SDKToolCall, CompletionRunStats } from '../../core/sdk.js'
-import { sdkToolCallsToOpenai } from './translate.js'
+import type { ToolCall, CompletionStats } from '@qvac/sdk'
+import { sdkToolCallsToOpenai } from './tool-calls.js'
 
 export function responseId (): string {
   return `resp_${randomId()}`
@@ -22,7 +22,7 @@ export interface BuildResponseObjectParams {
   id: string
   modelAlias: string
   text: string
-  toolCalls: SDKToolCall[] | null | undefined
+  toolCalls: ToolCall[] | null | undefined
   createdAtSec: number
   metadata: Record<string, unknown> | null | undefined
   temperature: number | undefined
@@ -36,7 +36,7 @@ export interface BuildResponseObjectParams {
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
   /** From SDK completion stats; `generatedTokens` maps to `usage.output_tokens`. */
-  stats?: CompletionRunStats
+  stats?: CompletionStats
 }
 
 function wordCountFallback (text: string): number {

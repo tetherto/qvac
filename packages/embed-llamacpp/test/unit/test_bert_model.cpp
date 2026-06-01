@@ -1,13 +1,16 @@
 #include <chrono>
 #include <filesystem>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <llama.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackCpp.hpp>
+#include <inference-addon-cpp/queue/OutputQueue.hpp>
+#include <llama.h>
 
 #include "addon/AddonCpp.hpp"
 #include "addon/BertErrors.hpp"
@@ -908,4 +911,69 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeBothKeysRejects) {
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, CancelMidDecode_ThrowsJobCancelled) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  using namespace qvac_lib_inference_addon_cpp;
+
+  std::unique_ptr<BertModel> model = std::make_unique<BertModel>(
+      getValidModelPath(),
+      std::unordered_map<std::string, std::string>{{"device", "cpu"}},
+      test_backends_dir);
+
+  std::shared_ptr<out_handl::CppQueuedOutputHandler<BertEmbeddings>>
+      embeddingHandler =
+          std::make_shared<out_handl::CppQueuedOutputHandler<BertEmbeddings>>();
+  std::shared_ptr<out_handl::CppQueuedOutputHandler<Output::Error>>
+      errorHandler =
+          std::make_shared<out_handl::CppQueuedOutputHandler<Output::Error>>();
+
+  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>> handlers;
+  handlers.add(embeddingHandler);
+  handlers.add(errorHandler);
+  std::unique_ptr<OutputCallBackCpp> callback =
+      std::make_unique<OutputCallBackCpp>(std::move(handlers));
+
+  std::unique_ptr<AddonCpp> addon =
+      std::make_unique<AddonCpp>(std::move(callback), std::move(model));
+  addon->activate();
+
+  constexpr int kSequenceCount = 64;
+  std::vector<std::string> sequences(kSequenceCount);
+  for (int i = 0; i < kSequenceCount; ++i) {
+    sequences[i] =
+        "Long passage number " + std::to_string(i) +
+        " with enough text to keep the model busy during decode so that "
+        "the cancel signal fires while llama_decode is in progress.";
+  }
+
+  addon->runJob(std::any(sequences));
+  std::this_thread::sleep_for(std::chrono::milliseconds{50});
+  addon->cancelJob();
+
+  std::optional<Output::Error> maybeError =
+      errorHandler->tryPop(std::chrono::seconds(10));
+
+  if (!maybeError.has_value()) {
+    std::optional<BertEmbeddings> maybeResult =
+        embeddingHandler->tryPop(std::chrono::seconds(1));
+    if (maybeResult.has_value()) {
+      GTEST_SKIP()
+          << "Cancel arrived after decode completed — no error to verify "
+             "(model too fast for this batch size)";
+    }
+    FAIL() << "Neither error nor result received within timeout";
+  }
+
+  const std::string errorMsg = maybeError.value();
+
+  EXPECT_EQ(errorMsg, "Job cancelled")
+      << "Mid-decode cancel must surface 'Job cancelled', not a generic "
+         "decode error like 'Failed to get sequence embeddings'. "
+         "Got: "
+      << errorMsg;
 }

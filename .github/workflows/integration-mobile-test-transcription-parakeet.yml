@@ -112,9 +112,11 @@ jobs:
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-tdt-0.6b-v3.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-eou-120m-v1.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/sortformer-4spk-v1.q4_0.gguf
+            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/parakeet-tdt-0.6b-v3.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/parakeet-eou-120m-v1.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/sortformer-4spk-v1.q4_0.gguf
+            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf
           key: parakeet-mobile-q4-registry-v1-${{ hashFiles(format('{0}/scripts/provision-mobile-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet'))) }}
           restore-keys: |
             parakeet-mobile-q4-registry-v1-
@@ -128,6 +130,20 @@ jobs:
         run: |
           chmod +x scripts/provision-mobile-models.sh
           scripts/provision-mobile-models.sh
+
+      - name: Stage q4 GGUFs into test/mobile/testAssets/ (cache hit)
+        if: steps.cache-parakeet-models.outputs.cache-hit == 'true'
+        working-directory: addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test/mobile/testAssets
+          cp models/parakeet-tdt-0.6b-v3.q4_0.gguf \
+             models/parakeet-eou-120m-v1.q4_0.gguf \
+             models/sortformer-4spk-v1.q4_0.gguf \
+             models/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf \
+             test/mobile/testAssets/
+          ls -lh test/mobile/testAssets/
 
       - name: Build mobile app
         id: build

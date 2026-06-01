@@ -1,3 +1,5 @@
+import type { ModelConstant } from '@qvac/sdk'
+
 const STATES = {
   IDLE: 'idle',
   LOADING: 'loading',
@@ -10,7 +12,7 @@ export type ModelState = typeof STATES[keyof typeof STATES]
 
 export interface ModelEntry {
   id: string
-  src: string
+  modelSrc: string | ModelConstant
   sdkType: string
   endpointCategory: string
   config: Record<string, unknown>
@@ -56,7 +58,7 @@ export interface OpenAIServeOptions {
 
 export interface ResolvedModelEntry {
   alias: string
-  src: string
+  modelSrc: string | ModelConstant
   sdkType: string
   endpointCategory: string
   isDefault: boolean
@@ -70,7 +72,7 @@ export interface ModelRegistry {
   getAll: () => ModelEntry[]
   getReady: () => ModelEntry[]
   register: (alias: string, opts: {
-    src: string
+    modelSrc: string | ModelConstant
     sdkType: string
     endpointCategory: string
     config: Record<string, unknown>
@@ -98,7 +100,7 @@ export function createModelRegistry (): ModelRegistry {
   }
 
   function register (alias: string, opts: {
-    src: string
+    modelSrc: string | ModelConstant
     sdkType: string
     endpointCategory: string
     config: Record<string, unknown>
@@ -108,7 +110,7 @@ export function createModelRegistry (): ModelRegistry {
 
     const entry: ModelEntry = {
       id: alias,
-      src: opts.src,
+      modelSrc: opts.modelSrc,
       sdkType: opts.sdkType,
       endpointCategory: opts.endpointCategory,
       config: opts.config,

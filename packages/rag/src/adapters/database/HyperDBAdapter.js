@@ -11,6 +11,8 @@ const {
   createLRUCache
 } = require('../../utils/helper')
 const QvacLogger = require('@qvac/logging')
+const HyperDB = require('hyperdb')
+const dbSpec = require('./hyperspec/hyperdb/index.js')
 
 const qvacCrypto = require('#crypto')
 
@@ -537,11 +539,6 @@ class HyperDBAdapter extends BaseDBAdapter {
       return
     }
 
-    await this._validateDependencies()
-
-    const HyperDB = await import('hyperdb')
-    const hyperDBModule = HyperDB.default || HyperDB
-
     if (!this.hypercore) {
       if (!this.store) {
         throw new QvacErrorRAG({
@@ -552,9 +549,7 @@ class HyperDBAdapter extends BaseDBAdapter {
       await this.store.ready()
       this.hypercore = this.store.get({ name: this.dbName })
     }
-    const dbSpecModule = await import('./hyperspec/hyperdb/index.js')
-    const dbSpec = await (dbSpecModule.default || dbSpecModule)
-    this.db = hyperDBModule.bee(this.hypercore, dbSpec, { autoUpdate: true })
+    this.db = HyperDB.bee(this.hypercore, dbSpec, { autoUpdate: true })
     await this.db.ready()
     await this._checkIsInitialized()
 
@@ -1149,37 +1144,6 @@ class HyperDBAdapter extends BaseDBAdapter {
       }
     }
     return { unique, duplicates }
-  }
-
-  /**
-   * Validate that all required dependencies are available.
-   * @private
-   */
-  async _validateDependencies () {
-    const missing = []
-
-    try {
-      await import('hyperdb')
-    } catch (error) {
-      if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
-        missing.push('hyperdb')
-      }
-    }
-
-    try {
-      await import('hyperschema')
-    } catch (error) {
-      if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
-        missing.push('hyperschema')
-      }
-    }
-
-    if (missing.length > 0) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.DEPENDENCY_REQUIRED,
-        adds: `HyperDBAdapter requires the following dependencies: ${missing.join(', ')}.`
-      })
-    }
   }
 }
 

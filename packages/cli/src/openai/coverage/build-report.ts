@@ -1,7 +1,6 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { categorize, summarizeUnknownLabels } from './categorize.js'
-import { collectMeta } from './collect-meta.js'
 import { parseRouter } from './parse-router.js'
 import { parseSpec } from './parse-spec.js'
 import { CONSUMER_PRIMARY_ENDPOINTS } from './primary.js'
@@ -16,14 +15,7 @@ import type {
 
 const COVERAGE_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI_ROOT = join(COVERAGE_DIR, '..', '..', '..')
-const DEFAULT_ROUTER = join(
-  CLI_ROOT,
-  'src',
-  'serve',
-  'adapters',
-  'openai',
-  'index.ts'
-)
+const DEFAULT_ROUTER = join(CLI_ROOT, 'src', 'serve', 'routes')
 
 function percent (n: number, total: number): number {
   if (total === 0) return 0
@@ -101,7 +93,6 @@ export async function buildCoverageReport (options: {
   const { entries: specEntries, source: specSource } = await parseSpec(parseOpts)
   const implementedList = parseRouter(routerPath)
   const implemented = new Set(implementedList)
-  const meta = collectMeta()
 
   const specKeys = new Set(specEntries.map((e) => `${e.method} ${e.path}`))
   for (const key of implemented) {
@@ -115,10 +106,6 @@ export async function buildCoverageReport (options: {
   const rows: CoverageRow[] = specEntries.map((e) => {
     const key = `${e.method} ${e.path}`
     const category = categorize(e)
-    const caveats = [...(meta.get(key) ?? [])]
-    if (e.deprecated) {
-      caveats.push('deprecated in upstream spec')
-    }
     const row: CoverageRow = {
       method: e.method,
       path: e.path,
@@ -126,7 +113,6 @@ export async function buildCoverageReport (options: {
       category,
       consumerPrimary: CONSUMER_PRIMARY_ENDPOINTS.has(key),
       implemented: implemented.has(key),
-      caveats,
       deprecated: e.deprecated ?? false,
       tags: e.tags
     }

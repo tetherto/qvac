@@ -37,6 +37,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_VALIDATION_FAILED: 50605,
   PEAR_WORKER_ENTRY_REQUIRED: 50606,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
+  WORKER_PLUGINS_NOT_REGISTERED: 50608,
   BUNDLE_VERIFICATION_FAILED: 50609,
   BARE_PACK_NOT_INSTALLED: 50610,
   BARE_PACK_ERROR: 50611,
@@ -178,6 +179,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "PEAR_WORKER_ENTRY_REQUIRED",
     message: (workerEntry: string) =>
       `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
+    name: "WORKER_PLUGINS_NOT_REGISTERED",
+    message: () =>
+      "No plugins registered in the worker. Call `plugins([...])` (or `registerPlugin(...)`) before the first SDK call. Import default plugin manifests from `@qvac/sdk/server/bare/plugins` if you want the full built-in set.",
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: "BUNDLE_VERIFICATION_FAILED",
