@@ -1,5 +1,6 @@
 export {
   registerPlugin,
+  registerPlugins,
   getPlugin,
   getPluginHandler,
   hasPlugin,

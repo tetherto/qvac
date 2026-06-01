@@ -20,15 +20,20 @@
     },
     {
       "name": "whisper-cpp",
-      "platform": "osx | ios"
+      "features": ["metal"],
+      "platform": "osx"
+    },
+    {
+      "name": "whisper-cpp",
+      "platform": "ios"
     },
     "gtest"
   ],
   "overrides": [
     {
       "name": "whisper-cpp",
-      "version": "1.8.4.3",
-      "port-version": 1
+      "version": "1.8.5",
+      "port-version": 0
     }
   ]
 }

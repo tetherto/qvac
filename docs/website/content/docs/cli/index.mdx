@@ -7,7 +7,7 @@ schemaType: TechArticle
 
 ## Overview
 
-QVAC CLI is provided through the `@qvac/cli` npm package. The CLI itself is installed globally so the `qvac` command is available on your `PATH`; `@qvac/sdk` is installed in your project so the CLI can resolve and run it. At the moment, it provides the following functionality:
+QVAC CLI is provided through the `@qvac/cli` npm package. The CLI is installed globally so the `qvac` command is available on your `PATH`. At the moment, it provides the following functionality:
 - OpenAI-compatible HTTP server
 - SDK bundling
 - System requirements check
@@ -21,16 +21,7 @@ Install the CLI globally so the `qvac` command is available on your `PATH`:
 ```bash
 npm install -g @qvac/cli
 ```
-</Step>
 
-<Step>
-Install the SDK as a dependency of the project where you'll run the CLI:
-
-```bash
-npm install @qvac/sdk
-```
-
-See [Installation](/installation) for environment-specific instructions of the SDK.
 </Step>
 
 <Step>
@@ -105,8 +96,27 @@ Start an OpenAI-compatible REST API server.
 | `--model <alias>` | Model alias to preload (repeatable, must be in config) |
 | `--api-key <key>` | Require Bearer token authentication |
 | `--cors` | Enable CORS headers |
+| `--docs` | Mount the Swagger UI at `/docs` (auto-enables CORS so the UI's "Try it out" works across origins). Off by default. |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
 | `-v, --verbose` | Detailed output |
+
+### `qvac openai spec`
+
+Emit the OpenAPI 3.1.0 spec for the OpenAI-compatible HTTP server to stdout or a file, without starting the server. Useful for piping into offline doc generators (Redocly, Widdershins, etc.) or wiring API clients.
+
+| Option | Description |
+| --- | --- |
+| `--yaml` | Emit YAML instead of JSON (default: JSON). |
+| `-o, --output <path>` | Write the spec to a file instead of stdout. |
+
+Examples:
+
+```bash
+qvac openai spec                       # JSON → stdout (pipe-safe)
+qvac openai spec -o spec.json          # write JSON to file
+qvac openai spec --yaml                # YAML → stdout
+qvac openai spec --yaml -o spec.yaml   # write YAML to file
+```
 
 ### `qvac doctor`
 

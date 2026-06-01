@@ -64,9 +64,13 @@ function flattenUpscalerKeys(
   };
 }
 
+// `mode: "upscale"` builds an EsrganUpscaler directly (not via SdCtx), so the
+// top-level `device` field has to be forwarded explicitly — it is not part of
+// the `upscaler.*` block.
 function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
   return {
     ...flattenUpscalerKeys(config.upscaler),
+    ...(config.device !== undefined && { device: config.device }),
     ...(config.verbosity !== undefined && { verbosity: config.verbosity }),
   };
 }

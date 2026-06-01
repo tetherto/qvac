@@ -1,30 +1,11 @@
 'use strict'
 
+const { split } = require('llm-splitter')
+
 const BaseChunkAdapter = require('./BaseChunkAdapter')
 const { QvacErrorRAG, ERR_CODES } = require('../../errors')
 const { generateId } = require('../../utils/helper')
 const { tokenizeText } = require('./Tokenizer')
-
-let _llmSplitterSplit = null
-
-async function getLLMSplitter () {
-  if (!_llmSplitterSplit) {
-    try {
-      const llmSplitter = await import('llm-splitter')
-      _llmSplitterSplit = llmSplitter.split
-    } catch (error) {
-      if (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') {
-        throw new QvacErrorRAG({
-          code: ERR_CODES.DEPENDENCY_REQUIRED,
-          adds: 'llm-splitter is required for LLMChunkAdapter.',
-          cause: error
-        })
-      }
-      throw error
-    }
-  }
-  return _llmSplitterSplit
-}
 
 /**
  * Predefined splitter strategies for common tokenization needs.
@@ -87,7 +68,6 @@ class LLMChunkAdapter extends BaseChunkAdapter {
 
       delete chunkOptions.splitStrategy
 
-      const split = await getLLMSplitter()
       const chunks = split(input, chunkOptions)
       return this._processChunks(chunks)
     } catch (error) {

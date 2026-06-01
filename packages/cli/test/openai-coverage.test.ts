@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildCoverageReport } from '../src/openai/coverage/build-report.js'
 import { categorize } from '../src/openai/coverage/categorize.js'
-import { collectMeta } from '../src/openai/coverage/collect-meta.js'
 import {
   filterCoverageRows,
   formatCoverageReportHuman
@@ -83,7 +82,6 @@ describe('openai coverage live report (fixture)', () => {
     const filesGet = report.rows.find((r) => r.key === 'GET /v1/files')
     assert.ok(filesGet)
     assert.equal(filesGet.implemented, true)
-    assert.ok(filesGet.caveats.includes('ephemeral in-memory store'))
   })
 
   it('filters consumer-primary rows', async () => {
@@ -123,7 +121,6 @@ describe('openai coverage live report (fixture)', () => {
           category: 'primary-ai' as const,
           consumerPrimary: true,
           implemented: true,
-          caveats: [],
           deprecated: false,
           tags: ['Chat']
         }
@@ -195,10 +192,3 @@ describe('openai coverage parse-spec', () => {
   })
 })
 
-describe('openai coverage collect-meta', () => {
-  it('aggregates route META exports', () => {
-    const meta = collectMeta()
-    assert.ok(meta.get('POST /v1/audio/speech')?.length)
-    assert.ok(meta.get('GET /v1/files')?.includes('ephemeral in-memory store'))
-  })
-})

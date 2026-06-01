@@ -1,4 +1,5 @@
-import { getSDK } from './core/sdk.js'
+import * as sdk from '@qvac/sdk'
+import type { ModelConstant } from '@qvac/sdk'
 import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
 
 const ENDPOINT_CATEGORY: Record<string, string> = {
@@ -64,18 +65,12 @@ interface CLIServeOptions {
   publicBaseUrl?: string | undefined
 }
 
-interface SDKModelConstant {
-  src: string
-  addon: string
-  name: string
-}
-
-export async function parseServeConfig (rawConfig: RawServeConfig, cliOptions: CLIServeOptions): Promise<ServeConfig> {
+export function parseServeConfig (rawConfig: RawServeConfig, cliOptions: CLIServeOptions): ServeConfig {
   const serve = rawConfig.serve ?? {}
   const rawModels = serve.models ?? {}
 
   const models = new Map<string, ResolvedModelEntry>()
-  const registry = await loadModelConstants()
+  const registry = loadModelConstants()
 
   for (const [alias, entry] of Object.entries(rawModels)) {
     let resolved: ResolvedModelEntry
@@ -236,7 +231,7 @@ function isConstantModelEntry (entry: unknown): entry is ConstantModelEntry {
   )
 }
 
-export function resolveModelConstant (alias: string, constantName: string, registry: Map<string, SDKModelConstant>, overrides?: ConstantModelEntry): ResolvedModelEntry {
+export function resolveModelConstant (alias: string, constantName: string, registry: Map<string, ModelConstant>, overrides?: ConstantModelEntry): ResolvedModelEntry {
   const model = registry.get(constantName)
   if (!model) {
     throw new Error(
@@ -256,7 +251,7 @@ export function resolveModelConstant (alias: string, constantName: string, regis
 
   return {
     alias,
-    src: model.src,
+    modelSrc: model,
     sdkType: resolved.sdkType,
     endpointCategory: resolved.endpointCategory,
     isDefault: overrides?.default === true,
@@ -278,7 +273,7 @@ function parseExplicitEntry (alias: string, entry: ExplicitModelEntry): Resolved
 
   return {
     alias,
-    src: entry.src,
+    modelSrc: entry.src,
     sdkType: resolved.sdkType,
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
@@ -306,36 +301,30 @@ export function resolveModelAlias (serveConfig: ServeConfig, modelName: string |
   if (entry) return entry
 
   for (const [, e] of serveConfig.models) {
-    if (e.src === modelName) return e
+    if (srcOf(e.modelSrc) === modelName) return e
   }
 
   return null
 }
 
-async function loadModelConstants (): Promise<Map<string, SDKModelConstant>> {
-  const map = new Map<string, SDKModelConstant>()
+function srcOf (modelSrc: string | ModelConstant): string {
+  return typeof modelSrc === 'string' ? modelSrc : modelSrc.src
+}
 
-  try {
-    const sdk = await getSDK()
-    for (const [key, value] of Object.entries(sdk)) {
-      if (isSDKModelConstant(value)) {
-        map.set(key, value)
-        map.set(value.name, value)
-      }
-    }
-  } catch {
-    // SDK not available — only explicit entries will work
+function loadModelConstants (): Map<string, ModelConstant> {
+  const map = new Map<string, ModelConstant>()
+  for (const value of Object.values(sdk)) {
+    if (isModelConstant(value)) map.set(value.name, value)
   }
-
   return map
 }
 
-function isSDKModelConstant (value: unknown): value is SDKModelConstant {
+function isModelConstant (value: unknown): value is ModelConstant {
   return (
     value !== null &&
     typeof value === 'object' &&
     'src' in value &&
-    'addon' in value &&
-    'name' in value
+    'name' in value &&
+    'addon' in value
   )
 }

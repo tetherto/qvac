@@ -1,53 +1,64 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
-function add (set: Set<string>, method: string, pathTemplate: string): void {
-  set.add(`${method} ${pathTemplate}`)
-}
+// Maps each route path's `:id` to the OpenAI spec's documented param name so
+// implemented routes compare 1:1 with `parse-spec.ts` keys.
+const PARAM_NAME_BY_PATH_PREFIX: Array<{ test: RegExp; name: string }> = [
+  { test: /\/v1\/models\/:id$/, name: 'model' },
+  { test: /\/v1\/files\/:id\/content$/, name: 'file_id' },
+  { test: /\/v1\/files\/:id$/, name: 'file_id' },
+  { test: /\/v1\/responses\/:id\/input_items$/, name: 'response_id' },
+  { test: /\/v1\/responses\/:id$/, name: 'response_id' },
+  { test: /\/v1\/vector_stores\/:id\/search$/, name: 'vector_store_id' },
+  { test: /\/v1\/vector_stores\/:id\/files$/, name: 'vector_store_id' },
+  { test: /\/v1\/vector_stores\/:id$/, name: 'vector_store_id' }
+]
 
-/**
- * Extract implemented route templates from the OpenAI adapter dispatcher.
- */
-export function parseRouter (routerSourcePath: string): string[] {
-  const text = readFileSync(routerSourcePath, 'utf8')
-  const keys = new Set<string>()
-
-  const exactRe = /if\s*\(\s*method\s*===\s*'(GET|POST|PUT|DELETE|PATCH)'\s*&&\s*path\s*===\s*'(\/v1\/[^']+)'\s*\)/g
-  for (const match of text.matchAll(exactRe)) {
-    add(keys, match[1]!, match[2]!)
-  }
-
-  const startsRe = /if\s*\(\s*method\s*===\s*'(GET|POST|PUT|DELETE|PATCH)'\s*&&\s*path\.startsWith\('(\/v1\/[^']+)\/'\)\s*\)/g
-  for (const match of text.matchAll(startsRe)) {
-    const method = match[1]!
-    const prefix = match[2]!
-    if (prefix === '/v1/models') {
-      add(keys, method, '/v1/models/{model}')
+function normalizeParams (path: string): string {
+  for (const rule of PARAM_NAME_BY_PATH_PREFIX) {
+    if (rule.test.test(path)) {
+      return path.replace(/:[A-Za-z_][A-Za-z0-9_]*/g, `{${rule.name}}`)
     }
   }
+  return path.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, '{$1}')
+}
 
-  if (text.includes('fileContentMatch') && text.includes('/files/')) {
-    add(keys, 'GET', '/v1/files/{file_id}/content')
+const ROUTE_CALL_RE = /\bapp\s*\.\s*(get|post|put|delete|patch)\s*\(\s*['"](\/v1\/[^'"]+)['"]/gi
+
+function extractFromText (text: string, keys: Set<string>): void {
+  for (const match of text.matchAll(ROUTE_CALL_RE)) {
+    const method = match[1]!.toUpperCase()
+    const rawPath = match[2]!
+    keys.add(`${method} ${normalizeParams(rawPath)}`)
+  }
+}
+
+function walk (dir: string, out: string[]): void {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    const stat = statSync(full)
+    if (stat.isDirectory()) {
+      walk(full, out)
+    } else if (entry.endsWith('.ts') || entry.endsWith('.js')) {
+      out.push(full)
+    }
+  }
+}
+
+export function parseRouter (routerSourceOrDir: string): string[] {
+  const keys = new Set<string>()
+  const abs = resolve(routerSourceOrDir)
+  const stat = statSync(abs)
+
+  const files: string[] = []
+  if (stat.isDirectory()) {
+    walk(abs, files)
+  } else {
+    files.push(abs)
   }
 
-  if (text.includes('fileIdMatch')) {
-    add(keys, 'GET', '/v1/files/{file_id}')
-  }
-
-  if (text.includes('vectorStoreSub')) {
-    add(keys, 'POST', '/v1/vector_stores/{vector_store_id}/search')
-    add(keys, 'POST', '/v1/vector_stores/{vector_store_id}/files')
-  }
-
-  if (text.includes('vectorStoreIdOnly')) {
-    add(keys, 'GET', '/v1/vector_stores/{vector_store_id}')
-    add(keys, 'POST', '/v1/vector_stores/{vector_store_id}')
-    add(keys, 'DELETE', '/v1/vector_stores/{vector_store_id}')
-  }
-
-  if (text.includes("path.startsWith('/v1/responses/')")) {
-    add(keys, 'GET', '/v1/responses/{response_id}')
-    add(keys, 'DELETE', '/v1/responses/{response_id}')
-    add(keys, 'GET', '/v1/responses/{response_id}/input_items')
+  for (const file of files) {
+    extractFromText(readFileSync(file, 'utf8'), keys)
   }
 
   return [...keys].sort()

@@ -7,6 +7,7 @@ import {
   diffusionStreamRequestSchema,
   diffusionStreamResponseSchema,
   diffusionStatsSchema,
+  upscaleStatsSchema,
   modelInfoSchema,
   ModelType,
   SDK_SERVER_ERROR_CODES,
@@ -1309,6 +1310,39 @@ test("sdcppConfigSchema: companion sources are stripped from config by resolveCo
     t.is(result.data.device, "gpu");
     t.ok("clipLModelSrc" in result.data);
     t.ok("vaeModelSrc" in result.data);
+  }
+});
+
+// ============================================
+// upscaleStatsSchema — backendDevice round-trip
+// ============================================
+
+test("upscaleStatsSchema: accepts backendDevice 'cpu' / 'gpu'", (t) => {
+  t.is(
+    upscaleStatsSchema.safeParse({ upscaleMs: 100, backendDevice: "cpu" }).success,
+    true,
+  );
+  t.is(
+    upscaleStatsSchema.safeParse({ upscaleMs: 100, backendDevice: "gpu" }).success,
+    true,
+  );
+});
+
+test("upscaleStatsSchema: rejects unknown backendDevice values", (t) => {
+  t.is(
+    upscaleStatsSchema.safeParse({ backendDevice: "tpu" }).success,
+    false,
+  );
+});
+
+test("upscaleStatsSchema: preserves backendDevice through parse (no passthrough strip)", (t) => {
+  const result = upscaleStatsSchema.safeParse({
+    upscaleMs: 42,
+    backendDevice: "cpu",
+  });
+  t.is(result.success, true);
+  if (result.success) {
+    t.is(result.data.backendDevice, "cpu");
   }
 });
 

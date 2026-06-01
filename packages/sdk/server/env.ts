@@ -17,6 +17,8 @@ let validatedEnv: WorkerEnv | null = null;
  */
 export function initEnv(): { hasRPCConfig: boolean } {
   const defaultHomeDir =
+    // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
+    process.env["SNAP_USER_COMMON"] ??
     process.env["HOME"] ??
     process.env["USERPROFILE"] ??
     "/tmp";

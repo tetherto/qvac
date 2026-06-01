@@ -37,7 +37,7 @@ import {
 } from "./lib/release-shared.js";
 import * as path from "path";
 
-async function releasePatch(newVersion: string) {
+export async function releasePatch(newVersion: string) {
   const parsed = parseVersion(newVersion);
   if (parsed.patch < 1) {
     throw new Error(
@@ -131,32 +131,37 @@ async function runPatchArchived(
   );
 }
 
-const args = process.argv.slice(2);
-const versionArg = args.find((a) => !a.startsWith("--"));
+// CLI — only runs when this module is invoked directly (not when imported
+// by `release-version.ts` for dispatch). `import.meta.main` is true under
+// both Bun and Node 24+.
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const versionArg = args.find((a) => !a.startsWith("--"));
 
-if (!versionArg || args.includes("--help") || args.includes("-h")) {
-  console.log("Usage: bun run scripts/release-version-patch.ts <X.Y.Z>");
-  console.log("");
-  console.log(
-    "Releases a patch (X.Y.Z with Z >= 1). Detects at runtime whether the",
-  );
-  console.log(
-    "incoming minor matches the current latest (patch-latest) or is an",
-  );
-  console.log("archived minor (patch-archived) and adapts the flow.");
-  console.log("");
-  console.log("Both modes:");
-  console.log(
-    "  - Insert ## v<X.Y.Z> directly after the ## v<X.Y>.0 minor block",
-  );
-  console.log("    of the corresponding release-notes series page.");
-  console.log(
-    "  - Do NOT touch the API summary page (patches don't change public API).",
-  );
-  process.exit(versionArg ? 0 : 1);
+  if (!versionArg || args.includes("--help") || args.includes("-h")) {
+    console.log("Usage: bun run scripts/release-version-patch.ts <X.Y.Z>");
+    console.log("");
+    console.log(
+      "Releases a patch (X.Y.Z with Z >= 1). Detects at runtime whether the",
+    );
+    console.log(
+      "incoming minor matches the current latest (patch-latest) or is an",
+    );
+    console.log("archived minor (patch-archived) and adapts the flow.");
+    console.log("");
+    console.log("Both modes:");
+    console.log(
+      "  - Insert ## v<X.Y.Z> directly after the ## v<X.Y>.0 minor block",
+    );
+    console.log("    of the corresponding release-notes series page.");
+    console.log(
+      "  - Do NOT touch the API summary page (patches don't change public API).",
+    );
+    process.exit(versionArg ? 0 : 1);
+  }
+
+  releasePatch(versionArg).catch((err) => {
+    console.error(`❌ Release (patch) failed: ${err.message}`);
+    process.exit(1);
+  });
 }
-
-releasePatch(versionArg).catch((err) => {
-  console.error(`❌ Release (patch) failed: ${err.message}`);
-  process.exit(1);
-});
