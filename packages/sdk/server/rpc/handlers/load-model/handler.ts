@@ -169,7 +169,10 @@ export async function handleLoadModel(
       );
     }
 
-    if (!resolvedModelPath) {
+    // An empty resolved path is legitimate when the plugin opts out of
+    // primary-model-path validation (bundled weights). For every other
+    // plugin, an empty path means resolution failed and we must abort.
+    if (!resolvedModelPath && !plugin.skipPrimaryModelPathValidation) {
       throw new ModelLoadFailedError("modelPath resolution failed");
     }
 

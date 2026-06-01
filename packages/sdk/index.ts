@@ -35,6 +35,9 @@ export {
   invokePluginStream,
   diffusion,
   type DiffusionProgressTick,
+  classify,
+  video,
+  type VideoProgressTick,
   upscale,
   modelRegistryList,
   modelRegistrySearch,
@@ -51,6 +54,7 @@ export {
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
+export { plugins } from "./client/plugins-factory";
 export {
   type LifecycleState,
   type ModelProgressUpdate,
@@ -94,6 +98,7 @@ export {
   type RagSaveStage,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
+  RAG_ERROR_CODES,
   type QvacConfig,
   type ModelInfo,
   type GetModelInfoParams,
@@ -109,9 +114,14 @@ export {
   type OCRClientParams,
   type OCRTextBlock,
   type OCROptions,
+  type ClassifyClientParams,
+  type ClassificationResult,
   type DiffusionClientParams,
   type DiffusionStreamResponse,
   type DiffusionStats,
+  type VideoClientParams,
+  type VideoStreamResponse,
+  type VideoStats,
   type UpscaleClientParams,
   type UpscaleStreamResponse,
   type UpscaleStats,
@@ -136,6 +146,7 @@ export {
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
   PLUGIN_VLA,
+  PLUGIN_CLASSIFICATION,
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,
@@ -181,6 +192,7 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 export { InferenceCancelledError } from "./utils/errors-server";
 export type { InferenceCancelledPartial } from "./utils/errors-server";
 export {
+  ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,

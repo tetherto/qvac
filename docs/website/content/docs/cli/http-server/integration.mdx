@@ -1,0 +1,181 @@
+---
+title: Integrate with the OpenAI-compatible API
+description: Use the npm package @qvac/ai-sdk-provider to create a client for the HTTP server.
+schemaType: TechArticle
+tocMaxDepth: 3
+---
+
+## Overview
+
+The npm package `@qvac/ai-sdk-provider` is a thin wrapper around [@ai-sdk/openai-compatible](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that provides a better developer experience when integrating with the QVAC OpenAI-compatible API.
+
+_At the moment, its main advantage is providing introspection of the models supported by QVAC for each API operation._ In addition, it provides branded exports, automatic configuration, and a discoverable handle for the [models.dev](https://models.dev) catalog, allowing QVAC to appear in `/connect` for [OpenCode](https://opencode.ai) and other catalog consumers.
+
+## Installation
+
+Install the package along with its peer dependencies:
+
+```bash
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible
+```
+
+## Basic usage
+
+Create a provider instance and use it to request AI inference:
+
+```js
+import { createQvac } from '@qvac/ai-sdk-provider'
+import { streamText } from 'ai'
+
+const qvac = createQvac({
+  baseURL: 'http://localhost:11434/v1', // match your HTTP server
+  apiKey: 'qvac'                         // any non-empty value; HTTP server does not validate it
+})
+
+const { textStream } = streamText({
+  model: qvac('qwen3-600m'),
+  prompt: 'Write a haiku about local-first AI.'
+})
+
+for await (const chunk of textStream) {
+  process.stdout.write(chunk)
+}
+```
+
+The provider exposes the same surface as the [Vercel AI SDK provider](https://ai-sdk.dev):
+
+```
+qvac('qwen3-600m')                     // language model (chat)
+qvac.chatModel('qwen3-600m')           // explicit chat model
+qvac.completionModel('qwen3-600m')     // legacy completion model
+qvac.textEmbeddingModel('embed-gemma') // text embeddings
+qvac.imageModel('flux-schnell')        // image generation
+```
+
+## Using with coding agents
+
+The HTTP server's primary use case is integrating local AI with coding agents (e.g., OpenCode, Cline, Aider, Continue, and Roo). Although the API is OpenAI-compatible, _the following behaviors require explicit configuration for this use case._
+
+### Concurrent requests collide on a single model instance
+
+The underlying `llm-llamacpp` addon serializes inference per native model context and rejects concurrent requests rather than queuing them. The server log `shows Cannot set new job: a job is already set or being processed`; clients see `500 An internal error occurred`.
+
+Coding agents routinely fire concurrent requests — typically a main chat completion plus a "title generation" call for the conversation panel. _To get parallel inference you need two different model files loaded under two aliases_. For example:
+
+```json
+// qvac.config.json — agent-friendly setup
+{
+  "serve": {
+    "models": {
+      "qwen3-8b-chat": {
+        "model": "QWEN3_8B_INST_Q4_K_M",
+        "preload": true,
+        "config": {
+          "ctx_size": 16384,
+          "reasoning_budget": 0
+        }
+      },
+      "qwen3-1_7b-title": {
+        "model": "QWEN3_1_7B_INST_Q4",
+        "preload": true,
+        "config": {
+          "ctx_size": 4096,
+          "reasoning_budget": 0
+        }
+      }
+    }
+  }
+}
+```
+
+Then map the two aliases to your harness's chat and utility model slots. For example, for OpenCode:
+
+```json
+// opencode.json
+{
+  "model":       "qvac/qwen3-8b-chat",
+  "small_model": "qvac/qwen3-1_7b-title"
+}
+```
+
+### `ctx_size` defaults to 1024 — too small for agents
+
+The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat, `4096` is enough for title generation) or you'll see context fills and truncated responses well before the model misbehaves.
+
+### `reasoning_budget: 0` to suppress `<think>` blocks
+
+Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoning_budget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
+
+### Local-model capability is the real ceiling
+
+Your local-model choice decides whether an agent actually works. Empirical findings from this HTTP server with OpenCode testing:
+
+- **Q4-quantized 4B/8B Qwen3-Instruct** can hold a conversation but won't reliably *invoke* tools. The model will say "let me search the docs" without emitting a tool call, then fabricate an answer.
+- **Cloud Qwen3.5-9B** (full precision, e.g. via OpenRouter) calls tools aggressively but still hallucinates content from tool results.
+- Reliable local tool use generally needs $\geq$ **14B parameters and coder/agent post-training** (e.g. `GPT_OSS_20B_INST_Q4_K_M` from the catalog, future Qwen3-Coder variants). Plain Instruct tunes at 4–8B sizes are not reliable agent backends.
+
+<Callout type="info">
+
+This is an industry-wide reality for local AI, not something specific to QVAC. Calibrate user expectations accordingly when documenting QVAC integrations for downstream harnesses.
+
+</Callout>
+
+### API key
+
+The default `apiKey` is the literal string `'qvac'`. The HTTP server does not validate the key; the value matters only because some OpenAI-shaped HTTP clients refuse to issue a request without an `Authorization` header.
+
+## Model metadata
+
+`@qvac/ai-sdk-provider` ships QVAC model metadata, _so you can introspect models without making an HTTP call to /v1/models._ For example:
+
+```ts
+import { models, allModels } from '@qvac/ai-sdk-provider'
+
+models.QWEN3_4B_INST_Q4_K_M.endpointCategory  // 'chat' (compile-time known)
+models.WHISPER_EN_TINY_Q8_0.endpointCategory  // 'transcription'
+
+for (const m of allModels) {
+  console.log(`${m.name} (${m.endpointCategory}, ${m.expectedSize} bytes)`)
+}
+```
+
+Each constant satisfies `ModelConstant<TEndpoint>` where `TEndpoint` is one of:
+
+```ts
+type EndpointCategory =
+  | 'chat'
+  | 'embedding'
+  | 'transcription'
+  | 'audio-translation'
+  | 'translation'
+  | 'speech'
+  | 'ocr'
+  | 'image'
+```
+
+## API
+
+### `createQvac(options?: QvacOptions): QvacProvider`
+
+Factory returning a branded Vercel AI SDK provider. Wraps `createOpenAICompatible` with QVAC defaults.
+
+```ts
+interface QvacOptions {
+  baseURL?: string                       // default: see Default base URL
+  apiKey?: string                        // default: 'qvac'
+  headers?: Record<string, string>       // default: {}
+  fetch?: typeof fetch                   // default: globalThis.fetch
+}
+```
+
+### `qvac`
+
+A default `createQvac()` instance with all defaults. Convenient for quick scripts; explicit `createQvac({ baseURL })` is recommended.
+
+<Callout type="warn" title="Default provider port does not match HTTP server's default port.">
+The provider defaults to `http://127.0.0.1:11435/v1`, while `qvac serve openai` listens on `11434` by default. This mismatch is intentional — `11434` collides with Ollama, so the provider ships a placeholder port until the CLI default is changed. Until then, **always pass `baseURL` explicitly** when calling `createQvac({ baseURL })`, matching the port your `qvac serve openai` instance is bound to (e.g. `http://127.0.0.1:11434/v1` for the CLI default).
+</Callout>
+
+### `models`, `allModels`, `ModelConstant`, `EndpointCategory`
+
+Re-exported model metadata. See [Model metadata](#model-metadata).

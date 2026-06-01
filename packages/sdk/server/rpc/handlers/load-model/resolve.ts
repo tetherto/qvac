@@ -135,6 +135,16 @@ async function resolveModelPathCore(
   }
   const srcString = modelInputToSrcSchema.parse(modelSrc);
 
+  // Empty modelSrc is reserved for plugins that ship bundled weights
+  // (e.g. `@qvac/classification-ggml`). The handler skips this resolver
+  // for them when `skipPrimaryModelPathValidation` is set, but if it
+  // somehow gets called we return an empty path so the plugin's
+  // `params.modelPath` falls through to undefined instead of being set
+  // to the cache directory itself.
+  if (srcString === "") {
+    return { path: "", sourceType: "filesystem" };
+  }
+
   // Parse hyperdrive URLs if present
   let hyperdriveKey: string | undefined;
   let actualModelSrc = srcString;

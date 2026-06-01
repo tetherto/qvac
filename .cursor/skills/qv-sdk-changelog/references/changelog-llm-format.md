@@ -16,13 +16,22 @@ Read all files from `{PACKAGE_ROOT}/changelog/{VERSION}/`:
 
 ## Step 3: Generate CHANGELOG_LLM.md
 
-Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines:
+Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines.
+
+> **Downstream rendering:** the docs site inlines this file **verbatim**
+> under a `### @qvac/<pkg>` subsection of a per-minor-series page
+> (`v<X.Y>.x.mdx`). The H1 banner is stripped and every remaining
+> heading is demoted by two levels — `##` becomes `####`, `###` becomes
+> `#####`, etc. Multiple SDK pod packages contribute siblings under
+> the same `## v<X.Y.Z>` section, so prose should stand on its own
+> without assuming surrounding category context.
+
 
 ### Format Requirements
 
 1. **Title**: `# QVAC SDK v{VERSION} Release Notes`
 
-2. **NPM Link**: Add `📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{VERSION}` right after the title
+2. **NPM Link**: Add `📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{VERSION}` right after the title. This is the **only** place an emoji is allowed in the document (see the no-emoji rule below).
 
 3. **Introduction**: Write a brief 2-3 sentence summary of what this release brings
 
@@ -43,6 +52,7 @@ Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelin
    - Remove internal jargon, make it accessible
    - **Do NOT include PR links or references to the original CHANGELOG.md** — this is a standalone document
    - **Skip entries with no informational value** — generic entries like "Updated models" or "Bumped dependencies" without specific details should be omitted
+   - **No emoji anywhere except the `📦 **NPM:**` line.** Section headings MUST be plain text — write `## Breaking Changes`, `## New APIs`, `## Bug Fixes`, never `## 💥 Breaking Changes`, `## 🔌 New APIs`, `## 🐞 Bug Fixes`. The docs site inlines this file verbatim, so any emoji prefix leaks straight into the public section headers and breaks consistency with the latest release. Do not add decorative emoji to prose or bullets either.
 
 ### Example Transformation
 

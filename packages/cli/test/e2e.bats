@@ -3,6 +3,27 @@
 # End-to-end tests with real models (LLM, embedding, whisper transcription + translation).
 # Requires: npm run build, jq, @qvac/sdk installed as devDependency.
 # These tests download small models and run real inference — expect ~5-10 min on first run.
+#
+# ⚠ BASH 3.2 COMPATIBILITY (macOS default) ⚠
+#
+# Assertions in this file must work under macOS's stock bash 3.2 (where
+# `set -e` does NOT propagate failures from a standalone `[[ ... ]]` — the
+# test silently continues past the failed assertion). CI runs bash 5.x and
+# *does* propagate, so a local-vs-CI green/red divergence is the symptom.
+#
+# Required pattern: every `[[ ... ]]` assertion must be the LAST command of
+# the @test, OR chained so that its exit code reaches the test's last line:
+#
+#   ✅  [[ "${a}" == 1 ]] \
+#         && [[ "${b}" == 2 ]] \
+#         && [[ "${c}" == 3 ]]
+#
+#   ✅  [[ "${status}" -eq 1 ]] || return 1
+#       <followup non-assertion commands>
+#
+#   ❌  [[ "${a}" == 1 ]]
+#       [[ "${b}" == 2 ]]              # bash 3.2 hides failure of line above
+#       <followup commands>            # also hide failures of [[ ]] above
 
 # Intentionally unquoted on use — BATS `run` needs word splitting for the command.
 QVAC="node ${BATS_TEST_DIRNAME}/../dist/index.js"
@@ -66,7 +87,7 @@ CONF
   ${QVAC} serve openai -p "${E2E_PORT}" --cors >"${FILE_TMPDIR}/serve.log" 2>&1 &
   echo "$!" > "${FILE_TMPDIR}/server_pid"
 
-  local max_wait=300
+  local max_wait="${E2E_MAX_WAIT:-300}"
   local elapsed=0
   while [[ "${elapsed}" -lt "${max_wait}" ]]; do
     local count
@@ -78,6 +99,42 @@ CONF
 
   if [[ "${elapsed}" -ge "${max_wait}" ]]; then
     echo "FATAL: models did not load within ${max_wait}s" >&2
+
+    # ── Failure diagnostics ──────────────────────────────────────────
+    # Disable errexit for the whole block. Any single command failing here
+    # (curl returning non-zero against a dead server, cat on a missing file,
+    # kill -0 on a stale pid) would otherwise abort the block under bats'
+    # `set -eET` and we'd lose everything that comes after — most importantly
+    # the serve.log dump, which is the actual reason we got here.
+    set +e
+
+    local server_pid
+    server_pid=$(cat "${FILE_TMPDIR}/server_pid" 2>/dev/null || echo "")
+    if [[ -n "${server_pid}" ]] && kill -0 "${server_pid}" 2>/dev/null; then
+      echo "  server pid ${server_pid} is still alive" >&2
+    else
+      echo "  server pid ${server_pid:-<unknown>} is NOT alive" >&2
+    fi
+
+    local diag_body diag_status diag_body_file
+    diag_body_file="${FILE_TMPDIR}/diag-models.body"
+    diag_status=$(curl -s --connect-timeout 2 --max-time 5 \
+      -o "${diag_body_file}" -w '%{http_code}' \
+      "${BASE}/v1/models" 2>/dev/null)
+    [[ -z "${diag_status}" ]] && diag_status="000"
+    if [[ -s "${diag_body_file}" ]]; then
+      diag_body=$(cat "${diag_body_file}")
+    else
+      diag_body="<empty or no response>"
+    fi
+    echo "  GET /v1/models → HTTP ${diag_status}" >&2
+    echo "  body: ${diag_body}" >&2
+
+    echo "── serve.log ────────────────────────────────────────────────" >&2
+    cat "${FILE_TMPDIR}/serve.log" >&2 || echo "  (serve.log unreadable)" >&2
+    echo "── end serve.log ────────────────────────────────────────────" >&2
+
+    set -e
     return 1
   fi
 }
@@ -115,7 +172,7 @@ json_post_capture() {
 
   local ids
   ids=$(echo "${body}" | jq -r '[.data[].id] | sort | join(",")')
-  [[ "${ids}" == "test-embed,test-llm,test-whisper,test-whisper-translate" ]]
+  [[ "${ids}" == "test-embed,test-llm,test-whisper,test-whisper-translate" ]] || return 1
 
   echo "${body}" | jq -e '.data | all(.object == "model")' >/dev/null
   echo "${body}" | jq -e '.data | all(.owned_by == "qvac")' >/dev/null
@@ -176,7 +233,7 @@ json_post_capture() {
   last_chunk=$(echo "${raw}" | grep "^data: {" | tail -1 | sed 's/^data: //')
   local reason
   reason=$(echo "${last_chunk}" | jq -r '.choices[0].finish_reason')
-  [[ "${reason}" == "stop" || "${reason}" == "tool_calls" ]]
+  [[ "${reason}" == "stop" || "${reason}" == "tool_calls" ]] || return 1
 
   local content_count
   content_count=$(echo "${raw}" | grep "^data: {" | sed 's/^data: //' | \
@@ -342,7 +399,7 @@ TXT
   # Bytes are dropped from the in-memory file store after attach.
   local file_status_after
   file_status_after=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/v1/files/${file}")
-  [[ "${file_status_after}" == "404" ]]
+  [[ "${file_status_after}" == "404" ]] || return 1
 
   curl -sf "${BASE}/v1/vector_stores/${vs}" | jq -e '.status == "completed"' >/dev/null
 
@@ -440,7 +497,7 @@ TXT
   json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"ping\",\"store\":true}"
   local rid
   rid=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
-  [[ "${rid}" == resp_* ]]
+  [[ "${rid}" == resp_* ]] || return 1
 
   curl -sS -D "${FILE_TMPDIR}/g.hdr" -o "${FILE_TMPDIR}/g.body" "${BASE}/v1/responses/${rid}"
   grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/g.hdr"

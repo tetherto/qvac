@@ -1,0 +1,439 @@
+#!/usr/bin/env bare
+'use strict'
+
+// QVAC OCR-GGML CLI — Optical Character Recognition Command-Line Tool
+//
+// Mirrors the surface of EasyOcr-ggml's `ocr-cli` binary, but driven from
+// the @qvac/ocr-ggml bare addon (this package). Design follows the sibling
+// `nmt-cli` in @qvac/translation-nmtcpp:
+//   - shebang JS, parsed by `bare`
+//   - logs to stderr, output to stdout (clean for piping / `jq`)
+//   - env-var fallbacks for every path argument
+//   - exit code 0 on success, 1 on runtime error, 2 on bad CLI usage
+//
+// This script is a development tool — it is intentionally NOT listed in
+// `package.json` `files`, so it is not shipped to npm consumers (same
+// convention as nmt-cli).
+//
+// Usage:
+//   bare ocr-ggml-cli [OPTIONS]
+//
+// Reads an image file from --image (default: samples/english.png), runs the
+// EasyOCR pipeline (CRAFT detect → bounding-box → CRNN gen-2 recognize) on
+// GGUF weights, and prints recognized text to stdout. Output is sorted
+// top-to-bottom by box y-center.
+
+const process = require('bare-process')
+const path = require('bare-path')
+const fs = require('bare-fs')
+const os = require('bare-os')
+
+const { OcrGgml } = require('./index.js')
+
+// JS mirror of easyocr::ggml::pipeline::defaultPhysicalThreadCount() — used
+// only to render an honest "[load]   n-threads=..." line. Same heuristic:
+// hardware_concurrency() / 2, floored at 1. Assumes 2-way SMT on x86; on
+// non-SMT hosts this under-reports by 2× (the C++ side has the same caveat).
+function defaultPhysicalThreadCount () {
+  const hc = (typeof os.cpus === 'function' && os.cpus().length) || 1
+  return Math.max(Math.floor(hc / 2), 1)
+}
+
+function describeNThreads (requested) {
+  if (requested === 0) {
+    return `${defaultPhysicalThreadCount()} (auto: physical cores)`
+  }
+  if (requested < 0) {
+    const logical = (typeof os.cpus === 'function' && os.cpus().length) || 1
+    return `~${logical} (GGML default: hardware_concurrency)`
+  }
+  return `${requested} (explicit)`
+}
+
+const VERSION = '0.1.0'
+
+const DEFAULTS = {
+  image: 'samples/english.png',
+  detector: 'models/craft_mlt_25k.gguf',
+  recognizer: 'models/english_g2.gguf',
+  lang: 'en',
+  pipelineType: 'easyocr',
+  magRatio: 1.5,
+  detail: 0,
+  outputFormat: 'standard',
+  nThreads: 0,
+  paragraph: false,
+  verbose: false
+}
+
+function showHelp () {
+  const helpLines = [
+    '',
+    `QVAC OCR-GGML CLI v${VERSION} — Optical Character Recognition (GGML backend)`,
+    '',
+    'USAGE:',
+    '  bare ocr-ggml-cli [OPTIONS]',
+    '',
+    'DESCRIPTION:',
+    '  Runs an OCR pipeline on a single image using GGUF weights loaded via the',
+    '  @qvac/ocr-ggml addon. Two pipelines are supported:',
+    '    easyocr  CRAFT detector + CRNN gen-2 recognizer (default)',
+    '    doctr    DBNet detector + doctr recognizer (language-agnostic)',
+    '  Output is sorted top-to-bottom by box y-center.',
+    '',
+    'OPTIONS:',
+    '  -h, --help                       Show this help message and exit',
+    '  -v, --version                    Show version information and exit',
+    '      --image PATH                 Input image (JPEG, PNG, or BMP)',
+    `                                   default: ${DEFAULTS.image}`,
+    '                                   env var: OCR_GGML_IMAGE',
+    '      --detector PATH              Detector GGUF file',
+    '                                   easyocr: CRAFT model',
+    '                                   doctr:   DBNet model',
+    `                                   default: ${DEFAULTS.detector}`,
+    '                                   env var: OCR_GGML_DETECTOR',
+    '      --recognizer PATH            Recognizer GGUF file',
+    '                                   easyocr: CRNN gen-2 model',
+    '                                   doctr:   doctr recognition model',
+    `                                   default: ${DEFAULTS.recognizer}`,
+    '                                   env var: OCR_GGML_RECOGNIZER',
+    '      --pipeline-type easyocr|doctr',
+    '                                   OCR pipeline to use',
+    `                                   default: ${DEFAULTS.pipelineType}`,
+    '                                   env var: OCR_GGML_PIPELINE_TYPE',
+    '      --lang CSV                   Comma-separated language codes (easyocr only)',
+    `                                   default: ${DEFAULTS.lang}`,
+    '      --paragraph                  Merge nearby boxes into paragraph regions',
+    '      --mag-ratio FLOAT            Input-image magnification factor (easyocr only)',
+    `                                   default: ${DEFAULTS.magRatio}`,
+    '      --detail 0|1                 0 = text only, 1 = #<idx> conf=… box=… text=…',
+    `                                   default: ${DEFAULTS.detail}`,
+    '      --output-format standard|json',
+    '                                   standard = human-readable lines',
+    '                                   json     = EasyOCR-compatible array',
+    `                                   default: ${DEFAULTS.outputFormat}`,
+    '      --n-threads N                GGML CPU thread count',
+    '                                   0 = auto (physical cores)',
+    '                                   N > 0 = explicit',
+    '                                   N < 0 = leave GGML default unchanged',
+    `                                   default: ${DEFAULTS.nThreads}`,
+    '      --verbose                    Forward C++ logs to stderr',
+    '',
+    'ENVIRONMENT VARIABLES:',
+    '  OCR_GGML_IMAGE           Image path (alternative to --image)',
+    '  OCR_GGML_DETECTOR        Detector GGUF (alternative to --detector)',
+    '  OCR_GGML_RECOGNIZER      Recognizer GGUF (alternative to --recognizer)',
+    '  OCR_GGML_PIPELINE_TYPE   Pipeline type (alternative to --pipeline-type)',
+    '',
+    'EXAMPLES:',
+    '  # Default: OCR samples/english.png with EasyOCR weights',
+    '  bare ocr-ggml-cli',
+    '',
+    '  # Doctr pipeline with DBNet detector + doctr recognizer',
+    '  bare ocr-ggml-cli --pipeline-type doctr \\',
+    '                    --detector models/db_mobilenet_v3_large.gguf \\',
+    '                    --recognizer models/crnn_mobilenet_v3_small.gguf \\',
+    '                    --image /tmp/photo.jpg',
+    '',
+    '  # Detail mode (index + confidence + box per recognised line)',
+    '  bare ocr-ggml-cli --detail 1',
+    '',
+    '  # JSON output (matches EasyOCR Python\'s readtext shape)',
+    '  bare ocr-ggml-cli --output-format json | jq .',
+    '',
+    '  # Custom image + Q8_0 quantized EasyOCR models',
+    '  bare ocr-ggml-cli --image /tmp/photo.jpg \\',
+    '                    --detector models/craft_mlt_25k_q8_0.gguf \\',
+    '                    --recognizer models/english_g2_q8_0.gguf',
+    '',
+    '  # Force a specific thread count',
+    '  bare ocr-ggml-cli --n-threads 8',
+    '',
+    '  # Verbose mode — print C++ pipeline logs to stderr',
+    '  bare ocr-ggml-cli --verbose',
+    '',
+    'EXIT CODES:',
+    '  0  Success',
+    '  1  Runtime error (missing file, addon failure, image decode error, …)',
+    '  2  CLI usage error (unknown flag, missing required value, …)',
+    ''
+  ]
+  console.log(helpLines.join('\n'))
+}
+
+function showVersion () {
+  console.log(`ocr-ggml-cli version ${VERSION}`)
+  console.log('QVAC Optical Character Recognition CLI (GGML backend)')
+}
+
+function bail (msg) {
+  console.error(`error: ${msg}`)
+  console.error('Run with --help for usage information')
+  process.exit(2)
+}
+
+function parseArgs () {
+  const argv = process.argv.slice(2)
+  const opts = { ...DEFAULTS, help: false, version: false }
+
+  let i = 0
+  const requireValue = (flag) => {
+    if (i + 1 >= argv.length) bail(`${flag} requires a value`)
+    return argv[++i]
+  }
+
+  while (i < argv.length) {
+    const a = argv[i]
+    switch (a) {
+      case '-h':
+      case '--help':
+        opts.help = true; break
+      case '-v':
+      case '--version':
+        opts.version = true; break
+      case '--image':
+        opts.image = requireValue(a); break
+      case '--detector':
+        opts.detector = requireValue(a); break
+      case '--recognizer':
+        opts.recognizer = requireValue(a); break
+      case '--lang':
+        opts.lang = requireValue(a); break
+      case '--paragraph':
+        opts.paragraph = true; break
+      case '--mag-ratio': {
+        const v = parseFloat(requireValue(a))
+        if (!Number.isFinite(v) || v <= 0) bail('--mag-ratio must be a positive number')
+        opts.magRatio = v
+        break
+      }
+      case '--detail': {
+        const v = parseInt(requireValue(a), 10)
+        if (v !== 0 && v !== 1) bail('--detail must be 0 or 1')
+        opts.detail = v
+        break
+      }
+      case '--output-format': {
+        const v = requireValue(a)
+        if (v !== 'standard' && v !== 'json') bail("--output-format must be 'standard' or 'json'")
+        opts.outputFormat = v
+        break
+      }
+      case '--n-threads': {
+        const v = parseInt(requireValue(a), 10)
+        if (!Number.isInteger(v)) bail('--n-threads must be an integer')
+        opts.nThreads = v
+        break
+      }
+      case '--pipeline-type': {
+        const v = requireValue(a)
+        if (v !== 'easyocr' && v !== 'doctr') bail("--pipeline-type must be 'easyocr' or 'doctr'")
+        opts.pipelineType = v
+        break
+      }
+      case '--verbose':
+        opts.verbose = true; break
+      default:
+        bail(`unknown argument: ${a}`)
+    }
+    i++
+  }
+
+  return opts
+}
+
+function applyEnvFallbacks (opts) {
+  if (opts.image === DEFAULTS.image && process.env.OCR_GGML_IMAGE) {
+    opts.image = process.env.OCR_GGML_IMAGE
+  }
+  if (opts.detector === DEFAULTS.detector && process.env.OCR_GGML_DETECTOR) {
+    opts.detector = process.env.OCR_GGML_DETECTOR
+  }
+  if (opts.recognizer === DEFAULTS.recognizer && process.env.OCR_GGML_RECOGNIZER) {
+    opts.recognizer = process.env.OCR_GGML_RECOGNIZER
+  }
+  if (opts.pipelineType === DEFAULTS.pipelineType && process.env.OCR_GGML_PIPELINE_TYPE) {
+    const v = process.env.OCR_GGML_PIPELINE_TYPE
+    if (v !== 'easyocr' && v !== 'doctr') {
+      console.error(`error: OCR_GGML_PIPELINE_TYPE must be 'easyocr' or 'doctr', got: ${v}`)
+      process.exit(2)
+    }
+    opts.pipelineType = v
+  }
+}
+
+function resolvePaths (opts) {
+  const cwd = process.cwd()
+  opts.image = path.isAbsolute(opts.image) ? opts.image : path.resolve(cwd, opts.image)
+  opts.detector = path.isAbsolute(opts.detector) ? opts.detector : path.resolve(cwd, opts.detector)
+  opts.recognizer = path.isAbsolute(opts.recognizer) ? opts.recognizer : path.resolve(cwd, opts.recognizer)
+}
+
+function checkFile (label, p) {
+  try {
+    if (!fs.statSync(p).isFile()) {
+      console.error(`error: ${label} is not a regular file: ${p}`)
+      process.exit(1)
+    }
+  } catch {
+    console.error(`error: ${label} not found: ${p}`)
+    process.exit(1)
+  }
+}
+
+function escapeJsonString (str) {
+  let esc = ''
+  for (let k = 0; k < str.length; k++) {
+    const c = str[k]
+    const code = str.charCodeAt(k)
+    switch (c) {
+      case '"': esc += '\\"'; break
+      case '\\': esc += '\\\\'; break
+      case '\b': esc += '\\b'; break
+      case '\f': esc += '\\f'; break
+      case '\n': esc += '\\n'; break
+      case '\r': esc += '\\r'; break
+      case '\t': esc += '\\t'; break
+      default:
+        if (code < 0x20) {
+          esc += '\\u' + code.toString(16).padStart(4, '0')
+        } else {
+          esc += c
+        }
+    }
+  }
+  return esc
+}
+
+function boxYCenter (box) {
+  let y = 0
+  for (const [, py] of box) y += py
+  return y * 0.25
+}
+
+function printStandard (rows, detail) {
+  console.log('')
+  for (let i = 0; i < rows.length; i++) {
+    const [box, text, conf] = rows[i]
+    if (detail >= 1) {
+      const fmt = (n) => n.toFixed(0)
+      const idxStr = String(i).padEnd(3, ' ')
+      console.log(
+        `#${idxStr}  conf=${conf.toFixed(3)}  ` +
+        `box=[${fmt(box[0][0])},${fmt(box[0][1])} ` +
+        `${fmt(box[1][0])},${fmt(box[1][1])} ` +
+        `${fmt(box[2][0])},${fmt(box[2][1])} ` +
+        `${fmt(box[3][0])},${fmt(box[3][1])}]  ` +
+        `text=${text}`
+      )
+    } else {
+      console.log(text)
+    }
+  }
+}
+
+function printJson (rows) {
+  // EasyOCR-compatible: array of { box: [[x,y]x4], text, confidence }.
+  const parts = ['[']
+  for (let i = 0; i < rows.length; i++) {
+    const [box, text, conf] = rows[i]
+    const boxStr = box.map(([x, y]) => `[${x.toFixed(2)}, ${y.toFixed(2)}]`).join(', ')
+    const entry =
+      '  {\n' +
+      `    "box": [${boxStr}],\n` +
+      `    "text": "${escapeJsonString(text)}",\n` +
+      `    "confidence": ${conf.toFixed(6)}\n` +
+      '  }' + (i + 1 < rows.length ? ',' : '')
+    parts.push(entry)
+  }
+  parts.push(']')
+  console.log(parts.join('\n'))
+}
+
+async function main () {
+  const opts = parseArgs()
+
+  if (opts.help) {
+    showHelp()
+    process.exit(0)
+  }
+  if (opts.version) {
+    showVersion()
+    process.exit(0)
+  }
+
+  applyEnvFallbacks(opts)
+  resolvePaths(opts)
+
+  checkFile('image', opts.image)
+  checkFile('detector', opts.detector)
+  checkFile('recognizer', opts.recognizer)
+
+  const quiet = (opts.outputFormat === 'json')
+  if (!quiet) {
+    console.error(`[load]   pipeline=${opts.pipelineType}`)
+    console.error(`[load]   image=${opts.image}`)
+    console.error(`[load]   detector=${opts.detector}`)
+    console.error(`[load]   recognizer=${opts.recognizer}`)
+    if (opts.pipelineType === 'easyocr') {
+      console.error(`[load]   langs=[${opts.lang}]  mag-ratio=${opts.magRatio}  n-threads=${describeNThreads(opts.nThreads)}`)
+    } else {
+      console.error(`[load]   n-threads=${describeNThreads(opts.nThreads)}`)
+    }
+  }
+
+  const logger = opts.verbose
+    ? {
+        info: (msg) => console.error(`[C++ INFO] ${msg}`),
+        warn: (msg) => console.error(`[C++ WARN] ${msg}`),
+        error: (msg) => console.error(`[C++ ERROR] ${msg}`),
+        debug: (msg) => console.error(`[C++ DEBUG] ${msg}`)
+      }
+    : null
+
+  const ocr = new OcrGgml({
+    params: {
+      pathDetector: opts.detector,
+      pathRecognizer: opts.recognizer,
+      langList: opts.lang.split(',').map(s => s.trim()).filter(Boolean),
+      pipelineType: opts.pipelineType,
+      magRatio: opts.magRatio,
+      nThreads: opts.nThreads
+    },
+    opts: { stats: true },
+    logger
+  })
+
+  await ocr.load()
+
+  try {
+    const response = await ocr.run({
+      path: opts.image,
+      options: { paragraph: opts.paragraph }
+    })
+
+    let collected = []
+    response.onUpdate(rows => { collected = rows })
+    const stats = await response.await()
+
+    // Sort top-to-bottom (mirrors ocr_cli.cpp)
+    collected.sort((a, b) => boxYCenter(a[0]) - boxYCenter(b[0]))
+
+    if (opts.outputFormat === 'json') {
+      printJson(collected)
+    } else {
+      printStandard(collected, opts.detail)
+    }
+
+    if (!quiet && stats && opts.verbose) {
+      console.error(`[stats]  ${JSON.stringify(stats)}`)
+    }
+  } finally {
+    await ocr.unload()
+  }
+}
+
+main().catch(err => {
+  console.error(`error: ${err && err.message ? err.message : err}`)
+  process.exit(1)
+})

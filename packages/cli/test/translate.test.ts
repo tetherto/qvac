@@ -1,36 +1,42 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  openaiMessagesToHistory,
   openaiToolsToSdk,
-  sdkToolCallsToOpenai,
-  sdkToolCallsToOpenaiDeltas,
-  extractGenerationParams,
   extractResponseFormat,
   InvalidResponseFormatError,
-  logUnsupportedParams,
-  vectorStoreToOpenAI,
-  searchResultsToOpenAI,
+  extractGenerationParams
+} from '../src/serve/schemas/common.js'
+import { openaiMessagesToHistory } from '../src/serve/schemas/chat.js'
+import {
   parseExpiresAfter,
   parseMetadata,
   InvalidExpiresAfterError,
-  InvalidMetadataError,
+  InvalidMetadataError
+} from '../src/serve/schemas/vector-stores.js'
+import {
+  vectorStoreToOpenAI,
+  searchResultsToOpenAI
+} from '../src/serve/adapters/openai/vector-stores-store.js'
+import {
+  sdkToolCallsToOpenai,
+  sdkToolCallsToOpenaiDeltas
+} from '../src/serve/adapters/openai/tool-calls.js'
+import {
   openaiResponsesInputToHistory,
   openaiResponsesToolsToSdk,
-  extractResponsesGenerationParams,
   extractResponsesResponseFormat,
   validateResponsesStatefulOptions,
   normalizeResponsesInputItemsForStorage,
   historyPrefixFromStoredResponse,
-  logResponsesUnsupportedParams,
   UnsupportedToolTypeError,
   InvalidResponsesConversationError,
-  InvalidResponsesBackgroundError,
+  InvalidResponsesBackgroundError
+} from '../src/serve/schemas/responses.js'
+import {
   parseLegacyPrompt,
   legacyPromptToHistory,
-  logLegacyUnsupportedParams,
   InvalidPromptError
-} from '../src/serve/adapters/openai/translate.js'
+} from '../src/serve/schemas/completions.js'
 import type { VectorStoreMeta } from '../src/serve/adapters/openai/vector-stores-store.js'
 
 describe('openaiMessagesToHistory', () => {
@@ -270,8 +276,8 @@ describe('sdkToolCallsToOpenai', () => {
     assert.equal(sdkToolCallsToOpenai([]), undefined)
   })
 
-  it('converts tool calls with string arguments', () => {
-    const calls = [{ id: 'call_1', name: 'fn_a', arguments: '{"x":1}' }]
+  it('converts tool calls with object arguments to JSON string', () => {
+    const calls = [{ id: 'call_1', name: 'fn_a', arguments: { x: 1 } }]
     const result = sdkToolCallsToOpenai(calls)
     assert.ok(result)
     assert.equal(result.length, 1)
@@ -281,7 +287,7 @@ describe('sdkToolCallsToOpenai', () => {
     assert.equal(result[0]!.function.arguments, '{"x":1}')
   })
 
-  it('converts tool calls with object arguments to JSON string', () => {
+  it('serializes nested object arguments', () => {
     const calls = [{ id: 'call_2', name: 'fn_b', arguments: { key: 'value' } }]
     const result = sdkToolCallsToOpenai(calls)
     assert.ok(result)
@@ -296,8 +302,8 @@ describe('sdkToolCallsToOpenaiDeltas', () => {
 
   it('includes index in delta output', () => {
     const calls = [
-      { id: 'c1', name: 'fn_a', arguments: '{}' },
-      { id: 'c2', name: 'fn_b', arguments: '{}' }
+      { id: 'c1', name: 'fn_a', arguments: {} },
+      { id: 'c2', name: 'fn_b', arguments: {} }
     ]
     const result = sdkToolCallsToOpenaiDeltas(calls)
     assert.ok(result)
@@ -306,50 +312,53 @@ describe('sdkToolCallsToOpenaiDeltas', () => {
   })
 })
 
-describe('extractGenerationParams', () => {
+// Chat semantics: `max_completion_tokens` overrides `max_tokens`.
+const extractChat = (body: Record<string, unknown>) => extractGenerationParams(body, 'max_completion_tokens')
+
+describe('extractGenerationParams (chat semantics)', () => {
   it('returns undefined for empty body', () => {
-    assert.equal(extractGenerationParams({}), undefined)
+    assert.equal(extractChat({}), undefined)
   })
 
   it('extracts temperature', () => {
-    const params = extractGenerationParams({ temperature: 0.7 })
+    const params = extractChat({ temperature: 0.7 })
     assert.ok(params)
     assert.equal(params.temp, 0.7)
   })
 
   it('extracts top_p', () => {
-    const params = extractGenerationParams({ top_p: 0.9 })
+    const params = extractChat({ top_p: 0.9 })
     assert.ok(params)
     assert.equal(params.top_p, 0.9)
   })
 
   it('extracts seed', () => {
-    const params = extractGenerationParams({ seed: 42 })
+    const params = extractChat({ seed: 42 })
     assert.ok(params)
     assert.equal(params.seed, 42)
   })
 
   it('extracts frequency_penalty and presence_penalty', () => {
-    const params = extractGenerationParams({ frequency_penalty: 0.5, presence_penalty: 0.3 })
+    const params = extractChat({ frequency_penalty: 0.5, presence_penalty: 0.3 })
     assert.ok(params)
     assert.equal(params.frequency_penalty, 0.5)
     assert.equal(params.presence_penalty, 0.3)
   })
 
   it('maps max_tokens to predict', () => {
-    const params = extractGenerationParams({ max_tokens: 100 })
+    const params = extractChat({ max_tokens: 100 })
     assert.ok(params)
     assert.equal(params.predict, 100)
   })
 
   it('maps max_completion_tokens to predict (takes precedence)', () => {
-    const params = extractGenerationParams({ max_tokens: 50, max_completion_tokens: 200 })
+    const params = extractChat({ max_tokens: 50, max_completion_tokens: 200 })
     assert.ok(params)
     assert.equal(params.predict, 200)
   })
 
   it('extracts all params together', () => {
-    const params = extractGenerationParams({
+    const params = extractChat({
       temperature: 0.0,
       top_p: 0.95,
       seed: 123,
@@ -366,57 +375,31 @@ describe('extractGenerationParams', () => {
     assert.equal(params.presence_penalty, 0.1)
   })
 
-  it('extracts reasoning_budget true', () => {
-    const params = extractGenerationParams({ reasoning_budget: true })
+  it('extracts reasoning_budget true → SDK-native -1', () => {
+    const params = extractChat({ reasoning_budget: true })
     assert.ok(params)
-    assert.equal(params.reasoning_budget, true)
+    assert.equal(params.reasoning_budget, -1)
   })
 
-  it('extracts reasoning_budget false', () => {
-    const params = extractGenerationParams({ reasoning_budget: false })
+  it('extracts reasoning_budget false → SDK-native 0', () => {
+    const params = extractChat({ reasoning_budget: false })
     assert.ok(params)
-    assert.equal(params.reasoning_budget, false)
+    assert.equal(params.reasoning_budget, 0)
   })
 
   it('ignores non-boolean reasoning_budget', () => {
-    const params = extractGenerationParams({ reasoning_budget: -1 })
+    const params = extractChat({ reasoning_budget: -1 })
     assert.equal(params, undefined)
   })
 
   it('ignores non-number values', () => {
-    const params = extractGenerationParams({ temperature: 'hot', max_tokens: '100' })
+    const params = extractChat({ temperature: 'hot', max_tokens: '100' })
     assert.equal(params, undefined)
   })
 
   it('ignores unrelated params', () => {
     const params = extractGenerationParams({ model: 'test', messages: [], stream: true })
     assert.equal(params, undefined)
-  })
-})
-
-describe('logUnsupportedParams', () => {
-  it('does not throw on empty body', () => {
-    const warnings: string[] = []
-    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logUnsupportedParams>[1]
-    logUnsupportedParams({}, logger)
-    assert.equal(warnings.length, 0)
-  })
-
-  it('logs warnings for unsupported params', () => {
-    const warnings: string[] = []
-    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logUnsupportedParams>[1]
-    logUnsupportedParams({ n: 2, logprobs: true, stop: ['END'] }, logger)
-    assert.equal(warnings.length, 3)
-    assert.ok(warnings.some(w => w.includes('n=')))
-    assert.ok(warnings.some(w => w.includes('logprobs=')))
-    assert.ok(warnings.some(w => w.includes('stop=')))
-  })
-
-  it('does not warn on response_format (now supported)', () => {
-    const warnings: string[] = []
-    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logUnsupportedParams>[1]
-    logUnsupportedParams({ response_format: { type: 'json_object' } }, logger)
-    assert.equal(warnings.length, 0)
   })
 })
 
@@ -751,9 +734,9 @@ describe('openaiResponsesToolsToSdk', () => {
   })
 })
 
-describe('extractResponsesGenerationParams', () => {
+describe('extractGenerationParams (responses semantics)', () => {
   it('maps max_output_tokens to predict', () => {
-    const p = extractResponsesGenerationParams({ max_output_tokens: 64 })
+    const p = extractGenerationParams({ max_output_tokens: 64 }, 'max_output_tokens')
     assert.equal(p!.predict, 64)
   })
 })
@@ -791,20 +774,6 @@ describe('validateResponsesStatefulOptions', () => {
       () => validateResponsesStatefulOptions({ background: true }),
       InvalidResponsesBackgroundError
     )
-  })
-})
-
-describe('logResponsesUnsupportedParams', () => {
-  it('does not treat parallel_tool_calls as unsupported', () => {
-    const lines: string[] = []
-    const logger = {
-      info: (msg: string) => lines.push(msg),
-      warn: (): void => {},
-      error: (): void => {},
-      debug: (): void => {}
-    } as Parameters<typeof logResponsesUnsupportedParams>[1]
-    logResponsesUnsupportedParams({ parallel_tool_calls: false, input: '' }, logger)
-    assert.ok(!lines.some((l) => l.includes('parallel_tool_calls')))
   })
 })
 
@@ -964,59 +933,3 @@ describe('legacyPromptToHistory', () => {
   })
 })
 
-describe('logLegacyUnsupportedParams', () => {
-  function captureWarnings (body: Record<string, unknown>): string[] {
-    const warnings: string[] = []
-    const logger = {
-      info: () => {},
-      warn: (msg: string) => { warnings.push(msg) },
-      error: () => {},
-      debug: () => {}
-    } as unknown as Parameters<typeof logLegacyUnsupportedParams>[1]
-    logLegacyUnsupportedParams(body, logger)
-    return warnings
-  }
-
-  it('warns for legacy-only unsupported params', () => {
-    const warnings = captureWarnings({ echo: true, best_of: 3, suffix: 'end', user: 'u1' })
-    assert.equal(warnings.length, 4)
-    assert.ok(warnings.some((w) => w.includes('echo')))
-    assert.ok(warnings.some((w) => w.includes('best_of')))
-    assert.ok(warnings.some((w) => w.includes('suffix')))
-    assert.ok(warnings.some((w) => w.includes('user')))
-  })
-
-  it('warns for shared unsupported params (logprobs, stop, logit_bias, stream_options)', () => {
-    const warnings = captureWarnings({
-      logprobs: 5,
-      stop: ['\n'],
-      logit_bias: { '50256': -100 },
-      stream_options: { include_usage: true }
-    })
-    assert.ok(warnings.some((w) => w.includes('logprobs')))
-    assert.ok(warnings.some((w) => w.includes('stop')))
-    assert.ok(warnings.some((w) => w.includes('logit_bias')))
-    assert.ok(warnings.some((w) => w.includes('stream_options')))
-  })
-
-  it('warns when response_format is sent (legacy clients should not use it)', () => {
-    const warnings = captureWarnings({ response_format: { type: 'json_object' } })
-    assert.equal(warnings.length, 1)
-    assert.ok(warnings[0]!.includes('response_format'))
-  })
-
-  it('does not warn when n is 1 (default)', () => {
-    const warnings = captureWarnings({ n: 1 })
-    assert.equal(warnings.length, 0)
-  })
-
-  it('warns when n is greater than 1', () => {
-    const warnings = captureWarnings({ n: 4 })
-    assert.equal(warnings.length, 1)
-    assert.ok(warnings[0]!.includes('n=4'))
-  })
-
-  it('is silent for an empty body', () => {
-    assert.deepEqual(captureWarnings({}), [])
-  })
-})

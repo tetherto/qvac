@@ -132,7 +132,17 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
+      - name: Cache OCR models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: ocr-onnx
+          paths: packages/ocr-onnx/models/ocr/rec_dyn
+          hash-files-glob: .github/workflows/integration-test-ocr-onnx.yml
+
       - name: Download onnx model files
+        if: steps.model-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
@@ -147,7 +157,7 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
 
       - name: Generate HTML performance report
-        if: always()
+        if: always() && !cancelled()
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
@@ -165,7 +175,7 @@ jobs:
           fi
 
       - name: Upload performance report
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}

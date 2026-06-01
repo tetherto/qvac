@@ -1,8 +1,10 @@
 import ImgStableDiffusion, {
   EsrganUpscaler,
+  VideoStableDiffusion,
   type DiffusionFiles,
   type EsrganUpscalerConfig,
   type SdConfig,
+  type VideoStableDiffusionArgs,
 } from "@qvac/diffusion-cpp";
 import addonLogging from "@qvac/diffusion-cpp/addonLogging";
 import {
@@ -11,6 +13,8 @@ import {
   sdcppConfigSchema,
   diffusionRequestSchema,
   diffusionStreamResponseSchema,
+  videoRequestSchema,
+  videoStreamResponseSchema,
   upscaleRequestSchema,
   upscaleStreamResponseSchema,
   ModelType,
@@ -24,6 +28,7 @@ import {
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import { diffusion } from "./ops/diffusion";
+import { video } from "./ops/video";
 import { upscale } from "./ops/upscale";
 
 type DiffusionArtifactKey =
@@ -32,6 +37,7 @@ type DiffusionArtifactKey =
   | "t5XxlModelPath"
   | "llmModelPath"
   | "vaeModelPath"
+  | "highNoiseDiffusionModelPath"
   | "esrganModelPath";
 
 // Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
@@ -58,13 +64,25 @@ function flattenUpscalerKeys(
   };
 }
 
+// `mode: "upscale"` builds an EsrganUpscaler directly (not via SdCtx), so the
+// top-level `device` field has to be forwarded explicitly — it is not part of
+// the `upscaler.*` block.
 function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
   return {
     ...flattenUpscalerKeys(config.upscaler),
+    ...(config.device !== undefined && { device: config.device }),
     ...(config.verbosity !== undefined && { verbosity: config.verbosity }),
   };
 }
 
+/**
+ * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
+ *
+ * Video mode is supported on React Native, but the SDK-published Wan model
+ * set is too large to load on typical mobile devices. Mobile apps should
+ * pass a `delegate` to `loadModel(...)` to run video generation on a
+ * desktop peer instead of loading the model on-device.
+ */
 export const diffusionPlugin = definePlugin({
   modelType: ModelType.sdcppGeneration,
   displayName: "Image Generation & Upscaling (stable-diffusion.cpp)",
@@ -84,17 +102,20 @@ export const diffusionPlugin = definePlugin({
 
     const {
       clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
-      llmModelSrc, vaeModelSrc, upscaler, ...rest
+      llmModelSrc, vaeModelSrc, highNoiseDiffusionModelSrc, upscaler, ...rest
     } = cfg;
-    const { model_src: esrganModelSrc, ...upscalerRuntime } = upscaler ?? {};
+    // Video jobs do not apply ESRGAN so we drop the whole `upscaler` object.
+    const effectiveUpscaler = cfg.mode === "video" ? undefined : upscaler;
+    const { model_src: esrganModelSrc, ...upscalerRuntime } =
+      effectiveUpscaler ?? {};
     const runtimeConfig = {
       ...rest,
-      ...(upscaler && { upscaler: upscalerRuntime }),
+      ...(effectiveUpscaler && { upscaler: upscalerRuntime }),
     } as SdcppConfig;
 
     const sources = {
       clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
-      llmModelSrc, vaeModelSrc, esrganModelSrc,
+      llmModelSrc, vaeModelSrc, highNoiseDiffusionModelSrc, esrganModelSrc,
     };
     const hasSources = Object.values(sources).some(Boolean);
 
@@ -105,13 +126,14 @@ export const diffusionPlugin = definePlugin({
     const resolve = ctx.resolveModelPath;
     const [
       clipLModelPath, clipGModelPath, t5XxlModelPath,
-      llmModelPath, vaeModelPath, esrganModelPath,
+      llmModelPath, vaeModelPath, highNoiseDiffusionModelPath, esrganModelPath,
     ] = await Promise.all([
       clipLModelSrc ? resolve(clipLModelSrc) : undefined,
       clipGModelSrc ? resolve(clipGModelSrc) : undefined,
       t5XxlModelSrc ? resolve(t5XxlModelSrc) : undefined,
       llmModelSrc ? resolve(llmModelSrc) : undefined,
       vaeModelSrc ? resolve(vaeModelSrc) : undefined,
+      highNoiseDiffusionModelSrc ? resolve(highNoiseDiffusionModelSrc) : undefined,
       esrganModelSrc ? resolve(esrganModelSrc) : undefined,
     ]);
 
@@ -123,6 +145,7 @@ export const diffusionPlugin = definePlugin({
         ...(t5XxlModelPath && { t5XxlModelPath }),
         ...(llmModelPath && { llmModelPath }),
         ...(vaeModelPath && { vaeModelPath }),
+        ...(highNoiseDiffusionModelPath && { highNoiseDiffusionModelPath }),
         ...(esrganModelPath && { esrganModelPath }),
       },
     };
@@ -138,15 +161,15 @@ export const diffusionPlugin = definePlugin({
     // instead of letting the native addon fail mid-load. Done before any
     // logger / native side-effects so callers can recover cleanly.
     if (
-      config.mode !== "upscale" &&
+      config.mode === "diffusion" &&
       config.upscaler !== undefined &&
       !artifacts?.["esrganModelPath"]
     ) {
       throw new ModelLoadFailedError(
         "modelConfig.upscaler.model_src is required when modelConfig.upscaler " +
-          "is set in diffusion mode. Provide the ESRGAN model, omit the " +
-          "upscaler block, or switch to modelConfig.mode = 'upscale' to load " +
-          "a standalone upscaler.",
+        "is set in diffusion mode. Provide the ESRGAN model, omit the " +
+        "upscaler block, or switch to modelConfig.mode = 'upscale' to load " +
+        "a standalone upscaler.",
       );
     }
 
@@ -157,6 +180,53 @@ export const diffusionPlugin = definePlugin({
       const model = new EsrganUpscaler({
         files: { esrgan: modelPath },
         config: toEsrganAddonConfig(config),
+        logger,
+        opts: { stats: true },
+      });
+      return { model };
+    }
+
+    if (config.mode === "video") {
+      if (!artifacts?.["t5XxlModelPath"]) {
+        throw new ModelLoadFailedError(
+          "modelConfig.t5XxlModelSrc is required in video mode. " +
+          "Provide the Wan text encoder model before loading the video pipeline.",
+        );
+      }
+      if (!artifacts?.["vaeModelPath"]) {
+        throw new ModelLoadFailedError(
+          "modelConfig.vaeModelSrc is required in video mode. " +
+          "Provide the Wan VAE model before loading the video pipeline.",
+        );
+      }
+
+      const files: VideoStableDiffusionArgs["files"] = {
+        model: modelPath,
+        t5Xxl: artifacts["t5XxlModelPath"],
+        vae: artifacts["vaeModelPath"],
+        ...(artifacts?.["highNoiseDiffusionModelPath"] && {
+          highNoiseDiffusionModel: artifacts["highNoiseDiffusionModelPath"],
+        }),
+        ...(artifacts?.["esrganModelPath"] && { esrgan: artifacts["esrganModelPath"] }),
+      };
+
+      /* eslint-disable @typescript-eslint/no-unused-vars */
+      const {
+        clipLModelSrc,
+        clipGModelSrc,
+        t5XxlModelSrc,
+        llmModelSrc,
+        vaeModelSrc,
+        highNoiseDiffusionModelSrc,
+        upscaler,
+        mode,
+        ...rest
+      } = config;
+      /* eslint-enable @typescript-eslint/no-unused-vars */
+
+      const model = new VideoStableDiffusion({
+        files,
+        config: rest as SdConfig,
         logger,
         opts: { stats: true },
       });
@@ -202,6 +272,13 @@ export const diffusionPlugin = definePlugin({
       // is interrupted on the currently-running generation.
       cancel: { scope: "model", hard: true },
       handler: diffusion,
+    }),
+    videoStream: defineHandler({
+      requestSchema: videoRequestSchema,
+      responseSchema: videoStreamResponseSchema,
+      streaming: true,
+      cancel: { scope: "model", hard: true },
+      handler: video,
     }),
     upscaleStream: defineHandler({
       requestSchema: upscaleRequestSchema,

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/rag",
-  "version": "0.5.0",
+  "version": "0.6.2",
   "main": "index.js",
   "scripts": {
     "lint": "standard",
@@ -27,6 +27,21 @@
     "NOTICE"
   ],
   "types": "index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./errors": {
+      "types": "./src/errors.d.ts",
+      "default": "./src/errors.js"
+    },
+    "./errors.js": {
+      "types": "./src/errors.d.ts",
+      "default": "./src/errors.js"
+    }
+  },
   "imports": {
     "#crypto": {
       "bare": "bare-crypto",
@@ -44,52 +59,24 @@
   "devDependencies": {
     "@qvac/embed-llamacpp": "^0.14.0",
     "@qvac/llm-llamacpp": "^0.16.0",
-    "@qvac/registry-client": "^0.4.1",
-    "bare-crypto": "^1.13.4",
+    "@qvac/registry-client": "^0.6.0",
     "bare-fs": "^4.1.6",
     "bare-path": "^3.0.0",
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
-    "hyperdb": "^4.19.0",
-    "llm-splitter": "^0.2.0",
     "standard": "^17.1.2",
     "test-tmp": "^1.4.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
-    "ready-resource": "^1.1.2",
-    "zod": "^4.1.13"
-  },
-  "peerDependencies": {
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^2.5.0",
     "crypto-browserify": "^3.12.1",
-    "hyperdb": "^4.19.0",
+    "hyperdb": "^6.7.0",
     "hyperdht": "^6.23.0",
     "hyperschema": "^1.13.0",
-    "llm-splitter": "^0.2.0"
-  },
-  "peerDependenciesMeta": {
-    "bare-crypto": {
-      "optional": true
-    },
-    "bare-fetch": {
-      "optional": true
-    },
-    "crypto-browserify": {
-      "optional": true
-    },
-    "hyperdb": {
-      "optional": true
-    },
-    "hyperdht": {
-      "optional": true
-    },
-    "hyperschema": {
-      "optional": true
-    },
-    "llm-splitter": {
-      "optional": true
-    }
+    "llm-splitter": "^0.2.0",
+    "ready-resource": "^1.1.2",
+    "zod": "^4.1.13"
   }
 }

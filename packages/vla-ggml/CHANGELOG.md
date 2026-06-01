@@ -1,8 +1,6 @@
 # Changelog
 
-## Unreleased
-
-## [0.2.0]
+## [0.3.0]
 
 - feat: π₀.₅ support behind GGUF `general.architecture=pi05`. The addon
   now loads and runs the Physical Intelligence π₀.₅ model alongside
@@ -33,6 +31,15 @@
 - New JS integration test `test/integration/pi05.test.js` mirrors the
   shape of `addon.test.js` (exports surface, validator error paths,
   img-shape mismatch, end-to-end inference parity).
+
+## [0.2.1] - 2026-05-26
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2`.
+
+## [0.2.0] - 2026-05-23
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1`.
+- Relaxed the `cmake-bare` dev dependency range to accept compatible patch releases.
 
 ## [0.1.0]
 

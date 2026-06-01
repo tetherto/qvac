@@ -27,25 +27,42 @@ const QvacResponse = require('../QvacResponse')
 function createJobHandler (opts) {
   let active = null
 
+  // Clears `active` whenever the response settles (end / fail / abort), not
+  // only on explicit end()/fail(). Identity-guarded against stale-replace
+  // races so a late settle on a stale response can't clobber a newer active.
+  const bindCleanup = (response) => {
+    const clearIfCurrent = () => {
+      if (active === response) active = null
+    }
+    response.onFinish(clearIfCurrent)
+    response.onError(clearIfCurrent)
+  }
+
   return {
     /**
      * Creates a new QvacResponse and stores it as the active response.
      * If a previous response is still active, it is failed with a stale-job error
      * before the new one is created.
      *
+     * @param {Object} [runOpts]
+     * @param {AbortSignal} [runOpts.signal] - Forwarded to the underlying `QvacResponse`.
+     *   Typically the per-call signal from `model.run(input, { signal })`. When aborted, the
+     *   abort `reason` becomes the response error (passed through unchanged when it's an Error).
      * @returns {QvacResponse}
      */
-    start () {
+    start (runOpts) {
       if (active) {
         active.failed(new Error('Stale job replaced by new run'))
         active = null
       }
 
       const response = new QvacResponse({
-        cancelHandler: () => opts.cancel()
+        cancelHandler: () => opts.cancel(),
+        signal: runOpts && runOpts.signal
       })
 
       active = response
+      bindCleanup(response)
       return response
     },
 
@@ -64,6 +81,7 @@ function createJobHandler (opts) {
       }
 
       active = response
+      bindCleanup(response)
       return response
     },
 

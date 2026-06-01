@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.22.1] - 2026-05-26
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2`.
+
+## [0.22.0] - 2026-05-23
+
+### Added
+
+- TurboQuant / PolarQuant KV-cache integration coverage, including mobile test grouping, a benchmark-style quantized KV-cache sanity test, and a focused supported-combination sweep for Vulkan/CPU-capable platforms.
+- Cross-platform C++ unit-test model download and runner scripts, with SHA256 verification and CI-mode fixture selection.
+
+### Fixed
+
+- `cancel()` now keeps the native addon alive for the async cancel/pause wait path, avoiding a use-after-free if JS teardown destroys the instance while cancellation is in flight.
+- JSON schema and user grammars are now tagged with the expected upstream grammar type wrappers.
+- TurboQuant / PolarQuant KV-cache types now fail early with a clear `InvalidArgument` on OpenCL and Metal backends, where the required kernels are not available.
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.1`.
+- Expanded Qwen3.5 and Gemma 4 integration coverage around GPU/mobile paths.
+
 ## [0.21.0] - 2026-05-13
 
 This release is a pure internal C++ refactor of the addon: the LoRA finetuning pipeline now lives in its own `LlamaFinetuner` class instead of inside `LlamaModel`. There are no JS API changes and no behaviour changes — finetune training, pause/resume, and adapter save go through exactly the same code paths.

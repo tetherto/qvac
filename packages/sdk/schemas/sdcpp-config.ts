@@ -6,16 +6,54 @@ const BASE64_PATTERN =
 
 const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/;
 
+const base64StringSchema = z.string().min(1).regex(BASE64_PATTERN);
+
+const samplingMethodSchema = z.enum([
+  "euler",
+  "euler_a",
+  "heun",
+  "dpm2",
+  "dpm++2m",
+  "dpm++2mv2",
+  "dpm++2s_a",
+  "lcm",
+  "ipndm",
+  "ipndm_v",
+  "ddim_trailing",
+  "tcd",
+  "res_multistep",
+  "res_2s",
+]);
+
+const scheduleTypeSchema = z.enum([
+  "discrete", "karras", "exponential", "ays", "gits",
+  "sgm_uniform", "simple", "lcm", "smoothstep", "kl_optimal", "bong_tangent",
+]);
+
+const cacheModeSchema = z.enum([
+  "disabled",
+  "easycache",
+  "ucache",
+  "dbcache",
+  "taylorseer",
+  "cache-dit",
+]);
+
 export const sdcppConfigSchema = z
   .object({
-    mode: z.enum(["diffusion", "upscale"]).default("diffusion")
+    mode: z.enum(["diffusion", "upscale", "video"]).default("diffusion")
       .describe(
         "Operation mode for the diffusion plugin. " +
         "`'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from " +
         "the primary model plus optional auxiliary text encoders, VAE, and ESRGAN " +
         "upscaler, and exposes diffusion({ ... }). " +
         "`'upscale'` builds a standalone ESRGAN upscaler from the primary model " +
-        "file alone (auxiliary model sources are ignored) and exposes upscale({ ... }).",
+        "file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). " +
+        "`'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }). " +
+        "On React Native, loading the video model on-device will likely fail " +
+        "because the video diffusion models currently " +
+        "shipped by the SDK are too large to load on typical mobile devices; " +
+        "pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
       ),
     threads: z.number().optional(),
     device: z.enum(["gpu", "cpu"]).optional(),
@@ -36,6 +74,8 @@ export const sdcppConfigSchema = z
     clip_on_cpu: z.boolean().optional().describe("Force CLIP text encoder to run on CPU"),
     vae_on_cpu: z.boolean().optional().describe("Force VAE decoder to run on CPU"),
     vae_tiling: z.boolean().optional().describe("Enable VAE tiling for large images on limited VRAM"),
+    offload_to_cpu: z.boolean().optional()
+      .describe("Keep model weights in CPU memory and offload them during GPU compute"),
     flash_attn: z.boolean().optional().describe("Enable flash attention to reduce memory usage"),
     diffusion_fa: z.boolean().optional().describe("Enable flash attention for the diffusion transformer only"),
     lora_apply_mode: z.enum(["auto", "immediately", "at_runtime"]).optional()
@@ -59,6 +99,8 @@ export const sdcppConfigSchema = z
       .describe("LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]"),
     vaeModelSrc: modelSrcInputSchema.optional()
       .describe("VAE decoder model — required for FLUX.2 [klein], optional for SDXL"),
+    highNoiseDiffusionModelSrc: modelSrcInputSchema.optional()
+      .describe("High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models"),
     upscaler: z.object({
       type: z.literal("esrgan").optional()
         .describe("Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale })."),
@@ -100,9 +142,10 @@ export const sdcppConfigSchema = z
         "requires `model_src`. In `mode: 'upscale'` only the tuning fields " +
         "(tile_size, direct, offload_params_to_cpu, threads) are honored — " +
         "the primary modelSrc IS the ESRGAN model in that mode and " +
-        "`model_src` here is ignored. Mode-dependent constraints (e.g. " +
-        "`model_src` required in diffusion mode) are enforced by the " +
-        "sdcpp-generation plugin at load time, not at the schema layer.",
+        "`model_src` here is ignored. In `mode: 'video'` the entire `upscaler` " +
+        "object is ignored. Mode-dependent constraints (e.g. `model_src` " +
+        "required in diffusion mode) are enforced by the sdcpp-generation " +
+        "plugin at load time, not at the schema layer.",
       ),
   });
 
@@ -163,6 +206,39 @@ export const diffusionStatsSchema = z.object({
 
 export type DiffusionStats = z.infer<typeof diffusionStatsSchema>;
 
+export const videoStatsSchema = diffusionStatsSchema.pick({
+  modelLoadMs: true,
+  generationMs: true,
+  totalGenerationMs: true,
+  totalWallMs: true,
+  totalSteps: true,
+  totalGenerations: true,
+  totalImages: true,
+  totalPixels: true,
+  width: true,
+  height: true,
+  seed: true,
+}).extend({
+  totalVideos: z
+    .number()
+    .optional()
+    .describe("Total number of videos produced."),
+  totalVideoFrames: z
+    .number()
+    .optional()
+    .describe("Total number of video frames produced."),
+  videoFrames: z
+    .number()
+    .optional()
+    .describe("Frame count of the most recent generated video."),
+  fps: z
+    .number()
+    .optional()
+    .describe("Frames-per-second metadata for the most recent generated video."),
+});
+
+export type VideoStats = z.infer<typeof videoStatsSchema>;
+
 export const diffusionStreamResponseSchema = z.object({
   type: z.literal("diffusionStream"),
   step: z.number().optional(),
@@ -177,6 +253,19 @@ export const diffusionStreamResponseSchema = z.object({
 export type DiffusionStreamResponse = z.infer<
   typeof diffusionStreamResponseSchema
 >;
+
+export const videoStreamResponseSchema = z.object({
+  type: z.literal("videoStream"),
+  step: z.number().optional(),
+  totalSteps: z.number().optional(),
+  elapsedMs: z.number().optional(),
+  data: z.string().optional(),
+  outputIndex: z.number().optional(),
+  done: z.boolean().optional(),
+  stats: videoStatsSchema.optional(),
+});
+
+export type VideoStreamResponse = z.infer<typeof videoStreamResponseSchema>;
 
 export const diffusionRequestSchema = z.object({
   modelId: z
@@ -225,30 +314,10 @@ export const diffusionRequestSchema = z.object({
     .describe(
       "Distilled guidance for FLUX models; typical range 1–10, default 3.5",
     ),
-  sampling_method: z
-    .enum([
-      "euler",
-      "euler_a",
-      "heun",
-      "dpm2",
-      "dpm++2m",
-      "dpm++2mv2",
-      "dpm++2s_a",
-      "lcm",
-      "ipndm",
-      "ipndm_v",
-      "ddim_trailing",
-      "tcd",
-      "res_multistep",
-      "res_2s",
-    ])
+  sampling_method: samplingMethodSchema
     .optional()
     .describe("Sampling algorithm used by the diffusion scheduler."),
-  scheduler: z
-    .enum([
-      "discrete", "karras", "exponential", "ays", "gits",
-      "sgm_uniform", "simple", "lcm", "smoothstep", "kl_optimal", "bong_tangent",
-    ])
+  scheduler: scheduleTypeSchema
     .optional()
     .describe("Noise schedule to apply when sampling."),
   seed: z
@@ -272,14 +341,11 @@ export const diffusionRequestSchema = z.object({
     .string()
     .optional()
     .describe("Optional name of a cached sampler preset to reuse."),
-  init_image: z
-    .string()
-    .min(1)
-    .regex(BASE64_PATTERN)
+  init_image: base64StringSchema
     .optional()
     .describe("Base64-encoded image for img2img generation. Mutually exclusive with init_images."),
   init_images: z.array(
-    z.string().min(1).regex(BASE64_PATTERN),
+    base64StringSchema,
   )
     .min(1)
     .optional()
@@ -371,6 +437,161 @@ export type DiffusionClientParams = DiffusionClientParamsBase &
     | { init_image?: never; init_images?: Uint8Array[] }
   );
 
+export const videoRequestSchema = z.object({
+  modelId: z
+    .string()
+    .describe(
+      "The identifier of the loaded video model to use for generation. " +
+        "On React Native, prefer a `modelId` loaded with a `delegate` because " +
+        "the video diffusion models currently shipped by the SDK are too " +
+        "large to load on typical mobile devices.",
+    ),
+  requestId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+    ),
+  mode: z
+    .enum(["txt2vid"])
+    .describe("Video generation mode. Only `txt2vid` is supported today."),
+  prompt: z.string().describe("Positive prompt describing the video to generate."),
+  negative_prompt: z
+    .string()
+    .optional()
+    .describe("Optional negative prompt describing what to avoid."),
+  width: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(8)
+    .optional()
+    .describe("Video width in pixels (must be a multiple of 8)."),
+  height: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(8)
+    .optional()
+    .describe("Video height in pixels (must be a multiple of 8)."),
+  video_frames: z
+    .number()
+    .int()
+    .refine((value) => value >= 5 && (value - 1) % 4 === 0, {
+      message: "video_frames must be an integer >= 5 of the form (4*k + 1)",
+    })
+    .optional()
+    .describe("Frame count for the generated video; must satisfy (4*k + 1), where k>=1."),
+  fps: z
+    .number()
+    .positive()
+    .max(120)
+    .optional()
+    .describe("AVI framerate metadata in frames per second; must be in (0, 120]."),
+  seed: z
+    .number()
+    .int()
+    .optional()
+    .describe("Random seed; when omitted the SDK picks one and returns it in stats."),
+  steps: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Low-noise or single-expert denoising step count."),
+  sampling_method: samplingMethodSchema
+    .optional()
+    .describe("Sampling algorithm used by the low-noise diffusion scheduler."),
+  scheduler: scheduleTypeSchema
+    .optional()
+    .describe("Noise schedule to apply for the low-noise diffusion path."),
+  cfg_scale: z
+    .number()
+    .optional()
+    .describe("Classifier-free guidance scale."),
+  flow_shift: z
+    .number()
+    .optional()
+    .describe("Per-request flow-matching guidance shift override."),
+  high_noise_steps: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Wan 2.2 high-noise expert step count."),
+  high_noise_sampler: samplingMethodSchema
+    .optional()
+    .describe("Wan 2.2 high-noise expert sampler."),
+  high_noise_scheduler: scheduleTypeSchema
+    .optional()
+    .describe("Wan 2.2 high-noise expert scheduler."),
+  high_noise_cfg_scale: z
+    .number()
+    .optional()
+    .describe("Wan 2.2 high-noise expert CFG scale."),
+  high_noise_flow_shift: z
+    .number()
+    .optional()
+    .describe("Wan 2.2 high-noise expert flow shift override."),
+  moe_boundary: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Wan 2.2 mixture-of-experts boundary in [0, 1]."),
+  vace_strength: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Control-frame guidance strength."),
+  control_frames: z.array(base64StringSchema)
+    .min(1)
+    .optional()
+    .describe("Optional array of base64-encoded control-frame images."),
+  vae_tiling: z
+    .boolean()
+    .optional()
+    .describe("Enable VAE tiling for large videos on constrained VRAM."),
+  vae_tile_size: z
+    .union([z.number().positive(), z.string().min(1)])
+    .optional()
+    .describe("VAE tile size override."),
+  vae_tile_overlap: z
+    .number()
+    .optional()
+    .describe("VAE tile overlap override."),
+  cache_mode: cacheModeSchema
+    .optional()
+    .describe("Step-caching algorithm."),
+  cache_preset: z
+    .string()
+    .optional()
+    .describe("Optional name of a cached sampler preset to reuse."),
+  cache_threshold: z
+    .number()
+    .optional()
+    .describe("Direct cache reuse threshold override."),
+});
+
+export type VideoRequest = z.input<typeof videoRequestSchema>;
+
+export const videoStreamRequestSchema = videoRequestSchema.extend({
+  type: z.literal("videoStream"),
+});
+
+export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>;
+
+type VideoClientParamsBase = Omit<
+  VideoRequest,
+  "requestId" | "control_frames"
+>;
+
+export type VideoClientParams = VideoClientParamsBase & {
+  control_frames?: Uint8Array[];
+};
+
 // ============================================
 // Standalone ESRGAN upscale (mode: "upscale")
 // ============================================
@@ -412,6 +633,14 @@ export const upscaleStatsSchema = z.object({
     .number()
     .optional()
     .describe("Number of ESRGAN passes used by the most recent upscale job."),
+  backendDevice: z
+    .enum(["cpu", "gpu"])
+    .optional()
+    .describe(
+      "Actual compute device used by the ESRGAN upscaler. " +
+      "Reflects the backend stable-diffusion.cpp selected (e.g. Android `gpu` " +
+      "falls back to `cpu` because the mobile GPU/OpenCL path is unstable).",
+    ),
 });
 
 export type UpscaleStats = z.infer<typeof upscaleStatsSchema>;

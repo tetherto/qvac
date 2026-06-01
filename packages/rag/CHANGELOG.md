@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2]
+
+### Fixed
+
+- Add `./errors.js` export alias so TypeScript ESM emit (`@qvac/rag/errors.js`) resolves under Node package exports.
+
+## [0.6.1]
+
+### Added
+
+- Published `@qvac/rag/errors` subpath for importing `ERR_CODES` and `QvacErrorRAG` without loading the full package entry (#2303).
+
+### Fixed
+
+- Load RAG hard dependencies (`hyperdb`, `hyperschema`, `llm-splitter`, `#fetch`) via synchronous `require()` instead of dynamic `await import()` for Pear/CJS compatibility (#2284).
+
+## [0.6.0]
+
+### Changed
+
+- Upgrade to HyperDB 6 (`hyperdb@^6.7.0`), regenerate RAG HyperDB specs for the v6 toolchain, and move runtime Holepunch libraries from `peerDependencies` to direct `dependencies` (#2255).
+- Bump `@qvac/registry-client` dev dependency to `^0.6.0`.
+
 ## [0.5.0]
 
 ### Fixed
