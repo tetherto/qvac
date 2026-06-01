@@ -97,6 +97,10 @@ public:
   using Input = PipelineContext;
   using Output = StepDetectionInferenceOutput;
 
+  // Default detection canvas cap (EasyOCR `canvas_size`), matching
+  // @qvac/ocr-onnx and EasyOCR.
+  static constexpr int kDefaultCanvasSize = 2560;
+
   // nThreads:
   //   - 0 (default): auto-detect via
   //     `easyocr::ggml::pipeline::defaultPhysicalThreadCount()`.  On x86
@@ -116,7 +120,8 @@ public:
   explicit StepDetectionInference(
       // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
       const std::string& gguf_path, float magRatio = 1.5F, int nThreads = 0,
-      const std::string& backendsDir = "", int maxImageSize = 2560);
+      const std::string& backendsDir = "",
+      int maxImageSize = kDefaultCanvasSize);
   ~StepDetectionInference();
 
   StepDetectionInference(const StepDetectionInference&) = delete;
@@ -186,7 +191,7 @@ private:
   void destroyGraph();
 
   float magRatio_;
-  int maxImageSize_; // EasyOCR canvas_size cap; see ctor docs
+  int maxImageSize_;                 // EasyOCR canvas_size cap; see ctor docs
   OcrBackendsHandle backendsHandle_; // must be declared before backend_
   ggml_backend_t backend_ = nullptr;
   std::unique_ptr<GgufLoader> loader_;

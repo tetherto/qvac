@@ -65,6 +65,7 @@ constexpr double PIXEL_INTENSITY_MAX = 255.0;
  * Verbatim from ocr-onnx StepDetectionInference.cpp.
  */
 std::tuple<cv::Mat, float>
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 resizeAspectRatio(const cv::Mat& img, float magRatio, int maxImageSize) {
   int height = img.rows;
   int width = img.cols;
