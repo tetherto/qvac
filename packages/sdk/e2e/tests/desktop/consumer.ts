@@ -140,6 +140,12 @@ resources.define("tools-qwen35", {
   config: { ctx_size: 4096, tools: true },
 });
 
+resources.define("tools-qwen35-dynamic", {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
+});
+
 resources.define("tools-gemma4", {
   constant: GEMMA4_2B_MULTIMODAL_Q4_K_M,
   type: "llm",
