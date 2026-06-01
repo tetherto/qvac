@@ -2,6 +2,7 @@
 import test from "brittle";
 import { createErrorResponse } from "@/schemas/error";
 import {
+  ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -48,6 +49,34 @@ test("createErrorResponse: RequestNotFoundError carries requestId on typedFields
   t.is(response.name, "REQUEST_NOT_FOUND");
   t.is(response.code, 52418);
   t.alike(response.typedFields, { requestId: "rid-3" });
+});
+
+test("createErrorResponse: ContextOverflowError carries overflow fields on typedFields", (t) => {
+  const err = new ContextOverflowError(5432, 4096, "model-1");
+  const response = createErrorResponse(err);
+
+  t.is(response.name, "CONTEXT_OVERFLOW");
+  t.is(response.code, 52421);
+  t.alike(response.typedFields, {
+    promptTokens: 5432,
+    ctxSize: 4096,
+    modelId: "model-1",
+  });
+});
+
+test("createErrorResponse: ContextOverflowError omits absent fields from typedFields", (t) => {
+  // The bare `LlamaModel::processPromptImpl` overflow path emits a
+  // message without prompt/ctx numbers — the addon-wrap throws
+  // `new ContextOverflowError()` with all fields undefined. The
+  // envelope must omit them (rather than send `undefined` values) so
+  // the client reconstructor's optional-number readers see `undefined`
+  // and the class re-instance carries `undefined` for those fields.
+  const err = new ContextOverflowError();
+  const response = createErrorResponse(err);
+
+  t.is(response.name, "CONTEXT_OVERFLOW");
+  t.is(response.code, 52421);
+  t.alike(response.typedFields, {});
 });
 
 test("createErrorResponse: QvacError without toErrorResponseFields omits typedFields", (t) => {

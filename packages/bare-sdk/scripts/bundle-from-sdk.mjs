@@ -4,7 +4,8 @@
  * dist/. Excludes server/worker.js (consumers assemble plugins
  * explicitly) and pear/pre.js (Pear apps author their own entry).
  *
- * NOTICE auto-copies from sibling sdk on every build (gitignored).
+ * NOTICE is generated and committed at release time via
+ * `/qv-sdk-bare-sdk-sync` (which invokes `qv-notice-generate bare-sdk`).
  * LICENSE is committed and verified against sdk via a fail-fast diff.
  */
 import fs from "node:fs";
@@ -74,18 +75,6 @@ console.log(
 );
 
 const sdkRoot = path.resolve(bareSdkRoot, "..", "sdk");
-const sdkNoticePath = path.join(sdkRoot, "NOTICE");
-const bareNoticePath = path.join(bareSdkRoot, "NOTICE");
-if (fs.existsSync(sdkNoticePath)) {
-  fs.copyFileSync(sdkNoticePath, bareNoticePath);
-  console.log(`[bundle-from-sdk] auto-copied NOTICE from sibling sdk`);
-} else {
-  console.warn(
-    `[bundle-from-sdk] sibling sdk NOTICE missing at ${sdkNoticePath}; ` +
-      `bare-sdk tarball will ship without third-party attributions`,
-  );
-}
-
 const sdkLicensePath = path.join(sdkRoot, "LICENSE");
 const bareLicensePath = path.join(bareSdkRoot, "LICENSE");
 if (fs.existsSync(sdkLicensePath) && fs.existsSync(bareLicensePath)) {

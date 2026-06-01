@@ -154,7 +154,7 @@
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
-    "@qvac/rag": "^0.6.0",
+    "@qvac/rag": "^0.6.2",
     "@qvac/registry-client": "^0.6.0",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.13.4",

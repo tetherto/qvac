@@ -36,6 +36,11 @@ import {
 } from "@/server/bare/runtime";
 import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 import { getServerLogger } from "@/logging";
+import { ContextOverflowError } from "@/utils/errors-server";
+import {
+  isAddonContextOverflowError,
+  parseContextOverflowMessage,
+} from "@/server/bare/plugins/llamacpp-completion/ops/context-overflow";
 
 
 function createLlmModel(
@@ -207,6 +212,27 @@ export const llmPlugin = definePlugin({
             },
             modelExecutionMs,
           );
+        } catch (err) {
+          // The llama.cpp addon emits a structured `ContextOverflow` status
+          // (LlmErrors.hpp::ContextOverflow = 14) when the prompt exceeds
+          // the model's `ctx_size`. Bare's `js_throw_error(env, code, msg)`
+          // surfaces it as a JS Error with `.code = "[ <addonId> :: ContextOverflow ]"`
+          // and `.message` carrying the C++-formatted detail. Rethrow as
+          // a typed `ContextOverflowError` so consumers can switch on the
+          // class (and `err.code === SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW`)
+          // instead of substring-matching on the raw addon message.
+          if (isAddonContextOverflowError(err)) {
+            const { promptTokens, ctxSize } = parseContextOverflowMessage(
+              err instanceof Error ? err.message : "",
+            );
+            throw new ContextOverflowError(
+              promptTokens,
+              ctxSize,
+              request.modelId,
+              err,
+            );
+          }
+          throw err;
         } finally {
           await stream.return?.(undefined as never);
         }
@@ -260,6 +286,21 @@ export const llmPlugin = definePlugin({
             },
             modelExecutionMs,
           );
+        } catch (err) {
+          // Same addon, same overflow path as `completionStream`. Wrap so
+          // translate consumers can `instanceof ContextOverflowError` too.
+          if (isAddonContextOverflowError(err)) {
+            const { promptTokens, ctxSize } = parseContextOverflowMessage(
+              err instanceof Error ? err.message : "",
+            );
+            throw new ContextOverflowError(
+              promptTokens,
+              ctxSize,
+              request.modelId,
+              err,
+            );
+          }
+          throw err;
         } finally {
           await stream.return?.(undefined as never);
         }

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0]
+
+In this release we validate the duplex-streaming end-of-utterance (EOU) surface of `parakeet-cpp` end-to-end and bump the native dependency to the latest port (`2026-05-26`), which carries the streaming-EOU plumbing plus the AOSC review-fixup follow-ups. There are no public addon API changes; the JS surface is unchanged and the bump is a runtime/native-dep upgrade plus mobile provisioning catch-up for the new Sortformer-Streaming v2.1 GGUF.
+
+### Added
+- **`test/integration/duplex-streaming-eou.test.js`** — duplex-streaming + EOU integration test. The existing `eou-streaming.test.js` covers the offline `runStreamingProcess_` path that calls `finalize()` on every `process()` invocation, and `duplex-streaming.test.js` covers the duplex `runStreaming()` path but only with the TDT model. This new test closes the gap: it loads the EOU model, drives it through the duplex `runStreaming()` API end-to-end (the same path `@qvac/sdk`'s `transcribeStream({ parakeetStreamingConfig })` uses), and asserts that at least one segment carries `isEndOfTurn === true`. Catches regressions where mid-stream `feed_pcm_f32` calls fail to reach `eou_decode_window` without an explicit `finalize()`, or where `ParakeetStreamingProcessor::onAsrSegment_` drops the `is_eou_boundary` flag.
+- **Sortformer-Streaming v2.1 mobile provisioning.** `scripts/provision-mobile-models.sh` now stages the `diar_streaming_sortformer_4spk-v2.1.q8_0.gguf` GGUF for Device Farm runs, so mobile suites can exercise the v2.1 + AOSC code path that landed in `0.6.0`.
+- **Mobile wiring for the duplex-streaming EOU test.** `test/mobile/integration.auto.cjs` and `.github/workflows/integration-mobile-test-transcription-parakeet.yml` are updated so the new duplex-streaming EOU test is picked up by the Device Farm runner alongside the existing mobile integration suite.
+
+### Changed
+- **parakeet-cpp dep bumped** to `version>= 2026-05-26` (was `2026-05-20#2`) across all three platform branches in `vcpkg.json` (macOS/iOS, Android, and the catch-all desktop branch). The new port revision ships the duplex-streaming EOU surface validated by this release together with the AOSC review-fixup follow-ups already integrated in `qvac-registry-vcpkg`'s latest `parakeet-cpp` revision.
+
 ## [0.6.0]
 
 In this release we reestablish the GGML implementation from `0.4.0` with extra additions. The main features are exposing the v2.1 streaming Sortformer model with NeMo-port AOSC (Audio-Online Speaker Cache) through the addon's public API and overhaul the Android prebuild to ship the ggml backends as separately-loadable MODULE `.so` files. v2.1 becomes the recommended streaming Sortformer model; v1 stays the offline-batch default. On the Android side, Vulkan and OpenCL ship as runtime-discovered `.so` files (qvac-ext-ggml@speech's `GGML_BACKEND_DL=ON`), alongside per-arch CPU variants (`libqvac-speech-ggml-cpu-android_armv{8.0,8.2,8.6,9.0,9.2}_*.so`); inference still runs on CPU there pending Vulkan/Mali + OpenCL/Adreno driver fixes (`useGPU` is overridden at the engine boundary), but the GPU `.so` files are in place for when the override is lifted.
