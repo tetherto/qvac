@@ -780,5 +780,6 @@ function applyFluxImg2ImgDimDefaults (params, prediction, hasInitImages) {
 
 module.exports = ImgStableDiffusion
 module.exports.ImgStableDiffusion = ImgStableDiffusion
+module.exports.VideoStableDiffusion = require('./video')
 module.exports.EsrganUpscaler = EsrganUpscaler
 module.exports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults

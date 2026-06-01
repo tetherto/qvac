@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+#### Restore root `VideoStableDiffusion` export
+
+`VideoStableDiffusion` was dropped from the package root (`index.js`) when the Wan 2.1 I2V bindings were ported, leaving `require('@qvac/diffusion-cpp').VideoStableDiffusion` `undefined` even though `index.d.ts` still declared it as a named export. Re-export it from the barrel so the root named export matches the type declarations. The subpath entry point (`@qvac/diffusion-cpp/video`) was unaffected and continues to work.
+
 ## [0.10.0] - 2026-05-25
 
 ### Changed
