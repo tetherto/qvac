@@ -12001,6 +12001,22 @@
     "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
   },
   {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q6_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 0.8B multimodal model",
+    "quantization": "q6_k",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Vision projector (mmproj) for Qwen 3.5 0.8B",

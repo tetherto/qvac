@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import type { ToolCall, CompletionStats } from '@qvac/sdk'
-import { sdkToolCallsToOpenai } from './translate.js'
+import { sdkToolCallsToOpenai } from './tool-calls.js'
 
 export function responseId (): string {
   return `resp_${randomId()}`

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/rag",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "main": "index.js",
   "scripts": {
     "lint": "standard",
@@ -34,6 +34,10 @@
       "default": "./index.js"
     },
     "./errors": {
+      "types": "./src/errors.d.ts",
+      "default": "./src/errors.js"
+    },
+    "./errors.js": {
       "types": "./src/errors.d.ts",
       "default": "./src/errors.js"
     }

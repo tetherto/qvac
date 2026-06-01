@@ -35,6 +35,7 @@ Below are examples of `qvac.config.*` files. Values marked with `<placeholders>`
       "defaults": { "llm": { "device": "cpu" } }
     }
   ],
+  "bareRuntimeVersion": "<x.y.z>",
   "serve": {
     "models": {
       "<model_alias>": {
@@ -70,6 +71,7 @@ module.exports = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
+  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {
@@ -108,6 +110,7 @@ const config: QvacConfig = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
+  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {
@@ -142,6 +145,7 @@ The following table lists all supported configuration options for `qvac.config.*
 | `registryDownloadMaxRetries` | Maximum retry attempts for registry (P2P) downloads on timeout. | `number` | No | `3` |
 | `registryStreamTimeoutMs` | Timeout in milliseconds for stalled registry (P2P) download streams. Raise on slow or high-latency connections where the default triggers spurious retries. | `number` | No | `60000` |
 | `deviceDefaults` | Override loaded model config for specific devices. First matching pattern wins. Use it to optimize for different hardware. | [`DevicePattern[]`](#devicepattern) | No | — |
+| `bareRuntimeVersion` | Bare runtime version used for native addon ABI verification during bundling (`qvac bundle sdk` / `qvac verify bundle`). When omitted, the bundler auto-detects it from `node_modules` (`bare-runtime`, then `bare`). | `string` | No | Auto-detected |
 | `serve` | Configuration for the [HTTP server](/cli/http-server). | [`ServeConfig`](#serveconfig) | No | — |
 
 ### `DevicePattern`

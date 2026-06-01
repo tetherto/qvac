@@ -390,6 +390,9 @@ async function* processModelResponse(
     ...(responseWithStats.stats?.CacheTokens !== undefined && {
       cacheTokens: responseWithStats.stats.CacheTokens,
     }),
+    ...(responseWithStats.stats?.promptTokens !== undefined && {
+      promptTokens: responseWithStats.stats.promptTokens,
+    }),
     ...(responseWithStats.stats?.generatedTokens !== undefined && {
       generatedTokens: responseWithStats.stats.generatedTokens,
     }),

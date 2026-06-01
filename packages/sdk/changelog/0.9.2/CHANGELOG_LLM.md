@@ -6,7 +6,7 @@ Hotfix patch release. Single-fix patch — no API, behavioral, or model changes.
 
 ---
 
-## 🐞 Fixes
+## Fixes
 
 ### Fix `TypeError: z.xor is not a function` for consumers on zod < 4.3
 
