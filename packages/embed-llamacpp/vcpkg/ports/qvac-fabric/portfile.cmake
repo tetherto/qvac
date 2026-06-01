@@ -1,8 +1,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO zoq/qvac-ext-lib-llama.cpp
+  REPO tetherto/qvac-fabric-llm.cpp
   REF bc85668ffad0394d4973d9e08eb8373871188d02
-  SHA512 0ae829a9d62af533d3803a5a67388fe2d3b6dc39a9b0c80a64f893253a37378365c7b3712ad6f6e1216ee63625f12d0e5b26e2cfaea0f2da1a35e65cb3e17b27
+  SHA512 8e07123e6169ed44d942495ab98f884f407b22b598b5035e0b47bdc372118f63a8fa03beecf6e36cd6482bbae877d8963813f85341f19b285882939c1c27ccee
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
