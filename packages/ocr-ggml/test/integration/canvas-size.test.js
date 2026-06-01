@@ -2,11 +2,10 @@
 
 const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { getImagePath, ensureModelPath } = require('./utils')
 
-const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
-const DESKTOP_TIMEOUT = 600 * 1000 // 10 minutes: dense page is heavy on slow CI runners
-const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
+// 10 minutes: dense page is heavy on slow CI runners (and mobile devices).
+const TEST_TIMEOUT = 600 * 1000
 
 // Regression for QVAC-19340: dense high-resolution pages drove CRAFT detection
 // peak memory to ~13 GB (canvas capped at the 2560 default), OOM-killing the
