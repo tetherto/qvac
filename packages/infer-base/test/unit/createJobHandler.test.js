@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const createJobHandler = require('../../src/utils/createJobHandler')
+const { makeAbortable } = require('../mocks/abortable')
 
 test('createJobHandler - start returns a QvacResponse', t => {
   const job = createJobHandler({ cancel: () => {} })
@@ -221,6 +222,56 @@ test('createJobHandler - startWith fails stale response', async t => {
 
   t.ok(firstError, 'first response should be failed')
   t.is(job.active, custom, 'active should be the custom response')
+})
+
+test('createJobHandler - aborted signal clears active without end()/fail()', async t => {
+  const job = createJobHandler({ cancel: () => {} })
+  const controller = makeAbortable()
+  const response = job.start({ signal: controller.signal })
+
+  t.is(job.active, response, 'active should be the started response')
+
+  controller.abort(new Error('crashed'))
+
+  try {
+    await response.await()
+    t.fail('await should reject')
+  } catch (err) {
+    t.is(err.message, 'crashed', 'await rejects with the abort reason')
+  }
+
+  t.is(job.active, null, 'active should be cleared on abort')
+})
+
+test('createJobHandler - aborted signal does not clobber a newer active response', async t => {
+  const job = createJobHandler({ cancel: () => {} })
+  const controller = makeAbortable()
+  const first = job.start({ signal: controller.signal })
+  first.onError(() => {})
+
+  const second = job.start()
+  t.is(job.active, second, 'active is the new response after stale-replace')
+
+  controller.abort(new Error('late abort'))
+
+  t.is(job.active, second, 'late abort on the stale response must not clear the new active')
+})
+
+test('createJobHandler - already-aborted signal clears active once settled', async t => {
+  const job = createJobHandler({ cancel: () => {} })
+  const controller = makeAbortable()
+  controller.abort(new Error('aborted before start'))
+
+  const response = job.start({ signal: controller.signal })
+
+  try {
+    await response.await()
+    t.fail('await should reject')
+  } catch (err) {
+    t.is(err.message, 'aborted before start', 'await rejects with the abort reason')
+  }
+
+  t.is(job.active, null, 'active should be cleared once the already-aborted response settles')
 })
 
 test('createJobHandler - is exported from package root', t => {
