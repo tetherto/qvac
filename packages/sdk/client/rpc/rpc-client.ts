@@ -101,35 +101,44 @@ async function* iterateWithLifeSignal<T>(
     return;
   }
   if (lifeSignal.aborted) throw lifeSignalAbortError(lifeSignal);
-  while (true) {
-    const nextP = source.next();
-    const result = await new Promise<IteratorResult<T>>((resolve, reject) => {
-      let settled = false;
-      const onAbort = () => {
-        if (settled) return;
-        settled = true;
-        lifeSignal.removeEventListener("abort", onAbort);
-        reject(lifeSignalAbortError(lifeSignal));
-      };
-      lifeSignal.addEventListener("abort", onAbort, { once: true });
-      nextP.then(
-        (value) => {
+  try {
+    while (true) {
+      const nextP = source.next();
+      const result = await new Promise<IteratorResult<T>>((resolve, reject) => {
+        let settled = false;
+        const onAbort = () => {
           if (settled) return;
           settled = true;
           lifeSignal.removeEventListener("abort", onAbort);
-          resolve(value);
-        },
-        (err: unknown) => {
-          if (settled) return;
-          settled = true;
-          lifeSignal.removeEventListener("abort", onAbort);
-          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is
-          reject(err);
-        },
-      );
-    });
-    if (result.done) return;
-    yield result.value;
+          reject(lifeSignalAbortError(lifeSignal));
+        };
+        lifeSignal.addEventListener("abort", onAbort, { once: true });
+        nextP.then(
+          (value) => {
+            if (settled) return;
+            settled = true;
+            lifeSignal.removeEventListener("abort", onAbort);
+            resolve(value);
+          },
+          (err: unknown) => {
+            if (settled) return;
+            settled = true;
+            lifeSignal.removeEventListener("abort", onAbort);
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is
+            reject(err);
+          },
+        );
+      });
+      if (result.done) return;
+      yield result.value;
+    }
+  } finally {
+    // Fire-and-forget cleanup. If the source is suspended on a never-
+    // settling read (worker dead), `.return()` propagates an abrupt
+    // completion through the for-await chain so inner streams get
+    // destroyed. The `.catch` swallows the case where the underlying
+    // stream cannot honour `.return()` cleanly.
+    void source.return?.(undefined).catch(() => {});
   }
 }
 
