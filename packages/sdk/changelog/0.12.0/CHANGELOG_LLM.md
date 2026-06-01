@@ -1,19 +1,12 @@
----
-title: SDK Release Notes — v0.12.x (latest)
-description: Release notes for QVAC SDK v0.12.0.
----
-
-## v0.12.0
-
-### @qvac/sdk
+# QVAC SDK v0.12.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.12.0
 
 This release expands the SDK into new modalities and tightens the Bare distribution story. You can now run vision-language-action inference (SmolVLA), image classification, and text-to-video generation from the same SDK surface that already handles LLMs and diffusion. TTS moves from the ONNX stack to `@qvac/tts-ggml`, Parakeet transcription advances to the 0.6.0 GGUF backend, and a new `@qvac/bare-sdk` package lets Bare workers register only the plugins they need. Tooling consumers get `@qvac/sdk/commands` for bundling and verification, the model registry picks up Gemma 4 and Qwen 3.5/3.6 multimodal constants, and several mobile and delegation fixes land alongside the feature work.
 
-#### Breaking Changes
+## Breaking Changes
 
-##### TTS migrates from ONNX to tts-ggml
+### TTS migrates from ONNX to tts-ggml
 
 The SDK TTS plugin now targets `@qvac/tts-ggml` instead of `@qvac/tts-onnx`. The old multi-file ONNX Chatterbox layout — separate speech encoder, embed tokens, conditional decoder, and language model paths — is replaced by single GGUF constants and a simpler load path.
 
@@ -47,7 +40,7 @@ await loadModel({
 
 New registry constants cover Chatterbox and Supertonic variants in GGUF form (`TTS_S3GEN_*`, `TTS_T3_*`, `TTS_*_SUPERTONIC_*`).
 
-##### Parakeet advances to 0.6.0 GGML
+### Parakeet advances to 0.6.0 GGML
 
 Building on the 0.11.0 single-file GGUF migration, Parakeet now targets `@qvac/transcription-parakeet` 0.6.0. Per-variant `modelType` discriminators and multi-file encoder/decoder/vocab fields are gone — pass a single GGUF constant and the addon detects TDT, CTC, EOU, or Sortformer from metadata.
 
@@ -77,7 +70,7 @@ await loadModel({
 });
 ```
 
-##### `@qvac/bare-sdk` requires explicit plugin registration
+### `@qvac/bare-sdk` requires explicit plugin registration
 
 Bare consumers that previously called `getRPC()` against the full `@qvac/sdk` worker must switch to `@qvac/bare-sdk` and register only the plugins their worker uses. The slim package ships no built-in addon dependencies — unregistered calls raise `WorkerPluginsNotRegisteredError`.
 
@@ -107,7 +100,7 @@ await sdk.loadModel({
 
 Install matching addon packages (`@qvac/translation-nmtcpp`, `@qvac/llm-llamacpp`, etc.) alongside `@qvac/bare-sdk`. `@qvac/sdk` remains the right choice for Node and Expo apps that want the full default worker.
 
-##### CLI bundle/verify delegates to `@qvac/sdk/commands`
+### CLI bundle/verify delegates to `@qvac/sdk/commands`
 
 `@qvac/cli` no longer embeds its own bundle and verify implementations. The commands are thin wrappers around `@qvac/sdk/commands`, and `@qvac/cli` now depends on `@qvac/sdk` directly rather than treating it as a dev-only peer with a runtime semver floor.
 
@@ -138,13 +131,13 @@ await verifyBundle({
 
 CLI publishers must confirm `@qvac/sdk@0.12.0` is on npm and flip `packages/cli/package.json` to `"@qvac/sdk": "^0.12.0"` before publishing `@qvac/cli`.
 
-##### react-native-bare-kit peer widened to ^0.14.0
+### react-native-bare-kit peer widened to ^0.14.0
 
 Mobile consumers should upgrade `react-native-bare-kit` to `^0.14.0` alongside `@qvac/sdk@0.12.0`. Pinning `0.12.x` will fail peer resolution.
 
-#### New APIs
+## New APIs
 
-##### Vision-language-action with SmolVLA
+### Vision-language-action with SmolVLA
 
 Load a SmolVLA model from the registry and run robot action inference with image preprocessing helpers:
 
@@ -181,7 +174,7 @@ const { actions, actionDim, chunkSize } = await vla({
 });
 ```
 
-##### Image classification
+### Image classification
 
 Classify JPEG/PNG buffers or raw RGB bytes with bundled MobileNetV3-Small or a custom GGUF:
 
@@ -197,7 +190,7 @@ const results = await classify({ modelId, image: jpegBytes });
 // → [{ label: "food", confidence: 0.91 }, ...]
 ```
 
-##### Text-to-video generation
+### Text-to-video generation
 
 Generate video frames from text prompts using WAN models:
 
@@ -222,7 +215,7 @@ for await (const tick of run.progressStream) {
 const frames = await run.outputs;
 ```
 
-##### `@qvac/sdk/commands` for bundling and verification
+### `@qvac/sdk/commands` for bundling and verification
 
 Programmatic access to worker bundling and prebuild verification — the same primitives `qvac bundle` and `qvac verify bundle` use:
 
@@ -237,7 +230,7 @@ await verifyBundle({
 });
 ```
 
-##### RAG cancellation detection
+### RAG cancellation detection
 
 Detect cancelled RAG operations without importing `@qvac/rag/errors`:
 
@@ -249,19 +242,19 @@ if (err.code === RAG_ERROR_CODES.OPERATION_CANCELLED) {
 }
 ```
 
-##### Diffusion flash attention toggle
+### Diffusion flash attention toggle
 
 `modelConfig.diffusion_fa` enables per-transformer flash attention on diffusion models (default on as of `@qvac/diffusion-cpp@0.8.0`). The deprecated `flux_flow` prediction mode is removed.
 
-##### Standalone ESRGAN device reporting
+### Standalone ESRGAN device reporting
 
 The standalone upscaler now forwards `device` from load config and exposes `backendDevice` in upscale stats.
 
-##### Expo plugin hoisted SDK resolution
+### Expo plugin hoisted SDK resolution
 
 Expo config plugins resolve `@qvac/sdk` from ancestor `node_modules` directories, fixing monorepo layouts where the SDK is hoisted above the app root.
 
-##### Completion prompt token counts and context overflow
+### Completion prompt token counts and context overflow
 
 LLM completion now surfaces real input token counts in stats and throws a typed `ContextOverflowError` when the prompt exceeds the model context window — including across the Bare RPC boundary:
 
@@ -281,7 +274,7 @@ try {
 }
 ```
 
-#### Bug Fixes and Reliability
+## Bug Fixes and Reliability
 
 - Bare delegated RPC now routes through the model registry instead of ad-hoc connection state.
 - `@qvac/sdk` builds cleanly under both Bun and npm.
@@ -290,11 +283,11 @@ try {
 - SDK `peerDependencies` on Holepunch libraries are removed; CI enforces the expected peer ranges instead.
 - `@qvac/rag` and `@qvac/registry-client` bump to `^0.6.0`.
 
-#### Model Registry
+## Model Registry
 
 The registry sync adds Gemma 4 and Qwen 3.5/3.6 multimodal LLM/VLM constants, expands Bergamot translation pairs, introduces Parakeet 0.6.0 GGUF constants, and replaces ONNX TTS constants with tts-ggml equivalents.
 
-##### Added
+### Added
 
 ```
 GEMMA4_31B_MULTIMODAL_Q4_K_M
@@ -308,7 +301,7 @@ PARAKEET_TDT_0_6B_V3_Q8_0
 (and 60+ more — see models.md)
 ```
 
-##### Updated
+### Updated
 
 ```
 BERGAMOT_EN_BG
