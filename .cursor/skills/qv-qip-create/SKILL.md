@@ -1,6 +1,6 @@
 ---
-name: qv-arch-qip-proposal-create
-description: Guides creation of a Slack Canvas-ready QIP from a clear proposal or a fuzzy idea, including alternatives, consequences, risks, and people to consult before posting. Uses the QIP template and architecture principles as lightweight checks. Use when drafting a QIP, responding to a significance-check recommendation, or invoking /qv-arch-qip-proposal-create.
+name: qv-qip-create
+description: Guides creation of a Slack Canvas-ready QIP from a clear proposal or a fuzzy idea, including alternatives, consequences, risks, and people to consult before posting. Uses the QIP template and architecture principles as lightweight checks. Use when drafting a QIP, responding to a significance-check recommendation, or invoking /qv-qip-create.
 ---
 
 # QIP Proposal Create
@@ -12,14 +12,14 @@ Help an author draft a QIP before posting to Slack Canvas.
 **Use when:**
 
 - The user wants to create a QIP
-- `qv-arch-qip-significance-check` recommended a QIP and the user confirmed
+- `qv-qip-significance-check` recommended a QIP and the user confirmed
 - The user has a fuzzy idea and needs help shaping it
-- User invokes `/qv-arch-qip-proposal-create`
+- User invokes `/qv-qip-create`
 
 **Do NOT use for:**
 
-- Deciding whether a QIP is needed (use `qv-arch-qip-significance-check`)
-- Reviewing an existing QIP for approval readiness (use `qv-arch-qip-proposal-review`)
+- Deciding whether a QIP is needed (use `qv-qip-significance-check`)
+- Reviewing an existing QIP for approval readiness (use `qv-qip-review`)
 
 ## Prerequisites
 
@@ -102,4 +102,4 @@ Author checklist
 
 ## Handoff
 
-If the user asks whether the draft is ready to post, suggest `qv-arch-qip-proposal-review`.
+If the user asks whether the draft is ready to post, suggest `qv-qip-review`.

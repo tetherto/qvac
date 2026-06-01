@@ -99,9 +99,9 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 | Skill | Purpose | Use when |
 |-------|---------|----------|
-| [`qv-arch-qip-significance-check`](../qv-arch-qip-significance-check/SKILL.md) | Conservatively checks whether a change clearly needs a QIP before deeper implementation. | Planning or implementing contract, cross-package, delivery, or principle-impacting work; PR review. **Auto** |
-| [`qv-arch-qip-proposal-create`](../qv-arch-qip-proposal-create/SKILL.md) | Drafts a Slack Canvas-ready QIP from a clear proposal or fuzzy idea. | Creating a QIP, shaping alternatives and consequences, naming people to consult. **Auto** |
-| [`qv-arch-qip-proposal-review`](../qv-arch-qip-proposal-review/SKILL.md) | Reviews a QIP for approval readiness, risks, principle conflicts, and consultation coverage. | Reviewing a QIP draft before posting or approval. **Auto** |
+| [`qv-qip-significance-check`](../qv-qip-significance-check/SKILL.md) | Conservatively checks whether a change clearly needs a QIP before deeper implementation. | Planning or implementing contract, cross-package, delivery, or principle-impacting work; PR review. **Auto** |
+| [`qv-qip-create`](../qv-qip-create/SKILL.md) | Drafts a Slack Canvas-ready QIP from a clear proposal or fuzzy idea. | Creating a QIP, shaping alternatives and consequences, naming people to consult. **Auto** |
+| [`qv-qip-review`](../qv-qip-review/SKILL.md) | Reviews a QIP for approval readiness, risks, principle conflicts, and consultation coverage. | Reviewing a QIP draft before posting or approval. **Auto** |
 
 Rule nudge: `.cursor/rules/qip-significance.mdc`
 
@@ -127,7 +127,7 @@ Rule nudge: `.cursor/rules/qip-significance.mdc`
 | Registry Autobase/HyperDB help | `qv-registry-autobase-patterns` |
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
-| Check if a QIP is needed | `qv-arch-qip-significance-check` |
-| Draft a QIP | `qv-arch-qip-proposal-create` |
-| Review a QIP | `qv-arch-qip-proposal-review` |
+| Check if a QIP is needed | `qv-qip-significance-check` |
+| Draft a QIP | `qv-qip-create` |
+| Review a QIP | `qv-qip-review` |
 | List all skills | `qv-skill-list` (this file) |

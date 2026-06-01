@@ -1,15 +1,15 @@
 ---
-description: When planning, implementing, or reviewing changes that clearly match architectural significance triggers, invoke qv-arch-qip-significance-check before continuing. Prefer false negatives over false positives.
+description: When planning, implementing, or reviewing changes that clearly match architectural significance triggers, invoke qv-qip-significance-check before continuing. Prefer false negatives over false positives.
 alwaysApply: false
 ---
 
 # QIP significance nudge
 
-This rule does not define the workflow. It only nudges agents to invoke `qv-arch-qip-significance-check` when appropriate.
+This rule does not define the workflow. It only nudges agents to invoke `qv-qip-significance-check` when appropriate.
 
 ## When to invoke
 
-During planning, implementation, or PR review, invoke `qv-arch-qip-significance-check` when a change clearly affects stable contracts, package boundaries, native/platform support, runtime/transport/storage choices, published NFRs, architecture principles, or delivery architecture in CI.
+During planning, implementation, or PR review, invoke `qv-qip-significance-check` when a change clearly affects stable contracts, package boundaries, native/platform support, runtime/transport/storage choices, published NFRs, architecture principles, or delivery architecture in CI.
 
 ## When not to invoke
 

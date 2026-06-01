@@ -1,6 +1,6 @@
 ---
-name: qv-arch-qip-proposal-review
-description: Reviews a QIP draft or Slack Canvas proposal for approval readiness, missing risks, architecture principle conflicts, and consultation coverage. Produces blockers, clarifying questions, suggested edits, and optional Slack-ready review comments. Use when reviewing a QIP or invoking /qv-arch-qip-proposal-review.
+name: qv-qip-review
+description: Reviews a QIP draft or Slack Canvas proposal for approval readiness, missing risks, architecture principle conflicts, and consultation coverage. Produces blockers, clarifying questions, suggested edits, and optional Slack-ready review comments. Use when reviewing a QIP or invoking /qv-qip-review.
 ---
 
 # QIP Proposal Review
@@ -14,12 +14,12 @@ Review a QIP for approval readiness without substituting for human approvers.
 - Reviewing a QIP draft before posting to Slack Canvas
 - Reviewing a QIP as Lead / Architect, Head of QVAC, or CTO support
 - The author asks whether the proposal is ready
-- User invokes `/qv-arch-qip-proposal-review`
+- User invokes `/qv-qip-review`
 
 **Do NOT use for:**
 
-- Creating the first draft (use `qv-arch-qip-proposal-create`)
-- Deciding whether a QIP is needed at all (use `qv-arch-qip-significance-check`)
+- Creating the first draft (use `qv-qip-create`)
+- Deciding whether a QIP is needed at all (use `qv-qip-significance-check`)
 
 ## Inputs
 
@@ -31,7 +31,7 @@ Accept any of:
 
 ## Review workflow
 
-1. Read [../qv-arch-qip-proposal-create/references/qip-template.md](../qv-arch-qip-proposal-create/references/qip-template.md)
+1. Read [../qv-qip-create/references/qip-template.md](../qv-qip-create/references/qip-template.md)
 2. Apply the review criteria below
 3. Check system fit against `docs/architecture/ARCHITECTURE.md` when the proposal touches runtime, package, plugin, registry, or deployment boundaries
 4. Separate blockers from clarifying questions and nice-to-have improvements
