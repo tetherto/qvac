@@ -1,12 +1,43 @@
-# Markdown content negotiation — serve the .md sibling of a page when the
-# client asks for it via `Accept: text/markdown`. Home maps to `/index.md`;
-# every other page `/foo/bar/` maps to `/foo/bar.md`. Sevalla's Pretty URLs
-# feature 301-normalizes incoming paths to the trailing-slash form before
-# these rules run, so only the with-slash variant is matched here.
-/                  /index.md       200!   Header:Accept=text/markdown
-/:slug/            /:slug.md       200!   Header:Accept=text/markdown
-# /*/              /:splat.md      301!   Header:Accept=text/markdown
-# /*               /:splat.md      301!   Header:Accept=text/markdown
+# Markdown content negotiation — serve the `.md` sibling of a page when
+# the client requests it via `Accept: text/markdown`. Home maps to
+# `/index.md`; every other page `/a/b/.../z/` maps to `/a/b/.../z.md`.
+#
+# Three properties of these rules and why they are required:
+#
+#  1. `!` (force) — the source path has an underlying static file (the
+#     HTML page) that would otherwise be served; the force flag is what
+#     lets the rule fire at all.
+#
+#  2. `303` (See Other) — the rule MUST be a 3xx redirect, not a 2xx
+#     rewrite. With a 2xx rewrite the response body for the `.md` content
+#     gets cached by Cloudflare under the page's URL key (Cloudflare does
+#     not honour `Vary: Accept`), poisoning the cache for subsequent
+#     HTML clients. A redirect is fetched anew by the client, so the
+#     Markdown response is cached under the `.md` URL key and the HTML
+#     response stays cached under the page URL key. Among 3xx codes,
+#     `303` is the semantically correct match for content negotiation
+#     ("the representation you asked for lives at another URI").
+#
+#  3. One rule per nesting depth, no splat. `_redirects` placeholders
+#     (`:name`) match a single path segment; covering the site requires
+#     one rule per depth. The splat form (`/* /:splat.md`) appears
+#     simpler but empirically crashes the Sevalla edge worker (HTTP 1101)
+#     when combined with `Header:Accept` — bug in their parser. Current
+#     site max depth is 3 segments; one extra level is included as
+#     headroom.
+#
+# Loop safety: the source pattern always ends in `/`, the rewrite target
+# always ends in `.md` (no slash). Those two URL spaces are disjoint, so
+# the client's follow-up `GET /foo.md` does not re-match the rule. This
+# only holds because all incoming page requests carry a trailing slash
+# (Sevalla's Pretty URLs normalizes bare paths first) AND because Pretty
+# URLs skips paths whose final segment contains a dot — so `/foo.md` is
+# never normalized into `/foo.md/`, which would otherwise loop.
+/                       /index.md                  303!   Header:Accept=text/markdown
+/:a/                    /:a.md                     303!   Header:Accept=text/markdown
+/:a/:b/                 /:a/:b.md                  303!   Header:Accept=text/markdown
+/:a/:b/:c/              /:a/:b/:c.md               303!   Header:Accept=text/markdown
+/:a/:b/:c/:d/           /:a/:b/:c/:d.md            303!   Header:Accept=text/markdown
 
 # Sevalla CDN does not resolve directory-to-index.html for path segments
 # containing dots (e.g. `v0.7.x`). The `:version` placeholder matches a
