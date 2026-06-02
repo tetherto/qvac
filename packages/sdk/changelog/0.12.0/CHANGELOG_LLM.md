@@ -100,37 +100,6 @@ await sdk.loadModel({
 
 Install matching addon packages (`@qvac/translation-nmtcpp`, `@qvac/llm-llamacpp`, etc.) alongside `@qvac/bare-sdk`. `@qvac/sdk` remains the right choice for Node and Expo apps that want the full default worker.
 
-### CLI bundle/verify delegates to `@qvac/sdk/commands`
-
-`@qvac/cli` no longer embeds its own bundle and verify implementations. The commands are thin wrappers around `@qvac/sdk/commands`, and `@qvac/cli` now depends on `@qvac/sdk` directly rather than treating it as a dev-only peer with a runtime semver floor.
-
-**Before:**
-
-```typescript
-// packages/cli served with its own bundle logic and a runtime MIN_SDK_VERSION check
-const MIN_SDK_VERSION = "0.11.0";
-```
-
-**After:**
-
-```typescript
-import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
-
-await bundleSdk({
-  projectRoot: process.cwd(),
-  configPath: "./qvac.config.json",
-  quiet: true,
-});
-
-await verifyBundle({
-  projectRoot: process.cwd(),
-  addonsSource: "./qvac/worker.bundle.js",
-  hosts: ["android-arm64", "ios-arm64"],
-});
-```
-
-CLI publishers must confirm `@qvac/sdk@0.12.0` is on npm and flip `packages/cli/package.json` to `"@qvac/sdk": "^0.12.0"` before publishing `@qvac/cli`.
-
 ### react-native-bare-kit peer widened to ^0.14.0
 
 Mobile consumers should upgrade `react-native-bare-kit` to `^0.14.0` alongside `@qvac/sdk@0.12.0`. Pinning `0.12.x` will fail peer resolution.

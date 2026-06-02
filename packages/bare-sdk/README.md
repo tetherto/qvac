@@ -59,6 +59,10 @@ const result = await sdk.translate({
 
 Use `@qvac/sdk` for Node and Expo apps that want the full default worker. Use `@qvac/bare-sdk` when you assemble your own worker on Bare.
 
+## Release history
+
+`@qvac/bare-sdk` releases in lockstep with `@qvac/sdk` from the same source tree. For release notes and version history, see the [`@qvac/sdk` changelog](../sdk/CHANGELOG.md).
+
 ## Migrating from `@qvac/sdk`
 
 Existing Bare consumers running a custom worker entry can switch packages without changing call sites. Two edits:
