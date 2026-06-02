@@ -71,6 +71,38 @@ function validateRunInput (input, hparams) {
   if (input.noise !== undefined && input.noise !== null && !(input.noise instanceof Float32Array)) {
     throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.noise must be a Float32Array when provided' })
   }
+
+  if (hparams && hparams.stateInputMode === 'continuous' &&
+      Number.isInteger(hparams.maxStateDim)) {
+    if (input.state.length === 0 || input.state.length > hparams.maxStateDim) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `state.length (${input.state.length}) must be > 0 and <= hparams.maxStateDim (${hparams.maxStateDim})`
+      })
+    }
+  }
+
+  if (hparams && hparams.stateInputMode === 'discrete') {
+    if (Number.isInteger(hparams.numCameras) && input.images.length !== hparams.numCameras) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `pi05 requires exactly ${hparams.numCameras} camera images (got ${input.images.length})`
+      })
+    }
+    if (Number.isInteger(hparams.tokenizerMaxLength) && input.tokens.length !== hparams.tokenizerMaxLength) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `pi05 requires tokens.length === ${hparams.tokenizerMaxLength} (got ${input.tokens.length})`
+      })
+    }
+    if (!input.noise || !(input.noise instanceof Float32Array) || input.noise.length === 0) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'pi05 requires input.noise (Float32Array) — flow matching needs a noise prior at t=1'
+      })
+    }
+  }
+
   return { imgWidth, imgHeight }
 }
 
@@ -101,9 +133,11 @@ class VlaModel {
     this._backendName = null
     this._hasActiveResponse = false
     this._nativeLoggerActive = false
+    this._packageName = '@qvac/vla-ggml'
+    this._packageVersion = require('./package.json').version
     // Per-run accumulator filled by _onAddonEvent; null between runs.
     this._pending = null
-    this.state = { configLoaded: false }
+    this.state = { configLoaded: false, weightsLoaded: false }
   }
 
   _connectNativeLogger () {
@@ -179,6 +213,7 @@ class VlaModel {
       if (this.state.configLoaded) return
       await this._load(backend)
       this.state.configLoaded = true
+      this.state.weightsLoaded = true
     })
   }
 
@@ -187,6 +222,12 @@ class VlaModel {
     this._connectNativeLogger()
     const ggufPath = pickPrimaryGgufPath(this._files)
     if (!fs.existsSync(ggufPath)) {
+      // _connectNativeLogger has already registered a JS callback with
+      // the native side; without unregistering, that callback pins the
+      // Bare event loop and prevents the process from exiting. Release
+      // before throwing so a `new VlaModel(...).load()` against a
+      // non-existent file leaves no event-loop references behind.
+      this._releaseNativeLogger()
       throw new QvacErrorAddonVla({ code: ERR_CODES.MODEL_NOT_FOUND, adds: ggufPath })
     }
     try {
@@ -214,6 +255,8 @@ class VlaModel {
         try { binding.destroyInstance(this._handle) } catch (_) {}
         this._handle = null
       }
+      // Same logger-leak guard as the missing-file path above.
+      this._releaseNativeLogger()
       throw new QvacErrorAddonVla({ code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS, adds: loadError.message, cause: loadError })
     }
     this.logger.info('Model load completed successfully')
@@ -327,6 +370,7 @@ class VlaModel {
       this._hparams = null
       this._backendName = null
       this.state.configLoaded = false
+      this.state.weightsLoaded = false
     })
   }
 

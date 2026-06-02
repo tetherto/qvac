@@ -1,0 +1,18 @@
+# Pinned environment for the π₀.₅ PyTorch parity oracle
+# (see scripts/dump_pi05_activations.py and scripts/oracle_fixtures.json)
+#
+# Install with:
+#   pip install --user -r requirements-pi05-oracle.txt
+#
+# These are the exact versions pulled in when the oracle dump was generated
+# against the lerobot/pi05_base checkpoint (revision pinned in
+# oracle_fixtures.json). Bump as a single transaction — the oracle file must
+# be regenerated whenever any of these change, since drift here invalidates
+# the parity contract.
+lerobot==0.5.2
+torch==2.10.0
+transformers==5.3.0
+safetensors==0.7.0
+huggingface_hub==1.10.1
+numpy==2.2.6
+accelerate==1.13.0

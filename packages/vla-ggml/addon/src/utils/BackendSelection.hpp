@@ -14,6 +14,12 @@ namespace vla_backend_selection {
 //   "Mali-G715"       -> 0
 int parseAdrenoModel(const std::string& description);
 
+// Discover and register ggml backend plugins (Vulkan / Metal / OpenCL / …).
+// Thread-safe (std::call_once); safe to call from multiple model constructors.
+// `backendsDir` is the absolute path to the prebuilds folder; BACKENDS_SUBDIR
+// (set by CMake) is appended automatically on plugin-based targets.
+void loadBackendsOnce(const std::string& backendsDir);
+
 // Pick the best GPU device available, applying the Adreno gate:
 //
 //   Adreno >= 800 + OpenCL -> accept (preferred Adreno path — Qualcomm /
