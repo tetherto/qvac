@@ -1,4 +1,5 @@
 declare module "hyperswarm" {
+  import { type Buffer } from "bare-buffer";
   import { EventEmitter } from "events";
 
   export interface SwarmOptions {

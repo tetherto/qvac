@@ -213,7 +213,7 @@
     "@qvac/tts-ggml": "^0.1.4",
     "@qvac/vla-ggml": "^0.2.0",
     "bare-abort-controller": "^1.0.0",
-    "bare-crypto": "^1.13.4",
+    "bare-crypto": "^1.15.0",
     "bare-events": "^2.8.0",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
