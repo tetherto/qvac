@@ -426,8 +426,8 @@ export const completionWithWhitespace = createCompletionTest(
   { validation: "contains-all", contains: ["24"] },
 );
 
-export const completionJsonInPrompt = createCompletionTest(
-  "completion-json-in-prompt",
+export const completionJsonFormat = createCompletionTest(
+  "completion-json-format",
   {
     history: [
       {
@@ -654,7 +654,7 @@ export const completionTests = [
   completionConcurrentRequests,
   completionCountInWords,
   completionWithWhitespace,
-  completionJsonInPrompt,
+  completionJsonFormat,
   completionCodeGeneration,
   completionConversationContext,
   completionSingleWord,
