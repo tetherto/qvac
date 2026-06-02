@@ -55,6 +55,31 @@ export interface OcrGgmlParams {
   nThreads?: number
   /** Directory holding ggml backend shared libraries. Default: `<package>/prebuilds`. */
   backendsDir?: string
+  /**
+   * Requested ggml backend device. Default: `'cpu'`.
+   *   - `'cpu'`: run inference on the CPU backend (always available).
+   *   - `'vulkan'`: opt in to GPU inference on a Vulkan-capable device. When no
+   *     Vulkan device is present the pipeline transparently falls back to CPU
+   *     and records the reason (see {@link BackendInfo.fallbackReason}).
+   * Requires the `libggml-vulkan` backend shared library to be present in
+   * `backendsDir`.
+   */
+  backendDevice?: 'cpu' | 'vulkan'
+}
+
+/**
+ * Backend device the C++ pipeline resolved for inference, as reported by
+ * {@link OcrGgml.getBackendInfo}.
+ */
+export interface BackendInfo {
+  /** Requested device (`'cpu'` | `'vulkan'`). */
+  requested: string
+  /** Resolved device type (`'CPU'` | `'GPU'` | `'IGPU'` | `'ACCEL'`). */
+  backendDevice: string
+  /** ggml backend/device name of the resolved device (e.g. `'Vulkan0'`, `'CPU'`). */
+  backendName: string
+  /** Empty when the requested device was used; otherwise why it fell back to CPU. */
+  fallbackReason: string
 }
 
 export interface OcrGgmlArgs {
@@ -106,6 +131,13 @@ export interface RuntimeStats {
   recognitionTime: number
   /** Number of detected boxes (aligned + unaligned). */
   numBoxes: number
+  /**
+   * Whether inference ran on a GPU (Vulkan) device (`1`) or the CPU (`0`).
+   * `RuntimeStats` values are numeric only, so this flag is the in-stats signal
+   * for the selected backend; richer string detail (name, fallback reason) is
+   * available via {@link OcrGgml.getBackendInfo}.
+   */
+  backendIsGpu: number
 }
 
 export class OcrGgml {
@@ -115,6 +147,8 @@ export class OcrGgml {
   run(input: OcrGgmlRunInput): Promise<QvacResponse<InferredText[]>>
   unload(): Promise<void>
   destroy(): Promise<void>
+  /** Backend device resolved for inference; `null` before `load()` / after `unload()`. */
+  getBackendInfo(): BackendInfo | null
 
   static readonly inferenceManagerConfig: { noAdditionalDownload: boolean }
   static getModelKey(): string
