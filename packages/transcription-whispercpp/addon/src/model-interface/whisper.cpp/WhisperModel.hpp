@@ -172,7 +172,10 @@ private:
   int64_t gpu_mem_free_mb_ = -1;
   std::string backend_name_ = "CPU";
   std::string gpu_device_description_;
-  void captureActiveBackendInfo();
+  // Populates the active-backend fields above from the ggml device registry,
+  // using the EXACT use_gpu / gpu_device the whisper context was created with
+  // (post Adreno->OpenCL preference), so the report matches whisper's pick.
+  void captureActiveBackendInfo(bool useGpu, int gpuDeviceIndex);
 
   // Runtime stats accumulated over a job (reset() clears these).
   int64_t totalSamples_ = 0;

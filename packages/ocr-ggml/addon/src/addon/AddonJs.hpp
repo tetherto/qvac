@@ -160,6 +160,11 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       optMagRatio) {
     config.magRatio = static_cast<float>(optMagRatio->as<double>(env));
   }
+  if (auto optCanvasSize =
+          args1.getOptionalProperty<js::Number>(env, "canvasSize");
+      optCanvasSize) {
+    config.canvasSize = static_cast<int>(optCanvasSize->as<double>(env));
+  }
   if (auto optAngles =
           args1.getOptionalProperty<js::Array>(env, "defaultRotationAngles");
       optAngles) {

@@ -74,7 +74,7 @@ jobs:
         # QVAC-17830: `label` disambiguates matrix entries that share
         # the same `<platform>-<arch>` tuple so every entry produces a
         # uniquely-named perf-report artifact. Without this, the two
-        # `linux-x64` entries (CPU-only vs GPU runner) and the two
+        # `linux-x64` entries (ubuntu 22 vs 24 GPU runners) and the two
         # `linux-arm64` entries (ubuntu 22 vs 24) collided on upload
         # and `actions/download-artifact` silently dropped one of each,
         # hiding GPU data in the combined report.
@@ -82,15 +82,14 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
-            no_gpu: 'true'
-            label: linux-x64-cpu
+            runner: qvac-ubuntu2204-x64-gpu
+            label: linux-x64-u22-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
             runner: qvac-ubuntu2404-x64-gpu
             timeout_minutes: 480
-            label: linux-x64-gpu
+            label: linux-x64-u24-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
