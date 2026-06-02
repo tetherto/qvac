@@ -19,7 +19,7 @@ try {
   console.log("Loading diffusion model...");
   const modelId = await loadModel({
     modelSrc,
-    modelType: "diffusion",
+    modelType: "sdcpp-generation",
   });
   console.log(`Model loaded: ${modelId}`);
 

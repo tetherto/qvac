@@ -30,7 +30,7 @@ try {
   console.log("Loading FLUX.2 [klein] split-layout model...");
   const modelId = await loadModel({
     modelSrc: diffusionModelSrc,
-    modelType: "diffusion",
+    modelType: "sdcpp-generation",
     modelConfig: {
       device: "gpu",
       threads: 4,

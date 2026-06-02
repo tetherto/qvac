@@ -43,7 +43,6 @@ try {
   console.log("Loading model...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
-    modelType: "whisper",
     modelConfig: {
       vadModelSrc: VAD_SILERO_5_1_2,
       audio_format: "f32le",

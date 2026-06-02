@@ -8,7 +8,6 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: AFRICAN_4B_TRANSLATION_Q4_K_M,
-    modelType: "llm",
     onProgress: (progress) => {
       console.log(progress);
     },
@@ -33,7 +32,7 @@ try {
     text: engText,
     from: "en",
     to: "swh_Latn",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     stream: false,
   });
 

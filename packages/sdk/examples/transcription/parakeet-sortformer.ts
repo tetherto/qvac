@@ -43,7 +43,7 @@ try {
 
   const sfModelId = await loadModel({
     modelSrc: sortformerSrc,
-    modelType: "parakeet",
+    modelType: "parakeet-transcription",
   });
 
   const diarization = await transcribe({
@@ -58,7 +58,6 @@ try {
 
   const tdtModelId = await loadModel({
     modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
-    modelType: "parakeet",
   });
 
   const pcm = readPcm(audioFilePath);

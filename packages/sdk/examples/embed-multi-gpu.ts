@@ -17,7 +17,6 @@ import { loadModel, embed, unloadModel, EMBEDDINGGEMMA_300M_Q8_0 } from "@qvac/s
 try {
   const modelId = await loadModel({
     modelSrc: EMBEDDINGGEMMA_300M_Q8_0,
-    modelType: "llamacpp-embedding",
     modelConfig: {
       splitMode: "layer",
       tensorSplit: "1,1",

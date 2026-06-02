@@ -11,7 +11,6 @@ function cosineSimilarity(vecA: number[], vecB: number[]) {
 try {
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    modelType: "embeddings",
     onProgress: (progress) => {
       console.log(progress);
     },

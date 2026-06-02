@@ -8,7 +8,6 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: BERGAMOT_EN_ES,
-    modelType: "nmt",
     modelConfig: {
       engine: "Bergamot",
       from: "en",
@@ -25,7 +24,7 @@ try {
   const streamResult = translate({
     modelId,
     text,
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     stream: true,
   });
 

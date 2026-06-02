@@ -32,7 +32,6 @@ try {
   console.log("Loading SD 2.1 + ESRGAN upscaler...");
   const modelId = await loadModel({
     modelSrc: SD_V2_1_1B_Q8_0,
-    modelType: "diffusion",
     modelConfig: {
       prediction: "v",
       upscaler: {

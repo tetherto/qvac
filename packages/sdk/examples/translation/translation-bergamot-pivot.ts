@@ -19,7 +19,6 @@ try {
     // Load the primary model (Spanish → English) with pivot configuration
     const modelId = await loadModel({
         modelSrc: BERGAMOT_ES_EN, // Primary model: Spanish → English
-        modelType: "nmt",
         modelConfig: {
             engine: "Bergamot",
             from: "es",
@@ -60,7 +59,7 @@ try {
     const result = translate({
         modelId,
         text: spanishText,
-        modelType: "nmt",
+        modelType: "nmtcpp-translation",
         stream: false,
     });
 

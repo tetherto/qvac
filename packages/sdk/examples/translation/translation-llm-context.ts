@@ -8,7 +8,6 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: SALAMANDRATA_2B_INST_Q8,
-    modelType: "llm",
     onProgress: (progress) => {
       console.log(progress);
     },
@@ -23,7 +22,7 @@ try {
     text: engText,
     from: "en",
     to: "es",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     context: "Use formal language, letter for financial institution",
     stream: false,
   });

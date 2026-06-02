@@ -13,7 +13,7 @@ console.log(`Loading diffusion model...`);
 // FLUX.2 models require companion LLM + VAE models
 const modelId = await loadModel({
   modelSrc,
-  modelType: "diffusion",
+  modelType: "sdcpp-generation",
   modelConfig: { device: "gpu", threads: 4, llmModelSrc: QWEN3_4B_Q4_K_M, vaeModelSrc: FLUX_2_KLEIN_4B_VAE },
   onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
 });

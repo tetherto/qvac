@@ -30,7 +30,7 @@ let modelId: string | undefined;
 try {
   modelId = await loadModel({
     modelSrc,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: { ctx_size: 4096, tools: true },
     onProgress: (progress) =>
       console.log(`Loading: ${progress.percentage.toFixed(1)}%`),

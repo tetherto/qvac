@@ -27,7 +27,6 @@ try {
   console.log("🚀 Loading OCR model...");
   const modelId = await loadModel({
     modelSrc: OCR_LATIN_RECOGNIZER_1,
-    modelType: "ocr",
     modelConfig: {
       langList: ["en"],
       useGPU: true,

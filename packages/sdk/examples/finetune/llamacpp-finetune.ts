@@ -30,7 +30,6 @@ async function readProgress(
 try {
   modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelType: "llm",
     modelConfig: {
       device: "gpu",
       ctx_size: 512,

@@ -35,7 +35,7 @@ try {
   console.log("Loading Parakeet CTC model...");
   const modelId = await loadModel({
     modelSrc: parakeetModelSrc,
-    modelType: "parakeet",
+    modelType: "parakeet-transcription",
     onProgress: (progress) => {
       console.log(`Download progress: ${progress.percentage.toFixed(1)}%`);
     },

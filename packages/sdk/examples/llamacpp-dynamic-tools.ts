@@ -138,7 +138,6 @@ async function chatTurn({ modelId, kvCache, history, tools }: ChatTurnParams) {
 async function main() {
   const modelId = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 4096,
       tools: true,

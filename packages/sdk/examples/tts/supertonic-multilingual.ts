@@ -17,8 +17,7 @@ const SUPERTONIC_SAMPLE_RATE = 44100;
 
 try {
   const modelId = await loadModel({
-    modelSrc: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0.src,
-    modelType: "tts",
+    modelSrc: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
     modelConfig: {
       ttsEngine: "supertonic",
       language: "es",

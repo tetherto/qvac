@@ -19,7 +19,7 @@ const modelSrc = process.argv[2] ?? LLAMA_3_2_1B_INST_Q4_0;
 try {
   const modelId = await loadModel({
     modelSrc,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: {
       "split-mode": "layer",
       "tensor-split": "1,1",
