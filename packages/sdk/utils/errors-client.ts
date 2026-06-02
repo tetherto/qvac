@@ -175,6 +175,39 @@ export class RPCInitTimeoutError extends QvacErrorBase {
   }
 }
 
+export class WorkerCrashedError extends QvacErrorBase {
+  public readonly exitCode: number | null;
+  public readonly exitSignal: NodeJS.Signals | null;
+
+  constructor(
+    exitCode: number | null,
+    exitSignal: NodeJS.Signals | null,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.WORKER_CRASHED,
+        [String(exitCode), String(exitSignal)],
+        cause,
+      ),
+    );
+    this.exitCode = exitCode;
+    this.exitSignal = exitSignal;
+  }
+}
+
+export class WorkerShutdownError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Provider/Delegation Errors ==============
 
 export class ProviderStartFailedError extends QvacErrorBase {
