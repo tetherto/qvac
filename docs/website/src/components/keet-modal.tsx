@@ -2,19 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTheme } from 'next-themes';
 import { QRCodeSVG } from 'qrcode.react';
 import { Check, Copy, X } from 'lucide-react';
 
-// QVAC brand tokens, inlined so the modal looks identical to the main
-// site (https://qvac.tether.io) regardless of the docs light/dark theme.
-const AQUA = '#16E3C1';
-const DARK = '#171817';
-const CARD_GRADIENT = 'linear-gradient(-10deg, #16e3c1 0%, #171717 20%)';
-const GLOW = '0 0 10px 0 #16e3c1';
-
+// Copy is kept verbatim from the main site (https://qvac.tether.io) modal.
+// `title` is only used for the dialog's accessible label — the modal itself
+// renders no heading/description, it is purely a container for the two cards.
 const KEET = {
   title: 'Join our Keet Room!',
-  subtitle: 'In order to get there, please follow the steps below',
   card1: {
     step: 'Step 1',
     title: 'Download Keet App!',
@@ -29,11 +25,18 @@ const KEET = {
     subtext: 'Scan the Invite QR Code',
     copyText: 'or copy/paste this link into your Keet app',
     roomLink:
-      'pear://keet/nfo35rbknsh35m184tmww7s4ssjh1hftiysx8yqreyi5njwsknuxs47nwhsbzt6wijoxfzmi6a8fh7b49gun3qxea3mumixnti8spizeysthyxdm968t6zof93yqpgyygb39rmoobki7fo7rh5hod71map4gayedt3qiwhkjakycqnfa5kswn58mtt8qg',
+      'pear://keet/nfo61f4e6zc5t1ifncyh9yp7s5eynbruz5bs95oc5ufn3e79entmhix74miigc8iz9iawfrb7pzk3am8eotxw8wat7554etbn7d6j4ho84b1zqnb63z7hxq1ubt5w4wi4kpq3mdgpijcnaifnhm7sy4cfxqqoyedpnb5qg1majcggy4s9s91fgtg3khgw',
   },
 } as const;
 
+// Card 1 carries the Keet logo artwork, so it stays a dark branded card in
+// both themes; its accent is the bright brand teal.
+const TEAL = '#16E3C1';
+const DARK = '#171817';
+
 function KeetModalContent({ onClose }: { onClose: () => void }) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme !== 'light';
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopyLink = useCallback(async () => {
@@ -46,9 +49,24 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
+  // Theme-aware palette for the container and the (themed) second card.
+  const containerBg = isDark
+    ? 'radial-gradient(80% 80% at 10% 140%, #16E3C1, #171817)'
+    : 'linear-gradient(140deg, #ffffff 40%, #ecf1ee 100%)';
+  const containerShadow = isDark
+    ? '0 0 10px 0 #16E3C1'
+    : '0 10px 40px 0 rgba(0, 0, 0, 0.15)';
+  const accent = isDark ? TEAL : '#00AF92';
+  const card2Bg = isDark ? DARK : '#ffffff';
+  const card2Shadow = isDark
+    ? '0 0 10px 0 #16E3C1'
+    : '0 0 0 1px rgba(0, 175, 146, 0.25)';
+  const card2TitleColor = isDark ? '#ffffff' : DARK;
+  const closeColor = isDark ? '#ffffff' : DARK;
+
   return (
     <div
-      className="fixed inset-0 z-[999] overflow-y-auto bg-black/70 backdrop-blur-[12px]"
+      className="fixed inset-0 z-[999] overflow-y-auto bg-black/60 backdrop-blur-[12px]"
       onClick={onClose}
     >
       <div className="flex min-h-full items-center justify-center p-4">
@@ -57,40 +75,33 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
           aria-modal="true"
           aria-label={KEET.title}
           onClick={(e) => e.stopPropagation()}
-          className="relative flex w-full max-w-[600px] flex-col items-center gap-6 rounded-[16px] px-6 py-10 text-center sm:px-[50px]"
-          style={{ background: CARD_GRADIENT, boxShadow: GLOW }}
+          className="relative flex w-full max-w-[600px] flex-col items-center rounded-[16px] px-6 py-[40px] sm:px-[40px]"
+          style={{ background: containerBg, boxShadow: containerShadow }}
         >
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full text-white transition-opacity hover:opacity-70"
+            className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full transition-opacity hover:opacity-70"
+            style={{ color: closeColor }}
           >
             <X className="size-6" />
           </button>
 
-          <div className="flex flex-col items-center gap-2">
-            <h2 className="text-[30px] font-bold leading-[33px] text-white">
-              {KEET.title}
-            </h2>
-            <p
-              className="text-[18px] font-normal leading-[22px] sm:text-[24px] sm:leading-[30px]"
-              style={{ color: AQUA }}
-            >
-              {KEET.subtitle}
-            </p>
-          </div>
-
           <div className="flex w-full flex-col items-stretch justify-center gap-4 sm:flex-row">
-            {/* Step 1 — download the Keet app */}
+            {/* Step 1 — download the Keet app (dark branded card with the Keet logo) */}
             <div
-              className="flex min-h-[290px] flex-1 flex-col justify-between rounded-[16px] p-4 text-center sm:max-w-[240px]"
-              style={{ background: DARK, boxShadow: GLOW }}
+              className="flex min-h-[300px] flex-1 flex-col justify-between rounded-[16px] bg-cover bg-center p-4 text-center sm:max-w-[240px]"
+              style={{
+                backgroundImage: 'url(/keet.svg)',
+                backgroundColor: DARK,
+                boxShadow: '0 0 10px 0 #16E3C1',
+              }}
             >
               <div className="flex flex-col items-center gap-2">
                 <h3
                   className="text-[26px] font-bold leading-[33px]"
-                  style={{ color: AQUA }}
+                  style={{ color: TEAL }}
                 >
                   {KEET.card1.step}
                 </h3>
@@ -98,8 +109,8 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
                   {KEET.card1.title}
                 </h4>
                 <p
-                  className="text-[15px] leading-[17px]"
-                  style={{ color: AQUA }}
+                  className="text-[15px] font-medium leading-[18px]"
+                  style={{ color: TEAL }}
                 >
                   {KEET.card1.subtext}
                 </p>
@@ -110,43 +121,54 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-[20px] border px-5 py-[5px] text-[18px] leading-[26px] no-underline transition-opacity hover:opacity-70 hover:no-underline"
-                  style={{ borderColor: AQUA, color: AQUA, background: DARK }}
+                  style={{ borderColor: TEAL, color: TEAL, background: DARK }}
                 >
                   {KEET.card1.downloadText}
                 </a>
               </div>
             </div>
 
-            {/* Step 2 — join the room (scan QR or copy link) */}
+            {/* Step 2 — join the room. The QR is always black on white. */}
             <div
-              className="flex min-h-[290px] flex-1 flex-col items-center gap-2 rounded-[16px] p-4 text-center sm:max-w-[240px]"
-              style={{ background: DARK, boxShadow: GLOW }}
+              className="flex min-h-[300px] flex-1 flex-col items-center gap-2 rounded-[16px] p-4 text-center sm:max-w-[240px]"
+              style={{ background: card2Bg, boxShadow: card2Shadow }}
             >
               <h3
                 className="text-[26px] font-bold leading-[33px]"
-                style={{ color: AQUA }}
+                style={{ color: accent }}
               >
                 {KEET.card2.step}
               </h3>
-              <h4 className="text-[19px] font-bold leading-[22px] text-white">
+              <h4
+                className="text-[19px] font-bold leading-[22px]"
+                style={{ color: card2TitleColor }}
+              >
                 {KEET.card2.title}
               </h4>
-              <p className="text-[15px] leading-[17px]" style={{ color: AQUA }}>
+              <p className="text-[15px] leading-[17px]" style={{ color: accent }}>
                 {KEET.card2.subtext}
               </p>
-              <QRCodeSVG
-                value={KEET.card2.roomLink}
-                size={120}
-                bgColor={DARK}
-                fgColor={AQUA}
-              />
-              <p className="text-[14px] leading-[16px]" style={{ color: AQUA }}>
+              <div className="rounded-[8px] bg-white p-2">
+                <QRCodeSVG
+                  value={KEET.card2.roomLink}
+                  size={112}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                  imageSettings={{
+                    src: '/keet-logo.svg',
+                    height: 28,
+                    width: 28,
+                    excavate: true,
+                  }}
+                />
+              </div>
+              <p className="text-[14px] leading-[16px]" style={{ color: accent }}>
                 {KEET.card2.copyText}
               </p>
               <div className="flex w-[85%] items-center justify-between gap-2">
                 <p
                   className="truncate text-[9px] leading-[14px]"
-                  style={{ color: AQUA }}
+                  style={{ color: accent }}
                   title={KEET.card2.roomLink}
                 >
                   {KEET.card2.roomLink}
@@ -156,7 +178,7 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
                   onClick={handleCopyLink}
                   aria-label="Copy room link"
                   className="flex size-5 shrink-0 items-center justify-center transition-opacity hover:opacity-70"
-                  style={{ color: AQUA }}
+                  style={{ color: accent }}
                 >
                   {isCopied ? (
                     <Check className="size-4" />
