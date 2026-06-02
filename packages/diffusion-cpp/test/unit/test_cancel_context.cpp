@@ -126,11 +126,11 @@ TEST_F(SdCancelContextTest, CancelDuringGenerationThrowsJobCancelled) {
     model->process(std::any(job));
     FAIL() << "process() should have thrown on cancel";
   } catch (const qvac_errors::StatusError &e) {
-    // Typed cancel surfaced as general_error::Cancelled so JS can
-    // discriminate it from real internal failures via the status code
-    // instead of string-matching the exception message.
+    // Typed cancel surfaced via makeCancelledError() as the diffusion-specific
+    // Diffusion/Cancelled status so JS can discriminate it from real internal
+    // failures via the status code instead of string-matching the message.
     EXPECT_STREQ(e.what(), "Job cancelled");
-    EXPECT_EQ(e.codeString(), "[ General :: Cancelled ]");
+    EXPECT_EQ(e.codeString(), "[ Diffusion :: Cancelled ]");
   } catch (...) {
     cancelThread.join();
     FAIL() << "Unexpected exception type (expected StatusError)";

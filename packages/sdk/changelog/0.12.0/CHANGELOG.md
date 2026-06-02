@@ -5,7 +5,6 @@ Release Date: 2026-05-29
 ## ✨ Features
 
 - Migrate SDK parakeet transcription to 0.6.0 GGML. (see PR [#2184](https://github.com/tetherto/qvac/pull/2184)) - See [breaking changes](./breaking.md)
-- Rewrite CLI bundle/verify as thin wrappers around @qvac/sdk/commands. (see PR [#2261](https://github.com/tetherto/qvac/pull/2261)) - See [breaking changes](./breaking.md)
 - Add @qvac/bare-sdk with explicit Bare plugin registration. (see PR [#2292](https://github.com/tetherto/qvac/pull/2292)) - See [breaking changes](./breaking.md)
 
 ## 🔌 API
