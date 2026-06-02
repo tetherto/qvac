@@ -3,7 +3,7 @@ import type QvacLogger from '@qvac/logging'
 import type { SamplerMethod, ScheduleType, SdConfig, CacheMode } from './index'
 
 /** Supported video-generation modes for `VideoStableDiffusion.run()`. */
-export type VideoMode = 'txt2vid' | 'img2vid' | 'flf2vid'
+export type VideoMode = 'txt2vid' | 'img2vid'
 
 /**
  * File paths for a Wan video model context.
@@ -24,6 +24,13 @@ export interface VideoDiffusionFiles {
   t5Xxl?: string
   /** Absolute path to the Wan VAE. */
   vae?: string
+  /**
+   * Absolute path to `clip_vision_h.safetensors` (OpenCLIP ViT-H/14).
+   * Required for `img2vid`; omit for pure `txt2vid`. Dispatching an `img2vid`
+   * job without this file throws from `run()` (the native path cannot build
+   * the `img_emb` projection without ViT-H/14).
+   */
+  clipVision?: string
   /**
    * Optional ESRGAN weights path for native ctx parity; video jobs do not apply
    * ESRGAN. Omit and the addon passes an empty string.
@@ -47,10 +54,8 @@ export interface VideoStableDiffusionArgs {
  *
  * Mode is required (no auto-detect). Every mode enforces its own input
  * invariants both in the JS wrapper and in C++ `SdModel::processVideo()`:
- *   - `txt2vid` rejects `init_image` and `end_image`.
- *   - `img2vid` requires `init_image`, rejects `end_image`.
- *   - `flf2vid` requires both `init_image` (first frame) and `end_image`
- *     (last frame).
+ *   - `txt2vid` rejects `init_image`.
+ *   - `img2vid` requires `init_image`.
  */
 export interface VideoGenerationParams {
   /** Required. Selects the generation branch. */
@@ -59,7 +64,7 @@ export interface VideoGenerationParams {
   negative_prompt?: string
 
   /**
-   * Video dimensions (multiples of 8). Default `480 x 832` portrait
+   * Video dimensions (multiples of 16). Default `480 x 832` portrait
    * (phone-screen friendly). Wan 2.1 T2V 1.3B is trained on `832 x 480`
    * landscape and handles both orientations equally well -- override
    * either field to switch.
@@ -108,14 +113,12 @@ export interface VideoGenerationParams {
   moe_boundary?: number
 
   // ── Conditioning inputs ───────────────────────────────────────────────
-  /** img2vid / flf2vid denoise strength (0.0 to 1.0). */
+  /** img2vid denoise strength (0.0 to 1.0). */
   strength?: number
   /** VACE control-frame guidance strength (0.0 to 1.0). */
   vace_strength?: number
-  /** First frame (PNG/JPEG bytes). Required for img2vid / flf2vid. */
+  /** First frame (PNG/JPEG bytes). Required for img2vid. */
   init_image?: Uint8Array
-  /** flf2vid only: last frame (PNG/JPEG bytes). */
-  end_image?: Uint8Array
   /** Optional VACE guidance frames (one PNG/JPEG per frame). */
   control_frames?: Uint8Array[]
 

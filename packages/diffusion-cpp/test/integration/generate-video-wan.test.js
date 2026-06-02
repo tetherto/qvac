@@ -1,10 +1,13 @@
 'use strict'
 
-// Wan 2.1 text-to-video end-to-end test.
+// Wan 2.1 text-to-video and image-to-video end-to-end tests.
 //
-// This test drives a real generate_video() call through the native addon. The three
-// Wan 2.1 model files (~8 GB total) are fetched on demand via ensureModel
-// into test/model/ on first run.
+// Two smoke tests are included:
+//   1. txt2vid — Wan 2.1 T2V 1.3B (fp16, ~3 GB)
+//   2. img2vid — Wan 2.1 I2V 14B Q4_K_M GGUF (~8.4 GB) + clip_vision_h (~630 MB)
+//
+// Both fetch their model files on demand via ensureModel into test/model/ on
+// first run.  Shared files (VAE, T5-XXL) are downloaded once and reused.
 //
 // Optional env vars:
 //   WAN_MODELS_DIR  - reuse an existing models directory (e.g. the one
@@ -28,7 +31,14 @@ const { detectPlatform, setupJsLogger, ensureModelPath } = require('./utils')
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const isDarwin = os.platform() === 'darwin'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
+// Skip Wan tests on mobile, on any CPU-only runner (NO_GPU), and on macOS.
+// The Wan 14B I2V model OOMs the Mac mini M4 Metal GPU during diffusion compute
+// (kIOGPUCommandBufferCallbackErrorOutOfMemory), even at 256x256, so darwin is
+// excluded entirely. Wan tests continue to run on Linux/Windows GPU runners.
 const skip = isMobile || isDarwin || noGpu
+
+// Log skip status for CI visibility
+console.log('[Wan Video Tests] Platform:', os.platform(), 'Arch:', os.arch(), 'NO_GPU:', noGpu, '→ Skip:', skip)
 
 const platform = detectPlatform()
 
@@ -47,6 +57,32 @@ const WAN_FILES = [
     key: 't5Xxl',
     name: 'umt5_xxl_fp16.safetensors',
     url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors'
+  }
+]
+
+// Additional model files required for the I2V smoke test.
+// VAE and T5-XXL are shared with T2V; they appear here so the I2V test is
+// self-contained and can run independently of the T2V test.
+const WAN_I2V_FILES = [
+  {
+    key: 'model',
+    name: 'wan2.1-i2v-14b-480p-Q4_K_M.gguf',
+    url: 'https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_M.gguf'
+  },
+  {
+    key: 'vae',
+    name: 'wan_2.1_vae.safetensors',
+    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors'
+  },
+  {
+    key: 't5Xxl',
+    name: 'umt5_xxl_fp16.safetensors',
+    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors'
+  },
+  {
+    key: 'clipVision',
+    name: 'clip_vision_h.safetensors',
+    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors'
   }
 ]
 
@@ -115,6 +151,16 @@ const SMOKE_HEIGHT = 240
 const SMOKE_FPS = 16
 const SMOKE_SEED = 7
 const SMOKE_PROMPT = 'a red fox running through snow at dusk'
+
+// I2V smoke-test configuration.  2 denoising steps at 512×512 (the init_image
+// resolution, which will be inferred from the image header when width/height
+// are omitted) keeps wall-clock comfortably under 5 minutes on a GPU runner.
+const I2V_SMOKE_FRAMES = 5
+const I2V_SMOKE_STEPS = 2
+const I2V_SMOKE_FPS = 16
+const I2V_SMOKE_SEED = 42
+const I2V_SMOKE_PROMPT = 'a scientist walking through a sunlit laboratory'
+const I2V_INIT_IMAGE_PATH = path.resolve(__dirname, '../../assets/von-neumann-colorized.jpg')
 
 test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
   { timeout: 600000, skip },
@@ -273,6 +319,168 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
       console.log(` Gen time        : ${(genMs / 1000).toFixed(1)}s`)
       console.log(` Progress ticks  : ${progressTicks.length}`)
       console.log(` String payloads : ${stringDataPayloads.length}`)
+      console.log(` AVI size        : ${avi ? avi.length : 0} bytes`)
+      console.log(` Frame markers   : ${sniff ? sniff.frameMarkers : 'n/a'}`)
+      console.log('='.repeat(60))
+    } finally {
+      console.log('\n=== Cleanup ===')
+      await model.unload()
+      try { binding.releaseLogger() } catch (_) {}
+      console.log('Done.')
+    }
+  }
+)
+
+test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
+  { timeout: 900000, skip },
+  async (t) => {
+    setupJsLogger(binding)
+
+    console.log('\n' + '='.repeat(60))
+    console.log('WAN 2.1 I2V — INTEGRATION SMOKE')
+    console.log('='.repeat(60))
+    console.log(` Platform   : ${platform}`)
+    console.log(` Frames     : ${I2V_SMOKE_FRAMES} @ ${I2V_SMOKE_FPS}fps`)
+    console.log(' Size       : inferred from init_image (512x512)')
+    console.log(` Steps      : ${I2V_SMOKE_STEPS}`)
+    console.log(` Seed       : ${I2V_SMOKE_SEED}`)
+    console.log(` Init image : ${I2V_INIT_IMAGE_PATH}`)
+    console.log(` Device     : ${(proc.env && proc.env.WAN_DEVICE) || 'gpu'}`)
+
+    if (!fs.existsSync(I2V_INIT_IMAGE_PATH)) {
+      t.fail(`Init image not found: ${I2V_INIT_IMAGE_PATH}`)
+      return
+    }
+    const initImage = fs.readFileSync(I2V_INIT_IMAGE_PATH)
+    console.log(`Loaded init image: ${initImage.length} bytes`)
+
+    console.log('\n=== Ensuring Wan 2.1 I2V model files ===')
+    const overrideDir = proc.env && proc.env.WAN_MODELS_DIR
+    const resolvedFiles = {}
+    for (const entry of WAN_I2V_FILES) {
+      const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
+      let modelPath
+      if (overridePath && fs.existsSync(overridePath)) {
+        console.log(`[wan-i2v] Using override: ${overridePath}`)
+        modelPath = overridePath
+      } else {
+        modelPath = await ensureModelPath({
+          modelName: entry.name,
+          downloadUrl: entry.url
+        })
+      }
+      resolvedFiles[entry.key] = modelPath
+      t.ok(fs.existsSync(modelPath), `Wan I2V file present: ${entry.name}`)
+    }
+    const resolvedModelDir = path.dirname(resolvedFiles.model)
+
+    const model = new VideoStableDiffusion({
+      files: {
+        model: resolvedFiles.model,
+        vae: resolvedFiles.vae,
+        t5Xxl: resolvedFiles.t5Xxl,
+        clipVision: resolvedFiles.clipVision
+      },
+      config: {
+        threads: 4,
+        device: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
+        diffusion_fa: true,
+        offload_to_cpu: true,
+        vae_tiling: true,
+        verbosity: 2
+      },
+      logger: console,
+      opts: { stats: true }
+    })
+
+    let avi = null
+    const progressTicks = []
+
+    try {
+      console.log('\n=== Loading Wan 2.1 I2V 14B Q4_K_M ===')
+      const tLoad = Date.now()
+      await model.load()
+      const loadMs = Date.now() - tLoad
+      console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
+      t.ok(loadMs < 480000, `Wan I2V model loaded within 480s (took ${(loadMs / 1000).toFixed(1)}s)`)
+      t.is(model.getState().configLoaded, true, 'state.configLoaded flips to true after load()')
+
+      console.log('\n=== Generating I2V video ===')
+      const tGen = Date.now()
+
+      const response = await model.run({
+        mode: 'img2vid',
+        prompt: I2V_SMOKE_PROMPT,
+        init_image: initImage,
+        video_frames: I2V_SMOKE_FRAMES,
+        fps: I2V_SMOKE_FPS,
+        steps: I2V_SMOKE_STEPS,
+        cfg_scale: 6.0,
+        flow_shift: 3.0,
+        seed: I2V_SMOKE_SEED
+      })
+
+      await response
+        .onUpdate((data) => {
+          if (data instanceof Uint8Array) {
+            avi = data
+          } else if (typeof data === 'string') {
+            try {
+              const tick = JSON.parse(data)
+              if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
+                progressTicks.push(tick)
+              }
+            } catch (_) { /* not JSON */ }
+          }
+        })
+        .await()
+
+      const genMs = Date.now() - tGen
+      console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
+
+      // ── Progress assertions ─────────────────────────────────────────────
+      t.ok(progressTicks.length > 0,
+        `Received progress ticks (got ${progressTicks.length})`)
+      t.ok(progressTicks.every((p) =>
+        Number.isFinite(p.step) && Number.isFinite(p.total) && p.total >= 1
+      ), 'every progress tick carries finite step + total >= 1')
+
+      // ── AVI buffer assertions ──────────────────────────────────────────
+      t.ok(avi instanceof Uint8Array, 'received an AVI Uint8Array on the output stream')
+      t.ok(avi && avi.length > 1024, `AVI buffer is >1KiB (${avi ? avi.length : 0} bytes)`)
+
+      const sniff = sniffAvi(avi)
+      t.is(sniff && sniff.error, null, 'AVI starts with the RIFF/AVI magic')
+      if (sniff && !sniff.error) {
+        t.ok(sniff.hdrlList, 'hdrl LIST chunk follows the AVI marker at offset 12')
+        t.ok(sniff.hasIdx1, 'AVI contains an idx1 (frame index) chunk')
+        t.ok(
+          sniff.frameMarkers >= I2V_SMOKE_FRAMES &&
+          sniff.frameMarkers <= I2V_SMOKE_FRAMES * 2,
+          `AVI carries ${I2V_SMOKE_FRAMES}..${I2V_SMOKE_FRAMES * 2} '00dc' markers ` +
+          `(got ${sniff.frameMarkers})`
+        )
+        t.ok(sniff.riffSizeMatchesBuffer,
+          'RIFF size header matches the actual buffer length (no trailing data)')
+      }
+
+      // Save artifact for manual inspection.
+      try {
+        const artifactDir = path.resolve(resolvedModelDir, '../output')
+        fs.mkdirSync(artifactDir, { recursive: true })
+        const outPath = path.join(artifactDir, `wan-i2v-smoke-seed${I2V_SMOKE_SEED}.avi`)
+        fs.writeFileSync(outPath, avi)
+        console.log(`\nSaved → ${outPath}`)
+      } catch (err) {
+        console.log(`Could not save AVI artifact: ${err.message}`)
+      }
+
+      console.log('\n' + '='.repeat(60))
+      console.log('I2V TEST SUMMARY')
+      console.log('='.repeat(60))
+      console.log(` Load time       : ${(loadMs / 1000).toFixed(1)}s`)
+      console.log(` Gen time        : ${(genMs / 1000).toFixed(1)}s`)
+      console.log(` Progress ticks  : ${progressTicks.length}`)
       console.log(` AVI size        : ${avi ? avi.length : 0} bytes`)
       console.log(` Frame markers   : ${sniff ? sniff.frameMarkers : 'n/a'}`)
       console.log('='.repeat(60))
