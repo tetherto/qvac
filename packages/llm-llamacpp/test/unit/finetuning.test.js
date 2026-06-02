@@ -442,10 +442,12 @@ test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent infer
 
   model.addon.runJob.callsFake(() => true)
   const inferResponse = await model._runInternal([{ role: 'user', content: 'Hello' }])
+  let inferenceFinished = false
+  inferResponse.onFinish(() => { inferenceFinished = true })
 
   model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0 }, null)
   t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should reset after consuming stale TPS')
-  t.is(inferResponse.getStatus(), 'running', 'inference must still be running after stale TPS was swallowed')
+  t.absent(inferenceFinished, 'inference must still be running after stale TPS was swallowed')
 
   model._addonOutputCallback(null, 'Output', 'answer', null)
   model._addonOutputCallback(null, 'Output', { TPS: 50.0, tokens: 5 }, null)
