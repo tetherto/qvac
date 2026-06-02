@@ -28,6 +28,14 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
       toolDialect?: ToolDialect;
       resourceKey?: string;
       stream?: boolean;
+      // When set, assert the model actually emitted a structured tool call with
+      // this function name and these argument keys — not just that it returned
+      // some text. The default path below only validates the text string, which
+      // silently passes even when the tool name or arguments are wrong.
+      expectedToolCall?: {
+        name: string;
+        argKeys?: string[];
+      };
     };
     const resourceKey = p.resourceKey ?? (p.toolsMode === "dynamic" ? "tools-dynamic" : "tools");
     const toolsModelId = await this.resources.ensureLoaded(resourceKey);
@@ -44,6 +52,12 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
       const text = await result.text;
       const toolCalls = result.toolCalls ? await result.toolCalls : undefined;
 
+      // Shape-asserting path: when a test declares expectedToolCall, verify the
+      // structured tool_call (name + argument keys) rather than the text blob.
+      if (p.expectedToolCall) {
+        return this.validateToolCallShape(toolCalls, p.expectedToolCall);
+      }
+
       const resultData =
         text ||
         (toolCalls && toolCalls.length > 0 ? "tool call made" : "no response");
@@ -53,5 +67,43 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Tools test failed: ${errorMsg}` };
     }
+  }
+
+  private validateToolCallShape(
+    toolCalls:
+      | Array<{ id?: string; name?: string; arguments?: Record<string, unknown> }>
+      | undefined,
+    expected: { name: string; argKeys?: string[] },
+  ): TestResult {
+    if (!toolCalls || toolCalls.length === 0) {
+      return {
+        passed: false,
+        output: `Expected a tool call named '${expected.name}' but the model returned no tool calls`,
+      };
+    }
+
+    const match = toolCalls.find((c) => c.name === expected.name);
+    if (!match) {
+      const got = toolCalls.map((c) => c.name ?? "<unnamed>").join(", ");
+      return {
+        passed: false,
+        output: `Expected tool call '${expected.name}', got: [${got}]`,
+      };
+    }
+
+    const args = match.arguments ?? {};
+    for (const key of expected.argKeys ?? []) {
+      if (!(key in args)) {
+        return {
+          passed: false,
+          output: `Tool call '${expected.name}' missing argument '${key}'. Got args: ${JSON.stringify(args)}`,
+        };
+      }
+    }
+
+    return {
+      passed: true,
+      output: `Tool call '${expected.name}' present with args: ${JSON.stringify(args)}`,
+    };
   }
 }

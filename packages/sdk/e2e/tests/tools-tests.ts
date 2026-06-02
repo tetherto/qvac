@@ -25,6 +25,13 @@ const createToolsTest = (
     toolDialect?: ToolDialect;
     resourceKey?: string;
     suites?: string[];
+    // When set, the executor asserts the model emitted a structured tool_call
+    // with this function name (and, optionally, these argument keys) instead of
+    // only checking that some text came back.
+    expectedToolCall?: {
+      name: string;
+      argKeys?: string[];
+    };
   } = {},
 ): TestDefinition => {
   const expectation = options.expectation ?? {
@@ -42,6 +49,7 @@ const createToolsTest = (
       ...(options.toolsMode && { toolsMode: options.toolsMode }),
       ...(options.toolDialect && { toolDialect: options.toolDialect }),
       ...(options.resourceKey && { resourceKey: options.resourceKey }),
+      ...(options.expectedToolCall && { expectedToolCall: options.expectedToolCall }),
     },
     expectation,
     ...(options.suites && { suites: options.suites }),
@@ -82,7 +90,13 @@ export const toolsSimpleFunction = createToolsTest(
       },
     },
   ],
-  { suites: ["smoke"] },
+  {
+    suites: ["smoke"],
+    expectedToolCall: {
+      name: "convert_temperature",
+      argKeys: ["value", "from_unit", "to_unit"],
+    },
+  },
 );
 
 export const toolsSimpleFunctionDynamic = createToolsTest(
@@ -145,7 +159,13 @@ export const toolsMultipleFunctions = createToolsTest(
       },
     },
   ],
-  { suites: ["smoke"] },
+  {
+    suites: ["smoke"],
+    expectedToolCall: {
+      name: "get_weather",
+      argKeys: ["location"],
+    },
+  },
 );
 
 // Add remaining ~40 tools tests as simplified placeholders
