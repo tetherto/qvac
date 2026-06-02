@@ -142,6 +142,9 @@ function runVlmCell (modelKey, mmprojKey) {
         try {
           const r = await runOne(inference, getMediaPath(item.image), item.prompt)
           const m = parseAddonLog(tap.text())
+          const st = r.stats || {}
+          // vision-encode is parsed from native stderr host-side (aggregate.js); decode
+          // TPS/TTFT come from response.stats (the addon doesn't print eval-time lines).
           emitRow({
             cell, model: modelKey, mmproj: mmprojKey, device,
             task: item.task, id: item.id, metric: item.metric, gold: item.gold,
@@ -149,11 +152,10 @@ function runVlmCell (modelKey, mmprojKey) {
             ms: r.ms,
             vision_encode_ms: m.visionEncodeMs != null ? m.visionEncodeMs : null,
             vision_slices: m.visionSlices != null ? m.visionSlices : null,
-            prompt_eval_ms: m.promptEvalMs != null ? m.promptEvalMs : null,
-            decode_ms: m.decodeMs != null ? m.decodeMs : null,
-            decode_tps: m.decodeTps != null ? m.decodeTps : null,
-            prompt_tokens: m.promptTokens != null ? m.promptTokens : null,
-            decode_tokens: m.decodeTokens != null ? m.decodeTokens : null
+            decode_tps: m.decodeTps != null ? m.decodeTps : (st.TPS != null ? st.TPS : null),
+            ttft_ms: st.TTFT != null ? st.TTFT : null,
+            gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
+            prompt_tokens: st.promptTokens != null ? st.promptTokens : null
           })
           ok++
         } catch (e) {

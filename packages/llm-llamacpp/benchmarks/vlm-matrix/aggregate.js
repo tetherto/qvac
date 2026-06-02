@@ -79,14 +79,40 @@ function parseArgs (argv) {
   }
   return out
 }
+// llama.cpp/mtmd print these on native stderr (captured by `2>&1 | tee`), NOT via the
+// JS logger — so we attribute the timing lines that precede each [VLMROW] to that row.
+const VISION_RE = /image (?:slice )?encoded in\s+(\d+(?:\.\d+)?)\s*ms/i
+const PROMPT_RE = /prompt eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+tokens\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i
+const EVAL_RE = /(?<!prompt )eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+(?:tokens|runs)\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i
+const ROW_RE = /\[VLMROW\](.*?)\[\/VLMROW\]/
+
 function readRows (files) {
   const rows = []
-  const re = /\[VLMROW\](.*?)\[\/VLMROW\]/g
+  const fresh = () => ({ encodeMs: 0, slices: 0, promptEvalMs: null, decodeMs: null, decodeTps: null })
   for (const f of files) {
     let txt = ''
     try { txt = fs.readFileSync(f, 'utf-8') } catch (_) { continue }
-    let m
-    while ((m = re.exec(txt))) { try { rows.push(JSON.parse(m[1])) } catch (_) {} }
+    let pend = fresh()
+    for (const line of txt.split(/\r?\n/)) {
+      let m
+      if ((m = line.match(VISION_RE))) { pend.encodeMs += Number(m[1]); pend.slices++ }
+      else if ((m = line.match(PROMPT_RE))) { pend.promptEvalMs = Number(m[1]) }
+      else if ((m = line.match(EVAL_RE))) { pend.decodeMs = Number(m[1]); pend.decodeTps = Number(m[3]) }
+      const rm = line.match(ROW_RE)
+      if (rm) {
+        try {
+          const row = JSON.parse(rm[1])
+          if (!row.error) {
+            if (pend.slices) { row.vision_encode_ms = pend.encodeMs; row.vision_slices = pend.slices }
+            if (pend.promptEvalMs != null) row.prompt_eval_ms = pend.promptEvalMs
+            if (pend.decodeMs != null) row.decode_ms = pend.decodeMs
+            if (pend.decodeTps != null) row.decode_tps = pend.decodeTps
+          }
+          rows.push(row)
+        } catch (_) {}
+        pend = fresh()
+      }
+    }
   }
   return rows
 }
@@ -124,7 +150,7 @@ function build (rows, title) {
   L.push('')
   // Speed — mmproj/vision-encode time is the headline metric for Q8 vs f16
   L.push('### Speed (mmproj vision-encode is the headline metric)\n')
-  L.push('| Config | n | err | **mmproj enc (ms)** | tiles | prompt-eval (ms) | decode TPS | wall (ms) |')
+  L.push('| Config | n | err | **mmproj enc (ms)** | tiles | TTFT (ms) | decode TPS | wall (ms) |')
   L.push('|---|---|---|---|---|---|---|---|')
   for (const k of keys) {
     const rs = byKey[k]
@@ -132,11 +158,11 @@ function build (rows, title) {
     const errs = rs.length - okRows.length
     const ve = mean(okRows.map(r => r.vision_encode_ms).filter(v => v != null))
     const sl = mean(okRows.map(r => r.vision_slices).filter(v => v != null))
-    const pe = mean(okRows.map(r => r.prompt_eval_ms).filter(v => v != null))
+    const tt = mean(okRows.map(r => r.ttft_ms).filter(v => v != null))
     const dt = mean(okRows.map(r => r.decode_tps).filter(v => v != null))
     const wall = mean(okRows.map(r => r.ms).filter(v => v != null))
     const [cell, dev] = k.split('|')
-    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${okRows.length} | ${errs} | ${fmtNum(ve, 1)} | ${fmtNum(sl, 1)} | ${fmtNum(pe, 0)} | ${fmtNum(dt, 1)} | ${fmtNum(wall, 0)} |`)
+    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${okRows.length} | ${errs} | ${fmtNum(ve, 1)} | ${fmtNum(sl, 1)} | ${fmtNum(tt, 0)} | ${fmtNum(dt, 1)} | ${fmtNum(wall, 0)} |`)
   }
   L.push('')
   // The headline of the whole exercise: mmproj Q8 vs f16 vision-encode delta.
