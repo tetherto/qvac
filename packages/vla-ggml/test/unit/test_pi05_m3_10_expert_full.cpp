@@ -13,13 +13,12 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -78,7 +77,8 @@ qvac_lib_infer_vla_ggml::Pi05ExpertBlockWeights
 loadExpertBlock(struct ggml_context* ctx, int i) {
   qvac_lib_infer_vla_ggml::Pi05ExpertBlockWeights bw{};
   const std::string base = "expert.blk." + std::to_string(i);
-  bw.pre_attn_ada_w = mustGet(ctx, (base + ".pre_attn_norm.ada.weight").c_str());
+  bw.pre_attn_ada_w =
+      mustGet(ctx, (base + ".pre_attn_norm.ada.weight").c_str());
   bw.pre_attn_ada_b = mustGet(ctx, (base + ".pre_attn_norm.ada.bias").c_str());
   bw.pre_ffw_ada_w = mustGet(ctx, (base + ".pre_ffw_norm.ada.weight").c_str());
   bw.pre_ffw_ada_b = mustGet(ctx, (base + ".pre_ffw_norm.ada.bias").c_str());
@@ -125,18 +125,16 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
       activations.readF32("vlm.kv_cache_full.keys");
   const std::vector<float> kv_vals_all =
       activations.readF32("vlm.kv_cache_full.values");
-  const size_t per_layer =
-      static_cast<size_t>(PREFIX_LEN_FULL) * EXPERT_N_KV_HEADS *
-      EXPERT_HEAD_DIM;
-  ASSERT_EQ(kv_keys_all.size(),
-            static_cast<size_t>(EXPERT_N_LAYERS) * per_layer);
-  ASSERT_EQ(kv_vals_all.size(),
-            static_cast<size_t>(EXPERT_N_LAYERS) * per_layer);
+  const size_t per_layer = static_cast<size_t>(PREFIX_LEN_FULL) *
+                           EXPERT_N_KV_HEADS * EXPERT_HEAD_DIM;
+  ASSERT_EQ(
+      kv_keys_all.size(), static_cast<size_t>(EXPERT_N_LAYERS) * per_layer);
+  ASSERT_EQ(
+      kv_vals_all.size(), static_cast<size_t>(EXPERT_N_LAYERS) * per_layer);
 
   // Slice each layer's KV to VALID_PREFIX_LEN rows.
-  const size_t per_layer_valid =
-      static_cast<size_t>(VALID_PREFIX_LEN) * EXPERT_N_KV_HEADS *
-      EXPERT_HEAD_DIM;
+  const size_t per_layer_valid = static_cast<size_t>(VALID_PREFIX_LEN) *
+                                 EXPERT_N_KV_HEADS * EXPERT_HEAD_DIM;
   std::vector<std::vector<float>> k_slices(EXPERT_N_LAYERS);
   std::vector<std::vector<float>> v_slices(EXPERT_N_LAYERS);
   for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
@@ -144,10 +142,8 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
     v_slices[L].resize(per_layer_valid);
     const float* k_src = kv_keys_all.data() + L * per_layer;
     const float* v_src = kv_vals_all.data() + L * per_layer;
-    std::memcpy(k_slices[L].data(), k_src,
-                per_layer_valid * sizeof(float));
-    std::memcpy(v_slices[L].data(), v_src,
-                per_layer_valid * sizeof(float));
+    std::memcpy(k_slices[L].data(), k_src, per_layer_valid * sizeof(float));
+    std::memcpy(v_slices[L].data(), v_src, per_layer_valid * sizeof(float));
   }
 
   // ── 2. GGUF weights. ──────────────────────────────────────────────────
@@ -208,15 +204,19 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
   std::vector<struct ggml_tensor*> cached_v_t(EXPERT_N_LAYERS);
   for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
     cached_k_t[L] = ggml_new_tensor_3d(
-        ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+        ctx_g,
+        GGML_TYPE_F32,
+        EXPERT_HEAD_DIM,
+        VALID_PREFIX_LEN,
         EXPERT_N_KV_HEADS);
     cached_v_t[L] = ggml_new_tensor_3d(
-        ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+        ctx_g,
+        GGML_TYPE_F32,
+        EXPERT_HEAD_DIM,
+        VALID_PREFIX_LEN,
         EXPERT_N_KV_HEADS);
-    ggml_set_name(cached_k_t[L],
-                  ("in.cached_k_" + std::to_string(L)).c_str());
-    ggml_set_name(cached_v_t[L],
-                  ("in.cached_v_" + std::to_string(L)).c_str());
+    ggml_set_name(cached_k_t[L], ("in.cached_k_" + std::to_string(L)).c_str());
+    ggml_set_name(cached_v_t[L], ("in.cached_v_" + std::to_string(L)).c_str());
   }
 
   // action_in_proj inside the graph.
@@ -227,12 +227,25 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
 
   using qvac_lib_infer_vla_ggml::pi05BuildExpertOdeStepGraph;
   auto outs = pi05BuildExpertOdeStepGraph(
-      ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond_t,
-      blocks, final_norm_ada_w, final_norm_ada_b,
-      action_out_w, action_out_b,
-      EXPERT_HIDDEN, EXPERT_N_HEADS, EXPERT_N_KV_HEADS,
-      EXPERT_HEAD_DIM, VALID_PREFIX_LEN, N_ACT,
-      EXPERT_RMS_EPS, EXPERT_ROPE_BASE);
+      ctx_g,
+      x_exp_t,
+      act_pos_t,
+      cached_k_t,
+      cached_v_t,
+      cond_t,
+      blocks,
+      final_norm_ada_w,
+      final_norm_ada_b,
+      action_out_w,
+      action_out_b,
+      EXPERT_HIDDEN,
+      EXPERT_N_HEADS,
+      EXPERT_N_KV_HEADS,
+      EXPERT_HEAD_DIM,
+      VALID_PREFIX_LEN,
+      N_ACT,
+      EXPERT_RMS_EPS,
+      EXPERT_ROPE_BASE);
   ASSERT_NE(outs.final_out, nullptr);
   ASSERT_NE(outs.v_t, nullptr);
 
@@ -240,8 +253,8 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
   ggml_build_forward_expand(gf, outs.final_out);
   ggml_build_forward_expand(gf, outs.v_t);
 
-  ggml_gallocr_t allocr = ggml_gallocr_new(
-      ggml_backend_get_default_buffer_type(cpu_backend));
+  ggml_gallocr_t allocr =
+      ggml_gallocr_new(ggml_backend_get_default_buffer_type(cpu_backend));
   ASSERT_NE(allocr, nullptr);
   ASSERT_TRUE(ggml_gallocr_alloc_graph(allocr, gf));
 
@@ -250,26 +263,35 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
   for (int i = 0; i < N_ACT; ++i) {
     act_pos_data[i] = VALID_PREFIX_LEN + i;
   }
-  ggml_backend_tensor_set(noise_t, noise.data(), 0,
-                          noise.size() * sizeof(float));
-  ggml_backend_tensor_set(act_pos_t, act_pos_data.data(), 0,
-                          act_pos_data.size() * sizeof(int32_t));
-  ggml_backend_tensor_set(cond_t, cond_data.data(), 0,
-                          cond_data.size() * sizeof(float));
+  ggml_backend_tensor_set(
+      noise_t, noise.data(), 0, noise.size() * sizeof(float));
+  ggml_backend_tensor_set(
+      act_pos_t, act_pos_data.data(), 0, act_pos_data.size() * sizeof(int32_t));
+  ggml_backend_tensor_set(
+      cond_t, cond_data.data(), 0, cond_data.size() * sizeof(float));
   for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
-    ggml_backend_tensor_set(cached_k_t[L], k_slices[L].data(), 0,
-                            k_slices[L].size() * sizeof(float));
-    ggml_backend_tensor_set(cached_v_t[L], v_slices[L].data(), 0,
-                            v_slices[L].size() * sizeof(float));
+    ggml_backend_tensor_set(
+        cached_k_t[L],
+        k_slices[L].data(),
+        0,
+        k_slices[L].size() * sizeof(float));
+    ggml_backend_tensor_set(
+        cached_v_t[L],
+        v_slices[L].data(),
+        0,
+        v_slices[L].size() * sizeof(float));
   }
 
-  ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf),
-            GGML_STATUS_SUCCESS);
+  ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
 
   // ── 4. Compare both outputs. ─────────────────────────────────────────
-  auto compare = [&](const char* name, struct ggml_tensor* out,
-                     const std::vector<float>& expected, int rows,
-                     int cols, float cos_bar, float rel_bar) {
+  auto compare = [&](const char* name,
+                     struct ggml_tensor* out,
+                     const std::vector<float>& expected,
+                     int rows,
+                     int cols,
+                     float cos_bar,
+                     float rel_bar) {
     const size_t n = static_cast<size_t>(rows) * cols;
     ASSERT_EQ(ggml_nelements(out), static_cast<int64_t>(n));
     ASSERT_EQ(expected.size(), n);
@@ -289,19 +311,29 @@ TEST(Pi05M3_10, ExpertFullPassMatchesPytorch) {
     }
     const float rms = static_cast<float>(std::sqrt(sum_sq / n));
     std::cerr << "[M3.10] " << name << ": cos=" << cos
-              << " max_abs_diff=" << diff
-              << " rms_diff=" << rms
+              << " max_abs_diff=" << diff << " rms_diff=" << rms
               << " max_abs_expected=" << max_abs
-              << " rel_max=" << (diff / std::max(max_abs, 1e-9f))
-              << "\n";
+              << " rel_max=" << (diff / std::max(max_abs, 1e-9f)) << "\n";
     EXPECT_GT(cos, cos_bar);
     EXPECT_LT(diff / std::max(max_abs, 1e-9f), rel_bar);
   };
 
-  compare("final_out", outs.final_out, expected_final, N_ACT,
-          EXPERT_HIDDEN, /*cos=*/0.9999f, /*rel=*/0.05f);
-  compare("v_t", outs.v_t, expected_vt, N_ACT, ACTION_DIM,
-          /*cos=*/0.9999f, /*rel=*/0.05f);
+  compare(
+      "final_out",
+      outs.final_out,
+      expected_final,
+      N_ACT,
+      EXPERT_HIDDEN,
+      /*cos=*/0.9999f,
+      /*rel=*/0.05f);
+  compare(
+      "v_t",
+      outs.v_t,
+      expected_vt,
+      N_ACT,
+      ACTION_DIM,
+      /*cos=*/0.9999f,
+      /*rel=*/0.05f);
 
   ggml_gallocr_free(allocr);
   ggml_backend_free(cpu_backend);

@@ -74,7 +74,7 @@ function getEnvVar (name) {
 
 // QVAC-17830: lightweight GPU probe so reports can label the actual
 // GPU (NVIDIA Tesla T4 vs Apple M2 Max vs integrated Intel) instead
-// of the opaque "linux-x64-gpu" / "darwin-arm64" runner names. Falls
+// of the opaque "linux-x64-u24-gpu" / "darwin-arm64" runner names. Falls
 // back to null on any failure — runs once per `createPerformanceReporter`
 // so the subprocess cost is paid at most once per test suite.
 //

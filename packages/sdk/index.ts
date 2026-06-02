@@ -198,6 +198,15 @@ export {
   RequestRejectedByPolicyError,
 } from "./utils/errors-server";
 
+// `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
+// rpc-client life-signal race when the bare worker exits unexpectedly
+// or close()/process-exit teardown runs while a caller is in flight.
+// Exported so consumers can pattern-match with `instanceof`.
+export {
+  WorkerCrashedError,
+  WorkerShutdownError,
+} from "./utils/errors-client";
+
 // Logging exports
 export { getLogger, SDK_LOG_ID } from "./logging";
 export type { Logger, LogTransport, LoggerOptions } from "./logging";

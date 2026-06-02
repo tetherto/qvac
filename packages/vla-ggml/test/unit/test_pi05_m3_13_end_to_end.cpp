@@ -27,13 +27,12 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -101,7 +100,8 @@ qvac_lib_infer_vla_ggml::Pi05GemmaBlockWeights
 loadVlmBlock(struct ggml_context* ctx, int i) {
   qvac_lib_infer_vla_ggml::Pi05GemmaBlockWeights bw{};
   const std::string base = "vlm.blk." + std::to_string(i);
-  bw.pre_attn_norm_scale = mustGet(ctx, (base + ".pre_attn_norm.scale").c_str());
+  bw.pre_attn_norm_scale =
+      mustGet(ctx, (base + ".pre_attn_norm.scale").c_str());
   bw.attn_q_w = mustGet(ctx, (base + ".attn.q.weight").c_str());
   bw.attn_k_w = mustGet(ctx, (base + ".attn.k.weight").c_str());
   bw.attn_v_w = mustGet(ctx, (base + ".attn.v.weight").c_str());
@@ -117,7 +117,8 @@ qvac_lib_infer_vla_ggml::Pi05ExpertBlockWeights
 loadExpertBlock(struct ggml_context* ctx, int i) {
   qvac_lib_infer_vla_ggml::Pi05ExpertBlockWeights bw{};
   const std::string base = "expert.blk." + std::to_string(i);
-  bw.pre_attn_ada_w = mustGet(ctx, (base + ".pre_attn_norm.ada.weight").c_str());
+  bw.pre_attn_ada_w =
+      mustGet(ctx, (base + ".pre_attn_norm.ada.weight").c_str());
   bw.pre_attn_ada_b = mustGet(ctx, (base + ".pre_attn_norm.ada.bias").c_str());
   bw.pre_ffw_ada_w = mustGet(ctx, (base + ".pre_ffw_norm.ada.weight").c_str());
   bw.pre_ffw_ada_b = mustGet(ctx, (base + ".pre_ffw_norm.ada.bias").c_str());
@@ -149,12 +150,10 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
   ASSERT_NO_THROW(activations.open(activations_path));
 
   const std::vector<float> noise = fixture.readF32("fixture.noise");
-  const std::vector<float> prefix =
-      activations.readF32("vlm.prefix_concat");
+  const std::vector<float> prefix = activations.readF32("vlm.prefix_concat");
   const std::vector<float> expected_actions =
       activations.readF32("ode.actions_final");
-  ASSERT_EQ(prefix.size(),
-            static_cast<size_t>(PREFIX_LEN_FULL * VLM_HIDDEN));
+  ASSERT_EQ(prefix.size(), static_cast<size_t>(PREFIX_LEN_FULL * VLM_HIDDEN));
 
   // ── GGUF weights. ────────────────────────────────────────────────────
   struct ggml_context* ctx_w = nullptr;
@@ -168,8 +167,7 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
   for (int i = 0; i < VLM_N_LAYERS; ++i) {
     vlm_blocks.push_back(loadVlmBlock(ctx_w, i));
   }
-  struct ggml_tensor* vlm_final_norm =
-      mustGet(ctx_w, "vlm.final_norm.scale");
+  struct ggml_tensor* vlm_final_norm = mustGet(ctx_w, "vlm.final_norm.scale");
 
   std::vector<qvac_lib_infer_vla_ggml::Pi05ExpertBlockWeights> expert_blocks;
   for (int i = 0; i < EXPERT_N_LAYERS; ++i) {
@@ -200,9 +198,9 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
   // ── 1. VLM prefill with K/V taps. ────────────────────────────────────
   // Captures 18 per-layer post-RoPE K/V tensors into CPU buffers, then
   // tears down the prefill graph.
-  const size_t per_layer_kv_bytes =
-      static_cast<size_t>(VLM_HEAD_DIM) * VALID_PREFIX_LEN *
-      VLM_N_KV_HEADS * sizeof(float);
+  const size_t per_layer_kv_bytes = static_cast<size_t>(VLM_HEAD_DIM) *
+                                    VALID_PREFIX_LEN * VLM_N_KV_HEADS *
+                                    sizeof(float);
   std::vector<std::vector<float>> k_cache(VLM_N_LAYERS);
   std::vector<std::vector<float>> v_cache(VLM_N_LAYERS);
   for (int L = 0; L < VLM_N_LAYERS; ++L) {
@@ -222,8 +220,7 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
     ASSERT_NE(ctx_g, nullptr);
 
     struct ggml_tensor* x =
-        ggml_new_tensor_2d(ctx_g, GGML_TYPE_F32, VLM_HIDDEN,
-                            VALID_PREFIX_LEN);
+        ggml_new_tensor_2d(ctx_g, GGML_TYPE_F32, VLM_HIDDEN, VALID_PREFIX_LEN);
     struct ggml_tensor* pos =
         ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, VALID_PREFIX_LEN);
 
@@ -232,10 +229,21 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
 
     using qvac_lib_infer_vla_ggml::pi05BuildVlmPrefillGraph;
     struct ggml_tensor* final_out = pi05BuildVlmPrefillGraph(
-        ctx_g, x, pos, /*attn_mask=*/nullptr, vlm_blocks, vlm_final_norm,
-        VLM_HIDDEN, VLM_N_HEADS, VLM_N_KV_HEADS, VLM_HEAD_DIM,
-        VALID_PREFIX_LEN, RMS_EPS, ROPE_BASE,
-        &out_keys, &out_values);
+        ctx_g,
+        x,
+        pos,
+        /*attn_mask=*/nullptr,
+        vlm_blocks,
+        vlm_final_norm,
+        VLM_HIDDEN,
+        VLM_N_HEADS,
+        VLM_N_KV_HEADS,
+        VLM_HEAD_DIM,
+        VALID_PREFIX_LEN,
+        RMS_EPS,
+        ROPE_BASE,
+        &out_keys,
+        &out_values);
     ASSERT_NE(final_out, nullptr);
     ASSERT_EQ(out_keys.size(), static_cast<size_t>(VLM_N_LAYERS));
     ASSERT_EQ(out_values.size(), static_cast<size_t>(VLM_N_LAYERS));
@@ -249,8 +257,8 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
       ggml_build_forward_expand(gf, v_t);
     }
 
-    ggml_gallocr_t allocr = ggml_gallocr_new(
-        ggml_backend_get_default_buffer_type(cpu_backend));
+    ggml_gallocr_t allocr =
+        ggml_gallocr_new(ggml_backend_get_default_buffer_type(cpu_backend));
     ASSERT_NE(allocr, nullptr);
     ASSERT_TRUE(ggml_gallocr_alloc_graph(allocr, gf));
 
@@ -258,21 +266,22 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
     for (int i = 0; i < VALID_PREFIX_LEN; ++i) {
       pos_data[i] = i;
     }
-    ggml_backend_tensor_set(x, prefix.data(), 0,
-                            static_cast<size_t>(VALID_PREFIX_LEN) *
-                                VLM_HIDDEN * sizeof(float));
-    ggml_backend_tensor_set(pos, pos_data.data(), 0,
-                            pos_data.size() * sizeof(int32_t));
+    ggml_backend_tensor_set(
+        x,
+        prefix.data(),
+        0,
+        static_cast<size_t>(VALID_PREFIX_LEN) * VLM_HIDDEN * sizeof(float));
+    ggml_backend_tensor_set(
+        pos, pos_data.data(), 0, pos_data.size() * sizeof(int32_t));
 
-    ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf),
-              GGML_STATUS_SUCCESS);
+    ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
 
     // Pull K/V out into the CPU caches.
     for (int L = 0; L < VLM_N_LAYERS; ++L) {
-      ggml_backend_tensor_get(out_keys[L], k_cache[L].data(), 0,
-                              per_layer_kv_bytes);
-      ggml_backend_tensor_get(out_values[L], v_cache[L].data(), 0,
-                              per_layer_kv_bytes);
+      ggml_backend_tensor_get(
+          out_keys[L], k_cache[L].data(), 0, per_layer_kv_bytes);
+      ggml_backend_tensor_get(
+          out_values[L], v_cache[L].data(), 0, per_layer_kv_bytes);
     }
 
     ggml_gallocr_free(allocr);
@@ -313,10 +322,16 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
     std::vector<struct ggml_tensor*> cached_v_t(EXPERT_N_LAYERS);
     for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
       cached_k_t[L] = ggml_new_tensor_3d(
-          ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+          ctx_g,
+          GGML_TYPE_F32,
+          EXPERT_HEAD_DIM,
+          VALID_PREFIX_LEN,
           EXPERT_N_KV_HEADS);
       cached_v_t[L] = ggml_new_tensor_3d(
-          ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+          ctx_g,
+          GGML_TYPE_F32,
+          EXPERT_HEAD_DIM,
+          VALID_PREFIX_LEN,
           EXPERT_N_KV_HEADS);
     }
 
@@ -325,46 +340,67 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
         ctx_g, sincos_t, time_in_w, time_in_b, time_out_w, time_out_b);
 
     struct ggml_tensor* x_exp_t = ggml_mul_mat(ctx_g, action_in_w, x_t_t);
-    x_exp_t = ggml_add(
-        ctx_g, x_exp_t, ggml_cast(ctx_g, action_in_b, GGML_TYPE_F32));
+    x_exp_t =
+        ggml_add(ctx_g, x_exp_t, ggml_cast(ctx_g, action_in_b, GGML_TYPE_F32));
 
     using qvac_lib_infer_vla_ggml::pi05BuildExpertOdeStepGraph;
     auto outs = pi05BuildExpertOdeStepGraph(
-        ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
-        expert_blocks, final_norm_ada_w, final_norm_ada_b,
-        action_out_w, action_out_b,
-        EXPERT_HIDDEN, EXPERT_N_HEADS, EXPERT_N_KV_HEADS,
-        EXPERT_HEAD_DIM, VALID_PREFIX_LEN, N_ACT, RMS_EPS, ROPE_BASE);
+        ctx_g,
+        x_exp_t,
+        act_pos_t,
+        cached_k_t,
+        cached_v_t,
+        cond,
+        expert_blocks,
+        final_norm_ada_w,
+        final_norm_ada_b,
+        action_out_w,
+        action_out_b,
+        EXPERT_HIDDEN,
+        EXPERT_N_HEADS,
+        EXPERT_N_KV_HEADS,
+        EXPERT_HEAD_DIM,
+        VALID_PREFIX_LEN,
+        N_ACT,
+        RMS_EPS,
+        ROPE_BASE);
     ASSERT_NE(outs.v_t, nullptr);
 
     using qvac_lib_infer_vla_ggml::pi05BuildEulerStepGraph;
-    struct ggml_tensor* x_next = pi05BuildEulerStepGraph(
-        ctx_g, x_t_t, outs.v_t, STEP_DT);
+    struct ggml_tensor* x_next =
+        pi05BuildEulerStepGraph(ctx_g, x_t_t, outs.v_t, STEP_DT);
 
     struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 32768, false);
     ggml_build_forward_expand(gf, x_next);
 
-    ggml_gallocr_t allocr = ggml_gallocr_new(
-        ggml_backend_get_default_buffer_type(cpu_backend));
+    ggml_gallocr_t allocr =
+        ggml_gallocr_new(ggml_backend_get_default_buffer_type(cpu_backend));
     ASSERT_TRUE(ggml_gallocr_alloc_graph(allocr, gf));
 
-    ggml_backend_tensor_set(x_t_t, x_t.data(), 0,
-                            x_t.size() * sizeof(float));
-    ggml_backend_tensor_set(sincos_t, sincos_buf.data(), 0,
-                            sincos_buf.size() * sizeof(float));
-    ggml_backend_tensor_set(act_pos_t, act_pos_data.data(), 0,
-                            act_pos_data.size() * sizeof(int32_t));
+    ggml_backend_tensor_set(x_t_t, x_t.data(), 0, x_t.size() * sizeof(float));
+    ggml_backend_tensor_set(
+        sincos_t, sincos_buf.data(), 0, sincos_buf.size() * sizeof(float));
+    ggml_backend_tensor_set(
+        act_pos_t,
+        act_pos_data.data(),
+        0,
+        act_pos_data.size() * sizeof(int32_t));
     for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
-      ggml_backend_tensor_set(cached_k_t[L], k_cache[L].data(), 0,
-                              k_cache[L].size() * sizeof(float));
-      ggml_backend_tensor_set(cached_v_t[L], v_cache[L].data(), 0,
-                              v_cache[L].size() * sizeof(float));
+      ggml_backend_tensor_set(
+          cached_k_t[L],
+          k_cache[L].data(),
+          0,
+          k_cache[L].size() * sizeof(float));
+      ggml_backend_tensor_set(
+          cached_v_t[L],
+          v_cache[L].data(),
+          0,
+          v_cache[L].size() * sizeof(float));
     }
 
-    ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf),
-              GGML_STATUS_SUCCESS);
-    ggml_backend_tensor_get(x_next, x_next_buf.data(), 0,
-                            x_next_buf.size() * sizeof(float));
+    ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
+    ggml_backend_tensor_get(
+        x_next, x_next_buf.data(), 0, x_next_buf.size() * sizeof(float));
     std::swap(x_t, x_next_buf);
 
     ggml_gallocr_free(allocr);
@@ -372,10 +408,10 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
   }
 
   // ── 3. Compare actions_final. ────────────────────────────────────────
-  const float cos = cosineSim(x_t.data(), expected_actions.data(),
-                               expected_actions.size());
-  const float diff = maxAbsDiff(x_t.data(), expected_actions.data(),
-                                 expected_actions.size());
+  const float cos =
+      cosineSim(x_t.data(), expected_actions.data(), expected_actions.size());
+  const float diff =
+      maxAbsDiff(x_t.data(), expected_actions.data(), expected_actions.size());
   float max_abs = 0.0f;
   double sum_sq = 0.0;
   for (size_t i = 0; i < expected_actions.size(); ++i) {
@@ -383,18 +419,15 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
     if (a > max_abs) {
       max_abs = a;
     }
-    const double d =
-        static_cast<double>(x_t[i]) - expected_actions[i];
+    const double d = static_cast<double>(x_t[i]) - expected_actions[i];
     sum_sq += d * d;
   }
-  const float rms = static_cast<float>(
-      std::sqrt(sum_sq / expected_actions.size()));
+  const float rms =
+      static_cast<float>(std::sqrt(sum_sq / expected_actions.size()));
   std::cerr << "[M3.13] ode.actions_final: cos=" << cos
-            << " max_abs_diff=" << diff
-            << " rms_diff=" << rms
+            << " max_abs_diff=" << diff << " rms_diff=" << rms
             << " max_abs_expected=" << max_abs
-            << " rel_max=" << (diff / std::max(max_abs, 1e-9f))
-            << "\n";
+            << " rel_max=" << (diff / std::max(max_abs, 1e-9f)) << "\n";
 
   EXPECT_GT(cos, 0.999f);
   EXPECT_LT(diff / std::max(max_abs, 1e-9f), 0.05f);

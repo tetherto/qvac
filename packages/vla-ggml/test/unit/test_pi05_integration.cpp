@@ -106,13 +106,16 @@ TEST(Pi05Integration, InferEndToEndMatchesPytorch) {
     ASSERT_TRUE(in);
     uint64_t header_len = 0;
     in.read(reinterpret_cast<char*>(&header_len), 8);
-    const std::streamoff blob_start = 8 + static_cast<std::streamoff>(header_len);
-    in.seekg(blob_start + static_cast<std::streamoff>(tok_rec.byte_offset),
-             std::ios::beg);
+    const std::streamoff blob_start =
+        8 + static_cast<std::streamoff>(header_len);
+    in.seekg(
+        blob_start + static_cast<std::streamoff>(tok_rec.byte_offset),
+        std::ios::beg);
     in.read(reinterpret_cast<char*>(tokens.data()), tok_rec.byte_length);
     ASSERT_TRUE(in);
-    in.seekg(blob_start + static_cast<std::streamoff>(mask_rec.byte_offset),
-             std::ios::beg);
+    in.seekg(
+        blob_start + static_cast<std::streamoff>(mask_rec.byte_offset),
+        std::ios::beg);
     in.read(reinterpret_cast<char*>(token_mask.data()), mask_rec.byte_length);
     ASSERT_TRUE(in);
   }
@@ -151,8 +154,9 @@ TEST(Pi05Integration, InferEndToEndMatchesPytorch) {
   EXPECT_EQ(hp.tokenizer_max_length, TOKEN_MAX_LEN);
   EXPECT_EQ(hp.vision_image_size, IMAGE_SIZE);
   EXPECT_EQ(hp.num_cameras, N_CAMERAS);
-  EXPECT_EQ(hp.state_input_mode,
-             qvac_lib_infer_vla_ggml::VlaHparamsGeneric::StateInputMode::Discrete);
+  EXPECT_EQ(
+      hp.state_input_mode,
+      qvac_lib_infer_vla_ggml::VlaHparamsGeneric::StateInputMode::Discrete);
 
   std::vector<float> actions_out(N_ACT * ACTION_DIM);
   int n_actions_out = 0;
@@ -162,7 +166,8 @@ TEST(Pi05Integration, InferEndToEndMatchesPytorch) {
       N_CAMERAS,
       IMAGE_SIZE,
       IMAGE_SIZE,
-      /*state=*/nullptr,  // pi05 ignores `state` (discrete state lives in the prompt)
+      /*state=*/nullptr, // pi05 ignores `state` (discrete state lives in the
+                         // prompt)
       /*state_dim=*/0,
       tokens.data(),
       lang_mask.get(),
@@ -175,12 +180,10 @@ TEST(Pi05Integration, InferEndToEndMatchesPytorch) {
   ASSERT_EQ(n_actions_out, N_ACT);
 
   // ── Compare against PyTorch ──────────────────────────────────────
-  const float cos = cosineSim(actions_out.data(),
-                               expected_actions.data(),
-                               expected_actions.size());
-  const float diff = maxAbsDiff(actions_out.data(),
-                                 expected_actions.data(),
-                                 expected_actions.size());
+  const float cos = cosineSim(
+      actions_out.data(), expected_actions.data(), expected_actions.size());
+  const float diff = maxAbsDiff(
+      actions_out.data(), expected_actions.data(), expected_actions.size());
   float max_abs = 0.0f;
   for (float v : expected_actions) {
     const float a = std::fabs(v);
@@ -189,15 +192,12 @@ TEST(Pi05Integration, InferEndToEndMatchesPytorch) {
     }
   }
   std::cerr << "[Pi05Integration] actions: cos=" << cos
-            << " max_abs_diff=" << diff
-            << " max_abs_expected=" << max_abs
-            << " rel_max=" << (diff / std::max(max_abs, 1e-9f))
-            << "\n"
-            << "[Pi05Integration] timing: vision="
-            << timing.vision_ms << "ms prefill="
-            << timing.prefill_total_ms << "ms ode="
-            << timing.ode_ms << "ms total="
-            << timing.total_ms << "ms\n";
+            << " max_abs_diff=" << diff << " max_abs_expected=" << max_abs
+            << " rel_max=" << (diff / std::max(max_abs, 1e-9f)) << "\n"
+            << "[Pi05Integration] timing: vision=" << timing.vision_ms
+            << "ms prefill=" << timing.prefill_total_ms
+            << "ms ode=" << timing.ode_ms << "ms total=" << timing.total_ms
+            << "ms\n";
 
   // Plan §5 end-to-end bar (CPU): cos > 0.999.
   EXPECT_GT(cos, 0.999f);

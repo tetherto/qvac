@@ -13,7 +13,11 @@ import { fileURLToPath } from "node:url";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
-import { RPCInitTimeoutError } from "@/utils/errors-client";
+import {
+  RPCInitTimeoutError,
+  WorkerCrashedError,
+  WorkerShutdownError,
+} from "@/utils/errors-client";
 import type { RuntimeContext } from "@/schemas";
 
 const RPC_INIT_TIMEOUT_MS = 30_000;
@@ -26,6 +30,11 @@ let bareWorkerProc: BareChildProcess | null = null;
 let ipcServer: ReturnType<typeof createServer> | null = null;
 let currentSocketPath: string | null = null;
 let closePromise: Promise<void> | null = null;
+// Aborted when the worker dies (crash) or close() runs (planned). Used
+// to unblock in-flight `req.reply()` callers — bare-rpc's `_onerror`
+// does not iterate `_outgoingRequests`, so without this signal they
+// would hang on the dead socket.
+let workerLifeController: AbortController | null = null;
 
 /**
  * Find project root by looking for package.json (sync version)
@@ -178,11 +187,63 @@ function snapshotAndResetState() {
   bareWorkerProc = null;
   ipcServer = null;
   currentSocketPath = null;
+  workerLifeController = null;
 
   return { workerToClose, serverToClose, socketPathToClose };
 }
 
+export function getWorkerLifeSignal(): AbortSignal | null {
+  return workerLifeController?.signal ?? null;
+}
+
+interface SpawnResources {
+  controller: AbortController;
+  server: ReturnType<typeof createServer>;
+  socketPath: string;
+}
+
+// `spawn` carries this listener's own captured resources. Module-level
+// state may belong to a newer ensureRPC() by the time we fire.
+function handlePostHandshakeExit(
+  code: number | null,
+  exitSignal: NodeJS.Signals | null,
+  spawn: SpawnResources,
+): void {
+  if (spawn.controller.signal.aborted) {
+    // close() already handled teardown.
+    logger.debug(
+      `Bare worker exited after planned shutdown (code=${code}, signal=${exitSignal})`,
+    );
+    return;
+  }
+
+  logger.info(
+    `🪦 Bare worker exited post-handshake (code=${code}, signal=${exitSignal})`,
+  );
+
+  // Only clear module state if we're still the active spawn.
+  if (workerLifeController === spawn.controller) {
+    rpcInstance = null;
+    rpcPromise = null;
+    bareWorkerProc = null;
+    ipcServer = null;
+    currentSocketPath = null;
+    workerLifeController = null;
+  }
+
+  try {
+    spawn.server.close();
+  } catch (err) {
+    logger.debug("Failed to close IPC server after worker crash", { err });
+  }
+  spawn.controller.abort(new WorkerCrashedError(code, exitSignal));
+  bestEffortUnlinkSocket(spawn.socketPath);
+}
+
 function closeSyncForExit() {
+  // Abort before kill so the exit handler sees planned intent.
+  workerLifeController?.abort(new WorkerShutdownError());
+
   const { workerToClose, serverToClose, socketPathToClose } =
     snapshotAndResetState();
 
@@ -215,6 +276,10 @@ async function ensureRPC(): Promise<RPC> {
   const socketPath = createSocketPath();
   currentSocketPath = socketPath;
 
+  // Allocated here so the init race and exit handler share one controller.
+  const spawnController = new AbortController();
+  workerLifeController = spawnController;
+
   rpcPromise = new Promise((resolve, reject) => {
     let settled = false;
 
@@ -226,6 +291,7 @@ async function ensureRPC(): Promise<RPC> {
       bareWorkerProc = null;
       ipcServer = null;
       currentSocketPath = null;
+      workerLifeController = null;
       reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS));
     }, RPC_INIT_TIMEOUT_MS);
 
@@ -249,10 +315,17 @@ async function ensureRPC(): Promise<RPC> {
       bareWorkerProc = null;
       ipcServer = null;
       currentSocketPath = null;
+      workerLifeController = null;
       reject(error);
     });
 
     ipcServer.listen(socketPath, () => {
+      const spawnResources: SpawnResources = {
+        controller: spawnController,
+        server: ipcServer!,
+        socketPath,
+      };
+
       bareWorkerProc = spawn("bare", {
         args: [
           WORKER_PATH,
@@ -268,24 +341,36 @@ async function ensureRPC(): Promise<RPC> {
       });
 
       if (bareWorkerProc) {
-        bareWorkerProc.on("exit", (code: number | null) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          rpcPromise = null;
-          rpcInstance = null;
-          bareWorkerProc = null;
-          ipcServer = null;
-          currentSocketPath = null;
-          reject(
-            new RPCInitTimeoutError(
-              RPC_INIT_TIMEOUT_MS,
-              new Error(
-                `Worker process exited with code ${code} before IPC connection was established`,
+        bareWorkerProc.on(
+          "exit",
+          (code: number | null, exitSignal: string | null) => {
+            if (settled) {
+              handlePostHandshakeExit(
+                code,
+                exitSignal as NodeJS.Signals | null,
+                spawnResources,
+              );
+              return;
+            }
+            // Worker died before handshake — reject the init promise.
+            settled = true;
+            clearTimeout(timer);
+            rpcPromise = null;
+            rpcInstance = null;
+            bareWorkerProc = null;
+            ipcServer = null;
+            currentSocketPath = null;
+            workerLifeController = null;
+            reject(
+              new RPCInitTimeoutError(
+                RPC_INIT_TIMEOUT_MS,
+                new Error(
+                  `Worker process exited with code ${code} before IPC connection was established`,
+                ),
               ),
-            ),
-          );
-        });
+            );
+          },
+        );
       }
     });
   });
@@ -296,9 +381,30 @@ async function ensureRPC(): Promise<RPC> {
     runtime: "node",
     platform: process.platform as "darwin" | "linux" | "win32",
   };
-  await initializeConfig(rpc, resolveConfig, runtimeContext);
+
+  // init-hooks calls bare-rpc directly, bypassing rpc-client's race.
+  await Promise.race([
+    initializeConfig(rpc, resolveConfig, runtimeContext),
+    rejectOnAbort(spawnController.signal),
+  ]);
 
   return rpc;
+}
+
+function rejectOnAbort(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    const fail = () =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new WorkerCrashedError(null, null),
+      );
+    if (signal.aborted) {
+      fail();
+      return;
+    }
+    signal.addEventListener("abort", fail, { once: true });
+  });
 }
 
 export async function getRPC() {
@@ -311,6 +417,25 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const requestStream = req.createRequestStream();
   const responseStream = req.createResponseStream({ encoding: "utf-8" });
   requestStream.write(payload, "utf-8");
+
+  // Destroy on worker death so consumers' for-await throws instead of hangs.
+  const lifeSignal = workerLifeController?.signal;
+  if (lifeSignal && !lifeSignal.aborted) {
+    const onAbort = () => {
+      const err =
+        lifeSignal.reason instanceof Error
+          ? lifeSignal.reason
+          : new WorkerCrashedError(null, null);
+      try {
+        (requestStream as { destroy?: (err?: Error) => void }).destroy?.(err);
+      } catch {}
+      try {
+        (responseStream as { destroy?: (err?: Error) => void }).destroy?.(err);
+      } catch {}
+    };
+    lifeSignal.addEventListener("abort", onAbort, { once: true });
+  }
+
   return { requestStream, responseStream };
 }
 
@@ -323,6 +448,10 @@ export async function close() {
   if (!rpcInstance && !rpcPromise && !bareWorkerProc && !ipcServer) return;
 
   logger.info("🧹 Closing RPC client");
+
+  // Abort before kill: exit handler sees planned intent; any in-flight
+  // caller (contract violators) rejects with WorkerShutdownError.
+  workerLifeController?.abort(new WorkerShutdownError());
 
   const { workerToClose, serverToClose, socketPathToClose } =
     snapshotAndResetState();

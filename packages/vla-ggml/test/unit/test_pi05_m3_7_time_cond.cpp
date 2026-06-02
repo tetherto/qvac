@@ -11,11 +11,10 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -63,13 +62,11 @@ struct ggml_tensor* mustGet(struct ggml_context* ctx, const char* name) {
   return t;
 }
 
-void runOne(float t,
-            const std::string& expected_key,
-            struct ggml_tensor* w_in_w,
-            struct ggml_tensor* w_in_b,
-            struct ggml_tensor* w_out_w,
-            struct ggml_tensor* w_out_b,
-            const qvac_vla_safetensors_lite::Reader& activations) {
+void runOne(
+    float t, const std::string& expected_key, struct ggml_tensor* w_in_w,
+    struct ggml_tensor* w_in_b, struct ggml_tensor* w_out_w,
+    struct ggml_tensor* w_out_b,
+    const qvac_vla_safetensors_lite::Reader& activations) {
   const std::vector<float> expected = activations.readF32(expected_key);
   ASSERT_EQ(expected.size(), static_cast<size_t>(COND_DIM));
 
@@ -91,18 +88,18 @@ void runOne(float t,
 
   struct ggml_tensor* time_emb =
       ggml_new_tensor_1d(ctx_g, GGML_TYPE_F32, COND_DIM);
-  std::memcpy(time_emb->data, sincos.data(),
-              COND_DIM * sizeof(float));
+  std::memcpy(time_emb->data, sincos.data(), COND_DIM * sizeof(float));
 
   using qvac_lib_infer_vla_ggml::pi05BuildTimeMlpGraph;
-  struct ggml_tensor* out = pi05BuildTimeMlpGraph(
-      ctx_g, time_emb, w_in_w, w_in_b, w_out_w, w_out_b);
+  struct ggml_tensor* out =
+      pi05BuildTimeMlpGraph(ctx_g, time_emb, w_in_w, w_in_b, w_out_w, w_out_b);
   ASSERT_NE(out, nullptr);
 
   struct ggml_cgraph* gf = ggml_new_graph(ctx_g);
   ggml_build_forward_expand(gf, out);
-  ASSERT_EQ(ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
-            GGML_STATUS_SUCCESS);
+  ASSERT_EQ(
+      ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
+      GGML_STATUS_SUCCESS);
 
   ASSERT_EQ(ggml_nelements(out), static_cast<int64_t>(COND_DIM));
   const float* got = static_cast<const float*>(out->data);
@@ -116,8 +113,7 @@ void runOne(float t,
       max_abs_expected = a;
     }
   }
-  std::cerr << "[M3.7] expert.cond[t=" << t
-            << "]: cos=" << cos
+  std::cerr << "[M3.7] expert.cond[t=" << t << "]: cos=" << cos
             << " max_abs_diff=" << diff
             << " max_abs_expected=" << max_abs_expected
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
@@ -163,9 +159,30 @@ TEST(Pi05M3_7, TimeCondMatchesPytorch) {
     FAIL() << "time_mlp tensors missing";
   }
 
-  runOne(1.0f, "expert.cond[t=1.0]", w_in_w, w_in_b, w_out_w, w_out_b, activations);
-  runOne(0.5f, "expert.cond[t=0.5]", w_in_w, w_in_b, w_out_w, w_out_b, activations);
-  runOne(0.1f, "expert.cond[t=0.1]", w_in_w, w_in_b, w_out_w, w_out_b, activations);
+  runOne(
+      1.0f,
+      "expert.cond[t=1.0]",
+      w_in_w,
+      w_in_b,
+      w_out_w,
+      w_out_b,
+      activations);
+  runOne(
+      0.5f,
+      "expert.cond[t=0.5]",
+      w_in_w,
+      w_in_b,
+      w_out_w,
+      w_out_b,
+      activations);
+  runOne(
+      0.1f,
+      "expert.cond[t=0.1]",
+      w_in_w,
+      w_in_b,
+      w_out_w,
+      w_out_b,
+      activations);
 
   gguf_free(gguf);
   ggml_free(ctx_w);

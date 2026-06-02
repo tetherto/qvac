@@ -68,19 +68,10 @@ public:
   // implementation should leave `actions_out`/`n_actions_out`/`timing_out`
   // unspecified — the caller treats the return value as authoritative.
   virtual bool infer(
-      const float** images,
-      int n_images,
-      int img_width,
-      int img_height,
-      const float* state,
-      int state_dim,
-      const int32_t* lang_tokens,
-      const bool* lang_mask,
-      int lang_len,
-      const float* noise,
-      float* actions_out,
-      int* n_actions_out,
-      VlaTimingGeneric* timing_out) = 0;
+      const float** images, int nImages, int imgWidth, int imgHeight,
+      const float* state, int stateDim, const int32_t* langTokens,
+      const bool* langMask, int langLen, const float* noise, float* actionsOut,
+      int* nActionsOut, VlaTimingGeneric* timingOut) = 0;
 };
 
 } // namespace qvac_lib_infer_vla_ggml

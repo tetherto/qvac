@@ -23,13 +23,12 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -92,7 +91,8 @@ qvac_lib_infer_vla_ggml::Pi05ExpertBlockWeights
 loadExpertBlock(struct ggml_context* ctx, int i) {
   qvac_lib_infer_vla_ggml::Pi05ExpertBlockWeights bw{};
   const std::string base = "expert.blk." + std::to_string(i);
-  bw.pre_attn_ada_w = mustGet(ctx, (base + ".pre_attn_norm.ada.weight").c_str());
+  bw.pre_attn_ada_w =
+      mustGet(ctx, (base + ".pre_attn_norm.ada.weight").c_str());
   bw.pre_attn_ada_b = mustGet(ctx, (base + ".pre_attn_norm.ada.bias").c_str());
   bw.pre_ffw_ada_w = mustGet(ctx, (base + ".pre_ffw_norm.ada.weight").c_str());
   bw.pre_ffw_ada_b = mustGet(ctx, (base + ".pre_ffw_norm.ada.bias").c_str());
@@ -106,8 +106,8 @@ loadExpertBlock(struct ggml_context* ctx, int i) {
   return bw;
 }
 
-void reportProbe(const char* name, const float* got, const float* exp,
-                 size_t n) {
+void reportProbe(
+    const char* name, const float* got, const float* exp, size_t n) {
   const float cos = cosineSim(got, exp, n);
   const float diff = maxAbsDiff(got, exp, n);
   float max_abs = 0.0f;
@@ -121,12 +121,9 @@ void reportProbe(const char* name, const float* got, const float* exp,
     sum_sq += d * d;
   }
   const float rms = static_cast<float>(std::sqrt(sum_sq / n));
-  std::cerr << "[M3.12] " << name << ": cos=" << cos
-            << " max_abs_diff=" << diff
-            << " rms_diff=" << rms
-            << " max_abs_expected=" << max_abs
-            << " rel_max=" << (diff / std::max(max_abs, 1e-9f))
-            << "\n";
+  std::cerr << "[M3.12] " << name << ": cos=" << cos << " max_abs_diff=" << diff
+            << " rms_diff=" << rms << " max_abs_expected=" << max_abs
+            << " rel_max=" << (diff / std::max(max_abs, 1e-9f)) << "\n";
 }
 
 } // namespace
@@ -164,12 +161,10 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
       activations.readF32("vlm.kv_cache_full.keys");
   const std::vector<float> kv_vals_all =
       activations.readF32("vlm.kv_cache_full.values");
-  const size_t per_layer =
-      static_cast<size_t>(PREFIX_LEN_FULL) * EXPERT_N_KV_HEADS *
-      EXPERT_HEAD_DIM;
-  const size_t per_layer_valid =
-      static_cast<size_t>(VALID_PREFIX_LEN) * EXPERT_N_KV_HEADS *
-      EXPERT_HEAD_DIM;
+  const size_t per_layer = static_cast<size_t>(PREFIX_LEN_FULL) *
+                           EXPERT_N_KV_HEADS * EXPERT_HEAD_DIM;
+  const size_t per_layer_valid = static_cast<size_t>(VALID_PREFIX_LEN) *
+                                 EXPERT_N_KV_HEADS * EXPERT_HEAD_DIM;
   std::vector<std::vector<float>> k_slices(EXPERT_N_LAYERS);
   std::vector<std::vector<float>> v_slices(EXPERT_N_LAYERS);
   for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
@@ -257,10 +252,16 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
     std::vector<struct ggml_tensor*> cached_v_t(EXPERT_N_LAYERS);
     for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
       cached_k_t[L] = ggml_new_tensor_3d(
-          ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+          ctx_g,
+          GGML_TYPE_F32,
+          EXPERT_HEAD_DIM,
+          VALID_PREFIX_LEN,
           EXPERT_N_KV_HEADS);
       cached_v_t[L] = ggml_new_tensor_3d(
-          ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+          ctx_g,
+          GGML_TYPE_F32,
+          EXPERT_HEAD_DIM,
+          VALID_PREFIX_LEN,
           EXPERT_N_KV_HEADS);
     }
 
@@ -279,47 +280,67 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
     // 18 expert blocks + final norm + action_out.
     using qvac_lib_infer_vla_ggml::pi05BuildExpertOdeStepGraph;
     auto outs = pi05BuildExpertOdeStepGraph(
-        ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
-        blocks, final_norm_ada_w, final_norm_ada_b,
-        action_out_w, action_out_b,
-        EXPERT_HIDDEN, EXPERT_N_HEADS, EXPERT_N_KV_HEADS,
-        EXPERT_HEAD_DIM, VALID_PREFIX_LEN, N_ACT,
-        EXPERT_RMS_EPS, EXPERT_ROPE_BASE);
+        ctx_g,
+        x_exp_t,
+        act_pos_t,
+        cached_k_t,
+        cached_v_t,
+        cond,
+        blocks,
+        final_norm_ada_w,
+        final_norm_ada_b,
+        action_out_w,
+        action_out_b,
+        EXPERT_HIDDEN,
+        EXPERT_N_HEADS,
+        EXPERT_N_KV_HEADS,
+        EXPERT_HEAD_DIM,
+        VALID_PREFIX_LEN,
+        N_ACT,
+        EXPERT_RMS_EPS,
+        EXPERT_ROPE_BASE);
     ASSERT_NE(outs.v_t, nullptr);
 
     // Euler step inside the same graph.
     using qvac_lib_infer_vla_ggml::pi05BuildEulerStepGraph;
-    struct ggml_tensor* x_next = pi05BuildEulerStepGraph(
-        ctx_g, x_t_t, outs.v_t, STEP_DT);
+    struct ggml_tensor* x_next =
+        pi05BuildEulerStepGraph(ctx_g, x_t_t, outs.v_t, STEP_DT);
     ASSERT_NE(x_next, nullptr);
 
     struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 32768, false);
     ggml_build_forward_expand(gf, x_next);
 
-    ggml_gallocr_t allocr = ggml_gallocr_new(
-        ggml_backend_get_default_buffer_type(cpu_backend));
+    ggml_gallocr_t allocr =
+        ggml_gallocr_new(ggml_backend_get_default_buffer_type(cpu_backend));
     ASSERT_NE(allocr, nullptr);
     ASSERT_TRUE(ggml_gallocr_alloc_graph(allocr, gf));
 
     // Upload inputs.
-    ggml_backend_tensor_set(x_t_t, x_t.data(), 0,
-                            x_t.size() * sizeof(float));
-    ggml_backend_tensor_set(sincos_t, sincos_buf.data(), 0,
-                            sincos_buf.size() * sizeof(float));
-    ggml_backend_tensor_set(act_pos_t, act_pos_data.data(), 0,
-                            act_pos_data.size() * sizeof(int32_t));
+    ggml_backend_tensor_set(x_t_t, x_t.data(), 0, x_t.size() * sizeof(float));
+    ggml_backend_tensor_set(
+        sincos_t, sincos_buf.data(), 0, sincos_buf.size() * sizeof(float));
+    ggml_backend_tensor_set(
+        act_pos_t,
+        act_pos_data.data(),
+        0,
+        act_pos_data.size() * sizeof(int32_t));
     for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
-      ggml_backend_tensor_set(cached_k_t[L], k_slices[L].data(), 0,
-                              k_slices[L].size() * sizeof(float));
-      ggml_backend_tensor_set(cached_v_t[L], v_slices[L].data(), 0,
-                              v_slices[L].size() * sizeof(float));
+      ggml_backend_tensor_set(
+          cached_k_t[L],
+          k_slices[L].data(),
+          0,
+          k_slices[L].size() * sizeof(float));
+      ggml_backend_tensor_set(
+          cached_v_t[L],
+          v_slices[L].data(),
+          0,
+          v_slices[L].size() * sizeof(float));
     }
 
-    ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf),
-              GGML_STATUS_SUCCESS);
+    ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
 
-    ggml_backend_tensor_get(x_next, x_next_buf.data(), 0,
-                            x_next_buf.size() * sizeof(float));
+    ggml_backend_tensor_get(
+        x_next, x_next_buf.data(), 0, x_next_buf.size() * sizeof(float));
     std::swap(x_t, x_next_buf);
 
     if (step == 0 || step == 3 || step == 7 || step == 9) {
@@ -331,25 +352,40 @@ TEST(Pi05M3_12, FullOdeLoopMatchesPytorch) {
   }
 
   // ── 4. Compare. ───────────────────────────────────────────────────────
-  reportProbe("ode.step_0.x_next", step_snapshots[0].data(),
-              expected_step0.data(), expected_step0.size());
-  reportProbe("ode.step_3.x_next", step_snapshots[3].data(),
-              expected_step3.data(), expected_step3.size());
-  reportProbe("ode.step_7.x_next", step_snapshots[7].data(),
-              expected_step7.data(), expected_step7.size());
-  reportProbe("ode.step_9.x_next", step_snapshots[9].data(),
-              expected_step9.data(), expected_step9.size());
-  reportProbe("ode.actions_final", x_t.data(),
-              expected_actions.data(), expected_actions.size());
+  reportProbe(
+      "ode.step_0.x_next",
+      step_snapshots[0].data(),
+      expected_step0.data(),
+      expected_step0.size());
+  reportProbe(
+      "ode.step_3.x_next",
+      step_snapshots[3].data(),
+      expected_step3.data(),
+      expected_step3.size());
+  reportProbe(
+      "ode.step_7.x_next",
+      step_snapshots[7].data(),
+      expected_step7.data(),
+      expected_step7.size());
+  reportProbe(
+      "ode.step_9.x_next",
+      step_snapshots[9].data(),
+      expected_step9.data(),
+      expected_step9.size());
+  reportProbe(
+      "ode.actions_final",
+      x_t.data(),
+      expected_actions.data(),
+      expected_actions.size());
 
   // Plan §5 end-to-end bar (CPU): cos > 0.999, max abs diff < 1e-2.
   // We assert against the final actions (the actual product). Per-step
   // intermediates are printed for diagnostics but not asserted to allow
   // the F16 quant noise to drift gradually across steps.
-  const float cos = cosineSim(x_t.data(), expected_actions.data(),
-                               expected_actions.size());
-  const float diff = maxAbsDiff(x_t.data(), expected_actions.data(),
-                                 expected_actions.size());
+  const float cos =
+      cosineSim(x_t.data(), expected_actions.data(), expected_actions.size());
+  const float diff =
+      maxAbsDiff(x_t.data(), expected_actions.data(), expected_actions.size());
   float max_abs = 0.0f;
   for (float v : expected_actions) {
     const float a = std::fabs(v);
