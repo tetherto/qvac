@@ -47,17 +47,8 @@ find_package(nlohmann_json CONFIG REQUIRED)
 if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
 endif()
-# After find_package(llama) around line 39, add:
 if(ANDROID)
-  set(DEBUG_LOG "${CMAKE_BINARY_DIR}/openmp_search_debug.txt")
-  file(WRITE ${DEBUG_LOG} "=== OpenMP Search Debug ===\n\n")
-  file(APPEND ${DEBUG_LOG} "Timestamp: ${CMAKE_CURRENT_DATE}\n")
-  file(APPEND ${DEBUG_LOG} "HOST: ${CMAKE_HOST_SYSTEM_NAME}\n")
-  file(APPEND ${DEBUG_LOG} "NDK: $ENV{ANDROID_NDK}\n")
-  file(APPEND ${DEBUG_LOG} "CMAKE_ANDROID_NDK: ${CMAKE_ANDROID_NDK}\n")
-  file(APPEND ${DEBUG_LOG} "ANDROID_ABI: ${ANDROID_ABI}\n\n")
   
-  # Determine host platform
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(NDK_HOST "windows-x86_64")
   elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
@@ -65,54 +56,28 @@ if(ANDROID)
   else()
     set(NDK_HOST "darwin-x86_64")
   endif()
-  file(APPEND ${DEBUG_LOG} "NDK_HOST: ${NDK_HOST}\n\n")
-  
-  # Single path for NDK 29 with Clang 21 (aarch64 only)
+
   set(LIBOMP_PATHS
     "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/21/lib/linux/aarch64/libomp.so"
   )
   
-  file(APPEND ${DEBUG_LOG} "Checking paths:\n")
   set(LIBOMP_FOUND_PATH "")
   foreach(path ${LIBOMP_PATHS})
     file(TO_CMAKE_PATH "${path}" path_normalized)
     if(EXISTS ${path_normalized})
       set(LIBOMP_FOUND_PATH ${path_normalized})
-      file(APPEND ${DEBUG_LOG} "  [FOUND] ${path_normalized}\n")
       break()
-    else()
-      file(APPEND ${DEBUG_LOG} "  [NOT FOUND] ${path_normalized}\n")
     endif()
   endforeach()
   
-  # Try glob search if not found
   if(NOT LIBOMP_FOUND_PATH)
-    file(APPEND ${DEBUG_LOG} "\nTrying glob search in NDK...\n")
     file(GLOB_RECURSE LIBOMP_SEARCH 
       "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib*/**/libomp.so"
     )
     if(LIBOMP_SEARCH)
       list(GET LIBOMP_SEARCH 0 LIBOMP_FOUND_PATH)
-      file(APPEND ${DEBUG_LOG} "  [FOUND via glob] ${LIBOMP_FOUND_PATH}\n")
-      foreach(found_path ${LIBOMP_SEARCH})
-        file(APPEND ${DEBUG_LOG} "    - ${found_path}\n")
-      endforeach()
-    else()
-      file(APPEND ${DEBUG_LOG} "  [GLOB FOUND NOTHING]\n")
     endif()
   endif()
-  
-  # Result
-  file(APPEND ${DEBUG_LOG} "\n=== RESULT ===\n")
-  if(LIBOMP_FOUND_PATH)
-    file(APPEND ${DEBUG_LOG} "LIBOMP_FOUND_PATH: ${LIBOMP_FOUND_PATH}\n")
-    file(APPEND ${DEBUG_LOG} "Status: SUCCESS - Will install libomp.so\n")
-  else()
-    file(APPEND ${DEBUG_LOG} "LIBOMP_FOUND_PATH: (empty)\n")
-    file(APPEND ${DEBUG_LOG} "Status: FAILED - libomp.so not found!\n")
-  endif()
-  
-  file(APPEND ${DEBUG_LOG} "\n=== End Debug ===\n")
 
 endif()
 bare_target(bare_target_value)
@@ -133,22 +98,14 @@ add_bare_module(inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
 if(ANDROID AND LIBOMP_FOUND_PATH)
   message(STATUS "Installing libomp.so from: ${LIBOMP_FOUND_PATH}")
   
-  # Install to prebuilds (this works immediately)
   install(FILES ${LIBOMP_FOUND_PATH} 
   DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
   RENAME libomp.so
   )
   
-  # install(FILES ${DEBUG_LOG} 
-  # DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
-  # RENAME openmp_debug_log.txt
-  # )
-  
-  # Link to main target
   target_link_libraries(${inference-addon-llama} PRIVATE ${LIBOMP_FOUND_PATH})
   target_compile_options(${inference-addon-llama} PRIVATE -fopenmp)
   
-  # Copy to build dir after build (target now exists!)
   add_custom_command(TARGET ${inference-addon-llama}_module POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       ${LIBOMP_FOUND_PATH}
