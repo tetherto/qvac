@@ -285,6 +285,8 @@ class BCIWhispercpp {
    * @param {'delta'|'full'} [streamOpts.emit='delta'] - whether each
    *   update carries only the newly-discovered tail ('delta') or the
    *   full running transcript ('full').
+   * @param {AbortSignal} [streamOpts.signal] - When aborted, the returned
+   *   response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
   async transcribeStream (neuralStream, streamOpts = {}) {

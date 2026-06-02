@@ -231,6 +231,13 @@ export interface EsrganUpscalerArgs {
 
 export interface EsrganUpscaleOptions {
   repeats?: number
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
+}
+
+export interface RunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
 }
 
 export interface GenerationParams {
@@ -409,7 +416,7 @@ export default class ImgStableDiffusion {
 
   load(): Promise<void>
 
-  run(params: GenerationParams): Promise<QvacResponse>
+  run(params: GenerationParams, runOptions?: RunOptions): Promise<QvacResponse>
 
   unload(): Promise<void>
 

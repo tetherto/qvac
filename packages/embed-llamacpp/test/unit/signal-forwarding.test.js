@@ -48,7 +48,7 @@ function buildModel () {
   const model = new GGMLBert({ files: { model: ['/tmp/fake-embed-model.gguf'] } })
   model._createAddon = () => ({
     activate: async () => {},
-    runJob: async () => true,
+    runJob: async (job) => { model._capturedJob = job; return true },
     cancel: async () => {},
     unload: async () => {}
   })
@@ -73,6 +73,8 @@ test('run(): aborting mid-inference rejects the response with the abort reason',
   const { signal, abort } = makeAbortable()
   const response = await model.run('hello world', { signal })
   const settled = response.await()
+
+  t.absent(model._capturedJob && 'signal' in model._capturedJob, 'signal not forwarded to native runJob')
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, settled, /aborted by caller/, 'await()')

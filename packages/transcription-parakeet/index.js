@@ -202,6 +202,8 @@ class TranscriptionParakeet {
    *   segments on chunk boundaries (default true)
    * @param {boolean} [streamingConfig.emitEnergyVad] - surface
    *   energy-VAD events for CTC/TDT
+   * @param {AbortSignal} [streamingConfig.signal] - When aborted, the
+   *   returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>} - response object exposing
    *   `onUpdate(seg => ...).await()`
    */

@@ -39,7 +39,7 @@ function buildModel () {
   const model = new TTSGgml({})
   model.addon = {
     activate: async () => {},
-    runJob: async () => true,
+    runJob: async (job) => { model._capturedJob = job; return true },
     cancel: async () => {},
     destroyInstance: async () => {}
   }
@@ -59,6 +59,8 @@ test('run(): aborting mid-synthesis rejects with the abort reason', async (t) =>
   const { signal, abort } = makeAbortable()
   const response = await model.run({ input: 'hello there' }, { signal })
   const settled = response.await()
+
+  t.absent(model._capturedJob && 'signal' in model._capturedJob, 'signal not forwarded to native runJob')
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, settled, /aborted by caller/, 'await()')

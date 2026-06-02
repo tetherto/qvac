@@ -40,7 +40,7 @@ function makeAbortable () {
 function buildModel () {
   const model = new ImageClassifier()
   model._addon = {
-    runJob: async () => true,
+    runJob: async (job) => { model._capturedJob = job; return true },
     cancel: async () => {},
     unload: async () => {}
   }
@@ -63,6 +63,7 @@ test('classify(): aborting mid-inference rejects with the abort reason', async (
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, pending, /aborted by caller/, 'classify()')
+  t.absent(model._capturedJob && 'signal' in model._capturedJob, 'signal not forwarded to native runJob')
 })
 
 test('classify(): an already-aborted signal rejects immediately', async (t) => {

@@ -36,6 +36,11 @@ export interface OCRRunParams {
   };
 }
 
+export interface RunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal;
+}
+
 export interface OCRStats {
   detectionTime?: number;
   recognitionTime?: number;
@@ -60,7 +65,7 @@ export class ONNXOcr {
 
   getState(): InferenceClientState;
   load(): Promise<void>;
-  run(params: OCRRunParams): Promise<QvacResponse>;
+  run(params: OCRRunParams, runOptions?: RunOptions): Promise<QvacResponse>;
   unload(): Promise<void>;
   destroy(): Promise<void>;
 

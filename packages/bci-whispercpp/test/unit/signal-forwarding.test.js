@@ -41,7 +41,7 @@ function makeAbortable () {
 function buildModel () {
   const model = new BCIWhispercpp({ files: { model: 'model.bin' } }, {})
   model.addon = {
-    runJob: async () => true,
+    runJob: async (job) => { model._capturedJob = job; return true },
     cancel: async () => {},
     destroyInstance: async () => {}
   }
@@ -62,6 +62,8 @@ test('transcribe(): aborting mid-inference rejects with the abort reason', async
   const { signal, abort } = makeAbortable()
   const response = await model.transcribe(new Uint8Array([1, 2, 3, 4]), { signal })
   const settled = response.await()
+
+  t.absent(model._capturedJob && 'signal' in model._capturedJob, 'signal not forwarded to native runJob')
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, settled, /aborted by caller/, 'await()')

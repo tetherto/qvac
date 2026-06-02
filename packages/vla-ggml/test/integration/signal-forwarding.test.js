@@ -69,7 +69,8 @@ async function expectRejection (t, promise, re, message) {
 
 test('run(): aborting mid-inference rejects with the abort reason', async (t) => {
   const original = binding.runJob
-  binding.runJob = () => true
+  let capturedJobParams
+  binding.runJob = (handle, params) => { capturedJobParams = params; return true }
   t.teardown(() => { binding.runJob = original })
 
   const model = buildModel()
@@ -77,6 +78,8 @@ test('run(): aborting mid-inference rejects with the abort reason', async (t) =>
   const { signal, abort } = makeAbortable()
   const response = await model.run(validInput(), { signal })
   const settled = response.await()
+
+  t.absent(capturedJobParams && 'signal' in capturedJobParams, 'signal not forwarded to native runJob')
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, settled, /aborted by caller/, 'await()')

@@ -74,6 +74,7 @@ test('run(): aborting mid-inference rejects with the abort reason', async (t) =>
   const settled = response.await()
 
   t.is(model._acceptedJobs.length, 1, 'native job was accepted before abort')
+  t.absent('signal' in model._acceptedJobs[0], 'signal not forwarded to native runJob')
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, settled, /aborted by caller/, 'await()')

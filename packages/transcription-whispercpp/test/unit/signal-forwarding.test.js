@@ -44,7 +44,7 @@ function buildModel () {
     { whisperConfig: {}, path: __filename }
   )
   model.addon = {
-    append: async () => 'job-1',
+    append: async (job) => { model._capturedJob = job; return 'job-1' },
     cancel: async () => {},
     _activeJobId: 'job-1'
   }
@@ -64,6 +64,8 @@ test('run(): aborting mid-transcription rejects with the abort reason', async (t
   const { signal, abort } = makeAbortable()
   const response = await model.run(new Uint8Array([1, 2, 3, 4]), { signal })
   const settled = response.await()
+
+  t.absent(model._capturedJob && 'signal' in model._capturedJob, 'signal not forwarded to native append')
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, settled, /aborted by caller/, 'await()')

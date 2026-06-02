@@ -41,7 +41,7 @@ function buildModel () {
     params: { pathDetector: 'd.gguf', pathRecognizer: 'r.gguf', langList: ['en'] }
   })
   model.addon = {
-    runJob: async () => true,
+    runJob: async (job) => { model._capturedJob = job; return true },
     cancel: async () => {},
     destroy: async () => {}
   }
@@ -62,6 +62,8 @@ test('run(): aborting mid-inference rejects with the abort reason', async (t) =>
   const { signal, abort } = makeAbortable()
   const response = await model.run({ path: 'image.png' }, { signal })
   const settled = response.await()
+
+  t.absent(model._capturedJob && 'signal' in model._capturedJob, 'signal not forwarded to native runJob')
 
   abort(new Error('aborted by caller'))
   await expectRejection(t, settled, /aborted by caller/, 'await()')

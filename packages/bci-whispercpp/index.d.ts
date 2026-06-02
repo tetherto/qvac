@@ -70,6 +70,11 @@ declare interface TranscriptSegment {
   id: number
 }
 
+declare interface BCIRunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
+}
+
 declare interface BCIWhispercppState {
   configLoaded: boolean
   destroyed: boolean
@@ -90,10 +95,10 @@ declare class BCIWhispercpp {
   load(): Promise<void>
 
   /** Transcribe a neural signal binary file (convenience wrapper). */
-  transcribeFile(filePath: string): Promise<QvacResponse>
+  transcribeFile(filePath: string, runOptions?: BCIRunOptions): Promise<QvacResponse>
 
   /** Transcribe a neural signal buffer (batch mode). */
-  transcribe(neuralData: Uint8Array): Promise<QvacResponse>
+  transcribe(neuralData: Uint8Array, runOptions?: BCIRunOptions): Promise<QvacResponse>
 
   /** Cancel the in-flight inference, if any. */
   cancel(): Promise<void>
@@ -127,7 +132,8 @@ declare namespace BCIWhispercpp {
     BCIWhispercppArgs,
     BCIWhispercppConfig,
     BCIWhispercppState,
-    TranscriptSegment
+    TranscriptSegment,
+    BCIRunOptions
   }
 }
 
