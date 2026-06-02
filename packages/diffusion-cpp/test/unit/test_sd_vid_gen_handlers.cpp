@@ -5,7 +5,7 @@
  * Coverage:
  *   1.  Mode validation (txt2vid / img2vid / unknown)
  *   2.  Prompt handlers (prompt / negative_prompt)
- *   3.  Dimensions (width / height -- multiples of 8)
+ *   3.  Dimensions (width / height -- multiples of 16)
  *   4.  video_frames (4k+1 rule, minimum 5)
  *   5.  fps (1-120)
  *   6.  Seed
@@ -110,16 +110,18 @@ TEST(SdVidGenHandlers_Prompt, NonStringPromptThrows) {
 // 3. Dimensions
 // -----------------------------------------------------------------------------
 
-TEST(SdVidGenHandlers_Dimensions, MultiplesOfEightAccepted) {
+TEST(SdVidGenHandlers_Dimensions, MultiplesOfSixteenAccepted) {
   EXPECT_EQ(applyOne("width", num(832)).width, 832);
   EXPECT_EQ(applyOne("height", num(480)).height, 480);
-  EXPECT_EQ(applyOne("width", num(8)).width, 8);
+  EXPECT_EQ(applyOne("width", num(16)).width, 16);
 }
 
-TEST(SdVidGenHandlers_Dimensions, NonMultipleOfEightRejected) {
+TEST(SdVidGenHandlers_Dimensions, NonMultipleOfSixteenRejected) {
   expectThrows("width", num(831));
   expectThrows("height", num(479));
-  expectThrows("width", num(1)); // not a multiple of 8
+  expectThrows("width", num(1));  // not a multiple of 16
+  expectThrows("width", num(8));  // multiple of 8 but not 16
+  expectThrows("height", num(24)); // multiple of 8 but not 16
 }
 
 TEST(SdVidGenHandlers_Dimensions, ZeroOrNegativeRejected) {
