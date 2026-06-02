@@ -4,7 +4,12 @@
 
 ### Changed
 
-- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2#2` (sync update with `llm-llamacpp`, no functional changes).
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2#1` (sync update with `llm-llamacpp`, no functional changes).
+## [0.18.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
 
 ## [0.18.0] - 2026-05-29
 

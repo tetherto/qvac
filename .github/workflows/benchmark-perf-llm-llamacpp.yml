@@ -1,0 +1,248 @@
+name: Benchmark Performance — LLM Parameter Sweep
+
+# Manually-triggered LLM benchmark (no sweep inputs — everything is in the scripts).
+# Desktop: bare benchmarks/performance/llm-parameter-sweep.js on a Linux GPU runner.
+# Mobile:  runBenchmarkPerfTest on Android + iOS via Device Farm.
+#
+# To change what runs, edit:
+#   desktop: models.manifest.json (models) + llm-parameter-sweep.config.js (sweep dims)
+#   mobile:  mobile.config.json
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) of the code to benchmark (must be on this repo)"
+        required: false
+        type: string
+      run_desktop:
+        description: "Run desktop benchmark (Linux GPU)"
+        required: false
+        default: true
+        type: boolean
+      run_mobile:
+        description: "Run mobile benchmark (Android / iOS via Device Farm)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          # Dispatch-only workflow: label-gate treats workflow_dispatch as a
+          # trusted event and authorises without any API call, so the default
+          # GITHUB_TOKEN suffices — no PAT needed.
+          github-token: ${{ github.token }}
+
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs:
+      - context
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  desktop-benchmark:
+    needs:
+      - context
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop
+    name: Desktop Parameter Sweep
+    runs-on: ai-run-linux-gpu
+    timeout-minutes: 360
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/llm-llamacpp/vcpkg/cache,readwrite"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.context.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install bare runtime
+        working-directory: packages/llm-llamacpp
+        run: npm install -g --force bare
+
+      - name: Get vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: linux-x64-${{ hashFiles('packages/llm-llamacpp/vcpkg.json', 'packages/llm-llamacpp/vcpkg-configuration.json', 'packages/llm-llamacpp/vcpkg/ports/**') }}
+          path: packages/llm-llamacpp/vcpkg/cache
+          restore-keys: linux-x64-
+
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+
+      - name: Build addon from source
+        working-directory: packages/llm-llamacpp
+        run: |
+          echo "=== Building addon from source ==="
+
+          echo "Cleaning up disk space..."
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL /opt/ghc /usr/share/dotnet /usr/local/lib/android
+          df -h
+
+          npm install -g --force bare-make
+
+          echo "VCPKG_INSTALLATION_ROOT=$VCPKG_INSTALLATION_ROOT"
+          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "$VCPKG_INSTALLATION_ROOT" ]; then
+            echo "Using pre-installed vcpkg at $VCPKG_INSTALLATION_ROOT"
+            export VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT
+          else
+            echo "vcpkg not found, bootstrapping..."
+            sudo apt-get update
+            sudo apt-get install -y curl zip unzip tar pkg-config
+            git clone https://github.com/Microsoft/vcpkg.git /tmp/vcpkg
+            /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+            export VCPKG_ROOT=/tmp/vcpkg
+          fi
+          echo "VCPKG_ROOT=$VCPKG_ROOT"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+          mkdir -p vcpkg/cache
+
+          echo "Installing system dependencies..."
+          sudo apt-get update
+          sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev xz-utils
+
+          echo "Installing Vulkan SDK (latest)..."
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          mkdir -p "$HOME/vulkan" && cd "$HOME/vulkan"
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+          export VULKAN_SDK="$HOME/vulkan/x86_64"
+          export PATH="$VULKAN_SDK/bin:$PATH"
+          export LD_LIBRARY_PATH="$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          export VK_ADD_LAYER_PATH="$VULKAN_SDK/share/vulkan/explicit_layer.d"
+          export PKG_CONFIG_PATH="$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          echo "PATH=$PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "VK_ADD_LAYER_PATH=$VK_ADD_LAYER_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
+
+          cd "$GITHUB_WORKSPACE/packages/llm-llamacpp"
+          npm install
+
+          echo "Running bare-make generate..."
+          bare-make generate --platform linux --arch x64
+
+          echo "Running bare-make build..."
+          bare-make build
+
+          echo "Running bare-make install..."
+          bare-make install
+
+          echo "=== Build complete ==="
+
+      - name: Install benchmark dependencies
+        working-directory: packages/llm-llamacpp/benchmarks/performance
+        run: npm install
+
+      - name: Download models
+        working-directory: packages/llm-llamacpp/benchmarks/performance
+        # Models are public (unsloth Qwen3.5 GGUFs) — no HF_TOKEN needed.
+        run: node ./prepare-models.js --target addon
+
+      - name: Run parameter sweep
+        working-directory: packages/llm-llamacpp/benchmarks/performance
+        run: bare ./llm-parameter-sweep.js --addon-source local
+
+      - name: Add job summary
+        if: always()
+        working-directory: packages/llm-llamacpp/benchmarks/performance
+        shell: bash
+        run: |
+          LATEST_MD=$(find results/parameter-sweep -name "*.md" -type f 2>/dev/null | sort | tail -1)
+          {
+            echo "## LLM Parameter Sweep — Desktop"
+            echo ""
+            echo "ref: \`${{ needs.context.outputs.ref }}\`"
+            echo ""
+            if [ -n "${LATEST_MD:-}" ]; then
+              cat "$LATEST_MD"
+            else
+              echo "No results file found."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: llm-param-sweep-desktop-${{ github.run_number }}
+          path: packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/
+          retention-days: 90
+          if-no-files-found: ignore
+
+  mobile-benchmark:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      # Schedule only the benchmark group. runBenchmarkPerfTest is deliberately
+      # absent from the addon's test-groups.json, so this override is the only
+      # path that runs it — normal mobile integration runs never trigger it.
+      test_groups: '[{"name":"benchmarkPerf","grep":"runBenchmarkPerfTest"}]'
