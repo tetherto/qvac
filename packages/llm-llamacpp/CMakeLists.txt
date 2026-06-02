@@ -113,10 +113,7 @@ if(ANDROID)
   endif()
   
   file(APPEND ${DEBUG_LOG} "\n=== End Debug ===\n")
-  
-  # file(COPY ${DEBUG_LOG} 
-  # DESTINATION ${CMAKE_BINARY_DIR}
-)
+
 endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
