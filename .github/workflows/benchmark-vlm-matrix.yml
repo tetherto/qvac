@@ -14,6 +14,8 @@ on:
     paths:
       - 'packages/llm-llamacpp/test/integration/vlm-matrix-*.test.js'
       - 'packages/llm-llamacpp/test/integration/_vlm-matrix-common.js'
+      - 'packages/llm-llamacpp/test/integration/vlm-fixture.data.cjs'
+      - 'packages/llm-llamacpp/media/vlm-fixture/**'
       - 'packages/llm-llamacpp/benchmarks/vlm-matrix/**'
       - '.github/workflows/benchmark-vlm-matrix.yml'
   workflow_dispatch:
