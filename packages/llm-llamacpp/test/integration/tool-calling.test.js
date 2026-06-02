@@ -38,8 +38,6 @@ const BASE_CONFIG = {
   device: useCpu ? 'cpu' : 'gpu',
   gpu_layers: '999',
   ctx_size: '8192',
-  temp: '0',
-  seed: '42',
   n_predict: '1024',
   verbosity: '2',
   tools: 'true'
@@ -209,9 +207,6 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
       const firstRun = await runPrompt(model, clonePrompt())
       t.ok(firstRun.text.length > 0, `${label} prompt1: generated text`)
       t.ok(firstRun.generatedTokens > 0, `${label} prompt1: generated tokens tracked`)
-      if (firstRun.generatedTokens >= parseInt(BASE_CONFIG.n_predict, 10)) {
-        t.comment(`WARNING: prompt1 hit n_predict limit (${BASE_CONFIG.n_predict})`)
-      }
       const perfLabel1 = `[tools batch] [${modelVariant.id}] [${epTag}]`
       t.comment(recordPerformance(perfLabel1, firstRun.endTime - firstRun.startTime, {
         _output: firstRun.text,
@@ -224,9 +219,6 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
       const secondRun = await runPrompt(model, buildPrompt2(firstRun.text))
       t.ok(secondRun.text.length > 0, `${label} prompt2: generated text`)
       t.ok(secondRun.generatedTokens > 0, `${label} prompt2: generated tokens tracked`)
-      if (secondRun.generatedTokens >= parseInt(BASE_CONFIG.n_predict, 10)) {
-        t.comment(`WARNING: prompt2 hit n_predict limit (${BASE_CONFIG.n_predict})`)
-      }
       const perfLabel2 = `[tools followup] [${modelVariant.id}] [${epTag}]`
       t.comment(recordPerformance(perfLabel2, secondRun.endTime - secondRun.startTime, {
         _output: secondRun.text,

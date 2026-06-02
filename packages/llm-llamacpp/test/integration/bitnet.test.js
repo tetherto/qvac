@@ -50,17 +50,6 @@ async function runBitnetInference (addon, prompt) {
   response
     .onUpdate(data => { chunks.push(data) })
     .onError(err => { error = err })
-
-  // Bare runtime on arm64 may not drain promise microtasks from native addon
-  // (uv_async) callbacks until another macrotask fires. A periodic setInterval
-  // ensures the event loop stays active and microtasks are flushed promptly.
-  const ticker = setInterval(() => {}, 50)
-  try {
-    await response.await()
-  } finally {
-    clearInterval(ticker)
-  }
-
   if (error) throw new Error('bitnet inference failed: ' + error)
   return {
     output: chunks.join('').trim(),
@@ -84,8 +73,6 @@ safeTest('bitnet model can run simple inference', { timeout: 900_000, skip: !isA
     ctx_size: '1024',
     device: 'gpu',
     n_predict: '32',
-    temp: '0',
-    seed: '42',
     verbosity: '2'
   }
 

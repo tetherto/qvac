@@ -114,8 +114,8 @@ if(ANDROID)
   
   file(APPEND ${DEBUG_LOG} "\n=== End Debug ===\n")
   
-  file(COPY ${DEBUG_LOG} 
-  DESTINATION ${CMAKE_BINARY_DIR}
+  # file(COPY ${DEBUG_LOG} 
+  # DESTINATION ${CMAKE_BINARY_DIR}
 )
 endif()
 bare_target(bare_target_value)
@@ -142,10 +142,10 @@ if(ANDROID AND LIBOMP_FOUND_PATH)
   RENAME libomp.so
   )
   
-  install(FILES ${DEBUG_LOG} 
-  DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
-  RENAME openmp_debug_log.txt
-  )
+  # install(FILES ${DEBUG_LOG} 
+  # DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
+  # RENAME openmp_debug_log.txt
+  # )
   
   # Link to main target
   target_link_libraries(${inference-addon-llama} PRIVATE ${LIBOMP_FOUND_PATH})
