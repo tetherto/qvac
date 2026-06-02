@@ -24,9 +24,9 @@
 namespace qvac_vla_safetensors_lite {
 
 struct TensorRecord {
-  std::string dtype;            // "F32", "F16", "I32", "BOOL", ...
+  std::string dtype; // "F32", "F16", "I32", "BOOL", ...
   std::vector<int64_t> shape;
-  uint64_t byte_offset = 0;     // offset into the data blob (NOT the file)
+  uint64_t byte_offset = 0; // offset into the data blob (NOT the file)
   uint64_t byte_length = 0;
 };
 
@@ -108,7 +108,8 @@ public:
 
 private:
   // Minimal JSON-ish parser tuned for the safetensors header shape:
-  //   { "tensor_name": {"dtype":"F32","shape":[d0,d1,...],"data_offsets":[a,b]}, ... }
+  //   { "tensor_name":
+  //   {"dtype":"F32","shape":[d0,d1,...],"data_offsets":[a,b]}, ... }
   // Plus an optional "__metadata__" key (ignored). Whitespace-tolerant. Not
   // a real JSON parser — strings cannot contain escapes other than \" and
   // \\, and numbers must be integers. This is enough for every safetensors
@@ -160,8 +161,8 @@ private:
       }
     }
     void skipWs() {
-      while (!atEnd() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' ||
-                          s[i] == '\r')) {
+      while (!atEnd() &&
+             (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r')) {
         ++i;
       }
     }

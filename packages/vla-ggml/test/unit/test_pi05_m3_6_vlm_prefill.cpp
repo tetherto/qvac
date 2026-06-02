@@ -12,13 +12,12 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -76,7 +75,8 @@ qvac_lib_infer_vla_ggml::Pi05GemmaBlockWeights
 loadVlmBlock(struct ggml_context* ctx, int i) {
   qvac_lib_infer_vla_ggml::Pi05GemmaBlockWeights bw{};
   const std::string base = "vlm.blk." + std::to_string(i);
-  bw.pre_attn_norm_scale = mustGet(ctx, (base + ".pre_attn_norm.scale").c_str());
+  bw.pre_attn_norm_scale =
+      mustGet(ctx, (base + ".pre_attn_norm.scale").c_str());
   bw.attn_q_w = mustGet(ctx, (base + ".attn.q.weight").c_str());
   bw.attn_k_w = mustGet(ctx, (base + ".attn.k.weight").c_str());
   bw.attn_v_w = mustGet(ctx, (base + ".attn.v.weight").c_str());
@@ -100,14 +100,10 @@ TEST(Pi05M3_6, VlmFullPrefillMatchesPytorchOverValidPrefix) {
 
   qvac_vla_safetensors_lite::Reader activations;
   ASSERT_NO_THROW(activations.open(activations_path));
-  const std::vector<float> prefix =
-      activations.readF32("vlm.prefix_concat");
-  const std::vector<float> expected =
-      activations.readF32("vlm.final_out");
-  ASSERT_EQ(prefix.size(),
-            static_cast<size_t>(PREFIX_LEN_FULL * VLM_HIDDEN));
-  ASSERT_EQ(expected.size(),
-            static_cast<size_t>(PREFIX_LEN_FULL * VLM_HIDDEN));
+  const std::vector<float> prefix = activations.readF32("vlm.prefix_concat");
+  const std::vector<float> expected = activations.readF32("vlm.final_out");
+  ASSERT_EQ(prefix.size(), static_cast<size_t>(PREFIX_LEN_FULL * VLM_HIDDEN));
+  ASSERT_EQ(expected.size(), static_cast<size_t>(PREFIX_LEN_FULL * VLM_HIDDEN));
 
   struct ggml_context* ctx_w = nullptr;
   struct gguf_init_params gguf_params{};
@@ -136,7 +132,7 @@ TEST(Pi05M3_6, VlmFullPrefillMatchesPytorchOverValidPrefix) {
   // non-simultaneously-live nodes. Same dance as
   // smolvla.cpp::build_staged/alloc_staged_simple/compute_staged.
   const size_t graph_ctx_mem = size_t{32} * 1024 * 1024; // 32 MiB
-                                                            // (struct space only)
+                                                         // (struct space only)
   std::vector<uint8_t> graph_mem(graph_ctx_mem);
   struct ggml_init_params gp{
       /*.mem_size   =*/graph_ctx_mem,
@@ -149,28 +145,38 @@ TEST(Pi05M3_6, VlmFullPrefillMatchesPytorchOverValidPrefix) {
   // Input placeholders — no backing memory yet (no_alloc=true). The
   // gallocr below will assign them buffer space, and we'll memcpy
   // values in after that.
-  struct ggml_tensor* x = ggml_new_tensor_2d(
-      ctx_g, GGML_TYPE_F32, VLM_HIDDEN, VALID_PREFIX_LEN);
+  struct ggml_tensor* x =
+      ggml_new_tensor_2d(ctx_g, GGML_TYPE_F32, VLM_HIDDEN, VALID_PREFIX_LEN);
   ggml_set_name(x, "input.prefix");
-  struct ggml_tensor* pos = ggml_new_tensor_1d(
-      ctx_g, GGML_TYPE_I32, VALID_PREFIX_LEN);
+  struct ggml_tensor* pos =
+      ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, VALID_PREFIX_LEN);
   ggml_set_name(pos, "input.pos");
 
   using qvac_lib_infer_vla_ggml::pi05BuildVlmPrefillGraph;
   struct ggml_tensor* out = pi05BuildVlmPrefillGraph(
-      ctx_g, x, pos, /*attn_mask=*/nullptr, blocks, final_norm,
-      VLM_HIDDEN, VLM_N_HEADS, VLM_N_KV_HEADS, VLM_HEAD_DIM,
-      VALID_PREFIX_LEN, VLM_RMS_EPS, VLM_ROPE_BASE);
+      ctx_g,
+      x,
+      pos,
+      /*attn_mask=*/nullptr,
+      blocks,
+      final_norm,
+      VLM_HIDDEN,
+      VLM_N_HEADS,
+      VLM_N_KV_HEADS,
+      VLM_HEAD_DIM,
+      VALID_PREFIX_LEN,
+      VLM_RMS_EPS,
+      VLM_ROPE_BASE);
   ASSERT_NE(out, nullptr);
 
-  struct ggml_cgraph* gf = ggml_new_graph_custom(
-      ctx_g, /*size=*/32768, /*grads=*/false);
+  struct ggml_cgraph* gf =
+      ggml_new_graph_custom(ctx_g, /*size=*/32768, /*grads=*/false);
   ggml_build_forward_expand(gf, out);
 
   // Allocate the graph (inputs + intermediates) onto a CPU backend
   // buffer, with gallocr's memory reuse.
-  ggml_backend_t backend = ggml_backend_init_by_type(
-      GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+  ggml_backend_t backend =
+      ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
   ASSERT_NE(backend, nullptr);
   ggml_gallocr_t allocr =
       ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
@@ -182,20 +188,20 @@ TEST(Pi05M3_6, VlmFullPrefillMatchesPytorchOverValidPrefix) {
   for (int i = 0; i < VALID_PREFIX_LEN; ++i) {
     pos_data[i] = i;
   }
-  ggml_backend_tensor_set(x, prefix.data(), 0,
-                          VALID_PREFIX_LEN * VLM_HIDDEN * sizeof(float));
-  ggml_backend_tensor_set(pos, pos_data.data(), 0,
-                          VALID_PREFIX_LEN * sizeof(int32_t));
+  ggml_backend_tensor_set(
+      x, prefix.data(), 0, VALID_PREFIX_LEN * VLM_HIDDEN * sizeof(float));
+  ggml_backend_tensor_set(
+      pos, pos_data.data(), 0, VALID_PREFIX_LEN * sizeof(int32_t));
 
   ASSERT_EQ(ggml_backend_graph_compute(backend, gf), GGML_STATUS_SUCCESS);
 
-  ASSERT_EQ(ggml_nelements(out),
-            static_cast<int64_t>(VALID_PREFIX_LEN * VLM_HIDDEN));
+  ASSERT_EQ(
+      ggml_nelements(out), static_cast<int64_t>(VALID_PREFIX_LEN * VLM_HIDDEN));
   // out's data lives in the gallocr-backed buffer — read it out via
   // ggml_backend_tensor_get rather than `out->data` directly.
   std::vector<float> got_vec(VALID_PREFIX_LEN * VLM_HIDDEN);
-  ggml_backend_tensor_get(out, got_vec.data(), 0,
-                          got_vec.size() * sizeof(float));
+  ggml_backend_tensor_get(
+      out, got_vec.data(), 0, got_vec.size() * sizeof(float));
   const float* got = got_vec.data();
   const size_t cmp_n = static_cast<size_t>(VALID_PREFIX_LEN * VLM_HIDDEN);
 
@@ -211,11 +217,9 @@ TEST(Pi05M3_6, VlmFullPrefillMatchesPytorchOverValidPrefix) {
     const double d = static_cast<double>(got[i]) - expected[i];
     sum_sq_diff += d * d;
   }
-  const float rms_diff =
-      static_cast<float>(std::sqrt(sum_sq_diff / cmp_n));
+  const float rms_diff = static_cast<float>(std::sqrt(sum_sq_diff / cmp_n));
   std::cerr << "[M3.6] vlm.final_out (valid prefix=" << VALID_PREFIX_LEN
-            << "): cos=" << cos
-            << " max_abs_diff=" << diff
+            << "): cos=" << cos << " max_abs_diff=" << diff
             << " rms_diff=" << rms_diff
             << " max_abs_expected=" << max_abs_expected
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
