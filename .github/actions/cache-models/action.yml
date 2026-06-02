@@ -2,8 +2,8 @@ name: Cache CI test models
 description: |
   Caches an addon's test model directory using actions/cache. Works for
   HuggingFace, S3, GitHub Release, or script-based model downloads.
-  Callers should gate with `if: startsWith(matrix.runner, 'qvac-')` on
-  Hetzner self-hosted runners (transparent local cache server) and
+  Callers should gate with `if: runner.environment != 'github-hosted'` on
+  self-hosted runners (transparent local cache server) and
   condition the download step on `steps.<id>.outputs.cache-hit != 'true'`.
   Tracks QVAC-19322.
 

@@ -41,7 +41,7 @@ test('Chatterbox TTS (ggml): English synthesis + optional WER verification', { t
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
   if (!download.success) {
     console.log('Chatterbox GGUFs not available locally; see instructions above.')
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
   t.ok(download.success, 'Chatterbox GGUFs should be available')
@@ -146,7 +146,7 @@ test('Chatterbox TTS (ggml): synthesizes without referenceAudio using the built-
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -195,7 +195,7 @@ test('Chatterbox TTS (ggml): outputSampleRate option is accepted (pass-through f
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -238,7 +238,7 @@ test('Chatterbox TTS (ggml): native C++ chunk streaming via streamChunkTokens', 
 
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -300,7 +300,7 @@ test('Chatterbox TTS (ggml): streaming input + streaming PCM output (runStreamin
   console.log('\n=== Ensuring Chatterbox GGUFs (streaming) ===')
   const download = await ensureChatterboxModels({ targetDir: modelsDir })
   if (!download.success) {
-    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    t.fail('Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
   t.ok(download.success, 'Chatterbox GGUFs should be available')

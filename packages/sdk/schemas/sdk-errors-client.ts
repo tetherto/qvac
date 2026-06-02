@@ -19,6 +19,8 @@ export const SDK_CLIENT_ERROR_CODES = {
   RPC_RESPONSE_STREAM_NOT_CREATED: 50202,
   RPC_CONNECTION_FAILED: 50203,
   RPC_INIT_TIMEOUT: 50204,
+  WORKER_CRASHED: 50205,
+  WORKER_SHUTDOWN: 50206,
 
   // Provider/Delegation Errors (50,400-50,599)
   PROVIDER_START_FAILED: 50400,
@@ -113,6 +115,16 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "RPC_INIT_TIMEOUT",
     message: (timeoutMs: number) =>
       `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`,
+  },
+  [SDK_CLIENT_ERROR_CODES.WORKER_CRASHED]: {
+    name: "WORKER_CRASHED",
+    message: (code: string, signal: string) =>
+      `Bare worker exited mid-request (code=${code}, signal=${signal}) — in-flight calls were aborted`,
+  },
+  [SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN]: {
+    name: "WORKER_SHUTDOWN",
+    message: () =>
+      `SDK is shutting down — in-flight RPC call aborted`,
   },
 
   // Provider/Delegation Errors (50,400-50,599)

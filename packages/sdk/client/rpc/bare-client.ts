@@ -297,6 +297,11 @@ function createMockRPCRequest() {
 
 let configInitialized = false;
 
+// No child worker on Bare-direct — `#rpc` interface stub.
+export function getWorkerLifeSignal(): AbortSignal | null {
+  return null;
+}
+
 export async function getRPC() {
   await ensureWorkerReady();
 

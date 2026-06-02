@@ -74,7 +74,7 @@ function getEnvVar (name) {
 
 // QVAC-17830: lightweight GPU probe so reports can label the actual
 // GPU (NVIDIA Tesla T4 vs Apple M2 Max vs integrated Intel) instead
-// of the opaque "linux-x64-gpu" / "darwin-arm64" runner names. Falls
+// of the opaque "linux-x64-u24-gpu" / "darwin-arm64" runner names. Falls
 // back to null on any failure — runs once per `createPerformanceReporter`
 // so the subprocess cost is paid at most once per test suite.
 //
@@ -326,6 +326,14 @@ const QUALITY_COLUMNS = {
     { key: 'action_max_abs_diff', label: 'Max \\|Δ\\|', unit: 'raw' },
     { key: 'action_mean_abs_diff', label: 'Mean \\|Δ\\|', unit: 'raw' },
     { key: 'action_cos_sim', label: 'Cosine Sim', unit: 'cos-sim' }
+  ],
+  // pi05 reports the same end-to-end action quality as smolvla — just a
+  // separate addon_type so the metric table can carry pi05-specific
+  // per-component timings (prefill_compute_ms etc.).
+  pi05: [
+    { key: 'action_max_abs_diff', label: 'Max \\|Δ\\|', unit: 'raw' },
+    { key: 'action_mean_abs_diff', label: 'Mean \\|Δ\\|', unit: 'raw' },
+    { key: 'action_cos_sim', label: 'Cosine Sim', unit: 'cos-sim' }
   ]
 }
 
@@ -366,6 +374,17 @@ const METRIC_COLUMNS = {
     { key: 'vision_time_ms', label: 'Vision (ms)' },
     { key: 'smollm2_compute_time_ms', label: 'SmolLM2 Compute (ms)' },
     { key: 'smollm2_total_time_ms', label: 'SmolLM2 Total (ms)' },
+    { key: 'ode_time_ms', label: 'ODE (ms)' }
+  ],
+  // π₀.₅ — same five-section breakdown the test records: vision encoder,
+  // PaliGemma VLM prefill (compute vs total — total includes graph build
+  // amortisation), 10-step ODE loop, and total. Keys match what
+  // pi05.test.js writes via `_perfReporter.record`.
+  pi05: [
+    { key: 'total_time_ms', label: 'Total Time (ms)' },
+    { key: 'vision_time_ms', label: 'Vision (ms)' },
+    { key: 'prefill_compute_time_ms', label: 'Prefill Compute (ms)' },
+    { key: 'prefill_total_time_ms', label: 'Prefill Total (ms)' },
     { key: 'ode_time_ms', label: 'ODE (ms)' }
   ],
   parakeet: [
