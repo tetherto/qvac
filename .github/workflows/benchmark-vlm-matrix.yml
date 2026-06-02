@@ -87,7 +87,8 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          PACKAGE="${{ inputs.prebuild_package }}"
+          # push events carry no inputs, so fall back to the default package
+          PACKAGE="${{ inputs.prebuild_package || '@qvac/llm-llamacpp@latest' }}"
           echo "Downloading $PACKAGE from npm..."
           npm pack "$PACKAGE"
           tar -xzf *.tgz
