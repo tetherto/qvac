@@ -240,3 +240,78 @@ safeTest('Qwen3 reasoning-budget=0 disables thinking', {
   t.ok(disabled.length < baseline.length / 4,
     `disabled (${disabled.length}) should be substantially shorter than baseline (${baseline.length})`)
 })
+
+// reasoning-budget = N caps the <think> channel at N tokens via the budget
+// sampler — </think> is force-emitted once N reasoning tokens have streamed.
+safeTest('Qwen3 reasoning-budget=N caps reasoning channel below baseline', {
+  skip: isDarwinX64 || isWindowsX64,
+  timeout: 600_000
+}, async t => {
+  const [modelName, dirPath] = await ensureModel({
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
+  })
+  const modelPath = path.join(dirPath, modelName)
+
+  const baseConfig = {
+    ctx_size: '4096',
+    n_predict: '1024',
+    seed: '50',
+    gpu_layers: '999',
+    temp: '0',
+    top_p: '1',
+    device: useCpu ? 'cpu' : 'gpu',
+    verbosity: '0'
+  }
+
+  async function runOnce (extra) {
+    const inference = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: { ...baseConfig, ...extra },
+      logger: console
+    })
+    try {
+      await inference.load()
+      const messages = [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'What is the capital of France? Answer in one word.' }
+      ]
+      return await runCompletion(inference, messages)
+    } finally {
+      await inference.unload().catch(() => {})
+    }
+  }
+
+  const baseline = await runOnce({})
+  const baselineThink = sliceReasoning(baseline)
+  t.ok(baselineThink !== null, `baseline produced a reasoning channel (${baselineThink ? baselineThink.length : 0} chars)`)
+
+  const BUDGET = 16
+  const capped = await runOnce({ 'reasoning-budget': String(BUDGET) })
+  const cappedThink = sliceReasoning(capped)
+
+  t.comment(`baseline reasoning (${baselineThink ? baselineThink.length : 0} chars): ${(baselineThink || '').slice(0, 200)}`)
+  t.comment(`capped   reasoning (${cappedThink ? cappedThink.length : 0} chars): ${cappedThink || ''}`)
+
+  t.ok(/paris/i.test(capped), 'capped output still mentions Paris (correctness preserved past forced close)')
+  t.ok(capped.includes('<think>') && capped.includes('</think>'),
+    `capped output keeps balanced reasoning tags: "${capped.slice(0, 200)}"`)
+  t.ok(cappedThink !== null,
+    'capped output has an extractable reasoning channel')
+  // The budget sampler is char-agnostic — it counts tokens, not characters —
+  // so we assert the reasoning channel is at least *substantially* shorter
+  // than the unrestricted baseline rather than asserting an exact char count.
+  t.ok(
+    cappedThink.length < Math.max(1, baselineThink.length * 0.6),
+    `capped reasoning (${cappedThink.length}) is substantially shorter than baseline (${baselineThink.length})`
+  )
+})
+
+function sliceReasoning (text) {
+  const open = text.indexOf('<think>')
+  const close = text.indexOf('</think>')
+  if (open === -1 || close === -1 || close < open) {
+    return null
+  }
+  return text.slice(open + '<think>'.length, close)
+}

@@ -22,6 +22,35 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::utils;
+
+namespace {
+
+// Populate params.sampling.reasoning_budget_{start,end,forced,tokens} from
+// params.reasoning_budget so common_sampler_init's budget-sampler kicks in.
+//
+//   < 0 - unrestricted (sampler skipped; thinking still enabled).
+//   0   - disabled (sampler skipped; inputs.enable_thinking=false at apply
+//         time keeps the template from inserting <think>).
+//   N>0 - token cap; the sampler counts tokens between <think> and </think>
+//         and forces </think> once N reasoning tokens have been emitted.
+void applyReasoningBudgetToSampling(
+    common_params& params, bool isQwen3Model, llama_context* lctx) {
+  if (params.reasoning_budget <= 0 || !isQwen3Model || lctx == nullptr) {
+    return;
+  }
+  params.sampling.reasoning_budget_tokens = params.reasoning_budget;
+  params.sampling.reasoning_budget_start =
+      common_tokenize(lctx, "<think>", false, true);
+  params.sampling.reasoning_budget_end =
+      common_tokenize(lctx, "</think>", false, true);
+  params.sampling.reasoning_budget_forced = common_tokenize(
+      lctx,
+      params.sampling.reasoning_budget_message + "</think>",
+      false,
+      true);
+}
+
+} // namespace
 // NOLINTNEXTLINE(readability-identifier-naming,readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
@@ -116,6 +145,10 @@ TextLlmContext::TextLlmContext(
     std::string chatTemplate =
         getChatTemplate(model_, params_, tools_.enabled());
     tmpls_ = common_chat_templates_init(model_, chatTemplate);
+
+    // Wire reasoning_budget > 0 through to the common-sampling layer's
+    // budget sampler so it caps the <think> channel at N tokens.
+    applyReasoningBudgetToSampling(params_, isQwen3Model_, lctx_);
 
     smpl_.reset(common_sampler_init(model_, params_.sampling));
     if (!smpl_) {

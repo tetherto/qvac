@@ -1,5 +1,7 @@
 #pragma once
+#include <cmath>
 #include <functional>
+#include <limits>
 #include <memory>
 
 #include <inference-addon-cpp/JsInterface.hpp>
@@ -365,16 +367,18 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           configObj->getOptionalPropertyAs<js::Number, double>(
               env, "reasoning_budget");
       if (reasoningBudget.has_value()) {
-        // Validate against the exact double values (0 and -1 are exactly
-        // representable in IEEE-754), so fractional inputs like 0.5 or -1.1
-        // are rejected instead of being silently truncated.
-        if (*reasoningBudget != 0 && *reasoningBudget != -1) {
+        // Reject fractional inputs (0.5, -1.1, 32.7) by requiring the value
+        // to round-trip through int. -1 = unrestricted, 0 = disabled, N>0
+        // caps the reasoning channel at N tokens via the budget sampler.
+        const double v = *reasoningBudget;
+        if (v < -1 || v != std::floor(v) ||
+            v > static_cast<double>(std::numeric_limits<int>::max())) {
           throw StatusError(
               general_error::InvalidArgument,
-              "generationParams.reasoning_budget must be -1 (unrestricted) "
-              "or 0 (disabled)");
+              "generationParams.reasoning_budget must be -1 (unrestricted), "
+              "0 (disabled), or a positive integer (token cap)");
         }
-        ov.reasoning_budget = static_cast<int>(*reasoningBudget);
+        ov.reasoning_budget = static_cast<int>(v);
       }
     }
 

@@ -29,6 +29,22 @@ void applyGenerationOverridesToSampling(
   setIf(overrides.presence_penalty, sampling.penalty_present);
   setIf(overrides.repeat_penalty, sampling.penalty_repeat);
 
+  // Forward reasoning_budget into the budget-sampler's token cap. The
+  // start/end/forced vectors were tokenized in the TextLlmContext ctor for
+  // Qwen3 models and survive the copy from params.sampling into the local
+  // override, so we only need to mutate the count here.
+  if (overrides.reasoning_budget) {
+    const int budget = *overrides.reasoning_budget;
+    if (budget > 0) {
+      sampling.reasoning_budget_tokens = budget;
+    } else {
+      sampling.reasoning_budget_tokens = -1;
+      sampling.reasoning_budget_start.clear();
+      sampling.reasoning_budget_end.clear();
+      sampling.reasoning_budget_forced.clear();
+    }
+  }
+
   // `json_schema` and `grammar` are mutually exclusive at the JS boundary
   // and in `AddonJs::runJob::parseText`, so reaching this branch with both
   // set means a caller bypassed those checks (most likely the C++ unit

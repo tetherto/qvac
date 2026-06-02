@@ -865,22 +865,23 @@ void LlamaModel::commonParamsParse(
         "embedded chat template is applied\n");
   }
 
-  // reasoning-budget controls whether the model emits a <think> reasoning
-  // channel. -1 (default) leaves it on; 0 disables. `std::from_chars` is used
-  // instead of `std::stoi` because the latter accepts trailing garbage ("0abc"
-  // → 0) and throws an uncaught `std::out_of_range` on overflow.
+  // reasoning-budget controls the size of the model's <think> reasoning
+  // channel: -1 (default) leaves it unrestricted, 0 disables thinking
+  // entirely, any positive N caps the reasoning channel at N tokens (the
+  // budget sampler forces </think> once N reasoning tokens have been
+  // emitted).
   auto parseReasoningBudget = [](const std::string& raw) {
     int value = 0;
     const char* begin = raw.data();
     const char* end = begin + raw.size();
     const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end ||
-        (value != 0 && value != -1)) {
+    if (ec != std::errc{} || ptr != end || value < -1) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
-          "reasoning-budget must be -1 (unrestricted) or 0 (disabled)");
+          "reasoning-budget must be -1 (unrestricted), 0 (disabled), or a "
+          "positive integer (token cap)");
     }
     return value;
   };
