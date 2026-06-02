@@ -1,9 +1,9 @@
 ---
-name: qv-qip-need-proposal
-description: Use during planning, implementation, PR review, or /qv-qip-need-proposal when a change may affect public SDK API, native dependency, plugin contract, model registry contract, runtime, transport, storage, release flow, deployment, security, NFR, or technical principles.
+name: qv-qip-triage
+description: Use during planning, implementation, PR review, or /qv-qip-triage when a change may affect public SDK API, native dependency, plugin contract, model registry contract, runtime, transport, storage, release flow, deployment, security, NFR, or technical principles.
 ---
 
-# QIP Proposal Need Check
+# QIP Triage
 
 Conservatively decide whether a change needs a QIP before deeper implementation or merge recommendation.
 
@@ -14,7 +14,7 @@ Conservatively decide whether a change needs a QIP before deeper implementation 
 - Planning or implementing a change that may affect technical direction
 - Reviewing a PR or diff for cross-package, contract, delivery, or principle impact
 - Another workflow asks whether a proposal is needed first
-- User invokes `/qv-qip-need-proposal`
+- User invokes `/qv-qip-triage`
 
 **Do NOT use for:**
 

@@ -19,7 +19,7 @@ Review a QIP for approval readiness without substituting for human approvers.
 **Do NOT use for:**
 
 - Creating the first draft (use `qv-qip-create`)
-- Deciding whether a QIP is needed at all (use `qv-qip-need-proposal`)
+- Deciding whether a QIP is needed at all (use `qv-qip-triage`)
 
 ## Inputs
 

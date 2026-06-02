@@ -1,6 +1,6 @@
 ---
 name: qv-qip-create
-description: Use when drafting a QIP, after qv-qip-need-proposal recommends creating one, shaping a fuzzy technical proposal with alternatives and consequences, or invoking /qv-qip-create.
+description: Use when drafting a QIP, after qv-qip-triage recommends creating one, shaping a fuzzy technical proposal with alternatives and consequences, or invoking /qv-qip-create.
 disable-model-invocation: true
 ---
 
@@ -13,13 +13,13 @@ Help an author draft a QIP before posting to Slack Canvas.
 **Use when:**
 
 - The user wants to create a QIP
-- `qv-qip-need-proposal` recommended a QIP and the user confirmed
+- `qv-qip-triage` recommended a QIP and the user confirmed
 - The user has a fuzzy idea and needs help shaping it
 - User invokes `/qv-qip-create`
 
 **Do NOT use for:**
 
-- Deciding whether a QIP is needed (use `qv-qip-need-proposal`)
+- Deciding whether a QIP is needed (use `qv-qip-triage`)
 - Reviewing an existing QIP for approval readiness (use `qv-qip-review`)
 
 ## Prerequisites
