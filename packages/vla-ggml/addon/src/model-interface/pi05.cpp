@@ -952,8 +952,9 @@ static bool pi05LoadWeightsAllocCopy(
     const char* bname = ggml_backend_name(m.backend);
     QLOG_IF(
         Priority::ERROR,
-        std::string("pi05LoadModel: ggml_backend_alloc_ctx_tensors_from_buft "
-                    "FAILED for ") +
+        std::string(
+            "pi05LoadModel: ggml_backend_alloc_ctx_tensors_from_buft "
+            "FAILED for ") +
             std::to_string((int)(totalSize / (1024 * 1024))) +
             " MB on backend '" + (bname != nullptr ? bname : "?") + "'");
     return false;
@@ -982,7 +983,7 @@ static bool pi05LoadWeightsAllocCopy(
       readBuf.resize(nbytes);
     }
 #ifdef _WIN32
-    int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
+    int seekErr = _fseeki64(f, (int64_t)off, SEEK_SET);
 #else
     int seekErr = fseeko(f, static_cast<off_t>(off), SEEK_SET);
 #endif

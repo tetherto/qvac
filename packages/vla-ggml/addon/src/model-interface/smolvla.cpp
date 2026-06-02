@@ -1409,7 +1409,7 @@ static bool loadWeightsAllocCopy(
       readBuf.resize(nbytes);
     }
 #ifdef _WIN32
-    int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
+    int seekErr = _fseeki64(f, (int64_t)off, SEEK_SET);
 #else
     int seekErr = fseeko(f, (off_t)off, SEEK_SET);
 #endif
