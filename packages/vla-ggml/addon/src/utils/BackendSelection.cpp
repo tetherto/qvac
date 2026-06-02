@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
+#include <mutex>
 #include <string>
 
 #include <ggml-backend.h>
@@ -9,6 +11,23 @@
 #include "LoggingMacros.hpp"
 
 namespace vla_backend_selection {
+
+void loadBackendsOnce(const std::string& backendsDir) {
+  static std::once_flag sFlag;
+  std::call_once(sFlag, [&backendsDir]() {
+    using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+    if (!backendsDir.empty()) {
+      std::filesystem::path p(backendsDir);
+#ifdef BACKENDS_SUBDIR
+      p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+      QLOG_IF(Priority::INFO, "Loading backends from: " + p.string());
+      ggml_backend_load_all_from_path(p.string().c_str());
+    } else {
+      ggml_backend_load_all();
+    }
+  });
+}
 
 int parseAdrenoModel(const std::string& description) {
   std::string lower = description;
@@ -53,7 +72,9 @@ ggml_backend_dev_t pickBestGpuDevice() {
     const std::string backendName = nameRaw ? nameRaw : "";
     std::string backendLower = backendName;
     std::transform(
-        backendLower.begin(), backendLower.end(), backendLower.begin(),
+        backendLower.begin(),
+        backendLower.end(),
+        backendLower.begin(),
         [](unsigned char c) { return std::tolower(c); });
 
     const int adreno = parseAdrenoModel(desc);

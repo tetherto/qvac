@@ -38,6 +38,7 @@ cv::Mat decodeOrWrapImage(const OcrInput& input) {
 
   int matType = 0;
   int expectedBytesPerPixel = 0;
+  // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   switch (input.bitsPerPixel) {
     case 8:
       matType = CV_8UC1;
@@ -122,8 +123,11 @@ Pipeline::Pipeline(
   } else {
     easyDetector_ =
         std::make_unique<easyocr::ggml::pipeline::StepDetectionInference>(
-            pathDetector, config_.magRatio, config_.nThreads,
-            config_.backendsDir);
+            pathDetector,
+            config_.magRatio,
+            config_.nThreads,
+            config_.backendsDir,
+            config_.canvasSize);
 
     easyBoxer_ = std::make_unique<easyocr::ggml::pipeline::StepBoundingBox>();
 
@@ -161,7 +165,7 @@ std::any Pipeline::process(const std::any& input) {
 Pipeline::Output Pipeline::processImage(const Input& input) {
   cancelFlag_.store(false, std::memory_order_relaxed);
 
-  const auto t0 = std::chrono::steady_clock::now();
+  const auto startTime = std::chrono::steady_clock::now();
 
   cv::Mat img = decodeOrWrapImage(input);
 
@@ -169,7 +173,7 @@ Pipeline::Output Pipeline::processImage(const Input& input) {
                       ? processDoctr(img, input)
                       : processEasyOcr(img, input);
 
-  lastProcessMs_ = elapsedMs(t0);
+  lastProcessMs_ = elapsedMs(startTime);
   return result;
 }
 
