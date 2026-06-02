@@ -159,13 +159,22 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
       ? job.size
       : (stats?.width != null && stats?.height != null ? `${stats.width}x${stats.height}` : '')
 
-    store.update(jobId, {
+    // The abort check above already handles DELETE / eviction on the normal
+    // path. The store-update return is a second check: if the job is gone we
+    // remove the just-put AVI from ephemeralFiles instead of leaving it to
+    // age out via that store's TTL. Same pattern as the mp4 write below.
+    const updated = store.update(jobId, {
       status: 'completed',
       progress: 100,
       completed_at: Math.floor(Date.now() / 1000),
       size,
       aviFileId
     })
+    if (!updated) {
+      ctx.ephemeralFiles.remove(aviFileId)
+      ctx.logger.info(`  video_create job=${jobId} bytes dropped (job torn down during generation)`)
+      return
+    }
     ctx.logger.info(`  video_create job=${jobId} done frames=${stats?.videoFrames ?? '?'} bytes=${buffer.length} avi_file=${aviFileId}`)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -246,7 +255,17 @@ async function serveContent (
       purpose: 'video',
       contentType: VIDEO_MP4_CONTENT_TYPE
     })
-    ctx.videoJobsStore.update(job.id, { mp4FileId })
+    // The transcode awaited above takes seconds; a DELETE / eviction landing
+    // in that window leaves the job gone from the store. Cache the mp4 only
+    // if the job is still reachable — otherwise the entry would orphan in
+    // ephemeralFiles until that store's own TTL drops it. We still serve the
+    // bytes for this in-flight request (the client asked, we already paid for
+    // the transcode).
+    const updated = ctx.videoJobsStore.update(job.id, { mp4FileId })
+    if (!updated) {
+      ctx.ephemeralFiles.remove(mp4FileId)
+      ctx.logger.debug(`  video_content job=${job.id} mp4 cache dropped (job torn down during transcode)`)
+    }
   }
 
   reply
