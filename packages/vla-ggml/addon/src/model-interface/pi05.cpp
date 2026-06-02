@@ -15,10 +15,10 @@
 #include <string>
 #include <vector>
 
-#include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
 #include <gguf.h>
 
 #include "model-interface/gguf_helpers.hpp"
@@ -36,8 +36,8 @@ namespace qvac_lib_infer_vla_ggml {
 // at lower precision in the GGUF (bias, pos_embed, etc.) has to be
 // promoted on the graph side before participating in arithmetic with an
 // F32 activation. Mirrors `smolvla.cpp::to_f32`.
-static struct ggml_tensor* toF32(
-    struct ggml_context* ctx, struct ggml_tensor* x) {
+static struct ggml_tensor*
+toF32(struct ggml_context* ctx, struct ggml_tensor* x) {
   if (x != nullptr && x->type != GGML_TYPE_F32) {
     return ggml_cast(ctx, x, GGML_TYPE_F32);
   }
@@ -46,15 +46,12 @@ static struct ggml_tensor* toF32(
 
 // ── M3.1: SigLIP patch + position embed ──────────────────────────────────
 Pi05PatchPosOutputs pi05BuildSiglipPatchPosGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* pixel_values,
-    struct ggml_tensor* patch_embed_w,
-    struct ggml_tensor* patch_embed_b,
-    struct ggml_tensor* pos_embed,
-    int patch_size) {
+    struct ggml_context* ctx, struct ggml_tensor* pixelValues,
+    struct ggml_tensor* patchEmbedW, struct ggml_tensor* patchEmbedB,
+    struct ggml_tensor* posEmbed, int patchSize) {
   Pi05PatchPosOutputs out{nullptr, nullptr};
-  if (ctx == nullptr || pixel_values == nullptr ||
-      patch_embed_w == nullptr || pos_embed == nullptr) {
+  if (ctx == nullptr || pixelValues == nullptr || patchEmbedW == nullptr ||
+      posEmbed == nullptr) {
     return out;
   }
 
@@ -62,23 +59,14 @@ Pi05PatchPosOutputs pi05BuildSiglipPatchPosGraph(
   // So400m/14 uses a 14×14 patch with no padding and stride = patch size,
   // matching PyTorch's `Conv2d(3, 1152, kernel_size=14, stride=14)`.
   struct ggml_tensor* x = ggml_conv_2d(
-      ctx,
-      patch_embed_w,
-      pixel_values,
-      patch_size,
-      patch_size,
-      0,
-      0,
-      1,
-      1);
+      ctx, patchEmbedW, pixelValues, patchSize, patchSize, 0, 0, 1, 1);
 
   // Conv2d output is (W_out, H_out, C_out, N). Flatten the spatial dims
   // into a single "patch" axis (16*16 = 256) and the channels (1152) stay
   // along the fast dim — so the resulting tensor's ne=[C_out, n_patches].
   // That matches the byte layout of numpy's (n_patches, C_out) row-major
   // array, which is what the PyTorch reference stores.
-  const int n_patches =
-      static_cast<int>(x->ne[0]) * static_cast<int>(x->ne[1]);
+  const int nPatches = static_cast<int>(x->ne[0]) * static_cast<int>(x->ne[1]);
   const int hidden = static_cast<int>(x->ne[2]);
 
   // Reshape (W, H, C, 1) → (n_patches, C) — note: in ggml, dim 0 is the
@@ -87,15 +75,15 @@ Pi05PatchPosOutputs pi05BuildSiglipPatchPosGraph(
   // (which has shape (C,)) broadcasts across the slow axis (patches),
   // which is the only direction ggml_add supports without an explicit
   // repeat.
-  x = ggml_reshape_2d(ctx, x, n_patches, hidden);
+  x = ggml_reshape_2d(ctx, x, nPatches, hidden);
   x = ggml_cont(ctx, ggml_transpose(ctx, x));
 
-  if (patch_embed_b != nullptr) {
+  if (patchEmbedB != nullptr) {
     // Conv2d in PyTorch fuses bias into the convolution output. We add
     // it post-reshape; numerically identical for an additive bias.
     // The bias is stored F16 in the GGUF — promote on-graph so the F32
     // conv output and the bias share a dtype.
-    x = ggml_add(ctx, x, toF32(ctx, patch_embed_b));
+    x = ggml_add(ctx, x, toF32(ctx, patchEmbedB));
   }
 
   // Parity gate #1 from plan §5: `vision.patch_embed_out[cam_i]`.
@@ -105,15 +93,15 @@ Pi05PatchPosOutputs pi05BuildSiglipPatchPosGraph(
   // converter writes it as numpy (n_patches, C), which the ggml loader
   // re-interprets with the last numpy dim as the fast ggml dim). It's
   // stored F16; promote before the add for the same reason as the bias.
-  out.pos_embed_out = ggml_add(ctx, x, toF32(ctx, pos_embed));
+  out.pos_embed_out = ggml_add(ctx, x, toF32(ctx, posEmbed));
   return out;
 }
 
 // ── Small shared helpers, mirrored from smolvla.cpp's static defs ────────
 // LayerNorm with weight + bias.
 static struct ggml_tensor* pi05LayerNorm(
-    struct ggml_context* ctx, struct ggml_tensor* x,
-    struct ggml_tensor* weight, struct ggml_tensor* bias, float eps) {
+    struct ggml_context* ctx, struct ggml_tensor* x, struct ggml_tensor* weight,
+    struct ggml_tensor* bias, float eps) {
   x = ggml_norm(ctx, x, eps);
   if (weight != nullptr) {
     x = ggml_mul(ctx, x, toF32(ctx, weight));
@@ -127,8 +115,8 @@ static struct ggml_tensor* pi05LayerNorm(
 // Linear: y = x @ W^T (+ b). ggml_mul_mat takes (weight, input) and
 // produces (out_features, ...) so the caller treats `x` as (..., in_feat).
 static struct ggml_tensor* pi05Linear(
-    struct ggml_context* ctx, struct ggml_tensor* x,
-    struct ggml_tensor* weight, struct ggml_tensor* bias) {
+    struct ggml_context* ctx, struct ggml_tensor* x, struct ggml_tensor* weight,
+    struct ggml_tensor* bias) {
   struct ggml_tensor* out = ggml_mul_mat(ctx, weight, x);
   if (bias != nullptr) {
     out = ggml_add(ctx, out, toF32(ctx, bias));
@@ -138,13 +126,9 @@ static struct ggml_tensor* pi05Linear(
 
 // ── M3.2: one SigLIP transformer block ──────────────────────────────────
 struct ggml_tensor* pi05BuildSiglipBlockGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* x,
-    const Pi05SiglipBlockWeights& w,
-    int n_patches,
-    int hidden,
-    int n_heads,
-    float layer_norm_eps) {
+    struct ggml_context* ctx, struct ggml_tensor* x,
+    const Pi05SiglipBlockWeights& w, int nPatches, int hidden, int nHeads,
+    float layerNormEps) {
   if (ctx == nullptr || x == nullptr) {
     return nullptr;
   }
@@ -153,31 +137,29 @@ struct ggml_tensor* pi05BuildSiglipBlockGraph(
   // crash deep in the graph executor.
   if (w.ln1_w == nullptr || w.ln1_b == nullptr || w.ln2_w == nullptr ||
       w.ln2_b == nullptr || w.attn_q_w == nullptr || w.attn_q_b == nullptr ||
-      w.attn_k_w == nullptr || w.attn_k_b == nullptr ||
-      w.attn_v_w == nullptr || w.attn_v_b == nullptr ||
-      w.attn_out_w == nullptr || w.attn_out_b == nullptr ||
-      w.fc1_w == nullptr || w.fc1_b == nullptr || w.fc2_w == nullptr ||
-      w.fc2_b == nullptr) {
+      w.attn_k_w == nullptr || w.attn_k_b == nullptr || w.attn_v_w == nullptr ||
+      w.attn_v_b == nullptr || w.attn_out_w == nullptr ||
+      w.attn_out_b == nullptr || w.fc1_w == nullptr || w.fc1_b == nullptr ||
+      w.fc2_w == nullptr || w.fc2_b == nullptr) {
     return nullptr;
   }
-  if (n_heads <= 0 || hidden <= 0 || hidden % n_heads != 0) {
+  if (nHeads <= 0 || hidden <= 0 || hidden % nHeads != 0) {
     return nullptr;
   }
-  const int head_dim = hidden / n_heads;
+  const int headDim = hidden / nHeads;
 
   // ── Pre-attention LayerNorm + MHSA + residual ───────────────────────
   struct ggml_tensor* residual = x;
-  struct ggml_tensor* h =
-      pi05LayerNorm(ctx, x, w.ln1_w, w.ln1_b, layer_norm_eps);
+  struct ggml_tensor* h = pi05LayerNorm(ctx, x, w.ln1_w, w.ln1_b, layerNormEps);
 
   struct ggml_tensor* q = pi05Linear(ctx, h, w.attn_q_w, w.attn_q_b);
   struct ggml_tensor* k = pi05Linear(ctx, h, w.attn_k_w, w.attn_k_b);
   struct ggml_tensor* v = pi05Linear(ctx, h, w.attn_v_w, w.attn_v_b);
 
   // Reshape (hidden, n_patches) → (head_dim, n_heads, n_patches).
-  q = ggml_reshape_3d(ctx, q, head_dim, n_heads, n_patches);
-  k = ggml_reshape_3d(ctx, k, head_dim, n_heads, n_patches);
-  v = ggml_reshape_3d(ctx, v, head_dim, n_heads, n_patches);
+  q = ggml_reshape_3d(ctx, q, headDim, nHeads, nPatches);
+  k = ggml_reshape_3d(ctx, k, headDim, nHeads, nPatches);
+  v = ggml_reshape_3d(ctx, v, headDim, nHeads, nPatches);
 
   // Permute to (head_dim, n_patches, n_heads) so ggml_mul_mat sees each
   // head as an independent (n_patches × head_dim) matmul.
@@ -189,23 +171,27 @@ struct ggml_tensor* pi05BuildSiglipBlockGraph(
   // ggml_mul_mat(k, q) → (n_patches, n_patches, n_heads).
   struct ggml_tensor* logits = ggml_mul_mat(ctx, k, q);
   struct ggml_tensor* attn = ggml_soft_max_ext(
-      ctx, logits, nullptr,
-      1.0f / std::sqrt(static_cast<float>(head_dim)), 0.0f);
+      ctx,
+      logits,
+      nullptr,
+      1.0f / std::sqrt(static_cast<float>(headDim)),
+      0.0f);
   // (head_dim, n_patches, n_heads): transpose v to (n_patches, head_dim,
   // n_heads) then mul_mat with the (n_patches, n_patches, n_heads) attn.
-  struct ggml_tensor* attn_out = ggml_mul_mat(
-      ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn);
+  struct ggml_tensor* attnOut =
+      ggml_mul_mat(ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn);
   // Back to (hidden, n_patches).
-  attn_out = ggml_cont(ctx, ggml_permute(ctx, attn_out, 0, 2, 1, 3));
-  attn_out = ggml_reshape_2d(ctx, attn_out, hidden, n_patches);
+  attnOut = ggml_cont(ctx, ggml_permute(ctx, attnOut, 0, 2, 1, 3));
+  attnOut = ggml_reshape_2d(ctx, attnOut, hidden, nPatches);
 
   // Output projection + residual.
-  struct ggml_tensor* proj = pi05Linear(ctx, attn_out, w.attn_out_w, w.attn_out_b);
+  struct ggml_tensor* proj =
+      pi05Linear(ctx, attnOut, w.attn_out_w, w.attn_out_b);
   h = ggml_add(ctx, proj, residual);
 
   // ── Post-attention LayerNorm + MLP + residual ───────────────────────
   residual = h;
-  h = pi05LayerNorm(ctx, h, w.ln2_w, w.ln2_b, layer_norm_eps);
+  h = pi05LayerNorm(ctx, h, w.ln2_w, w.ln2_b, layerNormEps);
   h = pi05Linear(ctx, h, w.fc1_w, w.fc1_b);
   // HF SigLIP uses GELU (default activation in SiglipMLP for the So400m
   // checkpoint). ggml_gelu is the tanh approximation, which matches
@@ -218,26 +204,24 @@ struct ggml_tensor* pi05BuildSiglipBlockGraph(
 
 // ── M3.3: full SigLIP-So400m/14 vision tower ────────────────────────────
 Pi05VisionTowerOutputs pi05BuildSiglipTowerGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* pixel_values,
-    const Pi05VisionTowerWeights& w,
-    int n_patches,
-    int hidden,
-    int proj_dim,
-    int n_heads,
-    int patch_size,
-    float layer_norm_eps) {
+    struct ggml_context* ctx, struct ggml_tensor* pixelValues,
+    const Pi05VisionTowerWeights& w, int nPatches, int hidden, int projDim,
+    int nHeads, int patchSize, float layerNormEps) {
   Pi05VisionTowerOutputs out{nullptr};
-  if (ctx == nullptr || pixel_values == nullptr || w.blocks.empty() ||
-      w.post_ln_w == nullptr || w.post_ln_b == nullptr ||
-      w.head_w == nullptr || w.head_b == nullptr) {
+  if (ctx == nullptr || pixelValues == nullptr || w.blocks.empty() ||
+      w.post_ln_w == nullptr || w.post_ln_b == nullptr || w.head_w == nullptr ||
+      w.head_b == nullptr) {
     return out;
   }
 
   // Patch + pos embed (M3.1).
   Pi05PatchPosOutputs pp = pi05BuildSiglipPatchPosGraph(
-      ctx, pixel_values, w.patch_embed_w, w.patch_embed_b,
-      w.pos_embed, patch_size);
+      ctx,
+      pixelValues,
+      w.patch_embed_w,
+      w.patch_embed_b,
+      w.pos_embed,
+      patchSize);
   if (pp.pos_embed_out == nullptr) {
     return out;
   }
@@ -246,7 +230,7 @@ Pi05VisionTowerOutputs pi05BuildSiglipTowerGraph(
   // Transformer stack (M3.2 × N).
   for (const auto& bw : w.blocks) {
     x = pi05BuildSiglipBlockGraph(
-        ctx, x, bw, n_patches, hidden, n_heads, layer_norm_eps);
+        ctx, x, bw, nPatches, hidden, nHeads, layerNormEps);
     if (x == nullptr) {
       return out;
     }
@@ -255,30 +239,28 @@ Pi05VisionTowerOutputs pi05BuildSiglipTowerGraph(
   // Post-LayerNorm — the LeRobot SigLIP wrapper applies this
   // immediately before the head Linear; HF naming is
   // `vision_model.post_layernorm`.
-  x = pi05LayerNorm(ctx, x, w.post_ln_w, w.post_ln_b, layer_norm_eps);
+  x = pi05LayerNorm(ctx, x, w.post_ln_w, w.post_ln_b, layerNormEps);
 
   // "Connector" head — Linear(hidden → proj_dim). For pi05_base this
   // is the `_siglip.Module(num_classes=2048, pool_type="none")` head,
   // i.e. just a single Linear, no pixel-shuffle (plan §2).
   out.head_out = pi05Linear(ctx, x, w.head_w, w.head_b);
-  (void)proj_dim; // shape is inferred from head_w — kept in the signature
-                  //  for documentation + caller-side sanity-checking.
+  (void)projDim; // shape is inferred from head_w — kept in the signature
+                 //  for documentation + caller-side sanity-checking.
   return out;
 }
 
 // ── M3.4: PaliGemma token embedder + sqrt(hidden) scaling ────────────────
 struct ggml_tensor* pi05BuildVlmEmbedGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* tokens,
-    struct ggml_tensor* embed_tokens,
-    int hidden) {
-  if (ctx == nullptr || tokens == nullptr || embed_tokens == nullptr) {
+    struct ggml_context* ctx, struct ggml_tensor* tokens,
+    struct ggml_tensor* embedTokens, int hidden) {
+  if (ctx == nullptr || tokens == nullptr || embedTokens == nullptr) {
     return nullptr;
   }
   // Embedding lookup: row[i] = embed_tokens[tokens[i]]. ggml_get_rows
   // produces ne=[hidden, n_tokens] (it picks columns of the I32 indices
   // out of `embed_tokens` whose ne=[hidden, vocab]).
-  struct ggml_tensor* e = ggml_get_rows(ctx, embed_tokens, tokens);
+  struct ggml_tensor* e = ggml_get_rows(ctx, embedTokens, tokens);
   // Gemma-1 embedding scale. Pre-norm RMSNorm divides by sqrt(mean(x²)),
   // so without this scale every block sees inputs ≈ 1/sqrt(hidden)
   // smaller than the checkpoint expects.
@@ -291,46 +273,36 @@ struct ggml_tensor* pi05BuildVlmEmbedGraph(
 // here on the graph side. We compute `normed * scale + normed` to
 // avoid needing a one-tensor.
 static struct ggml_tensor* pi05GemmaRmsNorm(
-    struct ggml_context* ctx, struct ggml_tensor* x,
-    struct ggml_tensor* scale, float eps) {
+    struct ggml_context* ctx, struct ggml_tensor* x, struct ggml_tensor* scale,
+    float eps) {
   struct ggml_tensor* normed = ggml_rms_norm(ctx, x, eps);
   if (scale == nullptr) {
     return normed;
   }
-  struct ggml_tensor* scale_f32 = toF32(ctx, scale);
+  struct ggml_tensor* scaleF32 = toF32(ctx, scale);
   // (1 + scale) * normed = normed + normed * scale
-  return ggml_add(ctx, normed, ggml_mul(ctx, normed, scale_f32));
+  return ggml_add(ctx, normed, ggml_mul(ctx, normed, scaleF32));
 }
 
 // ── M3.5: one Gemma-1 VLM block ─────────────────────────────────────────
 struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* x,
-    struct ggml_tensor* positions,
-    struct ggml_tensor* attn_mask,
-    const Pi05GemmaBlockWeights& w,
-    int hidden,
-    int n_heads,
-    int n_kv_heads,
-    int head_dim,
-    int seq_len,
-    float rms_norm_eps,
-    float rope_freq_base,
-    struct ggml_tensor** out_k_post_rope,
-    struct ggml_tensor** out_v) {
+    struct ggml_context* ctx, struct ggml_tensor* x,
+    struct ggml_tensor* positions, struct ggml_tensor* attnMask,
+    const Pi05GemmaBlockWeights& w, int hidden, int nHeads, int nKvHeads,
+    int headDim, int seqLen, float rmsNormEps, float ropeFreqBase,
+    struct ggml_tensor** outKPostRope, struct ggml_tensor** outV) {
   if (ctx == nullptr || x == nullptr || positions == nullptr ||
       w.pre_attn_norm_scale == nullptr || w.attn_q_w == nullptr ||
-      w.attn_k_w == nullptr || w.attn_v_w == nullptr ||
-      w.attn_o_w == nullptr || w.pre_ffw_norm_scale == nullptr ||
-      w.mlp_gate_w == nullptr || w.mlp_up_w == nullptr ||
-      w.mlp_down_w == nullptr) {
+      w.attn_k_w == nullptr || w.attn_v_w == nullptr || w.attn_o_w == nullptr ||
+      w.pre_ffw_norm_scale == nullptr || w.mlp_gate_w == nullptr ||
+      w.mlp_up_w == nullptr || w.mlp_down_w == nullptr) {
     return nullptr;
   }
 
   // ── Pre-attn RMSNorm ───────────────────────────────────────────────
   struct ggml_tensor* residual = x;
   struct ggml_tensor* h =
-      pi05GemmaRmsNorm(ctx, x, w.pre_attn_norm_scale, rms_norm_eps);
+      pi05GemmaRmsNorm(ctx, x, w.pre_attn_norm_scale, rmsNormEps);
 
   // ── Q, K, V projections (Gemma-1 has no attn bias) ────────────────
   struct ggml_tensor* q = pi05Linear(ctx, h, w.attn_q_w, nullptr);
@@ -340,26 +312,42 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
   // Reshape to per-head views. MQA: Q is split into n_heads, K/V into
   // n_kv_heads (1 for pi05). ggml broadcasts the kv-head dim against
   // the q-head dim when n_kv_heads < n_heads.
-  q = ggml_reshape_3d(ctx, q, head_dim, n_heads, seq_len);
-  k = ggml_reshape_3d(ctx, k, head_dim, n_kv_heads, seq_len);
-  v = ggml_reshape_3d(ctx, v, head_dim, n_kv_heads, seq_len);
+  q = ggml_reshape_3d(ctx, q, headDim, nHeads, seqLen);
+  k = ggml_reshape_3d(ctx, k, headDim, nKvHeads, seqLen);
+  v = ggml_reshape_3d(ctx, v, headDim, nKvHeads, seqLen);
 
   // RoPE on Q and K (NEOX style, Gemma-1 freq_base = 10000). Per-head
   // — ggml_rope_ext walks the seq dim using `positions`.
-  const int n_rot = head_dim;
-  const int rope_mode = GGML_ROPE_TYPE_NEOX;
+  const int nRot = headDim;
+  const int ropeMode = GGML_ROPE_TYPE_NEOX;
   q = ggml_rope_ext(
-      ctx, q, positions, /*freq_factors=*/nullptr,
-      n_rot, rope_mode, /*n_ctx_orig=*/0,
-      rope_freq_base, /*freq_scale=*/1.0f,
-      /*ext_factor=*/0.0f, /*attn_factor=*/1.0f,
-      /*beta_fast=*/32.0f, /*beta_slow=*/1.0f);
+      ctx,
+      q,
+      positions,
+      /*freq_factors=*/nullptr,
+      nRot,
+      ropeMode,
+      /*n_ctx_orig=*/0,
+      ropeFreqBase,
+      /*freq_scale=*/1.0f,
+      /*ext_factor=*/0.0f,
+      /*attn_factor=*/1.0f,
+      /*beta_fast=*/32.0f,
+      /*beta_slow=*/1.0f);
   k = ggml_rope_ext(
-      ctx, k, positions, /*freq_factors=*/nullptr,
-      n_rot, rope_mode, /*n_ctx_orig=*/0,
-      rope_freq_base, /*freq_scale=*/1.0f,
-      /*ext_factor=*/0.0f, /*attn_factor=*/1.0f,
-      /*beta_fast=*/32.0f, /*beta_slow=*/1.0f);
+      ctx,
+      k,
+      positions,
+      /*freq_factors=*/nullptr,
+      nRot,
+      ropeMode,
+      /*n_ctx_orig=*/0,
+      ropeFreqBase,
+      /*freq_scale=*/1.0f,
+      /*ext_factor=*/0.0f,
+      /*attn_factor=*/1.0f,
+      /*beta_fast=*/32.0f,
+      /*beta_slow=*/1.0f);
 
   // Permute to (head_dim, seq, heads) — the layout ggml_mul_mat
   // consumes per-head as independent (seq × head_dim) batches.
@@ -375,36 +363,36 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
   // last in-graph consumer (the joint softmax / attn matmul), which
   // would otherwise corrupt them by the time the caller reads back via
   // `ggml_backend_tensor_get`.
-  if (out_k_post_rope != nullptr) {
+  if (outKPostRope != nullptr) {
     ggml_set_output(k);
-    *out_k_post_rope = k;
+    *outKPostRope = k;
   }
-  if (out_v != nullptr) {
+  if (outV != nullptr) {
     ggml_set_output(v);
-    *out_v = v;
+    *outV = v;
   }
 
   // Attention: softmax(K^T · Q / sqrt(head_dim) + mask) · V.
   // mul_mat(K, Q) broadcasts K's kv_heads=1 across Q's n_heads=8.
   struct ggml_tensor* logits = ggml_mul_mat(ctx, k, q);
-  const float scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
+  const float scale = 1.0f / std::sqrt(static_cast<float>(headDim));
   struct ggml_tensor* attn =
-      ggml_soft_max_ext(ctx, logits, attn_mask, scale, /*max_bias=*/0.0f);
-  // V^T: (n_patches, head_dim, n_kv_heads). mul_mat with attn (n_k, n_q, n_heads)
-  // → (head_dim, n_q, n_heads).
-  struct ggml_tensor* attn_out = ggml_mul_mat(
-      ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn);
+      ggml_soft_max_ext(ctx, logits, attnMask, scale, /*max_bias=*/0.0f);
+  // V^T: (n_patches, head_dim, n_kv_heads). mul_mat with attn (n_k, n_q,
+  // n_heads) → (head_dim, n_q, n_heads).
+  struct ggml_tensor* attnOut =
+      ggml_mul_mat(ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn);
   // Back to (hidden, seq_q).
-  attn_out = ggml_cont(ctx, ggml_permute(ctx, attn_out, 0, 2, 1, 3));
-  attn_out = ggml_reshape_2d(ctx, attn_out, hidden, seq_len);
+  attnOut = ggml_cont(ctx, ggml_permute(ctx, attnOut, 0, 2, 1, 3));
+  attnOut = ggml_reshape_2d(ctx, attnOut, hidden, seqLen);
 
   // O proj + residual.
-  struct ggml_tensor* proj = pi05Linear(ctx, attn_out, w.attn_o_w, nullptr);
+  struct ggml_tensor* proj = pi05Linear(ctx, attnOut, w.attn_o_w, nullptr);
   h = ggml_add(ctx, proj, residual);
 
   // ── Pre-FFW RMSNorm + GeGLU MLP + residual ────────────────────────
   residual = h;
-  h = pi05GemmaRmsNorm(ctx, h, w.pre_ffw_norm_scale, rms_norm_eps);
+  h = pi05GemmaRmsNorm(ctx, h, w.pre_ffw_norm_scale, rmsNormEps);
   struct ggml_tensor* gate = pi05Linear(ctx, h, w.mlp_gate_w, nullptr);
   struct ggml_tensor* up = pi05Linear(ctx, h, w.mlp_up_w, nullptr);
   // GeGLU: gelu(gate) * up. ggml_gelu is the tanh approximation —
@@ -417,52 +405,53 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
 
 // ── M3.6: full VLM prefill (18 blocks + final RMSNorm) ──────────────────
 struct ggml_tensor* pi05BuildVlmPrefillGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* x,
-    struct ggml_tensor* positions,
-    struct ggml_tensor* attn_mask,
+    struct ggml_context* ctx, struct ggml_tensor* x,
+    struct ggml_tensor* positions, struct ggml_tensor* attnMask,
     const std::vector<Pi05GemmaBlockWeights>& blocks,
-    struct ggml_tensor* final_norm_scale,
-    int hidden,
-    int n_heads,
-    int n_kv_heads,
-    int head_dim,
-    int seq_len,
-    float rms_norm_eps,
-    float rope_freq_base,
-    std::vector<struct ggml_tensor*>* out_keys,
-    std::vector<struct ggml_tensor*>* out_values) {
+    struct ggml_tensor* finalNormScale, int hidden, int nHeads, int nKvHeads,
+    int headDim, int seqLen, float rmsNormEps, float ropeFreqBase,
+    std::vector<struct ggml_tensor*>* outKeys,
+    std::vector<struct ggml_tensor*>* outValues) {
   if (ctx == nullptr || x == nullptr || positions == nullptr ||
-      blocks.empty() || final_norm_scale == nullptr) {
+      blocks.empty() || finalNormScale == nullptr) {
     return nullptr;
   }
-  if (out_keys != nullptr) {
-    out_keys->assign(blocks.size(), nullptr);
+  if (outKeys != nullptr) {
+    outKeys->assign(blocks.size(), nullptr);
   }
-  if (out_values != nullptr) {
-    out_values->assign(blocks.size(), nullptr);
+  if (outValues != nullptr) {
+    outValues->assign(blocks.size(), nullptr);
   }
   struct ggml_tensor* h = x;
   for (size_t i = 0; i < blocks.size(); ++i) {
-    struct ggml_tensor* k_out = nullptr;
-    struct ggml_tensor* v_out = nullptr;
+    struct ggml_tensor* kOut = nullptr;
+    struct ggml_tensor* vOut = nullptr;
     h = pi05BuildGemmaVlmBlockGraph(
-        ctx, h, positions, attn_mask, blocks[i],
-        hidden, n_heads, n_kv_heads, head_dim,
-        seq_len, rms_norm_eps, rope_freq_base,
-        (out_keys != nullptr) ? &k_out : nullptr,
-        (out_values != nullptr) ? &v_out : nullptr);
+        ctx,
+        h,
+        positions,
+        attnMask,
+        blocks[i],
+        hidden,
+        nHeads,
+        nKvHeads,
+        headDim,
+        seqLen,
+        rmsNormEps,
+        ropeFreqBase,
+        (outKeys != nullptr) ? &kOut : nullptr,
+        (outValues != nullptr) ? &vOut : nullptr);
     if (h == nullptr) {
       return nullptr;
     }
-    if (out_keys != nullptr) {
-      (*out_keys)[i] = k_out;
+    if (outKeys != nullptr) {
+      (*outKeys)[i] = kOut;
     }
-    if (out_values != nullptr) {
-      (*out_values)[i] = v_out;
+    if (outValues != nullptr) {
+      (*outValues)[i] = vOut;
     }
   }
-  return pi05GemmaRmsNorm(ctx, h, final_norm_scale, rms_norm_eps);
+  return pi05GemmaRmsNorm(ctx, h, finalNormScale, rmsNormEps);
 }
 
 // ── M3.7a: sin-cos time embedding ───────────────────────────────────────
@@ -474,21 +463,20 @@ struct ggml_tensor* pi05BuildVlmPrefillGraph(
 // `2π · t / period` at the tiniest periods (4 ms × 1 → tens of
 // thousands of radians, where F32 loses precision).
 void pi05ComputeTimeSincos(
-    float t, int dim, float min_period, float max_period, float* out) {
+    float t, int dim, float minPeriod, float maxPeriod, float* out) {
   if (out == nullptr || dim <= 0 || (dim & 1) != 0) {
     return;
   }
   const int n = dim / 2;
   const double td = static_cast<double>(t);
-  const double log_min = std::log(static_cast<double>(min_period));
-  const double log_max = std::log(static_cast<double>(max_period));
-  const double two_pi = 2.0 * 3.14159265358979323846;
+  const double logMin = std::log(static_cast<double>(minPeriod));
+  const double logMax = std::log(static_cast<double>(maxPeriod));
+  const double twoPi = 2.0 * 3.14159265358979323846;
   for (int i = 0; i < n; ++i) {
     const double fraction =
-        (n > 1) ? (static_cast<double>(i) / static_cast<double>(n - 1))
-                : 0.0;
-    const double period = std::exp(log_min + fraction * (log_max - log_min));
-    const double phase = (two_pi / period) * td;
+        (n > 1) ? (static_cast<double>(i) / static_cast<double>(n - 1)) : 0.0;
+    const double period = std::exp(logMin + fraction * (logMax - logMin));
+    const double phase = (twoPi / period) * td;
     out[i] = static_cast<float>(std::sin(phase));
     out[n + i] = static_cast<float>(std::cos(phase));
   }
@@ -496,48 +484,41 @@ void pi05ComputeTimeSincos(
 
 // ── M3.7b: MLP + swish chain ────────────────────────────────────────────
 struct ggml_tensor* pi05BuildTimeMlpGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* time_emb,
-    struct ggml_tensor* time_mlp_in_w,
-    struct ggml_tensor* time_mlp_in_b,
-    struct ggml_tensor* time_mlp_out_w,
-    struct ggml_tensor* time_mlp_out_b) {
-  if (ctx == nullptr || time_emb == nullptr ||
-      time_mlp_in_w == nullptr || time_mlp_in_b == nullptr ||
-      time_mlp_out_w == nullptr || time_mlp_out_b == nullptr) {
+    struct ggml_context* ctx, struct ggml_tensor* timeEmb,
+    struct ggml_tensor* timeMlpInW, struct ggml_tensor* timeMlpInB,
+    struct ggml_tensor* timeMlpOutW, struct ggml_tensor* timeMlpOutB) {
+  if (ctx == nullptr || timeEmb == nullptr || timeMlpInW == nullptr ||
+      timeMlpInB == nullptr || timeMlpOutW == nullptr ||
+      timeMlpOutB == nullptr) {
     return nullptr;
   }
   // Linear → SiLU → Linear → SiLU. SiLU is swish (x * sigmoid(x)) —
   // openpi uses `nn.swish` which is JAX's alias for SiLU; ggml_silu
   // matches.
-  struct ggml_tensor* h = pi05Linear(ctx, time_emb, time_mlp_in_w, time_mlp_in_b);
+  struct ggml_tensor* h = pi05Linear(ctx, timeEmb, timeMlpInW, timeMlpInB);
   h = ggml_silu(ctx, h);
-  h = pi05Linear(ctx, h, time_mlp_out_w, time_mlp_out_b);
+  h = pi05Linear(ctx, h, timeMlpOutW, timeMlpOutB);
   h = ggml_silu(ctx, h);
   return h;
 }
 
 // ── M3.8: adaRMSNorm split (scale, shift, gate) ─────────────────────────
 Pi05AdaSplit pi05BuildAdarmsSplitGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* cond,
-    struct ggml_tensor* ada_dense_w,
-    struct ggml_tensor* ada_dense_b,
-    int hidden) {
+    struct ggml_context* ctx, struct ggml_tensor* cond,
+    struct ggml_tensor* adaDenseW, struct ggml_tensor* adaDenseB, int hidden) {
   Pi05AdaSplit out{nullptr, nullptr, nullptr};
-  if (ctx == nullptr || cond == nullptr || ada_dense_w == nullptr ||
-      ada_dense_b == nullptr || hidden <= 0) {
+  if (ctx == nullptr || cond == nullptr || adaDenseW == nullptr ||
+      adaDenseB == nullptr || hidden <= 0) {
     return out;
   }
   // modulation = cond @ W^T + b  →  (3*hidden,)
-  struct ggml_tensor* mod = pi05Linear(ctx, cond, ada_dense_w, ada_dense_b);
+  struct ggml_tensor* mod = pi05Linear(ctx, cond, adaDenseW, adaDenseB);
   // Chunk into three contiguous (hidden,) slices. `mod` is 1-D
   // (ne[0] = 3*hidden), so a 1-D view with the right offset suffices.
   const size_t es = ggml_element_size(mod);
   out.scale = ggml_view_1d(ctx, mod, hidden, /*offset=*/0);
   out.shift = ggml_view_1d(ctx, mod, hidden, /*offset=*/hidden * es);
-  out.gate = ggml_view_1d(
-      ctx, mod, hidden, /*offset=*/2 * hidden * es);
+  out.gate = ggml_view_1d(ctx, mod, hidden, /*offset=*/2 * hidden * es);
   return out;
 }
 
@@ -548,127 +529,137 @@ Pi05AdaSplit pi05BuildAdarmsSplitGraph(
 // `_optional_pt_keys_with_shape` in convert_pi05_to_gguf.py.
 static struct ggml_tensor* pi05AdarmsApply(
     struct ggml_context* ctx, struct ggml_tensor* x,
-    struct ggml_tensor* ada_scale, struct ggml_tensor* ada_shift,
-    float eps) {
+    struct ggml_tensor* adaScale, struct ggml_tensor* adaShift, float eps) {
   struct ggml_tensor* normed = ggml_rms_norm(ctx, x, eps);
   // normed * (1 + ada_scale) = normed + normed * ada_scale
-  struct ggml_tensor* s = ggml_add(
-      ctx, normed, ggml_mul(ctx, normed, ada_scale));
-  return ggml_add(ctx, s, ada_shift);
+  struct ggml_tensor* s =
+      ggml_add(ctx, normed, ggml_mul(ctx, normed, adaScale));
+  return ggml_add(ctx, s, adaShift);
 }
 
 // ── M3.9: one expert block (Gemma-1 300M) with joint attention ──────────
 struct ggml_tensor* pi05BuildExpertBlockGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* x_exp,
-    struct ggml_tensor* act_positions,
-    struct ggml_tensor* cached_k,
-    struct ggml_tensor* cached_v,
-    struct ggml_tensor* cond,
-    const Pi05ExpertBlockWeights& w,
-    int expert_hidden,
-    int n_heads,
-    int n_kv_heads,
-    int head_dim,
-    int prefix_len,
-    int n_act,
-    float rms_norm_eps,
-    float rope_freq_base) {
-  if (ctx == nullptr || x_exp == nullptr || act_positions == nullptr ||
-      cached_k == nullptr || cached_v == nullptr || cond == nullptr ||
+    struct ggml_context* ctx, struct ggml_tensor* xExp,
+    struct ggml_tensor* actPositions, struct ggml_tensor* cachedK,
+    struct ggml_tensor* cachedV, struct ggml_tensor* cond,
+    const Pi05ExpertBlockWeights& w, int expertHidden, int nHeads, int nKvHeads,
+    int headDim, int prefixLen, int nAct, float rmsNormEps,
+    float ropeFreqBase) {
+  if (ctx == nullptr || xExp == nullptr || actPositions == nullptr ||
+      cachedK == nullptr || cachedV == nullptr || cond == nullptr ||
       w.pre_attn_ada_w == nullptr || w.pre_attn_ada_b == nullptr ||
       w.pre_ffw_ada_w == nullptr || w.pre_ffw_ada_b == nullptr ||
-      w.attn_q_w == nullptr || w.attn_k_w == nullptr ||
-      w.attn_v_w == nullptr || w.attn_o_w == nullptr ||
-      w.mlp_gate_w == nullptr || w.mlp_up_w == nullptr ||
-      w.mlp_down_w == nullptr) {
+      w.attn_q_w == nullptr || w.attn_k_w == nullptr || w.attn_v_w == nullptr ||
+      w.attn_o_w == nullptr || w.mlp_gate_w == nullptr ||
+      w.mlp_up_w == nullptr || w.mlp_down_w == nullptr) {
     return nullptr;
   }
 
   // ── Pre-attn adaRMSNorm + per-block ada split ──────────────────────
   Pi05AdaSplit a = pi05BuildAdarmsSplitGraph(
-      ctx, cond, w.pre_attn_ada_w, w.pre_attn_ada_b, expert_hidden);
+      ctx, cond, w.pre_attn_ada_w, w.pre_attn_ada_b, expertHidden);
   if (a.scale == nullptr) {
     return nullptr;
   }
 
   struct ggml_tensor* h =
-      pi05AdarmsApply(ctx, x_exp, a.scale, a.shift, rms_norm_eps);
+      pi05AdarmsApply(ctx, xExp, a.scale, a.shift, rmsNormEps);
 
   // ── Q, K, V projections (Gemma-1 expert has no attn bias) ─────────
   struct ggml_tensor* q = pi05Linear(ctx, h, w.attn_q_w, nullptr);
-  struct ggml_tensor* k_exp = pi05Linear(ctx, h, w.attn_k_w, nullptr);
-  struct ggml_tensor* v_exp = pi05Linear(ctx, h, w.attn_v_w, nullptr);
+  struct ggml_tensor* kExp = pi05Linear(ctx, h, w.attn_k_w, nullptr);
+  struct ggml_tensor* vExp = pi05Linear(ctx, h, w.attn_v_w, nullptr);
 
   // Reshape to per-head layout. Q goes through 8-head expansion; K/V
   // stay at 1 head (MQA).
-  q = ggml_reshape_3d(ctx, q, head_dim, n_heads, n_act);
-  k_exp = ggml_reshape_3d(ctx, k_exp, head_dim, n_kv_heads, n_act);
-  v_exp = ggml_reshape_3d(ctx, v_exp, head_dim, n_kv_heads, n_act);
+  q = ggml_reshape_3d(ctx, q, headDim, nHeads, nAct);
+  kExp = ggml_reshape_3d(ctx, kExp, headDim, nKvHeads, nAct);
+  vExp = ggml_reshape_3d(ctx, vExp, headDim, nKvHeads, nAct);
 
   // RoPE on Q and expert K (NEOX, base 10000 like the VLM). The
   // cached prefix K from the VLM was already RoPE-rotated at prefill
   // time and uses positions 0..prefix_len-1; the expert's positions
   // continue from there (act_positions).
-  const int n_rot = head_dim;
-  const int rope_mode = GGML_ROPE_TYPE_NEOX;
+  const int nRot = headDim;
+  const int ropeMode = GGML_ROPE_TYPE_NEOX;
   q = ggml_rope_ext(
-      ctx, q, act_positions, /*freq_factors=*/nullptr,
-      n_rot, rope_mode, 0, rope_freq_base, 1.0f, 0.0f, 1.0f, 32.0f, 1.0f);
-  k_exp = ggml_rope_ext(
-      ctx, k_exp, act_positions, /*freq_factors=*/nullptr,
-      n_rot, rope_mode, 0, rope_freq_base, 1.0f, 0.0f, 1.0f, 32.0f, 1.0f);
+      ctx,
+      q,
+      actPositions,
+      /*freq_factors=*/nullptr,
+      nRot,
+      ropeMode,
+      0,
+      ropeFreqBase,
+      1.0f,
+      0.0f,
+      1.0f,
+      32.0f,
+      1.0f);
+  kExp = ggml_rope_ext(
+      ctx,
+      kExp,
+      actPositions,
+      /*freq_factors=*/nullptr,
+      nRot,
+      ropeMode,
+      0,
+      ropeFreqBase,
+      1.0f,
+      0.0f,
+      1.0f,
+      32.0f,
+      1.0f);
 
   // Permute Q/K/V to ggml's attention layout (head_dim, seq, heads).
   q = ggml_cont(ctx, ggml_permute(ctx, q, 0, 2, 1, 3));
-  k_exp = ggml_cont(ctx, ggml_permute(ctx, k_exp, 0, 2, 1, 3));
-  v_exp = ggml_cont(ctx, ggml_permute(ctx, v_exp, 0, 2, 1, 3));
+  kExp = ggml_cont(ctx, ggml_permute(ctx, kExp, 0, 2, 1, 3));
+  vExp = ggml_cont(ctx, ggml_permute(ctx, vExp, 0, 2, 1, 3));
 
   // The cached prefix K/V is stored ne=[head_dim, prefix_len, n_kv_heads]
   // already — no permute needed, and tensors from ggml_new_tensor_3d +
   // ggml_backend_tensor_set are inherently contiguous.
-  struct ggml_tensor* k_cached_c = cached_k;
-  struct ggml_tensor* v_cached_c = cached_v;
+  struct ggml_tensor* kCachedC = cachedK;
+  struct ggml_tensor* vCachedC = cachedV;
 
   // Concatenate on the seq axis (ggml dim 1). Both halves are
   // ne=[head_dim, seq_*, n_kv_heads]; the joint K/V is
   // ne=[head_dim, prefix_len + n_act, n_kv_heads].
-  struct ggml_tensor* k_joint = ggml_concat(ctx, k_cached_c, k_exp, /*dim=*/1);
-  struct ggml_tensor* v_joint = ggml_concat(ctx, v_cached_c, v_exp, /*dim=*/1);
+  struct ggml_tensor* kJoint = ggml_concat(ctx, kCachedC, kExp, /*dim=*/1);
+  struct ggml_tensor* vJoint = ggml_concat(ctx, vCachedC, vExp, /*dim=*/1);
 
   // Joint softmax. mul_mat(K_joint, Q) broadcasts kv_heads=1 across
   // Q's n_heads=8, producing ne=[seq_k, seq_q, n_heads].
-  struct ggml_tensor* logits = ggml_mul_mat(ctx, k_joint, q);
-  const float scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
+  struct ggml_tensor* logits = ggml_mul_mat(ctx, kJoint, q);
+  const float scale = 1.0f / std::sqrt(static_cast<float>(headDim));
   struct ggml_tensor* attn = ggml_soft_max_ext(
       ctx, logits, /*mask=*/nullptr, scale, /*max_bias=*/0.0f);
 
   // V_joint^T then mul_mat with attn → ne=[head_dim, seq_q, n_heads].
-  struct ggml_tensor* attn_out = ggml_mul_mat(
-      ctx, ggml_cont(ctx, ggml_transpose(ctx, v_joint)), attn);
+  struct ggml_tensor* attnOut =
+      ggml_mul_mat(ctx, ggml_cont(ctx, ggml_transpose(ctx, vJoint)), attn);
   // Back to (head_dim*n_heads, n_act) = (expert_q_dim, n_act). The
   // expert's o_proj reads (n_heads*head_dim, expert_hidden), so we
   // reshape to ne=[n_heads*head_dim, n_act].
-  attn_out = ggml_cont(ctx, ggml_permute(ctx, attn_out, 0, 2, 1, 3));
-  attn_out = ggml_reshape_2d(
-      ctx, attn_out, n_heads * head_dim, n_act);
+  attnOut = ggml_cont(ctx, ggml_permute(ctx, attnOut, 0, 2, 1, 3));
+  attnOut = ggml_reshape_2d(ctx, attnOut, nHeads * headDim, nAct);
 
   // O-proj + gated residual.
-  struct ggml_tensor* proj = pi05Linear(ctx, attn_out, w.attn_o_w, nullptr);
+  struct ggml_tensor* proj = pi05Linear(ctx, attnOut, w.attn_o_w, nullptr);
   // Gated residual: x + ada_gate * proj  (per-channel multiply,
   // broadcasts the (expert_hidden,) gate across n_act).
-  h = ggml_add(ctx, x_exp, ggml_mul(ctx, proj, a.gate));
+  h = ggml_add(ctx, xExp, ggml_mul(ctx, proj, a.gate));
 
   // ── Pre-FFW adaRMSNorm + GeGLU MLP + gated residual ────────────────
   Pi05AdaSplit b = pi05BuildAdarmsSplitGraph(
-      ctx, cond, w.pre_ffw_ada_w, w.pre_ffw_ada_b, expert_hidden);
+      ctx, cond, w.pre_ffw_ada_w, w.pre_ffw_ada_b, expertHidden);
   if (b.scale == nullptr) {
     return nullptr;
   }
-  struct ggml_tensor* normed_ffw =
-      pi05AdarmsApply(ctx, h, b.scale, b.shift, rms_norm_eps);
-  struct ggml_tensor* gate = pi05Linear(ctx, normed_ffw, w.mlp_gate_w, nullptr);
-  struct ggml_tensor* up = pi05Linear(ctx, normed_ffw, w.mlp_up_w, nullptr);
+  struct ggml_tensor* normedFfw =
+      pi05AdarmsApply(ctx, h, b.scale, b.shift, rmsNormEps);
+  struct ggml_tensor* gate = pi05Linear(ctx, normedFfw, w.mlp_gate_w, nullptr);
+  struct ggml_tensor* up = pi05Linear(ctx, normedFfw, w.mlp_up_w, nullptr);
   gate = ggml_gelu(ctx, gate);
   struct ggml_tensor* ff = ggml_mul(ctx, gate, up);
   struct ggml_tensor* down = pi05Linear(ctx, ff, w.mlp_down_w, nullptr);
@@ -677,70 +668,66 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
 
 // ── M3.10: full expert pass (18 blocks + final adaRMSNorm + action_out) ─
 Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* x_exp,
-    struct ggml_tensor* act_positions,
-    const std::vector<struct ggml_tensor*>& cached_k,
-    const std::vector<struct ggml_tensor*>& cached_v,
-    struct ggml_tensor* cond,
+    struct ggml_context* ctx, struct ggml_tensor* xExp,
+    struct ggml_tensor* actPositions,
+    const std::vector<struct ggml_tensor*>& cachedK,
+    const std::vector<struct ggml_tensor*>& cachedV, struct ggml_tensor* cond,
     const std::vector<Pi05ExpertBlockWeights>& blocks,
-    struct ggml_tensor* final_norm_ada_w,
-    struct ggml_tensor* final_norm_ada_b,
-    struct ggml_tensor* action_out_proj_w,
-    struct ggml_tensor* action_out_proj_b,
-    int expert_hidden,
-    int n_heads,
-    int n_kv_heads,
-    int head_dim,
-    int prefix_len,
-    int n_act,
-    float rms_norm_eps,
-    float rope_freq_base) {
+    struct ggml_tensor* finalNormAdaW, struct ggml_tensor* finalNormAdaB,
+    struct ggml_tensor* actionOutProjW, struct ggml_tensor* actionOutProjB,
+    int expertHidden, int nHeads, int nKvHeads, int headDim, int prefixLen,
+    int nAct, float rmsNormEps, float ropeFreqBase) {
   Pi05ExpertODEStepOutputs out{nullptr, nullptr};
-  if (ctx == nullptr || x_exp == nullptr || act_positions == nullptr ||
-      cond == nullptr || blocks.empty() ||
-      cached_k.size() != blocks.size() ||
-      cached_v.size() != blocks.size() ||
-      final_norm_ada_w == nullptr || final_norm_ada_b == nullptr ||
-      action_out_proj_w == nullptr || action_out_proj_b == nullptr) {
+  if (ctx == nullptr || xExp == nullptr || actPositions == nullptr ||
+      cond == nullptr || blocks.empty() || cachedK.size() != blocks.size() ||
+      cachedV.size() != blocks.size() || finalNormAdaW == nullptr ||
+      finalNormAdaB == nullptr || actionOutProjW == nullptr ||
+      actionOutProjB == nullptr) {
     return out;
   }
-  struct ggml_tensor* h = x_exp;
+  struct ggml_tensor* h = xExp;
   for (size_t i = 0; i < blocks.size(); ++i) {
     h = pi05BuildExpertBlockGraph(
-        ctx, h, act_positions, cached_k[i], cached_v[i], cond,
+        ctx,
+        h,
+        actPositions,
+        cachedK[i],
+        cachedV[i],
+        cond,
         blocks[i],
-        expert_hidden, n_heads, n_kv_heads, head_dim,
-        prefix_len, n_act, rms_norm_eps, rope_freq_base);
+        expertHidden,
+        nHeads,
+        nKvHeads,
+        headDim,
+        prefixLen,
+        nAct,
+        rmsNormEps,
+        ropeFreqBase);
     if (h == nullptr) {
       return out;
     }
   }
   // Final adaRMSNorm — same modulation form as the per-block norms.
   Pi05AdaSplit fin = pi05BuildAdarmsSplitGraph(
-      ctx, cond, final_norm_ada_w, final_norm_ada_b, expert_hidden);
+      ctx, cond, finalNormAdaW, finalNormAdaB, expertHidden);
   if (fin.scale == nullptr) {
     return out;
   }
-  out.final_out = pi05AdarmsApply(
-      ctx, h, fin.scale, fin.shift, rms_norm_eps);
+  out.final_out = pi05AdarmsApply(ctx, h, fin.scale, fin.shift, rmsNormEps);
 
   // action_out_proj — Linear(expert_hidden → action_dim).
-  out.v_t = pi05Linear(
-      ctx, out.final_out, action_out_proj_w, action_out_proj_b);
+  out.v_t = pi05Linear(ctx, out.final_out, actionOutProjW, actionOutProjB);
   return out;
 }
 
 // ── M3.11: explicit-Euler ODE step ──────────────────────────────────────
 struct ggml_tensor* pi05BuildEulerStepGraph(
-    struct ggml_context* ctx,
-    struct ggml_tensor* x_t,
-    struct ggml_tensor* v_t,
+    struct ggml_context* ctx, struct ggml_tensor* xT, struct ggml_tensor* vT,
     float dt) {
-  if (ctx == nullptr || x_t == nullptr || v_t == nullptr) {
+  if (ctx == nullptr || xT == nullptr || vT == nullptr) {
     return nullptr;
   }
-  return ggml_add(ctx, x_t, ggml_scale(ctx, v_t, dt));
+  return ggml_add(ctx, xT, ggml_scale(ctx, vT, dt));
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -884,19 +871,20 @@ struct Pi05StagedGraph {
   ggml_backend_sched_t sched = nullptr;
 };
 
-static Pi05StagedGraph pi05BuildStaged(size_t ctx_bytes, int max_nodes) {
+static Pi05StagedGraph pi05BuildStaged(size_t ctxBytes, int maxNodes) {
   Pi05StagedGraph sg{};
-  struct ggml_init_params params{ctx_bytes, nullptr, /*no_alloc=*/true};
+  struct ggml_init_params params{ctxBytes, nullptr, /*no_alloc=*/true};
   sg.ctx = ggml_init(params);
-  if (sg.ctx == nullptr) return sg;
-  sg.gf = ggml_new_graph_custom(sg.ctx, max_nodes, false);
+  if (sg.ctx == nullptr)
+    return sg;
+  sg.gf = ggml_new_graph_custom(sg.ctx, maxNodes, false);
   return sg;
 }
 
-static bool pi05AllocStagedSimple(
-    Pi05StagedGraph& sg, ggml_backend_t backend) {
+static bool pi05AllocStagedSimple(Pi05StagedGraph& sg, ggml_backend_t backend) {
   sg.allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-  if (sg.allocr == nullptr) return false;
+  if (sg.allocr == nullptr)
+    return false;
   return ggml_gallocr_alloc_graph(sg.allocr, sg.gf);
 }
 
@@ -905,12 +893,12 @@ static bool pi05AllocStagedSched(
   ggml_backend_t backends[] = {gpu, cpu};
   sg.sched = ggml_backend_sched_new(
       backends, nullptr, 2, GGML_DEFAULT_GRAPH_SIZE, false, true);
-  if (sg.sched == nullptr) return false;
+  if (sg.sched == nullptr)
+    return false;
   return ggml_backend_sched_alloc_graph(sg.sched, sg.gf);
 }
 
-static bool pi05ComputeStaged(
-    Pi05StagedGraph& sg, ggml_backend_t backend) {
+static bool pi05ComputeStaged(Pi05StagedGraph& sg, ggml_backend_t backend) {
   if (sg.sched != nullptr) {
     return ggml_backend_sched_graph_compute(sg.sched, sg.gf) ==
            GGML_STATUS_SUCCESS;
@@ -919,9 +907,12 @@ static bool pi05ComputeStaged(
 }
 
 static void pi05FreeStaged(Pi05StagedGraph& sg) {
-  if (sg.sched != nullptr) ggml_backend_sched_free(sg.sched);
-  if (sg.allocr != nullptr) ggml_gallocr_free(sg.allocr);
-  if (sg.ctx != nullptr) ggml_free(sg.ctx);
+  if (sg.sched != nullptr)
+    ggml_backend_sched_free(sg.sched);
+  if (sg.allocr != nullptr)
+    ggml_gallocr_free(sg.allocr);
+  if (sg.ctx != nullptr)
+    ggml_free(sg.ctx);
   sg = {};
 }
 
@@ -930,8 +921,6 @@ struct Pi05StagedGuard {
   Pi05StagedGraph sg;
   ~Pi05StagedGuard() { pi05FreeStaged(sg); }
 };
-
-
 
 // alloc+copy weight loader. Allocates a backend buffer of the right
 // type for every tensor metadata in ctx_w, then reads each tensor's
@@ -945,17 +934,17 @@ struct Pi05StagedGuard {
 // ops directly without per-op host→device copies.
 static bool pi05LoadWeightsAllocCopy(
     Pi05ModelInternal& m, const char* path, gguf_context* gguf,
-    ggml_backend_buffer_type_t buft, size_t data_offset,
-    int64_t n_tensors_in_gguf) {
-  size_t total_size = 0;
+    ggml_backend_buffer_type_t buft, size_t dataOffset,
+    int64_t nTensorsInGguf) {
+  size_t totalSize = 0;
   for (struct ggml_tensor* t = ggml_get_first_tensor(m.ctx_w); t != nullptr;
        t = ggml_get_next_tensor(m.ctx_w, t)) {
-    total_size += ggml_nbytes(t);
+    totalSize += ggml_nbytes(t);
   }
   QLOG_IF(
       Priority::INFO,
       "pi05LoadModel: alloc+copy path, total weights " +
-          std::to_string((int)(total_size / (1024 * 1024))) + " MB");
+          std::to_string((int)(totalSize / (1024 * 1024))) + " MB");
 
   ggml_backend_buffer_t buf =
       ggml_backend_alloc_ctx_tensors_from_buft(m.ctx_w, buft);
@@ -966,7 +955,7 @@ static bool pi05LoadWeightsAllocCopy(
         std::string(
             "pi05LoadModel: ggml_backend_alloc_ctx_tensors_from_buft "
             "FAILED for ") +
-            std::to_string((int)(total_size / (1024 * 1024))) +
+            std::to_string((int)(totalSize / (1024 * 1024))) +
             " MB on backend '" + (bname != nullptr ? bname : "?") + "'");
     return false;
   }
@@ -980,25 +969,25 @@ static bool pi05LoadWeightsAllocCopy(
         std::string("pi05LoadModel: fopen failed for '") + path + "'");
     return false;
   }
-  std::vector<uint8_t> read_buf;
-  int n_copied = 0;
-  for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+  std::vector<uint8_t> readBuf;
+  int nCopied = 0;
+  for (int64_t i = 0; i < nTensorsInGguf; i++) {
     const char* name = gguf_get_tensor_name(gguf, i);
     struct ggml_tensor* t = ggml_get_tensor(m.ctx_w, name);
     if (t == nullptr) {
       continue;
     }
-    size_t off = data_offset + gguf_get_tensor_offset(gguf, i);
+    size_t off = dataOffset + gguf_get_tensor_offset(gguf, i);
     size_t nbytes = ggml_nbytes(t);
-    if (read_buf.size() < nbytes) {
-      read_buf.resize(nbytes);
+    if (readBuf.size() < nbytes) {
+      readBuf.resize(nbytes);
     }
 #ifdef _WIN32
-    int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
+    int seekErr = _fseeki64(f, (int64_t)off, SEEK_SET);
 #else
-    int seek_err = fseeko(f, static_cast<off_t>(off), SEEK_SET);
+    int seekErr = fseeko(f, static_cast<off_t>(off), SEEK_SET);
 #endif
-    if (seek_err != 0 || std::fread(read_buf.data(), 1, nbytes, f) != nbytes) {
+    if (seekErr != 0 || std::fread(readBuf.data(), 1, nbytes, f) != nbytes) {
       QLOG_IF(
           Priority::ERROR,
           std::string("pi05LoadModel: failed to read tensor '") + name +
@@ -1006,16 +995,15 @@ static bool pi05LoadWeightsAllocCopy(
       std::fclose(f);
       return false;
     }
-    ggml_backend_tensor_set(t, read_buf.data(), 0, nbytes);
-    n_copied++;
+    ggml_backend_tensor_set(t, readBuf.data(), 0, nbytes);
+    nCopied++;
   }
   std::fclose(f);
   const char* bname = ggml_backend_name(m.backend);
   QLOG_IF(
       Priority::INFO,
-      "pi05LoadModel: alloc+copy buffer ready, " +
-          std::to_string(n_copied) + " tensors, backend='" +
-          (bname != nullptr ? bname : "?") + "'");
+      "pi05LoadModel: alloc+copy buffer ready, " + std::to_string(nCopied) +
+          " tensors, backend='" + (bname != nullptr ? bname : "?") + "'");
   return true;
 }
 
@@ -1030,12 +1018,12 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   vla_backend_selection::loadBackendsOnce(backendsDir);
   auto m = std::make_unique<Pi05ModelInternal>();
 
-  ggml_backend_dev_t cpu_dev =
+  ggml_backend_dev_t cpuDev =
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  if (cpu_dev == nullptr) {
+  if (cpuDev == nullptr) {
     throw std::runtime_error("pi05LoadModel: no CPU backend available");
   }
-  m->backend_cpu = ggml_backend_dev_init(cpu_dev, nullptr);
+  m->backend_cpu = ggml_backend_dev_init(cpuDev, nullptr);
   if (m->backend_cpu == nullptr) {
     throw std::runtime_error("pi05LoadModel: failed to init CPU backend");
   }
@@ -1053,11 +1041,11 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   if (!forceCpu) {
     ggml_backend_dev_t gpu = vla_backend_selection::pickBestGpuDevice();
     if (gpu != nullptr) {
-      ggml_backend_t gpu_backend = ggml_backend_dev_init(gpu, nullptr);
-      if (gpu_backend != nullptr) {
-        m->backend = gpu_backend;
+      ggml_backend_t gpuBackend = ggml_backend_dev_init(gpu, nullptr);
+      if (gpuBackend != nullptr) {
+        m->backend = gpuBackend;
         m->has_gpu = true;
-        const char* bname = ggml_backend_name(gpu_backend);
+        const char* bname = ggml_backend_name(gpuBackend);
         const char* ddesc = ggml_backend_dev_description(gpu);
         m->backend_name = bname != nullptr ? bname : "gpu";
         QLOG_IF(
@@ -1072,9 +1060,7 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
             "staying on CPU");
       }
     } else {
-      QLOG_IF(
-          Priority::INFO,
-          "pi05LoadModel: no GPU device picked; using CPU");
+      QLOG_IF(Priority::INFO, "pi05LoadModel: no GPU device picked; using CPU");
     }
   } else {
     QLOG_IF(
@@ -1107,38 +1093,30 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
         "pi05LoadModel: gguf_init_from_file failed for " + ggufPath);
   }
 
-  const std::string arch =
-      ggufGetStrOr(m->gguf, "general.architecture", "");
+  const std::string arch = ggufGetStrOr(m->gguf, "general.architecture", "");
   if (arch != "pi05") {
     throw std::runtime_error(
-        "pi05LoadModel: expected general.architecture=pi05, got '" +
-        arch + "'");
+        "pi05LoadModel: expected general.architecture=pi05, got '" + arch +
+        "'");
   }
 
   // hparams (all keys per the converter's stamp_metadata).
-  m->vision_image_size =
-      ggufGetU32Or(m->gguf, "pi05.image_resolution", 224);
-  m->vision_n_layers =
-      ggufGetU32Or(m->gguf, "pi05.vision.num_layers", 27);
+  m->vision_image_size = ggufGetU32Or(m->gguf, "pi05.image_resolution", 224);
+  m->vision_n_layers = ggufGetU32Or(m->gguf, "pi05.vision.num_layers", 27);
   m->vlm_n_layers = ggufGetU32Or(m->gguf, "pi05.vlm.num_layers", 18);
   m->vlm_hidden = ggufGetU32Or(m->gguf, "pi05.vlm.hidden_size", 2048);
   m->vlm_n_heads = ggufGetU32Or(m->gguf, "pi05.vlm.num_heads", 8);
-  m->vlm_n_kv_heads =
-      ggufGetU32Or(m->gguf, "pi05.vlm.num_kv_heads", 1);
+  m->vlm_n_kv_heads = ggufGetU32Or(m->gguf, "pi05.vlm.num_kv_heads", 1);
   m->vlm_head_dim = ggufGetU32Or(m->gguf, "pi05.vlm.head_dim", 256);
   m->vlm_vocab_size = ggufGetU32Or(m->gguf, "pi05.vocab_size", 257152);
-  m->expert_hidden =
-      ggufGetU32Or(m->gguf, "pi05.expert.hidden_size", 1024);
-  m->expert_n_layers =
-      ggufGetU32Or(m->gguf, "pi05.expert.num_layers", 18);
+  m->expert_hidden = ggufGetU32Or(m->gguf, "pi05.expert.hidden_size", 1024);
+  m->expert_n_layers = ggufGetU32Or(m->gguf, "pi05.expert.num_layers", 18);
   m->action_dim = ggufGetU32Or(m->gguf, "pi05.action_dim", 32);
   m->action_horizon = ggufGetU32Or(m->gguf, "pi05.action_horizon", 50);
-  m->max_token_len =
-      ggufGetU32Or(m->gguf, "pi05.max_token_len", 200);
+  m->max_token_len = ggufGetU32Or(m->gguf, "pi05.max_token_len", 200);
   m->num_cameras = ggufGetU32Or(m->gguf, "pi05.num_cameras", 3);
-  m->vision_n_patches =
-      (m->vision_image_size / m->vision_patch_size) *
-      (m->vision_image_size / m->vision_patch_size);
+  m->vision_n_patches = (m->vision_image_size / m->vision_patch_size) *
+                        (m->vision_image_size / m->vision_patch_size);
 
   // Sanity-check hparams — reject zeros (division/scaling UB), unreasonable
   // upper bounds (OOM / integer overflow from crafted GGUFs), and
@@ -1147,17 +1125,14 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
       m->vlm_n_layers == 0 || m->vlm_n_layers > 512 ||
       m->expert_n_layers == 0 || m->expert_n_layers > 512 ||
       m->action_horizon == 0 || m->action_horizon > 1024 ||
-      m->max_token_len == 0 || m->max_token_len > 8192 ||
-      m->num_cameras == 0 || m->num_cameras > 16 ||
-      m->action_dim == 0 || m->action_dim > 512 ||
+      m->max_token_len == 0 || m->max_token_len > 8192 || m->num_cameras == 0 ||
+      m->num_cameras > 16 || m->action_dim == 0 || m->action_dim > 512 ||
       m->vision_image_size == 0 || m->vision_image_size > 2048 ||
-      m->expert_hidden == 0 || m->expert_hidden > 16384 ||
-      m->vlm_hidden == 0 || m->vlm_n_heads == 0 ||
-      m->vlm_n_kv_heads == 0 || m->vlm_head_dim == 0 ||
+      m->expert_hidden == 0 || m->expert_hidden > 16384 || m->vlm_hidden == 0 ||
+      m->vlm_n_heads == 0 || m->vlm_n_kv_heads == 0 || m->vlm_head_dim == 0 ||
       m->expert_n_heads == 0 || m->expert_n_kv_heads == 0 ||
-      m->expert_head_dim == 0 ||
-      m->vlm_vocab_size == 0 || m->vlm_vocab_size > 1048576 ||
-      m->vision_n_patches == 0 ||
+      m->expert_head_dim == 0 || m->vlm_vocab_size == 0 ||
+      m->vlm_vocab_size > 1048576 || m->vision_n_patches == 0 ||
       m->vision_image_size % m->vision_patch_size != 0 ||
       m->vlm_hidden % m->vlm_n_heads != 0 ||
       m->expert_hidden % m->expert_n_heads != 0) {
@@ -1180,10 +1155,10 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
       m->vlm_n_kv_heads != m->expert_n_kv_heads) {
     throw std::runtime_error(
         "pi05LoadModel: VLM/expert KV geometry mismatch (vlm_head_dim=" +
-        std::to_string(m->vlm_head_dim) + " expert_head_dim=" +
-        std::to_string(m->expert_head_dim) + " vlm_n_kv_heads=" +
-        std::to_string(m->vlm_n_kv_heads) + " expert_n_kv_heads=" +
-        std::to_string(m->expert_n_kv_heads) + ")");
+        std::to_string(m->vlm_head_dim) +
+        " expert_head_dim=" + std::to_string(m->expert_head_dim) +
+        " vlm_n_kv_heads=" + std::to_string(m->vlm_n_kv_heads) +
+        " expert_n_kv_heads=" + std::to_string(m->expert_n_kv_heads) + ")");
   }
 
   // GPU only: allocate a backend buffer and copy the GGUF data into
@@ -1204,11 +1179,10 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   if (m->has_gpu) {
     ggml_backend_buffer_type_t buft =
         ggml_backend_get_default_buffer_type(m->backend);
-    const size_t data_offset = gguf_get_data_offset(m->gguf);
-    const int64_t n_tensors_in_gguf = gguf_get_n_tensors(m->gguf);
+    const size_t dataOffset = gguf_get_data_offset(m->gguf);
+    const int64_t nTensorsInGguf = gguf_get_n_tensors(m->gguf);
     if (!pi05LoadWeightsAllocCopy(
-            *m, ggufPath.c_str(), m->gguf, buft, data_offset,
-            n_tensors_in_gguf)) {
+            *m, ggufPath.c_str(), m->gguf, buft, dataOffset, nTensorsInGguf)) {
       QLOG_IF(
           Priority::WARNING,
           "pi05LoadModel: GPU weight alloc failed — falling back to CPU");
@@ -1234,7 +1208,7 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   }
 
   // Populate tensor pointers from the final (possibly fallback) ctx_w.
-  auto must_get = [&](const std::string& name) -> struct ggml_tensor* {
+  auto mustGet = [&](const std::string& name) -> struct ggml_tensor* {
     struct ggml_tensor* t = ggml_get_tensor(m->ctx_w, name.c_str());
     if (t == nullptr) {
       throw std::runtime_error(
@@ -1244,82 +1218,82 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   };
 
   // Vision
-  m->vision_patch_embed_w = must_get("vision.patch_embed.weight");
-  m->vision_patch_embed_b = must_get("vision.patch_embed.bias");
-  m->vision_pos_embed = must_get("vision.pos_embed");
-  m->vision_post_ln_w = must_get("vision.post_ln.weight");
-  m->vision_post_ln_b = must_get("vision.post_ln.bias");
-  m->vision_head_w = must_get("vision.head.weight");
-  m->vision_head_b = must_get("vision.head.bias");
+  m->vision_patch_embed_w = mustGet("vision.patch_embed.weight");
+  m->vision_patch_embed_b = mustGet("vision.patch_embed.bias");
+  m->vision_pos_embed = mustGet("vision.pos_embed");
+  m->vision_post_ln_w = mustGet("vision.post_ln.weight");
+  m->vision_post_ln_b = mustGet("vision.post_ln.bias");
+  m->vision_head_w = mustGet("vision.head.weight");
+  m->vision_head_b = mustGet("vision.head.bias");
   m->vision_blocks.resize(m->vision_n_layers);
   for (int i = 0; i < m->vision_n_layers; ++i) {
     const std::string b = "vision.blk." + std::to_string(i);
     auto& bw = m->vision_blocks[i];
-    bw.ln1_w = must_get(b + ".ln1.weight");
-    bw.ln1_b = must_get(b + ".ln1.bias");
-    bw.attn_q_w = must_get(b + ".attn_q.weight");
-    bw.attn_q_b = must_get(b + ".attn_q.bias");
-    bw.attn_k_w = must_get(b + ".attn_k.weight");
-    bw.attn_k_b = must_get(b + ".attn_k.bias");
-    bw.attn_v_w = must_get(b + ".attn_v.weight");
-    bw.attn_v_b = must_get(b + ".attn_v.bias");
-    bw.attn_out_w = must_get(b + ".attn_out.weight");
-    bw.attn_out_b = must_get(b + ".attn_out.bias");
-    bw.ln2_w = must_get(b + ".ln2.weight");
-    bw.ln2_b = must_get(b + ".ln2.bias");
-    bw.fc1_w = must_get(b + ".fc1.weight");
-    bw.fc1_b = must_get(b + ".fc1.bias");
-    bw.fc2_w = must_get(b + ".fc2.weight");
-    bw.fc2_b = must_get(b + ".fc2.bias");
+    bw.ln1_w = mustGet(b + ".ln1.weight");
+    bw.ln1_b = mustGet(b + ".ln1.bias");
+    bw.attn_q_w = mustGet(b + ".attn_q.weight");
+    bw.attn_q_b = mustGet(b + ".attn_q.bias");
+    bw.attn_k_w = mustGet(b + ".attn_k.weight");
+    bw.attn_k_b = mustGet(b + ".attn_k.bias");
+    bw.attn_v_w = mustGet(b + ".attn_v.weight");
+    bw.attn_v_b = mustGet(b + ".attn_v.bias");
+    bw.attn_out_w = mustGet(b + ".attn_out.weight");
+    bw.attn_out_b = mustGet(b + ".attn_out.bias");
+    bw.ln2_w = mustGet(b + ".ln2.weight");
+    bw.ln2_b = mustGet(b + ".ln2.bias");
+    bw.fc1_w = mustGet(b + ".fc1.weight");
+    bw.fc1_b = mustGet(b + ".fc1.bias");
+    bw.fc2_w = mustGet(b + ".fc2.weight");
+    bw.fc2_b = mustGet(b + ".fc2.bias");
   }
 
   // VLM
-  m->vlm_embed_tokens = must_get("vlm.embed_tokens");
-  m->vlm_final_norm_w = must_get("vlm.final_norm.scale");
+  m->vlm_embed_tokens = mustGet("vlm.embed_tokens");
+  m->vlm_final_norm_w = mustGet("vlm.final_norm.scale");
   m->vlm_blocks.resize(m->vlm_n_layers);
   for (int i = 0; i < m->vlm_n_layers; ++i) {
     const std::string b = "vlm.blk." + std::to_string(i);
     auto& bw = m->vlm_blocks[i];
-    bw.pre_attn_norm_scale = must_get(b + ".pre_attn_norm.scale");
-    bw.attn_q_w = must_get(b + ".attn.q.weight");
-    bw.attn_k_w = must_get(b + ".attn.k.weight");
-    bw.attn_v_w = must_get(b + ".attn.v.weight");
-    bw.attn_o_w = must_get(b + ".attn.o.weight");
-    bw.pre_ffw_norm_scale = must_get(b + ".pre_ffw_norm.scale");
-    bw.mlp_gate_w = must_get(b + ".mlp.gate.weight");
-    bw.mlp_up_w = must_get(b + ".mlp.up.weight");
-    bw.mlp_down_w = must_get(b + ".mlp.down.weight");
+    bw.pre_attn_norm_scale = mustGet(b + ".pre_attn_norm.scale");
+    bw.attn_q_w = mustGet(b + ".attn.q.weight");
+    bw.attn_k_w = mustGet(b + ".attn.k.weight");
+    bw.attn_v_w = mustGet(b + ".attn.v.weight");
+    bw.attn_o_w = mustGet(b + ".attn.o.weight");
+    bw.pre_ffw_norm_scale = mustGet(b + ".pre_ffw_norm.scale");
+    bw.mlp_gate_w = mustGet(b + ".mlp.gate.weight");
+    bw.mlp_up_w = mustGet(b + ".mlp.up.weight");
+    bw.mlp_down_w = mustGet(b + ".mlp.down.weight");
   }
 
   // Expert
-  m->expert_final_norm_ada_w = must_get("expert.final_norm.ada.weight");
-  m->expert_final_norm_ada_b = must_get("expert.final_norm.ada.bias");
+  m->expert_final_norm_ada_w = mustGet("expert.final_norm.ada.weight");
+  m->expert_final_norm_ada_b = mustGet("expert.final_norm.ada.bias");
   m->expert_blocks.resize(m->expert_n_layers);
   for (int i = 0; i < m->expert_n_layers; ++i) {
     const std::string b = "expert.blk." + std::to_string(i);
     auto& bw = m->expert_blocks[i];
-    bw.pre_attn_ada_w = must_get(b + ".pre_attn_norm.ada.weight");
-    bw.pre_attn_ada_b = must_get(b + ".pre_attn_norm.ada.bias");
-    bw.pre_ffw_ada_w = must_get(b + ".pre_ffw_norm.ada.weight");
-    bw.pre_ffw_ada_b = must_get(b + ".pre_ffw_norm.ada.bias");
-    bw.attn_q_w = must_get(b + ".attn.q.weight");
-    bw.attn_k_w = must_get(b + ".attn.k.weight");
-    bw.attn_v_w = must_get(b + ".attn.v.weight");
-    bw.attn_o_w = must_get(b + ".attn.o.weight");
-    bw.mlp_gate_w = must_get(b + ".mlp.gate.weight");
-    bw.mlp_up_w = must_get(b + ".mlp.up.weight");
-    bw.mlp_down_w = must_get(b + ".mlp.down.weight");
+    bw.pre_attn_ada_w = mustGet(b + ".pre_attn_norm.ada.weight");
+    bw.pre_attn_ada_b = mustGet(b + ".pre_attn_norm.ada.bias");
+    bw.pre_ffw_ada_w = mustGet(b + ".pre_ffw_norm.ada.weight");
+    bw.pre_ffw_ada_b = mustGet(b + ".pre_ffw_norm.ada.bias");
+    bw.attn_q_w = mustGet(b + ".attn.q.weight");
+    bw.attn_k_w = mustGet(b + ".attn.k.weight");
+    bw.attn_v_w = mustGet(b + ".attn.v.weight");
+    bw.attn_o_w = mustGet(b + ".attn.o.weight");
+    bw.mlp_gate_w = mustGet(b + ".mlp.gate.weight");
+    bw.mlp_up_w = mustGet(b + ".mlp.up.weight");
+    bw.mlp_down_w = mustGet(b + ".mlp.down.weight");
   }
 
   // Projections
-  m->action_in_w = must_get("proj.action_in.weight");
-  m->action_in_b = must_get("proj.action_in.bias");
-  m->action_out_w = must_get("proj.action_out.weight");
-  m->action_out_b = must_get("proj.action_out.bias");
-  m->time_mlp_in_w = must_get("proj.time_mlp_in.weight");
-  m->time_mlp_in_b = must_get("proj.time_mlp_in.bias");
-  m->time_mlp_out_w = must_get("proj.time_mlp_out.weight");
-  m->time_mlp_out_b = must_get("proj.time_mlp_out.bias");
+  m->action_in_w = mustGet("proj.action_in.weight");
+  m->action_in_b = mustGet("proj.action_in.bias");
+  m->action_out_w = mustGet("proj.action_out.weight");
+  m->action_out_b = mustGet("proj.action_out.bias");
+  m->time_mlp_in_w = mustGet("proj.time_mlp_in.weight");
+  m->time_mlp_in_b = mustGet("proj.time_mlp_in.bias");
+  m->time_mlp_out_w = mustGet("proj.time_mlp_out.weight");
+  m->time_mlp_out_b = mustGet("proj.time_mlp_out.bias");
 
   return m;
 }
@@ -1328,61 +1302,55 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
 // + M3.6 (VLM prefill with KV taps) + M3.12 (ODE loop) into a single
 // pass. Returns true on success.
 static bool pi05Inference(
-    Pi05ModelInternal& m,
-    const float** images,
-    int n_images,
-    const int32_t* lang_tokens,
-    const bool* lang_mask,
-    int lang_len,
-    const float* noise,
-    float* actions_out,
-    int* n_actions_out,
-    VlaTimingGeneric* timing_out) {
-  if (actions_out == nullptr || n_actions_out == nullptr) {
+    Pi05ModelInternal& m, const float** images, int nImages,
+    const int32_t* langTokens, const bool* langMask, int langLen,
+    const float* noise, float* actionsOut, int* nActionsOut,
+    VlaTimingGeneric* timingOut) {
+  if (actionsOut == nullptr || nActionsOut == nullptr) {
     return false;
   }
-  if (images == nullptr || lang_tokens == nullptr || lang_mask == nullptr) {
+  if (images == nullptr || langTokens == nullptr || langMask == nullptr) {
     return false;
   }
   if (noise == nullptr) {
     return false;
   }
-  const auto t_start = std::chrono::steady_clock::now();
-  if (n_images < 1 || n_images > m.num_cameras) {
+  const auto tStart = std::chrono::steady_clock::now();
+  if (nImages < 1 || nImages > m.num_cameras) {
     return false;
   }
-  for (int i = 0; i < n_images; ++i) {
+  for (int i = 0; i < nImages; ++i) {
     if (images[i] == nullptr) {
       return false;
     }
   }
-  if (lang_len != m.max_token_len) {
+  if (langLen != m.max_token_len) {
     return false;
   }
-  for (int i = 0; i < lang_len; ++i) {
-    if (lang_tokens[i] < 0 || lang_tokens[i] >= m.vlm_vocab_size) {
+  for (int i = 0; i < langLen; ++i) {
+    if (langTokens[i] < 0 || langTokens[i] >= m.vlm_vocab_size) {
       return false;
     }
   }
   // Find leading-contiguous valid range; reject holes.
-  int valid_lang = 0;
-  while (valid_lang < lang_len && lang_mask[valid_lang]) {
-    ++valid_lang;
+  int validLang = 0;
+  while (validLang < langLen && langMask[validLang]) {
+    ++validLang;
   }
-  for (int i = valid_lang; i < lang_len; ++i) {
-    if (lang_mask[i]) {
+  for (int i = validLang; i < langLen; ++i) {
+    if (langMask[i]) {
       return false;
     }
   }
-  const int prefix_len = n_images * m.vision_n_patches + valid_lang;
+  const int prefixLen = nImages * m.vision_n_patches + validLang;
 
   // ── Vision tower per camera ────────────────────────────────────────
-  const auto t_vis_start = std::chrono::steady_clock::now();
-  const int H = m.vision_image_size;
-  const size_t per_image_out =
+  const auto tVisStart = std::chrono::steady_clock::now();
+  const int h = m.vision_image_size;
+  const size_t perImageOut =
       static_cast<size_t>(m.vision_n_patches) * m.vision_proj_dim;
-  std::vector<std::vector<float>> image_features(n_images);
-  const size_t img_floats = static_cast<size_t>(3) * H * H;
+  std::vector<std::vector<float>> imageFeatures(nImages);
+  const size_t imgFloats = static_cast<size_t>(3) * h * h;
 
   // P5: construct vision tower weight struct once (all fields are immutable
   // pointers into the model's weight context).
@@ -1396,9 +1364,9 @@ static bool pi05Inference(
   tw.head_w = m.vision_head_w;
   tw.head_b = m.vision_head_b;
 
-  for (int cam = 0; cam < n_images; ++cam) {
+  for (int cam = 0; cam < nImages; ++cam) {
     // CHW row-major is already ggml's (W, H, C, 1) layout for square images.
-    const float* img_data = images[cam];
+    const float* imgData = images[cam];
 
     Pi05StagedGuard vg;
     vg.sg = pi05BuildStaged(size_t{32} * 1024 * 1024, 8192);
@@ -1406,11 +1374,17 @@ static bool pi05Inference(
       return false;
     }
     struct ggml_tensor* pixels =
-        ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, H, H, 3, 1);
+        ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, h, h, 3, 1);
 
     auto outs = pi05BuildSiglipTowerGraph(
-        vg.sg.ctx, pixels, tw, m.vision_n_patches, m.vision_hidden,
-        m.vision_proj_dim, m.vision_n_heads, m.vision_patch_size,
+        vg.sg.ctx,
+        pixels,
+        tw,
+        m.vision_n_patches,
+        m.vision_hidden,
+        m.vision_proj_dim,
+        m.vision_n_heads,
+        m.vision_patch_size,
         m.vision_layer_norm_eps);
     if (outs.head_out == nullptr) {
       return false;
@@ -1422,34 +1396,34 @@ static bool pi05Inference(
     // older Vulkan). The scheduler routes Conv2d to CPU if the GPU
     // doesn't support it; rest of the SigLIP tower stays on GPU.
     const bool ok = m.has_gpu
-        ? pi05AllocStagedSched(vg.sg, m.backend, m.backend_cpu)
-        : pi05AllocStagedSimple(vg.sg, m.backend_cpu);
+                        ? pi05AllocStagedSched(vg.sg, m.backend, m.backend_cpu)
+                        : pi05AllocStagedSimple(vg.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
-    ggml_backend_tensor_set(pixels, img_data, 0,
-                            img_floats * sizeof(float));
+    ggml_backend_tensor_set(pixels, imgData, 0, imgFloats * sizeof(float));
     if (!pi05ComputeStaged(vg.sg, m.backend)) {
       return false;
     }
-    image_features[cam].resize(per_image_out);
-    ggml_backend_tensor_get(outs.head_out, image_features[cam].data(), 0,
-                            per_image_out * sizeof(float));
+    imageFeatures[cam].resize(perImageOut);
+    ggml_backend_tensor_get(
+        outs.head_out,
+        imageFeatures[cam].data(),
+        0,
+        perImageOut * sizeof(float));
   }
-  const auto t_vis_end = std::chrono::steady_clock::now();
+  const auto tVisEnd = std::chrono::steady_clock::now();
 
   // ── Language embedding (valid tokens only) ─────────────────────────
-  std::vector<float> lang_embeds(
-      static_cast<size_t>(valid_lang) * m.vlm_hidden);
+  std::vector<float> langEmbeds(static_cast<size_t>(validLang) * m.vlm_hidden);
   {
     Pi05StagedGuard eg;
-    eg.sg = pi05BuildStaged(size_t{32} * 1024 * 1024,
-                              GGML_DEFAULT_GRAPH_SIZE);
+    eg.sg = pi05BuildStaged(size_t{32} * 1024 * 1024, GGML_DEFAULT_GRAPH_SIZE);
     if (eg.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* tok =
-        ggml_new_tensor_1d(eg.sg.ctx, GGML_TYPE_I32, valid_lang);
+        ggml_new_tensor_1d(eg.sg.ctx, GGML_TYPE_I32, validLang);
     struct ggml_tensor* emb = pi05BuildVlmEmbedGraph(
         eg.sg.ctx, tok, m.vlm_embed_tokens, m.vlm_hidden);
     if (emb == nullptr) {
@@ -1457,204 +1431,243 @@ static bool pi05Inference(
     }
     ggml_build_forward_expand(eg.sg.gf, emb);
     const bool ok = m.has_gpu
-        ? pi05AllocStagedSched(eg.sg, m.backend, m.backend_cpu)
-        : pi05AllocStagedSimple(eg.sg, m.backend_cpu);
+                        ? pi05AllocStagedSched(eg.sg, m.backend, m.backend_cpu)
+                        : pi05AllocStagedSimple(eg.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
-    ggml_backend_tensor_set(tok, lang_tokens, 0,
-                            static_cast<size_t>(valid_lang) *
-                                sizeof(int32_t));
+    ggml_backend_tensor_set(
+        tok, langTokens, 0, static_cast<size_t>(validLang) * sizeof(int32_t));
     if (!pi05ComputeStaged(eg.sg, m.backend)) {
       return false;
     }
-    ggml_backend_tensor_get(emb, lang_embeds.data(), 0,
-                            lang_embeds.size() * sizeof(float));
+    ggml_backend_tensor_get(
+        emb, langEmbeds.data(), 0, langEmbeds.size() * sizeof(float));
   }
 
   // ── Concat prefix (images + lang) ──────────────────────────────────
-  std::vector<float> prefix(
-      static_cast<size_t>(prefix_len) * m.vlm_hidden);
+  std::vector<float> prefix(static_cast<size_t>(prefixLen) * m.vlm_hidden);
   {
     size_t off = 0;
-    for (int cam = 0; cam < n_images; ++cam) {
-      std::memcpy(prefix.data() + off, image_features[cam].data(),
-                  image_features[cam].size() * sizeof(float));
-      off += image_features[cam].size();
+    for (int cam = 0; cam < nImages; ++cam) {
+      std::memcpy(
+          prefix.data() + off,
+          imageFeatures[cam].data(),
+          imageFeatures[cam].size() * sizeof(float));
+      off += imageFeatures[cam].size();
     }
-    std::memcpy(prefix.data() + off, lang_embeds.data(),
-                lang_embeds.size() * sizeof(float));
+    std::memcpy(
+        prefix.data() + off,
+        langEmbeds.data(),
+        langEmbeds.size() * sizeof(float));
   }
 
   // ── VLM prefill with K/V taps ──────────────────────────────────────
-  const auto t_prefill_start = std::chrono::steady_clock::now();
-  const size_t per_layer_kv =
-      static_cast<size_t>(m.vlm_head_dim) * prefix_len * m.vlm_n_kv_heads;
+  const auto tPrefillStart = std::chrono::steady_clock::now();
+  const size_t perLayerKv =
+      static_cast<size_t>(m.vlm_head_dim) * prefixLen * m.vlm_n_kv_heads;
   // Flat buffers — one allocation each instead of n_layers separate vectors.
-  std::vector<float> k_cache(static_cast<size_t>(m.vlm_n_layers) * per_layer_kv);
-  std::vector<float> v_cache(static_cast<size_t>(m.vlm_n_layers) * per_layer_kv);
+  std::vector<float> kCache(static_cast<size_t>(m.vlm_n_layers) * perLayerKv);
+  std::vector<float> vCache(static_cast<size_t>(m.vlm_n_layers) * perLayerKv);
   {
     Pi05StagedGuard pg;
     pg.sg = pi05BuildStaged(size_t{64} * 1024 * 1024, 65536);
     if (pg.sg.ctx == nullptr) {
       return false;
     }
-    struct ggml_tensor* x = ggml_new_tensor_2d(
-        pg.sg.ctx, GGML_TYPE_F32, m.vlm_hidden, prefix_len);
+    struct ggml_tensor* x =
+        ggml_new_tensor_2d(pg.sg.ctx, GGML_TYPE_F32, m.vlm_hidden, prefixLen);
     struct ggml_tensor* pos =
-        ggml_new_tensor_1d(pg.sg.ctx, GGML_TYPE_I32, prefix_len);
+        ggml_new_tensor_1d(pg.sg.ctx, GGML_TYPE_I32, prefixLen);
 
-    std::vector<struct ggml_tensor*> out_keys;
-    std::vector<struct ggml_tensor*> out_values;
-    struct ggml_tensor* final_out = pi05BuildVlmPrefillGraph(
-        pg.sg.ctx, x, pos, /*attn_mask=*/nullptr, m.vlm_blocks,
-        m.vlm_final_norm_w, m.vlm_hidden, m.vlm_n_heads,
-        m.vlm_n_kv_heads, m.vlm_head_dim, prefix_len, m.rms_norm_eps,
-        m.rope_freq_base, &out_keys, &out_values);
-    if (final_out == nullptr) {
+    std::vector<struct ggml_tensor*> outKeys;
+    std::vector<struct ggml_tensor*> outValues;
+    struct ggml_tensor* finalOut = pi05BuildVlmPrefillGraph(
+        pg.sg.ctx,
+        x,
+        pos,
+        /*attn_mask=*/nullptr,
+        m.vlm_blocks,
+        m.vlm_final_norm_w,
+        m.vlm_hidden,
+        m.vlm_n_heads,
+        m.vlm_n_kv_heads,
+        m.vlm_head_dim,
+        prefixLen,
+        m.rms_norm_eps,
+        m.rope_freq_base,
+        &outKeys,
+        &outValues);
+    if (finalOut == nullptr) {
       return false;
     }
-    ggml_build_forward_expand(pg.sg.gf, final_out);
-    for (auto* k_t : out_keys) {
-      ggml_build_forward_expand(pg.sg.gf, k_t);
+    ggml_build_forward_expand(pg.sg.gf, finalOut);
+    for (auto* kT : outKeys) {
+      ggml_build_forward_expand(pg.sg.gf, kT);
     }
-    for (auto* v_t : out_values) {
-      ggml_build_forward_expand(pg.sg.gf, v_t);
+    for (auto* vT : outValues) {
+      ggml_build_forward_expand(pg.sg.gf, vT);
     }
     const bool ok = m.has_gpu
-        ? pi05AllocStagedSched(pg.sg, m.backend, m.backend_cpu)
-        : pi05AllocStagedSimple(pg.sg, m.backend_cpu);
+                        ? pi05AllocStagedSched(pg.sg, m.backend, m.backend_cpu)
+                        : pi05AllocStagedSimple(pg.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
-    std::vector<int32_t> pos_data(prefix_len);
-    for (int i = 0; i < prefix_len; ++i) {
-      pos_data[i] = i;
+    std::vector<int32_t> posData(prefixLen);
+    for (int i = 0; i < prefixLen; ++i) {
+      posData[i] = i;
     }
-    ggml_backend_tensor_set(x, prefix.data(), 0,
-                            prefix.size() * sizeof(float));
-    ggml_backend_tensor_set(pos, pos_data.data(), 0,
-                            pos_data.size() * sizeof(int32_t));
+    ggml_backend_tensor_set(x, prefix.data(), 0, prefix.size() * sizeof(float));
+    ggml_backend_tensor_set(
+        pos, posData.data(), 0, posData.size() * sizeof(int32_t));
     if (!pi05ComputeStaged(pg.sg, m.backend)) {
       return false;
     }
-    for (int L = 0; L < m.vlm_n_layers; ++L) {
-      ggml_backend_tensor_get(out_keys[L],
-                              k_cache.data() + static_cast<size_t>(L) * per_layer_kv,
-                              0, per_layer_kv * sizeof(float));
-      ggml_backend_tensor_get(out_values[L],
-                              v_cache.data() + static_cast<size_t>(L) * per_layer_kv,
-                              0, per_layer_kv * sizeof(float));
+    for (int l = 0; l < m.vlm_n_layers; ++l) {
+      ggml_backend_tensor_get(
+          outKeys[l],
+          kCache.data() + static_cast<size_t>(l) * perLayerKv,
+          0,
+          perLayerKv * sizeof(float));
+      ggml_backend_tensor_get(
+          outValues[l],
+          vCache.data() + static_cast<size_t>(l) * perLayerKv,
+          0,
+          perLayerKv * sizeof(float));
     }
   }
-  const auto t_prefill_end = std::chrono::steady_clock::now();
+  const auto tPrefillEnd = std::chrono::steady_clock::now();
 
   // ── ODE loop (10 steps) ────────────────────────────────────────────
-  const auto t_ode_start = std::chrono::steady_clock::now();
+  const auto tOdeStart = std::chrono::steady_clock::now();
   const float dt = -1.0f / m.n_inference_steps;
-  std::vector<float> x_t(
-      static_cast<size_t>(m.action_horizon) * m.action_dim);
-  std::memcpy(x_t.data(), noise, x_t.size() * sizeof(float));
-  std::vector<float> sincos_buf(m.cond_dim);
-  std::vector<int32_t> act_pos_data(m.action_horizon);
+  std::vector<float> xT(static_cast<size_t>(m.action_horizon) * m.action_dim);
+  std::memcpy(xT.data(), noise, xT.size() * sizeof(float));
+  std::vector<float> sincosBuf(m.cond_dim);
+  std::vector<int32_t> actPosData(m.action_horizon);
   for (int i = 0; i < m.action_horizon; ++i) {
-    act_pos_data[i] = prefix_len + i;
+    actPosData[i] = prefixLen + i;
   }
-  std::vector<float> x_next_buf(x_t.size());
+  std::vector<float> xNextBuf(xT.size());
 
   for (int step = 0; step < m.n_inference_steps; ++step) {
     const float t = 1.0f + step * dt;
-    pi05ComputeTimeSincos(t, m.cond_dim, m.min_period, m.max_period,
-                             sincos_buf.data());
+    pi05ComputeTimeSincos(
+        t, m.cond_dim, m.min_period, m.max_period, sincosBuf.data());
 
     Pi05StagedGuard og;
     og.sg = pi05BuildStaged(size_t{96} * 1024 * 1024, 32768);
     if (og.sg.ctx == nullptr) {
       return false;
     }
-    struct ggml_tensor* x_t_t = ggml_new_tensor_2d(
+    struct ggml_tensor* xTT = ggml_new_tensor_2d(
         og.sg.ctx, GGML_TYPE_F32, m.action_dim, m.action_horizon);
-    struct ggml_tensor* sincos_t =
+    struct ggml_tensor* sincosT =
         ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, m.cond_dim);
-    struct ggml_tensor* act_pos_t =
+    struct ggml_tensor* actPosT =
         ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_I32, m.action_horizon);
-    std::vector<struct ggml_tensor*> cached_k_t(m.expert_n_layers);
-    std::vector<struct ggml_tensor*> cached_v_t(m.expert_n_layers);
-    for (int L = 0; L < m.expert_n_layers; ++L) {
-      cached_k_t[L] = ggml_new_tensor_3d(
-          og.sg.ctx, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
+    std::vector<struct ggml_tensor*> cachedKT(m.expert_n_layers);
+    std::vector<struct ggml_tensor*> cachedVT(m.expert_n_layers);
+    for (int l = 0; l < m.expert_n_layers; ++l) {
+      cachedKT[l] = ggml_new_tensor_3d(
+          og.sg.ctx,
+          GGML_TYPE_F32,
+          m.expert_head_dim,
+          prefixLen,
           m.expert_n_kv_heads);
-      cached_v_t[L] = ggml_new_tensor_3d(
-          og.sg.ctx, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
+      cachedVT[l] = ggml_new_tensor_3d(
+          og.sg.ctx,
+          GGML_TYPE_F32,
+          m.expert_head_dim,
+          prefixLen,
           m.expert_n_kv_heads);
     }
 
     struct ggml_tensor* cond = pi05BuildTimeMlpGraph(
-        og.sg.ctx, sincos_t, m.time_mlp_in_w, m.time_mlp_in_b,
-        m.time_mlp_out_w, m.time_mlp_out_b);
+        og.sg.ctx,
+        sincosT,
+        m.time_mlp_in_w,
+        m.time_mlp_in_b,
+        m.time_mlp_out_w,
+        m.time_mlp_out_b);
 
-    struct ggml_tensor* x_exp_t =
-        ggml_mul_mat(og.sg.ctx, m.action_in_w, x_t_t);
-    x_exp_t = ggml_add(
-        og.sg.ctx, x_exp_t,
-        ggml_cast(og.sg.ctx, m.action_in_b, GGML_TYPE_F32));
+    struct ggml_tensor* xExpT = ggml_mul_mat(og.sg.ctx, m.action_in_w, xTT);
+    xExpT = ggml_add(
+        og.sg.ctx, xExpT, ggml_cast(og.sg.ctx, m.action_in_b, GGML_TYPE_F32));
 
     auto outs = pi05BuildExpertOdeStepGraph(
-        og.sg.ctx, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
-        m.expert_blocks, m.expert_final_norm_ada_w,
-        m.expert_final_norm_ada_b, m.action_out_w, m.action_out_b,
-        m.expert_hidden, m.expert_n_heads, m.expert_n_kv_heads,
-        m.expert_head_dim, prefix_len, m.action_horizon,
-        m.rms_norm_eps, m.rope_freq_base);
+        og.sg.ctx,
+        xExpT,
+        actPosT,
+        cachedKT,
+        cachedVT,
+        cond,
+        m.expert_blocks,
+        m.expert_final_norm_ada_w,
+        m.expert_final_norm_ada_b,
+        m.action_out_w,
+        m.action_out_b,
+        m.expert_hidden,
+        m.expert_n_heads,
+        m.expert_n_kv_heads,
+        m.expert_head_dim,
+        prefixLen,
+        m.action_horizon,
+        m.rms_norm_eps,
+        m.rope_freq_base);
     if (outs.v_t == nullptr) {
       return false;
     }
-    struct ggml_tensor* x_next =
-        pi05BuildEulerStepGraph(og.sg.ctx, x_t_t, outs.v_t, dt);
-    ggml_build_forward_expand(og.sg.gf, x_next);
+    struct ggml_tensor* xNext =
+        pi05BuildEulerStepGraph(og.sg.ctx, xTT, outs.v_t, dt);
+    ggml_build_forward_expand(og.sg.gf, xNext);
 
     const bool ok = m.has_gpu
-        ? pi05AllocStagedSched(og.sg, m.backend, m.backend_cpu)
-        : pi05AllocStagedSimple(og.sg, m.backend_cpu);
+                        ? pi05AllocStagedSched(og.sg, m.backend, m.backend_cpu)
+                        : pi05AllocStagedSimple(og.sg, m.backend_cpu);
     if (!ok) {
       return false;
     }
-    ggml_backend_tensor_set(x_t_t, x_t.data(), 0,
-                            x_t.size() * sizeof(float));
-    ggml_backend_tensor_set(sincos_t, sincos_buf.data(), 0,
-                            sincos_buf.size() * sizeof(float));
-    ggml_backend_tensor_set(act_pos_t, act_pos_data.data(), 0,
-                            act_pos_data.size() * sizeof(int32_t));
-    for (int L = 0; L < m.expert_n_layers; ++L) {
-      ggml_backend_tensor_set(cached_k_t[L],
-                              k_cache.data() + static_cast<size_t>(L) * per_layer_kv,
-                              0, per_layer_kv * sizeof(float));
-      ggml_backend_tensor_set(cached_v_t[L],
-                              v_cache.data() + static_cast<size_t>(L) * per_layer_kv,
-                              0, per_layer_kv * sizeof(float));
+    ggml_backend_tensor_set(xTT, xT.data(), 0, xT.size() * sizeof(float));
+    ggml_backend_tensor_set(
+        sincosT, sincosBuf.data(), 0, sincosBuf.size() * sizeof(float));
+    ggml_backend_tensor_set(
+        actPosT, actPosData.data(), 0, actPosData.size() * sizeof(int32_t));
+    for (int l = 0; l < m.expert_n_layers; ++l) {
+      ggml_backend_tensor_set(
+          cachedKT[l],
+          kCache.data() + static_cast<size_t>(l) * perLayerKv,
+          0,
+          perLayerKv * sizeof(float));
+      ggml_backend_tensor_set(
+          cachedVT[l],
+          vCache.data() + static_cast<size_t>(l) * perLayerKv,
+          0,
+          perLayerKv * sizeof(float));
     }
     if (!pi05ComputeStaged(og.sg, m.backend)) {
       return false;
     }
-    ggml_backend_tensor_get(x_next, x_next_buf.data(), 0,
-                            x_next_buf.size() * sizeof(float));
-    std::swap(x_t, x_next_buf);
+    ggml_backend_tensor_get(
+        xNext, xNextBuf.data(), 0, xNextBuf.size() * sizeof(float));
+    std::swap(xT, xNextBuf);
   }
-  const auto t_ode_end = std::chrono::steady_clock::now();
+  const auto tOdeEnd = std::chrono::steady_clock::now();
 
-  std::memcpy(actions_out, x_t.data(), x_t.size() * sizeof(float));
-  *n_actions_out = m.action_horizon;
+  std::memcpy(actionsOut, xT.data(), xT.size() * sizeof(float));
+  *nActionsOut = m.action_horizon;
 
-  if (timing_out != nullptr) {
-    const auto t_end = std::chrono::steady_clock::now();
-    auto to_ms = [](auto a, auto b) {
+  if (timingOut != nullptr) {
+    const auto tEnd = std::chrono::steady_clock::now();
+    auto toMs = [](auto a, auto b) {
       return std::chrono::duration<double, std::milli>(b - a).count();
     };
-    timing_out->vision_ms = to_ms(t_vis_start, t_vis_end);
-    timing_out->prefill_compute_ms = to_ms(t_prefill_start, t_prefill_end);
-    timing_out->prefill_total_ms = to_ms(t_prefill_start, t_prefill_end);
-    timing_out->ode_ms = to_ms(t_ode_start, t_ode_end);
-    timing_out->total_ms = to_ms(t_start, t_end);
+    timingOut->vision_ms = toMs(tVisStart, tVisEnd);
+    timingOut->prefill_compute_ms = toMs(tPrefillStart, tPrefillEnd);
+    timingOut->prefill_total_ms = toMs(tPrefillStart, tPrefillEnd);
+    timingOut->ode_ms = toMs(tOdeStart, tOdeEnd);
+    timingOut->total_ms = toMs(tStart, tEnd);
   }
   return true;
 }
@@ -1670,8 +1683,7 @@ Pi05Model::Pi05Model(
   hparams_.tokenizer_max_length = impl_->max_token_len;
   hparams_.vision_image_size = impl_->vision_image_size;
   hparams_.num_cameras = impl_->num_cameras;
-  hparams_.state_input_mode =
-      VlaHparamsGeneric::StateInputMode::Discrete;
+  hparams_.state_input_mode = VlaHparamsGeneric::StateInputMode::Discrete;
 }
 
 Pi05Model::~Pi05Model() = default;
@@ -1683,29 +1695,29 @@ std::string Pi05Model::backendName() const {
 bool Pi05Model::hasGpu() const { return impl_ && impl_->has_gpu; }
 
 bool Pi05Model::infer(
-    const float** images,
-    int n_images,
-    int img_width,
-    int img_height,
+    const float** images, int nImages, int imgWidth, int imgHeight,
     const float* /*state*/, // pi05 uses discrete state in the prompt
-    int /*state_dim*/,
-    const int32_t* lang_tokens,
-    const bool* lang_mask,
-    int lang_len,
-    const float* noise,
-    float* actions_out,
-    int* n_actions_out,
-    VlaTimingGeneric* timing_out) {
+    int /*state_dim*/, const int32_t* langTokens, const bool* langMask,
+    int langLen, const float* noise, float* actionsOut, int* nActionsOut,
+    VlaTimingGeneric* timingOut) {
   if (!impl_) {
     return false;
   }
   const int expected = impl_->vision_image_size;
-  if (img_width != expected || img_height != expected) {
+  if (imgWidth != expected || imgHeight != expected) {
     return false;
   }
-  return pi05Inference(*impl_, images, n_images, lang_tokens, lang_mask,
-                         lang_len, noise, actions_out, n_actions_out,
-                         timing_out);
+  return pi05Inference(
+      *impl_,
+      images,
+      nImages,
+      langTokens,
+      langMask,
+      langLen,
+      noise,
+      actionsOut,
+      nActionsOut,
+      timingOut);
 }
 
 } // namespace qvac_lib_infer_vla_ggml

@@ -10,8 +10,8 @@
 
 namespace qvac_lib_infer_vla_ggml {
 
-inline uint32_t ggufGetU32Or(
-    struct gguf_context* g, const char* key, uint32_t dflt) {
+inline uint32_t
+ggufGetU32Or(struct gguf_context* g, const char* key, uint32_t dflt) {
   const int64_t idx = gguf_find_key(g, key);
   if (idx < 0) {
     return dflt;
@@ -22,8 +22,8 @@ inline uint32_t ggufGetU32Or(
   return gguf_get_val_u32(g, idx);
 }
 
-inline std::string ggufGetStrOr(
-    struct gguf_context* g, const char* key, const std::string& dflt) {
+inline std::string
+ggufGetStrOr(struct gguf_context* g, const char* key, const std::string& dflt) {
   const int64_t idx = gguf_find_key(g, key);
   if (idx < 0) {
     return dflt;

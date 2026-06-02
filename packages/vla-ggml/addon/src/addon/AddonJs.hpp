@@ -110,12 +110,12 @@ inline VlaInput parseRunInput(js_env_t* env, js_value_t* inputVal) {
   in.imgWidth = obj.getPropertyAs<js::Number, int32_t>(env, "imgWidth");
   in.imgHeight = obj.getPropertyAs<js::Number, int32_t>(env, "imgHeight");
 
-  in.state = copyFloat32(
-      env, obj.getProperty<js::TypedArray<float>>(env, "state"));
-  in.tokens = copyInt32(
-      env, obj.getProperty<js::TypedArray<int32_t>>(env, "tokens"));
-  in.mask = copyUint8(
-      env, obj.getProperty<js::TypedArray<uint8_t>>(env, "mask"));
+  in.state =
+      copyFloat32(env, obj.getProperty<js::TypedArray<float>>(env, "state"));
+  in.tokens =
+      copyInt32(env, obj.getProperty<js::TypedArray<int32_t>>(env, "tokens"));
+  in.mask =
+      copyUint8(env, obj.getProperty<js::TypedArray<uint8_t>>(env, "mask"));
 
   if (auto noiseOpt =
           obj.getOptionalProperty<js::TypedArray<float>>(env, "noise")) {
@@ -158,8 +158,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
           args.getFunction(2, "outputCallback"),
           std::move(outHandlers));
 
-  auto addon = std::make_unique<AddonJs>(
-      env, std::move(callback), std::move(model));
+  auto addon =
+      std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -241,10 +241,7 @@ inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   auto setStr = [&](const char* name, const char* value) {
     js_value_t* v = nullptr;
     js_create_string_utf8(
-        env,
-        reinterpret_cast<const utf8_t*>(value),
-        std::strlen(value),
-        &v);
+        env, reinterpret_cast<const utf8_t*>(value), std::strlen(value), &v);
     js_set_named_property(env, obj, name, v);
   };
   setInt("chunkSize", hp.chunk_size);
@@ -274,13 +271,13 @@ inline js_value_t* setVerbosity(js_env_t* env, js_callback_info_t* info) try {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
   JsArgsParser args(env, info);
-  const int32_t level =
-      js::Number(env, args.get(0, "level")).as<int32_t>(env);
+  const int32_t level = js::Number(env, args.get(0, "level")).as<int32_t>(env);
   Priority p = Priority::ERROR;
   if (level >= 0 && level <= static_cast<int32_t>(Priority::OFF)) {
     p = static_cast<Priority>(level);
   }
-  qvac_lib_infer_vla_ggml::logging::g_verbosityLevel.store(p, std::memory_order_relaxed);
+  qvac_lib_infer_vla_ggml::logging::g_verbosityLevel.store(
+      p, std::memory_order_relaxed);
 
   js_value_t* undef = nullptr;
   js_get_undefined(env, &undef);

@@ -21,14 +21,15 @@ namespace qvac_lib_infer_vla_ggml {
 // so input buffers must be owned copies — we cannot rely on JS-paused-during-
 // native-call semantics like the old sync `runVlaModel` did.
 struct VlaInput {
-  // images[i] is contiguous CHW float32 in [-1, 1], length 3*imgWidth*imgHeight.
+  // images[i] is contiguous CHW float32 in [-1, 1], length
+  // 3*imgWidth*imgHeight.
   std::vector<std::vector<float>> images;
   int imgWidth = 0;
   int imgHeight = 0;
-  std::vector<float> state;     // length = state_dim
-  std::vector<int32_t> tokens;  // length = nTokens
-  std::vector<uint8_t> mask;    // length = nTokens
-  std::vector<float> noise;     // empty if no noise was provided
+  std::vector<float> state;    // length = state_dim
+  std::vector<int32_t> tokens; // length = nTokens
+  std::vector<uint8_t> mask;   // length = nTokens
+  std::vector<float> noise;    // empty if no noise was provided
 };
 
 // Owns a loaded VLA model. Implements the canonical IModel interface so
@@ -43,8 +44,7 @@ public:
   // backend implementation so ggml backends are loaded from an absolute
   // path rather than relative to process CWD (required on mobile).
   explicit VlaModel(
-      const std::string& ggufPath,
-      bool forceCpu = false,
+      const std::string& ggufPath, bool forceCpu = false,
       std::string backendsDir = {})
       : model_(createVlaModelFromGguf(ggufPath, forceCpu, backendsDir)) {
     // Canonical `backendDevice` encoding used across the inference addons
@@ -79,8 +79,7 @@ public:
   std::any process(const std::any& input) final {
     const VlaInput* in = std::any_cast<VlaInput>(&input);
     if (in == nullptr) {
-      throw std::invalid_argument(
-          "VlaModel::process: input is not a VlaInput");
+      throw std::invalid_argument("VlaModel::process: input is not a VlaInput");
     }
     return std::any{runInternal(*in)};
   }
