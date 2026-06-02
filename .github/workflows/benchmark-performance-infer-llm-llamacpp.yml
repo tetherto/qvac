@@ -177,7 +177,7 @@ jobs:
       - name: Fix desktop device names
         shell: bash
         run: |
-          # Collapse sibling matrix legs (linux-x64-cpu/gpu,
+          # Collapse sibling matrix legs (linux-x64-u22/u24-gpu,
           # linux-arm64-u22/u24) onto one device name so [CPU]/[GPU]
           # rows sit in the same column.
           for dir in combined-reports/perf-report-llamacpp-llm-*/; do
@@ -188,7 +188,7 @@ jobs:
             case "$platform" in Android|iOS) continue ;; esac
 
             case "$platform" in
-              linux-x64-cpu|linux-x64-gpu) device_name="linux-x64" ;;
+              linux-x64-u22-gpu|linux-x64-u24-gpu) device_name="linux-x64" ;;
               linux-arm64-u22|linux-arm64-u24) device_name="linux-arm64" ;;
               *) device_name="$platform" ;;
             esac

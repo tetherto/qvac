@@ -22,7 +22,7 @@ namespace qvac_lib_infer_ocr_ggml {
 
 // Selects which backend the `Pipeline` constructs at load time. Mirrors
 // `qvac_lib_inference_addon_onnx_ocr_fasttext::PipelineMode`.
-enum class PipelineMode {
+enum class PipelineMode : std::uint8_t {
   EASYOCR, // CRAFT detection + bounding-box extraction + CRNN gen-2 recognition
   DOCTR    // DBNet detection + DocTR recognition
 };
@@ -33,6 +33,7 @@ enum class PipelineMode {
 struct OcrInput {
   int imageWidth{};
   int imageHeight{};
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   int bitsPerPixel{24};
   std::vector<uint8_t> data;
   bool isEncoded{false};
@@ -49,6 +50,11 @@ struct OcrConfig {
   // DocTR explicitly via `params.pipelineType: 'doctr'`.
   PipelineMode mode{PipelineMode::EASYOCR};
   float magRatio{1.5F};
+  // EasyOCR `canvas_size`: detection canvas cap (long side, px) after magRatio
+  // scaling. Bounds the CRAFT graph's peak memory; default 2560 matches
+  // @qvac/ocr-onnx and EasyOCR. Lower on memory-constrained targets (mobile)
+  // to avoid the dense-page OOM in QVAC-19340. EasyOCR only.
+  int canvasSize{2560};
   std::vector<int> defaultRotationAngles{90, 270};
   bool contrastRetry{false};
   float lowConfidenceThreshold{0.4F};
