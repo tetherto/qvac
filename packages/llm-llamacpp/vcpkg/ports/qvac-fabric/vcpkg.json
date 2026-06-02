@@ -1,6 +1,7 @@
 {
   "name": "qvac-fabric",
   "version": "8828.0.2",
+  "port-version": 1,
   "description": "LLM inference in C/C++",
   "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
   "license": "MIT",
@@ -29,11 +30,11 @@
     "gpu-backends": {
       "description": "Build the GPU backends ggml ships per platform: Metal on Apple, Vulkan on Linux/Windows/Android, plus the Android backend-DL hybrid mode and OpenCL. Default-on so existing consumers (llamacpp-llm, llamacpp-embed, nmtcpp, diffusion-cpp) keep their current behaviour with default features. Disable to produce a CPU-only ggml build (useful for consumers like @qvac/classification-ggml that don't need GPU paths and want to skip the vulkan-sdk / metal / opencl build cost). Orthogonal to the 'llama' feature.",
       "dependencies": [
-      {
-        "name": "spirv-headers",
-        "platform": "!osx & !ios",
-        "version>=": "1.4.341.0"
-      }
+        {
+          "name": "spirv-headers",
+          "platform": "!osx & !ios",
+          "version>=": "1.4.341.0"
+        }
       ]
     },
     "kleidiai": {
@@ -41,6 +42,9 @@
     },
     "llama": {
       "description": "Build llama components."
+    },
+    "openmp": {
+      "description": "Enable openmp on Android."
     }
   }
 }

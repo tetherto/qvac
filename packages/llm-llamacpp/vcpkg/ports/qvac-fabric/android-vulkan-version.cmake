@@ -2,7 +2,7 @@
 function(detect_ndk_vulkan_version)
     string(TOLOWER "${CMAKE_HOST_SYSTEM_NAME}" host_system_name_lower)
 
-    # CMAKE_HOST_SYSTEM_PROCESSOR is unavailable here. Use a glob pattern to complete the folder instead.
+    # CMAKE_HOST_SYSTEM_PROCESSOR is unavailable here. Use a glob pattern to complete the folder instead. 
     file(GLOB host_dirs LIST_DIRECTORIES true "$ENV{ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${host_system_name_lower}-*")
     if(host_dirs)
         list(GET host_dirs 0 host_dir)

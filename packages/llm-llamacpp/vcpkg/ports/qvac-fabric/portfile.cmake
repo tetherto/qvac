@@ -1,9 +1,9 @@
 vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO tetherto/qvac-fabric-llm.cpp
-    REF 97165a1a79650db28ec6a7d965b5905defcd5a23
-    SHA512 92f0c54f648c1c30a879e31a5de934511aeb7da97ba0bdeb68caca8bff4ad43388b997288eccfdabb97f6a4c549a7f14f004688c52c99a8477108b2888132a73
-    HEAD_REF qvac-b9341
+  OUT_SOURCE_PATH SOURCE_PATH
+  REPO tetherto/qvac-fabric-llm.cpp
+  REF 1d0e4859d6bc97d64359075a1045c241e109abf9
+  SHA512 caffa277b0acd45de435634c085e2c4d42ca00ba658dabae0d7ded41c9d83ea1974819c448a399f2849c2b8656b1c098267ea4daefd202fa127159d563ebe841
+  HEAD_REF qvac-b9341
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -20,6 +20,7 @@ vcpkg_check_features(
   FEATURES
     gpu-backends BUILD_GPU_BACKENDS
     kleidiai BUILD_KLEIDIAI
+    openmp BUILD_OPENMP
 )
 
 # gpu-backends is default-on via default-features in vcpkg.json. CPU-only
@@ -106,6 +107,14 @@ if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
   )
 endif()
 
+if(VCPKG_TARGET_IS_ANDROID AND BUILD_OPENMP)
+  message(STATUS "qvac-fabric: OpenMP for Android enabled")
+  list(APPEND PLATFORM_OPTIONS -DGGML_OPENMP=ON)
+else()
+  message(STATUS "qvac-fabric: OpenMP Disabled")
+  list(APPEND PLATFORM_OPTIONS -DGGML_OPENMP=OFF)
+endif()
+
 if (VCPKG_TARGET_IS_ANDROID AND BUILD_GPU_BACKENDS)
   list(APPEND PLATFORM_OPTIONS -DGGML_OPENCL=ON)
 endif()
@@ -136,7 +145,6 @@ vcpkg_cmake_configure(
   OPTIONS
     -DGGML_NATIVE=OFF
     -DGGML_CCACHE=OFF
-    -DGGML_OPENMP=OFF
     -DGGML_LLAMAFILE=OFF
     -DLLAMA_CURL=OFF
     -DLLAMA_BUILD_TESTS=OFF
