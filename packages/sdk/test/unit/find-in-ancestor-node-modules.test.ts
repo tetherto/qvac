@@ -1,14 +1,8 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { findInAncestorNodeModules } from "@/expo/plugins/find-in-ancestor-node-modules";
-
-type BrittleAssert = {
-  is: Function;
-  ok: Function;
-};
 
 function makePackage(parentDir: string, name: string) {
   const pkgDir = path.join(parentDir, "node_modules", ...name.split("/"));
@@ -32,7 +26,7 @@ function withTempProject(
   }
 }
 
-test("findInAncestorNodeModules: finds a package at the start directory", (t: BrittleAssert) => {
+test("findInAncestorNodeModules: finds a package at the start directory", (t) => {
   withTempProject((projectRoot) => {
     const expected = makePackage(projectRoot, "react-native-bare-kit");
     t.is(
@@ -42,7 +36,7 @@ test("findInAncestorNodeModules: finds a package at the start directory", (t: Br
   });
 });
 
-test("findInAncestorNodeModules: walks up and finds a hoisted package", (t: BrittleAssert) => {
+test("findInAncestorNodeModules: walks up and finds a hoisted package", (t) => {
   withTempProject((projectRoot, workspaceRoot) => {
     const expected = makePackage(workspaceRoot, "react-native-bare-kit");
     t.is(
@@ -52,7 +46,7 @@ test("findInAncestorNodeModules: walks up and finds a hoisted package", (t: Brit
   });
 });
 
-test("findInAncestorNodeModules: prefers the install closest to startDir", (t: BrittleAssert) => {
+test("findInAncestorNodeModules: prefers the install closest to startDir", (t) => {
   withTempProject((projectRoot, workspaceRoot) => {
     const closer = makePackage(projectRoot, "@qvac/cli");
     makePackage(workspaceRoot, "@qvac/cli");
@@ -60,13 +54,13 @@ test("findInAncestorNodeModules: prefers the install closest to startDir", (t: B
   });
 });
 
-test("findInAncestorNodeModules: returns null when package is nowhere in the tree", (t: BrittleAssert) => {
+test("findInAncestorNodeModules: returns null when package is nowhere in the tree", (t) => {
   withTempProject((projectRoot) => {
     t.is(findInAncestorNodeModules(projectRoot, "@qvac/cli"), null);
   });
 });
 
-test("findInAncestorNodeModules: handles scoped package names", (t: BrittleAssert) => {
+test("findInAncestorNodeModules: handles scoped package names", (t) => {
   withTempProject((projectRoot) => {
     const expected = makePackage(projectRoot, "@some-scope/some-pkg");
     t.is(

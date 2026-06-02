@@ -225,7 +225,7 @@ jobs:
           fi
 
       - name: Install Bare runtime
-        if: matrix.package == 'rag' || matrix.package == 'error'
+        if: matrix.package == 'rag' || matrix.package == 'error' || matrix.package == 'sdk'
         run: npm install -g --force bare
 
       # All script steps use npm run --if-present (bun lacks --if-present).
@@ -250,6 +250,12 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: npm run --if-present test:unit
+
+      - name: Run bare tests
+        id: run_bare_tests
+        if: matrix.package == 'sdk'
+        continue-on-error: true
+        run: npm run --if-present test:bare
 
       - name: Run e2e tests
         id: run_e2e_tests
@@ -351,6 +357,10 @@ jobs:
           fi
           if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
             echo "::error::Unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_bare_tests.outcome }}" = "failure" ]; then
+            echo "::error::Bare tests failed"
             count=$((count + 1))
           fi
           if [ "${{ steps.run_e2e_tests.outcome }}" = "failure" ]; then

@@ -82,6 +82,7 @@ bun run format      # prettier check
 **Testing:**
 ```bash
 bun run test:unit
+bun run test:bare
 bun run test:security
 bun run test:security:bare
 ```

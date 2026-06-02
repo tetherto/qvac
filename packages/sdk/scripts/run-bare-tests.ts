@@ -8,7 +8,6 @@ const pkgRoot = join(__dirname, "..");
 const testDistRoot = join(pkgRoot, "test", "dist");
 const testDistDir = join(testDistRoot, "test", "bare");
 
-// Step 1: Compile
 console.log("Compiling tests...");
 spawnSync("rm", ["-rf", testDistRoot], { cwd: pkgRoot });
 const compile = spawnSync(
@@ -24,7 +23,6 @@ if (compile.status !== 0 && !existsSync(testDistDir)) {
   process.exit(1);
 }
 
-// Step 2: Resolve @/ aliases in compiled output
 function walk(dir: string): string[] {
   const results: string[] = [];
   if (!existsSync(dir)) return results;
@@ -48,13 +46,11 @@ function resolveTarget(fromFile: string, spec: string): string {
 for (const file of walk(testDistRoot)) {
   const content = readFileSync(file, "utf-8");
   let updated = content;
-  // Static imports/exports: from "@/..."
   updated = updated.replace(
     /((?:from|import)\s*["'])@\/([^"']+)(["'])/g,
     (_m: string, pre: string, spec: string, suf: string) =>
       `${pre}${resolveTarget(file, spec)}${suf}`,
   );
-  // Dynamic imports: import("@/...")
   updated = updated.replace(
     /(import\s*\(\s*["'])@\/([^"']+)(["']\s*\))/g,
     (_m: string, pre: string, spec: string, suf: string) =>
@@ -63,20 +59,28 @@ for (const file of walk(testDistRoot)) {
   if (updated !== content) writeFileSync(file, updated);
 }
 
-// Step 3: Run under Bare
 if (!existsSync(testDistDir)) {
-  console.error(`Test dist not found: ${testDistDir}`);
+  console.error(`Bare test dist not found: ${testDistDir}`);
   process.exit(1);
 }
 
-const testFiles = readdirSync(testDistDir).filter(
-  (f) =>
-    (f.startsWith("path-traversal") || f.startsWith("path-security")) &&
-    f.endsWith(".test.js"),
-);
+function collectTestFiles(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectTestFiles(full));
+    } else if (entry.name.endsWith(".test.js")) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+
+const testFiles = collectTestFiles(testDistDir);
 
 if (testFiles.length === 0) {
-  console.log("No compiled security test files found.");
+  console.log("No compiled bare test files found.");
   process.exit(0);
 }
 
@@ -84,8 +88,8 @@ const brittleBare = join(pkgRoot, "node_modules", ".bin", "brittle-bare");
 
 let hasFailure = false;
 for (const file of testFiles) {
-  const testPath = relative(pkgRoot, join(testDistDir, file));
-  console.log(`\nRunning under Bare: ${file}`);
+  const testPath = relative(pkgRoot, file);
+  console.log(`\nRunning under Bare: ${testPath}`);
   const result = spawnSync(brittleBare, [testPath], {
     stdio: "inherit",
     cwd: pkgRoot,
