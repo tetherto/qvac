@@ -4349,6 +4349,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
     "quantization": "",
     "params": "",
@@ -4365,6 +4366,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "fp16",
     "params": "",
@@ -4381,6 +4383,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox S3Gen vocoder (GGUF, English)",
     "quantization": "",
     "params": "",
@@ -4397,6 +4400,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
     "quantization": "fp16",
     "params": "",
@@ -4417,6 +4421,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
     "quantization": "q4_0",
     "params": "",
@@ -4437,6 +4442,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q8_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
     "quantization": "q8_0",
     "params": "",
@@ -4457,6 +4463,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "q4_0",
     "params": "",
@@ -4473,6 +4480,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q8_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "q8_0",
     "params": "",
@@ -4482,6 +4490,146 @@
       "chatterbox",
       "t3-turbo",
       "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-turbo-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3-turbo",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-mtl-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3",
+      "multilingual",
+      "gguf",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "multilingual",
       "gguf"
     ],
     "notes": ""

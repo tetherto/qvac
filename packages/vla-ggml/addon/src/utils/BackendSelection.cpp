@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
+#include <mutex>
 #include <string>
 
 #include <ggml-backend.h>
@@ -9,6 +11,23 @@
 #include "LoggingMacros.hpp"
 
 namespace vla_backend_selection {
+
+void loadBackendsOnce(const std::string& backendsDir) {
+  static std::once_flag s_flag;
+  std::call_once(s_flag, [&backendsDir]() {
+    using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+    if (!backendsDir.empty()) {
+      std::filesystem::path p(backendsDir);
+#ifdef BACKENDS_SUBDIR
+      p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+      QLOG_IF(Priority::INFO, "Loading backends from: " + p.string());
+      ggml_backend_load_all_from_path(p.string().c_str());
+    } else {
+      ggml_backend_load_all();
+    }
+  });
+}
 
 int parseAdrenoModel(const std::string& description) {
   std::string lower = description;
