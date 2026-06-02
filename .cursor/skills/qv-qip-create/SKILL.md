@@ -1,6 +1,7 @@
 ---
 name: qv-qip-create
 description: Use when drafting a QIP, after qv-qip-need-proposal recommends creating one, shaping a fuzzy technical proposal with alternatives and consequences, or invoking /qv-qip-create.
+disable-model-invocation: true
 ---
 
 # QIP Proposal Create
