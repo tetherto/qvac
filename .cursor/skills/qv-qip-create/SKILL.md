@@ -1,6 +1,6 @@
 ---
 name: qv-qip-create
-description: Use when drafting a QIP, responding to qv-qip-significance-check, shaping a fuzzy architecture proposal, or invoking /qv-qip-create.
+description: Use when drafting a QIP, responding to qv-qip-significance-check, shaping a fuzzy architecture proposal with alternatives and trade-offs, or invoking /qv-qip-create.
 ---
 
 # QIP Proposal Create
@@ -32,7 +32,7 @@ Read before drafting:
 
 ### Clear proposal mode
 
-Use when the user already has problem, solution, affected area or team, and known risks.
+Use when the user already has problem, solution, affected area or team, and known trade-offs.
 
 Ask only for missing essentials.
 
@@ -74,12 +74,22 @@ Advice is direction plus reasoning, not a vote.
 - Do a cleanup pass before finalizing: remove non-important details, obvious statements, duplicate or near-duplicate points, and stale context
 - Prefer precise domain terms over long explanations when they are clearer, e.g. `idle timeout`, `whole-stream deadline`, `idempotent`, `terminal failure`
 - Write Solution as an explanation of how the problem is solved. Do not make it just a task list; use bullets only for compact scope boundaries after the reader understands the design.
-- Treat the template's Risks section as consequences and trade-offs for proposal review. Avoid a probable-production-bugs list; state what reviewers must accept, then add mitigation only where it affects whether the proposal should be accepted, changed, or split.
-- Remove "risks" that the proposed design already rules out; keep consequences that remain true after the design is implemented.
-- Fold alternatives and consequences into Solution and Risks when helpful
+- Keep `Alternatives considered` separate from Solution. Include the existing option and any obvious option reviewers would expect to see.
+- Write `Trade-offs` as consequences for proposal review. Avoid a probable-production-bugs list; state what reviewers must accept, then add mitigation only where it affects whether the proposal should be accepted, changed, or split.
+- Remove issues that the proposed design already rules out; keep consequences that remain true after the design is implemented.
 - Add a diagram only when runtime, package, or approval boundaries are non-obvious
 - Do not invent approvals, commitments, or team decisions
 - Do not claim the QIP is approved
+
+## Proposal substance checks
+
+Before finalizing, check whether the proposal needs any of these:
+
+- Trust boundary: if the proposal changes transport, RPC, storage, auth, sandboxing, plugin execution, model provenance, or any cross-process / cross-peer boundary, state the security properties explicitly. If properties are unchanged, say so briefly.
+- Solution rationale: explain why the chosen approach is needed, not just what it changes. If another obvious option could solve the same problem, name why the proposal prefers this one.
+- Compatibility / release impact: call out observable behavior changes, public API changes, dependency/install-contract changes, migration needs, and expected versioning impact when relevant. If there is no breaking change, say so briefly.
+
+If the rationale or impact is unclear, investigate the existing code/docs enough to form a grounded draft or ask the user for the missing decision context.
 
 ## Output format
 
@@ -102,7 +112,11 @@ End with this author checklist:
 Author checklist
 - [ ] Problem is clear and timely
 - [ ] Solution is concrete enough to review
-- [ ] Risks include mitigations
+- [ ] Chosen solution is justified against obvious alternatives
+- [ ] Trust boundaries and security properties are explicit when affected
+- [ ] Compatibility, migration, and release impact are explicit when affected
+- [ ] Alternatives considered includes the existing option
+- [ ] Trade-offs state consequences reviewers must accept
 - [ ] Out of scope is explicit
 - [ ] Approvers table preserved
 - [ ] Consultation note reflects affected teams and expertise

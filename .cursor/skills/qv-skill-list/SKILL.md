@@ -100,8 +100,8 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | Skill | Purpose | Use when |
 |-------|---------|----------|
 | [`qv-qip-significance-check`](../qv-qip-significance-check/SKILL.md) | Conservatively checks whether a change clearly needs a QIP before deeper implementation. | Planning or implementing contract, cross-package, delivery, or principle-impacting work; PR review. **Auto** |
-| [`qv-qip-create`](../qv-qip-create/SKILL.md) | Drafts a Slack Canvas-ready QIP from a clear proposal or fuzzy idea. | Creating a QIP, shaping alternatives and consequences, naming people to consult. **Auto** |
-| [`qv-qip-review`](../qv-qip-review/SKILL.md) | Reviews a QIP for approval readiness, risks, principle conflicts, and consultation coverage. | Reviewing a QIP draft before posting or approval. **Auto** |
+| [`qv-qip-create`](../qv-qip-create/SKILL.md) | Drafts a Slack Canvas-ready QIP from a clear proposal or fuzzy idea. | Creating a QIP, shaping alternatives, trade-offs, and people to consult. **Auto** |
+| [`qv-qip-review`](../qv-qip-review/SKILL.md) | Reviews a QIP for approval readiness, trade-offs, principle conflicts, and consultation coverage. | Reviewing a QIP draft before posting or approval. **Auto** |
 
 Rule nudge: `.cursor/rules/qip-significance.mdc`
 

@@ -22,9 +22,13 @@ What do we want to do and why.
 
 How do we plan on solving it. This can be case by case: the solution can include POCs, links to diagrams, links to docs, or anything that makes the solution clear.
 
-### Risks
+### Alternatives considered
 
-What risks do we foresee and how can we mitigate them.
+What other options did we consider, including the existing option, and why are we not choosing them.
+
+### Trade-offs
+
+What consequences does the chosen solution create. State what reviewers must accept if this proposal is approved, including what gets better, what gets worse, and what mitigations matter to the decision.
 
 ### Out of scope (optional)
 

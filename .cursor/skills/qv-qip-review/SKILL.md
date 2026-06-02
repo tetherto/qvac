@@ -1,6 +1,6 @@
 ---
 name: qv-qip-review
-description: Reviews a QIP draft or Slack Canvas proposal for approval readiness, missing risks, architecture principle conflicts, and consultation coverage. Produces blockers, clarifying questions, suggested edits, and optional Slack-ready review comments. Use when reviewing a QIP or invoking /qv-qip-review.
+description: Reviews a QIP draft or Slack Canvas proposal for approval readiness, missing alternatives, unclear trade-offs, architecture principle conflicts, and consultation coverage. Produces blockers, clarifying questions, suggested edits, and optional Slack-ready review comments. Use when reviewing a QIP or invoking /qv-qip-review.
 ---
 
 # QIP Proposal Review
@@ -43,7 +43,8 @@ Accept any of:
 
 - Problem explains what and why
 - Solution is concrete enough to evaluate
-- Risks include mitigations, not just fears
+- Alternatives considered includes the existing option and credible alternatives
+- Trade-offs state consequences reviewers must accept, not just possible issues
 - Out of scope is present when confusion is likely
 - Approvers table is preserved
 
