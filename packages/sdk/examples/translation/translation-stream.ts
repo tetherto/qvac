@@ -1,9 +1,4 @@
-import {
-  loadModel,
-  translate,
-  unloadModel,
-  BERGAMOT_EN_ES,
-} from "@qvac/sdk";
+import { loadModel, translate, unloadModel, BERGAMOT_EN_ES } from "@qvac/sdk";
 
 try {
   const modelId = await loadModel({

@@ -44,7 +44,10 @@ try {
   console.log("🔄 Continuing conversation (reusing previous turn cache):");
   const history2 = [
     { role: "user", content: "What is the capital of France?" },
-    { role: "assistant", content: final1.cacheableAssistantContent ?? final1.contentText },
+    {
+      role: "assistant",
+      content: final1.cacheableAssistantContent ?? final1.contentText,
+    },
     { role: "user", content: "What about Germany?" },
   ];
 

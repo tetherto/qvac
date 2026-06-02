@@ -44,7 +44,11 @@ try {
   console.log(`TTS complete. Total samples: ${audioBuffer.length}`);
 
   console.log("💾 Saving audio to file...");
-  createWav(audioBuffer, SUPERTONIC_SAMPLE_RATE, "supertonic-multilingual-output.wav");
+  createWav(
+    audioBuffer,
+    SUPERTONIC_SAMPLE_RATE,
+    "supertonic-multilingual-output.wav",
+  );
   console.log("✅ Audio saved to supertonic-multilingual-output.wav");
 
   console.log("🔊 Playing audio...");

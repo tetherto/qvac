@@ -122,7 +122,10 @@ function parseDiarization(text: string) {
 function readPcm(wavPath: string): Buffer {
   const buf = readFileSync(wavPath);
   const dataOffset = buf.indexOf("data") + 4;
-  return buf.subarray(dataOffset + 4, dataOffset + 4 + buf.readUInt32LE(dataOffset));
+  return buf.subarray(
+    dataOffset + 4,
+    dataOffset + 4 + buf.readUInt32LE(dataOffset),
+  );
 }
 
 function writeWavSlice(

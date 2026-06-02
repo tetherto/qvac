@@ -33,7 +33,9 @@ try {
 
   const result = completion({
     modelId,
-    history: [{ role: "user", content: "Explain quantum computing in 2 sentences" }],
+    history: [
+      { role: "user", content: "Explain quantum computing in 2 sentences" },
+    ],
     stream: true,
     captureThinking: true,
   });
@@ -72,10 +74,14 @@ function handleEvent(event: CompletionEvent) {
       process.stdout.write(`\x1b[2m${event.text}\x1b[0m`);
       break;
     case "toolCall":
-      console.log(`\n→ Tool: ${event.call.name}(${JSON.stringify(event.call.arguments)})`);
+      console.log(
+        `\n→ Tool: ${event.call.name}(${JSON.stringify(event.call.arguments)})`,
+      );
       break;
     case "toolError":
-      console.warn(`\n⚠ Tool error [${event.error.code}]: ${event.error.message}`);
+      console.warn(
+        `\n⚠ Tool error [${event.error.code}]: ${event.error.message}`,
+      );
       break;
     case "completionStats":
       console.log(`\n📊 ${event.stats.tokensPerSecond?.toFixed(1)} tok/s`);

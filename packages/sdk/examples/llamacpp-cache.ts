@@ -124,8 +124,12 @@ try {
   });
 
   console.log("\nSummary:");
-  console.log(`- Reusing "${sharedCacheKey}" keeps conversation context across turns.`);
-  console.log(`- Switching to "${isolatedCacheKey}" starts a separate cache session.`);
+  console.log(
+    `- Reusing "${sharedCacheKey}" keeps conversation context across turns.`,
+  );
+  console.log(
+    `- Switching to "${isolatedCacheKey}" starts a separate cache session.`,
+  );
   console.log(
     '- Use deleteCache({ kvCacheKey: "your-session" }) to clear a saved session.',
   );

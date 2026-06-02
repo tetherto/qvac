@@ -20,9 +20,7 @@ const vaeModelSrc = process.argv[4] || WAN_2_1_COMFYUI_REPACKAGED_VAE;
 // Prompt tip: Wan 1.3B is small and has weak temporal priors. Use motion-
 // explicit verbs and avoid static framing words like "standing", "still",
 // or "portrait" in the positive prompt.
-const prompt =
-  process.argv[5] ||
-  "a colorful bird flapping its wings";
+const prompt = process.argv[5] || "a colorful bird flapping its wings";
 const outputDir = process.argv[6] || ".";
 
 try {

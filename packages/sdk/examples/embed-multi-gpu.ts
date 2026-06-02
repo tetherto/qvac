@@ -1,4 +1,9 @@
-import { loadModel, embed, unloadModel, EMBEDDINGGEMMA_300M_Q8_0 } from "@qvac/sdk";
+import {
+  loadModel,
+  embed,
+  unloadModel,
+  EMBEDDINGGEMMA_300M_Q8_0,
+} from "@qvac/sdk";
 
 // Multi-GPU embedding distributes model layers across multiple GPUs using
 // llama.cpp's built-in split modes. Two strategies are available:
@@ -37,7 +42,9 @@ try {
     console.log(`Embedded ${text.slice(0, 50)}...`);
     console.log(`  Dimensions: ${embedding.length}`);
     if (stats) {
-      console.log(`  Backend: ${stats.backendDevice}, TPS: ${stats.tokensPerSecond?.toFixed(1)}`);
+      console.log(
+        `  Backend: ${stats.backendDevice}, TPS: ${stats.tokensPerSecond?.toFixed(1)}`,
+      );
     }
   }
 

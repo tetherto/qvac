@@ -1,9 +1,4 @@
-import {
-  completion,
-  loadModel,
-  unloadModel,
-  type ToolCall,
-} from "@qvac/sdk";
+import { completion, loadModel, unloadModel, type ToolCall } from "@qvac/sdk";
 import { tools } from "./shared";
 
 const LFM_TOOL_HF =

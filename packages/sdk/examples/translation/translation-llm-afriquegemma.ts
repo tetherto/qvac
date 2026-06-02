@@ -21,8 +21,8 @@ try {
       repeat_penalty: 1,
       seed: 42,
       predict: 256,
-      stop_sequences: ['\n']
-    }
+      stop_sequences: ["\n"],
+    },
   });
 
   // With explicit source language

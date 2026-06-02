@@ -85,6 +85,7 @@ try {
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
   console.error("Error:", error);
-  if (modelId) await unloadModel({ modelId, clearStorage: false }).catch(() => {});
+  if (modelId)
+    await unloadModel({ modelId, clearStorage: false }).catch(() => {});
   process.exit(1);
 }

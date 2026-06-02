@@ -96,8 +96,7 @@ try {
   });
   console.log(`TTS ready: ${ttsModelId}`);
 
-  const prompt =
-    "What is a constellation?";
+  const prompt = "What is a constellation?";
 
   console.log(`\nUser: ${prompt}\nAssistant (streaming):`);
 

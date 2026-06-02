@@ -59,7 +59,11 @@ try {
       "ms",
     );
     if (tags["cacheHit"] !== "true") {
-      console.log("  downloadTime:", gauges["downloadTime"] ?? "(cached)", "ms");
+      console.log(
+        "  downloadTime:",
+        gauges["downloadTime"] ?? "(cached)",
+        "ms",
+      );
       console.log(
         "  totalBytesDownloaded:",
         gauges["totalBytesDownloaded"] ?? "(cached)",
@@ -72,12 +76,18 @@ try {
       console.log("  (download metrics omitted - cache hit)");
     }
     if (gauges["checksumValidationTime"] !== undefined) {
-      console.log("  checksumValidationTime:", gauges["checksumValidationTime"], "ms");
+      console.log(
+        "  checksumValidationTime:",
+        gauges["checksumValidationTime"],
+        "ms",
+      );
     }
   } else {
     console.log("  (no loadModel handler event captured)");
     // Debug: show what ops are available
-    const ops = [...new Set(json.recentEvents?.map((e) => `${e.op}:${e.kind}`) ?? [])];
+    const ops = [
+      ...new Set(json.recentEvents?.map((e) => `${e.op}:${e.kind}`) ?? []),
+    ];
     console.log("  Available ops:", ops.join(", "));
   }
 

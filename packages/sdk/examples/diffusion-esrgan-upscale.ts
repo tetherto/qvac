@@ -17,9 +17,7 @@ const esrganArg: string | undefined = process.argv[2];
 const promptArg: string | undefined = process.argv[3];
 const outputDirArg: string | undefined = process.argv[4];
 
-const esrganModelSrc =
-  esrganArg ??
-  REALESRGAN_X4PLUS_ANIME_6B;
+const esrganModelSrc = esrganArg ?? REALESRGAN_X4PLUS_ANIME_6B;
 
 const prompt =
   promptArg ??

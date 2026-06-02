@@ -23,7 +23,10 @@ try {
   console.log("\n📝 Example 1: Single Text Embedding");
   console.log("=".repeat(50));
 
-  const { embedding: singleEmbedding } = await embed({ modelId, text: "Hello, world!" });
+  const { embedding: singleEmbedding } = await embed({
+    modelId,
+    text: "Hello, world!",
+  });
 
   console.log("Input: 'Hello, world!'");
   console.log("Embedding dimensions:", singleEmbedding.length);

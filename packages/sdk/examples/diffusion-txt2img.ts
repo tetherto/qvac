@@ -1,4 +1,11 @@
-import { loadModel, unloadModel, diffusion, FLUX_2_KLEIN_4B_Q4_0, FLUX_2_KLEIN_4B_VAE, QWEN3_4B_Q4_K_M } from "@qvac/sdk";
+import {
+  loadModel,
+  unloadModel,
+  diffusion,
+  FLUX_2_KLEIN_4B_Q4_0,
+  FLUX_2_KLEIN_4B_VAE,
+  QWEN3_4B_Q4_K_M,
+} from "@qvac/sdk";
 import fs from "fs";
 import path from "path";
 
@@ -14,7 +21,12 @@ console.log(`Loading diffusion model...`);
 const modelId = await loadModel({
   modelSrc,
   modelType: "sdcpp-generation",
-  modelConfig: { device: "gpu", threads: 4, llmModelSrc: QWEN3_4B_Q4_K_M, vaeModelSrc: FLUX_2_KLEIN_4B_VAE },
+  modelConfig: {
+    device: "gpu",
+    threads: 4,
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+  },
   onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
 });
 console.log(`Model loaded: ${modelId}`);

@@ -24,7 +24,9 @@ if (!args[0]) {
     "Usage: bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file-path> " +
       "[parakeet-tdt-gguf]",
   );
-  console.error("\nIf the model path is omitted, defaults to the registry model.");
+  console.error(
+    "\nIf the model path is omitted, defaults to the registry model.",
+  );
   process.exit(1);
 }
 

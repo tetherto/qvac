@@ -78,7 +78,10 @@ try {
     );
   }
   console.log(
-    `\nFull transcript: ${segments.map((s) => s.text).join("").trim()}`,
+    `\nFull transcript: ${segments
+      .map((s) => s.text)
+      .join("")
+      .trim()}`,
   );
 
   // Unload the model when done

@@ -165,7 +165,10 @@ async function main() {
 
   // Turn 2 — same session, swap to horoscope tools. Dynamic mode lets the
   // model see a different tool set without invalidating the kv-cache.
-  history.push({ role: "user", content: "Now check my horoscope for Aquarius." });
+  history.push({
+    role: "user",
+    content: "Now check my horoscope for Aquarius.",
+  });
   console.log("\n\n🤖 Turn 2 (tools=horoscope):\n");
   await chatTurn({ modelId, kvCache, history, tools: horoscopeTools });
 
