@@ -120,6 +120,7 @@ const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => {
 function getConfig (device, modelConfig) {
   return {
     gpu_layers: '98',
+    temp: '0.0',
     verbosity: '2',
     device,
     ctx_size: modelConfig.ctx_size

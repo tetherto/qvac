@@ -50,6 +50,7 @@ async function runBitnetInference (addon, prompt) {
   response
     .onUpdate(data => { chunks.push(data) })
     .onError(err => { error = err })
+  await response.await()
   if (error) throw new Error('bitnet inference failed: ' + error)
   return {
     output: chunks.join('').trim(),
