@@ -1,9 +1,9 @@
 ---
-name: qv-qip-significance-check
-description: Use during planning, implementation, PR review, or /qv-qip-significance-check when a change may affect public SDK API, native dependency, plugin contract, model registry contract, runtime, transport, storage, release flow, deployment, security, NFR, or architecture principles.
+name: qv-qip-need-proposal
+description: Use during planning, implementation, PR review, or /qv-qip-need-proposal when a change may affect public SDK API, native dependency, plugin contract, model registry contract, runtime, transport, storage, release flow, deployment, security, NFR, or technical principles.
 ---
 
-# QIP Significance Check
+# QIP Proposal Need Check
 
 Conservatively decide whether a change needs a QIP before deeper implementation or merge recommendation.
 
@@ -11,10 +11,10 @@ Conservatively decide whether a change needs a QIP before deeper implementation 
 
 **Use when:**
 
-- Planning or implementing a change that may affect architecture
+- Planning or implementing a change that may affect technical direction
 - Reviewing a PR or diff for cross-package, contract, delivery, or principle impact
 - Another workflow asks whether a proposal is needed first
-- User invokes `/qv-qip-significance-check`
+- User invokes `/qv-qip-need-proposal`
 
 **Do NOT use for:**
 
@@ -67,7 +67,7 @@ Not QIP-worthy on its own:
 Proposal count:
 <One QIP: <scope name> / Multiple QIPs: <scope names and why split>>
 
-This looks architecturally significant because it changes <trigger>. I recommend drafting the proposal(s) above before going deeper, so the affected people can review the direction early. Want me to start a QIP draft from what we know?
+This looks technically significant because it changes <trigger>. I recommend drafting the proposal(s) above before going deeper, so the affected people can review the direction early. Want me to start a QIP draft from what we know?
 ```
 
 ## Efficiency rules
