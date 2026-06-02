@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -10,10 +11,11 @@
 #include <gtest/gtest.h>
 
 #include "WhisperTypes.hpp"
+#include "addon/GgmlLogForwarding.hpp"
 #include "addon/WhisperErrors.hpp"
-#include "model-interface/StreamingProcessor.hpp"
 #include "inference-addon-cpp/queue/OutputCallbackInterface.hpp"
 #include "inference-addon-cpp/queue/OutputQueue.hpp"
+#include "model-interface/StreamingProcessor.hpp"
 #include "whisper.cpp/WhisperConfig.hpp"
 #include "whisper.cpp/WhisperModel.hpp"
 
@@ -1284,4 +1286,56 @@ TEST_F(WhisperModelTest, PreprocessAudioDataUnsupportedFormatThrows) {
         std::string(e.what()),
         testing::HasSubstr("Unsupported audio_format: mp3"));
   }
+}
+
+// ── whisper.cpp / ggml log forwarding (QVAC-19783) ─────────────────────────
+// Helper: run forwardGgmlLog while capturing std::cout (QLOG routes there in
+// this no-JS test build, where JS_LOGGER is undefined).
+namespace {
+std::string captureForwarded(enum ggml_log_level level, const char* text) {
+  std::ostringstream captured;
+  std::streambuf* previous = std::cout.rdbuf(captured.rdbuf());
+  forwardGgmlLog(level, text, nullptr);
+  std::cout.rdbuf(previous);
+  return captured.str();
+}
+} // namespace
+
+TEST(WhisperGgmlLogForwarding, MapsEachLevelToPriority) {
+  namespace logp = qvac_lib_inference_addon_cpp::logger;
+  EXPECT_EQ(ggmlLevelToPriority(GGML_LOG_LEVEL_ERROR), logp::Priority::ERROR);
+  EXPECT_EQ(ggmlLevelToPriority(GGML_LOG_LEVEL_WARN), logp::Priority::WARNING);
+  EXPECT_EQ(ggmlLevelToPriority(GGML_LOG_LEVEL_INFO), logp::Priority::INFO);
+  EXPECT_EQ(ggmlLevelToPriority(GGML_LOG_LEVEL_DEBUG), logp::Priority::DEBUG);
+  // Continuation fragments and NONE default to INFO.
+  EXPECT_EQ(ggmlLevelToPriority(GGML_LOG_LEVEL_CONT), logp::Priority::INFO);
+  EXPECT_EQ(ggmlLevelToPriority(GGML_LOG_LEVEL_NONE), logp::Priority::INFO);
+}
+
+TEST(WhisperGgmlLogForwarding, NullAndEmptyAndWhitespaceOnlyAreNoOps) {
+  EXPECT_TRUE(captureForwarded(GGML_LOG_LEVEL_INFO, nullptr).empty());
+  EXPECT_TRUE(captureForwarded(GGML_LOG_LEVEL_INFO, "").empty());
+  EXPECT_TRUE(captureForwarded(GGML_LOG_LEVEL_INFO, "\n").empty());
+  EXPECT_TRUE(captureForwarded(GGML_LOG_LEVEL_ERROR, "\r\n").empty());
+}
+
+TEST(WhisperGgmlLogForwarding, ForwardsMessageAtMappedLevelAndTrimsNewline) {
+  const std::string out =
+      captureForwarded(GGML_LOG_LEVEL_INFO, "ggml_vulkan: Found 1 device\n");
+  // The message text is forwarded...
+  EXPECT_THAT(out, testing::HasSubstr("ggml_vulkan: Found 1 device"));
+  // ...at INFO priority (QLOG prefixes the level in the no-JS build)...
+  EXPECT_THAT(out, testing::HasSubstr("INFO"));
+  // ...and the message's own trailing '\n' is trimmed, so there is no blank
+  // line before QLOG's own line terminator.
+  EXPECT_THAT(out, testing::Not(testing::HasSubstr("device\n\n")));
+}
+
+TEST(WhisperGgmlLogForwarding, EachCallEmittedIndependently) {
+  // Per-callback forwarding: a message without a trailing newline is emitted
+  // immediately (not held in a buffer waiting for a later newline).
+  const std::string out =
+      captureForwarded(GGML_LOG_LEVEL_ERROR, "whisper: failed to load");
+  EXPECT_THAT(out, testing::HasSubstr("whisper: failed to load"));
+  EXPECT_THAT(out, testing::HasSubstr("ERROR"));
 }

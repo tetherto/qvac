@@ -53,6 +53,10 @@ jobs:
             arch: x64
             runner: qvac-ubuntu2204-x64
             no_gpu: 'true'
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -83,7 +87,7 @@ jobs:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
-        if: startsWith(matrix.runner, 'qvac-')
+        if: runner.environment != 'github-hosted'
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -149,7 +153,7 @@ jobs:
 
       - name: Cache Parakeet GGUF models
         id: model-cache
-        if: startsWith(matrix.runner, 'qvac-')
+        if: runner.environment != 'github-hosted'
         uses: ./.github/actions/cache-models
         with:
           package: transcription-parakeet

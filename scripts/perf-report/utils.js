@@ -531,7 +531,7 @@ function aggregateReports (reports) {
   // mixing them into one giant table.
   const scenarioMap = {}
   // QVAC-17830: dedupe by (device, test, run_number). The combined
-  // report folds sibling matrix legs (linux-x64-cpu+linux-x64-gpu,
+  // report folds sibling matrix legs (linux-x64-u22-gpu+linux-x64-u24-gpu,
   // linux-arm64-u22+linux-arm64-u24) onto one device name so users see
   // ONE column per physical platform. Without dedupe each shared
   // [test] [CPU] row gets 3 iters from each leg → iteration count
@@ -561,9 +561,8 @@ function aggregateReports (reports) {
       }
     } else if (deviceMeta[deviceName] && report.device && report.device.gpu && !deviceMeta[deviceName].gpu) {
       // Sibling matrix legs may report different gpu strings — keep
-      // the first non-null one we see (e.g. linux-x64-gpu reports
-      // NVIDIA, linux-x64-cpu reports null; fold both onto one
-      // device, surface the GPU label).
+      // the first non-null one we see; folded sibling legs share one
+      // device column and surface the GPU label.
       deviceMeta[deviceName].gpu = report.device.gpu
     }
 

@@ -15,6 +15,7 @@
       "runFullOcrSuiteTest"
     ],
     "regularB": [
+      "runCanvasSizeTest",
       "runImageFormatsTest",
       "runLargeImagesTest",
       "runLifecycleTest",
@@ -40,6 +41,7 @@
       "runFullOcrSuiteTest"
     ],
     "regularB": [
+      "runCanvasSizeTest",
       "runImageFormatsTest",
       "runLargeImagesTest",
       "runLifecycleTest",

@@ -45,7 +45,7 @@ test('Supertonic MTL TTS (ggml): synthesizes across es/fr/pt with shared engine'
   const baseDir = getBaseDir()
   const download = await ensureSupertonicMtlModel({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) {
-    t.pass('Skipped: Supertonic MTL GGUF not available')
+    t.fail('Supertonic MTL GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -80,7 +80,7 @@ test('Supertonic MTL TTS (ggml): unsupported language fails fast at engine load'
   const baseDir = getBaseDir()
   const download = await ensureSupertonicMtlModel({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) {
-    t.pass('Skipped: Supertonic MTL GGUF not available')
+    t.fail('Supertonic MTL GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 
@@ -118,7 +118,7 @@ test('Supertonic MTL TTS (ggml): backendDevice + backendId surfaced in stats', {
   const baseDir = getBaseDir()
   const download = await ensureSupertonicMtlModel({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) {
-    t.pass('Skipped: Supertonic MTL GGUF not available')
+    t.fail('Supertonic MTL GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
 

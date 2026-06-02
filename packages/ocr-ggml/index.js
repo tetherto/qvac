@@ -21,6 +21,7 @@ class OcrGgml {
    * @param {string} args.params.pathRecognizer - path to the recognizer .gguf
    * @param {string[]} args.params.langList - e.g. `['en']`
    * @param {number} [args.params.magRatio=1.5]
+   * @param {number} [args.params.canvasSize=2560] - EasyOCR `canvas_size`: detection canvas cap (long side, px). Lower it (e.g. 1280) on memory-constrained targets to bound CRAFT peak memory. EasyOCR only.
    * @param {number[]} [args.params.defaultRotationAngles]
    * @param {boolean} [args.params.contrastRetry]
    * @param {number} [args.params.lowConfidenceThreshold]
@@ -131,6 +132,7 @@ class OcrGgml {
     // defaults (in OcrConfig) win otherwise.
     const optionalFields = [
       'magRatio',
+      'canvasSize',
       'defaultRotationAngles',
       'contrastRetry',
       'lowConfidenceThreshold',
