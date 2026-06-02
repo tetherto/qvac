@@ -215,7 +215,7 @@
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.15.0",
     "bare-events": "^2.8.0",
-    "bare-fetch": "^2.5.1",
+    "bare-fetch": "^2.9.1",
     "bare-fs": "^4.5.1",
     "bare-net": "^2.2.0",
     "bare-os": "^3.6.2",
