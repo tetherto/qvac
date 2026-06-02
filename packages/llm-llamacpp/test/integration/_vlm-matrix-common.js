@@ -117,7 +117,6 @@ function runVlmCell (modelKey, mmprojKey) {
     test(`vlm-matrix ${cell} [${dev}]`, { timeout: 30 * 60 * 1000 }, async t => {
       const [mainName, dir] = await ensureModel(cfg.main)
       const [projName] = await ensureModel(cfg.mmproj[mmprojKey])
-      const tap = createLogTap()
       const inference = new LlmLlamacpp({
         files: { model: [path.join(dir, mainName)], projectionModel: path.join(dir, projName) },
         config: {
@@ -127,10 +126,10 @@ function runVlmCell (modelKey, mmprojKey) {
           seed: '42',
           ctx_size: cfg.ctx_size,
           n_predict: '128',
-          verbosity: '2', // surfaces `image slice encoded in N ms` via the logger
+          verbosity: '2', // surfaces `image slice encoded in N ms` on native stderr
           'reasoning-budget': '0' // disable Qwen3.5 thinking -> clean direct answers
         },
-        logger: tap.logger,
+        logger: console,
         opts: { stats: true }
       })
       t.teardown(async () => { try { await inference.unload() } catch (_) {} })
@@ -138,21 +137,19 @@ function runVlmCell (modelKey, mmprojKey) {
 
       let ok = 0
       for (const item of fixture.items) {
-        tap.clear()
+        // segment marker on STDERR — same stream as llama.cpp's `image slice encoded`
+        // lines, so host-side attribution is alignment-proof (stdout [VLMROW] markers
+        // can interleave unpredictably after 2>&1).
+        console.error('[VLMSEG]' + JSON.stringify({ cell, model: modelKey, mmproj: mmprojKey, device, id: item.id }) + '[/VLMSEG]')
         try {
           const r = await runOne(inference, getMediaPath(item.image), item.prompt)
-          const m = parseAddonLog(tap.text())
           const st = r.stats || {}
-          // vision-encode is parsed from native stderr host-side (aggregate.js); decode
-          // TPS/TTFT come from response.stats (the addon doesn't print eval-time lines).
           emitRow({
             cell, model: modelKey, mmproj: mmprojKey, device,
             task: item.task, id: item.id, metric: item.metric, gold: item.gold,
             pred: String(r.text).slice(0, 600),
             ms: r.ms,
-            vision_encode_ms: m.visionEncodeMs != null ? m.visionEncodeMs : null,
-            vision_slices: m.visionSlices != null ? m.visionSlices : null,
-            decode_tps: m.decodeTps != null ? m.decodeTps : (st.TPS != null ? st.TPS : null),
+            decode_tps: st.TPS != null ? st.TPS : null,
             ttft_ms: st.TTFT != null ? st.TTFT : null,
             gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
             prompt_tokens: st.promptTokens != null ? st.promptTokens : null

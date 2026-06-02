@@ -85,42 +85,44 @@ const VISION_RE = /image (?:slice )?encoded in\s+(\d+(?:\.\d+)?)\s*ms/i
 const PROMPT_RE = /prompt eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+tokens\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i
 const EVAL_RE = /(?<!prompt )eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+(?:tokens|runs)\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i
 const ROW_RE = /\[VLMROW\](.*?)\[\/VLMROW\]/
+const SEG_RE = /\[VLMSEG\](.*?)\[\/VLMSEG\]/
 
-function readRows (files) {
+// Per-cell vision-encode comes from [VLMSEG] segments (stderr, same stream as the
+// `image slice encoded` lines) — alignment-proof. Per-row quality/TTFT/TPS come from
+// the [VLMROW] markers (stdout). They're joined on the cell|device key, not position.
+function parseLog (files) {
   const rows = []
-  const fresh = () => ({ encodeMs: 0, slices: 0, promptEvalMs: null, decodeMs: null, decodeTps: null })
+  const vision = {} // cell|device -> { sumMs, segs, enc }
   for (const f of files) {
     let txt = ''
     try { txt = fs.readFileSync(f, 'utf-8') } catch (_) { continue }
-    let pend = fresh()
+    let cur = null
     for (const line of txt.split(/\r?\n/)) {
-      let m
-      if ((m = line.match(VISION_RE))) { pend.encodeMs += Number(m[1]); pend.slices++ }
-      else if ((m = line.match(PROMPT_RE))) { pend.promptEvalMs = Number(m[1]) }
-      else if ((m = line.match(EVAL_RE))) { pend.decodeMs = Number(m[1]); pend.decodeTps = Number(m[3]) }
-      const rm = line.match(ROW_RE)
-      if (rm) {
+      const sm = line.match(SEG_RE)
+      if (sm) {
         try {
-          const row = JSON.parse(rm[1])
-          if (!row.error) {
-            if (pend.slices) { row.vision_encode_ms = pend.encodeMs; row.vision_slices = pend.slices }
-            if (pend.promptEvalMs != null) row.prompt_eval_ms = pend.promptEvalMs
-            if (pend.decodeMs != null) row.decode_ms = pend.decodeMs
-            if (pend.decodeTps != null) row.decode_tps = pend.decodeTps
-          }
-          rows.push(row)
+          const s = JSON.parse(sm[1])
+          cur = `${s.cell}|${s.device}`
+          if (!vision[cur]) vision[cur] = { sumMs: 0, segs: 0, enc: 0 }
+          vision[cur].segs++
         } catch (_) {}
-        pend = fresh()
+        continue
       }
+      const vm = line.match(VISION_RE)
+      if (vm && cur) { vision[cur].sumMs += Number(vm[1]); vision[cur].enc++; continue }
+      const rm = line.match(ROW_RE)
+      if (rm) { try { rows.push(JSON.parse(rm[1])) } catch (_) {} }
     }
   }
-  return rows
+  return { rows, vision }
 }
 const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null
 const fmtPct = x => x == null ? '—' : (100 * x).toFixed(1)
 const fmtNum = (x, d = 1) => x == null ? '—' : Number(x).toFixed(d)
 
-function build (rows, title) {
+function build (rows, vision, title) {
+  const visMean = key => (vision[key] && vision[key].segs) ? vision[key].sumMs / vision[key].segs : null
+  const visSlices = key => (vision[key] && vision[key].segs) ? vision[key].enc / vision[key].segs : null
   // group key = cell|device
   const keys = []
   const byKey = {}
@@ -156,8 +158,8 @@ function build (rows, title) {
     const rs = byKey[k]
     const okRows = rs.filter(r => !r.error)
     const errs = rs.length - okRows.length
-    const ve = mean(okRows.map(r => r.vision_encode_ms).filter(v => v != null))
-    const sl = mean(okRows.map(r => r.vision_slices).filter(v => v != null))
+    const ve = visMean(k)
+    const sl = visSlices(k)
     const tt = mean(okRows.map(r => r.ttft_ms).filter(v => v != null))
     const dt = mean(okRows.map(r => r.decode_tps).filter(v => v != null))
     const wall = mean(okRows.map(r => r.ms).filter(v => v != null))
@@ -171,14 +173,12 @@ function build (rows, title) {
   L.push('|---|---|---|---|---|---|')
   const models = [...new Set(rows.map(r => r.model).filter(Boolean))].sort()
   const devs = [...new Set(rows.map(r => r.device).filter(Boolean))].sort()
-  const veMean = (md, mm, dv) => mean(rows.filter(r => r.model === md && r.mmproj === mm && r.device === dv && !r.error)
-    .map(r => r.vision_encode_ms).filter(v => v != null))
   for (const md of models) {
     for (const dv of devs) {
-      const q = veMean(md, 'q8', dv)
-      const f = veMean(md, 'f16', dv)
+      const q = visMean(`${md}-q8|${dv}`)
+      const f = visMean(`${md}-f16|${dv}`)
       if (q == null && f == null) continue
-      const tiles = mean(rows.filter(r => r.model === md && r.device === dv && !r.error).map(r => r.vision_slices).filter(v => v != null))
+      const tiles = visSlices(`${md}-q8|${dv}`)
       const pct = (q != null && f != null && f !== 0) ? ((f - q) / f * 100) : null
       L.push(`| ${md} | ${dv.toUpperCase()} | ${fmtNum(q, 1)} | ${fmtNum(f, 1)} | ${fmtNum(tiles, 1)} | ${pct == null ? '—' : (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'} |`)
     }
@@ -189,7 +189,7 @@ function build (rows, title) {
 }
 
 const args = parseArgs(process.argv)
-const rows = readRows(args.files)
-const md = build(rows, args.title)
+const { rows, vision } = parseLog(args.files)
+const md = build(rows, vision, args.title)
 process.stdout.write(md + '\n')
 if (args.outFile) fs.writeFileSync(args.outFile, md + '\n')
