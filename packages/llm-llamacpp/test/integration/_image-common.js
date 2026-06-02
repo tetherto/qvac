@@ -45,16 +45,18 @@ const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 // CPU-only platforms (no GPU inference path today)
 const useCpu = isDarwinX64 || isLinuxArm64
 
+// QVAC-19178 Phase 0b: swapped from SmolVLM2-500M to Qwen3.5-0.8B to confirm the
+// addon's vision path supports Qwen3.5 + its mmproj on-device (Samsung S25).
 const MULTIMODAL_MODEL_CONFIG = {
   llmModel: {
-    modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
-    downloadUrl: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
+    modelName: 'Qwen3.5-0.8B-Q4_K_M.gguf',
+    downloadUrl: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B.Q4_K_M.gguf'
   },
   projModel: {
-    modelName: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
-    downloadUrl: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
+    modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+    downloadUrl: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B.mmproj-f16.gguf'
   },
-  ctx_size: '2048'
+  ctx_size: '4096'
 }
 
 const LARGE_MULTIMODAL_CONFIG = {
