@@ -3,9 +3,9 @@
  * parsing for Wan 2.1 / Wan 2.2).
  *
  * Coverage:
- *   1.  Mode validation (txt2vid / img2vid / flf2vid / unknown)
+ *   1.  Mode validation (txt2vid / img2vid / unknown)
  *   2.  Prompt handlers (prompt / negative_prompt)
- *   3.  Dimensions (width / height -- multiples of 8)
+ *   3.  Dimensions (width / height -- multiples of 16)
  *   4.  video_frames (4k+1 rule, minimum 5)
  *   5.  fps (1-120)
  *   6.  Seed
@@ -13,7 +13,7 @@
  *                                       flow_shift)
  *   8.  High-noise expert sample params (high_noise_* family)
  *   9.  moe_boundary (Wan 2.2, [0, 1])
- *  10.  strength (img2vid / flf2vid, [0, 1])
+ *  10.  strength (img2vid, [0, 1])
  *  11.  vace_strength (VACE, [0, 1])
  *  12.  VAE tiling (vae_tiling, vae_tile_size as int and "WxH",
  * vae_tile_overlap)
@@ -42,23 +42,23 @@ using namespace qvac_errors;
 
 namespace {
 
-picojson::object makeObj(const std::string &key, const picojson::value &val) {
+picojson::object makeObj(const std::string& key, const picojson::value& val) {
   picojson::object obj;
   obj[key] = val;
   return obj;
 }
 
-picojson::value str(const std::string &s) { return picojson::value(s); }
+picojson::value str(const std::string& s) { return picojson::value(s); }
 picojson::value num(double n) { return picojson::value(n); }
 picojson::value boolean(bool b) { return picojson::value(b); }
 
-SdVidGenConfig applyOne(const std::string &key, const picojson::value &val) {
+SdVidGenConfig applyOne(const std::string& key, const picojson::value& val) {
   SdVidGenConfig cfg;
   applySdVidGenHandlers(cfg, makeObj(key, val));
   return cfg;
 }
 
-void expectThrows(const std::string &key, const picojson::value &val) {
+void expectThrows(const std::string& key, const picojson::value& val) {
   SdVidGenConfig cfg;
   EXPECT_THROW(applySdVidGenHandlers(cfg, makeObj(key, val)), StatusError);
 }
@@ -69,10 +69,9 @@ void expectThrows(const std::string &key, const picojson::value &val) {
 // 1. Mode
 // -----------------------------------------------------------------------------
 
-TEST(SdVidGenHandlers_Mode, AcceptsTxt2VidImg2VidFlf2Vid) {
+TEST(SdVidGenHandlers_Mode, AcceptsTxt2VidAndImg2Vid) {
   EXPECT_EQ(applyOne("mode", str("txt2vid")).mode, "txt2vid");
   EXPECT_EQ(applyOne("mode", str("img2vid")).mode, "img2vid");
-  EXPECT_EQ(applyOne("mode", str("flf2vid")).mode, "flf2vid");
 }
 
 TEST(SdVidGenHandlers_Mode, RejectsUnknownModeAndImageModes) {
@@ -93,8 +92,9 @@ TEST(SdVidGenHandlers_Mode, RejectsNonString) {
 
 TEST(SdVidGenHandlers_Prompt, PromptAndNegativePrompt) {
   EXPECT_EQ(applyOne("prompt", str("a cat")).prompt, "a cat");
-  EXPECT_EQ(applyOne("negative_prompt", str("bad quality")).negativePrompt,
-            "bad quality");
+  EXPECT_EQ(
+      applyOne("negative_prompt", str("bad quality")).negativePrompt,
+      "bad quality");
 }
 
 TEST(SdVidGenHandlers_Prompt, EmptyPromptAccepted) {
@@ -110,16 +110,18 @@ TEST(SdVidGenHandlers_Prompt, NonStringPromptThrows) {
 // 3. Dimensions
 // -----------------------------------------------------------------------------
 
-TEST(SdVidGenHandlers_Dimensions, MultiplesOfEightAccepted) {
+TEST(SdVidGenHandlers_Dimensions, MultiplesOfSixteenAccepted) {
   EXPECT_EQ(applyOne("width", num(832)).width, 832);
   EXPECT_EQ(applyOne("height", num(480)).height, 480);
-  EXPECT_EQ(applyOne("width", num(8)).width, 8);
+  EXPECT_EQ(applyOne("width", num(16)).width, 16);
 }
 
-TEST(SdVidGenHandlers_Dimensions, NonMultipleOfEightRejected) {
+TEST(SdVidGenHandlers_Dimensions, NonMultipleOfSixteenRejected) {
   expectThrows("width", num(831));
   expectThrows("height", num(479));
-  expectThrows("width", num(1)); // not a multiple of 8
+  expectThrows("width", num(1));  // not a multiple of 16
+  expectThrows("width", num(8));  // multiple of 8 but not 16
+  expectThrows("height", num(24)); // multiple of 8 but not 16
 }
 
 TEST(SdVidGenHandlers_Dimensions, ZeroOrNegativeRejected) {
@@ -250,10 +252,11 @@ TEST(SdVidGenHandlers_Steps, ZeroAndNegativeRejected) {
 }
 
 TEST(SdVidGenHandlers_Sampler, SupportedNamesMap) {
-  EXPECT_EQ(applyOne("sampler", str("euler")).sampleMethod,
-            EULER_SAMPLE_METHOD);
-  EXPECT_EQ(applyOne("sampling_method", str("euler_a")).sampleMethod,
-            EULER_A_SAMPLE_METHOD);
+  EXPECT_EQ(
+      applyOne("sampler", str("euler")).sampleMethod, EULER_SAMPLE_METHOD);
+  EXPECT_EQ(
+      applyOne("sampling_method", str("euler_a")).sampleMethod,
+      EULER_A_SAMPLE_METHOD);
   EXPECT_EQ(applyOne("sampler", str("heun")).sampleMethod, HEUN_SAMPLE_METHOD);
 }
 
@@ -296,8 +299,9 @@ TEST(SdVidGenHandlers_HighNoiseSteps, ZeroOrNegativeRejected) {
 }
 
 TEST(SdVidGenHandlers_HighNoiseSampler, SupportedNamesMap) {
-  EXPECT_EQ(applyOne("high_noise_sampler", str("euler")).highNoiseSampleMethod,
-            EULER_SAMPLE_METHOD);
+  EXPECT_EQ(
+      applyOne("high_noise_sampler", str("euler")).highNoiseSampleMethod,
+      EULER_SAMPLE_METHOD);
   EXPECT_EQ(
       applyOne("high_noise_sampler", str("dpm++2m")).highNoiseSampleMethod,
       DPMPP2M_SAMPLE_METHOD);
@@ -308,15 +312,17 @@ TEST(SdVidGenHandlers_HighNoiseSampler, UnknownRejected) {
 }
 
 TEST(SdVidGenHandlers_HighNoiseScheduler, SupportedNamesMap) {
-  EXPECT_EQ(applyOne("high_noise_scheduler", str("simple")).highNoiseScheduler,
-            SIMPLE_SCHEDULER);
-  EXPECT_EQ(applyOne("high_noise_scheduler", str("karras")).highNoiseScheduler,
-            KARRAS_SCHEDULER);
+  EXPECT_EQ(
+      applyOne("high_noise_scheduler", str("simple")).highNoiseScheduler,
+      SIMPLE_SCHEDULER);
+  EXPECT_EQ(
+      applyOne("high_noise_scheduler", str("karras")).highNoiseScheduler,
+      KARRAS_SCHEDULER);
 }
 
 TEST(SdVidGenHandlers_HighNoiseCfgScale, SetsValue) {
-  EXPECT_FLOAT_EQ(applyOne("high_noise_cfg_scale", num(6.5)).highNoiseCfgScale,
-                  6.5f);
+  EXPECT_FLOAT_EQ(
+      applyOne("high_noise_cfg_scale", num(6.5)).highNoiseCfgScale, 6.5f);
 }
 
 TEST(SdVidGenHandlers_HighNoiseFlowShift, SetsValue) {
@@ -430,8 +436,8 @@ TEST(SdVidGenHandlers_VaeTileSize, StringFormRejectsZeroAndNegativeDims) {
 TEST(SdVidGenHandlers_VaeTileOverlap, AcceptsRangeZeroToAlmostOne) {
   EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.0)).vaeTileOverlap, 0.0f);
   EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.5)).vaeTileOverlap, 0.5f);
-  EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.99)).vaeTileOverlap,
-                  0.99f);
+  EXPECT_FLOAT_EQ(
+      applyOne("vae_tile_overlap", num(0.99)).vaeTileOverlap, 0.99f);
 }
 
 TEST(SdVidGenHandlers_VaeTileOverlap, OneOrAboveRejected) {
@@ -446,12 +452,12 @@ TEST(SdVidGenHandlers_VaeTileOverlap, OneOrAboveRejected) {
 
 TEST(SdVidGenHandlers_CacheMode, SupportedValuesMap) {
   EXPECT_EQ(applyOne("cache_mode", str("")).cacheMode, SD_CACHE_DISABLED);
-  EXPECT_EQ(applyOne("cache_mode", str("disabled")).cacheMode,
-            SD_CACHE_DISABLED);
-  EXPECT_EQ(applyOne("cache_mode", str("easycache")).cacheMode,
-            SD_CACHE_EASYCACHE);
-  EXPECT_EQ(applyOne("cache_mode", str("cache-dit")).cacheMode,
-            SD_CACHE_CACHE_DIT);
+  EXPECT_EQ(
+      applyOne("cache_mode", str("disabled")).cacheMode, SD_CACHE_DISABLED);
+  EXPECT_EQ(
+      applyOne("cache_mode", str("easycache")).cacheMode, SD_CACHE_EASYCACHE);
+  EXPECT_EQ(
+      applyOne("cache_mode", str("cache-dit")).cacheMode, SD_CACHE_CACHE_DIT);
 }
 
 TEST(SdVidGenHandlers_CacheMode, UnknownRejected) {
