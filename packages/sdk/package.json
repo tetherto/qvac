@@ -165,7 +165,7 @@
   ],
   "scripts": {
     "test:unit": "bun run scripts/run-unit-tests.ts",
-    "test:bare": "bun run scripts/run-bare-tests.ts",
+    "test:bare": "tsc -p test/bare/tsconfig.json && tsc-alias -p test/bare/tsconfig.json && brittle-bare \"test/dist/test/bare/**/*.test.js\"",
     "test:security": "bun run scripts/run-security-tests.ts",
     "test:security:bare": "bun run scripts/run-security-tests-bare.ts",
     "lint": "eslint . --max-warnings=0 && npm run typecheck",
@@ -241,7 +241,7 @@
     "bare-readline": "^1.2.0",
     "bare-subprocess": "^5.2.3",
     "bare-url": "^2.4.3",
-    "brittle": "^3.19.1",
+    "brittle": "^4.0.0",
     "chromadb": "^3.0.14",
     "eslint": "^9.33.0",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -256,6 +256,7 @@
     "remark-code-import": "^1.2.0",
     "remark-frontmatter": "^5.0.0",
     "remark-mdx": "^3.1.1",
+    "tsc-alias": "^1.8.17",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.39.0"
