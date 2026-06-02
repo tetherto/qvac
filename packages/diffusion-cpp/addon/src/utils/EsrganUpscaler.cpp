@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdlib>
-#include <stdexcept>
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
@@ -10,6 +9,7 @@
 
 #include "BackendSelection.hpp"
 #include "LoggingMacros.hpp"
+#include "SdErrors.hpp"
 
 using namespace qvac_errors;
 
@@ -180,7 +180,7 @@ sd_image_t EsrganUpscaler::upscaleImage(
       if (currentOwned) {
         freeSdImageData(current);
       }
-      throw std::runtime_error("Job cancelled");
+      throw errors::makeCancelledError();
     }
 
     sd_image_t next = upscale(ctx, current, factor);

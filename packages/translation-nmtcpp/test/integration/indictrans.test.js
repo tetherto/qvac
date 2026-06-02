@@ -521,3 +521,398 @@ test('IndicTrans backend comparison [Vulkan vs OpenCL]', { timeout: TEST_TIMEOUT
   // OpenCL crashes on IndicTrans (ggml-opencl M%4 assertion on Adreno 830)
   t.pass()
 })
+
+// ===========================================================================
+// Standalone IndicTrans coverage (QVAC-19836)
+//
+// The addon tests above cover EN->Hindi happy paths and CPU/GPU parity, but
+// the reverse direction, batch path, lifecycle reload, use-after-unload,
+// cancel, and resource-release checks are only proven for the pivot model.
+// These tests bring the standalone IndicTrans path to parity and add the
+// resource-release coverage no IndicTrans test has today.
+//
+// All run CPU-only: these tests exercise JS-level lifecycle/API behaviour
+// that is backend-independent, so CPU keeps them deterministic and fast on
+// the hosted desktop runners (the per-GPU happy-path coverage already lives
+// in the tests above).
+// ===========================================================================
+
+/**
+ * Builds standalone IndicTrans constructor args (CPU) for a given direction.
+ */
+function createStandaloneIndicArgs (modelPath, logger, srcLang, dstLang) {
+  return {
+    files: { model: modelPath },
+    params: { mode: 'full', srcLang, dstLang },
+    config: {
+      modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+      use_gpu: false,
+      beamsize: 1
+    },
+    logger,
+    opts: { stats: true }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// #1 — Reverse direction: Hindi -> English
+//
+// WHY: Users translate both ways. Every IndicTrans test today is EN->HI, so
+// a regression in the reverse direction would ship with no addon-level
+// signal. Asserts type + non-empty only (Latin output, no keyword lock-in).
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - Hindi to English translation', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'hin_Deva', 'eng_Latn')
+    )
+    await model.load()
+
+    const response = await model.run('नमस्ते, आप कैसे हैं? आज मौसम बहुत अच्छा है।')
+    let output = ''
+    await response.onUpdate(data => { output += data }).await()
+
+    t.ok(typeof output === 'string', 'output is a string')
+    t.ok(output.length > 0, `HI->EN translation produced output: "${output}"`)
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #3 — Standalone batch translation via runBatch()
+//
+// WHY: runBatch() drives the native batch path, distinct from run(). Only
+// pivot batch is tested today; IndicTrans batch has zero coverage.
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - standalone batch translation via runBatch()', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+    await model.load()
+
+    const inputs = ['Good morning', 'Thank you for your help']
+    const results = await model.runBatch(inputs)
+
+    t.ok(Array.isArray(results), 'batch results should be an array')
+    t.is(results.length, inputs.length, `should return ${inputs.length} translations`)
+    for (let i = 0; i < results.length; i++) {
+      t.ok(typeof results[i] === 'string', `result[${i}] should be a string`)
+      t.ok(results[i].length > 0, `result[${i}] should not be empty`)
+      t.comment(`  "${inputs[i]}" -> "${results[i]}"`)
+    }
+    t.pass('Standalone IndicTrans batch translation completed')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #5 — Load -> use -> unload -> reload -> use cycle
+//
+// WHY: IndicTrans uses a different native loader from Bergamot. Reload is
+// only proven for the pivot model, so a reload regression specific to the
+// IndicTrans GGML path would go uncaught.
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - load, unload, reload cycle', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+
+    await model.load()
+    const r1 = await model.run('Where is the nearest hospital?')
+    let out1 = ''
+    await r1.onUpdate(data => { out1 += data }).await()
+    t.ok(out1.length > 0, `First translation produced output: "${out1}"`)
+
+    await model.unload()
+    t.pass('Unload succeeded')
+
+    await model.load()
+    const r2 = await model.run('I need to book a flight.')
+    let out2 = ''
+    await r2.onUpdate(data => { out2 += data }).await()
+    t.ok(out2.length > 0, `Second translation after reload produced output: "${out2}"`)
+
+    t.pass('Load -> unload -> reload cycle completed successfully')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #6 — run() after unload() must throw, not crash
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - run after unload throws', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+    await model.load()
+    await model.unload()
+
+    try {
+      await model.run('Hello')
+      t.fail('Expected run() after unload to throw')
+    } catch (e) {
+      t.ok(e, 'run() after unload threw an error')
+      t.comment('Error message: ' + e.message)
+      t.pass('Unloaded model correctly rejects run()')
+    }
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #7 — Cancel mid-inference, then prove the model is still usable
+//
+// WHY: Cancelling a translation must not corrupt the model's internal state.
+// If it does, the user has to restart the whole process. Only pivot cancel
+// is tested today, and it does not verify reusability after cancel.
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - cancel mid-inference leaves model reusable', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+    await model.load()
+
+    const longText = 'This is a deliberately long sentence intended to give the ' +
+      'translation process enough work to still be running when we cancel it, ' +
+      'so that the cancel path is exercised mid-inference rather than after ' +
+      'the job has already completed on its own.'
+
+    const response = await model.run(longText)
+    await response.cancel()
+    t.pass('cancel() during translation did not crash')
+
+    // Let the cancelled job fully settle before the next run. IndicTrans
+    // cancel is best-effort (the native job may run to completion), and the
+    // addon routes addon output to whichever response is currently active.
+    // Without draining the first response, its trailing output would bleed
+    // into the second run and we'd assert on the wrong text. await() resolves
+    // on the cancelled response's terminal settle (end or cancel-driven
+    // error); we ignore the outcome and only use it as a barrier.
+    try { await response.await() } catch (_) { /* cancelled job may settle as error */ }
+
+    // Prove the model is still usable after a cancel — use a distinct input
+    // whose translation is short, so a non-empty result genuinely reflects
+    // the second request rather than leftover output from the first.
+    const r2 = await model.run('Thank you')
+    let out2 = ''
+    await r2.onUpdate(data => { out2 += data }).await()
+    t.ok(out2.length > 0, `model still translates after cancel: "${out2}"`)
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #8 — backend introspection reports 'Unloaded'/'' after unload
+//
+// Checks both public backend-introspection getters reset on teardown:
+// getActiveBackendName() is the resource-release proof; getActiveBackendDescription()
+// is verified alongside so the cosmetic GPU-name getter can't silently retain
+// a stale device string after unload.
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - backend reports Unloaded after unload', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+    await model.load()
+
+    const loadedBackend = model.getActiveBackendName()
+    t.comment(`Backend while loaded: ${loadedBackend}`)
+    t.comment(`Backend description while loaded: "${model.getActiveBackendDescription()}"`)
+    t.not(loadedBackend, 'Unloaded', 'backend should not report Unloaded while loaded')
+
+    await model.unload()
+
+    t.is(model.getActiveBackendName(), 'Unloaded', 'backend reports Unloaded after unload')
+    t.is(model.getActiveBackendDescription(), '', 'backend description is empty after unload')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #9 — Streaming onUpdate fires at least once
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - streaming onUpdate fires at least once', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+    await model.load()
+
+    let updateCount = 0
+    let output = ''
+    const response = await model.run('Good morning, how are you?')
+    await response.onUpdate(data => { updateCount++; output += data }).await()
+
+    t.ok(updateCount >= 1, `onUpdate fired ${updateCount} time(s) (expected >= 1)`)
+    t.ok(output.length > 0, 'streamed output is not empty')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #10 — Stats object has the expected shape
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - stats object has expected shape', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+    await model.load()
+
+    const response = await model.run('Hello world')
+    await response.onUpdate(() => {}).await()
+
+    const stats = response.stats
+    t.ok(stats && typeof stats === 'object', 'stats is an object')
+    t.comment('Stats keys: ' + Object.keys(stats || {}).join(', '))
+    t.ok(typeof stats.totalTokens === 'number', 'stats.totalTokens is a number')
+    const hasTiming = typeof stats.totalTime === 'number' ||
+      typeof stats.decodeTime === 'number' ||
+      Object.keys(stats).some(k => k.endsWith('TPS'))
+    t.ok(hasTiming, 'stats has a timing field (totalTime/decodeTime/TPS)')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #14 — Multi-cycle load/unload stress (accumulation leak catcher)
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  const CYCLES = 6
+
+  for (let i = 1; i <= CYCLES; i++) {
+    let model
+    const started = Date.now()
+    try {
+      model = new TranslationNmtcpp(
+        createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+      )
+      await model.load()
+
+      const response = await model.run('Thank you')
+      let output = ''
+      await response.onUpdate(data => { output += data }).await()
+      t.ok(output.length > 0, `cycle ${i}/${CYCLES} produced output`)
+    } finally {
+      if (model) {
+        try { await model.unload() } catch (e) {
+          t.comment(`cycle ${i} unload error: ${e.message}`)
+        }
+      }
+    }
+    t.comment(`cycle ${i}/${CYCLES} completed in ${Date.now() - started}ms`)
+    if (isMobile) {
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+  }
+
+  t.pass(`Completed ${CYCLES} load/unload cycles without failure`)
+})
+
+// ---------------------------------------------------------------------------
+// #15 — Cancel then immediate destroy (race condition)
+//
+// WHY: The most dangerous teardown race — cancel's async resolution can
+// overlap the destroy thread-join. If they collide, you get a use-after-free
+// crash. This test sequences them back-to-back without awaiting cancel.
+// ---------------------------------------------------------------------------
+
+test('IndicTrans [CPU] - cancel then immediate destroy does not crash', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(
+      createStandaloneIndicArgs(modelPath, logger, 'eng_Latn', 'hin_Deva')
+    )
+    await model.load()
+
+    const longText = 'This is a long sentence that should keep the translation ' +
+      'busy for long enough that destroying the model immediately after cancel ' +
+      'exercises the teardown race rather than a clean post-completion destroy.'
+
+    const response = await model.run(longText)
+    response.cancel()
+    await model.destroy()
+
+    t.pass('cancel() then destroy() did not crash')
+    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+  } finally {
+    if (model) {
+      try { await model.destroy() } catch (_) {}
+    }
+  }
+})
