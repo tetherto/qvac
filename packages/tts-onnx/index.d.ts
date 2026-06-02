@@ -1,4 +1,4 @@
-import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
+import type { QvacResponse } from '@qvac/infer-base'
 
 /**
  * LavaSR enhancer configuration.

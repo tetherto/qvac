@@ -1,4 +1,4 @@
-import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
+import type { QvacResponse } from '@qvac/infer-base'
 
 /**
  * Model file paths for the GGML TTS backend.  Engine is auto-detected

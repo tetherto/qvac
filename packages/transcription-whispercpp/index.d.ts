@@ -1,4 +1,4 @@
-import QvacResponse from "@qvac/infer-base/src/QvacResponse";
+import type { QvacResponse } from "@qvac/infer-base";
 import type { LoggerInterface } from "@qvac/logging";
 import { Readable } from "stream";
 
