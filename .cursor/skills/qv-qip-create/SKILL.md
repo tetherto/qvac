@@ -1,6 +1,6 @@
 ---
 name: qv-qip-create
-description: Use when drafting a QIP, responding to qv-qip-significance-check, shaping a fuzzy architecture proposal with alternatives and trade-offs, or invoking /qv-qip-create.
+description: Use when drafting a QIP, responding to qv-qip-significance-check, shaping a fuzzy architecture proposal with alternatives and consequences, or invoking /qv-qip-create.
 ---
 
 # QIP Proposal Create
@@ -32,7 +32,7 @@ Read before drafting:
 
 ### Clear proposal mode
 
-Use when the user already has problem, solution, affected area or team, and known trade-offs.
+Use when the user already has problem, solution, affected area or team, and known consequences.
 
 Ask only for missing essentials.
 
@@ -74,8 +74,8 @@ Advice is direction plus reasoning, not a vote.
 - Do a cleanup pass before finalizing: remove non-important details, obvious statements, duplicate or near-duplicate points, and stale context
 - Prefer precise domain terms over long explanations when they are clearer, e.g. `idle timeout`, `whole-stream deadline`, `idempotent`, `terminal failure`
 - Write Solution as an explanation of how the problem is solved. Do not make it just a task list; use bullets only for compact scope boundaries after the reader understands the design.
-- Keep `Alternatives considered` separate from Solution. Include the existing option and any obvious option reviewers would expect to see.
-- Write `Trade-offs` as consequences for proposal review. Avoid a probable-production-bugs list; state what reviewers must accept, then add mitigation only where it affects whether the proposal should be accepted, changed, or split.
+- Keep `Alternatives considered` separate from Solution. Include obvious options reviewers would expect to see, but keep each to 1-2 sentences or link to research for detailed analysis.
+- Write `Consequences` as positive impact plus trade-offs for proposal review. Avoid a probable-production-bugs list; state what reviewers must accept, then add mitigation only where it affects whether the proposal should be accepted, changed, or split.
 - Remove issues that the proposed design already rules out; keep consequences that remain true after the design is implemented.
 - Add a diagram only when runtime, package, or approval boundaries are non-obvious
 - Do not invent approvals, commitments, or team decisions
@@ -115,8 +115,8 @@ Author checklist
 - [ ] Chosen solution is justified against obvious alternatives
 - [ ] Trust boundaries and security properties are explicit when affected
 - [ ] Compatibility, migration, and release impact are explicit when affected
-- [ ] Alternatives considered includes the existing option
-- [ ] Trade-offs state consequences reviewers must accept
+- [ ] Alternatives considered is brief or links to detailed research
+- [ ] Consequences state positive impact and trade-offs reviewers must accept
 - [ ] Out of scope is explicit
 - [ ] Approvers table preserved
 - [ ] Consultation note reflects affected teams and expertise

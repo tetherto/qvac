@@ -24,11 +24,11 @@ How do we plan on solving it. This can be case by case: the solution can include
 
 ### Alternatives considered
 
-What other options did we consider, including the existing option, and why are we not choosing them.
+What other options did we consider. Keep each alternative to 1-2 sentences, or link to research if there is detailed analysis.
 
-### Trade-offs
+### Consequences
 
-What consequences does the chosen solution create. State what reviewers must accept if this proposal is approved, including what gets better, what gets worse, and what mitigations matter to the decision.
+State the positive impact as well as the trade-offs reviewers must accept. Include mitigations when they affect the decision.
 
 ### Out of scope (optional)
 
