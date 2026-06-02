@@ -14,6 +14,7 @@ const FAKE_MODEL = '/tmp/wan2.1_t2v_1.3B_fp16.safetensors'
 const FAKE_T5XXL = '/tmp/umt5_xxl_fp16.safetensors'
 const FAKE_VAE = '/tmp/wan_2.1_vae.safetensors'
 const FAKE_HIGH_NOISE = '/tmp/wan2.2_t2v_high_noise.safetensors'
+const FAKE_CLIP_VISION = '/tmp/clip_vision_h.safetensors'
 
 // Minimal valid PNG header (24 bytes — magic + IHDR width/height).
 const FAKE_PNG = new Uint8Array([
@@ -53,7 +54,12 @@ function makeRecording () {
 
 function makeWanModel ({ files, config, logger } = {}) {
   return new VideoStableDiffusion({
-    files: files || { model: FAKE_MODEL, t5Xxl: FAKE_T5XXL, vae: FAKE_VAE },
+    files: files || {
+      model: FAKE_MODEL,
+      t5Xxl: FAKE_T5XXL,
+      vae: FAKE_VAE,
+      clipVision: FAKE_CLIP_VISION
+    },
     config: config || { threads: 1 },
     logger: logger || makeQuiet()
   })
@@ -174,26 +180,26 @@ test('run | throws when mode is not a string', async (t) => {
 
 test('run | throws when mode is an unrecognised string', async (t) => {
   const m = makeWanModel()
-  await t.exception.all(m.run({ mode: 'txt2img', prompt: 'hi' }), /'txt2vid' \| 'img2vid' \| 'flf2vid'/)
+  await t.exception.all(m.run({ mode: 'txt2img', prompt: 'hi' }), /'txt2vid' \| 'img2vid'/)
 })
 
 // ─────────────────────────────────────────────────────────────────────
 //  run(): dimension alignment
 // ─────────────────────────────────────────────────────────────────────
 
-test('run | throws when width is not a multiple of 8', async (t) => {
+test('run | throws when width is not a multiple of 16', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: 833, height: 480 }),
-    /width and height must be positive multiples of 8/
+    /width and height must be positive multiples of 16/
   )
 })
 
-test('run | throws when height is not a multiple of 8', async (t) => {
+test('run | throws when height is not a multiple of 16', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: 832, height: 481 }),
-    /width and height must be positive multiples of 8/
+    /width and height must be positive multiples of 16/
   )
 })
 
@@ -201,7 +207,7 @@ test('run | width=NaN is rejected (treated as misaligned)', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: Number.NaN }),
-    /multiples of 8/
+    /multiples of 16/
   )
 })
 
@@ -275,7 +281,7 @@ test('run | rejects null prompt', async (t) => {
 //  pass explicit dims" message.
 // ─────────────────────────────────────────────────────────────────────
 
-// 100x100 PNG header -- both axes off the multiple-of-8 grid.
+// 100x100 PNG header -- both axes off the multiple-of-16 grid.
 const OFFGRID_PNG = new Uint8Array([
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
   0x00, 0x00, 0x00, 0x0D,
@@ -288,20 +294,7 @@ test('run | rejects off-grid init_image when width/height are implicit', async (
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'img2vid', prompt: 'hi', init_image: OFFGRID_PNG }),
-    /init_image dimensions 100x100 must be multiples of 8/
-  )
-})
-
-test('run | rejects off-grid end_image when width/height are implicit', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({
-      mode: 'flf2vid',
-      prompt: 'hi',
-      init_image: FAKE_PNG, // aligned 64x48
-      end_image: OFFGRID_PNG
-    }),
-    /end_image dimensions 100x100 must be multiples of 8/
+    /init_image dimensions 100x100 must be multiples of 16/
   )
 })
 
@@ -313,7 +306,7 @@ test('run | rejects off-grid control_frames[i] with index when dims implicit', a
       prompt: 'hi',
       control_frames: [FAKE_PNG, OFFGRID_PNG, FAKE_JPEG]
     }),
-    /control_frames\[1\] dimensions 100x100 must be multiples of 8/
+    /control_frames\[1\] dimensions 100x100 must be multiples of 16/
   )
 })
 
@@ -328,8 +321,8 @@ test('run | accepts off-grid init_image when caller passes explicit aligned widt
       mode: 'img2vid',
       prompt: 'hi',
       init_image: OFFGRID_PNG,
-      width: 104,
-      height: 104
+      width: 112,
+      height: 112
     }),
     /Addon not initialized/
   )
@@ -453,7 +446,7 @@ test('run | accepts moe_boundary at the endpoints (0 and 1)', async (t) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────
-//  run(): init_image / end_image
+//  run(): init_image
 // ─────────────────────────────────────────────────────────────────────
 
 test('run | rejects non-Uint8Array init_image', async (t) => {
@@ -464,37 +457,11 @@ test('run | rejects non-Uint8Array init_image', async (t) => {
   )
 })
 
-test('run | rejects non-Uint8Array end_image', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({
-      mode: 'flf2vid',
-      prompt: 'hi',
-      init_image: FAKE_PNG,
-      end_image: 'not-a-buffer'
-    }),
-    /end_image must be a Uint8Array/
-  )
-})
-
 test('run | rejects empty init_image buffer', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'img2vid', prompt: 'hi', init_image: new Uint8Array(0) }),
     /init_image must not be empty/
-  )
-})
-
-test('run | rejects empty end_image buffer', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({
-      mode: 'flf2vid',
-      prompt: 'hi',
-      init_image: FAKE_PNG,
-      end_image: new Uint8Array(0)
-    }),
-    /end_image must not be empty/
   )
 })
 
@@ -522,61 +489,11 @@ test('run | txt2vid rejects init_image', async (t) => {
   )
 })
 
-test('run | txt2vid rejects end_image', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', end_image: FAKE_PNG }),
-    /txt2vid does not accept end_image/
-  )
-})
-
 test('run | img2vid requires init_image', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'img2vid', prompt: 'hi' }),
     /img2vid requires init_image/
-  )
-})
-
-test('run | img2vid rejects end_image (must use flf2vid)', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({
-      mode: 'img2vid',
-      prompt: 'hi',
-      init_image: FAKE_PNG,
-      end_image: FAKE_JPEG
-    }),
-    /end_image is only valid for mode='flf2vid'/
-  )
-})
-
-test('run | flf2vid requires init_image', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'flf2vid', prompt: 'hi', end_image: FAKE_JPEG }),
-    /flf2vid requires init_image/
-  )
-})
-
-test('run | flf2vid requires end_image', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'flf2vid', prompt: 'hi', init_image: FAKE_PNG }),
-    /flf2vid requires end_image/
-  )
-})
-
-test('run | flf2vid passes validation when both frames are provided', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({
-      mode: 'flf2vid',
-      prompt: 'hi',
-      init_image: FAKE_PNG,
-      end_image: FAKE_JPEG
-    }),
-    /Addon not initialized/
   )
 })
 
