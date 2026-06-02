@@ -13,8 +13,8 @@
 namespace vla_backend_selection {
 
 void loadBackendsOnce(const std::string& backendsDir) {
-  static std::once_flag s_flag;
-  std::call_once(s_flag, [&backendsDir]() {
+  static std::once_flag sFlag;
+  std::call_once(sFlag, [&backendsDir]() {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
     if (!backendsDir.empty()) {
       std::filesystem::path p(backendsDir);
@@ -72,7 +72,9 @@ ggml_backend_dev_t pickBestGpuDevice() {
     const std::string backendName = nameRaw ? nameRaw : "";
     std::string backendLower = backendName;
     std::transform(
-        backendLower.begin(), backendLower.end(), backendLower.begin(),
+        backendLower.begin(),
+        backendLower.end(),
+        backendLower.begin(),
         [](unsigned char c) { return std::tolower(c); });
 
     const int adreno = parseAdrenoModel(desc);

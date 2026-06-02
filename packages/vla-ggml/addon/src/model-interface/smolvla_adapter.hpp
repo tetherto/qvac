@@ -22,8 +22,7 @@ public:
   // (mirrors the previous VlaModel constructor behaviour). `forceCpu` and
   // `backendsDir` are forwarded verbatim to `smolvla_load_model`.
   SmolvlaModelAdapter(
-      const std::string& ggufPath,
-      bool forceCpu,
+      const std::string& ggufPath, bool forceCpu,
       const std::string& backendsDir);
 
   ~SmolvlaModelAdapter() override = default;
@@ -37,22 +36,13 @@ public:
   bool hasGpu() const override { return model_->has_gpu; }
 
   bool infer(
-      const float** images,
-      int n_images,
-      int img_width,
-      int img_height,
-      const float* state,
-      int state_dim,
-      const int32_t* lang_tokens,
-      const bool* lang_mask,
-      int lang_len,
-      const float* noise,
-      float* actions_out,
-      int* n_actions_out,
-      VlaTimingGeneric* timing_out) override;
+      const float** images, int nImages, int imgWidth, int imgHeight,
+      const float* state, int stateDim, const int32_t* langTokens,
+      const bool* langMask, int langLen, const float* noise, float* actionsOut,
+      int* nActionsOut, VlaTimingGeneric* timingOut) override;
 
 private:
-  std::unique_ptr<smolvla_model> model_;
+  std::unique_ptr<SmolvlaModel> model_;
   VlaHparamsGeneric hparamsGeneric_{};
 };
 

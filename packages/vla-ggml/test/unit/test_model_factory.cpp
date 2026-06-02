@@ -4,9 +4,8 @@
 #include <stdexcept>
 #include <string>
 
-#include <gtest/gtest.h>
-
 #include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/model_factory.hpp"
 

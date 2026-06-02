@@ -13,11 +13,10 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -26,11 +25,12 @@ namespace {
 
 constexpr int IMAGE_SIZE = 224;
 constexpr int PATCH_SIZE = 14;
-constexpr int N_PATCHES = (IMAGE_SIZE / PATCH_SIZE) * (IMAGE_SIZE / PATCH_SIZE); // 256
+constexpr int N_PATCHES =
+    (IMAGE_SIZE / PATCH_SIZE) * (IMAGE_SIZE / PATCH_SIZE); // 256
 constexpr int HIDDEN = 1152;
 constexpr int N_HEADS = 16;
-constexpr int N_BLOCKS = 27;     // SigLIP-So400m/14 depth
-constexpr int PROJ_DIM = 2048;   // VLM input width
+constexpr int N_BLOCKS = 27;   // SigLIP-So400m/14 depth
+constexpr int PROJ_DIM = 2048; // VLM input width
 constexpr float LAYER_NORM_EPS = 1e-6f;
 
 const char* envOrNull(const char* name) {
@@ -115,8 +115,8 @@ TEST(Pi05M3_3, SiglipFullTowerMatchesPytorch) {
   const std::vector<float> images_all = fixture.readF32("fixture.images");
   const size_t per_cam = 3 * IMAGE_SIZE * IMAGE_SIZE;
   ASSERT_GE(images_all.size(), per_cam);
-  std::vector<float> cam0_image(images_all.begin(),
-                                 images_all.begin() + per_cam);
+  std::vector<float> cam0_image(
+      images_all.begin(), images_all.begin() + per_cam);
   const std::vector<float> expected =
       activations.readF32("vision.head_out[cam0]");
   ASSERT_EQ(expected.size(), static_cast<size_t>(N_PATCHES * PROJ_DIM));
@@ -164,8 +164,8 @@ TEST(Pi05M3_3, SiglipFullTowerMatchesPytorch) {
   ASSERT_NE(ctx_g, nullptr);
 
   // Permute fixture cam0 (C, H, W) → ggml's (W, H, C, N).
-  struct ggml_tensor* pixels = ggml_new_tensor_4d(
-      ctx_g, GGML_TYPE_F32, IMAGE_SIZE, IMAGE_SIZE, 3, 1);
+  struct ggml_tensor* pixels =
+      ggml_new_tensor_4d(ctx_g, GGML_TYPE_F32, IMAGE_SIZE, IMAGE_SIZE, 3, 1);
   std::vector<float> permuted(per_cam);
   for (int c = 0; c < 3; ++c) {
     for (int h = 0; h < IMAGE_SIZE; ++h) {
@@ -184,19 +184,27 @@ TEST(Pi05M3_3, SiglipFullTowerMatchesPytorch) {
 
   using qvac_lib_infer_vla_ggml::pi05BuildSiglipTowerGraph;
   auto out = pi05BuildSiglipTowerGraph(
-      ctx_g, pixels, tw, N_PATCHES, HIDDEN, PROJ_DIM, N_HEADS, PATCH_SIZE,
+      ctx_g,
+      pixels,
+      tw,
+      N_PATCHES,
+      HIDDEN,
+      PROJ_DIM,
+      N_HEADS,
+      PATCH_SIZE,
       LAYER_NORM_EPS);
   ASSERT_NE(out.head_out, nullptr);
 
-  struct ggml_cgraph* gf = ggml_new_graph_custom(
-      ctx_g, /*size=*/8192, /*grads=*/false);
+  struct ggml_cgraph* gf =
+      ggml_new_graph_custom(ctx_g, /*size=*/8192, /*grads=*/false);
   ggml_build_forward_expand(gf, out.head_out);
-  ASSERT_EQ(ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
-            GGML_STATUS_SUCCESS);
+  ASSERT_EQ(
+      ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
+      GGML_STATUS_SUCCESS);
 
   // ── 4. Compare against vision.head_out[cam0]. ─────────────────────────
-  ASSERT_EQ(ggml_nelements(out.head_out),
-            static_cast<int64_t>(N_PATCHES * PROJ_DIM));
+  ASSERT_EQ(
+      ggml_nelements(out.head_out), static_cast<int64_t>(N_PATCHES * PROJ_DIM));
   const float* got = static_cast<const float*>(out.head_out->data);
   const float cos = cosineSim(got, expected.data(), expected.size());
   const float diff = maxAbsDiff(got, expected.data(), expected.size());
@@ -213,8 +221,7 @@ TEST(Pi05M3_3, SiglipFullTowerMatchesPytorch) {
   }
   const float rms_diff =
       static_cast<float>(std::sqrt(sum_sq_diff / expected.size()));
-  std::cerr << "[M3.3] head_out: cos=" << cos
-            << " max_abs_diff=" << diff
+  std::cerr << "[M3.3] head_out: cos=" << cos << " max_abs_diff=" << diff
             << " rms_diff=" << rms_diff
             << " max_abs_expected=" << max_abs_expected
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))

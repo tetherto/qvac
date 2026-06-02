@@ -13,11 +13,10 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -82,8 +81,10 @@ TEST(Pi05M3_2, SiglipBlock0MatchesPytorch) {
   //       output (blk_0.out[cam0]) from the PyTorch reference.
   qvac_vla_safetensors_lite::Reader activations;
   ASSERT_NO_THROW(activations.open(activations_path));
-  const std::vector<float> input = activations.readF32("vision.pos_embed_out[cam0]");
-  const std::vector<float> expected = activations.readF32("vision.blk_0.out[cam0]");
+  const std::vector<float> input =
+      activations.readF32("vision.pos_embed_out[cam0]");
+  const std::vector<float> expected =
+      activations.readF32("vision.blk_0.out[cam0]");
   ASSERT_EQ(input.size(), static_cast<size_t>(N_PATCHES * HIDDEN));
   ASSERT_EQ(expected.size(), static_cast<size_t>(N_PATCHES * HIDDEN));
 
@@ -144,8 +145,9 @@ TEST(Pi05M3_2, SiglipBlock0MatchesPytorch) {
 
   struct ggml_cgraph* gf = ggml_new_graph(ctx_g);
   ggml_build_forward_expand(gf, out);
-  ASSERT_EQ(ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
-            GGML_STATUS_SUCCESS);
+  ASSERT_EQ(
+      ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
+      GGML_STATUS_SUCCESS);
 
   // ── 4. Compare. ─────────────────────────────────────────────────────
   ASSERT_EQ(ggml_nelements(out), static_cast<int64_t>(N_PATCHES * HIDDEN));
@@ -167,8 +169,7 @@ TEST(Pi05M3_2, SiglipBlock0MatchesPytorch) {
   }
   const float rms_diff =
       static_cast<float>(std::sqrt(sum_sq_diff / expected.size()));
-  std::cerr << "[M3.2] blk_0.out: cos=" << cos
-            << " max_abs_diff=" << diff
+  std::cerr << "[M3.2] blk_0.out: cos=" << cos << " max_abs_diff=" << diff
             << " rms_diff=" << rms_diff
             << " max_abs_expected=" << max_abs_expected
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
