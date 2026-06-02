@@ -26,10 +26,14 @@ function coerceParamValue(
       if (Number.isNaN(n) || !Number.isInteger(n)) throw new Error(`invalid integer value: "${trimmed}"`);
       return n;
     }
-    case "boolean":
-      if (trimmed === "true") return true;
-      if (trimmed === "false") return false;
+    case "boolean": {
+      // Qwen3.5/3.6 intermittently emit Python-style capitalised booleans
+      // (`True`/`False`); accept any casing so a valid call isn't dropped.
+      const v = trimmed.toLowerCase();
+      if (v === "true") return true;
+      if (v === "false") return false;
       throw new Error(`invalid boolean value: "${trimmed}"`);
+    }
     case "array":
     case "object":
       return JSON.parse(trimmed);
