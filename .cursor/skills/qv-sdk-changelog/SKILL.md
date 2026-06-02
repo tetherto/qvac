@@ -172,6 +172,41 @@ before committing.
 
 See `.cursor/skills/qv-notice-generate/SKILL.md` for full details.
 
+### Step 7: Sync `@qvac/bare-sdk` (only when `--package=sdk`)
+
+`@qvac/bare-sdk` releases in lockstep with `@qvac/sdk` from the same source
+tree, so every sdk release must also mirror version + shared dep ranges into
+bare-sdk and regenerate bare-sdk's NOTICE. Skip this step for any other
+`--package` value.
+
+Two distinct steps — run them in order:
+
+1. **Mirror `package.json`** via the sync skill (writes only to
+   `packages/bare-sdk/package.json`):
+
+   ```bash
+   node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs
+   cd packages/bare-sdk && bun run check:deps-vs-sdk && cd -
+   ```
+
+2. **Regenerate `packages/bare-sdk/NOTICE`** against the post-sync dep tree
+   (separate from the sync script; uses the existing `qv-notice-generate`
+   skill which requires env tokens):
+
+   ```bash
+   source .env
+   node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk
+   ```
+
+After this, `git status` should additionally show modifications to
+`packages/bare-sdk/package.json` and `packages/bare-sdk/NOTICE`. Include both
+in the release commit. `bare-sdk` does not get its own changelog — its
+release history lives in `packages/sdk/CHANGELOG.md` (see
+`packages/bare-sdk/README.md` → "Release history").
+
+See `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md` for the full sync skill
+spec, including the exclusion lists and what is intentionally NOT mirrored.
+
 ## CLI Parameters
 
 | Flag                            | Required | Description                                                        |
@@ -222,6 +257,7 @@ Before completing:
 - [ ] CHANGELOG_LLM.md generated (mandatory) and follows format guide
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
+- [ ] When `--package=sdk`: `qv-sdk-bare-sdk-sync` run, `check:deps-vs-sdk` passing, bare-sdk NOTICE regenerated
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions
@@ -234,3 +270,4 @@ Before completing:
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
 - NOTICE generation: `.cursor/skills/qv-notice-generate/SKILL.md`
+- sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`

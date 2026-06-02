@@ -82,17 +82,27 @@ function extractCodeBlocks(text) {
 }
 
 /**
- * Extract BEFORE/AFTER examples from text
+ * Extract BEFORE/AFTER examples from a PR body.
  * @param {string} text
  * @returns {string|null}
  */
 function extractBeforeAfter(text) {
-  // Try BEFORE:/AFTER: pattern first
-  const beforeAfterMatch = text.match(
-    /BEFORE:\s*([\s\S]*?)\s*AFTER:\s*([\s\S]*?)(?=\n\n|$)/i,
+  const bcSectionMatch = text.match(
+    /(?:^|\n)##\s*(?:💥\s*)?Breaking Changes\s*\n([\s\S]*?)(?=\n##\s*📦|\n---\s*\n(?:_?Asana|Public docs)|\Z)/im,
+  );
+  const scope = bcSectionMatch ? bcSectionMatch[1] : text;
+
+  const beforeAfterMatch = scope.match(
+    /\*{0,2}BEFORE:\*{0,2}\s*([\s\S]*?)\*{0,2}AFTER:\*{0,2}\s*([\s\S]*)/i,
   );
   if (beforeAfterMatch) {
-    return `**BEFORE:**\n${beforeAfterMatch[1].trim()}\n\n**AFTER:**\n${beforeAfterMatch[2].trim()}`;
+    const before = beforeAfterMatch[1].trim();
+    let after = beforeAfterMatch[2].trim();
+    after = after.replace(/\nPublic docs[\s\S]*$/i, "").trim();
+
+    if (before || after) {
+      return `**BEFORE:**\n${before}\n\n**AFTER:**\n${after}`;
+    }
   }
 
   // Try to find code blocks with // old and // new
