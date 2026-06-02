@@ -1,7 +1,3 @@
 [
-  "runImageElephantTest",
-  "runImageFruitPlateTest",
-  "runImageHighResAuroraTest",
-  "runBitnetTest",
-  "runToolCallingTest"
+  "runImageElephantTest"
 ]

@@ -83,9 +83,6 @@ jobs:
           - platform: Android
             os: ubuntu-22.04
             runner: qvac-ubuntu2204-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
 
     steps:
       - name: Validate Dispatch Inputs

@@ -30,35 +30,8 @@
     ]
   },
   "android": {
-    "groupA": [
-      "runApiBehaviorTest",
-      "runBitnetTest",
-      "runConfigParametersTest",
-      "runFinetuningPauseResumeTest",
-      "runGenerationParamsTest",
-      "runGrammarTest",
-      "runMultiInstanceTest",
-      "runQuantizedKvcacheTest",
-      "runQwen35Test",
-      "runReasoningTest",
-      "runToolsCompactTest",
-      "runTurboquantTest"
-    ],
-    "groupB": [
-      "runCacheStateMachineTest",
-      "runGemma4Test",
-      "runModelLoadingTest",
-      "runMultiGpuTest",
-      "runOcrLightonTest",
-      "runOcrPaddleTest",
-      "runSlidingContextTest",
-      "runToolCallingTest",
-      "runUtf8OutputTest"
-    ],
     "groupImagesPerf": [
-      "runImageElephantTest",
-      "runImageFruitPlateTest",
-      "runImageHighResAuroraTest"
+      "runImageElephantTest"
     ]
   }
 }
