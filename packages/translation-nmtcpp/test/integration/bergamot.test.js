@@ -219,3 +219,298 @@ test('Bergamot backend [CPU] - English to Italian translation', { timeout: TEST_
     }
   }
 })
+
+// ===========================================================================
+// Standalone Bergamot coverage (QVAC-19836)
+//
+// The pivot-bergamot suite already exercises batch, lifecycle, cancel and
+// use-after-unload, but only through the chained PivotTranslationModel — a
+// different C++ path from a single standalone Bergamot model. These tests
+// mirror that coverage on the standalone path, plus the resource-release
+// checks (backend state after unload, multi-cycle stress) that no Bergamot
+// test covers today.
+// ===========================================================================
+
+/**
+ * Builds standalone Bergamot constructor args for the EN->IT model on disk.
+ * Centralises the model/vocab file discovery the per-test bodies share.
+ */
+function createStandaloneBergamotArgs (modelDir, logger, extraConfig = {}) {
+  const allFiles = fs.readdirSync(modelDir)
+  const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
+  const vocabFile = allFiles.find(f => f.includes('.spm'))
+  const fullVocabPath = path.join(modelDir, vocabFile)
+
+  return {
+    files: {
+      model: path.join(modelDir, modelFile),
+      srcVocab: fullVocabPath,
+      dstVocab: fullVocabPath
+    },
+    params: { srcLang: 'en', dstLang: 'it' },
+    config: {
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+      beamsize: 1,
+      normalize: 1,
+      use_gpu: false,
+      ...extraConfig
+    },
+    logger,
+    opts: { stats: true }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// #2 — Standalone batch translation via runBatch()
+//
+// WHY: runBatch() drives the native processBatch path, distinct from run().
+// Apps batch-wrap inputs in production pipelines; only pivot batch is tested
+// today, so a standalone-batch regression would ship uncaught.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - standalone batch translation via runBatch()', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+
+    const inputs = ['Hello, how are you?', 'The weather is beautiful today.']
+    const results = await model.runBatch(inputs)
+
+    t.ok(Array.isArray(results), 'batch results should be an array')
+    t.is(results.length, inputs.length, `should return ${inputs.length} translations`)
+    for (let i = 0; i < results.length; i++) {
+      t.ok(typeof results[i] === 'string', `result[${i}] should be a string`)
+      t.ok(results[i].length > 0, `result[${i}] should not be empty`)
+      t.comment(`  "${inputs[i]}" -> "${results[i]}"`)
+    }
+    t.pass('Standalone Bergamot batch translation completed')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #4 — Load -> use -> unload -> reload -> use cycle
+//
+// WHY: Apps that swap models or recover from errors rely on reload working.
+// If unload corrupts internal state, the second translation breaks with no
+// clear error. Only the pivot model proves this today.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - load, unload, reload cycle', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+
+    await model.load()
+    t.pass('First load succeeded')
+
+    const response1 = await model.run('The meeting starts at 10 AM.')
+    let output1 = ''
+    await response1.onUpdate(data => { output1 += data }).await()
+    t.ok(output1.length > 0, `First translation produced output: "${output1}"`)
+
+    await model.unload()
+    t.pass('Unload succeeded')
+
+    await model.load()
+    t.pass('Reload succeeded')
+
+    const response2 = await model.run('Please pass the salt.')
+    let output2 = ''
+    await response2.onUpdate(data => { output2 += data }).await()
+    t.ok(output2.length > 0, `Second translation after reload produced output: "${output2}"`)
+
+    t.pass('Load -> unload -> reload cycle completed successfully')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #6 — run() after unload() must throw, not crash
+//
+// WHY: Use-after-teardown is a common integrator mistake. It must surface a
+// clear error rather than a segfault that takes down the whole app.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - run after unload throws', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+    await model.unload()
+
+    try {
+      await model.run('Hello')
+      t.fail('Expected run() after unload to throw')
+    } catch (e) {
+      t.ok(e, 'run() after unload threw an error')
+      t.comment('Error message: ' + e.message)
+      t.pass('Unloaded model correctly rejects run()')
+    }
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #8 — backend introspection reports 'Unloaded'/'' after unload
+//
+// WHY: This is the cheapest probe that the native backend was actually
+// released (not just a JS flag flipped). If getActiveBackendName() still
+// reports a live backend after unload, GPU/native resources are leaking.
+// getActiveBackendDescription() is checked alongside it so both public
+// backend-introspection getters are proven to reset on teardown.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - backend reports Unloaded after unload', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+
+    const loadedBackend = model.getActiveBackendName()
+    t.comment(`Backend while loaded: ${loadedBackend}`)
+    t.comment(`Backend description while loaded: "${model.getActiveBackendDescription()}"`)
+    t.not(loadedBackend, 'Unloaded', 'backend should not report Unloaded while loaded')
+
+    await model.unload()
+
+    t.is(model.getActiveBackendName(), 'Unloaded', 'backend reports Unloaded after unload')
+    t.is(model.getActiveBackendDescription(), '', 'backend description is empty after unload')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #9 — Streaming onUpdate fires at least once
+//
+// WHY: The SDK asserts >=1 streamed token; the addon only checks non-empty.
+// A broken streaming pipe would ship green here and break any UI that shows
+// incremental progress (typing indicator).
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - streaming onUpdate fires at least once', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+
+    let updateCount = 0
+    let output = ''
+    const response = await model.run('Good morning, how are you?')
+    await response.onUpdate(data => { updateCount++; output += data }).await()
+
+    t.ok(updateCount >= 1, `onUpdate fired ${updateCount} time(s) (expected >= 1)`)
+    t.ok(output.length > 0, 'streamed output is not empty')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #10 — Stats object has the expected shape
+//
+// WHY: The SDK reads stats.totalTokens and a timing field. The addon only
+// logs stats today; a shape regression would break SDK consumers that parse
+// it. We assert shape only — never specific values (hardware varies).
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - stats object has expected shape', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+
+    const response = await model.run('Hello world')
+    await response.onUpdate(() => {}).await()
+
+    const stats = response.stats
+    t.ok(stats && typeof stats === 'object', 'stats is an object')
+    t.comment('Stats keys: ' + Object.keys(stats || {}).join(', '))
+    t.ok(typeof stats.totalTokens === 'number', 'stats.totalTokens is a number')
+    const hasTiming = typeof stats.totalTime === 'number' ||
+      typeof stats.decodeTime === 'number' ||
+      Object.keys(stats).some(k => k.endsWith('TPS'))
+    t.ok(hasTiming, 'stats has a timing field (totalTime/decodeTime/TPS)')
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #14 — Multi-cycle load/unload stress (accumulation leak catcher)
+//
+// WHY: A small per-unload leak passes a single cycle but crashes mobile on a
+// later load (pool exhaustion). The existing C++ test does 2 cycles; this
+// does enough to surface accumulation. On mobile we add a short settle wait
+// so the allocator can reclaim pages before the next load.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  const CYCLES = 6
+
+  for (let i = 1; i <= CYCLES; i++) {
+    let model
+    const started = Date.now()
+    try {
+      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+      await model.load()
+
+      const response = await model.run('Thank you very much')
+      let output = ''
+      await response.onUpdate(data => { output += data }).await()
+      t.ok(output.length > 0, `cycle ${i}/${CYCLES} produced output`)
+    } finally {
+      if (model) {
+        try { await model.unload() } catch (e) {
+          t.comment(`cycle ${i} unload error: ${e.message}`)
+        }
+      }
+    }
+    t.comment(`cycle ${i}/${CYCLES} completed in ${Date.now() - started}ms`)
+
+    // Mobile allocators (Android Scudo) need a moment to reclaim pages
+    // before the next load, otherwise a fresh allocation can abort.
+    if (isMobile) {
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+  }
+
+  t.pass(`Completed ${CYCLES} load/unload cycles without failure`)
+})
