@@ -6,8 +6,8 @@ The SDK test suite is split into three clearly separated buckets. Each bucket ha
 
 | Bucket | Runtime | Framework | Location | Command |
 |--------|---------|-----------|----------|---------|
-| **Unit** | Bun / Node | brittle | `test/unit/` | `npm run test:unit` |
-| **Server (Bare)** | Bare | brittle | `test/bare/` | `npm run test:bare` |
+| **Unit** | Bun / Node | brittle | `test/unit/` | `bun run test:unit` |
+| **Server (Bare)** | Bare | brittle | `test/bare/` | `bun run test:bare` |
 | **Client (consumer)** | Node (desktop) / RN (mobile) | @tetherto/qvac-test-suite | `e2e/` | See [below](#e2e--clientconsumer-e2e-tests) |
 
 ## Where new tests must land
@@ -40,7 +40,7 @@ Tests that exercise **server-side code requiring the Bare runtime** — addon pl
 - Tests addon plugin manifests or handlers (`@/server/bare/plugins/*`)
 - Requires native addon bindings that only resolve in Bare
 
-**How it runs:** TypeScript is compiled to JS via `tsc`, `@/` aliases are resolved, then each `.test.js` file runs under `brittle-bare`.
+**How it runs:** TypeScript is compiled to JS via `tsc`, `@/` aliases are resolved via `tsc-alias`, then `brittle-make-test` generates an entrypoint (`all.mjs`) and `brittle-bare` runs it.
 
 ### `e2e/` — Client/consumer e2e tests
 
@@ -59,16 +59,16 @@ See [e2e/README.md](./e2e/README.md) for the full structure and local run instru
 
 ```bash
 # Unit tests (Bun/Node)
-npm run test:unit
+bun run test:unit
 
 # Bare runtime tests
-npm run test:bare
+bun run test:bare
 
 # Security tests (subset of unit tests, path-traversal/path-security)
-npm run test:security
+bun run test:security
 
 # Security tests under Bare (same tests compiled and run via brittle-bare)
-npm run test:security:bare
+bun run test:security:bare
 ```
 
 For client e2e tests, see [e2e/README.md](./e2e/README.md).

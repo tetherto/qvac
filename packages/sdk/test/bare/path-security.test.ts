@@ -30,7 +30,6 @@ test("validateAndJoinPath: neutralizes traversal", async (t) => {
 
 test("validateAndJoinPath: throws on null byte", async (t) => {
   const { validateAndJoinPath } = await import("@/server/utils/path-security");
-  // @ts-ignore brittle exception signature
   t.exception(() => validateAndJoinPath("/base/dir", "foo\0bar.gguf"));
 });
 
