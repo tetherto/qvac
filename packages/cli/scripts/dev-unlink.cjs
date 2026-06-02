@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Restores packages/cli/package.json to its committed state and re-runs
 // `npm install`. Use after `npm run dev:link` (or any other ad-hoc local
-// dep swap) when you want to get back to the canonical `file:../sdk` wiring
+// dep swap) when you want to get back to the committed `@qvac/sdk` dependency
 // before committing.
 //
 // The committed state is the source of truth for what `npm publish` checks
