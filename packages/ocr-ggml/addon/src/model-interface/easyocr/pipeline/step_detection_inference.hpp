@@ -26,13 +26,13 @@
 #include "model-interface/OcrLazyInitializeBackend.hpp"
 #include "steps.hpp"
 
+// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 using ggml_backend_t = struct ggml_backend*;
 using ggml_gallocr_t = struct ggml_gallocr*;
 struct ggml_cgraph;
 struct ggml_context;
 struct ggml_tensor;
 
-// NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 // StepDetectionInference header uses snake_case (gguf_path) to mirror the
 // upstream EasyOCR API and contains CRAFT magic numbers (mag_ratio=1.5,
 // warmup_per_tap=1, runs_per_tap=3).
@@ -97,6 +97,10 @@ public:
   using Input = PipelineContext;
   using Output = StepDetectionInferenceOutput;
 
+  // Default detection canvas cap (EasyOCR `canvas_size`), matching
+  // @qvac/ocr-onnx and EasyOCR.
+  static constexpr int kDefaultCanvasSize = 2560;
+
   // nThreads:
   //   - 0 (default): auto-detect via
   //     `easyocr::ggml::pipeline::defaultPhysicalThreadCount()`.  On x86
@@ -108,10 +112,16 @@ public:
   //   - <0:          leave the GGML CPU backend's built-in default
   //                  unchanged (escape hatch for thread-scaling
   //                  experiments).
+  // maxImageSize is EasyOCR's `canvas_size`: the cap (long side, px) applied
+  // after magRatio scaling. It bounds the CRAFT graph's peak compute buffer
+  // (which scales with canvas area). Default 2560 matches @qvac/ocr-onnx and
+  // EasyOCR; lower it on memory-constrained targets (e.g. mobile) to avoid the
+  // dense-page OOM in QVAC-19340. Values <= 0 fall back to the 2560 default.
   explicit StepDetectionInference(
       // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
       const std::string& gguf_path, float magRatio = 1.5F, int nThreads = 0,
-      const std::string& backendsDir = "");
+      const std::string& backendsDir = "",
+      int maxImageSize = kDefaultCanvasSize);
   ~StepDetectionInference();
 
   StepDetectionInference(const StepDetectionInference&) = delete;
@@ -181,6 +191,7 @@ private:
   void destroyGraph();
 
   float magRatio_;
+  int maxImageSize_;                 // EasyOCR canvas_size cap; see ctor docs
   OcrBackendsHandle backendsHandle_; // must be declared before backend_
   ggml_backend_t backend_ = nullptr;
   std::unique_ptr<GgufLoader> loader_;

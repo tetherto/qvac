@@ -39,6 +39,11 @@ async function getRuntimeContext(): Promise<RuntimeContext> {
   return cachedRuntimeContext;
 }
 
+// No child-process exit on Expo (Worklet lifecycle) — `#rpc` interface stub.
+export function getWorkerLifeSignal(): AbortSignal | null {
+  return null;
+}
+
 export async function getRPC() {
   if (rpcInstance) {
     return rpcInstance;

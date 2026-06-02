@@ -285,6 +285,60 @@ export class CompletionFailedError extends QvacErrorBase {
   }
 }
 
+/**
+ * Thrown when the prompt exceeds the loaded model's configured context
+ * window — distinct from a generic `CompletionFailedError` so consumers
+ * can drive UX (truncate, summarize, or surface a "increase ctx_size /
+ * start a new thread" CTA) instead of treating it as an opaque failure.
+ *
+ * Carries the addon-reported prompt size and the model's context window
+ * when the addon's error message includes them (the C++ overflow paths
+ * in `TextLlmContext.cpp` and `MtmdLlmContext.cpp` format both numbers
+ * into the message; the bare `processPromptImpl: context overflow`
+ * fallback in `LlamaModel.cpp` carries neither — both fields are
+ * therefore optional). `modelId` is supplied by the server-side handler
+ * that wraps the addon error.
+ *
+ * Round-trips the RPC boundary via the typed-error reconstructor in
+ * `client/rpc/rpc-error.ts`, so `err instanceof ContextOverflowError`
+ * works on the consumer side.
+ */
+export class ContextOverflowError extends QvacErrorBase {
+  readonly promptTokens?: number;
+  readonly ctxSize?: number;
+  readonly modelId?: string;
+
+  constructor(
+    promptTokens?: number,
+    ctxSize?: number,
+    modelId?: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW,
+        [
+          promptTokens !== undefined ? String(promptTokens) : "",
+          ctxSize !== undefined ? String(ctxSize) : "",
+          modelId ?? "",
+        ],
+        cause,
+      ),
+    );
+    if (promptTokens !== undefined) this.promptTokens = promptTokens;
+    if (ctxSize !== undefined) this.ctxSize = ctxSize;
+    if (modelId !== undefined) this.modelId = modelId;
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return {
+      ...(this.promptTokens !== undefined && { promptTokens: this.promptTokens }),
+      ...(this.ctxSize !== undefined && { ctxSize: this.ctxSize }),
+      ...(this.modelId !== undefined && { modelId: this.modelId }),
+    };
+  }
+}
+
 export class AttachmentNotFoundError extends QvacErrorBase {
   constructor(path: string, cause?: unknown) {
     super(

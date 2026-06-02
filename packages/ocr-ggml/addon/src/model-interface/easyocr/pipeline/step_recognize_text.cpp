@@ -49,7 +49,7 @@
 #include "model-interface/easyocr/gguf_loader.hpp"
 #include "qlog.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,readability-identifier-naming,readability-identifier-length,hicpp-use-auto,modernize-use-auto,bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast,modernize-use-integer-sign-comparison)
 // DSP / inference inner loops use raw pointer arithmetic on cv::Mat /
 // std::vector row buffers, single-letter math identifiers, and
 // architecture-defined magic numbers from upstream EasyOCR.
@@ -62,10 +62,13 @@ namespace {
 
 // model_height and imgH in python
 // specific per recognizer model. Not an API option
-// Upper bound on the CRNN ggml node budget passed to ggml_new_graph_custom
-// in ggml_run_one_T / ggml_run_recognizer_t. Deliberately oversized; the
-// real CRNN gen-2 graph stays well below this.
-constexpr size_t kCrnnRunGraphSize = static_cast<size_t>(32) * 1024;
+// Lower bound on the CRNN ggml node budget passed to ggml_new_graph_custom
+// in ggml_run_one_T / ggml_run_recognizer_t. The LSTM unroll is linear in
+// the recognizer time dimension, so very wide crops need a larger budget.
+constexpr size_t kMinCrnnRunGraphSize = static_cast<size_t>(32) * 1024;
+constexpr size_t kCrnnRunGraphBaseSize = static_cast<size_t>(4) * 1024;
+constexpr size_t kCrnnRunGraphNodesPerTimestep = 256;
+constexpr int kCrnnWidthDownsample = 4;
 
 constexpr int RECOGNIZER_MODEL_HEIGHT = 64;
 
@@ -327,6 +330,25 @@ int calculateProportionalWidth(int width, int height) {
   float ratio = static_cast<float>(width) / static_cast<float>(height);
   int newWidth = static_cast<int>(std::ceil(RECOGNIZER_MODEL_HEIGHT * ratio));
   return std::max(1, newWidth); // Ensure at least 1 pixel width
+}
+
+size_t crnnGraphSizeForWidth(int width) {
+  if (width <= 0) {
+    throw std::runtime_error("CRNN recognizer input width must be positive");
+  }
+
+  // build_crnn_gen2 produces roughly width / 4 timesteps after the feature
+  // extractor. Each timestep unrolls two bidirectional LSTM layers, so the
+  // ggml tensor/node count scales linearly with T. Keep the old 32k floor for
+  // normal crops, but grow the graph budget for very wide text rows instead
+  // of letting ggml abort when the fixed-size graph fills up.
+  const size_t timesteps = std::max<size_t>(
+      1,
+      (static_cast<size_t>(width) + kCrnnWidthDownsample - 1) /
+          kCrnnWidthDownsample);
+  return std::max(
+      kMinCrnnRunGraphSize,
+      kCrnnRunGraphBaseSize + (timesteps * kCrnnRunGraphNodesPerTimestep));
 }
 
 /**
@@ -718,6 +740,7 @@ StepRecognizeText::StepRecognizeText(
 }
 
 StepRecognizeText::~StepRecognizeText() {
+  destroyRecognizerGraph();
   gen2_weights_.reset();
   loader_.reset();
   if (backend_ != nullptr) {
@@ -1043,113 +1066,107 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
 
 // --- GGML inference helpers --------------------------------------------------
 //
-// Both functions take an [N, 1, H, W] CV_32F input blob, build a fresh
-// `build_crnn_gen2` graph for that exact shape (W is dynamic per
-// call), allocate via ggml_gallocr, run on the
-// (shared) CPU backend, and copy the [N, T, num_classes] logits back into
-// a freshly-owned cv::Mat.
-//
-// Per-call graph rebuild is the ggml-canonical pattern for dynamic shapes
-// and is fast (sub-ms graph construction; the heavy lifting is the
-// compute itself).
+// build_crnn_gen2 currently collapses the batch axis at the AAP stage, so a
+// batch is still computed one image at a time and the [T, classes] logits are
+// stacked into a [N, T, classes] cv::Mat. The graph topology is identical for
+// all images with the same (height, width), so StepRecognizeText caches the
+// ggml context / graph / allocator / I/O tensors and only swaps input bytes
+// between computes.
 
-namespace {
+void StepRecognizeText::destroyRecognizerGraph() {
+  if (recognizerGraphCache_.gallocr != nullptr) {
+    ggml_gallocr_free(recognizerGraphCache_.gallocr);
+    recognizerGraphCache_.gallocr = nullptr;
+  }
+  if (recognizerGraphCache_.gctx != nullptr) {
+    ggml_free(recognizerGraphCache_.gctx);
+    recognizerGraphCache_.gctx = nullptr;
+  }
+  recognizerGraphCache_.graph = nullptr;
+  recognizerGraphCache_.input = nullptr;
+  recognizerGraphCache_.output = nullptr;
+  recognizerGraphCache_.height = 0;
+  recognizerGraphCache_.width = 0;
+  recognizerGraphCache_.graphSize = 0;
+  recognizerGraphCache_.ctxBuf.clear();
+}
 
-// Templated single-image runner.
-// Returns a [T, num_classes] cv::Mat.
-template <class W>
-cv::Mat ggml_run_one_T(
-    ggml_backend_t backend, const W& weights, const float* input_data,
-    int height, int width, size_t graph_size);
+void StepRecognizeText::ensureRecognizerGraph(
+    int height, int width, size_t graphSize) {
+  if (recognizerGraphCache_.gctx != nullptr &&
+      recognizerGraphCache_.height == height &&
+      recognizerGraphCache_.width == width &&
+      recognizerGraphCache_.graphSize == graphSize) {
+    return;
+  }
 
-template <>
-cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
-    ggml_backend_t backend, const easyocr::ggml::CrnnGen2Weights& weights,
-    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    const float* input_data, int height, int width, size_t graph_size) {
-  const size_t graph_ctx_size = (ggml_tensor_overhead() * graph_size) +
-                                ggml_graph_overhead_custom(graph_size, false);
-  std::vector<uint8_t> graph_buf(graph_ctx_size);
+  destroyRecognizerGraph();
+
+  const size_t graphCtxSize = (ggml_tensor_overhead() * graphSize) +
+                              ggml_graph_overhead_custom(graphSize, false);
+  recognizerGraphCache_.ctxBuf.assign(graphCtxSize, 0);
   ggml_init_params init{
-      .mem_size = graph_ctx_size,
-      .mem_buffer = graph_buf.data(),
+      .mem_size = graphCtxSize,
+      .mem_buffer = recognizerGraphCache_.ctxBuf.data(),
       .no_alloc = true,
   };
-  ggml_context* gctx = ggml_init(init);
-  auto* x = ggml_new_tensor_4d(gctx, GGML_TYPE_F32, width, height, 1, 1);
-  auto* out = easyocr::ggml::build_crnn_gen2(gctx, weights, x, nullptr);
-  ggml_set_output(out);
-  auto* gf = ggml_new_graph_custom(gctx, graph_size, false);
-  ggml_build_forward_expand(gf, out);
-  auto* gallocr =
-      ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-  if (!ggml_gallocr_alloc_graph(gallocr, gf)) {
-    ggml_gallocr_free(gallocr);
-    ggml_free(gctx);
+
+  recognizerGraphCache_.gctx = ggml_init(init);
+  recognizerGraphCache_.input = ggml_new_tensor_4d(
+      recognizerGraphCache_.gctx, GGML_TYPE_F32, width, height, 1, 1);
+  recognizerGraphCache_.output = easyocr::ggml::build_crnn_gen2(
+      recognizerGraphCache_.gctx,
+      *gen2_weights_,
+      recognizerGraphCache_.input,
+      nullptr);
+  ggml_set_output(recognizerGraphCache_.output);
+
+  recognizerGraphCache_.graph =
+      ggml_new_graph_custom(recognizerGraphCache_.gctx, graphSize, false);
+  ggml_build_forward_expand(
+      recognizerGraphCache_.graph, recognizerGraphCache_.output);
+
+  recognizerGraphCache_.gallocr =
+      ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend_));
+  if (!ggml_gallocr_alloc_graph(
+          recognizerGraphCache_.gallocr, recognizerGraphCache_.graph)) {
+    destroyRecognizerGraph();
     throw std::runtime_error(
         "StepRecognizeText: ggml_gallocr_alloc_graph failed");
   }
-  ggml_backend_tensor_set(x, input_data, 0, ggml_nbytes(x));
-  if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
-    ggml_gallocr_free(gallocr);
-    ggml_free(gctx);
+
+  recognizerGraphCache_.height = height;
+  recognizerGraphCache_.width = width;
+  recognizerGraphCache_.graphSize = graphSize;
+}
+
+cv::Mat StepRecognizeText::runRecognizerOneCached(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    const float* inputData, int height, int width, size_t graphSize) {
+  ensureRecognizerGraph(height, width, graphSize);
+  ggml_backend_tensor_set(
+      recognizerGraphCache_.input,
+      inputData,
+      0,
+      ggml_nbytes(recognizerGraphCache_.input));
+
+  if (ggml_backend_graph_compute(backend_, recognizerGraphCache_.graph) !=
+      GGML_STATUS_SUCCESS) {
     throw std::runtime_error(
         "StepRecognizeText: ggml_backend_graph_compute failed");
   }
-  const int num_classes = static_cast<int>(out->ne[0]);
-  const int T = static_cast<int>(out->ne[1]);
-  cv::Mat preds(T, num_classes, CV_32F);
-  ggml_backend_tensor_get(out, preds.ptr<float>(), 0, ggml_nbytes(out));
-  ggml_gallocr_free(gallocr);
-  ggml_free(gctx);
+
+  const int numClasses = static_cast<int>(recognizerGraphCache_.output->ne[0]);
+  const int numTimesteps =
+      static_cast<int>(recognizerGraphCache_.output->ne[1]);
+  cv::Mat preds(numTimesteps, numClasses, CV_32F);
+  ggml_backend_tensor_get(
+      recognizerGraphCache_.output,
+      preds.ptr<float>(),
+      0,
+      ggml_nbytes(recognizerGraphCache_.output));
   return preds;
 }
-
-// build_crnn_gen2 currently collapses the batch axis at the AAP
-// stage, so we run one image at a time and stack the results.  Future
-// optimisation: keep the batch axis through AAP so we can do one graph
-// for the whole batch.
-template <class W>
-cv::Mat ggml_run_recognizer_t(
-    ggml_backend_t backend, const W& weights, const float* input_data,
-    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    int batch_size, int height, int width, size_t graph_size) {
-  if (batch_size <= 0) {
-    return {};
-  }
-
-  cv::Mat first = ggml_run_one_T<W>(
-      backend, weights, input_data, height, width, graph_size);
-  const int T = first.rows;
-  const int num_classes = first.cols;
-  // Stride matches batchBuffer_ layout in runBatchInference: numChannels is
-  // fixed at 1 today but kept explicit so any future channel change is loud.
-  constexpr int kPerImgChannels = 1;
-  const size_t per_img_floats =
-      static_cast<size_t>(kPerImgChannels) * height * width;
-  const size_t per_img_logits = static_cast<size_t>(T) * num_classes;
-
-  std::array<int, 3> dims = {batch_size, T, num_classes};
-  cv::Mat preds(3, dims.data(), CV_32F);
-  std::memcpy(
-      preds.ptr<float>(), first.ptr<float>(), per_img_logits * sizeof(float));
-  for (int b = 1; b < batch_size; ++b) {
-    cv::Mat one = ggml_run_one_T<W>(
-        backend,
-        weights,
-        input_data + (b * per_img_floats),
-        height,
-        width,
-        graph_size);
-    std::memcpy(
-        preds.ptr<float>() + (b * per_img_logits),
-        one.ptr<float>(),
-        per_img_logits * sizeof(float));
-  }
-  return preds;
-}
-
-} // unnamed namespace
 
 cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
   int height = img.rows;
@@ -1159,14 +1176,8 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
   CV_Assert(img.isContinuous());
   CV_Assert(img.type() == CV_32F);
 
-  return ggml_run_recognizer_t(
-      backend_,
-      *gen2_weights_,
-      img.ptr<float>(),
-      /*batch_size=*/1,
-      height,
-      width,
-      /*graph_size=*/kCrnnRunGraphSize);
+  return runRecognizerOneCached(
+      img.ptr<float>(), height, width, crnnGraphSizeForWidth(width));
 }
 
 cv::Mat StepRecognizeText::runBatchInference(
@@ -1201,14 +1212,30 @@ cv::Mat StepRecognizeText::runBatchInference(
     std::memcpy(destPtr, imgPtr, sizeof(float) * height * width);
   }
 
-  cv::Mat preds = ggml_run_recognizer_t(
-      backend_,
-      *gen2_weights_,
-      batchBuffer_.data(),
-      batchSize,
-      height,
-      width,
-      kCrnnRunGraphSize);
+  const size_t graphSize = crnnGraphSizeForWidth(width);
+  cv::Mat first =
+      runRecognizerOneCached(batchBuffer_.data(), height, width, graphSize);
+  const int numTimesteps = first.rows;
+  const int numClasses = first.cols;
+  const size_t perImageFloats =
+      static_cast<size_t>(numChannels) * height * width;
+  const size_t perImageLogits = static_cast<size_t>(numTimesteps) * numClasses;
+
+  std::array<int, 3> dims = {batchSize, numTimesteps, numClasses};
+  cv::Mat preds(3, dims.data(), CV_32F);
+  std::memcpy(
+      preds.ptr<float>(), first.ptr<float>(), perImageLogits * sizeof(float));
+  for (int b = 1; b < batchSize; ++b) {
+    cv::Mat one = runRecognizerOneCached(
+        batchBuffer_.data() + (static_cast<size_t>(b) * perImageFloats),
+        height,
+        width,
+        graphSize);
+    std::memcpy(
+        preds.ptr<float>() + (static_cast<size_t>(b) * perImageLogits),
+        one.ptr<float>(),
+        perImageLogits * sizeof(float));
+  }
 
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs =
@@ -1492,4 +1519,4 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
 
 } // namespace easyocr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,readability-identifier-naming,readability-identifier-length,hicpp-use-auto,modernize-use-auto,bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast,modernize-use-integer-sign-comparison)

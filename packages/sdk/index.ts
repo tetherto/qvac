@@ -98,6 +98,7 @@ export {
   type RagSaveStage,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
+  RAG_ERROR_CODES,
   type QvacConfig,
   type ModelInfo,
   type GetModelInfoParams,
@@ -191,10 +192,20 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 export { InferenceCancelledError } from "./utils/errors-server";
 export type { InferenceCancelledPartial } from "./utils/errors-server";
 export {
+  ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
 } from "./utils/errors-server";
+
+// `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
+// rpc-client life-signal race when the bare worker exits unexpectedly
+// or close()/process-exit teardown runs while a caller is in flight.
+// Exported so consumers can pattern-match with `instanceof`.
+export {
+  WorkerCrashedError,
+  WorkerShutdownError,
+} from "./utils/errors-client";
 
 // Logging exports
 export { getLogger, SDK_LOG_ID } from "./logging";

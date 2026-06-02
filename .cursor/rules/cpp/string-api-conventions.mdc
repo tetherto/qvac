@@ -1,0 +1,43 @@
+---
+description: Enforce C++ string parameter conventions for efficient addon APIs
+globs:
+  - packages/**/*.{h,hpp,hh,hxx,c,cc,cpp,cxx}
+alwaysApply: false
+---
+
+# C++ String API Conventions
+
+Apply these conventions when editing C++ interfaces and call sites.
+
+## Rules
+
+- Prefer `std::string_view` for read-only string inputs when ownership is not required and null termination is not required.
+- Prefer `std::string&&` for true sink parameters (callee unconditionally stores/owns the string). Move into storage with `std::move`.
+- Use `const std::string&` when integrating with downstream APIs that already require string-reference semantics.
+- Use `const char*` at C API / null-terminated boundaries where ownership is not needed.
+- For string-keyed unordered maps in addon code, prefer `TransparentStringMap` to enable heterogeneous lookup without temporary key allocation.
+
+## Review checklist
+
+- Is any read-only `const std::string&` parameter better as `std::string_view`?
+- Is any sink currently modeled as `const std::string&` + copy instead of `std::string&&` + move?
+- Does any `std::string_view` cross a boundary that requires `const std::string&` or `const char*`?
+  - If yes, expose the stricter requirement at the right interface layer to avoid hidden redundant conversions.
+- Is any `view.data()` passed to C APIs without guaranteed null termination?
+- Is any map lookup constructing `std::string{view}` unnecessarily where transparent lookup is available?
+
+## Quick examples
+
+```cpp
+// GOOD: read-only
+bool hasModel(std::string_view id);
+
+// GOOD: sink
+void setModelId(std::string&& id) { modelId_ = std::move(id); }
+
+// AVOID: hidden temporary for map lookup
+auto it = counts.find(std::string{keyView});
+```
+
+Reference: `docs/conventions/string-api-conventions.md`
+
