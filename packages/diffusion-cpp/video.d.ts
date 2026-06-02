@@ -26,8 +26,9 @@ export interface VideoDiffusionFiles {
   vae?: string
   /**
    * Absolute path to `clip_vision_h.safetensors` (OpenCLIP ViT-H/14).
-   * Required for `img2vid`; omit for pure `txt2vid`. The JS wrapper warns
-   * loudly when an `img2vid` job is dispatched without this file.
+   * Required for `img2vid`; omit for pure `txt2vid`. Dispatching an `img2vid`
+   * job without this file throws from `run()` (the native path cannot build
+   * the `img_emb` projection without ViT-H/14).
    */
   clipVision?: string
   /**
@@ -63,7 +64,7 @@ export interface VideoGenerationParams {
   negative_prompt?: string
 
   /**
-   * Video dimensions (multiples of 8). Default `480 x 832` portrait
+   * Video dimensions (multiples of 16). Default `480 x 832` portrait
    * (phone-screen friendly). Wan 2.1 T2V 1.3B is trained on `832 x 480`
    * landscape and handles both orientations equally well -- override
    * either field to switch.

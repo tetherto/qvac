@@ -338,14 +338,15 @@ class VideoStableDiffusion {
     const { mode } = params
     // True when the caller omits both width and height, meaning C++ will infer
     // them from the input image. In that case we pre-validate that the image
-    // header dimensions are on the multiple-of-8 grid so the error message
+    // header dimensions are on the multiple-of-16 grid so the error message
     // names the actual pixels rather than an internal derived value.
     const dimsImplicit = params.width == null && params.height == null
 
-    // ── Dimension alignment (multiples of 8) ─────────────────────────────
-    // Only validate provided dims; C++ falls back to 480x832 (portrait,
-    // phone-screen friendly) when omitted. Override either field for
-    // landscape (832x480 is Wan 1.3B's training res).
+    // ── Dimension alignment (multiples of 16) ────────────────────────────
+    // Wan's spatial compression requires 16-aligned width/height (see
+    // addon.js::_fillDimsFromImage). Only validate provided dims; C++ falls
+    // back to 480x832 (portrait, phone-screen friendly) when omitted. Override
+    // either field for landscape (832x480 is Wan 1.3B's training res).
     const alignTo = 16
     const w = params.width
     const h = params.height

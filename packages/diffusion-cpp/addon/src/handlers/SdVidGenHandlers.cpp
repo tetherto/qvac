@@ -50,15 +50,17 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
      }},
 
     // -- Video dimensions -----------------------------------------------------
-    // Wan uses multiples of 8; the upstream library rounds if we don't.
+    // Wan's spatial compression requires multiples of 16. Enforcing it here
+    // (rather than letting the upstream library round) keeps init_image and
+    // video dimensions consistent and matches the JS wrapper's validation.
 
     {"width",
      [](SdVidGenConfig& c, const picojson::value& v) {
        const int w = requireInt(v, "width");
-       if (w <= 0 || w % 8 != 0)
+       if (w <= 0 || w % 16 != 0)
          throw StatusError(
              general_error::InvalidArgument,
-             "width must be a positive multiple of 8, got: " +
+             "width must be a positive multiple of 16, got: " +
                  std::to_string(w));
        c.width = w;
      }},
@@ -66,10 +68,10 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"height",
      [](SdVidGenConfig& c, const picojson::value& v) {
        const int h = requireInt(v, "height");
-       if (h <= 0 || h % 8 != 0)
+       if (h <= 0 || h % 16 != 0)
          throw StatusError(
              general_error::InvalidArgument,
-             "height must be a positive multiple of 8, got: " +
+             "height must be a positive multiple of 16, got: " +
                  std::to_string(h));
        c.height = h;
      }},
@@ -122,7 +124,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"seed",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.seed = static_cast<int64_t>(requireNum(v, "seed"));
+       c.seed = requireInt64(v, "seed");
      }},
 
     // -- Low-noise expert sample params (single expert for Wan 2.1) ----------

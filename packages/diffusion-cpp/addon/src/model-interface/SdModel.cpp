@@ -17,10 +17,12 @@
 #include "utils/ImageCodec.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/SdErrors.hpp"
 #include "utils/SdVideoFrames.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
+namespace sd_errors = qvac_lib_inference_addon_sd::errors;
 
 // ---------------------------------------------------------------------------
 // Thread-local progress context -- sd progress callbacks are process-global,
@@ -714,10 +716,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   // partial images, so a "successful" completion with output_count=0 would
   // be misleading -- throwing gives the JS caller an explicit cancel signal.
   if (wasCancelled) {
-    throw StatusError(
-        std::string(general_error::GeneralAddonId),
-        "Cancelled",
-        "Job cancelled");
+    throw sd_errors::makeCancelledError();
   }
 
   const auto t1 = std::chrono::steady_clock::now();
@@ -934,10 +933,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // would be misleading. Typed Cancelled status (see image path above for
   // the 3-arg ctor rationale).
   if (cancelRequested_.load()) {
-    throw StatusError(
-        std::string(general_error::GeneralAddonId),
-        "Cancelled",
-        "Job cancelled");
+    throw sd_errors::makeCancelledError();
   }
 
   if (frames.empty())

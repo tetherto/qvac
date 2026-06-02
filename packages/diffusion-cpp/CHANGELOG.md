@@ -13,6 +13,21 @@
 
 `VideoStableDiffusion` was dropped from the package root (`index.js`) when the Wan 2.1 I2V bindings were ported, leaving `require('@qvac/diffusion-cpp').VideoStableDiffusion` `undefined` even though `index.d.ts` still declared it as a named export. Re-export it from the barrel so the root named export matches the type declarations. The subpath entry point (`@qvac/diffusion-cpp/video`) was unaffected and continues to work.
 
+#### Make the video dimension contract consistent (16-aligned end-to-end)
+
+The JS wrapper validated video `width`/`height` as multiples of 16 (Wan's spatial-compression requirement) while the native C++ video handler still enforced multiples of 8 and the TypeScript docs still described 8. A caller could pass dimensions the types/native layer accepted but `VideoStableDiffusion.run()` rejected, and 8-but-not-16 dims could snap inside the addon and trip the `init_image` vs video dimension assertion. The C++ `width`/`height` handlers and `video.d.ts` now both require multiples of 16, matching the JS wrapper.
+
+#### Harden video parameter validation
+
+- `requireRange` now rejects non-finite values (NaN/Inf) before the range comparison, so direct C++ callers can no longer slip `NaN` past min/max checks.
+- Video `seed` now uses `requireInt64` (matching the image path) instead of `static_cast<int64_t>(requireNum(...))`, so fractional/out-of-safe-range seeds are rejected rather than silently truncated.
+- All four diffusion cancellation sites now throw the typed `Diffusion/Cancelled` error via `makeCancelledError()`, so callers see one consistent cancellation shape.
+
+#### Documentation accuracy
+
+- `video.d.ts` now states that an `img2vid` job without `files.clipVision` throws from `run()` (matching the implementation), rather than only "warning loudly".
+- The `SdCtxConfig` preview-callback comment now reflects that the preview options are parsed/validated but not yet wired (no `sd_set_preview_callback()` call), instead of claiming they are forwarded to JS.
+
 ## [0.10.0] - 2026-05-25
 
 ### Changed

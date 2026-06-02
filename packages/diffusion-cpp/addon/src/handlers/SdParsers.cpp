@@ -95,6 +95,12 @@ int64_t requireInt64(const picojson::value& v, const std::string& key) {
 float requireRange(
     const picojson::value& v, const std::string& key, float lo, float hi) {
   const float f = static_cast<float>(requireNum(v, key));
+  // Guard against NaN: both `<` and `>` comparisons are false for NaN, so the
+  // range check below would otherwise let it through to the native layer.
+  if (!std::isfinite(f))
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite number, got: " + std::to_string(f));
   if (f < lo || f > hi)
     throw StatusError(
         general_error::InvalidArgument,

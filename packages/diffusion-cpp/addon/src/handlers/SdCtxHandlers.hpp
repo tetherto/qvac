@@ -112,11 +112,14 @@ struct SdCtxConfig {
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
 
   // -- Preview callback -------------------------------------------------------
-  // Opt-in, ctx-level toggle for mid-denoising preview frames. Wired to
-  // sd_set_preview_callback() in SdModel::process(). When previewMode !=
-  // PREVIEW_NONE, the upstream library fires the preview callback every
-  // previewInterval steps with an intermediate sd_image_t that the addon
-  // forwards to JS as PNG bytes (one event per fire).
+  // Opt-in, ctx-level toggle for mid-denoising preview frames.
+  //
+  // NOTE: These options are currently PARSED AND VALIDATED but NOT YET WIRED.
+  // SdModel does not call sd_set_preview_callback() yet, so setting
+  // previewMode has no effect and no preview events are emitted to JS. The
+  // fields are kept so the config surface is stable for when the callback is
+  // wired up (TODO: forward intermediate sd_image_t frames to JS as PNG
+  // bytes, one event per fire, every previewInterval steps).
   //
   // Modes (preview_t from stable-diffusion.h):
   //   PREVIEW_NONE  -- disabled (default; zero overhead)
