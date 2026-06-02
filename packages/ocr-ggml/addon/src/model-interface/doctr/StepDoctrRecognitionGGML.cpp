@@ -529,15 +529,25 @@ struct StepDoctrRecognitionGGML::Impl {
   std::vector<float> linearWeight;
   std::vector<float> linearBias;
 
-  explicit Impl(const std::string& pathRecognizer) { load(pathRecognizer); }
+  explicit Impl(
+      const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
+    load(pathRecognizer, backendDevice);
+  }
 
-  void load(const std::string& pathRecognizer) {
+  void load(const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
     graph.reset();
-    ggml_backend_dev_t cpuDev =
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-    graph.backend = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
+    ggml_backend_dev_t dev =
+        (backendDevice != nullptr)
+            ? backendDevice
+            : ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    // Only the MobileNetV3 feature-extractor graph runs on this ggml backend.
+    // The downstream bidirectional LSTM and the final linear classifier are
+    // implemented as plain CPU C++ (no ggml graph), so they always execute on
+    // the CPU even when VULKAN is the selected device — that fallback for the
+    // recurrent/linear tail is by design.
+    graph.backend = dev ? ggml_backend_dev_init(dev, nullptr) : nullptr;
     if (graph.backend == nullptr) {
-      raise("failed to initialize ggml CPU backend");
+      raise("failed to initialize ggml backend");
     }
 
     struct ggml_context* ggufGgmlCtx = nullptr;
@@ -968,9 +978,11 @@ private:
 };
 
 StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
-    const std::string& pathRecognizer, int batchSize, DecodingMethod decoding)
-    : impl_(std::make_unique<Impl>(pathRecognizer)), batchSize_(batchSize),
-      decodingMethod_(decoding), vocabChars_(parseVocabToChars(VOCAB)) {
+    const std::string& pathRecognizer, int batchSize, DecodingMethod decoding,
+    ggml_backend_dev_t backendDevice)
+    : impl_(std::make_unique<Impl>(pathRecognizer, backendDevice)),
+      batchSize_(batchSize), decodingMethod_(decoding),
+      vocabChars_(parseVocabToChars(VOCAB)) {
   const std::string decodingStr =
       (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(

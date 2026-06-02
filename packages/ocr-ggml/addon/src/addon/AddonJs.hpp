@@ -196,6 +196,24 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     config.backendsDir = optBackendsDir->as<std::string>(env);
   }
 
+  // Optional opt-in backend device. Default (`BackendDevice::CPU`, set in
+  // OcrTypes.hpp) keeps CPU inference; `'vulkan'` requests a Vulkan-capable
+  // GPU with transparent CPU fallback (see OcrBackendSelection).
+  if (auto optBackendDevice =
+          args1.getOptionalProperty<js::String>(env, "backendDevice");
+      optBackendDevice) {
+    const auto backendDevice = optBackendDevice->as<std::string>(env);
+    if (backendDevice == "vulkan") {
+      config.backendDevice = BackendDevice::VULKAN;
+    } else if (backendDevice == "cpu") {
+      config.backendDevice = BackendDevice::CPU;
+    } else {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "backendDevice must be 'cpu' or 'vulkan'"};
+    }
+  }
+
   // Default matches the JS / TS / CLI / README contract: EasyOCR is the
   // primary pipeline; callers opt in to DocTR explicitly via
   // `params.pipelineType: 'doctr'`. `config.mode` defaults to
@@ -300,6 +318,46 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JsInterface::getInstance(env, args[0])
       .addonCpp->runJob(std::any(std::move(modelInput)));
   return nullptr;
+}
+JSCATCH
+
+// Returns the backend device the pipeline resolved for inference as a JS
+// object: `{ requested, backendDevice, backendName, fallbackReason }`. This is
+// the programmatic surface for the selected ggml backend (RuntimeStats can only
+// carry numbers, so backend identity strings are exposed here). Consumed by
+// `OcrGgml._getDiagnosticsJSON()` and the Vulkan integration test.
+inline js_value_t*
+getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  auto args = js::getArguments(env, info);
+  if (args.size() != 1) {
+    throw StatusError{
+        general_error::InvalidArgument,
+        "Expected 1 parameter (instance handle)"};
+  }
+
+  auto& instance = JsInterface::getInstance(env, args[0]);
+  auto* pipeline = dynamic_cast<Pipeline*>(&instance.addonCpp->model.get());
+  if (pipeline == nullptr) {
+    throw StatusError{
+        general_error::InvalidArgument,
+        "getBackendInfo: instance is not an ocr-ggml Pipeline"};
+  }
+
+  const auto& backendInfo = pipeline->backendInfo();
+  auto result = js::Object::create(env);
+  result.setProperty(
+      env, "requested", js::String::create(env, backendInfo.requested));
+  result.setProperty(
+      env, "backendDevice", js::String::create(env, backendInfo.backendDevice));
+  result.setProperty(
+      env, "backendName", js::String::create(env, backendInfo.backendName));
+  result.setProperty(
+      env,
+      "fallbackReason",
+      js::String::create(env, backendInfo.fallbackReason));
+  return result;
 }
 JSCATCH
 
