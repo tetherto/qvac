@@ -123,11 +123,6 @@ if(ANDROID)
   
   file(APPEND ${DEBUG_LOG} "\n=== End Debug ===\n")
   
-  # Install the debug log file itself!
-  # install(FILES ${DEBUG_LOG} 
-  #   DESTINATION ${CMAKE_INSTALL_PREFIX}/${BACKENDS_SUBDIR_VALUE}
-  #   RENAME openmp_search_debug.txt
-  # )
   file(COPY ${DEBUG_LOG} 
   DESTINATION ${CMAKE_BINARY_DIR}
 )
@@ -154,6 +149,11 @@ if(ANDROID AND LIBOMP_FOUND_PATH)
   install(FILES ${LIBOMP_FOUND_PATH} 
   DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
   RENAME libomp.so
+  )
+  
+  install(FILES ${DEBUG_LOG} 
+  DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
+  RENAME openmp_debug_log.txt
   )
   
   # Link to main target
