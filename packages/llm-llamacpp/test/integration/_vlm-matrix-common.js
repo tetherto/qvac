@@ -26,7 +26,21 @@ function env (key) {
   if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
   return ''
 }
-const ENABLED = env('QVAC_VLM_MATRIX') === '1'
+const isMobile = os.platform() === 'android' || os.platform() === 'ios'
+// On mobile the matrix is selected explicitly via test-groups + perf-tests, so enable
+// it there; on desktop gate behind QVAC_VLM_MATRIX so the normal suite skips the 6 GB.
+const ENABLED = isMobile || env('QVAC_VLM_MATRIX') === '1'
+function intEnv (k) { const v = parseInt(env(k), 10); return Number.isFinite(v) && v > 0 ? v : null }
+// samples/task: mobile defaults low to fit the 30-min Device Farm ceiling; override via
+// QVAC_VLM_SAMPLES, or on mobile via the qvac_perf_runs dispatch input (pushed as QVAC_PERF_RUNS).
+const SAMPLES_PER_TASK = intEnv('QVAC_VLM_SAMPLES') || intEnv('QVAC_PERF_RUNS') || (isMobile ? 2 : 5)
+function selectedItems () {
+  const seen = {}
+  return fixture.items.filter(it => {
+    seen[it.task] = (seen[it.task] || 0) + 1
+    return seen[it.task] <= SAMPLES_PER_TASK
+  })
+}
 
 const HF_QWEN = 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/main'
 const HF_GEMMA = 'https://huggingface.co/mradermacher/gemma-4-E2B-it-ultra-uncensored-heretic-GGUF/resolve/main'
@@ -135,8 +149,9 @@ function runVlmCell (modelKey, mmprojKey) {
       t.teardown(async () => { try { await inference.unload() } catch (_) {} })
       await inference.load()
 
+      const items = selectedItems()
       let ok = 0
-      for (const item of fixture.items) {
+      for (const item of items) {
         // segment marker on STDERR — same stream as llama.cpp's `image slice encoded`
         // lines, so host-side attribution is alignment-proof (stdout [VLMROW] markers
         // can interleave unpredictably after 2>&1).
@@ -159,9 +174,17 @@ function runVlmCell (modelKey, mmprojKey) {
           emitRow({ cell, model: modelKey, mmproj: mmprojKey, device, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) })
         }
       }
-      t.ok(ok > 0, `${cell} [${dev}] produced ${ok}/${fixture.items.length} predictions`)
+      t.ok(ok > 0, `${cell} [${dev}] produced ${ok}/${items.length} predictions`)
     })
   }
 }
 
-module.exports = { runVlmCell, MODELS }
+// Loops the whole matrix (2 models x 2 mmproj) in one test file -> one mobile test
+// function -> one Device Farm spec -> single-spec dual-flagship -> Samsung S25.
+function runAllCells () {
+  for (const [model, mmproj] of [['qwen', 'q8'], ['qwen', 'f16'], ['gemma', 'q8'], ['gemma', 'f16']]) {
+    runVlmCell(model, mmproj)
+  }
+}
+
+module.exports = { runVlmCell, runAllCells, MODELS }

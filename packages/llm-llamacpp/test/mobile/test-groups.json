@@ -11,6 +11,7 @@
     "heavy9": ["runGemma4Test"],
     "heavy10": ["runOcrPaddleTest"],
     "heavy11": ["runQuantizedKvcacheTest"],
+    "vlmMatrix": ["runVlmMatrixTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -30,8 +31,36 @@
     ]
   },
   "android": {
+    "groupA": [
+      "runApiBehaviorTest",
+      "runBitnetTest",
+      "runConfigParametersTest",
+      "runFinetuningPauseResumeTest",
+      "runGenerationParamsTest",
+      "runGrammarTest",
+      "runMultiInstanceTest",
+      "runQuantizedKvcacheTest",
+      "runQwen35Test",
+      "runReasoningTest",
+      "runToolsCompactTest",
+      "runTurboquantTest"
+    ],
+    "groupB": [
+      "runCacheStateMachineTest",
+      "runGemma4Test",
+      "runModelLoadingTest",
+      "runMultiGpuTest",
+      "runOcrLightonTest",
+      "runOcrPaddleTest",
+      "runSlidingContextTest",
+      "runToolCallingTest",
+      "runUtf8OutputTest"
+    ],
     "groupImagesPerf": [
-      "runImageElephantTest"
-    ]
+      "runImageElephantTest",
+      "runImageFruitPlateTest",
+      "runImageHighResAuroraTest"
+    ],
+    "vlmMatrix": ["runVlmMatrixTest"]
   }
 }

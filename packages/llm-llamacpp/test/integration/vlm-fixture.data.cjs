@@ -1,7 +1,6 @@
 'use strict'
-// QVAC-19178: frozen 5-task x 5-sample VLM benchmark fixture (auto-generated).
-// metadata bundles with the test code; images live in test/media/vlm-fixture
-// (desktop) and test/mobile/testAssets/vlm-fixture (mobile).
+// QVAC-19178: frozen 5-task x 5-sample VLM benchmark fixture (auto-generated, FLAT).
+// images: media/vlmx-*.png (desktop) and test/mobile/testAssets/vlmx-*.png (mobile).
 module.exports = {
   tasks: ["vqav2", "textvqa", "docvqa", "chartqa", "scienceqa"],
   samplesPerTask: 5,
@@ -23,7 +22,7 @@ module.exports = {
       "down",
       "down"
     ],
-    "image": "vlm-fixture/vqav2_0.png"
+    "image": "vlmx-vqav2_0.png"
   },
   {
     "id": "vqav2_1",
@@ -42,7 +41,7 @@ module.exports = {
       "watching",
       "watching"
     ],
-    "image": "vlm-fixture/vqav2_1.png"
+    "image": "vlmx-vqav2_1.png"
   },
   {
     "id": "vqav2_2",
@@ -61,7 +60,7 @@ module.exports = {
       "skateboard",
       "picnic table"
     ],
-    "image": "vlm-fixture/vqav2_2.png"
+    "image": "vlmx-vqav2_2.png"
   },
   {
     "id": "vqav2_3",
@@ -80,7 +79,7 @@ module.exports = {
       "foodiebakercom",
       "foodiebaker"
     ],
-    "image": "vlm-fixture/vqav2_3.png"
+    "image": "vlmx-vqav2_3.png"
   },
   {
     "id": "vqav2_4",
@@ -99,7 +98,7 @@ module.exports = {
       "no",
       "no"
     ],
-    "image": "vlm-fixture/vqav2_4.png"
+    "image": "vlmx-vqav2_4.png"
   },
   {
     "id": "textvqa_0",
@@ -118,7 +117,7 @@ module.exports = {
       "dakota",
       "dakota"
     ],
-    "image": "vlm-fixture/textvqa_0.png"
+    "image": "vlmx-textvqa_0.png"
   },
   {
     "id": "textvqa_1",
@@ -137,7 +136,7 @@ module.exports = {
       "copenhagen",
       "copenhagen"
     ],
-    "image": "vlm-fixture/textvqa_1.png"
+    "image": "vlmx-textvqa_1.png"
   },
   {
     "id": "textvqa_2",
@@ -156,7 +155,7 @@ module.exports = {
       "ale",
       "ale"
     ],
-    "image": "vlm-fixture/textvqa_2.png"
+    "image": "vlmx-textvqa_2.png"
   },
   {
     "id": "textvqa_3",
@@ -175,7 +174,7 @@ module.exports = {
       "dowmore islay",
       "bowmore islay"
     ],
-    "image": "vlm-fixture/textvqa_3.png"
+    "image": "vlmx-textvqa_3.png"
   },
   {
     "id": "textvqa_4",
@@ -194,7 +193,7 @@ module.exports = {
       "martial arts",
       "10"
     ],
-    "image": "vlm-fixture/textvqa_4.png"
+    "image": "vlmx-textvqa_4.png"
   },
   {
     "id": "docvqa_0",
@@ -204,7 +203,7 @@ module.exports = {
     "gold": [
       "0.28"
     ],
-    "image": "vlm-fixture/docvqa_0.png"
+    "image": "vlmx-docvqa_0.png"
   },
   {
     "id": "docvqa_1",
@@ -216,7 +215,7 @@ module.exports = {
       "University of California",
       "university of california, san diego"
     ],
-    "image": "vlm-fixture/docvqa_1.png"
+    "image": "vlmx-docvqa_1.png"
   },
   {
     "id": "docvqa_2",
@@ -227,7 +226,7 @@ module.exports = {
       "itc limited",
       "ITC Limited"
     ],
-    "image": "vlm-fixture/docvqa_2.png"
+    "image": "vlmx-docvqa_2.png"
   },
   {
     "id": "docvqa_3",
@@ -238,7 +237,7 @@ module.exports = {
       "san diego",
       "San Diego"
     ],
-    "image": "vlm-fixture/docvqa_3.png"
+    "image": "vlmx-docvqa_3.png"
   },
   {
     "id": "docvqa_4",
@@ -248,7 +247,7 @@ module.exports = {
     "gold": [
       "Paul"
     ],
-    "image": "vlm-fixture/docvqa_4.png"
+    "image": "vlmx-docvqa_4.png"
   },
   {
     "id": "chartqa_0",
@@ -258,7 +257,7 @@ module.exports = {
     "gold": [
       "14"
     ],
-    "image": "vlm-fixture/chartqa_0.png"
+    "image": "vlmx-chartqa_0.png"
   },
   {
     "id": "chartqa_1",
@@ -268,7 +267,7 @@ module.exports = {
     "gold": [
       "0.57"
     ],
-    "image": "vlm-fixture/chartqa_1.png"
+    "image": "vlmx-chartqa_1.png"
   },
   {
     "id": "chartqa_2",
@@ -278,7 +277,7 @@ module.exports = {
     "gold": [
       "3"
     ],
-    "image": "vlm-fixture/chartqa_2.png"
+    "image": "vlmx-chartqa_2.png"
   },
   {
     "id": "chartqa_3",
@@ -288,7 +287,7 @@ module.exports = {
     "gold": [
       "No"
     ],
-    "image": "vlm-fixture/chartqa_3.png"
+    "image": "vlmx-chartqa_3.png"
   },
   {
     "id": "chartqa_4",
@@ -298,7 +297,7 @@ module.exports = {
     "gold": [
       "23"
     ],
-    "image": "vlm-fixture/chartqa_4.png"
+    "image": "vlmx-chartqa_4.png"
   },
   {
     "id": "scienceqa_0",
@@ -308,7 +307,7 @@ module.exports = {
     "gold": [
       "B"
     ],
-    "image": "vlm-fixture/scienceqa_0.png"
+    "image": "vlmx-scienceqa_0.png"
   },
   {
     "id": "scienceqa_1",
@@ -318,7 +317,7 @@ module.exports = {
     "gold": [
       "C"
     ],
-    "image": "vlm-fixture/scienceqa_1.png"
+    "image": "vlmx-scienceqa_1.png"
   },
   {
     "id": "scienceqa_2",
@@ -328,7 +327,7 @@ module.exports = {
     "gold": [
       "B"
     ],
-    "image": "vlm-fixture/scienceqa_2.png"
+    "image": "vlmx-scienceqa_2.png"
   },
   {
     "id": "scienceqa_3",
@@ -338,7 +337,7 @@ module.exports = {
     "gold": [
       "B"
     ],
-    "image": "vlm-fixture/scienceqa_3.png"
+    "image": "vlmx-scienceqa_3.png"
   },
   {
     "id": "scienceqa_4",
@@ -348,7 +347,7 @@ module.exports = {
     "gold": [
       "B"
     ],
-    "image": "vlm-fixture/scienceqa_4.png"
+    "image": "vlmx-scienceqa_4.png"
   }
 ]
 }

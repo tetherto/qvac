@@ -12,10 +12,10 @@ on:
   push:
     branches: [qvac-19178-vlm-benchmark-mobile]
     paths:
-      - 'packages/llm-llamacpp/test/integration/vlm-matrix-*.test.js'
+      - 'packages/llm-llamacpp/test/integration/vlm-matrix.test.js'
       - 'packages/llm-llamacpp/test/integration/_vlm-matrix-common.js'
       - 'packages/llm-llamacpp/test/integration/vlm-fixture.data.cjs'
-      - 'packages/llm-llamacpp/media/vlm-fixture/**'
+      - 'packages/llm-llamacpp/media/vlmx-*.png'
       - 'packages/llm-llamacpp/benchmarks/vlm-matrix/**'
       - '.github/workflows/benchmark-vlm-matrix.yml'
   workflow_dispatch:
@@ -109,10 +109,7 @@ jobs:
           QVAC_VLM_DEVICES: ${{ matrix.devices }}
         run: |
           npx brittle -r test/integration/all.js \
-            test/integration/vlm-matrix-qwen-q8.test.js \
-            test/integration/vlm-matrix-qwen-f16.test.js \
-            test/integration/vlm-matrix-gemma-q8.test.js \
-            test/integration/vlm-matrix-gemma-f16.test.js
+            test/integration/vlm-matrix.test.js
           # don't fail the step on quality misses / per-cell errors — the matrix
           # captures them; the aggregate step always renders what we got.
           bare test/integration/all.js --exit 2>&1 | tee vlm-output-${{ matrix.label }}.log || true

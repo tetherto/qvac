@@ -130,3 +130,8 @@ async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unus
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUtf8OutputTest')) return __FILTERED
   return runIntegrationModule('../integration/utf8-output.test.js', options)
 }
+
+async function runVlmMatrixTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVlmMatrixTest')) return __FILTERED
+  return runIntegrationModule('../integration/vlm-matrix.test.js', options)
+}
