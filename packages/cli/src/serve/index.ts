@@ -27,6 +27,7 @@ import { createEphemeralFilesStore } from './adapters/openai/ephemeral-files-sto
 import { createVectorStoresStore } from './adapters/openai/vector-stores-store.js'
 import { createVideoJobsStore } from './core/video-jobs-store.js'
 import { probeFfmpegAvailable } from './lib/video-transcode.js'
+import { tearDownJob } from './routes/videos.js'
 import type { QvacContext } from './lib/types.js'
 import contextPlugin from './plugins/context.js'
 import errorHandlerPlugin from './plugins/error-handler.js'
@@ -69,11 +70,19 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     }
   })
   const chunkAttributions = createChunkAttributionStore()
-  const videoJobsStore = createVideoJobsStore()
   const videoTranscodeAvailable = await probeFfmpegAvailable()
   if (!videoTranscodeAvailable) {
     logger.warn('ffmpeg not on PATH — /v1/videos/{id}/content will default to video/avi. Install ffmpeg to serve video/mp4. See: qvac doctor')
   }
+  // `onEvict` captures `qvacContext` by reference; the closure runs lazily
+  // (only when the store actually evicts), long after `qvacContext` is wired
+  // below, so the forward reference is safe at invocation time.
+  const videoJobsStore = createVideoJobsStore({
+    onEvict: (job, reason) => {
+      logger.warn(`video job evicted id=${job.id} reason=${reason} status=${job.status}`)
+      tearDownJob(qvacContext, job)
+    }
+  })
 
   const qvacContext: QvacContext = {
     registry,

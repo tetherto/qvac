@@ -6,7 +6,9 @@ import {
   nearestVideoFrameCount,
   DEFAULT_FPS
 } from '../src/serve/schemas/videos.js'
-import { createVideoJobsStore } from '../src/serve/core/video-jobs-store.js'
+import { createVideoJobsStore, type VideoJob } from '../src/serve/core/video-jobs-store.js'
+import { tearDownJob } from '../src/serve/routes/videos.js'
+import type { QvacContext } from '../src/serve/lib/types.js'
 
 function expectIssue (input: unknown, path: string): { message: string } {
   const result = videosCreateBody.safeParse(input)
@@ -202,4 +204,108 @@ describe('createVideoJobsStore', () => {
     assert.ok(store.get(c.id))
   })
 
+  it('invokes onEvict with the dropped job and reason', () => {
+    const evicted: Array<{ id: string; reason: string }> = []
+    const store = createVideoJobsStore({
+      maxEntries: 1,
+      onEvict: (job, reason) => evicted.push({ id: job.id, reason })
+    })
+    const a = store.create({ model: 'wan', prompt: 'a', size: '480x832', seconds: '4' })
+    const b = store.create({ model: 'wan', prompt: 'b', size: '480x832', seconds: '4' })
+    assert.deepEqual(evicted, [{ id: a.id, reason: 'max_entries' }])
+    assert.equal(store.get(a.id), undefined)
+    assert.ok(store.get(b.id))
+  })
+
+})
+
+// ─── tearDownJob ───────────────────────────────────────────────────────
+
+function makeCtxStub (opts: {
+  cancelOverride?: QvacContext['cancelOverride']
+  removed?: string[]
+} = {}): QvacContext {
+  const removed = opts.removed ?? []
+  const stub = {
+    logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    ephemeralFiles: { remove: (id: string) => { removed.push(id) } }
+  } as unknown as QvacContext
+  if (opts.cancelOverride) {
+    (stub as { cancelOverride?: QvacContext['cancelOverride'] }).cancelOverride = opts.cancelOverride
+  }
+  return stub
+}
+
+function makeJob (overrides: Partial<VideoJob> = {}): VideoJob {
+  const base: VideoJob = {
+    id: 'video_test',
+    object: 'video',
+    model: 'wan',
+    status: 'in_progress',
+    progress: 50,
+    created_at: 0,
+    completed_at: null,
+    expires_at: 253402300799,
+    prompt: 'p',
+    size: '480x832',
+    seconds: '4',
+    remixed_from_video_id: null,
+    error: null,
+    requestId: 'req-xyz',
+    aviFileId: null,
+    mp4FileId: null,
+    controller: new AbortController()
+  }
+  return { ...base, ...overrides }
+}
+
+describe('tearDownJob', () => {
+  it('aborts the controller and cancels the SDK request for in-progress jobs', () => {
+    const cancelled: Array<{ requestId: string }> = []
+    const ctx = makeCtxStub({
+      cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
+    })
+    const job = makeJob({ status: 'in_progress', requestId: 'req-abc' })
+    tearDownJob(ctx, job)
+    assert.equal(job.controller.signal.aborted, true)
+    assert.deepEqual(cancelled, [{ requestId: 'req-abc' }])
+  })
+
+  it('skips cancel for completed jobs', () => {
+    const cancelled: Array<{ requestId: string }> = []
+    const ctx = makeCtxStub({
+      cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
+    })
+    const job = makeJob({ status: 'completed', requestId: 'req-abc', aviFileId: 'file-1' })
+    tearDownJob(ctx, job)
+    assert.deepEqual(cancelled, [])
+    assert.equal(job.controller.signal.aborted, false)
+  })
+
+  it('skips cancel when requestId is not yet set', () => {
+    const cancelled: Array<{ requestId: string }> = []
+    const ctx = makeCtxStub({
+      cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
+    })
+    const job = makeJob({ status: 'queued', requestId: null })
+    tearDownJob(ctx, job)
+    assert.equal(job.controller.signal.aborted, true)
+    assert.deepEqual(cancelled, [])
+  })
+
+  it('removes both ephemeral file ids when present', () => {
+    const removed: string[] = []
+    const ctx = makeCtxStub({ removed })
+    const job = makeJob({ status: 'completed', aviFileId: 'avi-1', mp4FileId: 'mp4-1' })
+    tearDownJob(ctx, job)
+    assert.deepEqual(removed.sort(), ['avi-1', 'mp4-1'])
+  })
+
+  it('survives a rejecting cancelFn (no throw)', () => {
+    const ctx = makeCtxStub({
+      cancelOverride: async () => { throw new Error('worker down') }
+    })
+    const job = makeJob({ status: 'in_progress', requestId: 'req-abc' })
+    assert.doesNotThrow(() => tearDownJob(ctx, job))
+  })
 })

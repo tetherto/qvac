@@ -34,6 +34,8 @@ export interface VideoResource {
  * Extra fields are stripped from any HTTP response by `videoJobResource()`.
  */
 export interface VideoJob extends VideoResource {
+  /** SDK requestId for `cancel(...)`. Set by `runVideoJob` once `video()` returns; null in the (tiny) window between job creation and that call. */
+  requestId: string | null
   /** Ephemeral file id holding the AVI bytes (set when `status === 'completed'`). */
   aviFileId: string | null
   /** Ephemeral file id holding the lazily-transcoded MP4 (set on first MP4 fetch). */
@@ -44,15 +46,19 @@ export interface VideoJob extends VideoResource {
 
 /** Strip server-only fields and return the OpenAI-shaped resource view. */
 export function videoJobResource (job: VideoJob): VideoResource {
-  const { aviFileId, mp4FileId, controller, ...resource } = job
-  void aviFileId; void mp4FileId; void controller
+  const { requestId, aviFileId, mp4FileId, controller, ...resource } = job
+  void requestId; void aviFileId; void mp4FileId; void controller
   return resource
 }
+
+export type VideoEvictReason = 'max_entries'
 
 export interface VideoJobsStoreOptions {
   /** Hard cap on stored entries. Oldest evicted first. */
   maxEntries?: number
   now?: () => number
+  /** Fired when `create()` evicts an older job to stay within `maxEntries`. The route layer hooks this to abort the SDK call and drop the rendered bytes. */
+  onEvict?: (job: VideoJob, reason: VideoEvictReason) => void
 }
 
 export interface ListVideoJobsOptions {
@@ -92,6 +98,7 @@ const DEFAULT_MAX_ENTRIES = 256
 export function createVideoJobsStore (options: VideoJobsStoreOptions = {}): VideoJobsStore {
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES
   const nowMs = options.now ?? ((): number => Date.now())
+  const onEvict = options.onEvict
 
   const jobs = new Map<string, VideoJob>()
 
@@ -112,15 +119,18 @@ export function createVideoJobsStore (options: VideoJobsStoreOptions = {}): Vide
         seconds: input.seconds,
         remixed_from_video_id: null,
         error: null,
+        requestId: null,
         aviFileId: null,
         mp4FileId: null,
         controller: new AbortController()
       }
       jobs.set(id, job)
       while (jobs.size > maxEntries) {
-        const oldest = jobs.keys().next().value
-        if (oldest === undefined) break
-        jobs.delete(oldest)
+        const oldestId = jobs.keys().next().value
+        if (oldestId === undefined) break
+        const evicted = jobs.get(oldestId)!
+        jobs.delete(oldestId)
+        if (onEvict) onEvict(evicted, 'max_entries')
       }
       return job
     },

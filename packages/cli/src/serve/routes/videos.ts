@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply } from 'fastify'
-import { video } from '@qvac/sdk'
+import { video, cancel } from '@qvac/sdk'
 import type { VideoClientParams } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
 import { requireModel } from '../plugins/require-model.js'
@@ -59,6 +59,35 @@ const VIDEO_AVI_CONTENT_TYPE = 'video/avi' as const
 const VIDEO_MP4_CONTENT_TYPE = 'video/mp4' as const
 const RETRY_AFTER_SECONDS = 2
 
+/**
+ * Single source of truth for "this job is going away — release everything it
+ * owns". Called from the DELETE handler AND from the store's `onEvict`
+ * callback (max-entries pressure), so DELETE and silent eviction share the
+ * same teardown: abort the local controller (interrupts the drain loop),
+ * cancel the SDK request if we have its `requestId`, and remove any
+ * ephemeral-file ids backing the rendered bytes.
+ *
+ * No-throw — runs in fire-and-forget contexts (server-side eviction) where a
+ * thrown cancel-RPC failure would crash the surrounding hook. SDK cancel
+ * failures are logged at DEBUG.
+ */
+function tearDownJob (ctx: QvacContext, job: VideoJob): void {
+  if (job.status === 'queued' || job.status === 'in_progress') {
+    try { job.controller.abort() } catch { /* noop */ }
+    if (job.requestId) {
+      const cancelFn = ctx.cancelOverride ?? cancel
+      cancelFn({ requestId: job.requestId }).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        ctx.logger.debug(`  video_teardown job=${job.id} cancel failed: ${message}`)
+      })
+    }
+  }
+  if (job.aviFileId) ctx.ephemeralFiles.remove(job.aviFileId)
+  if (job.mp4FileId) ctx.ephemeralFiles.remove(job.mp4FileId)
+}
+
+export { tearDownJob }
+
 async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClientParams, alias: string): Promise<void> {
   const store = ctx.videoJobsStore
   const job = store.get(jobId)
@@ -66,7 +95,20 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
   ctx.logger.info(`  video_create job=${jobId} model=${alias} prompt_chars=${params.prompt.length} size=${job.size} seconds=${job.seconds}`)
 
   try {
-    const result = video(params)
+    const videoFn = ctx.videoOverride ?? video
+    const result = videoFn(params)
+
+    // Stash requestId so DELETE / onEvict can cancel via the SDK. If
+    // store.update returns undefined the job is already gone (DELETE /
+    // eviction ran while video() was being constructed) — issue the cancel
+    // here since tearDownJob couldn't, then bail.
+    const stored = store.update(jobId, { requestId: result.requestId })
+    if (!stored) {
+      const cancelFn = ctx.cancelOverride ?? cancel
+      cancelFn({ requestId: result.requestId }).catch(() => { /* noop */ })
+      ctx.logger.info(`  video_create job=${jobId} torn down before run; cancelled requestId=${result.requestId}`)
+      return
+    }
 
     // SDK reports progress per pipeline phase (sampler → VAE decode → mux),
     // each starting at step=0. Publish as a monotonic high-water mark.
@@ -322,10 +364,11 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     if (!job) {
       throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
     }
-    try { job.controller.abort() } catch { /* noop */ }
-    if (job.aviFileId) ctx.ephemeralFiles.remove(job.aviFileId)
-    if (job.mp4FileId) ctx.ephemeralFiles.remove(job.mp4FileId)
+    // Drop the store entry first so a racing runVideoJob (still mid-`video()`
+    // call) sees `store.update` return undefined and self-cancels with the
+    // freshly-acquired requestId.
     ctx.videoJobsStore.delete(req.params.id)
+    tearDownJob(ctx, job)
     return {
       id: req.params.id,
       object: 'video.deleted' as const,
