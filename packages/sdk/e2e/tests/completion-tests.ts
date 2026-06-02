@@ -363,7 +363,7 @@ export const completionSeedReproducibility = createCompletionTest(
       { role: "user", content: "Generate a random story in 20 words." },
     ],
     stream: false,
-    generationParams: { seed: 42 },
+    generationParams: DETERMINISTIC,
   },
   { validation: "type", expectedType: "string" },
 );
