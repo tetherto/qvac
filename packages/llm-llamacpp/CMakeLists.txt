@@ -67,18 +67,9 @@ if(ANDROID)
   endif()
   file(APPEND ${DEBUG_LOG} "NDK_HOST: ${NDK_HOST}\n\n")
   
-  # List of paths to check
+  # Single path for NDK 29 with Clang 21 (aarch64 only)
   set(LIBOMP_PATHS
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/20/lib/linux/aarch64/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/20/lib/linux/arm/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/19/lib/linux/aarch64/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/19/lib/linux/arm/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/18/lib/linux/aarch64/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/18/lib/linux/arm/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/17/lib/linux/aarch64/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/17/lib/linux/arm/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib64/clang/20/lib/linux/aarch64/libomp.so"
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib64/clang/19/lib/linux/aarch64/libomp.so"
+    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/21/lib/linux/aarch64/libomp.so"
   )
   
   file(APPEND ${DEBUG_LOG} "Checking paths:\n")
