@@ -68,7 +68,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   // -- Step 1: Extract model file paths from JS args[1] --------------------
   // index.js selects which field to populate based on model family:
-  //   "path"               -> model_path          (SD2.x / SDXL all-in-one
+  //   "path"               -> model_path          (SD1.x / SDXL all-in-one
   //   checkpoint) "diffusionModelPath" -> diffusion_model_path (FLUX.2 [klein]
   //   standalone GGUF; Wan 2.1 single expert; Wan 2.2 low-noise expert)
   //   "highNoiseDiffusionModelPath" -> high_noise_diffusion_model_path (Wan
@@ -87,6 +87,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");
   config.llmPath = args.getMapEntry(1, "llmPath");
   config.vaePath = args.getMapEntry(1, "vaePath");
+  config.clipVisionPath = args.getMapEntry(1, "clipVisionPath");
   config.esrganPath = args.getMapEntry(1, "esrganPath");
 
   // -- Step 2: Apply SD_CTX_HANDLERS to the "config" sub-object -------------
@@ -191,21 +192,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   // -- Video-specific inputs ------------------------------------------------
-  // `endImageBuffer`       -- last frame bytes for Wan flf2vid
-  //                           (first-last-frame interpolation). Mutually
-  //                           exclusive with all non-flf2vid video modes;
-  //                           rejected by SdModel::processVideo() if supplied
-  //                           alongside mode="txt2vid" or "img2vid".
   // `controlFramesBuffers` -- VACE control-frame sequence (one PNG/JPEG
   //                           buffer per frame). Optional on every video
   //                           mode; `vace_strength` controls guidance.
-  auto endBuf =
-      inputObj
-          .getOptionalPropertyAs<js::TypedArray<uint8_t>, std::vector<uint8_t>>(
-              env, "endImageBuffer");
-  if (endBuf.has_value())
-    job.endImageBytes = std::move(endBuf.value());
-
   auto controlBufs =
       inputObj.getOptionalProperty<js::Array>(env, "controlFramesBuffers");
   if (controlBufs.has_value()) {
@@ -218,6 +207,21 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
+  // Lifetime contract for the `[&instance]` captures below:
+  //
+  //   `instance` is a reference into the AddonJs that the inference-addon-cpp
+  //   parent framework holds in a stable storage slot keyed by `js_env_t`.
+  //   The framework destroys that slot only on `destroyInstance()`, and
+  //   `destroyInstance()` first joins / drains the JobRunner, which means
+  //   the async job consuming these callbacks is guaranteed to have
+  //   finished before the AddonJs is freed. As long as that invariant
+  //   holds, capturing by reference is safe.
+  //
+  //   If the parent framework ever changes that ordering (e.g. allows
+  //   destroyInstance during an in-flight job), these captures must be
+  //   converted to a refcounted handle (e.g. shared_ptr to AddonCpp) or
+  //   to a stable-key copy. Update both callbacks together.
+  //
   // Progress updates are queued as JSON strings (JsStringOutputHandler).
   job.progressCallback = [&instance](const std::string& progressJson) {
     instance.addonCpp->outputQueue->queueResult(std::any(progressJson));

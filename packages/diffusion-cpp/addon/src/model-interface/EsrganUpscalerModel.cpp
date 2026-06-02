@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
@@ -10,6 +9,7 @@
 #include "utils/BackendLoader.hpp"
 #include "utils/ImageCodec.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/SdErrors.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
@@ -18,7 +18,7 @@ namespace {
 
 void throwIfCancelled(const std::atomic<bool>& cancelRequested) {
   if (cancelRequested.load()) {
-    throw std::runtime_error("Job cancelled");
+    throw qvac_lib_inference_addon_sd::errors::makeCancelledError();
   }
 }
 
