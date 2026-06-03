@@ -100,11 +100,13 @@ bool isMetalBackendName(std::string_view backendName) {
   // ggml's Metal backend identifies as "MTL": the backend registration is named
   // "MTL" and devices are "MTL0"/"MTL1"… (the human-readable description carries
   // the GPU model, e.g. "Apple M3 Ultra", and varies per device). Match the
-  // stable "mtl" token so selection is generic across all Apple GPUs; also
-  // accept "metal" defensively in case a future ggml renames the backend.
+  // stable "MTL" prefix so selection is generic across all Apple GPUs; also
+  // accept a "metal" prefix defensively in case a future ggml renames the
+  // backend. Prefix (not substring) matching mirrors tts-ggml /
+  // transcription-parakeet and avoids false positives on unrelated names that
+  // merely contain "mtl".
   const std::string lower = toLower(backendName);
-  return lower.find("mtl") != std::string::npos ||
-         lower.find("metal") != std::string::npos;
+  return lower.rfind("mtl", 0) == 0 || lower.rfind("metal", 0) == 0;
 }
 
 namespace {
@@ -155,6 +157,15 @@ BackendSelection selectBackendDevice(BackendDevice requested) {
     break;
   case BackendDevice::CPU:
     sel.requested = "cpu";
+    break;
+  default:
+    // Defensive: a BackendDevice value added without updating this switch must
+    // not silently masquerade as an explicit CPU request. Record the fallback
+    // so getBackendInfo() surfaces the gap instead of reporting a clean CPU.
+    sel.requested = "unknown";
+    sel.fallbackReason =
+        "Unsupported backendDevice value; falling back to CPU";
+    QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
     break;
   }
 

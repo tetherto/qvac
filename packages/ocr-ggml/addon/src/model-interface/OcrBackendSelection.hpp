@@ -11,8 +11,8 @@
 //     (backend name contains "vulkan", case-insensitive). When none is present
 //     the result falls back to the CPU device and records a `fallbackReason`.
 //   - `BackendDevice::METAL` -> the first Metal-capable GPU device (backend
-//     name contains "metal", case-insensitive; Apple only). Same CPU-fallback
-//     behaviour as Vulkan when no Metal device is present.
+//     name begins with "MTL"/"metal", case-insensitive; Apple only). Same
+//     CPU-fallback behaviour as Vulkan when no Metal device is present.
 //   - `BackendDevice::CPU` (default) -> the CPU device.
 //
 // The returned device is then handed to each step's `ggml_backend_dev_init`.
@@ -33,7 +33,7 @@ namespace qvac_lib_infer_ocr_ggml::ocr_backend_selection {
 // the string fields are surfaced to JS for diagnostics / logging.
 struct BackendSelection {
   ggml_backend_dev_t device{nullptr};
-  // Requested device as a lowercase string ("cpu" | "vulkan").
+  // Requested device as a lowercase string ("cpu" | "vulkan" | "metal").
   std::string requested;
   // Resolved device-type string ("CPU" | "GPU" | "IGPU" | "ACCEL").
   std::string backendDevice;
@@ -56,8 +56,9 @@ BackendSelection selectBackendDevice(BackendDevice requested);
 // unit testing / reuse.
 [[nodiscard]] bool isVulkanBackendName(std::string_view backendName);
 
-// True if the backend name contains "metal" (case-insensitive). Exposed for
-// unit testing / reuse.
+// True if the backend name begins with "MTL" or "metal" (case-insensitive) —
+// matches both the ggml device name ("MTL0"/"MTL1") and the "Metal" backend
+// registration name. Exposed for unit testing / reuse.
 [[nodiscard]] bool isMetalBackendName(std::string_view backendName);
 
 } // namespace qvac_lib_infer_ocr_ggml::ocr_backend_selection

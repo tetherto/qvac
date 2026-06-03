@@ -140,7 +140,7 @@ await ocr.load()
 console.log(ocr.getBackendInfo())
 // Vulkan available → { requested: 'vulkan', backendDevice: 'GPU',  backendName: 'Vulkan0', fallbackReason: '' }
 // no Vulkan device → { requested: 'vulkan', backendDevice: 'CPU',  backendName: 'CPU',     fallbackReason: 'Vulkan backend requested but no Vulkan-capable GPU device was found; falling back to CPU' }
-// Metal available  → { requested: 'metal',  backendDevice: 'GPU',  backendName: 'Metal',   fallbackReason: '' }
+// Metal available  → { requested: 'metal',  backendDevice: 'GPU',  backendName: 'MTL0',    fallbackReason: '' }  // device name; 'MTL1'… on a multi-GPU host
 // no Metal device  → { requested: 'metal',  backendDevice: 'CPU',  backendName: 'CPU',     fallbackReason: 'Metal backend requested but no Metal-capable GPU device was found; falling back to CPU' }
 ```
 
