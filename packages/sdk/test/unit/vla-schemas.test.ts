@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { z } from "zod";
 import {
@@ -681,7 +680,7 @@ test("vlaGetHparams op: returns the model's hparams + backend", async function (
       runImpl: async function () {
         throw new Error("run not exercised");
       },
-      hparams: hp as unknown as { actionDim: number; chunkSize: number },
+      hparams: hp as { actionDim: number; chunkSize: number },
     },
     async (modelId) => {
       const result = await vlaGetHparams({ type: "vlaHparams", modelId });

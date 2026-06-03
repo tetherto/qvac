@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { transformLlmConfig } from "@/server/bare/plugins/llamacpp-completion/transform";
 import { llmConfigSchema } from "@/schemas/llamacpp-config";

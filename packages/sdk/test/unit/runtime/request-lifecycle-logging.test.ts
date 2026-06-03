@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { AbortController } from "bare-abort-controller";
 import type { LogLevel } from "@qvac/logging";
@@ -19,11 +18,6 @@ import { createRequestRegistry } from "@/server/bare/runtime/request-registry";
 // cached singleton logger.
 // -----------------------------------------------------------------------------
 
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-};
 
 interface EmitRecord {
   level: LogLevel;
@@ -42,7 +36,7 @@ function makeLoggerStub(): Logger & { emits: EmitRecord[] } {
     warn: stub("warn"),
     info: stub("info"),
     debug: stub("debug"),
-    trace: stub("trace"),
+    trace: stub("trace" as LogLevel),
     setLevel: () => {},
     getLevel: () => "info" as LogLevel,
     addTransport: (_: LogTransport) => {},
@@ -70,7 +64,7 @@ function stripDuration(line: string): string {
   return line.replace(DURATION_SUFFIX_RE, "");
 }
 
-test("registry: begin emits a [request-lifecycle] begin line", async (t: T) => {
+test("registry: begin emits a [request-lifecycle] begin line", async (t) => {
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
@@ -90,7 +84,7 @@ test("registry: begin emits a [request-lifecycle] begin line", async (t: T) => {
   );
 });
 
-test("registry: cancel-by-requestId emits a [request-lifecycle] cancel line once", async (t: T) => {
+test("registry: cancel-by-requestId emits a [request-lifecycle] cancel line once", async (t) => {
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
@@ -114,7 +108,7 @@ test("registry: cancel-by-requestId emits a [request-lifecycle] cancel line once
   );
 });
 
-test("registry: end emits a [request-lifecycle] end line with the terminal state + durationMs", async (t: T) => {
+test("registry: end emits a [request-lifecycle] end line with the terminal state + durationMs", async (t) => {
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
@@ -159,7 +153,7 @@ test("registry: end emits a [request-lifecycle] end line with the terminal state
   );
 });
 
-test("registry: failed end emits at warn level, not info", async (t: T) => {
+test("registry: failed end emits at warn level, not info", async (t) => {
   // Ops alerting wants a cheap `level>=warn` predicate on the
   // [request-lifecycle] prefix; the failure path is the only one
   // that should lift level above info.
@@ -195,7 +189,7 @@ test("registry: failed end emits at warn level, not info", async (t: T) => {
   );
 });
 
-test("registry: cancelAll emits one cancel line per active request", async (t: T) => {
+test("registry: cancelAll emits one cancel line per active request", async (t) => {
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
@@ -228,7 +222,7 @@ test("registry: cancelAll emits one cancel line per active request", async (t: T
   );
 });
 
-test("registry: parentSignal already aborted lands begin with state=cancelling", async (t: T) => {
+test("registry: parentSignal already aborted lands begin with state=cancelling", async (t) => {
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
@@ -251,7 +245,7 @@ test("registry: parentSignal already aborted lands begin with state=cancelling",
   );
 });
 
-test("registry: begin without modelId emits state line with modelId=-", async (t: T) => {
+test("registry: begin without modelId emits state line with modelId=-", async (t) => {
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
