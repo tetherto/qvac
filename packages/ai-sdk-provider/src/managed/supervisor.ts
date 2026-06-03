@@ -84,22 +84,31 @@ function resolveServeCommand (serveBinPath?: string): ServeCommand {
   }
 
   const require = createRequire(import.meta.url)
-  let pkgJsonPath: string
+
+  // Preferred: read the `qvac` bin path from @qvac/cli's package.json. But the
+  // published CLI ships a *string* `exports` ("./dist/index.js"), which makes
+  // the `./package.json` subpath non-resolvable (ERR_PACKAGE_PATH_NOT_EXPORTED).
+  // So this is best-effort; we fall back to resolving the package's main entry,
+  // which for @qvac/cli is the same file as the `qvac` bin.
   try {
-    pkgJsonPath = require.resolve('@qvac/cli/package.json')
+    const pkgJsonPath = require.resolve('@qvac/cli/package.json')
+    const pkg = require(pkgJsonPath) as { bin?: string | Record<string, string> }
+    const binField = pkg.bin
+    const binRel = typeof binField === 'string' ? binField : binField?.['qvac']
+    if (binRel !== undefined) {
+      return { command: process.execPath, baseArgs: [join(dirname(pkgJsonPath), binRel)] }
+    }
+  } catch {
+    // package.json not exported (or CLI absent) — fall through to main-entry
+    // resolution, which throws a clean CliNotFoundError if the CLI is missing.
+  }
+
+  try {
+    const entry = require.resolve('@qvac/cli')
+    return { command: process.execPath, baseArgs: [entry] }
   } catch (err) {
     throw new CliNotFoundError(err)
   }
-
-  const pkg = require(pkgJsonPath) as { bin?: string | Record<string, string> }
-  const binField = pkg.bin
-  const binRel = typeof binField === 'string' ? binField : binField?.['qvac']
-  if (binRel === undefined) {
-    throw new CliNotFoundError(new Error('@qvac/cli package.json has no `qvac` bin entry'))
-  }
-
-  const entry = join(dirname(pkgJsonPath), binRel)
-  return { command: process.execPath, baseArgs: [entry] }
 }
 
 // Bounded ring buffer of the child's combined stdout/stderr so a startup
