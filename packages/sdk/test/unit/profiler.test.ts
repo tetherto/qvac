@@ -30,7 +30,7 @@ function testEvent(op: string, phase: string, ms: number): ProfilingEvent {
 // Core Contract
 // =============================================================================
 
-test("profiler: enable/disable toggles isEnabled", (t: any) => {
+test("profiler: enable/disable toggles isEnabled", (t) => {
   reset();
   t.is(isEnabled(), false, "disabled by default");
 
@@ -41,7 +41,7 @@ test("profiler: enable/disable toggles isEnabled", (t: any) => {
   t.is(isEnabled(), false, "disabled after disable()");
 });
 
-test("profiler: enable() resets aggregates and events", (t: any) => {
+test("profiler: enable() resets aggregates and events", (t) => {
   reset();
   enable({ mode: "verbose" });
   record(testEvent("test", "a", 100));
@@ -59,7 +59,7 @@ test("profiler: enable() resets aggregates and events", (t: any) => {
   t.is(events.length, 0, "events cleared after enable()");
 });
 
-test("profiler: disable() preserves aggregates but exportJSON omits events", (t: any) => {
+test("profiler: disable() preserves aggregates but exportJSON omits events", (t) => {
   reset();
   enable({ mode: "verbose" });
   record(testEvent("test", "x", 50));
@@ -83,7 +83,7 @@ test("profiler: disable() preserves aggregates but exportJSON omits events", (t:
   );
 });
 
-test("profiler: verbose mode buffers events", (t: any) => {
+test("profiler: verbose mode buffers events", (t) => {
   reset();
   enable({ mode: "verbose" });
   record(testEvent("test", "v", 10));
@@ -92,7 +92,7 @@ test("profiler: verbose mode buffers events", (t: any) => {
   t.ok(events.length > 0, "events buffered in verbose mode");
 });
 
-test("profiler: summary mode does not buffer events", (t: any) => {
+test("profiler: summary mode does not buffer events", (t) => {
   reset();
   enable({ mode: "summary" });
   record(testEvent("test", "s", 10));
@@ -104,7 +104,7 @@ test("profiler: summary mode does not buffer events", (t: any) => {
   t.ok(Object.keys(aggregates).length > 0, "aggregates still recorded");
 });
 
-test("profiler: exportJSON omits recentEvents in summary mode", (t: any) => {
+test("profiler: exportJSON omits recentEvents in summary mode", (t) => {
   reset();
   enable({ mode: "summary" });
   record(testEvent("test", "e", 10));
@@ -114,7 +114,7 @@ test("profiler: exportJSON omits recentEvents in summary mode", (t: any) => {
   t.ok(Object.keys(json.aggregates).length > 0, "aggregates present");
 });
 
-test("profiler: exportJSON includes recentEvents in verbose mode", (t: any) => {
+test("profiler: exportJSON includes recentEvents in verbose mode", (t) => {
   reset();
   enable({ mode: "verbose" });
   record(testEvent("test", "e", 10));
@@ -124,7 +124,7 @@ test("profiler: exportJSON includes recentEvents in verbose mode", (t: any) => {
   t.ok(json.recentEvents!.length > 0, "recentEvents has entries");
 });
 
-test("profiler: exportTable returns string", (t: any) => {
+test("profiler: exportTable returns string", (t) => {
   reset();
   enable();
   record(testEvent("test", "t", 10));
@@ -134,7 +134,7 @@ test("profiler: exportTable returns string", (t: any) => {
   t.ok(table.includes("test.t"), "table contains metric key");
 });
 
-test("profiler: exportSummary returns string", (t: any) => {
+test("profiler: exportSummary returns string", (t) => {
   reset();
   enable();
   record(testEvent("test", "s", 10));
@@ -148,7 +148,7 @@ test("profiler: exportSummary returns string", (t: any) => {
 // Precedence
 // =============================================================================
 
-test("profiler: shouldProfile per-call > runtime > default", (t: any) => {
+test("profiler: shouldProfile per-call > runtime > default", (t) => {
   reset();
 
   // Default: disabled
@@ -170,7 +170,7 @@ test("profiler: shouldProfile per-call > runtime > default", (t: any) => {
   t.is(shouldProfile("test", { enabled: true }), true, "per-call enable wins");
 });
 
-test("profiler: shouldIncludeServerBreakdown per-call > runtime > default", (t: any) => {
+test("profiler: shouldIncludeServerBreakdown per-call > runtime > default", (t) => {
   reset();
 
   // Default: false
@@ -205,7 +205,7 @@ test("profiler: shouldIncludeServerBreakdown per-call > runtime > default", (t: 
 // Gating (wrapper-level disabled path)
 // =============================================================================
 
-test("profiler: no aggregates when globally disabled and no per-call override", (t: any) => {
+test("profiler: no aggregates when globally disabled and no per-call override", (t) => {
   reset();
   // Simulate what wrappers do: check shouldProfile before recording
   if (shouldProfile("gated")) {
@@ -216,7 +216,7 @@ test("profiler: no aggregates when globally disabled and no per-call override", 
   t.is(Object.keys(aggregates).length, 0, "nothing recorded when gated");
 });
 
-test("profiler: per-call enabled:true records even when globally disabled", (t: any) => {
+test("profiler: per-call enabled:true records even when globally disabled", (t) => {
   reset();
   if (shouldProfile("percall", { enabled: true })) {
     record(testEvent("percall", "enabled", 50));
@@ -229,7 +229,7 @@ test("profiler: per-call enabled:true records even when globally disabled", (t: 
   );
 });
 
-test("profiler: per-call enabled:false suppresses when globally enabled", (t: any) => {
+test("profiler: per-call enabled:false suppresses when globally enabled", (t) => {
   reset();
   enable();
   if (shouldProfile("suppressed", { enabled: false })) {
@@ -243,7 +243,7 @@ test("profiler: per-call enabled:false suppresses when globally enabled", (t: an
   );
 });
 
-test("profiler: exportJSON contract top-level keys are stable by mode", (t: any) => {
+test("profiler: exportJSON contract top-level keys are stable by mode", (t) => {
   reset();
 
   enable({ mode: "summary" });

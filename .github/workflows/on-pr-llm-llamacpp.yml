@@ -274,16 +274,16 @@ jobs:
         shell: bash
         run: |
           # Every desktop matrix entry uses a unique `label` in its
-          # artifact name (e.g. linux-x64-cpu / linux-x64-gpu). The sed
+          # artifact name (e.g. linux-x64-u22-gpu / linux-x64-u24-gpu). The sed
           # below strips our fixed prefix + run number; the remainder
           # IS the raw matrix label.
           #
           # QVAC-17830 (combined-report fix): the CI matrix intentionally
-          # runs two legs on the same physical Linux x64 target (one
-          # no_gpu=true for pure CPU data, one on a GPU runner for CPU+GPU
-          # data) and likewise two ubuntu versions for linux-arm64. In the
+          # runs two GPU legs on the same physical Linux x64 target
+          # (ubuntu 22.04 and 24.04) and likewise two ubuntu versions for
+          # linux-arm64. In the
           # combined summary those should show up as ONE column per
-          # platform — otherwise the GPU row on the "*-cpu" / "*-u22" /
+          # platform — otherwise the GPU row on the "*-u22" /
           # "*-u24" columns renders as "-" and looks like missing data
           # even though the data lives in the sibling leg.
           #
@@ -299,7 +299,7 @@ jobs:
             case "$platform" in Android|iOS) continue ;; esac
 
             case "$platform" in
-              linux-x64-cpu|linux-x64-gpu) device_name="linux-x64" ;;
+              linux-x64-u22-gpu|linux-x64-u24-gpu) device_name="linux-x64" ;;
               linux-arm64-u22|linux-arm64-u24) device_name="linux-arm64" ;;
               *) device_name="$platform" ;;
             esac

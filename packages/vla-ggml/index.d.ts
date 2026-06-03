@@ -24,6 +24,19 @@ export interface VlaHparams {
   maxStateDim: number
   tokenizerMaxLength: number
   visionImageSize: number
+  /**
+   * Number of camera views the model accepts. 2 for SmolVLA, up to 3 for
+   * π₀.₅. Optional for back-compat — older addon builds may omit it.
+   */
+  numCameras?: number
+  /**
+   * How the consumer passes the robot state. `'continuous'` (SmolVLA) means
+   * the `state` Float32Array is projected by an in-model linear layer;
+   * `'discrete'` (π₀.₅) means the state is already tokenized into the
+   * language prompt and the `state` buffer is ignored. Optional for
+   * back-compat.
+   */
+  stateInputMode?: 'continuous' | 'discrete'
 }
 
 export interface VlaRunInput {
@@ -38,8 +51,18 @@ export interface VlaRunInput {
 
 export interface VlaRunStats {
   vision_ms: number
+  /**
+   * SmolVLA-specific legacy alias for `prefill_compute_ms`. Kept for
+   * back-compat with consumers written against v0.1.x; will be removed once
+   * π₀.₅ ships and consumers migrate to the architecture-neutral names.
+   */
   smollm2_compute_ms: number
+  /** Legacy alias for `prefill_total_ms`; see `smollm2_compute_ms`. */
   smollm2_total_ms: number
+  /** Architecture-neutral prefill compute time (ms). */
+  prefill_compute_ms: number
+  /** Architecture-neutral prefill total time (ms). */
+  prefill_total_ms: number
   ode_ms: number
   total_ms: number
   /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
@@ -77,7 +100,7 @@ export class VlaModel {
   pause (): Promise<void>
   cancel (): Promise<void>
   unload (): Promise<void>
-  getState (): { configLoaded: boolean }
+  getState (): { configLoaded: boolean; weightsLoaded: boolean }
 }
 
 export function preprocessImage (

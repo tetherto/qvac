@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { createErrorResponse } from "@/schemas/error";
 import {

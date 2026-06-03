@@ -64,7 +64,15 @@ message("Building ocr-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    # GGML_AVAILABLE_BACKENDS advertises every backend the upstream port
+    # knows about, but real CMake targets only exist for those actually
+    # built into the installed package (e.g. ggml-vulkan / ggml-opencl
+    # are absent on hosts/feature sets without them). Skip missing ones so
+    # add_bare_module's get_target_property() doesn't error out. Parity with
+    # packages/classification-ggml.
+    if(TARGET ggml::${_backend})
+      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    endif()
   endforeach()
 endif()
 
@@ -88,6 +96,7 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrLazyInitializeBackend.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrBackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Pipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/gguf_loader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/ops.cpp

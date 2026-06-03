@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.0"
+      "version>=": "1.2.1"
     },
     {
       "name": "qvac-lint-cpp",
@@ -10,7 +10,7 @@
     },
     {
       "name": "tts-cpp",
-      "version>=": "2026-05-20#2"
+      "version>=": "2026-06-02#1"
     }
   ],
   "features": {

@@ -266,21 +266,13 @@ Third-Party Model Licenses
   chatterbox-multilingual-ONNX
     https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX
   chatterbox-s3gen
-    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf
+    https://huggingface.co/ResembleAI/chatterbox-turbo
   chatterbox-s3gen-mtl
-    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf
+    https://huggingface.co/ResembleAI/chatterbox
   chatterbox-t3-mtl
-    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf
-  chatterbox-t3-mtl-q4_0
-    s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf
-  chatterbox-t3-mtl-q8_0
-    s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q8_0.gguf
+    https://huggingface.co/ResembleAI/chatterbox
   chatterbox-t3-turbo
-    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf
-  chatterbox-t3-turbo-q4_0
-    s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q4_0.gguf
-  chatterbox-t3-turbo-q8_0
-    s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q8_0.gguf
+    https://huggingface.co/ResembleAI/chatterbox-turbo
   chatterbox-turbo-ONNX
     https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX
   de-base-ggml-model-f16

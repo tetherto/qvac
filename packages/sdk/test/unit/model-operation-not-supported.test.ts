@@ -8,7 +8,7 @@ import {
 } from "@/server/bare/registry/model-registry";
 import { dispatchPluginReply } from "@/server/rpc/handlers/plugin-dispatch";
 import { ModelOperationNotSupportedError } from "@/utils/errors-server";
-import { SDK_SERVER_ERROR_CODES } from "@/schemas";
+import { type CanonicalModelType, SDK_SERVER_ERROR_CODES } from "@/schemas";
 
 let idCounter = 0;
 function makeId(prefix: string) {
@@ -82,7 +82,7 @@ test("dispatch: throws ModelOperationNotSupportedError with bundle-aware suggest
     model: {} as unknown as AnyModel,
     path: "/tmp/model.bin",
     config: {},
-    modelType: llmType,
+    modelType: llmType as CanonicalModelType,
   });
 
   try {

@@ -34,7 +34,7 @@
 #include "model-interface/easyocr/craft_weights.hpp"
 #include "model-interface/easyocr/gguf_loader.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)
 // DSP / inference inner loops use raw pointer arithmetic on cv::Mat planes
 // and ggml buffers, single-letter math identifiers, and CRAFT/DBNet
 // architecture-defined magic numbers.
@@ -65,13 +65,18 @@ constexpr double PIXEL_INTENSITY_MAX = 255.0;
  * Verbatim from ocr-onnx StepDetectionInference.cpp.
  */
 std::tuple<cv::Mat, float>
-resizeAspectRatio(const cv::Mat& img, float magRatio) {
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+resizeAspectRatio(const cv::Mat& img, float magRatio, int maxImageSize) {
   int height = img.rows;
   int width = img.cols;
 
   float targetSize = magRatio * static_cast<float>(std::max(height, width));
 
-  targetSize = std::min(targetSize, static_cast<float>(MAX_IMAGE_SIZE));
+  // `maxImageSize` is EasyOCR's `canvas_size`. Capping it bounds the CRAFT
+  // graph's peak compute-buffer (which scales with canvas area) — the source
+  // of the dense-page Android OOM in QVAC-19340. Default keeps the 2560 cap
+  // that matches @qvac/ocr-onnx and EasyOCR.
+  targetSize = std::min(targetSize, static_cast<float>(maxImageSize));
 
   float inputResizeRatio =
       targetSize / static_cast<float>(std::max(height, width));
@@ -158,7 +163,8 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
 
 cv::Mat StepDetectionInference::preprocess(
     const cv::Mat& image, float magRatio, float* outResizeRatio) {
-  auto [imgResized, imgResizeRatio] = resizeAspectRatio(image, magRatio);
+  auto [imgResized, imgResizeRatio] =
+      resizeAspectRatio(image, magRatio, MAX_IMAGE_SIZE);
   if (outResizeRatio != nullptr) {
     *outResizeRatio = imgResizeRatio;
   }
@@ -168,19 +174,27 @@ cv::Mat StepDetectionInference::preprocess(
 StepDetectionInference::StepDetectionInference(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& gguf_path, float magRatio, int nThreads,
-    const std::string& backendsDir)
-    : magRatio_(magRatio), backendsHandle_(backendsDir) {
-  ggml_backend_dev_t cpuDev =
-      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  backend_ = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
+    const std::string& backendsDir, int maxImageSize,
+    ggml_backend_dev_t backendDevice)
+    : magRatio_(magRatio),
+      maxImageSize_(maxImageSize > 0 ? maxImageSize : MAX_IMAGE_SIZE),
+      backendsHandle_(backendsDir) {
+  ggml_backend_dev_t dev =
+      (backendDevice != nullptr)
+          ? backendDevice
+          : ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  backend_ = dev ? ggml_backend_dev_init(dev, nullptr) : nullptr;
   if (backend_ == nullptr) {
     throw std::runtime_error(
-        "StepDetectionInference: failed to init CPU backend");
+        "StepDetectionInference: failed to init ggml backend");
   }
-  if (nThreads >= 0) {
+  // Thread-count tuning only applies to the CPU backend; GPU backends (Vulkan)
+  // ignore it, so gate the call on the selected device being CPU.
+  const bool isCpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
+  if (isCpu && nThreads >= 0) {
     const int effective =
         (nThreads == 0) ? defaultPhysicalThreadCount() : nThreads;
-    ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(cpuDev);
+    ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(dev);
     auto* fn_set_n_threads =
         cpuReg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
                      cpuReg, "ggml_backend_set_n_threads")
@@ -363,7 +377,7 @@ std::vector<BlockTiming> StepDetectionInference::profileBlocks(
   warmupPerTap = std::max(warmupPerTap, 0);
 
   auto [imgResized, _imgResizeRatio] =
-      resizeAspectRatio(input.origImg, magRatio_);
+      resizeAspectRatio(input.origImg, magRatio_, maxImageSize_);
   cv::Mat inputBlob = normalizeAndBuildCHW(imgResized);
   assert(inputBlob.dims == 4);
   const int N = inputBlob.size[0];
@@ -480,7 +494,7 @@ StepDetectionInference::process(const StepDetectionInference::Input& input) {
 
   const auto tPre0 = clock::now();
   auto [imgResized, imgResizeRatio] =
-      resizeAspectRatio(input.origImg, magRatio_);
+      resizeAspectRatio(input.origImg, magRatio_, maxImageSize_);
   cv::Mat inputBlob = normalizeAndBuildCHW(imgResized);
   const auto tPre1 = clock::now();
   lastTimings_.preprocessMs = msd(tPre1 - tPre0).count();
@@ -515,4 +529,4 @@ StepDetectionInference::process(const StepDetectionInference::Input& input) {
 
 } // namespace easyocr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)

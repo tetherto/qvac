@@ -1,16 +1,9 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 import {
   createProgressThrottle,
   PROGRESS_THROTTLE_MS,
   PROGRESS_MAX_PENDING,
 } from "@/server/rpc/progress-throttle";
-
-type BrittleT = {
-  is: (a: unknown, b: unknown, msg?: string) => void;
-  ok: (v: unknown, msg?: string) => void;
-  alike: (a: unknown, b: unknown, msg?: string) => void;
-};
 
 const T0 = 1_000_000;
 
@@ -33,7 +26,7 @@ function createTestThrottle(
   return { written, batchSizes, throttle };
 }
 
-test("immediate write when throttle window has elapsed", (t: BrittleT) => {
+test("immediate write when throttle window has elapsed", (t) => {
   let time = T0;
   const { written, batchSizes, throttle } = createTestThrottle(() => time);
 
@@ -49,7 +42,7 @@ test("immediate write when throttle window has elapsed", (t: BrittleT) => {
   throttle.flush();
 });
 
-test("events within the same window are buffered, not dropped", (t: BrittleT) => {
+test("events within the same window are buffered, not dropped", (t) => {
   let time = T0;
   const { written, batchSizes, throttle } = createTestThrottle(() => time);
 
@@ -67,7 +60,7 @@ test("events within the same window are buffered, not dropped", (t: BrittleT) =>
   t.alike(batchSizes, [1, 3], "buffered events flushed as single batch");
 });
 
-test("flush is a no-op when buffer is empty", (t: BrittleT) => {
+test("flush is a no-op when buffer is empty", (t) => {
   let time = T0;
   const { written, batchSizes, throttle } = createTestThrottle(() => time);
 
@@ -83,7 +76,7 @@ test("flush is a no-op when buffer is empty", (t: BrittleT) => {
   t.alike(written, [1], "second flush is safe");
 });
 
-test("timer flush writes all buffered events as single batch", async (t: BrittleT) => {
+test("timer flush writes all buffered events as single batch", async (t) => {
   let time = T0;
   const throttleMs = 50;
   const { written, batchSizes, throttle } = createTestThrottle(() => time, throttleMs);
@@ -103,7 +96,7 @@ test("timer flush writes all buffered events as single batch", async (t: Brittle
   throttle.flush();
 });
 
-test("simulates rapid finetune-like progress: no events lost", (t: BrittleT) => {
+test("simulates rapid finetune-like progress: no events lost", (t) => {
   let time = T0;
   const { written, batchSizes, throttle } = createTestThrottle(() => time);
 
@@ -122,7 +115,7 @@ test("simulates rapid finetune-like progress: no events lost", (t: BrittleT) => 
   t.ok(totalBatchCalls < 8, "fewer batch calls than events (throttled)");
 });
 
-test("high-volume download-like burst: all events in bounded batch calls", (t: BrittleT) => {
+test("high-volume download-like burst: all events in bounded batch calls", (t) => {
   let time = T0;
   const { written, batchSizes, throttle } = createTestThrottle(() => time);
 
@@ -142,7 +135,7 @@ test("high-volume download-like burst: all events in bounded batch calls", (t: B
   }
 });
 
-test("maxPending cap triggers early flush", (t: BrittleT) => {
+test("maxPending cap triggers early flush", (t) => {
   let time = T0;
   const maxPending = 5;
   const { written, batchSizes, throttle } = createTestThrottle(() => time, undefined, maxPending);
@@ -164,7 +157,7 @@ test("maxPending cap triggers early flush", (t: BrittleT) => {
   }
 });
 
-test("flush on error path delivers pending events", (t: BrittleT) => {
+test("flush on error path delivers pending events", (t) => {
   let time = T0;
   const { written, throttle } = createTestThrottle(() => time);
 
@@ -180,7 +173,7 @@ test("flush on error path delivers pending events", (t: BrittleT) => {
   t.alike(written, [1, 2, 3], "double flush is safe");
 });
 
-test("mixed fast and slow events: all delivered, batch calls minimized", (t: BrittleT) => {
+test("mixed fast and slow events: all delivered, batch calls minimized", (t) => {
   let time = T0;
   const { written, batchSizes, throttle } = createTestThrottle(() => time);
 

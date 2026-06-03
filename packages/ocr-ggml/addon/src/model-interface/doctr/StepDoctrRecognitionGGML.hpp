@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <opencv2/imgproc.hpp>
 
 #include "DoctrPipelineTypes.hpp"
@@ -22,9 +23,13 @@ public:
   static constexpr int RECOG_WIDTH = StepDoctrRecognition::RECOG_WIDTH;
   static constexpr int DEFAULT_BATCH_SIZE = 32;
 
+  // backendDevice: ggml device the MobileNetV3 feature-extractor graph runs on
+  // (selected by `Pipeline` via `ocr_backend_selection`). nullptr -> CPU
+  // device. The downstream LSTM + linear classifier always run on CPU.
   explicit StepDoctrRecognitionGGML(
       const std::string& pathRecognizer, int batchSize = DEFAULT_BATCH_SIZE,
-      DecodingMethod decoding = DecodingMethod::CTC);
+      DecodingMethod decoding = DecodingMethod::CTC,
+      ggml_backend_dev_t backendDevice = nullptr);
   ~StepDoctrRecognitionGGML();
 
   StepDoctrRecognitionGGML(const StepDoctrRecognitionGGML&) = delete;
