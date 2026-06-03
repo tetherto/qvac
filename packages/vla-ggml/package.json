@@ -52,7 +52,7 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/vla-ggml#readme",
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/infer-base": "^0.6.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
@@ -70,7 +70,9 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
-    }
+    },
+    "./addon.js": "./addon.js",
+    "./binding.js": "./binding.js"
   },
   "main": "index.js",
   "types": "index.d.ts"

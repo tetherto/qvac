@@ -20,3 +20,8 @@ async function runPi05Test (options = {}) { // eslint-disable-line no-unused-var
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runPi05Test')) return __FILTERED
   return runIntegrationModule('../integration/pi05.test.js', options)
 }
+
+async function runSignalForwardingTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runSignalForwardingTest')) return __FILTERED
+  return runIntegrationModule('../integration/signal-forwarding.test.js', options)
+}

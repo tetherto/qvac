@@ -81,6 +81,11 @@ export interface VlaModelOptions {
   opts?: { stats?: boolean }
 }
 
+export interface RunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
+}
+
 export interface QvacResponse {
   await(): Promise<VlaRunResult>
   cancel(): Promise<void>
@@ -96,7 +101,7 @@ export class VlaModel {
    */
   readonly backendName: string | null
   load (opts?: { backend?: 'auto' | 'cpu' }): Promise<void>
-  run (input: VlaRunInput): Promise<QvacResponse>
+  run (input: VlaRunInput, runOptions?: RunOptions): Promise<QvacResponse>
   pause (): Promise<void>
   cancel (): Promise<void>
   unload (): Promise<void>
