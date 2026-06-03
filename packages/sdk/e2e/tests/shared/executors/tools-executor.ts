@@ -69,6 +69,13 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
     }
   }
 
+  // Behavior/shape check only — deliberately does NOT assert which tool the
+  // model picked or its argument values (that is model quality, checked at the
+  // addon level). We verify the SDK produced a STRUCTURED tool call: at least
+  // one call with a non-empty string name (proves the parser ran, not text).
+  // If the expected tool happens to be the one called, we also confirm its
+  // requested argument KEYS are present (structure, not values). A different
+  // valid tool still passes.
   private validateToolCallShape(
     toolCalls:
       | Array<{ id?: string; name?: string; arguments?: Record<string, unknown> }>
@@ -78,32 +85,38 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
     if (!toolCalls || toolCalls.length === 0) {
       return {
         passed: false,
-        output: `Expected a tool call named '${expected.name}' but the model returned no tool calls`,
+        output: "Expected a structured tool call but the model returned none",
       };
     }
 
-    const match = toolCalls.find((c) => c.name === expected.name);
-    if (!match) {
-      const got = toolCalls.map((c) => c.name ?? "<unnamed>").join(", ");
+    const named = toolCalls.filter(
+      (c) => typeof c.name === "string" && c.name.length > 0,
+    );
+    if (named.length === 0) {
       return {
         passed: false,
-        output: `Expected tool call '${expected.name}', got: [${got}]`,
+        output: `Tool calls present but none has a non-empty name: ${JSON.stringify(toolCalls)}`,
       };
     }
 
-    const args = match.arguments ?? {};
-    for (const key of expected.argKeys ?? []) {
-      if (!(key in args)) {
-        return {
-          passed: false,
-          output: `Tool call '${expected.name}' missing argument '${key}'. Got args: ${JSON.stringify(args)}`,
-        };
+    // Only check arg-key structure when the expected tool is the one chosen;
+    // we don't penalize a different (valid) tool choice.
+    const match = named.find((c) => c.name === expected.name);
+    if (match) {
+      const args = match.arguments ?? {};
+      for (const key of expected.argKeys ?? []) {
+        if (!(key in args)) {
+          return {
+            passed: false,
+            output: `Tool call '${expected.name}' missing argument key '${key}'. Got args: ${JSON.stringify(args)}`,
+          };
+        }
       }
     }
 
     return {
       passed: true,
-      output: `Tool call '${expected.name}' present with args: ${JSON.stringify(args)}`,
+      output: `Structured tool call(s): ${named.map((c) => c.name).join(", ")}`,
     };
   }
 }
