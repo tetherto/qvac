@@ -1,27 +1,31 @@
 'use strict'
-// QVAC-18298: Qwen3.5-VL image-inference perf rows for the weekly
-// perf-report aggregate. Split into its own file (separate from the
-// functional qwen3-5.test.js) so the mobile generator gives it a dedicated
-// runQwen35ImagePerfTest function that runs in an isolated Device Farm
-// group — the functional qwen3-5 suite was already near the 30-minute
-// per-test cap on slower Mali GPUs, so bundling the 3-image perf loop in
-// the same group timed out.
+// QVAC-18298: shared helper for the per-(model x image) VLM perf tests.
+// Each gemma4-image-* / qwen3-5-image-* file is a thin entry that calls
+// runVlmImagePerf with one image, mirroring the SmolVLM2 image-*.test.js
+// structure (one Device Farm test = one image) so a single test stays well
+// under the 30-minute mobile cap even on the slower Mali GPU.
+//
+// This file intentionally does NOT end in `.test.js` so the mobile test
+// generator and brittle runner skip it.
 
-const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
-const LlmLlamacpp = require('../../index.js')
-const { ensureModel, getMediaPath } = require('./utils')
 const os = require('bare-os')
 const process = require('bare-process')
+const LlmLlamacpp = require('../../index.js')
+const { ensureModel, getMediaPath } = require('./utils')
 const { recordPerformance } = require('./_perf-helper.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+// Desktop x64-darwin and linux-arm64 hosts have no working GPU stack here so
+// they drop to CPU; everywhere else (incl. mobile Device Farm) uses GPU.
 const useCpu = isDarwinX64 || isLinuxArm64
 
+// QVAC_PERF_RUNS / QVAC_PERF_WARMUP_RUNS knobs, same as image-*.test.js.
+// Default 1 warmup + 1 counted on PRs; the benchmark dispatch bumps RUNS to 3.
 function _envInt (key, fallback) {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
@@ -32,14 +36,63 @@ function _envInt (key, fallback) {
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
 const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 
-const QWEN3_5_MODEL = {
-  name: 'Qwen3.5-0.8B-Q8_0.gguf',
-  url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+// Image cases shared by both models. ctxSize is per-image because Qwen3.5-VL
+// uses dense patch tokenization (the 1472x1472 fruit plate → ~4k image
+// tokens, the 3000x4000 aurora more), so the large images need a bigger ctx
+// to avoid mid-decode overflow. Gemma 4's SigLIP encoder caps at ~1024 image
+// tokens, so 4096 is always safe there — gemma uses gemmaCtxSize.
+const IMAGE_CASES = {
+  elephant: {
+    name: 'elephant',
+    imageFile: 'elephant.jpg',
+    keywords: ['elephant', 'elephants'],
+    gemmaCtxSize: '4096',
+    qwenCtxSize: '4096'
+  },
+  'fruit-plate': {
+    name: 'fruit plate',
+    imageFile: 'fruitPlate.png',
+    keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'],
+    gemmaCtxSize: '4096',
+    qwenCtxSize: '8192'
+  },
+  'high-res-aurora': {
+    name: 'high-res aurora',
+    imageFile: 'highRes3000x4000.jpg',
+    keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'],
+    gemmaCtxSize: '4096',
+    qwenCtxSize: '8192'
+  }
 }
 
-const QWEN3_5_PROJ_MODEL = {
-  name: 'mmproj-Qwen3.5-0.8B-F16.gguf',
-  url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+const GEMMA4_MODEL = {
+  perfLabel: 'gemma4-vl',
+  llmModel: {
+    modelName: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
+    downloadUrl: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf'
+  },
+  projModel: {
+    modelName: 'mmproj-google_gemma-4-E2B-it-bf16.gguf',
+    downloadUrl: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf'
+  },
+  // ubatch 320 keeps Gemma 4's Metal compute buffer under the iPhone Jetsam
+  // ceiling; reasoning-budget 0 suppresses CoT so a one-sentence answer fits.
+  extraConfig: { 'ubatch-size': '320' },
+  ctxFor: (imageCase) => imageCase.gemmaCtxSize
+}
+
+const QWEN35_MODEL = {
+  perfLabel: 'qwen3.5-vl',
+  llmModel: {
+    modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
+    downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+  },
+  projModel: {
+    modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+    downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+  },
+  extraConfig: {},
+  ctxFor: (imageCase) => imageCase.qwenCtxSize
 }
 
 function createLogger () {
@@ -51,40 +104,26 @@ function createLogger () {
   }
 }
 
-// VLM perf coverage matches the SmolVLM2 image-*.test.js set. Qwen3.5-VL
-// uses dense patch tokenization, so the 1472x1472 fruit plate encodes to
-// ~4k image tokens and the high-res aurora more — a fixed 4096 ctx would
-// overflow mid-decode. elephant (~270 tokens) keeps a small ctx; the large
-// images get 8192 headroom for image tokens + generation.
-const QWEN35_IMAGE_CASES = [
-  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'], ctxSize: '4096' },
-  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'], ctxSize: '8192' },
-  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'], ctxSize: '8192' }
-]
-
-async function runQwen35ImagePerf (t, imageCase) {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: QWEN3_5_MODEL.name,
-    downloadUrl: QWEN3_5_MODEL.url
-  })
-  const [projModelName] = await ensureModel({
-    modelName: QWEN3_5_PROJ_MODEL.name,
-    downloadUrl: QWEN3_5_PROJ_MODEL.url
-  })
+/**
+ * Loads `modelDef`, runs PERF_WARMUP_RUNS warmup + PERF_RUNS counted image
+ * inferences on a single `imageCase`, records a perf row per counted run and
+ * asserts the expected keyword. One image per call → one Device Farm test.
+ */
+async function runVlmImagePerf (t, modelDef, imageCase) {
+  const [modelName, dirPath] = await ensureModel(modelDef.llmModel)
+  const [projModelName] = await ensureModel(modelDef.projModel)
   const modelPath = path.join(dirPath, modelName)
   const projectionModelPath = path.join(dirPath, projModelName)
 
-  // reasoning-budget 0 suppresses Qwen3.5's <think> trace so a one-sentence
-  // image answer doesn't eat the ctx budget; ctx_size is per-image so large
-  // images don't overflow mid-decode.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
-    ctx_size: imageCase.ctxSize,
+    ctx_size: modelDef.ctxFor(imageCase),
     temp: '0',
     seed: '42',
     'reasoning-budget': '0',
-    verbosity: '2'
+    verbosity: '2',
+    ...modelDef.extraConfig
   }
 
   const inference = new LlmLlamacpp({
@@ -95,9 +134,9 @@ async function runQwen35ImagePerf (t, imageCase) {
   })
 
   // [image] [model] [backend] so the GitHub summary Test column shows the
-  // image under test, matching the [elephant] [GPU] image rows.
+  // image under test, matching the existing [elephant] [GPU] image rows.
   const backendTag = useCpu ? 'CPU' : 'GPU'
-  const perfLabel = `[${imageCase.name}] [qwen3.5-vl] [${backendTag}]`
+  const perfLabel = `[${imageCase.name}] [${modelDef.perfLabel}] [${backendTag}]`
 
   async function runImageInference (imageBytes) {
     const messages = [
@@ -159,14 +198,9 @@ async function runQwen35ImagePerf (t, imageCase) {
   }
 }
 
-for (const imageCase of QWEN35_IMAGE_CASES) {
-  test(`Qwen3.5-VL image perf [${imageCase.name}]`, {
-    timeout: 1_800_000
-  }, async t => {
-    await runQwen35ImagePerf(t, imageCase)
-  })
+module.exports = {
+  IMAGE_CASES,
+  GEMMA4_MODEL,
+  QWEN35_MODEL,
+  runVlmImagePerf
 }
-
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})

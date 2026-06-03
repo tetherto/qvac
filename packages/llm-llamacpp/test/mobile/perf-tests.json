@@ -4,6 +4,10 @@
   "runImageHighResAuroraTest",
   "runBitnetTest",
   "runToolCallingTest",
-  "runGemma4ImagePerfTest",
-  "runQwen35ImagePerfTest"
+  "runGemma4ImageElephantPerfTest",
+  "runGemma4ImageFruitPlatePerfTest",
+  "runGemma4ImageHighResAuroraPerfTest",
+  "runQwen35ImageElephantPerfTest",
+  "runQwen35ImageFruitPlatePerfTest",
+  "runQwen35ImageHighResAuroraPerfTest"
 ]
