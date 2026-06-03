@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { createDisposableScope } from "@/server/bare/runtime/disposable-scope";
 
@@ -16,20 +15,8 @@ import { createDisposableScope } from "@/server/bare/runtime/disposable-scope";
 //      cleanup eagerly so resources don't leak silently.
 // -----------------------------------------------------------------------------
 
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-  exception: (
-    fn: () => Promise<unknown> | unknown,
-    matcher?: unknown,
-    msg?: string,
-  ) => Promise<void>;
-  pass: (msg?: string) => void;
-  fail: (msg?: string) => void;
-};
 
-test("disposable-scope: host runtime exposes Symbol.asyncDispose", (t: T) => {
+test("disposable-scope: host runtime exposes Symbol.asyncDispose", (t) => {
   // Tripwire for the module-load guard in disposable-scope.ts. If a future
   // runtime upgrade strips Symbol.asyncDispose (older Bare/Expo, missing
   // polyfill), the guard throws at SDK import time and this test fails first.
@@ -41,7 +28,7 @@ test("disposable-scope: host runtime exposes Symbol.asyncDispose", (t: T) => {
   );
 });
 
-test("disposable-scope: cleanups run in LIFO order", async (t: T) => {
+test("disposable-scope: cleanups run in LIFO order", async (t) => {
   const order: string[] = [];
   const scope = createDisposableScope();
   scope.defer(() => {
@@ -60,7 +47,7 @@ test("disposable-scope: cleanups run in LIFO order", async (t: T) => {
   t.is(scope.disposed, true);
 });
 
-test("disposable-scope: dispose is idempotent", async (t: T) => {
+test("disposable-scope: dispose is idempotent", async (t) => {
   let runs = 0;
   const scope = createDisposableScope();
   scope.defer(() => {
@@ -73,7 +60,7 @@ test("disposable-scope: dispose is idempotent", async (t: T) => {
   t.is(scope.disposed, true);
 });
 
-test("disposable-scope: a single failing cleanup rethrows verbatim", async (t: T) => {
+test("disposable-scope: a single failing cleanup rethrows verbatim", async (t) => {
   const scope = createDisposableScope();
   const boom = new Error("boom");
   scope.defer(() => {
@@ -84,7 +71,7 @@ test("disposable-scope: a single failing cleanup rethrows verbatim", async (t: T
   });
 });
 
-test("disposable-scope: multiple failures are collected into AggregateError", async (t: T) => {
+test("disposable-scope: multiple failures are collected into AggregateError", async (t) => {
   const scope = createDisposableScope();
   let third = 0;
   scope.defer(() => {
@@ -111,7 +98,7 @@ test("disposable-scope: multiple failures are collected into AggregateError", as
   t.is(third, 1, "non-throwing cleanup still runs");
 });
 
-test("disposable-scope: every cleanup runs even when one throws midway", async (t: T) => {
+test("disposable-scope: every cleanup runs even when one throws midway", async (t) => {
   const scope = createDisposableScope();
   let aRan = 0;
   let cRan = 0;
@@ -133,7 +120,7 @@ test("disposable-scope: every cleanup runs even when one throws midway", async (
   t.is(cRan, 1, "later-registered cleanup ran first (LIFO) and unaffected");
 });
 
-test("disposable-scope: late defer runs the cleanup eagerly", async (t: T) => {
+test("disposable-scope: late defer runs the cleanup eagerly", async (t) => {
   const scope = createDisposableScope();
   await scope[Symbol.asyncDispose]();
   t.is(scope.disposed, true);
@@ -148,7 +135,7 @@ test("disposable-scope: late defer runs the cleanup eagerly", async (t: T) => {
   t.is(lateRan, 1, "late-registered cleanup ran without leaking");
 });
 
-test("disposable-scope: works with `await using` syntax", async (t: T) => {
+test("disposable-scope: works with `await using` syntax", async (t) => {
   const seen: string[] = [];
   async function run() {
     await using scope = createDisposableScope();

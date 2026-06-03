@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { AbortController } from "bare-abort-controller";
 import {
@@ -29,15 +28,6 @@ import { InferenceCancelledError } from "@/utils/errors-server";
 // → underlying transfer aborts" without timing dependencies.
 // -----------------------------------------------------------------------------
 
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-  exception: (
-    fn: () => Promise<unknown> | unknown,
-    matcher?: unknown,
-    msg?: string,
-  ) => Promise<void>;
-};
 
 interface ControllableDownload {
   start: (ctx: DownloadContext) => Promise<string>;
@@ -89,7 +79,7 @@ function bindingFromAbortController(
   };
 }
 
-test("download-manager: two callers with same key share one transfer", async (t: T) => {
+test("download-manager: two callers with same key share one transfer", async (t) => {
   const dl = makeControllableDownload();
   const downloadKey = `dedup:${Math.random()}`;
 
@@ -124,7 +114,7 @@ test("download-manager: two callers with same key share one transfer", async (t:
   t.is(b, "/cached/model.gguf");
 });
 
-test("download-manager: cancelling one subscriber does not affect the other", async (t: T) => {
+test("download-manager: cancelling one subscriber does not affect the other", async (t) => {
   const dl = makeControllableDownload();
   const downloadKey = `cancel-one:${Math.random()}`;
 
@@ -174,7 +164,7 @@ test("download-manager: cancelling one subscriber does not affect the other", as
   t.is(await second.promise, "/path/b.gguf");
 });
 
-test("download-manager: last subscriber leaving aborts the transfer", async (t: T) => {
+test("download-manager: last subscriber leaving aborts the transfer", async (t) => {
   const dl = makeControllableDownload();
   const downloadKey = `last-sub:${Math.random()}`;
 
@@ -223,7 +213,7 @@ test("download-manager: last subscriber leaving aborts the transfer", async (t: 
   dl.reject(new Error("download aborted"));
 });
 
-test("download-manager: scope.defer is the safety net for handler-exit paths", async (t: T) => {
+test("download-manager: scope.defer is the safety net for handler-exit paths", async (t) => {
   const dl = makeControllableDownload();
   const downloadKey = `defer-unwind:${Math.random()}`;
 
@@ -262,7 +252,7 @@ test("download-manager: scope.defer is the safety net for handler-exit paths", a
   dl.reject(new Error("download aborted"));
 });
 
-test("download-manager: cancel error carries the requestId", async (t: T) => {
+test("download-manager: cancel error carries the requestId", async (t) => {
   const dl = makeControllableDownload();
   const downloadKey = `cancel-id:${Math.random()}`;
 

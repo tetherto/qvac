@@ -1,14 +1,6 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { TtsMulticast } from "@/client/api/text-to-speech";
 import type { TtsResponse } from "@/schemas";
-
-type BrittleT = {
-  is: Function;
-  ok: Function;
-  alike: Function;
-  exception: Function;
-};
 
 // ---------------------------------------------------------------------------
 // Push-controlled source: the test pushes `TtsResponse` items at deterministic
@@ -92,7 +84,7 @@ function queueSize(mc: TtsMulticast): number {
 // Tests
 // ---------------------------------------------------------------------------
 
-test("TtsMulticast: each subscriber receives all items independently and in order", async (t: BrittleT) => {
+test("TtsMulticast: each subscriber receives all items independently and in order", async (t) => {
   const src = createPushSource();
   const mc = new TtsMulticast(src.iterable);
   const sub0 = mc.subscribe();
@@ -116,7 +108,7 @@ test("TtsMulticast: each subscriber receives all items independently and in orde
   t.is(await mc.done, true, "done resolves true on clean completion");
 });
 
-test("TtsMulticast: queue empties after both subscribers fully consume", async (t: BrittleT) => {
+test("TtsMulticast: queue empties after both subscribers fully consume", async (t) => {
   const src = createPushSource();
   const mc = new TtsMulticast(src.iterable);
   const sub0 = mc.subscribe();
@@ -133,7 +125,7 @@ test("TtsMulticast: queue empties after both subscribers fully consume", async (
   t.is(queueSize(mc), 0, "queue is empty after both subscribers finish");
 });
 
-test("TtsMulticast: subscriber A breaks out, subscriber B still consumes; queue stays bounded", async (t: BrittleT) => {
+test("TtsMulticast: subscriber A breaks out, subscriber B still consumes; queue stays bounded", async (t) => {
   const src = createPushSource();
   const mc = new TtsMulticast(src.iterable);
   const subA = mc.subscribe();
@@ -185,7 +177,7 @@ test("TtsMulticast: subscriber A breaks out, subscriber B still consumes; queue 
   );
 });
 
-test("TtsMulticast: source error rejects done", async (t: BrittleT) => {
+test("TtsMulticast: source error rejects done", async (t) => {
   const src = createPushSource();
   const mc = new TtsMulticast(src.iterable);
   // Subscribe so we can drain successfully-pushed frames first.
@@ -211,7 +203,7 @@ test("TtsMulticast: source error rejects done", async (t: BrittleT) => {
   );
 });
 
-test("TtsMulticast: late subscriber misses earlier items (verifies trim correctness)", async (t: BrittleT) => {
+test("TtsMulticast: late subscriber misses earlier items (verifies trim correctness)", async (t) => {
   // This is the dual of the eager-subscribe contract used by `sentenceStreamTts`:
   // by the time a second subscriber registers, items already trimmed from the
   // queue are gone. This test pins down that semantics so a regression that

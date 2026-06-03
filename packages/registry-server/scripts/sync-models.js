@@ -9,6 +9,9 @@ const { connectToRegistry } = require('./utils/rpc-client')
 const { parseCanonicalSource } = require('../lib/source-helpers')
 const QVACRegistryClient = require('../client/lib/client')
 
+const ADD_MODEL_RPC_TIMEOUT_MS = 60 * 60 * 1000
+const ADD_MODEL_POLL_INTERVAL_MS = 10 * 1000
+
 async function syncModels () {
   const args = process.argv.slice(2)
   const fileArg = args.find(arg => arg.startsWith('--file='))
@@ -30,7 +33,7 @@ async function syncModels () {
   const client = new QVACRegistryClient({ registryCoreKey, logger })
   await client.ready()
 
-  const connection = await connectToRegistry({ config, logger })
+  let connection = await connectToRegistry({ config, logger })
 
   try {
     const configModels = JSON.parse(await fs.readFile(path.resolve(filePath), 'utf8'))
@@ -95,7 +98,30 @@ async function syncModels () {
               modelRequest.deprecationReason = entry.deprecationReason
             }
 
-            await connection.rpc.request('add-model', modelRequest)
+            try {
+              await connection.rpc.request('add-model', modelRequest, { timeout: ADD_MODEL_RPC_TIMEOUT_MS })
+            } catch (err) {
+              if (!isAmbiguousRpcError(err)) throw err
+
+              logger.warn({
+                path: sourceInfo.path,
+                source: sourceInfo.protocol,
+                error: err.message,
+                code: err.code
+              }, 'add-model RPC ended ambiguously; polling registry for completed ingest')
+
+              const recovery = await recoverAfterAmbiguousAdd({
+                client,
+                sourceInfo,
+                logger,
+                connection,
+                reconnect: () => connectToRegistry({ config, logger })
+              })
+              connection = recovery.connection
+
+              if (recovery.error) throw recovery.error
+              dbByKey.set(key, recovery.model)
+            }
           } else {
             logger.info(`[DRY RUN] Would add: ${sourceInfo.path}`)
           }
@@ -183,6 +209,88 @@ async function syncModels () {
     await client.close()
     await connection.cleanup()
   }
+}
+
+async function recoverAfterAmbiguousAdd ({
+  client,
+  sourceInfo,
+  logger,
+  connection,
+  reconnect,
+  waitForModel = waitForModelAfterAmbiguousAdd
+}) {
+  let model = null
+  let error = null
+
+  try {
+    model = await waitForModel({
+      client,
+      sourceInfo,
+      logger
+    })
+  } catch (err) {
+    error = err
+  }
+
+  await connection.cleanup().catch(cleanupErr => {
+    logger.warn({ error: cleanupErr.message }, 'Failed to clean up stale RPC connection')
+  })
+
+  return {
+    connection: await reconnect(),
+    error,
+    model
+  }
+}
+
+function isAmbiguousRpcError (err) {
+  if (!err) return false
+
+  const code = err.code || err.cause?.code
+  if (code === 'ETIMEDOUT' || code === 'CHANNEL_CLOSED' || code === 'CHANNEL_DESTROYED') {
+    return true
+  }
+
+  const message = String(err.message || '').toLowerCase()
+  return (
+    message.includes('connection timed out') ||
+    message.includes('channel closed') ||
+    message.includes('channel destroyed')
+  )
+}
+
+async function waitForModelAfterAmbiguousAdd ({
+  client,
+  sourceInfo,
+  timeoutMs = ADD_MODEL_RPC_TIMEOUT_MS,
+  pollIntervalMs = ADD_MODEL_POLL_INTERVAL_MS,
+  logger = console,
+  sleep = defaultSleep
+}) {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (client.db?.core?.update) {
+      await client.db.core.update()
+    }
+
+    const model = await client.getModel(sourceInfo.path, sourceInfo.protocol)
+    if (model) {
+      logger.info({
+        path: sourceInfo.path,
+        source: sourceInfo.protocol
+      }, 'Model appeared after ambiguous add-model RPC')
+      return model
+    }
+
+    await sleep(pollIntervalMs)
+  }
+
+  throw new Error(`Timed out waiting for model after ambiguous add-model RPC: ${sourceInfo.path}`)
+}
+
+function defaultSleep (ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 function needsMetadataUpdate (config, existing, sourceInfo) {
@@ -274,4 +382,10 @@ if (require.main === module) {
     })
 }
 
-module.exports = { syncModels }
+module.exports = {
+  ADD_MODEL_RPC_TIMEOUT_MS,
+  recoverAfterAmbiguousAdd,
+  isAmbiguousRpcError,
+  syncModels,
+  waitForModelAfterAmbiguousAdd
+}

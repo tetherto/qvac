@@ -88,6 +88,30 @@ Pod scope and high-level principles live in `.cursor/rules/devops/main.mdc`. Thi
 - Matrix dimension names are concrete and stable: `os`, `arch`, `node-version`, `target` — not `config`, `variant`, `flavor`.
 - `include` and `exclude` are documented in a comment when used; they obscure the matrix.
 
+## Self-hosted runners — Manual Workspace Cleanup
+
+Persistent self-hosted runners (`qvac-*` labels) reuse disk between jobs. Workflows that checkout the default `$GITHUB_WORKSPACE` on those runners should start with a step named **Manual Workspace Cleanup** (before `actions/checkout`). Full rationale: [`docs/ci/SELF-HOSTED-RUNNERS.md`](../../../docs/ci/SELF-HOSTED-RUNNERS.md).
+
+**Required shape** when the job matrix mixes GitHub-hosted and self-hosted runners:
+
+```yaml
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+```
+
+| Field | Why |
+|-------|-----|
+| `working-directory: .` | Job- or step-level defaults often set `packages/<pkg>/`. Without an explicit `.`, the shell runs in the package directory and cleanup behavior diverges from intent even though `$GITHUB_WORKSPACE` is absolute. |
+| `if: runner.environment != 'github-hosted'` | Cleanup is only needed on persistent self-hosted machines. Prefer this over `startsWith(matrix.runner, 'qvac-')` / `startsWith(matrix.os, 'qvac-')` so hosted matrix rows (`ubuntu-*`, `macos-*`) skip the step without coupling to label strings. |
+
+- **Do not** use `startsWith(matrix.runner, 'qvac-')` on new or edited cleanup steps; use `runner.environment`.
+- **Omit** the `if` only when the job never runs on `github-hosted` (self-hosted-only job).
+- **Omit** the whole step when the workflow no longer does a full-repo checkout at `$GITHUB_WORKSPACE` (some mobile/refactored flows).
+- Gate [`.github/actions/cache-models`](../../../.github/actions/cache-models/action.yml) with the same `runner.environment` condition.
+
 ## Environments
 
 - **Production deployments target a GitHub Environment** with required reviewers configured in the GitHub UI, not in YAML.
