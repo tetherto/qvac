@@ -21,7 +21,7 @@ on:
         required: false
         default: ""
       qvac_perf_only:
-        description: "If true, run only the perf-emitting tests (image-elephant, image-fruit-plate, image-high-res-aurora, bitnet, tool-calling)."
+        description: "If true, run only the perf-emitting tests (image-elephant, image-fruit-plate, image-high-res-aurora, bitnet, tool-calling, gemma4, qwen3-5)."
         type: boolean
         required: false
         default: false
@@ -277,7 +277,9 @@ jobs:
               test/integration/tool-calling.test.js \
               test/integration/image-elephant.test.js \
               test/integration/image-fruit-plate.test.js \
-              test/integration/image-high-res-aurora.test.js
+              test/integration/image-high-res-aurora.test.js \
+              test/integration/gemma4.test.js \
+              test/integration/qwen3-5.test.js
             bare test/integration/all.js --exit 2>&1 | tee test-output.log
             exit ${PIPESTATUS[0]}
           fi
@@ -300,7 +302,9 @@ jobs:
               test/integration/tool-calling.test.js `
               test/integration/image-elephant.test.js `
               test/integration/image-fruit-plate.test.js `
-              test/integration/image-high-res-aurora.test.js
+              test/integration/image-high-res-aurora.test.js `
+              test/integration/gemma4.test.js `
+              test/integration/qwen3-5.test.js
           } else {
             npm run test:integration:generate
           }

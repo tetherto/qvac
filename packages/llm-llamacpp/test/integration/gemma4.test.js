@@ -6,11 +6,26 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, getMediaPath } = require('./utils')
 const os = require('bare-os')
+const process = require('bare-process')
+// QVAC-18298: emit a Gemma4-VL perf row into the weekly perf-report aggregate.
+const { recordPerformance } = require('./_perf-helper.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+
+// QVAC-18298: same QVAC_PERF_RUNS / QVAC_PERF_WARMUP_RUNS knobs as the
+// image-*.test.js perf rows. Default 1+1 on PRs; benchmark dispatch bumps to 3.
+function _envInt (key, fallback) {
+  let raw = ''
+  if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
+  if (!raw && typeof process !== 'undefined' && process.env) raw = process.env[key] || ''
+  const v = parseInt(raw, 10)
+  return Number.isFinite(v) && v > 0 ? v : fallback
+}
+const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
+const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 // Desktop x64-darwin and linux-arm64 hosts have no working GPU stack here
 // so we drop to CPU; everywhere else (including iOS / Android device farm)
 // uses the GPU backend the addon picks. Vision (mmproj) follows the same
@@ -245,8 +260,36 @@ test('Gemma 4 can describe an image', {
   const inference = new LlmLlamacpp({
     files: { model: [modelPath], projectionModel: projectionModelPath },
     config,
-    logger: createLogger()
+    // QVAC-18298: stats:true so response.stats (TTFT / TPS / tokens) is
+    // populated for the perf row.
+    logger: createLogger(),
+    opts: { stats: true }
   })
+
+  // QVAC-18298: backend in the label so each platform x backend gets its own
+  // aggregate.js cell (it groups perf rows by result.test).
+  const backendTag = useCpu ? 'CPU' : 'GPU'
+  const perfLabel = `[gemma4-vl] [${backendTag}]`
+
+  async function runImageInference (imageBytes) {
+    const messages = [
+      { role: 'user', type: 'media', content: imageBytes },
+      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
+    ]
+    const startTime = Date.now()
+    const response = await inference.run(messages)
+    const chunks = []
+    let error = null
+    response.onUpdate(data => { chunks.push(data) })
+      .onError(err => { error = err })
+    await response.await()
+    if (error) throw new Error('Inference error: ' + error)
+    return {
+      output: chunks.join(''),
+      totalTime: Date.now() - startTime,
+      stats: response.stats || null
+    }
+  }
 
   try {
     const t0 = Date.now()
@@ -257,30 +300,33 @@ test('Gemma 4 can describe an image', {
     t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
 
     const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
-    const messages = [
-      { role: 'user', type: 'media', content: imageBytes },
-      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
-    ]
 
-    const response = await inference.run(messages)
-    const generatedText = []
-    let error = null
-
-    response.onUpdate(data => { generatedText.push(data) })
-      .onError(err => { error = err })
-
-    await response.await()
-
-    if (error) {
-      throw new Error('Inference error: ' + error)
+    // QVAC-18298: warmup pass(es) absorb one-shot shader-compile / buffer
+    // allocation costs and are not recorded.
+    for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
+      const warmup = await runImageInference(imageBytes)
+      t.comment(`${perfLabel} warmup ${w}/${PERF_WARMUP_RUNS} (${warmup.totalTime}ms, ${warmup.output.length} chars) - perf NOT recorded`)
     }
 
-    const output = generatedText.join('')
-    t.ok(output.length > 0, `image inference produced output (${output.length} chars)`)
-    console.log(`  output: "${output.slice(0, 200)}"`)
+    // QVAC-18298: PERF_RUNS counted rows under the same label → mean ± std.
+    let lastOutput = ''
+    for (let run = 1; run <= PERF_RUNS; run++) {
+      const { output, totalTime, stats } = await runImageInference(imageBytes)
+      lastOutput = output
+      t.comment(`${perfLabel} run ${run}/${PERF_RUNS} output: "${output.slice(0, 200)}"`)
+      t.comment(recordPerformance(perfLabel, totalTime, {
+        _output: output,
+        stats,
+        deviceId: useCpu ? 'cpu' : 'gpu',
+        scenario: 'image',
+        model: modelName.replace(/\.gguf$/i, '')
+      }))
+    }
 
-    const lowerOutput = output.toLowerCase()
-    t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${output.slice(0, 100)}"`)
+    t.ok(lastOutput.length > 0, `image inference produced output (${lastOutput.length} chars)`)
+
+    const lowerOutput = lastOutput.toLowerCase()
+    t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${lastOutput.slice(0, 100)}"`)
   } finally {
     await inference.unload().catch(() => {})
   }
