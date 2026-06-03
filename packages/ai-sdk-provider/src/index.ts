@@ -1,5 +1,11 @@
 export { createQvac, qvac } from './provider.js'
-export type { QvacOptions, QvacProvider } from './types.js'
+export type {
+  ManagedQvacProvider,
+  QvacExternalOptions,
+  QvacManagedOptions,
+  QvacOptions,
+  QvacProvider
+} from './types.js'
 
 export type { EndpointCategory, ModelConstant } from './models/types.js'
 export { allModels } from './models/constants.js'

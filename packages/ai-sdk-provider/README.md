@@ -4,7 +4,11 @@
 
 QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package is a thin, branded wrapper around [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that points at a running `qvac serve openai` HTTP server and re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
-> **Status — v1 (`0.1.0`).** External mode only: the package wraps a `qvac serve openai` HTTP endpoint that you run yourself. A future `0.2.0` will add `mode: 'managed'` for auto-spawn / supervise of the serve process. See the [QVAC-19194 epic](https://app.asana.com/1/45238840754660/task/1214968611313049).
+> **Status — v2 (`0.2.0`).** Two modes:
+> - **External** (default, unchanged from v1): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
+> - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, spawns and supervises `qvac serve` for you on a free port, and tears it down on exit. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
+>
+> See the [QVAC-19194 epic](https://app.asana.com/1/45238840754660/task/1214968611313049).
 
 ---
 
@@ -73,6 +77,71 @@ qvac.completionModel('qwen3-600m')     // legacy completion
 qvac.textEmbeddingModel('embed-gemma') // text embeddings
 qvac.imageModel('flux-schnell')        // image generation
 ```
+
+---
+
+## Managed mode
+
+External mode (above) assumes you've already authored a `qvac.config.json` and have `qvac serve openai` running in another terminal. **Managed mode removes both steps**: pass `mode: 'managed'` and a list of model constants, and the provider will synthesize an ephemeral config, spawn `qvac serve` on a free port, wait until it's healthy, and shut it down cleanly when you're done.
+
+```bash
+# Managed mode needs the QVAC CLI available (optional peer dependency):
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli
+```
+
+```ts
+import { createQvac } from '@qvac/ai-sdk-provider'
+import { generateText } from 'ai'
+
+// `createQvac` is async in managed mode — it resolves once the serve is healthy.
+const qvac = await createQvac({
+  mode: 'managed',
+  models: ['QWEN3_600M_INST_Q4'] // SDK model constant names; first is the default
+})
+
+try {
+  const { text } = await generateText({
+    model: qvac('QWEN3_600M_INST_Q4'), // each constant becomes a same-named alias
+    prompt: 'Write a haiku about local-first AI.'
+  })
+  console.log(text)
+} finally {
+  await qvac.close() // SIGTERM → grace → SIGKILL, then cleanup
+}
+```
+
+The returned provider is an `AsyncDisposable`, so `await using` handles teardown for you:
+
+```ts
+await using qvac = await createQvac({ mode: 'managed', models: ['QWEN3_600M_INST_Q4'] })
+const { text } = await generateText({ model: qvac('QWEN3_600M_INST_Q4'), prompt: '…' })
+// serve is torn down automatically at the end of the scope
+```
+
+### Managed options
+
+```ts
+interface QvacManagedOptions {
+  mode: 'managed'
+  models: string[]               // SDK model constant names (see `models` export)
+  servePort?: number             // default: auto-allocate a free port
+  serveHost?: string             // default: '127.0.0.1' (loopback only)
+  serveStartTimeout?: number     // ms to wait for health; default: 180000
+  serveBinPath?: string          // override the `qvac` binary; default: resolve @qvac/cli
+  apiKey?: string                // default: 'qvac'
+  headers?: Record<string, string>
+  fetch?: typeof fetch
+}
+```
+
+The resolved provider also exposes `provider.port`, `provider.pid`, and `provider.baseURL` for diagnostics.
+
+### Behaviour notes
+
+- **Startup is gated on model preload.** `qvac serve` does not open its port until every preloaded model is ready, and a cold P2P download can take minutes — hence the generous default `serveStartTimeout`. Raise it for large models.
+- **Lifecycle is supervised.** The provider installs `exit` / `SIGINT` / `SIGTERM` handlers so the child serve is never orphaned, and records its PID under `~/.qvac/managed-serves/` so a later run can sweep any serve leaked by a hard crash.
+- **External mode pays nothing.** The supervisor (and its `node:child_process` / `@qvac/cli` resolution) is dynamically imported only when `mode: 'managed'` is set.
+- **Node 20+ and Bun.** The supervisor uses only portable `node:` APIs — no Bun-specific calls.
 
 ---
 
@@ -200,18 +269,24 @@ Registry entries for engines without an OpenAI-shaped surface (VAD, classificati
 
 ## API
 
-### `createQvac(options?: QvacOptions): QvacProvider`
+### `createQvac(options?): QvacProvider | Promise<ManagedQvacProvider>`
 
-Factory returning a branded Vercel AI SDK provider. Wraps `createOpenAICompatible` with QVAC defaults.
+Factory returning a branded Vercel AI SDK provider. The return type depends on `mode`:
+
+- **External** (default): returns a `QvacProvider` **synchronously**. Wraps `createOpenAICompatible` with QVAC defaults.
+- **Managed** (`mode: 'managed'`): returns a `Promise<ManagedQvacProvider>` that resolves once the spawned `qvac serve` is healthy. See [Managed mode](#managed-mode).
 
 ```ts
-interface QvacOptions {
+interface QvacExternalOptions {
+  mode?: 'external'                      // default
   baseURL?: string                       // default: see Default base URL
   apiKey?: string                        // default: 'qvac'
   headers?: Record<string, string>       // default: {}
   fetch?: typeof fetch                   // default: globalThis.fetch
 }
 ```
+
+For `QvacManagedOptions` and the `ManagedQvacProvider` shape, see [Managed options](#managed-options).
 
 ### `qvac`
 
@@ -235,7 +310,7 @@ createOpenAICompatible({
 })
 ```
 
-You get the QVAC branded export, the typed model metadata, the future `mode: 'managed'` auto-spawn surface, and a discoverable handle for the [`models.dev`](https://models.dev) catalog (so QVAC shows up in `/connect` for OpenCode and other catalog consumers).
+You get the QVAC branded export, the typed model metadata, the [`mode: 'managed'`](#managed-mode) auto-spawn / supervise surface, and a discoverable handle for the [`models.dev`](https://models.dev) catalog (so QVAC shows up in `/connect` for OpenCode and other catalog consumers).
 
 ---
 

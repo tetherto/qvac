@@ -14,3 +14,26 @@ export const DEFAULT_BASE_URL = 'http://127.0.0.1:11435/v1'
 export const DEFAULT_API_KEY = 'qvac'
 
 export const DEFAULT_HEADERS: Readonly<Record<string, string>> = Object.freeze({})
+
+// ── Managed mode ────────────────────────────────────────────────────────────
+
+// Host the spawned `qvac serve` binds to. Loopback only — managed mode is for
+// the single-machine "run it for me" case, never a public listener.
+export const DEFAULT_SERVE_HOST = '127.0.0.1'
+
+// Max time to wait for the serve to answer `GET /v1/models`. The port stays
+// closed until preload finishes and a cold P2P download can take minutes, so
+// this is deliberately generous.
+export const DEFAULT_SERVE_START_TIMEOUT_MS = 180_000
+
+// Interval between health-check polls while waiting for startup.
+export const SERVE_HEALTH_POLL_INTERVAL_MS = 250
+
+// Grace period between SIGTERM and SIGKILL during shutdown, mirroring the
+// CLI's own `close-with-grace` ladder.
+export const SERVE_SHUTDOWN_GRACE_MS = 5_000
+
+// Bin name used when spawning the resolved `@qvac/cli` entry is not desired
+// (i.e. the caller passes `serveBinPath`). Kept here for documentation; the
+// supervisor spawns the explicit path verbatim.
+export const DEFAULT_SERVE_BIN = 'qvac'
