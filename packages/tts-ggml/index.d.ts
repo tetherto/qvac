@@ -1,4 +1,4 @@
-import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
+import type { QvacResponse } from '@qvac/infer-base'
 
 /**
  * Model file paths for the GGML TTS backend.  Engine is auto-detected
@@ -119,9 +119,10 @@ declare class TTSGgml {
    */
   run(
     input: TTSGgml.TTSRunInput & { streamOutput: true },
+    runOptions?: TTSGgml.TTSRunOptions,
   ): Promise<QvacResponse<TTSGgml.TTSOutputChunk & TTSGgml.SentenceStreamChunkMeta>>
 
-  run(input: TTSGgml.TTSRunInput): Promise<QvacResponse<TTSGgml.TTSOutputChunk>>
+  run(input: TTSGgml.TTSRunInput, runOptions?: TTSGgml.TTSRunOptions): Promise<QvacResponse<TTSGgml.TTSOutputChunk>>
 
   /**
    * Chunked streaming synthesis: forwards to `run({ input: text, streamOutput: true, ... })`.
@@ -167,11 +168,18 @@ declare namespace TTSGgml {
     isLast?: boolean
   }
 
+  export interface TTSRunOptions {
+    /** When aborted, the returned response fails with the abort reason. */
+    signal?: AbortSignal
+  }
+
   export interface SentenceStreamOptions {
     /** BCP-47 locale for Intl.Segmenter when available. */
     locale?: string
     /** Max graphemes per chunk (defaults: 300, or 120 when language is ko). */
     maxChunkScalars?: number
+    /** When aborted, the returned response fails with the abort reason. */
+    signal?: AbortSignal
   }
 
   /** Input accepted by `runStreaming`. */
@@ -187,6 +195,8 @@ declare namespace TTSGgml {
     sentenceDelimiterPreset?: 'latin' | 'cjk' | 'multilingual'
     maxBufferScalars?: number
     flushAfterMs?: number
+    /** When aborted, the returned response fails with the abort reason. */
+    signal?: AbortSignal
   }
 
   export type TTSRunInput = {
@@ -209,7 +219,8 @@ declare namespace TTSGgml {
     RunStreamingOptions,
     TextStreamInput,
     TTSOutputChunk,
-    TTSRunInput
+    TTSRunInput,
+    TTSRunOptions
   }
 }
 
