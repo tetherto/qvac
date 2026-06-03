@@ -64,25 +64,25 @@ jobs:
 
       - name: Setup build host (github-hosted runners only)
         if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
+        uses: tetherto/qvac/.github/actions/setup-build-host@e45a4973c58c7f61df631d2a4b242155e15ac0ee
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@e45a4973c58c7f61df631d2a4b242155e15ac0ee
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@6e8d3c306a462a58589396cda428d65e015f0d8b
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@e45a4973c58c7f61df631d2a4b242155e15ac0ee
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -96,13 +96,13 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@e45a4973c58c7f61df631d2a4b242155e15ac0ee
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
       - name: Setup Apple Clang
         if: ${{ matrix.platform == 'darwin' }}
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@e45a4973c58c7f61df631d2a4b242155e15ac0ee
 
       - name: Install npm dependencies
         working-directory: ${{ env.WORKDIR }}
