@@ -290,10 +290,15 @@ test('Qwen3.5-0.8B supports tool calling', {
 // only regresses large or high-resolution inputs is still caught. Each image
 // reloads the model fresh and unloads after, so peak memory stays bounded per
 // image (mirrors the per-file split SmolVLM2 uses for iOS Jetsam isolation).
+// ctxSize is per-image: high-detail VLMs encode a large image to thousands
+// of image tokens (the 1472x1472 fruit plate → ~4k, the 3000x4000 aurora
+// more), so a fixed 4096 ctx overflows mid-decode → "failed to decode next
+// token". elephant (~270 tokens) keeps a small ctx so its KV cache stays
+// cheap; the large images get headroom for image tokens + generation.
 const QWEN35_IMAGE_CASES = [
-  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'] },
-  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'] },
-  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'] }
+  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'], ctxSize: '4096' },
+  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'], ctxSize: '8192' },
+  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'], ctxSize: '8192' }
 ]
 
 async function runQwen35ImagePerf (t, imageCase) {
@@ -308,12 +313,16 @@ async function runQwen35ImagePerf (t, imageCase) {
   const modelPath = path.join(dirPath, modelName)
   const projectionModelPath = path.join(dirPath, projModelName)
 
+  // reasoning-budget 0 suppresses Qwen3.5's <think> trace so a one-sentence
+  // image answer doesn't eat the ctx budget; ctx_size is per-image (see
+  // QWEN35_IMAGE_CASES) so large images don't overflow mid-decode.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
-    ctx_size: '4096',
+    ctx_size: imageCase.ctxSize,
     temp: '0',
     seed: '42',
+    'reasoning-budget': '0',
     verbosity: '2'
   }
 

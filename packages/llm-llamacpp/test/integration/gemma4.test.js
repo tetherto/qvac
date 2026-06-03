@@ -222,10 +222,14 @@ test('Gemma 4 supports multi-turn conversation with KV cache', {
 // reloads the model fresh and unloads after, so peak memory stays bounded per
 // image (mirrors the per-file split SmolVLM2 uses for iOS Jetsam isolation)
 // rather than holding the VLM + every image in one process at once.
+// Gemma 4's SigLIP vision encoder caps at 4 tiles → ~1024 image tokens max
+// regardless of input resolution, so 4096 ctx never overflows for any image
+// here. (Qwen3.5-VL uses dense patch tokenization and needs a bigger ctx for
+// the large images — see qwen3-5.test.js.)
 const GEMMA4_IMAGE_CASES = [
-  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'] },
-  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'] },
-  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'] }
+  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'], ctxSize: '4096' },
+  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'], ctxSize: '4096' },
+  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'], ctxSize: '4096' }
 ]
 
 async function runGemma4ImagePerf (t, imageCase) {
@@ -234,13 +238,14 @@ async function runGemma4ImagePerf (t, imageCase) {
   const modelPath = path.join(dirPath, modelName)
   const projectionModelPath = path.join(dirPath, projModelName)
 
-  // ctx_size 4096 / ubatch 320 / reasoning-budget 0 keep Gemma 4's compute
-  // buffer + KV cache under the iPhone Jetsam ceiling while still fitting the
-  // image tokens. See the original single-image notes for the full rationale.
+  // ubatch 320 / reasoning-budget 0 keep Gemma 4's compute buffer + KV cache
+  // under the iPhone Jetsam ceiling while still fitting the image tokens;
+  // ctx_size is per-image (see GEMMA4_IMAGE_CASES) so large images don't
+  // overflow and small ones don't carry a needlessly big KV cache.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
-    ctx_size: '4096',
+    ctx_size: imageCase.ctxSize,
     'ubatch-size': '320',
     temp: '0',
     seed: '42',
