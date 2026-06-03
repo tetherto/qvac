@@ -217,7 +217,7 @@
     "bare-events": "^2.8.0",
     "bare-fetch": "^2.9.1",
     "bare-fs": "^4.5.1",
-    "bare-net": "^2.2.0",
+    "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
     "bare-pack": "^2.0.1",
     "bare-path": "^3.0.1",
