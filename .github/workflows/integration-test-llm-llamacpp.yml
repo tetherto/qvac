@@ -74,7 +74,7 @@ jobs:
         # QVAC-17830: `label` disambiguates matrix entries that share
         # the same `<platform>-<arch>` tuple so every entry produces a
         # uniquely-named perf-report artifact. Without this, the two
-        # `linux-x64` entries (CPU-only vs GPU runner) and the two
+        # `linux-x64` entries (ubuntu 22 vs 24 GPU runners) and the two
         # `linux-arm64` entries (ubuntu 22 vs 24) collided on upload
         # and `actions/download-artifact` silently dropped one of each,
         # hiding GPU data in the combined report.
@@ -82,15 +82,14 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
-            no_gpu: 'true'
-            label: linux-x64-cpu
+            runner: qvac-ubuntu2204-x64-gpu
+            label: linux-x64-u22-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
             runner: qvac-ubuntu2404-x64-gpu
             timeout_minutes: 480
-            label: linux-x64-gpu
+            label: linux-x64-u24-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -135,7 +134,8 @@ jobs:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
-        if: startsWith(matrix.runner, 'qvac-')
+        working-directory: .
+        if: runner.environment != 'github-hosted'
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -146,7 +146,7 @@ jobs:
 
       - name: Cache integration test models
         id: model-cache
-        if: startsWith(matrix.runner, 'qvac-')
+        if: runner.environment != 'github-hosted'
         uses: ./.github/actions/cache-models
         with:
           package: llm-llamacpp
@@ -169,8 +169,31 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
+        run: |
+          mkdir -p ${{ env.WORKDIR }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ env.WORKDIR }}/prebuilds/
+          echo "Prebuilds moved from staging area"
+          ls -la ${{ env.WORKDIR }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
+      # source path becomes invalid and the copy silently no-ops. Use
+      # PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dst = "${{ env.WORKDIR }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}

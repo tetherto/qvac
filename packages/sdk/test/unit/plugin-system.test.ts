@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { z } from "zod";
 import { clearPlugins, registerPlugin } from "@/server/plugins";
@@ -18,7 +17,7 @@ import {
   PluginModelTypeReservedError,
   PluginResponseValidationFailedError,
 } from "@/utils/errors-server";
-import { SDK_SERVER_ERROR_CODES, ModelType } from "@/schemas";
+import { SDK_SERVER_ERROR_CODES, ModelType, type QvacPlugin } from "@/schemas";
 import { getPlugin, hasPlugin } from "@/server/plugins";
 
 let idCounter = 0;
@@ -52,7 +51,7 @@ test("registerPlugin: rejects invalid plugin definitions (fail-fast)", function 
   };
 
   try {
-    registerPlugin(invalidPlugin);
+    registerPlugin(invalidPlugin as unknown as QvacPlugin<Record<string, unknown>, string>);
     t.fail("Expected registerPlugin to throw");
   } catch (error) {
     t.ok(error instanceof PluginDefinitionInvalidError);

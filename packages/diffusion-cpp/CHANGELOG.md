@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.11.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
+## [0.11.0]
+
+### Changed
+
+- Consume `stable-diffusion-cpp@2026-03-01#6` from `tetherto/qvac-registry-vcpkg`, which pins the merge commit of qvac-ext-stable-diffusion.cpp#10 (bypass spatial VAE tiling for Wan 2.1 I2V video encode/decode).
+- Remove the temporary package-local `stable-diffusion-cpp` vcpkg overlay port (and its `overlay-ports` entry); the addon now resolves the Wan I2V VAE-tiling fix from the registry.
+
+### Fixed
+
+#### Restore root `VideoStableDiffusion` export
+
+`VideoStableDiffusion` was dropped from the package root (`index.js`) when the Wan 2.1 I2V bindings were ported, leaving `require('@qvac/diffusion-cpp').VideoStableDiffusion` `undefined` even though `index.d.ts` still declared it as a named export. Re-export it from the barrel so the root named export matches the type declarations. The subpath entry point (`@qvac/diffusion-cpp/video`) was unaffected and continues to work.
+
+#### Make the video dimension contract consistent (16-aligned end-to-end)
+
+The JS wrapper validated video `width`/`height` as multiples of 16 (Wan's spatial-compression requirement) while the native C++ video handler still enforced multiples of 8 and the TypeScript docs still described 8. A caller could pass dimensions the types/native layer accepted but `VideoStableDiffusion.run()` rejected, and 8-but-not-16 dims could snap inside the addon and trip the `init_image` vs video dimension assertion. The C++ `width`/`height` handlers and `video.d.ts` now both require multiples of 16, matching the JS wrapper.
+
+#### Harden video parameter validation
+
+- `requireRange` now rejects non-finite values (NaN/Inf) before the range comparison, so direct C++ callers can no longer slip `NaN` past min/max checks.
+- Video `seed` now uses `requireInt64` (matching the image path) instead of `static_cast<int64_t>(requireNum(...))`, so fractional/out-of-safe-range seeds are rejected rather than silently truncated.
+- All four diffusion cancellation sites now throw the typed `Diffusion/Cancelled` error via `makeCancelledError()`, so callers see one consistent cancellation shape.
+
+#### Documentation accuracy
+
+- `video.d.ts` now states that an `img2vid` job without `files.clipVision` throws from `run()` (matching the implementation), rather than only "warning loudly".
+- The `SdCtxConfig` preview-callback comment now reflects that the preview options are parsed/validated but not yet wired (no `sd_set_preview_callback()` call), instead of claiming they are forwarded to JS.
+
 ## [0.10.0] - 2026-05-25
 
 ### Changed
@@ -58,13 +92,12 @@ const response = await model.run({
 })
 ```
 
-#### Three video modes: `txt2vid`, `img2vid`, `flf2vid`
+#### Two video modes: `txt2vid`, `img2vid`
 
 `run()` requires an explicit `mode` (no auto-detect):
 
-- `txt2vid` — pure text-to-video; rejects `init_image` / `end_image`.
-- `img2vid` — animate a single first frame; requires `init_image` (PNG/JPEG bytes), rejects `end_image`.
-- `flf2vid` — interpolate between a first and last frame; requires both `init_image` and `end_image` at matching dimensions.
+- `txt2vid` — pure text-to-video; rejects `init_image`.
+- `img2vid` — animate a single first frame; requires `init_image` (PNG/JPEG bytes).
 
 Each mode enforces its own invariants twice — once in the JS wrapper and again in C++ `SdModel::processVideo()` — so misuse fails fast with a typed error instead of crashing native code.
 
@@ -84,7 +117,7 @@ Each mode enforces its own invariants twice — once in the JS wrapper and again
 - `fps` — AVI framerate metadata, `(0, 120]`; default 16.
 - `flow_shift` — flow-matching noise schedule shift. Sentinel `0` (default) falls through to the ctx-level `SdConfig.flow_shift`; pass `> 0` to override per-job. Wan 2.1 T2V 1.3B sweet spot is `3.0` (higher values flatten the motion trajectory).
 - `width` / `height` — multiples of 8, default `480 × 832` (phone-portrait). Wan 2.1 T2V 1.3B handles both portrait and landscape.
-- `strength` — img2vid / flf2vid denoise strength `[0, 1]`.
+- `strength` — img2vid denoise strength `[0, 1]`.
 - `vace_strength` — VACE control-frame guidance strength `[0, 1]`.
 - `control_frames` — optional array of `Uint8Array` PNG/JPEG frames for VACE guidance.
 
@@ -102,8 +135,6 @@ New npm scripts:
 
 - `generate:video` → `examples/generate-video-wan.js`
 - `generate:img2vid` → `examples/img2vid-wan.js`
-- `generate:flf2vid` → `examples/flf2vid-wan.js`
-
 Each example streams progress ticks to stdout as a progress bar and writes a `.avi` to `output/`.
 
 #### Refactored download scripts
@@ -112,9 +143,9 @@ All `scripts/download-model-*.sh` helpers now share a single retry/resume utilit
 
 #### Test coverage
 
-- JS integration: `test/integration/generate-video-wan.test.js` — end-to-end Wan generation across all three modes plus AVI validation.
+- JS integration: `test/integration/generate-video-wan.test.js` — end-to-end Wan generation across both modes plus AVI validation.
 - JS unit: `test/unit/video-validation.test.js` — ~800 lines covering every documented input invariant (mode gating, frame-count law, dimension multiples, image-buffer typing, fps range, MoE param routing).
-- C++ unit: `test_avi_writer.cpp`, `test_sd_ctx_handlers.cpp`, `test_sd_vid_gen_handlers.cpp`, `test_sd_video_frames.cpp`, `test_wan_video.cpp` — AVI muxer corner cases, ctx parser, video-gen parameter parser, frame helpers, full Wan dispatch path including img2vid / flf2vid input validation.
+- C++ unit: `test_avi_writer.cpp`, `test_sd_ctx_handlers.cpp`, `test_sd_vid_gen_handlers.cpp`, `test_sd_video_frames.cpp`, `test_wan_video.cpp` — AVI muxer corner cases, ctx parser, video-gen parameter parser, frame helpers, full Wan dispatch path including img2vid input validation.
 
 ### Changed
 

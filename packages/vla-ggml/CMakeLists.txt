@@ -72,6 +72,9 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/smolvla_adapter.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/pi05.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/model_factory.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
 )

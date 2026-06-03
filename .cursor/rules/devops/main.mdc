@@ -26,6 +26,7 @@ Owns CI/CD pipelines (GitHub Actions workflows + composite actions), repo-wide a
 | Rule | Scope | When it applies |
 |---|---|---|
 | `.cursor/rules/devops/github-actions.mdc` | `.github/workflows/**`, `.github/actions/**` | Authoring or modifying any workflow or composite action |
+| `docs/ci/SELF-HOSTED-RUNNERS.md` | `.github/workflows/**` (self-hosted / `qvac-*` runners) | Manual Workspace Cleanup, `working-directory: .`, `runner.environment` gating |
 | `.cursor/rules/devops/secrets-and-credentials.mdc` | `.github/**`, `scripts/**` | Anything that can read, derive, or transmit a secret |
 | `.cursor/rules/devops/agentic-automation.mdc` | `.cursor/skills/**`, `.cursor/rules/**`, `.cursor/hooks/**`, `.github/workflows/**`, `.github/scripts/**`, `scripts/**` | Authoring skills, hooks, MCP integrations, or any AI-driven DevOps workflow |
 
@@ -40,6 +41,7 @@ These are the bar; the deep-dive lives in the topic files above.
 - Top-level `permissions:` is mandatory and defaults to `contents: read`.
 - `pull_request_target` never checks out untrusted PR HEAD ("pwn request" pattern).
 - Use OIDC for cloud auth; long-lived credentials are the fallback, not the default.
+- **Manual Workspace Cleanup** on self-hosted jobs: `working-directory: .` plus `if: runner.environment != 'github-hosted'` (see `docs/ci/SELF-HOSTED-RUNNERS.md`).
 
 ### Secrets
 - Never inline a secret value. Always reference via `${{ secrets.X }}`.

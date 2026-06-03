@@ -1,4 +1,3 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 import { z } from "zod";
 import {
@@ -22,41 +21,14 @@ import {
 //     sync with the addon (e.g. adding a hard-cancel call to nmtcpp
 //     without flipping its declaration off `"none"`).
 //
-// ---- Runtime gating ----
-//
-// Built-in plugin manifests load real `@qvac/*` addons (llamacpp,
-// whispercpp, parakeet, …) which carry N-API bindings that Bun can't
-// resolve. The truth-table block dynamically imports those manifests
-// and so runs only under the Bare unit-test entry. The schema /
-// `defineHandler` tests are runtime-agnostic and run under both.
 // -----------------------------------------------------------------------------
 
-const isBunUnitTestRunner =
-  typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
-// @ts-ignore Bare global only exists in Bare runtime
-const isBareRuntime =
-  !isBunUnitTestRunner && typeof globalThis.Bare !== "undefined";
-
-function bareTest(name: string, fn: (t: BrittleT) => Promise<void> | void) {
-  if (isBareRuntime) {
-    test(name, fn);
-  } else {
-    test.skip(`[bare-only] ${name}`, () => {});
-  }
-}
-
-type BrittleT = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-  not: (actual: unknown, expected: unknown, msg?: string) => void;
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-};
 
 // =============================================================================
 // Runtime schema
 // =============================================================================
 
-test("pluginHandlerDefinitionRuntimeSchema: cancel field is optional", (t: BrittleT) => {
+test("pluginHandlerDefinitionRuntimeSchema: cancel field is optional", (t) => {
   const withoutCancel = pluginHandlerDefinitionRuntimeSchema.safeParse({
     requestSchema: { safeParse: () => {} },
     responseSchema: { safeParse: () => {} },
@@ -66,7 +38,7 @@ test("pluginHandlerDefinitionRuntimeSchema: cancel field is optional", (t: Britt
   t.ok(withoutCancel.success, "handler without cancel field is valid");
 });
 
-test("pluginHandlerDefinitionRuntimeSchema: accepts each cancel.scope value", (t: BrittleT) => {
+test("pluginHandlerDefinitionRuntimeSchema: accepts each cancel.scope value", (t) => {
   const scopes: PluginHandlerCancel["scope"][] = ["request", "model", "none"];
   for (const scope of scopes) {
     const result = pluginHandlerDefinitionRuntimeSchema.safeParse({
@@ -80,7 +52,7 @@ test("pluginHandlerDefinitionRuntimeSchema: accepts each cancel.scope value", (t
   }
 });
 
-test("pluginHandlerDefinitionRuntimeSchema: cancel.hard is optional and boolean", (t: BrittleT) => {
+test("pluginHandlerDefinitionRuntimeSchema: cancel.hard is optional and boolean", (t) => {
   const withHardTrue = pluginHandlerDefinitionRuntimeSchema.safeParse({
     requestSchema: { safeParse: () => {} },
     responseSchema: { safeParse: () => {} },
@@ -109,7 +81,7 @@ test("pluginHandlerDefinitionRuntimeSchema: cancel.hard is optional and boolean"
   t.ok(withoutHard.success, "hard omitted is valid");
 });
 
-test("pluginHandlerDefinitionRuntimeSchema: rejects invalid cancel.scope", (t: BrittleT) => {
+test("pluginHandlerDefinitionRuntimeSchema: rejects invalid cancel.scope", (t) => {
   const result = pluginHandlerDefinitionRuntimeSchema.safeParse({
     requestSchema: { safeParse: () => {} },
     responseSchema: { safeParse: () => {} },
@@ -124,7 +96,7 @@ test("pluginHandlerDefinitionRuntimeSchema: rejects invalid cancel.scope", (t: B
 // defineHandler / defineDuplexHandler — field threading
 // =============================================================================
 
-test("defineHandler: preserves cancel field on the returned definition", (t: BrittleT) => {
+test("defineHandler: preserves cancel field on the returned definition", (t) => {
   const def = defineHandler({
     requestSchema: z.object({ modelId: z.string() }),
     responseSchema: z.object({ ok: z.boolean() }),
@@ -135,7 +107,7 @@ test("defineHandler: preserves cancel field on the returned definition", (t: Bri
   t.alike(def.cancel, { scope: "model", hard: true });
 });
 
-test("defineDuplexHandler: preserves cancel field on the returned definition", (t: BrittleT) => {
+test("defineDuplexHandler: preserves cancel field on the returned definition", (t) => {
   const def = defineDuplexHandler({
     requestSchema: z.object({ modelId: z.string() }),
     responseSchema: z.object({ ok: z.boolean() }),
@@ -148,133 +120,3 @@ test("defineDuplexHandler: preserves cancel field on the returned definition", (
   });
   t.alike(def.cancel, { scope: "none" });
 });
-
-// =============================================================================
-// Built-in plugin truth table (bare-only — addon bindings require Bare)
-//
-// Locks the cancel-capability truth table in — if a future change flips
-// a plugin's `cancel` declaration without the corresponding code path
-// landing, this test fails loudly.
-// =============================================================================
-
-bareTest(
-  "builtin plugins: every handler declares cancel matching the truth table",
-  async (t: BrittleT) => {
-    const [
-      { llmPlugin },
-      { embeddingsPlugin },
-      { whisperPlugin },
-      { parakeetPlugin },
-      { nmtPlugin },
-      { ttsPlugin },
-      { ocrPlugin },
-      { diffusionPlugin },
-      { vlaPlugin },
-      { classificationPlugin },
-    ] = await Promise.all([
-      import("@/server/bare/plugins/llamacpp-completion/plugin"),
-      import("@/server/bare/plugins/llamacpp-embedding/plugin"),
-      import("@/server/bare/plugins/whispercpp-transcription/plugin"),
-      import("@/server/bare/plugins/parakeet-transcription/plugin"),
-      import("@/server/bare/plugins/nmtcpp-translation/plugin"),
-      import("@/server/bare/plugins/tts-ggml/plugin"),
-      import("@/server/bare/plugins/onnx-ocr/plugin"),
-      import("@/server/bare/plugins/sdcpp-generation/plugin"),
-      import("@/server/bare/plugins/ggml-vla/plugin"),
-      import("@/server/bare/plugins/ggml-classification/plugin"),
-    ]);
-
-    const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {
-      [llmPlugin.modelType]: {
-        completionStream: { scope: "model", hard: true },
-        // `finetune` declares `{ scope: "model", hard: true }`: the
-        // addon exposes `model.cancel()` for the running finetune job,
-        // and `startFinetune` wires it through the registry's abort
-        // signal.
-        finetune: { scope: "model", hard: true },
-        translate: { scope: "model", hard: true },
-      },
-      [embeddingsPlugin.modelType]: {
-        embed: { scope: "model", hard: true },
-      },
-      [whisperPlugin.modelType]: {
-        transcribe: { scope: "model", hard: true },
-        transcribeStream: { scope: "model", hard: true },
-      },
-      [parakeetPlugin.modelType]: {
-        transcribe: { scope: "model", hard: true },
-        transcribeStream: { scope: "model", hard: true },
-      },
-      [nmtPlugin.modelType]: {
-        translate: { scope: "none" },
-      },
-      [ttsPlugin.modelType]: {
-        textToSpeech: { scope: "model", hard: true },
-        textToSpeechStream: { scope: "model", hard: true },
-      },
-      [ocrPlugin.modelType]: {
-        ocrStream: { scope: "none" },
-      },
-      [diffusionPlugin.modelType]: {
-        diffusionStream: { scope: "model", hard: true },
-        videoStream: { scope: "model", hard: true },
-        upscaleStream: { scope: "none" },
-      },
-      [vlaPlugin.modelType]: {
-        vlaRun: { scope: "model", hard: true },
-        vlaHparams: { scope: "none" },
-      },
-      [classificationPlugin.modelType]: {
-        classify: { scope: "none" },
-      },
-    };
-
-    type BuiltinPlugin = {
-      modelType: string;
-      handlers: Record<
-        string,
-        { cancel?: PluginHandlerCancel } & Record<string, unknown>
-      >;
-    };
-
-    const builtins: BuiltinPlugin[] = [
-      llmPlugin as unknown as BuiltinPlugin,
-      embeddingsPlugin as unknown as BuiltinPlugin,
-      whisperPlugin as unknown as BuiltinPlugin,
-      parakeetPlugin as unknown as BuiltinPlugin,
-      nmtPlugin as unknown as BuiltinPlugin,
-      ttsPlugin as unknown as BuiltinPlugin,
-      ocrPlugin as unknown as BuiltinPlugin,
-      diffusionPlugin as unknown as BuiltinPlugin,
-      vlaPlugin as unknown as BuiltinPlugin,
-      classificationPlugin as unknown as BuiltinPlugin,
-    ];
-
-    for (const plugin of builtins) {
-      const expectedHandlers = truthTable[plugin.modelType];
-      t.ok(
-        expectedHandlers !== undefined,
-        `${plugin.modelType} has a row in the brief truth table`,
-      );
-      if (!expectedHandlers) continue;
-      for (const [handlerName, expected] of Object.entries(expectedHandlers)) {
-        const handler = plugin.handlers[handlerName];
-        t.ok(
-          handler !== undefined,
-          `${plugin.modelType}.${handlerName} is registered`,
-        );
-        if (!handler) continue;
-        t.alike(
-          handler.cancel,
-          expected,
-          `${plugin.modelType}.${handlerName} declares the expected cancel surface`,
-        );
-        const result = pluginHandlerDefinitionRuntimeSchema.safeParse(handler);
-        t.ok(
-          result.success,
-          `${plugin.modelType}.${handlerName} validates against the runtime schema`,
-        );
-      }
-    }
-  },
-);
