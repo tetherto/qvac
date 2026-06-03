@@ -96,34 +96,32 @@ jobs:
 
       # The C++ test suite only needs ONE GGUF pointed at by
       # QVAC_TEST_GGUF (see addon/tests/test_core.cpp::gguf_test_path).
-      # Engine identity does not matter -- the comment there says
-      # "any of the shipping CTC / TDT / EOU / Sortformer GGUFs is
-      # fine". Sortformer q4_0 is the smallest at ~75 MiB and the
-      # cheapest to convert, so we ship just that one. The
-      # GGUF-on-disk smoke tests skip cleanly via GTEST_SKIP() when
-      # QVAC_TEST_GGUF is unset, so partial cache corruption never
-      # hard-fails the suite.
-      - name: Cache Parakeet sortformer .nemo + q4 GGUF
+      # Engine identity does not matter; sortformer q4_0 is the
+      # smallest at ~75 MiB and the cheapest payload to pull.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Cache Parakeet sortformer q4 GGUF
         id: cache-parakeet-models
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: |
-            ${{ env.PKG_DIR }}/models/nemo
             ${{ env.PKG_DIR }}/models/sortformer-4spk-v1.q4_0.gguf
-          key: parakeet-cpp-q4-sortformer-v1-${{ hashFiles(format('{0}/scripts/convert-nemo-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-nemo.sh', env.PKG_DIR), format('{0}/scripts/download-models.sh', env.PKG_DIR), format('{0}/scripts/requirements.txt', env.PKG_DIR)) }}
+          key: parakeet-cpp-q4-sortformer-v1-${{ hashFiles('.github/workflows/cpp-test-coverage-transcription-parakeet.yml') }}
           restore-keys: |
             parakeet-cpp-q4-sortformer-v1-
 
-      - name: Convert .nemo -> sortformer q4_0 GGUF (cache miss)
+      - name: Download sortformer q4_0 GGUF from QVAC registry (cache miss)
         if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "Cache miss -- provisioning Python venv and converting sortformer..."
-          bash scripts/setup-venv.sh
-          bash scripts/download-models.sh -t sortformer
-          bash scripts/convert-nemo.sh    -t sortformer -q q4_0
+          mkdir -p models
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf models/
           ls -lh models/sortformer-4spk-v1.q4_0.gguf
 
       - name: Verify GGUF for C++ tests

@@ -767,10 +767,10 @@ async function runTranscription (params, expectation = {}) {
 // Quantisation:
 //   - Desktop default is q8_0 (best WER per byte). `file` below.
 //   - Mobile default is q4_0 (~4x smaller than q8 on full models),
-//     bundled into `test/mobile/testAssets/` and extracted to the
-//     app cache at runtime. `mobileFile` below. The size hit on
-//     accuracy is acceptable for integration smoke tests; full WER
-//     gates remain a desktop-only signal.
+//     fetched at runtime from the QVAC model registry into the app
+//     cache. `mobileFile` below. The size hit on accuracy is
+//     acceptable for integration smoke tests; full WER gates remain
+//     a desktop-only signal.
 // Tests can override per-model with QVAC_TEST_GGUF_<TYPE> (e.g.
 // QVAC_TEST_GGUF_EOU=/path/to/parakeet-eou-120m-v1.f16.gguf).
 //
@@ -778,28 +778,55 @@ async function runTranscription (params, expectation = {}) {
 // only; pick a value small enough to accept the smallest expected
 // quantisation (q4_0). Real correctness is enforced by the GGUF
 // loader rejecting malformed payloads.
+//
+// `registryPath` / `mobileRegistryPath` point at the canonical S3
+// keys served by the QVAC model registry. The desktop / mobile
+// runtime falls back to these when no local copy can be resolved.
+const REGISTRY_SOURCE = 's3'
+const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
+const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
+const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
+
+function _registryQ8 (file) {
+  return `${REGISTRY_PREFIX_Q8_0}/${file}`
+}
+function _registryQ4 (file) {
+  return `${REGISTRY_PREFIX_Q4_0}/${file}`
+}
+function _registryStreaming (file) {
+  return `${REGISTRY_PREFIX_STREAMING}/${file}`
+}
+
 const MODEL_CONFIGS = {
   ctc: {
     file: 'parakeet-ctc-0.6b.q8_0.gguf',
     mobileFile: 'parakeet-ctc-0.6b.q4_0.gguf',
+    registryPath: _registryQ8('parakeet-ctc-0.6b.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('parakeet-ctc-0.6b.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   tdt: {
     file: 'parakeet-tdt-0.6b-v3.q8_0.gguf',
     mobileFile: 'parakeet-tdt-0.6b-v3.q4_0.gguf',
+    registryPath: _registryQ8('parakeet-tdt-0.6b-v3.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('parakeet-tdt-0.6b-v3.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   eou: {
     file: 'parakeet-eou-120m-v1.q8_0.gguf',
     mobileFile: 'parakeet-eou-120m-v1.q4_0.gguf',
+    registryPath: _registryQ8('parakeet-eou-120m-v1.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('parakeet-eou-120m-v1.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   sortformer: {
     file: 'sortformer-4spk-v1.q8_0.gguf',
     mobileFile: 'sortformer-4spk-v1.q4_0.gguf',
+    registryPath: _registryQ8('sortformer-4spk-v1.q8_0.gguf'),
+    mobileRegistryPath: _registryQ4('sortformer-4spk-v1.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
@@ -808,14 +835,86 @@ const MODEL_CONFIGS = {
   // fixing the per-chunk drift v1 shows when two voices have been seen
   // in the rolling-history window. Auto-enabled by parakeet-cpp when the
   // GGUF carries `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"`.
-  // The GGUF needs to be staged (npm run setup-models / QVAC_TEST_GGUF_DIR)
-  // before sortformer-streaming tests can run; otherwise they skip.
   sortformerStreaming: {
     file: 'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
     mobileFile: 'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf',
+    registryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'),
+    mobileRegistryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.q4_0.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   }
+}
+
+// QVAC model registry fetch. Used as the final fallback in
+// `ensureGgufForType` when no local cache / asset bundle / external
+// dir has the model. Mirrors the pattern in
+// packages/tts-ggml/test/utils/downloadModel.js: lazy-require
+// `@qvac/registry-client` so the test code stays importable even in
+// environments without the devDependency, and return `null` on any
+// failure so `loadGgufOrSkip` can keep its existing
+// fail-hard-via-`t.fail` contract.
+async function downloadFromRegistry (registryPath, registrySource, destPath, minSize) {
+  let QVACRegistryClient
+  try {
+    ({ QVACRegistryClient } = require('@qvac/registry-client'))
+  } catch (err) {
+    console.log('  Registry client (@qvac/registry-client) not installed; ' +
+      'cannot fetch from QVAC model registry.')
+    return null
+  }
+
+  const destDir = path.dirname(destPath)
+  if (!fs.existsSync(destDir)) {
+    try {
+      fs.mkdirSync(destDir, { recursive: true })
+    } catch (err) {
+      console.log(`  Could not create ${destDir} for registry download: ${err.message}`)
+      return null
+    }
+  }
+
+  console.log(`  Fetching ${path.basename(destPath)} from QVAC registry...`)
+  console.log(`    path:   ${registryPath}`)
+  console.log(`    source: ${registrySource}`)
+
+  let client
+  try {
+    client = new QVACRegistryClient()
+    await client.ready()
+    const result = await client.downloadModel(registryPath, registrySource, {
+      outputFile: destPath
+    })
+    if (!result || !result.artifact || !result.artifact.path) {
+      console.log('  Registry download returned no artifact path')
+      return null
+    }
+    const stats = fs.statSync(result.artifact.path)
+    if (stats.size < minSize) {
+      console.log(`  Registry download too small: ${stats.size} bytes (expected >=${minSize})`)
+      try { fs.unlinkSync(destPath) } catch (_) {}
+      return null
+    }
+    console.log(`  ✓ Registry download: ${path.basename(destPath)} (${stats.size} bytes)`)
+    return destPath
+  } catch (err) {
+    console.log(`  Registry download failed: ${err && err.message ? err.message : String(err)}`)
+    try { fs.unlinkSync(destPath) } catch (_) {}
+    return null
+  } finally {
+    if (client) {
+      try { await client.close() } catch (_) {}
+    }
+  }
+}
+
+// Resolves the preferred GGUF for `modelType` on the current platform.
+// Mobile prefers q4_0 (smaller payload over Device Farm's network);
+// desktop prefers q8_0 (best WER per byte).
+function _preferredGgufFor (cfg) {
+  if (isMobile && cfg.mobileFile && cfg.mobileRegistryPath) {
+    return { file: cfg.mobileFile, registryPath: cfg.mobileRegistryPath }
+  }
+  return { file: cfg.file, registryPath: cfg.registryPath }
 }
 
 /**
@@ -826,19 +925,20 @@ const MODEL_CONFIGS = {
  * Resolution order:
  *   1. Explicit `override` argument.
  *   2. `QVAC_TEST_GGUF_<TYPE>` env var (e.g. QVAC_TEST_GGUF_TDT).
- *   3. Existing cache in the test models dir (`<modelsDir>/<file>`).
- *   4. On mobile only: bundled GGUF in the asset cache, preferring
- *      `<samplesDir>/<mobileFile>` (q4_0) over `<samplesDir>/<file>`
- *      (q8_0). `samplesDir` resolves to the React-Native cache dir
- *      where the test framework extracts entries from
- *      `test/mobile/testAssets/` at app launch.
+ *   3. Existing cache in the test models dir for the preferred quant
+ *      (q4_0 on mobile, q8_0 on desktop), then the other quant as a
+ *      fallback.
+ *   4. On mobile only: bundled GGUF in the React-Native asset cache,
+ *      preferring `<samplesDir>/<mobileFile>` (q4_0). Surviving
+ *      contract for dev flows that adb-push a GGUF into testAssets;
+ *      production mobile CI no longer bundles GGUFs and relies on
+ *      the registry fetch in step 6 instead.
  *   5. `QVAC_TEST_GGUF_DIR/<file>` -- copy from any pre-staged
  *      `models/` directory if present (typically the package's own
- *      `./models/` produced by `npm run setup-models`).
- *   6. (TODO) Download from HuggingFace -- not yet wired since GGUFs
- *      aren't published there; users currently stage them by running
- *      `npm run setup-models` (which writes to ./models/) or by
- *      pointing `QVAC_TEST_GGUF_DIR` at an existing GGUF directory.
+ *      `./models/` produced by `npm run setup-models` or
+ *      `npm run download-models:registry`).
+ *   6. QVAC model registry fetch into the test models dir, using the
+ *      `mobileRegistryPath` on mobile and `registryPath` on desktop.
  *
  * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
  * @param {string} [override] - explicit GGUF path to use
@@ -856,11 +956,21 @@ async function ensureGgufForType (modelType, override = null) {
   }
 
   const { modelsDir, samplesDir } = getTestPaths()
-  const cachePath = path.join(modelsDir, cfg.file)
+  const preferred = _preferredGgufFor(cfg)
+  const cachePath = path.join(modelsDir, preferred.file)
 
   if (fs.existsSync(cachePath) &&
       fs.statSync(cachePath).size >= (cfg.minSize || 0)) {
     return cachePath
+  }
+
+  const otherFile = preferred.file === cfg.file ? cfg.mobileFile : cfg.file
+  if (otherFile) {
+    const otherPath = path.join(modelsDir, otherFile)
+    if (fs.existsSync(otherPath) &&
+        fs.statSync(otherPath).size >= (cfg.minSize || 0)) {
+      return otherPath
+    }
   }
 
   if (isMobile && samplesDir) {
@@ -876,13 +986,27 @@ async function ensureGgufForType (modelType, override = null) {
 
   const externalDir = process.env && process.env.QVAC_TEST_GGUF_DIR
   if (externalDir) {
-    const externalPath = path.join(externalDir, cfg.file)
-    if (fs.existsSync(externalPath) &&
-        fs.statSync(externalPath).size >= (cfg.minSize || 0)) {
-      console.log(`  Staging GGUF from ${externalPath} -> ${cachePath}`)
-      fs.copyFileSync(externalPath, cachePath)
-      return cachePath
+    const candidates = [preferred.file, otherFile].filter(Boolean)
+    for (const candidate of candidates) {
+      const externalPath = path.join(externalDir, candidate)
+      if (fs.existsSync(externalPath) &&
+          fs.statSync(externalPath).size >= (cfg.minSize || 0)) {
+        const stagedPath = path.join(modelsDir, candidate)
+        console.log(`  Staging GGUF from ${externalPath} -> ${stagedPath}`)
+        fs.copyFileSync(externalPath, stagedPath)
+        return stagedPath
+      }
     }
+  }
+
+  if (preferred.registryPath) {
+    const fetched = await downloadFromRegistry(
+      preferred.registryPath,
+      REGISTRY_SOURCE,
+      cachePath,
+      cfg.minSize || 0
+    )
+    if (fetched) return fetched
   }
 
   if (cfg.url) {
@@ -891,10 +1015,10 @@ async function ensureGgufForType (modelType, override = null) {
     return cachePath
   }
 
-  console.log(`  ${modelType.toUpperCase()} GGUF not available. Run ` +
-              '`npm run setup-models` or set ' +
-              `${envKey} / QVAC_TEST_GGUF_DIR to a directory of GGUFs ` +
-              'to enable this test.')
+  console.log(`  ${modelType.toUpperCase()} GGUF not available. Tried ` +
+              `QVAC registry (${preferred.registryPath || 'no path'}). ` +
+              'Run `npm run download-models:registry` or `npm run setup-models`, ' +
+              `or set ${envKey} / QVAC_TEST_GGUF_DIR to a directory of GGUFs.`)
   return null
 }
 
@@ -908,19 +1032,16 @@ async function ensureModelForType (modelType) {
  * every integration test that needs a real model -- when the GGUF is
  * available the function returns its path; when it isn't, behaviour is:
  *
- *   - Mobile + ctc: skip-as-pass. We intentionally do not bundle CTC
- *     into the mobile test app (redundant with TDT for transcription
- *     tests; see helpers.js MODEL_CONFIGS and the
- *     integration-mobile-test-transcription-parakeet workflow).
- *     Letting this one case stay as `t.pass` keeps the multi-model
- *     test green on mobile while still actually exercising
- *     TDT / EOU / Sortformer there.
+ *   - Mobile + ctc: skip-as-pass. We intentionally do not exercise
+ *     CTC on mobile (redundant with TDT for transcription tests;
+ *     shares the same FastConformer encoder). Letting this one case
+ *     stay as `t.pass` keeps the multi-model test green on mobile
+ *     while still actually exercising TDT / EOU / Sortformer there.
  *   - Everything else: hard fail via `t.fail`. A missing model means
- *     `npm run setup-models` did not run, the cache restore was
- *     corrupt, or the test framework copy-step never landed the GGUF
- *     in test/mobile/testAssets. All three are real bugs we want to
- *     surface, not silently mask with a "test skipped, all green"
- *     outcome.
+ *     none of the resolution sources (env var, local cache, mobile
+ *     asset bundle, external dir, QVAC registry) returned a usable
+ *     file. All cases are real bugs we want to surface, not silently
+ *     mask with a "test skipped, all green" outcome.
  *
  * @param {Object} t - brittle test object (must have `.fail(message)` /
  *                     `.pass(message)`)
@@ -935,11 +1056,14 @@ async function loadGgufOrSkip (t, modelType = 'tdt') {
     return ggufPath
   }
 
-  const remediation = 'Run `npm run setup-models` (or set ' +
+  const remediation = 'Run `npm run download-models:registry` (fetches ' +
+    'pre-built GGUFs from the QVAC registry) or `npm run setup-models` ' +
+    '(downloads .nemo from HuggingFace and converts locally), or set ' +
     `QVAC_TEST_GGUF_${modelType.toUpperCase()}=/path/to/model.gguf ` +
-    'or QVAC_TEST_GGUF_DIR=/path/to/models). For mobile, the model ' +
-    'must be staged into test/mobile/testAssets/ before the test app ' +
-    'is built.'
+    'or QVAC_TEST_GGUF_DIR=/path/to/models. ' +
+    'In CI / on mobile the test runtime fetches from the registry ' +
+    'automatically, so a failure here means registry access is broken ' +
+    'or the requested quantisation has not been published yet.'
 
   if (isMobile && modelType === 'ctc') {
     t.pass(`No CTC GGUF bundled on mobile (intentional). ${remediation}`)
