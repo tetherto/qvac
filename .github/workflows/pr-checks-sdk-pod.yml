@@ -1,19 +1,17 @@
 name: PR Checks (SDK Pod)
 
 on:
+  # No trigger-level `paths:` filter on purpose: this workflow publishes the
+  # required "SDK Pod Checks" status. A path-skipped workflow would leave that
+  # required check stuck "Pending" and block unrelated PRs from merging.
+  # Path scoping happens inside the `changes` job instead, and the `gate` job
+  # passes cleanly when no SDK pod files changed.
   pull_request_target:
     types:
       - opened
       - synchronize
       - reopened
       - labeled
-    paths:
-      - "packages/sdk/**"
-      - "packages/cli/**"
-      - "packages/rag/**"
-      - "packages/logging/**"
-      - "packages/error/**"
-      - "packages/ai-sdk-provider/**"
     branches:
       - main
       - release-*
@@ -129,9 +127,11 @@ jobs:
             2>/dev/null || true
           echo "::warning::Removed safe-to-test label — new commits pushed. Re-review required."
 
+  # Runs unconditionally (even for unauthorized fork PRs) so the `gate` job can
+  # always tell whether SDK pod files changed. Safe to run for anyone: it only
+  # reads the trusted base-branch config and diffs file names — it never
+  # executes PR code. The `check` job below stays gated on authorization.
   changes:
-    needs: authorize
-    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
@@ -379,3 +379,45 @@ jobs:
             echo "::error::There were $count failed checks"
             exit 1
           fi
+
+  # ---------------------------------------------------------------------------
+  # Aggregator gate — the single required status check for SDK pod packages.
+  #
+  # Always runs (even when `check` is skipped) so the "SDK Pod Checks" context
+  # is reported on every PR and is never stuck "Pending". Mark THIS job's name
+  # ("SDK Pod Checks") as the required status check in the branch ruleset.
+  #
+  #   - no SDK pod files changed            -> pass (unrelated PRs unaffected)
+  #   - changed + all checks succeeded      -> pass
+  #   - changed + unauthorized fork PR      -> fail (needs safe-to-test label)
+  #   - changed + a check failed            -> fail (blocks the merge)
+  # ---------------------------------------------------------------------------
+  gate:
+    name: SDK Pod Checks
+    needs: [authorize, changes, check]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Evaluate SDK pod check results
+        shell: bash
+        env:
+          HAS_CHANGES: ${{ needs.changes.outputs.has_changes }}
+          ALLOWED: ${{ needs.authorize.outputs.allowed }}
+          CHECK_RESULT: ${{ needs.check.result }}
+        run: |
+          if [ "$HAS_CHANGES" != "true" ]; then
+            echo "::notice::No SDK pod package files changed - gate passes."
+            exit 0
+          fi
+          if [ "$ALLOWED" != "true" ]; then
+            echo "::error::SDK pod files changed but checks were not authorized. A maintainer must apply the 'safe-to-test' label, then re-run."
+            exit 1
+          fi
+          if [ "$CHECK_RESULT" = "success" ]; then
+            echo "::notice::All SDK pod checks passed."
+            exit 0
+          fi
+          echo "::error::SDK pod checks did not pass (result: $CHECK_RESULT)."
+          exit 1
