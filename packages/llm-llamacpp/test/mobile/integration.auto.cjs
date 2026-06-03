@@ -36,6 +36,11 @@ async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-l
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
 }
 
+async function runGemma4ImagePerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4ImagePerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/gemma4-image-perf.test.js', options)
+}
+
 async function runGemma4Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4Test')) return __FILTERED
   return runIntegrationModule('../integration/gemma4.test.js', options)
@@ -94,6 +99,11 @@ async function runOcrPaddleTest (options = {}) { // eslint-disable-line no-unuse
 async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQuantizedKvcacheTest')) return __FILTERED
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
+}
+
+async function runQwen35ImagePerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImagePerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-perf.test.js', options)
 }
 
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars

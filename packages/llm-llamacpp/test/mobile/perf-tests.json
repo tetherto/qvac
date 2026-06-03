@@ -4,6 +4,6 @@
   "runImageHighResAuroraTest",
   "runBitnetTest",
   "runToolCallingTest",
-  "runGemma4Test",
-  "runQwen35Test"
+  "runGemma4ImagePerfTest",
+  "runQwen35ImagePerfTest"
 ]

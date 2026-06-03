@@ -6,26 +6,11 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, getMediaPath } = require('./utils')
 const os = require('bare-os')
-const process = require('bare-process')
-// QVAC-18298: emit a Gemma4-VL perf row into the weekly perf-report aggregate.
-const { recordPerformance } = require('./_perf-helper.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-
-// QVAC-18298: same QVAC_PERF_RUNS / QVAC_PERF_WARMUP_RUNS knobs as the
-// image-*.test.js perf rows. Default 1+1 on PRs; benchmark dispatch bumps to 3.
-function _envInt (key, fallback) {
-  let raw = ''
-  if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
-  if (!raw && typeof process !== 'undefined' && process.env) raw = process.env[key] || ''
-  const v = parseInt(raw, 10)
-  return Number.isFinite(v) && v > 0 ? v : fallback
-}
-const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
-const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 // Desktop x64-darwin and linux-arm64 hosts have no working GPU stack here
 // so we drop to CPU; everywhere else (including iOS / Android device farm)
 // uses the GPU backend the addon picks. Vision (mmproj) follows the same
@@ -216,36 +201,22 @@ test('Gemma 4 supports multi-turn conversation with KV cache', {
   }
 })
 
-// QVAC-18298: VLM perf coverage matches the SmolVLM2 image-*.test.js set
-// (elephant / fruit plate / high-res aurora) so a Phase-3 optimization that
-// only regresses large or high-resolution inputs is still caught. Each image
-// reloads the model fresh and unloads after, so peak memory stays bounded per
-// image (mirrors the per-file split SmolVLM2 uses for iOS Jetsam isolation)
-// rather than holding the VLM + every image in one process at once.
-// Gemma 4's SigLIP vision encoder caps at 4 tiles → ~1024 image tokens max
-// regardless of input resolution, so 4096 ctx never overflows for any image
-// here. (Qwen3.5-VL uses dense patch tokenization and needs a bigger ctx for
-// the large images — see qwen3-5.test.js.)
-const GEMMA4_IMAGE_CASES = [
-  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'], ctxSize: '4096' },
-  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'], ctxSize: '4096' },
-  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'], ctxSize: '4096' }
-]
-
-async function runGemma4ImagePerf (t, imageCase) {
+// QVAC-18298: functional image check only (single small image). The
+// multi-image perf rows live in gemma4-image-perf.test.js so they run in an
+// isolated Device Farm group and don't push this functional suite over the
+// 30-minute mobile cap.
+test('Gemma 4 can describe an image', {
+  timeout: 1_800_000
+}, async t => {
   const [modelName, dirPath] = await ensureModel(GEMMA4_MODEL.llmModel)
   const [projModelName] = await ensureModel(GEMMA4_MODEL.projModel)
   const modelPath = path.join(dirPath, modelName)
   const projectionModelPath = path.join(dirPath, projModelName)
 
-  // ubatch 320 / reasoning-budget 0 keep Gemma 4's compute buffer + KV cache
-  // under the iPhone Jetsam ceiling while still fitting the image tokens;
-  // ctx_size is per-image (see GEMMA4_IMAGE_CASES) so large images don't
-  // overflow and small ones don't carry a needlessly big KV cache.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
-    ctx_size: imageCase.ctxSize,
+    ctx_size: '4096',
     'ubatch-size': '320',
     temp: '0',
     seed: '42',
@@ -256,87 +227,36 @@ async function runGemma4ImagePerf (t, imageCase) {
   const inference = new LlmLlamacpp({
     files: { model: [modelPath], projectionModel: projectionModelPath },
     config,
-    // QVAC-18298: stats:true so response.stats (TTFT / TPS / tokens) is
-    // populated for the perf row.
-    logger: createLogger(),
-    opts: { stats: true }
+    logger: createLogger()
   })
 
-  // QVAC-18298: [image] [model] [backend] so the GitHub summary Test column
-  // shows the image under test, matching the [elephant] [GPU] image rows.
-  const backendTag = useCpu ? 'CPU' : 'GPU'
-  const perfLabel = `[${imageCase.name}] [gemma4-vl] [${backendTag}]`
+  try {
+    await inference.load()
 
-  async function runImageInference (imageBytes) {
+    const imageFilePath = getMediaPath('elephant.jpg')
+    t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
+
+    const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
     const messages = [
       { role: 'user', type: 'media', content: imageBytes },
-      { role: 'user', content: 'Describe the image briefly in one sentence.' }
+      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
     ]
-    const startTime = Date.now()
+
     const response = await inference.run(messages)
-    const chunks = []
+    const generatedText = []
     let error = null
-    response.onUpdate(data => { chunks.push(data) })
+    response.onUpdate(data => { generatedText.push(data) })
       .onError(err => { error = err })
     await response.await()
     if (error) throw new Error('Inference error: ' + error)
-    return {
-      output: chunks.join(''),
-      totalTime: Date.now() - startTime,
-      stats: response.stats || null
-    }
-  }
 
-  try {
-    const t0 = Date.now()
-    await inference.load()
-    console.log(`  ${perfLabel} model.load() took ${Date.now() - t0} ms`)
-
-    const imageFilePath = getMediaPath(imageCase.imageFile)
-    t.ok(fs.existsSync(imageFilePath), `${imageCase.imageFile} image file should exist`)
-
-    const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
-
-    // QVAC-18298: warmup pass(es) absorb one-shot shader-compile / buffer
-    // allocation costs and are not recorded.
-    for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
-      const warmup = await runImageInference(imageBytes)
-      t.comment(`${perfLabel} warmup ${w}/${PERF_WARMUP_RUNS} (${warmup.totalTime}ms, ${warmup.output.length} chars) - perf NOT recorded`)
-    }
-
-    // QVAC-18298: PERF_RUNS counted rows under the same label → mean ± std.
-    let lastOutput = ''
-    for (let run = 1; run <= PERF_RUNS; run++) {
-      const { output, totalTime, stats } = await runImageInference(imageBytes)
-      lastOutput = output
-      t.comment(`${perfLabel} run ${run}/${PERF_RUNS} output: "${output.slice(0, 200)}"`)
-      t.comment(recordPerformance(perfLabel, totalTime, {
-        _output: output,
-        stats,
-        deviceId: useCpu ? 'cpu' : 'gpu',
-        scenario: 'image',
-        model: modelName.replace(/\.gguf$/i, '')
-      }))
-    }
-
-    t.ok(lastOutput.length > 0, `${perfLabel} image inference produced output (${lastOutput.length} chars)`)
-
-    const lowerOutput = lastOutput.toLowerCase()
-    const matched = imageCase.keywords.some(k => new RegExp(`\\b${k}\\b`, 'i').test(lowerOutput))
-    t.ok(matched,
-      `${perfLabel} output should mention one of ${imageCase.keywords.join(', ')}: "${lastOutput.slice(0, 150)}"`)
+    const output = generatedText.join('')
+    t.ok(output.length > 0, `image inference produced output (${output.length} chars)`)
+    t.ok(/elephant/.test(output.toLowerCase()), `output mentions elephant: "${output.slice(0, 100)}"`)
   } finally {
     await inference.unload().catch(() => {})
   }
-}
-
-for (const imageCase of GEMMA4_IMAGE_CASES) {
-  test(`Gemma 4 can describe an image [${imageCase.name}]`, {
-    timeout: 1_800_000
-  }, async t => {
-    await runGemma4ImagePerf(t, imageCase)
-  })
-}
+})
 
 test('Gemma 4 supports tool calling', {
   timeout: 600_000
