@@ -630,7 +630,10 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture = state_->toolsCompact_->enabled();
+  // The streamed output must be captured into `oss` whenever any
+  // post-generation pass needs to inspect the full assistant text.
+  const bool needsOutputCapture =
+      state_->toolsCompact_->enabled() || !resolved.tools.empty();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -700,9 +703,11 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
           envelopes.append(args);
           envelopes.append("}</tool_call>");
         }
+
         if (prompt.outputCallback) {
           prompt.outputCallback(envelopes);
         } else {
+          out = parsed.content;
           out.append(envelopes);
         }
       }
