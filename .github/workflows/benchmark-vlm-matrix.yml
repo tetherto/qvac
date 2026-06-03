@@ -108,6 +108,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
+          set +e +o pipefail   # provenance gathering must never fail the job (e.g. no nvidia-smi on CPU runner)
           P="prov-${{ matrix.label }}.md"
           GPU=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1)
           [ -z "$GPU" ] && GPU=$(vulkaninfo --summary 2>/dev/null | sed -n 's/.*deviceName[[:space:]]*=[[:space:]]*//p' | head -1)
@@ -127,6 +128,7 @@ jobs:
           cat "$P"
 
       - name: Run VLM matrix (${{ matrix.devices }})
+        if: always()
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:

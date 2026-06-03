@@ -94,7 +94,7 @@ const META_RE = /\[VLMMETA\](.*?)\[\/VLMMETA\]/
 // the [VLMROW] markers (stdout). They're joined on the cell|device key, not position.
 function parseLog (files) {
   const rows = []
-  const vision = {} // cell|device -> { sumMs, segs, enc }
+  const vision = {} // cell|device -> { segMs: [perSegmentSummedMs], segTiles: [perSegmentEncodeCount] }
   const meta = {} // cell -> { main_origin, mmproj_origin, ... }
   for (const f of files) {
     let txt = ''
@@ -108,13 +108,17 @@ function parseLog (files) {
         try {
           const s = JSON.parse(sm[1])
           cur = `${s.cell}|${s.device}`
-          if (!vision[cur]) vision[cur] = { sumMs: 0, segs: 0, enc: 0 }
-          vision[cur].segs++
+          if (!vision[cur]) vision[cur] = { segMs: [], segTiles: [] }
+          vision[cur].segMs.push(0); vision[cur].segTiles.push(0)
         } catch (_) {}
         continue
       }
       const vm = line.match(VISION_RE)
-      if (vm && cur) { vision[cur].sumMs += Number(vm[1]); vision[cur].enc++; continue }
+      if (vm && cur && vision[cur] && vision[cur].segMs.length) {
+        const v = vision[cur]
+        v.segMs[v.segMs.length - 1] += Number(vm[1]); v.segTiles[v.segTiles.length - 1]++
+        continue
+      }
       const rm = line.match(ROW_RE)
       if (rm) { try { rows.push(JSON.parse(rm[1])) } catch (_) {} }
     }
@@ -126,8 +130,18 @@ const fmtPct = x => x == null ? '—' : (100 * x).toFixed(1)
 const fmtNum = (x, d = 1) => x == null ? '—' : Number(x).toFixed(d)
 
 function build (rows, vision, meta, provText, title) {
-  const visMean = key => (vision[key] && vision[key].segs) ? vision[key].sumMs / vision[key].segs : null
-  const visSlices = key => (vision[key] && vision[key].segs) ? vision[key].enc / vision[key].segs : null
+  // Drop the first segment per cell as warmup (Vulkan shader-compile / JIT spike on the
+  // first encode after each model load) so the mean reflects steady-state encode cost.
+  function visStats (key) {
+    const v = vision[key]
+    if (!v || !v.segMs.length) return { mean: null, tiles: null }
+    const drop = v.segMs.length > 3 ? 1 : 0
+    const ms = v.segMs.slice(drop)
+    const tiles = v.segTiles.slice(drop)
+    return { mean: mean(ms), tiles: mean(tiles) }
+  }
+  const visMean = key => visStats(key).mean
+  const visSlices = key => visStats(key).tiles
   // group key = cell|device
   const keys = []
   const byKey = {}
