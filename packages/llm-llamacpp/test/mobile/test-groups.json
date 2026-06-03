@@ -25,6 +25,7 @@
       "runMultiGpuTest",
       "runMultiInstanceTest",
       "runQwen35Test",
+      "runQwen35SlidingContextTest",
       "runTurboquantTest",
       "runUtf8OutputTest"
     ],
@@ -50,6 +51,7 @@
       "runMultiInstanceTest",
       "runQuantizedKvcacheTest",
       "runQwen35Test",
+      "runQwen35SlidingContextTest",
       "runReasoningTest",
       "runToolsCompactTest",
       "runTurboquantTest"

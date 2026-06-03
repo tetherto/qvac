@@ -111,6 +111,7 @@ async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
 }
 
+<<<<<<< HEAD
 async function runQwen35ImageElephantPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageElephantPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5-image-elephant-perf.test.js', options)
@@ -124,6 +125,11 @@ async function runQwen35ImageFruitPlatePerfTest (options = {}) { // eslint-disab
 async function runQwen35ImageHighResAuroraPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-perf.test.js', options)
+=======
+async function runQwen35SlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35SlidingContextTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-sliding-context.test.js', options)
+>>>>>>> 82f2bc7e8 (test: cover Qwen3.5 sliding context)
 }
 
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars
