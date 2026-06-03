@@ -66,10 +66,12 @@ class OcrGgml {
 
   /**
    * @param {{ path: string, options?: Object }} input
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<import('@qvac/infer-base').QvacResponse>}
    */
-  async run (input) {
-    return this._run(() => this._runInternal(input))
+  async run (input, runOptions = {}) {
+    return this._run(() => this._runInternal(input, runOptions))
   }
 
   async unload () {
@@ -170,7 +172,7 @@ class OcrGgml {
     )
   }
 
-  async _runInternal (input) {
+  async _runInternal (input, runOptions = {}) {
     this.logger.info('Starting OCR inference')
 
     if (!this.addon) {
@@ -180,7 +182,7 @@ class OcrGgml {
       })
     }
 
-    const response = this._job.start()
+    const response = this._job.start({ signal: runOptions && runOptions.signal })
     try {
       const imageInput = this._readImage(input.path)
       await this.addon.runJob({

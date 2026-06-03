@@ -78,6 +78,11 @@ export interface OcrGgmlRunInput {
   options?: OcrGgmlRunOptions
 }
 
+export interface RunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
+}
+
 /**
  * One detected text region. Shape matches `@qvac/ocr-onnx` so downstream
  * consumers can swap backends without changing data handling code.
@@ -112,7 +117,7 @@ export class OcrGgml {
   constructor(args: OcrGgmlArgs)
   getState(): InferenceClientState
   load(): Promise<void>
-  run(input: OcrGgmlRunInput): Promise<QvacResponse<InferredText[]>>
+  run(input: OcrGgmlRunInput, runOptions?: RunOptions): Promise<QvacResponse<InferredText[]>>
   unload(): Promise<void>
   destroy(): Promise<void>
 
