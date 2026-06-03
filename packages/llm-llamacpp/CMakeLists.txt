@@ -47,7 +47,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
 endif()
-if(ANDROID)
+if(ANDROID AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
   if(NOT IS_DIRECTORY "$ENV{ANDROID_NDK}")
     message(FATAL_ERROR "ANDROID_NDK is not set or does not point to a valid directory: '$ENV{ANDROID_NDK}'")
   endif()
@@ -97,7 +97,7 @@ endif()
 
 add_bare_module(inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
 
-if(ANDROID AND LIBOMP_FOUND_PATH)
+if(ANDROID AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64" AND LIBOMP_FOUND_PATH)
   message(STATUS "Installing libomp.so from: ${LIBOMP_FOUND_PATH}")
 
   install(FILES ${LIBOMP_FOUND_PATH}

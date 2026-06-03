@@ -5,6 +5,7 @@
 ### Changed
 
 - Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2#1` (sync update with `llm-llamacpp`, no functional changes).
+
 ## [0.18.2] - 2026-06-03
 
 ### Fixed
