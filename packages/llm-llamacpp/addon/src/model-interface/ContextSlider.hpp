@@ -14,7 +14,7 @@ struct IContextSliderOps {
   virtual ~IContextSliderOps() = default;
   virtual llama_pos nCtx(llama_context* lctx) const = 0;
   virtual ContextSliderMemoryHandle memory(llama_context* lctx) const = 0;
-  virtual void seqRm(
+  virtual bool seqRm(
       ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const = 0;
   virtual void seqAdd(
@@ -32,6 +32,7 @@ struct ContextSlideOutcome {
     Slid,      // Successfully discarded tokens via partial slide
     FullWipe,  // Fallback: wiped everything after firstMsgTokens (prefill only)
     Overflow,  // Could not free enough space; caller should throw
+    MemoryOperationFailed, // llama memory rejected the requested slide
   };
 
   Kind kind = Kind::NotNeeded;

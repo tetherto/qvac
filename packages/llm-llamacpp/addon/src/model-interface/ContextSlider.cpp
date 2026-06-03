@@ -18,10 +18,10 @@ public:
     return llama_get_memory(lctx);
   }
 
-  void seqRm(
+  bool seqRm(
       ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const override {
-    llama_memory_seq_rm(mem, seqId, startPos, endPos);
+    return llama_memory_seq_rm(mem, seqId, startPos, endPos);
   }
 
   void seqAdd(
@@ -57,23 +57,58 @@ ContextSlideOutcome trySlidePrefill(
   if (leftTokens >= 0 && discard > 0 &&
       nPast + nTokensToAppend - discard < nCtx) {
     auto mem = ops.memory(lctx);
-    ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
+    if (!ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard)) {
+      return {ContextSlideOutcome::Kind::MemoryOperationFailed, nPast, 0};
+    }
     ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
     llama_pos newNPast = nPast - discard;
     tools.onSlide(discard, firstMsgTokens);
     return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
   }
 
-  // Fallback: wipe everything after the first message
-  if (leftTokens < 0 && firstMsgTokens + nTokensToAppend < nCtx &&
-      nDiscarded > 0) {
-    auto mem = ops.memory(lctx);
-    ops.seqRm(mem, 0, firstMsgTokens, nPast);
-    llama_pos wiped = nPast - firstMsgTokens;
-    if (tools.enabled()) {
-      tools.reset();
+  // Fallback: wipe everything after the first message.
+  // Some hybrid recurrent memories cannot roll their tail state backwards. In
+  // that case, preserve the tail token and move it next to the protected prefix
+  // so decoding can continue with a best-effort contaminated state.
+  if (nDiscarded > 0) {
+    const llama_pos tail = nPast - 1;
+    const bool exactWipeFits = firstMsgTokens + nTokensToAppend < nCtx;
+    const bool tailPreservingWipeFits =
+        tail > firstMsgTokens && firstMsgTokens + 1 + nTokensToAppend < nCtx;
+
+    if (!exactWipeFits && !tailPreservingWipeFits) {
+      return {ContextSlideOutcome::Kind::Overflow, nPast, 0};
     }
-    return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens, wiped};
+
+    auto mem = ops.memory(lctx);
+    bool memoryOperationFailed = false;
+
+    if (exactWipeFits) {
+      if (ops.seqRm(mem, 0, firstMsgTokens, nPast)) {
+        llama_pos wiped = nPast - firstMsgTokens;
+        if (tools.enabled()) {
+          tools.reset();
+        }
+        return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens, wiped};
+      }
+      memoryOperationFailed = true;
+    }
+
+    if (tailPreservingWipeFits) {
+      if (ops.seqRm(mem, 0, firstMsgTokens, tail)) {
+        ops.seqAdd(mem, 0, tail, nPast, firstMsgTokens - tail);
+        llama_pos wiped = tail - firstMsgTokens;
+        if (tools.enabled()) {
+          tools.reset();
+        }
+        return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens + 1, wiped};
+      }
+      memoryOperationFailed = true;
+    }
+
+    if (memoryOperationFailed) {
+      return {ContextSlideOutcome::Kind::MemoryOperationFailed, nPast, 0};
+    }
   }
 
   // Cannot free enough space
@@ -129,7 +164,9 @@ ContextSlideOutcome trySlideGeneration(
 
   // Perform the slide
   auto mem = ops.memory(lctx);
-  ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
+  if (!ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard)) {
+    return {ContextSlideOutcome::Kind::MemoryOperationFailed, nPast, 0};
+  }
   ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
   llama_pos newNPast = nPast - discard;
   tools.onSlide(discard, firstMsgTokens);

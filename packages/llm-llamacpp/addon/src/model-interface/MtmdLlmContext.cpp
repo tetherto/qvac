@@ -339,6 +339,16 @@ bool MtmdLlmContext::evalMessageWithTools(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(ContextOverflow), errorMsg);
     }
+    case ContextSlideOutcome::Kind::MemoryOperationFailed: {
+      std::string errorMsg = string_format(
+          "[MtmdLlm] failed to slide context memory at prefill step "
+          "(nPast=%d, append=%ld, max=%d)\n",
+          nPast_,
+          nTokens,
+          llama_n_ctx(lctx_));
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextSlideFailed), errorMsg);
+    }
     case ContextSlideOutcome::Kind::NotNeeded:
       break;
     }
@@ -414,6 +424,14 @@ void MtmdLlmContext::applyContextDiscard() {
         string_format(
             "[MtmdLlm] discarded %d tokens after the first message\n",
             outcome.discarded));
+  } else if (outcome.kind == ContextSlideOutcome::Kind::MemoryOperationFailed) {
+    std::string errorMsg = string_format(
+        "[MtmdLlm] failed to slide context memory during generation "
+        "(nPast=%d, nDiscarded=%d)\n",
+        nPast_,
+        nDiscarded_);
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(ContextSlideFailed), errorMsg);
   }
 }
 
