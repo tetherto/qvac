@@ -105,9 +105,12 @@ if(ANDROID AND LIBOMP_FOUND_PATH)
     RENAME libomp.so
   )
 
-  target_link_libraries(${inference-addon-llama} PRIVATE ${LIBOMP_FOUND_PATH})
+  add_library(OpenMP::omp SHARED IMPORTED)
+  set_target_properties(OpenMP::omp PROPERTIES IMPORTED_LOCATION "${LIBOMP_FOUND_PATH}")
+
+  target_link_libraries(${inference-addon-llama} PRIVATE OpenMP::omp)
   target_compile_options(${inference-addon-llama} PRIVATE -fopenmp)
-  target_link_libraries(${inference-addon-llama}_module PRIVATE ${LIBOMP_FOUND_PATH})
+  target_link_libraries(${inference-addon-llama}_module PRIVATE OpenMP::omp)
   target_compile_options(${inference-addon-llama}_module PRIVATE -fopenmp)
 
   add_custom_command(TARGET ${inference-addon-llama}_module POST_BUILD
