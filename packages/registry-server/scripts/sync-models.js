@@ -110,17 +110,17 @@ async function syncModels () {
                 code: err.code
               }, 'add-model RPC ended ambiguously; polling registry for completed ingest')
 
-              const model = await waitForModelAfterAmbiguousAdd({
+              const recovery = await recoverAfterAmbiguousAdd({
                 client,
                 sourceInfo,
-                logger
+                logger,
+                connection,
+                reconnect: () => connectToRegistry({ config, logger })
               })
-              dbByKey.set(key, model)
+              connection = recovery.connection
 
-              await connection.cleanup().catch(cleanupErr => {
-                logger.warn({ error: cleanupErr.message }, 'Failed to clean up stale RPC connection')
-              })
-              connection = await connectToRegistry({ config, logger })
+              if (recovery.error) throw recovery.error
+              dbByKey.set(key, recovery.model)
             }
           } else {
             logger.info(`[DRY RUN] Would add: ${sourceInfo.path}`)
@@ -208,6 +208,38 @@ async function syncModels () {
   } finally {
     await client.close()
     await connection.cleanup()
+  }
+}
+
+async function recoverAfterAmbiguousAdd ({
+  client,
+  sourceInfo,
+  logger,
+  connection,
+  reconnect,
+  waitForModel = waitForModelAfterAmbiguousAdd
+}) {
+  let model = null
+  let error = null
+
+  try {
+    model = await waitForModel({
+      client,
+      sourceInfo,
+      logger
+    })
+  } catch (err) {
+    error = err
+  }
+
+  await connection.cleanup().catch(cleanupErr => {
+    logger.warn({ error: cleanupErr.message }, 'Failed to clean up stale RPC connection')
+  })
+
+  return {
+    connection: await reconnect(),
+    error,
+    model
   }
 }
 
@@ -352,6 +384,7 @@ if (require.main === module) {
 
 module.exports = {
   ADD_MODEL_RPC_TIMEOUT_MS,
+  recoverAfterAmbiguousAdd,
   isAmbiguousRpcError,
   syncModels,
   waitForModelAfterAmbiguousAdd

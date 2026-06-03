@@ -3,6 +3,7 @@
 const test = require('brittle')
 const {
   ADD_MODEL_RPC_TIMEOUT_MS,
+  recoverAfterAmbiguousAdd,
   isAmbiguousRpcError,
   waitForModelAfterAmbiguousAdd
 } = require('../../scripts/sync-models')
@@ -43,4 +44,37 @@ test('waitForModelAfterAmbiguousAdd polls until the model appears', async t => {
     [expected.path, expected.source],
     [expected.path, expected.source]
   ])
+})
+
+test('recoverAfterAmbiguousAdd reconnects even when polling times out', async t => {
+  t.plan(4)
+
+  const staleConnection = {
+    cleaned: false,
+    async cleanup () {
+      this.cleaned = true
+    }
+  }
+  const freshConnection = {}
+  const pollError = new Error('poll timed out')
+  let reconnects = 0
+
+  const result = await recoverAfterAmbiguousAdd({
+    client: {},
+    sourceInfo: { path: 'repo/model.gguf', protocol: 'hf' },
+    logger: { info () {}, warn () {} },
+    connection: staleConnection,
+    reconnect: async () => {
+      reconnects++
+      return freshConnection
+    },
+    waitForModel: async () => {
+      throw pollError
+    }
+  })
+
+  t.is(result.error, pollError)
+  t.is(result.connection, freshConnection)
+  t.is(reconnects, 1)
+  t.ok(staleConnection.cleaned)
 })
