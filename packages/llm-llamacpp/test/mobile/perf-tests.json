@@ -3,5 +3,7 @@
   "runImageFruitPlateTest",
   "runImageHighResAuroraTest",
   "runBitnetTest",
-  "runToolCallingTest"
+  "runToolCallingTest",
+  "runGemma4Test",
+  "runQwen35Test"
 ]
