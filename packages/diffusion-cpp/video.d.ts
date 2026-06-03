@@ -1,6 +1,6 @@
 import type { QvacResponse } from '@qvac/infer-base'
 import type QvacLogger from '@qvac/logging'
-import type { SamplerMethod, ScheduleType, SdConfig, CacheMode } from './index'
+import type { SamplerMethod, ScheduleType, SdConfig, CacheMode, RunOptions } from './index'
 
 /** Supported video-generation modes for `VideoStableDiffusion.run()`. */
 export type VideoMode = 'txt2vid' | 'img2vid'
@@ -174,7 +174,7 @@ export default class VideoStableDiffusion {
    * stream carries one final `Uint8Array` (MJPG AVI buffer) and JSON
    * progress-tick strings throughout denoising.
    */
-  run (params: VideoGenerationParams): Promise<QvacResponse>
+  run (params: VideoGenerationParams, runOptions?: RunOptions): Promise<QvacResponse>
 
   /** Cancel the in-flight video generation job. */
   cancel (): Promise<void>
