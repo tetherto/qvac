@@ -1,12 +1,6 @@
-// NOTE:
-// This test file is temporarily disabled by filename so the Bun unit runner does not import it.
-// Importing `@/server/bare/plugins/llamacpp-completion/ops/finetune` loads `bare-fs` at module scope,
-// which currently crashes under Bun.
-// This seems to be a bug in Bun itself.
-
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "bare-fs";
+import os from "bare-os";
+import path from "bare-path";
 import test from "brittle";
 import {
   clearRegistry,
@@ -40,7 +34,7 @@ function cleanupCheckpointDir(baseDir: string) {
   fs.rmSync(baseDir, { recursive: true, force: true });
 }
 
-test.skip("startFinetune: propagates busy rejection from model.finetune()", async (t) => {
+test("startFinetune: propagates busy rejection from model.finetune()", async (t) => {
   clearRegistry();
   const modelId = "finetune-busy-model";
   const busyError = new CompletionFailedError(
@@ -58,7 +52,6 @@ test.skip("startFinetune: propagates busy rejection from model.finetune()", asyn
     path: "/tmp/busy-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 
   let caughtError: unknown;
@@ -85,7 +78,7 @@ test.skip("startFinetune: propagates busy rejection from model.finetune()", asyn
   t.ok(caughtError instanceof CompletionFailedError);
 });
 
-test.skip("getFinetuneStateFromCheckpoints: reports paused when any pause checkpoint exists", async (t) => {
+test("getFinetuneStateFromCheckpoints: reports paused when any pause checkpoint exists", async (t) => {
   const checkpointDir = createTempCheckpointDir();
 
   try {
@@ -104,7 +97,7 @@ test.skip("getFinetuneStateFromCheckpoints: reports paused when any pause checkp
   }
 });
 
-test.skip("startFinetune: rejects explicit start when a pause checkpoint exists", async (t) => {
+test("startFinetune: rejects explicit start when a pause checkpoint exists", async (t) => {
   clearRegistry();
   const modelId = "finetune-start-paused-model";
   const checkpointDir = createTempCheckpointDir();
@@ -124,7 +117,6 @@ test.skip("startFinetune: rejects explicit start when a pause checkpoint exists"
     path: "/tmp/start-paused-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 
   let caughtError: unknown;
@@ -153,7 +145,7 @@ test.skip("startFinetune: rejects explicit start when a pause checkpoint exists"
   t.ok(caughtError instanceof CompletionFailedError);
 });
 
-test.skip("startFinetune: rejects explicit resume when no pause checkpoint exists", async (t) => {
+test("startFinetune: rejects explicit resume when no pause checkpoint exists", async (t) => {
   clearRegistry();
   const modelId = "finetune-resume-idle-model";
   const checkpointDir = createTempCheckpointDir();
@@ -171,7 +163,6 @@ test.skip("startFinetune: rejects explicit resume when no pause checkpoint exist
     path: "/tmp/resume-idle-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 
   let caughtError: unknown;
@@ -200,7 +191,7 @@ test.skip("startFinetune: rejects explicit resume when no pause checkpoint exist
   t.ok(caughtError instanceof CompletionFailedError);
 });
 
-test.skip("getFinetuneState: returns idle when no pause checkpoint exists", async (t) => {
+test("getFinetuneState: returns idle when no pause checkpoint exists", async (t) => {
   clearRegistry();
   const modelId = "finetune-state-idle-model";
   const checkpointDir = createTempCheckpointDir();
@@ -216,7 +207,6 @@ test.skip("getFinetuneState: returns idle when no pause checkpoint exists", asyn
     path: "/tmp/state-idle-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 
   try {
@@ -240,7 +230,7 @@ test.skip("getFinetuneState: returns idle when no pause checkpoint exists", asyn
   }
 });
 
-test.skip("getFinetuneState: returns running while finetune is active", async (t) => {
+test("getFinetuneState: returns running while finetune is active", async (t) => {
   clearRegistry();
   const modelId = "finetune-state-running-model";
   const checkpointDir = createTempCheckpointDir();
@@ -276,7 +266,6 @@ test.skip("getFinetuneState: returns running while finetune is active", async (t
     path: "/tmp/state-running-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 
   try {
@@ -305,7 +294,9 @@ test.skip("getFinetuneState: returns running while finetune is active", async (t
 
     t.is(result.status, "RUNNING");
 
-    resolveAwait?.({
+    // Yield to let startFinetune reach model.finetune().await() and set resolveAwait.
+    await new Promise((r) => setTimeout(r, 0));
+    resolveAwait!({
       op: "finetune",
       status: "COMPLETED",
       stats: {
@@ -322,7 +313,7 @@ test.skip("getFinetuneState: returns running while finetune is active", async (t
   }
 });
 
-test.skip("finetune: omitted operation preserves automatic addon behavior", async (t) => {
+test("finetune: omitted operation preserves automatic addon behavior", async (t) => {
   clearRegistry();
   const modelId = "finetune-auto-model";
   const checkpointDir = createTempCheckpointDir();
@@ -362,7 +353,6 @@ test.skip("finetune: omitted operation preserves automatic addon behavior", asyn
     path: "/tmp/auto-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 
   try {
@@ -387,7 +377,7 @@ test.skip("finetune: omitted operation preserves automatic addon behavior", asyn
   }
 });
 
-test.skip("startFinetune: detaches progress listeners after completion", async (t) => {
+test("startFinetune: detaches progress listeners after completion", async (t) => {
   clearRegistry();
   const modelId = "finetune-listener-model";
   const seenSteps: number[] = [];
@@ -444,7 +434,6 @@ test.skip("startFinetune: detaches progress listeners after completion", async (
     path: "/tmp/listener-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 
   try {

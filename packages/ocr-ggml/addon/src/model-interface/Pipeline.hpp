@@ -25,11 +25,11 @@
 #include <string>
 #include <vector>
 
-#include <opencv2/core.hpp>
-
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
+#include <opencv2/core.hpp>
 
+#include "OcrBackendSelection.hpp"
 #include "OcrLazyInitializeBackend.hpp"
 #include "OcrTypes.hpp"
 #include "doctr/StepDoctrDetectionGGML.hpp"
@@ -69,6 +69,14 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const override;
 
+  // The backend device that was resolved for this pipeline's inference steps.
+  // Surfaced to JS (see `getBackendInfo` in AddonJs.hpp) for diagnostics and
+  // exercised by the Vulkan integration test.
+  [[nodiscard]] const ocr_backend_selection::BackendSelection&
+  backendInfo() const {
+    return backendInfo_;
+  }
+
   void cancel() const override {
     cancelFlag_.store(true, std::memory_order_relaxed);
   }
@@ -80,6 +88,9 @@ private:
 
   OcrConfig config_;
   OcrBackendsHandle backendsHandle_; // must be declared after config_
+  // Resolved backend device for the inference steps; populated in the ctor
+  // after `backendsHandle_` has loaded the ggml backends.
+  ocr_backend_selection::BackendSelection backendInfo_;
 
   // EasyOCR steps (constructed when config_.mode == PipelineMode::EASYOCR).
   std::unique_ptr<easyocr::ggml::pipeline::StepDetectionInference> easyDetector_;

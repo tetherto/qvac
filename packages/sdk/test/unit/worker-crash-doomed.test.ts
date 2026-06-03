@@ -1,4 +1,3 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

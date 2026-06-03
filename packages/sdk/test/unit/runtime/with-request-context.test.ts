@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import type { LogLevel } from "@qvac/logging";
 import type { Logger, LogTransport } from "@/logging/types";
@@ -20,11 +19,6 @@ import { withRequestContext } from "@/server/bare/runtime/with-request-context";
 //     (the wrapper only prefixes the leading message).
 // -----------------------------------------------------------------------------
 
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-};
 
 type EmitRecord = { level: LogLevel; args: unknown[] };
 
@@ -52,7 +46,7 @@ function makeStubLogger(): Logger & {
     warn: record("warn"),
     info: record("info"),
     debug: record("debug"),
-    trace: record("trace"),
+    trace: record("trace" as LogLevel),
     setLevel: (level: LogLevel) => {
       levelState.value = level;
     },
@@ -64,7 +58,7 @@ function makeStubLogger(): Logger & {
   };
 }
 
-test("withRequestContext: prefixes every level with kind/requestId/modelId", (t: T) => {
+test("withRequestContext: prefixes every level with kind/requestId/modelId", (t) => {
   const stub = makeStubLogger();
   const log = withRequestContext(stub, {
     requestId: "abc-123",
@@ -104,11 +98,12 @@ test("withRequestContext: prefixes every level with kind/requestId/modelId", (t:
   });
 });
 
-test("withRequestContext: drops modelId segment when the request has no modelId", (t: T) => {
+test("withRequestContext: drops modelId segment when the request has no modelId", (t) => {
   const stub = makeStubLogger();
   const log = withRequestContext(stub, {
     requestId: "req-1",
     kind: "embeddings",
+    modelId: undefined,
   });
 
   log.info("hello");
@@ -119,7 +114,7 @@ test("withRequestContext: drops modelId segment when the request has no modelId"
   });
 });
 
-test("withRequestContext: preserves extra arguments after the leading message", (t: T) => {
+test("withRequestContext: preserves extra arguments after the leading message", (t) => {
   const stub = makeStubLogger();
   const log = withRequestContext(stub, {
     requestId: "r-x",
@@ -140,7 +135,7 @@ test("withRequestContext: preserves extra arguments after the leading message", 
   });
 });
 
-test("withRequestContext: zero-argument emits still ship the prefix on its own", (t: T) => {
+test("withRequestContext: zero-argument emits still ship the prefix on its own", (t) => {
   const stub = makeStubLogger();
   const log = withRequestContext(stub, {
     requestId: "r-y",
@@ -158,7 +153,7 @@ test("withRequestContext: zero-argument emits still ship the prefix on its own",
   });
 });
 
-test("withRequestContext: setLevel/getLevel/addTransport/setConsoleOutput pass through", (t: T) => {
+test("withRequestContext: setLevel/getLevel/addTransport/setConsoleOutput pass through", (t) => {
   const stub = makeStubLogger();
   const log = withRequestContext(stub, {
     requestId: "r-z",
