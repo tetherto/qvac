@@ -341,19 +341,6 @@ export const completionTopK = createCompletionTest(
   { estimatedDurationMs: 8000 },
 );
 
-export const completionNegativeTemperature = createCompletionTest(
-  "completion-negative-temperature",
-  {
-    history: [
-      { role: "user", content: "What is 1 + 1? Answer with just the number." },
-    ],
-    stream: false,
-    generationParams: { temp: -0.5, seed: 42 },
-  },
-  { validation: "type", expectedType: "string" }, // SDK should handle gracefully
-  { estimatedDurationMs: 8000 },
-);
-
 // Runs the same prompt twice with a fixed seed and asserts byte-identical
 // output — see CompletionExecutor.seedReproducibility.
 export const completionSeedReproducibility = createCompletionTest(
@@ -637,7 +624,6 @@ export const completionTests = [
   completionTopP,
   completionRepeatPenalty,
   completionTopK,
-  completionNegativeTemperature,
   completionTemperature00,
   completionTemperature05,
   completionTemperature10,

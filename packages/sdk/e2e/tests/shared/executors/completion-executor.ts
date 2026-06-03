@@ -126,10 +126,12 @@ export class CompletionExecutor extends AbstractModelExecutor<
       (s): s is PromiseRejectedResult => s.status === "rejected",
     );
 
-    if (fulfilled.length === 0) {
+    if (fulfilled.length !== 1 || rejected.length !== CONCURRENCY - 1) {
       return {
         passed: false,
-        output: "Expected at least one concurrent completion to run to completion",
+        output:
+          `Expected single-flight shape: 1 fulfilled and ${CONCURRENCY - 1} rejected by policy; ` +
+          `got ${fulfilled.length} fulfilled and ${rejected.length} rejected`,
       };
     }
 
