@@ -264,11 +264,11 @@ test('Qwen3.5-0.8B supports tool calling', {
   }
 })
 
-// QVAC-18298: image (vision) correctness for Qwen3.5 is covered by
-// qwen3-5-image-perf.test.js, which asserts the expected keyword per image
-// (elephant / fruit plate / high-res aurora) alongside recording perf — so
-// the former single-image "can describe an image" test here was redundant
-// (it only checked elephant) and ran the same inference twice on each PR.
+// QVAC-18298: image (vision) correctness for Qwen3.5 is covered by the
+// qwen3-5-image-*-perf.test.js files (one per image: elephant / fruit plate /
+// high-res aurora), which assert the expected keyword alongside recording
+// perf — so the former single-image "can describe an image" test here was
+// redundant (it only checked elephant) and ran the same inference twice.
 
 test('Qwen3.5-0.8B reasoning-budget=0 disables thinking', {
   timeout: 600_000

@@ -200,11 +200,11 @@ test('Gemma 4 supports multi-turn conversation with KV cache', {
   }
 })
 
-// QVAC-18298: image (vision) correctness for Gemma 4 is covered by
-// gemma4-image-perf.test.js, which asserts the expected keyword per image
-// (elephant / fruit plate / high-res aurora) alongside recording perf — so
-// the former single-image "can describe an image" test here was redundant
-// (it only checked elephant) and ran the same inference twice on each PR.
+// QVAC-18298: image (vision) correctness for Gemma 4 is covered by the
+// gemma4-image-*-perf.test.js files (one per image: elephant / fruit plate /
+// high-res aurora), which assert the expected keyword alongside recording
+// perf — so the former single-image "can describe an image" test here was
+// redundant (it only checked elephant) and ran the same inference twice.
 
 test('Gemma 4 supports tool calling', {
   timeout: 600_000
