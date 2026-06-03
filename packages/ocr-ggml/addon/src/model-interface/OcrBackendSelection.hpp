@@ -10,6 +10,9 @@
 //   - `BackendDevice::VULKAN` -> the first Vulkan-capable GPU/iGPU device
 //     (backend name contains "vulkan", case-insensitive). When none is present
 //     the result falls back to the CPU device and records a `fallbackReason`.
+//   - `BackendDevice::METAL` -> the first Metal-capable GPU device (backend
+//     name contains "metal", case-insensitive; Apple only). Same CPU-fallback
+//     behaviour as Vulkan when no Metal device is present.
 //   - `BackendDevice::CPU` (default) -> the CPU device.
 //
 // The returned device is then handed to each step's `ggml_backend_dev_init`.
@@ -52,5 +55,9 @@ BackendSelection selectBackendDevice(BackendDevice requested);
 // True if the backend name contains "vulkan" (case-insensitive). Exposed for
 // unit testing / reuse.
 [[nodiscard]] bool isVulkanBackendName(std::string_view backendName);
+
+// True if the backend name contains "metal" (case-insensitive). Exposed for
+// unit testing / reuse.
+[[nodiscard]] bool isMetalBackendName(std::string_view backendName);
 
 } // namespace qvac_lib_infer_ocr_ggml::ocr_backend_selection
