@@ -314,7 +314,7 @@ case only when the corresponding GGUFs are present on disk:
 | `OCR_GGML_DOCTR_DETECTOR` | Doctr | Doctr case |
 | `OCR_GGML_DOCTR_RECOGNIZER` | Doctr | Doctr case |
 | `OCR_GGML_IMAGE` | — | overrides the default sample image |
-| `OCR_GGML_BACKEND` | — | ggml backend device for the whole suite: `cpu` (default) or `vulkan` |
+| `OCR_GGML_BACKEND` | — | manual ggml backend override for the whole suite: `cpu` or `vulkan` (otherwise auto-detected, see below) |
 
 CI sets these automatically; locally you can:
 
@@ -326,9 +326,23 @@ npm run test:integration
 
 ### Running the suite on Vulkan (GPU)
 
-By default the integration suite runs CPU-only. Set `OCR_GGML_BACKEND=vulkan`
-to run every EasyOCR + DocTR case through the ggml Vulkan backend (with the
-same expected-text / quality assertions as CPU):
+The harness **auto-detects** the backend. When the package ships a
+`ggml-vulkan` backend lib in `prebuilds/` (as the merged desktop CI prebuilds
+do), the whole integration suite — every EasyOCR + DocTR case, with the same
+expected-text / quality assertions as CPU — automatically runs through the
+ggml Vulkan backend. This means the existing desktop `test-<platform>-<arch>`
+integration job exercises Vulkan on the Vulkan-capable GPU runner (e.g.
+`qvac-ubuntu2404-x64-gpu`) with no separate CI job.
+
+On a host without a Vulkan-capable GPU (or without the `ggml-vulkan` backend
+lib — e.g. local dev with unmerged prebuilds), the suite stays on CPU: when no
+lib is present it never requests Vulkan, and when the lib is present but no GPU
+is available the request transparently falls back to CPU. Either way the suite
+still passes, and the recorded `execution_provider` reflects the backend
+actually used (driven by the `backendIsGpu` stat), not the request.
+
+`OCR_GGML_BACKEND` remains a manual override that takes precedence over
+auto-detection — force the GPU path (or force CPU) with:
 
 ```bash
 OCR_GGML_BACKEND=vulkan \
@@ -336,14 +350,6 @@ OCR_GGML_DETECTOR=$PWD/models/craft_mlt_25k.gguf \
 OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
 npm run test:integration
 ```
-
-On a host without a Vulkan-capable GPU (or without the `libggml-vulkan`
-backend lib), the request transparently falls back to CPU and the suite still
-passes — the recorded `execution_provider` reflects the backend actually used
-(driven by the `backendIsGpu` stat), not the request. In CI, the dedicated
-`test-vulkan-<platform>-<arch>` job runs this suite on the two Vulkan-capable
-GPU runners (`qvac-ubuntu2404-x64-gpu`, `qvac-win25-x64-gpu`); the CPU
-`test-<platform>-<arch>` matrix is unchanged.
 
 ## Repository layout
 

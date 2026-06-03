@@ -292,20 +292,68 @@ function _envInt (key, fallback) {
   return Number.isFinite(v) && v > 0 ? v : fallback
 }
 
+// Resolves to packages/ocr-ggml/prebuilds (utils.js lives in
+// test/integration/, so two levels up reaches the package root).
+const PREBUILDS_DIR = path.join(__dirname, '..', '..', 'prebuilds')
+
 /**
- * Resolves the ggml backend device for the integration suite from the
- * OCR_GGML_BACKEND env var (mirrors the `_envInt` lookup pattern so it works
- * under both bare-os and node). Returns 'vulkan' only when the value is exactly
- * `vulkan` (case-insensitive); everything else (unset / 'cpu' / garbage)
- * defaults to 'cpu'. CPU is always available; 'vulkan' opts in to GPU inference
- * and transparently falls back to CPU when no Vulkan device is present.
+ * Recursively search a directory for a ggml Vulkan backend shared library
+ * (`*ggml-vulkan*.so/.dll/.dylib`). Returns the full path of the first match,
+ * or null when none is found (including when the directory does not exist).
+ * @param {string} dir - directory to search (typically {@link PREBUILDS_DIR})
+ * @returns {string|null}
+ */
+function findVulkanBackendLib (dir) {
+  let entries
+  try {
+    entries = fs.readdirSync(dir)
+  } catch (_) {
+    return null
+  }
+  for (const name of entries) {
+    const full = path.join(dir, name)
+    let st
+    try {
+      st = fs.statSync(full)
+    } catch (_) {
+      continue
+    }
+    if (st.isDirectory()) {
+      const nested = findVulkanBackendLib(full)
+      if (nested) return nested
+    } else if (/ggml-vulkan/i.test(name) && /\.(so|dll|dylib)$/i.test(name)) {
+      return full
+    }
+  }
+  return null
+}
+
+/**
+ * Resolves the ggml backend device for the integration suite.
+ *
+ * Precedence:
+ *   1. Explicit `OCR_GGML_BACKEND` (via `os.getEnv` then `process.env`) wins —
+ *      'vulkan' only when exactly `vulkan` (case-insensitive), else 'cpu'. This
+ *      preserves a manual override (e.g. workflow_dispatch / forcing CPU).
+ *   2. Else, on desktop, auto-select 'vulkan' when a `ggml-vulkan` backend lib
+ *      is shipped in prebuilds/. On desktop CI the merged prebuilds/ contains
+ *      that lib, so the suites attempt Vulkan; only the GPU runner actually
+ *      executes on Vulkan, while other runners report an explicit CPU fallback.
+ *      Local dev without merged prebuilds (no lib) stays on CPU. The addon
+ *      gracefully falls back to CPU when no Vulkan GPU is present, so requesting
+ *      'vulkan' is safe on non-GPU hosts.
+ *   3. Else 'cpu'.
  * @returns {'cpu'|'vulkan'}
  */
 function getBackendDevice () {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
   if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
-  return String(raw).trim().toLowerCase() === 'vulkan' ? 'vulkan' : 'cpu'
+  if (String(raw).trim() !== '') {
+    return String(raw).trim().toLowerCase() === 'vulkan' ? 'vulkan' : 'cpu'
+  }
+  if (!isMobile && findVulkanBackendLib(PREBUILDS_DIR)) return 'vulkan'
+  return 'cpu'
 }
 
 /**
@@ -724,6 +772,8 @@ module.exports = {
   isWindows,
   platform,
   PERF_RUNS,
+  PREBUILDS_DIR,
+  findVulkanBackendLib,
   getBackendDevice,
   createOcrGgml,
   getImagePath,
