@@ -89,15 +89,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Mali→Vulkan and Metal paths are untouched. `captureActiveBackendInfo()` now
   takes the EXACT `use_gpu` / `gpu_device` the context was created with, so
   the reported backend always matches whisper's actual pick.
-- Whisper/ggml native logs are no longer discarded. The previous
-  `whisper_log_set(<no-op>)` swallowed every whisper.cpp and ggml log line
-  (whisper routes ggml's logs through the same callback); they are now
-  forwarded into the addon logger (`QLOG` → JS logger), surfacing the
-  authoritative backend-init lines (`ggml_vulkan: Found N Vulkan devices…`,
-  `whisper_backend_init_gpu: using <name> backend`). Verbosity is gated by
-  the JS-side logger level (nothing shows unless the host raises it to
-  INFO/DEBUG); the forwarding sink is thread-safe and never throws back into
-  ggml's C log path.
+- Whisper/ggml native logs are redirected to JS through the addon logger
+  (`QLOG`) with verbosity preserved (QVAC-19783). The previous
+  `whisper_log_set(<no-op>)` swallowed every whisper.cpp and ggml log line;
+  they are now forwarded via `whisper_log_set()` (the correct hook — whisper
+  re-applies the callback to ggml during `whisper_backend_init_gpu()`, so a
+  raw `ggml_log_set()` would be clobbered). `ggmlLevelToPriority()` maps each
+  `ggml_log_level` to the matching logger `Priority` (ERROR/WARNING/INFO/DEBUG)
+  so the JS-side logger level controls how much is shown — e.g.
+  `ggml_vulkan: Found N Vulkan devices…` at DEBUG and
+  `whisper_backend_init_gpu: using <name> backend` at INFO. Each callback is
+  forwarded immediately (no cross-call buffering), mirroring `llm-llamacpp`'s
+  `LlamaModel::llamaLogCallback`, so it is deterministic regardless of newline
+  termination (whisper/ggml error paths emit lines without a trailing `\n`) —
+  no message is held pending or merged into a later one at the wrong priority,
+  and there is no unbounded buffer or partial line lost at shutdown. Nothing
+  shows unless the host raises the level via `binding.setLogger()` /
+  `--native-logs`. The forwarder is JS-free (`GgmlLogForwarding.hpp`) and
+  unit-tested; it never throws back into ggml's C log path.
 
 ### Removed
 - `transcription-whispercpp`-side `spirv-headers` / `vulkan-headers` /

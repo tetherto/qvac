@@ -12,11 +12,10 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -77,8 +76,9 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
   // by API, so we copy the raw bytes via the record.
   const auto& tok_record = fixture.record("fixture.tokens");
   ASSERT_EQ(tok_record.dtype, "I32");
-  ASSERT_EQ(tok_record.byte_length,
-            static_cast<uint64_t>(TOKEN_MAX_LEN * sizeof(int32_t)));
+  ASSERT_EQ(
+      tok_record.byte_length,
+      static_cast<uint64_t>(TOKEN_MAX_LEN * sizeof(int32_t)));
   std::vector<int32_t> tokens(TOKEN_MAX_LEN);
   // Re-open the fixture as a byte stream to fetch the raw int32 blob.
   // (safetensors_lite only exposes readF32; for the test it's simpler to
@@ -88,17 +88,16 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
     ASSERT_TRUE(in);
     uint64_t header_len = 0;
     in.read(reinterpret_cast<char*>(&header_len), 8);
-    in.seekg(8 + static_cast<std::streamoff>(header_len) +
-                 static_cast<std::streamoff>(tok_record.byte_offset),
-             std::ios::beg);
-    in.read(reinterpret_cast<char*>(tokens.data()),
-            tok_record.byte_length);
+    in.seekg(
+        8 + static_cast<std::streamoff>(header_len) +
+            static_cast<std::streamoff>(tok_record.byte_offset),
+        std::ios::beg);
+    in.read(reinterpret_cast<char*>(tokens.data()), tok_record.byte_length);
     ASSERT_TRUE(in);
   }
 
   const std::vector<float> expected = activations.readF32("vlm.embed_out");
-  ASSERT_EQ(expected.size(),
-            static_cast<size_t>(TOKEN_MAX_LEN * HIDDEN));
+  ASSERT_EQ(expected.size(), static_cast<size_t>(TOKEN_MAX_LEN * HIDDEN));
 
   // ── 2. Load the embedding matrix from the GGUF. ───────────────────────
   struct ggml_context* ctx_w = nullptr;
@@ -109,8 +108,7 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
   ASSERT_NE(gguf, nullptr);
   ASSERT_NE(ctx_w, nullptr);
 
-  struct ggml_tensor* embed_tokens =
-      ggml_get_tensor(ctx_w, "vlm.embed_tokens");
+  struct ggml_tensor* embed_tokens = ggml_get_tensor(ctx_w, "vlm.embed_tokens");
   ASSERT_NE(embed_tokens, nullptr);
   EXPECT_EQ(embed_tokens->ne[0], HIDDEN);
 
@@ -127,8 +125,7 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
 
   struct ggml_tensor* tok_t =
       ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, TOKEN_MAX_LEN);
-  std::memcpy(tok_t->data, tokens.data(),
-              tokens.size() * sizeof(int32_t));
+  std::memcpy(tok_t->data, tokens.data(), tokens.size() * sizeof(int32_t));
 
   using qvac_lib_infer_vla_ggml::pi05BuildVlmEmbedGraph;
   struct ggml_tensor* out =
@@ -137,12 +134,12 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
 
   struct ggml_cgraph* gf = ggml_new_graph(ctx_g);
   ggml_build_forward_expand(gf, out);
-  ASSERT_EQ(ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
-            GGML_STATUS_SUCCESS);
+  ASSERT_EQ(
+      ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
+      GGML_STATUS_SUCCESS);
 
   // ── 4. Compare. ───────────────────────────────────────────────────────
-  ASSERT_EQ(ggml_nelements(out),
-            static_cast<int64_t>(TOKEN_MAX_LEN * HIDDEN));
+  ASSERT_EQ(ggml_nelements(out), static_cast<int64_t>(TOKEN_MAX_LEN * HIDDEN));
   const float* got = static_cast<const float*>(out->data);
   const float cos = cosineSim(got, expected.data(), expected.size());
   const float diff = maxAbsDiff(got, expected.data(), expected.size());
@@ -154,8 +151,7 @@ TEST(Pi05M3_4, VlmEmbedMatchesPytorch) {
       max_abs_expected = a;
     }
   }
-  std::cerr << "[M3.4] embed_out: cos=" << cos
-            << " max_abs_diff=" << diff
+  std::cerr << "[M3.4] embed_out: cos=" << cos << " max_abs_diff=" << diff
             << " max_abs_expected=" << max_abs_expected
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
             << "\n";

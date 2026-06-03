@@ -27,7 +27,7 @@
 // Model hyperparameters (from SmolVLA config)
 // ============================================================
 
-struct smolvla_hparams {
+struct SmolvlaHparams {
   // Vision encoder (SigLIP)
   int vision_hidden_size = 768;
   int vision_intermediate = 3072;
@@ -77,17 +77,19 @@ struct smolvla_hparams {
 
   // Derived. Guard against zero divisors so a malformed GGUF that slips a
   // zero past the load-time hparam validation cannot trigger SIGFPE here.
-  int patches_per_image() const {
-    if (vision_patch_size <= 0) return 0;
+  int patchesPerImage() const {
+    if (vision_patch_size <= 0)
+      return 0;
     int s = vision_image_size / vision_patch_size;
     return s * s; // 1024
   }
-  int tokens_per_image() const {
-    if (connector_scale_factor <= 0) return 0;
-    return patches_per_image() /
+  int tokensPerImage() const {
+    if (connector_scale_factor <= 0)
+      return 0;
+    return patchesPerImage() /
            (connector_scale_factor * connector_scale_factor); // 64
   }
-  int connector_in_features() const {
+  int connectorInFeatures() const {
     return vision_hidden_size * connector_scale_factor *
            connector_scale_factor; // 12288
   }
@@ -108,7 +110,7 @@ struct smolvla_hparams {
 // Model weight structures
 // ============================================================
 
-struct siglip_layer_weights {
+struct SiglipLayerWeights {
   struct ggml_tensor* ln1_weight;
   struct ggml_tensor* ln1_bias;
   struct ggml_tensor* qkv_proj_w; // fused Q+K+V weight
@@ -129,20 +131,20 @@ struct siglip_layer_weights {
   struct ggml_tensor* fc2_bias;
 };
 
-struct siglip_weights {
+struct SiglipWeights {
   struct ggml_tensor* patch_embed_weight; // Conv2d weight
   struct ggml_tensor* patch_embed_bias;
   struct ggml_tensor* pos_embed; // position embedding
-  std::vector<siglip_layer_weights> layers;
+  std::vector<SiglipLayerWeights> layers;
   struct ggml_tensor* post_ln_weight; // final LayerNorm
   struct ggml_tensor* post_ln_bias;
 };
 
-struct connector_weights {
+struct ConnectorWeights {
   struct ggml_tensor* proj_weight; // Linear(12288, 960, bias=False)
 };
 
-struct transformer_layer_weights {
+struct TransformerLayerWeights {
   struct ggml_tensor* attn_norm_weight;
   struct ggml_tensor* qkv_proj_weight; // fused Q+K+V (NULL if not fused)
   struct ggml_tensor* q_proj_weight;   // unfused (NULL if fused)
@@ -156,25 +158,25 @@ struct transformer_layer_weights {
   struct ggml_tensor* down_proj_weight;
 };
 
-struct smolllm2_weights {
+struct Smolllm2Weights {
   struct ggml_tensor* embed_tokens; // token embedding
-  std::vector<transformer_layer_weights> layers;
+  std::vector<TransformerLayerWeights> layers;
   struct ggml_tensor* final_norm_weight; // final RMSNorm
 };
 
-struct expert_weights {
-  std::vector<transformer_layer_weights> layers;
+struct ExpertWeights {
+  std::vector<TransformerLayerWeights> layers;
   struct ggml_tensor* final_norm_weight; // final RMSNorm
 };
 
-struct smolvla_model {
-  smolvla_hparams hparams;
+struct SmolvlaModel {
+  SmolvlaHparams hparams;
 
   // Component weights
-  siglip_weights vision;
-  connector_weights connector;
-  smolllm2_weights text;
-  expert_weights expert;
+  SiglipWeights vision;
+  ConnectorWeights connector;
+  Smolllm2Weights text;
+  ExpertWeights expert;
 
   // Projection weights
   struct ggml_tensor* state_proj_weight; // Linear(32, 960)
@@ -218,14 +220,14 @@ struct smolvla_model {
   // smolvla_free_model is forward-declared below. Required so a partially
   // initialised model is freed when smolvla_load_model fails and the
   // owning unique_ptr unwinds (e.g. VlaModel constructor throws).
-  ~smolvla_model();
+  ~SmolvlaModel();
 };
 
 // ============================================================
 // KV cache
 // ============================================================
 
-struct smolvla_kv_cache {
+struct SmolvlaKvCache {
   // VLM KV cache: 16 layers, each with key and value tensors
   // key:   (B, prefix_len, num_kv_heads, head_dim)
   // value: (B, prefix_len, num_kv_heads, head_dim)
@@ -243,55 +245,53 @@ struct smolvla_kv_cache {
 // Utility functions exposed for checkpoint verification
 
 // Build SigLIP vision encoder graph for a single image
-struct ggml_tensor* build_siglip_graph(
-    struct ggml_context* ctx, smolvla_model& model,
-    struct ggml_tensor* pixel_values);
+struct ggml_tensor* buildSiglipGraph(
+    struct ggml_context* ctx, SmolvlaModel& model,
+    struct ggml_tensor* pixelValues);
 
 // Build connector (PixelShuffle + projection) graph
-struct ggml_tensor* build_connector_graph(
-    struct ggml_context* ctx, smolvla_model& model,
-    struct ggml_tensor* vision_output);
+struct ggml_tensor* buildConnectorGraph(
+    struct ggml_context* ctx, SmolvlaModel& model,
+    struct ggml_tensor* visionOutput);
 
 // Build SmolLM2 forward pass graph (16 layers), outputs KV cache per layer
-struct ggml_tensor* build_smollm2_graph(
-    struct ggml_context* ctx, smolvla_model& model,
-    struct ggml_tensor* prefix_embeddings, struct ggml_tensor* position_ids,
-    struct ggml_tensor* attn_mask,
-    std::vector<struct ggml_tensor*>& kv_keys_out,
-    std::vector<struct ggml_tensor*>& kv_vals_out,
-    std::vector<struct ggml_tensor*>* layer_outputs = nullptr);
+struct ggml_tensor* buildSmollm2Graph(
+    struct ggml_context* ctx, SmolvlaModel& model,
+    struct ggml_tensor* prefixEmbeddings, struct ggml_tensor* positionIds,
+    struct ggml_tensor* attnMask, std::vector<struct ggml_tensor*>& kvKeysOut,
+    std::vector<struct ggml_tensor*>& kvValsOut,
+    std::vector<struct ggml_tensor*>* layerOutputs = nullptr);
 
 // Build single denoise step graph (action expert forward)
-struct ggml_tensor* build_denoise_step_graph(
-    struct ggml_context* ctx, smolvla_model& model, struct ggml_tensor* x_t,
-    struct ggml_tensor* time_embed, struct ggml_tensor** vlm_kv_keys,
-    struct ggml_tensor** vlm_kv_vals, struct ggml_tensor* position_ids,
-    struct ggml_tensor* cross_pos_ids, struct ggml_tensor* cross_attn_mask,
-    struct ggml_tensor* self_attn_mask);
+struct ggml_tensor* buildDenoiseStepGraph(
+    struct ggml_context* ctx, SmolvlaModel& model, struct ggml_tensor* xT,
+    struct ggml_tensor* timeEmbed, struct ggml_tensor** vlmKvKeys,
+    struct ggml_tensor** vlmKvVals, struct ggml_tensor* positionIds,
+    struct ggml_tensor* crossPosIds, struct ggml_tensor* crossAttnMask,
+    struct ggml_tensor* selfAttnMask);
 
 // Sinusoidal time embedding using a precomputed `1/period` table
 // (size = dimension/2). `out` must be sized `dimension`. Used on the
 // ODE hot path.
-void compute_sinusoidal_time_embedding_cached(
-    float timestep, const float* inv_periods, int dimension, float* out);
+void computeSinusoidalTimeEmbeddingCached(
+    float timestep, const float* invPeriods, int dimension, float* out);
 
 // Load model from GGUF file. `force_cpu`: skip GPU device selection.
 // `backendsDir`: absolute path to the prebuilds folder; BACKENDS_SUBDIR is
 // appended before calling ggml_backend_load_all_from_path so dlopen works
 // regardless of process CWD (critical on mobile). Pass empty string to fall
 // back to ggml_backend_load_all() (static builds / desktop dev).
-bool smolvla_load_model(
-    const char* path,
-    smolvla_model& model,
-    bool force_cpu,
+bool smolvlaLoadModel(
+    const char* path, SmolvlaModel& model, bool forceCpu,
     const std::string& backendsDir);
 
-// Free model resources. Idempotent — also called from `smolvla_model::~smolvla_model`.
-void smolvla_free_model(smolvla_model& model);
+// Free model resources. Idempotent — also called from
+// `smolvla_model::~smolvla_model`.
+void smolvlaFreeModel(SmolvlaModel& model);
 
 // Per-stage wall-clock timing captured during a single inference call.
 // All values are milliseconds.
-struct smolvla_timing {
+struct SmolvlaTiming {
   double vision_ms = 0.0;
   double smollm2_compute_ms = 0.0;
   double smollm2_total_ms = 0.0;
@@ -301,9 +301,8 @@ struct smolvla_timing {
 
 // Full pipeline: image(s) + state + instruction -> actions. If
 // `timing_out` is non-null, populates it with per-stage timings.
-bool smolvla_inference_with_timing(
-    smolvla_model* model, const float** images, int n_images, int img_width,
-    int img_height, const float* state, int state_dim,
-    const int32_t* lang_tokens, const bool* lang_mask, int lang_len,
-    const float* noise, float* actions_out, int* n_actions_out,
-    smolvla_timing* timing_out);
+bool smolvlaInferenceWithTiming(
+    SmolvlaModel* model, const float** images, int nImages, int imgWidth,
+    int imgHeight, const float* state, int stateDim, const int32_t* langTokens,
+    const bool* langMask, int langLen, const float* noise, float* actionsOut,
+    int* nActionsOut, SmolvlaTiming* timingOut);

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -36,7 +36,8 @@
     "test:dts": "tsc index.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-models": "bash scripts/convert-models.sh",
-    "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh"
+    "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh",
+    "download-models:registry": "node scripts/download-tts-ggml-models.js"
   },
   "files": [
     "addonLogging.js",

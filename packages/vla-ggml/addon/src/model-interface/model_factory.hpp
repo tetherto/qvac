@@ -27,8 +27,6 @@ std::string sniffGgufArchitecture(const std::string& ggufPath);
 //   "pi05"    → Pi05Model
 // Any other value throws std::runtime_error with the offending arch name.
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
-    const std::string& ggufPath,
-    bool forceCpu,
-    const std::string& backendsDir);
+    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir);
 
 } // namespace qvac_lib_infer_vla_ggml

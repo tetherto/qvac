@@ -319,7 +319,7 @@ test("dedupe: framed and final with different raw whitespace are deduped", (t) =
     ...pushAll(n, [`<tool_call>\n${toolJson}\n</tool_call>`]),
     ...n.finish({
       toolCalls: [
-        { name: "echo", arguments: { msg: "hi" }, raw: toolJson },
+        { id: "call_1", name: "echo", arguments: { msg: "hi" }, raw: toolJson },
       ],
     }),
   ];
@@ -334,8 +334,8 @@ test("dedupe: calls with different arguments are both emitted", (t) => {
   );
   const events = n.finish({
     toolCalls: [
-      { name: "echo", arguments: { msg: "hello" } },
-      { name: "echo", arguments: { msg: "world" } },
+      { id: "call_1", name: "echo", arguments: { msg: "hello" } },
+      { id: "call_2", name: "echo", arguments: { msg: "world" } },
     ],
   });
 
@@ -351,8 +351,8 @@ test("dedupe: repeated identical calls from same source are preserved", (t) => {
   );
   const finalEvents = nFinal.finish({
     toolCalls: [
-      { name: "echo", arguments: { msg: "hi" } },
-      { name: "echo", arguments: { msg: "hi" } },
+      { id: "call_1", name: "echo", arguments: { msg: "hi" } },
+      { id: "call_2", name: "echo", arguments: { msg: "hi" } },
     ],
   });
   t.is(finalEvents.filter((e) => e.type === "toolCall").length, 2, "final: identical calls preserved");
@@ -459,7 +459,7 @@ test("pythonic streaming: bare canonical [func(...)] still parses at finish via 
 
   const events = n.finish({
     toolCalls: [
-      { name: "get_weather", arguments: { city: "Tokyo", country: "JP" } },
+      { id: "call_1", name: "get_weather", arguments: { city: "Tokyo", country: "JP" } },
     ],
   });
 

@@ -1,19 +1,14 @@
 {
   "extends": "../tsconfig.json",
-  "exclude": [
-    "node_modules",
-    "dist",
-    "../dist",
-    "../e2e",
-    "../examples"
-  ],
+  "include": ["./**/*", "../types/**/*"],
+  "exclude": ["./dist", "./bare"],
   "compilerOptions": {
-    "outDir": "./dist",
-    "declaration": false,
-    "declarationMap": false,
-    "noImplicitAny": false,
+    "noEmit": true,
+    "noImplicitAny": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noEmitOnError": false
+    "noPropertyAccessFromIndexSignature": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false
   }
 }

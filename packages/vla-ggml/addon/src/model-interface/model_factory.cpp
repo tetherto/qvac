@@ -34,7 +34,6 @@ std::string toLowerAscii(std::string s) {
   return s;
 }
 
-
 } // namespace
 
 std::string sniffGgufArchitecture(const std::string& ggufPath) {
@@ -42,7 +41,7 @@ std::string sniffGgufArchitecture(const std::string& ggufPath) {
   // is independent (no shared tensor data context). The metadata-only
   // open is cheap.
   struct ggml_context* ctxData = nullptr;
-  struct gguf_init_params params {};
+  struct gguf_init_params params{};
   params.no_alloc = true;
   params.ctx = &ctxData;
 
@@ -73,8 +72,7 @@ std::string sniffGgufArchitecture(const std::string& ggufPath) {
 }
 
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
-    const std::string& ggufPath,
-    bool forceCpu,
+    const std::string& ggufPath, bool forceCpu,
     const std::string& backendsDir) {
   const std::string arch = sniffGgufArchitecture(ggufPath);
 

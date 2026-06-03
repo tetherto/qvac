@@ -9,8 +9,9 @@
 // are mirrored to its cache, and developers can opt out by leaving them
 // unset:
 //   PI05_TEST_GGUF        — path to pi05_base.gguf (Phase 2 output)
-//   PI05_TEST_FIXTURE     — path to oracle_dump/fixture.safetensors (PyTorch reference)
-//   PI05_TEST_ACTIVATIONS — path to oracle_dump/activations.safetensors (PyTorch reference)
+//   PI05_TEST_FIXTURE     — path to oracle_dump/fixture.safetensors (PyTorch
+//   reference) PI05_TEST_ACTIVATIONS — path to
+//   oracle_dump/activations.safetensors (PyTorch reference)
 //
 // Tolerances are plan §5 CPU bars: cos > 0.9995 and max-abs-diff < 5e-3.
 
@@ -20,11 +21,10 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -33,7 +33,8 @@ namespace {
 
 constexpr int IMAGE_SIZE = 224;
 constexpr int PATCH_SIZE = 14;
-constexpr int N_PATCHES = (IMAGE_SIZE / PATCH_SIZE) * (IMAGE_SIZE / PATCH_SIZE); // 256
+constexpr int N_PATCHES =
+    (IMAGE_SIZE / PATCH_SIZE) * (IMAGE_SIZE / PATCH_SIZE); // 256
 constexpr int HIDDEN = 1152;
 
 const char* envOrNull(const char* name) {
@@ -89,17 +90,15 @@ TEST(Pi05M3_1, SiglipPatchAndPosEmbedMatchPytorch) {
   // camera 0 — the first cam (3*224*224 = 150 528) floats.
   const size_t per_cam = 3 * IMAGE_SIZE * IMAGE_SIZE;
   ASSERT_GE(images_all.size(), per_cam);
-  std::vector<float> cam0_image(images_all.begin(),
-                                 images_all.begin() + per_cam);
+  std::vector<float> cam0_image(
+      images_all.begin(), images_all.begin() + per_cam);
 
   const std::vector<float> expected_patch =
       activations.readF32("vision.patch_embed_out[cam0]");
   const std::vector<float> expected_pos =
       activations.readF32("vision.pos_embed_out[cam0]");
-  ASSERT_EQ(expected_patch.size(),
-            static_cast<size_t>(N_PATCHES * HIDDEN));
-  ASSERT_EQ(expected_pos.size(),
-            static_cast<size_t>(N_PATCHES * HIDDEN));
+  ASSERT_EQ(expected_patch.size(), static_cast<size_t>(N_PATCHES * HIDDEN));
+  ASSERT_EQ(expected_pos.size(), static_cast<size_t>(N_PATCHES * HIDDEN));
 
   // ── 2. Load the three vision tensors from pi05_base.gguf ──────────────
   struct ggml_context* ctx_w = nullptr;
@@ -115,8 +114,7 @@ TEST(Pi05M3_1, SiglipPatchAndPosEmbedMatchPytorch) {
       ggml_get_tensor(ctx_w, "vision.patch_embed.weight");
   struct ggml_tensor* b_patch =
       ggml_get_tensor(ctx_w, "vision.patch_embed.bias");
-  struct ggml_tensor* pos_embed =
-      ggml_get_tensor(ctx_w, "vision.pos_embed");
+  struct ggml_tensor* pos_embed = ggml_get_tensor(ctx_w, "vision.pos_embed");
   ASSERT_NE(w_patch, nullptr) << "vision.patch_embed.weight missing";
   ASSERT_NE(b_patch, nullptr) << "vision.patch_embed.bias missing";
   ASSERT_NE(pos_embed, nullptr) << "vision.pos_embed missing";
@@ -146,8 +144,8 @@ TEST(Pi05M3_1, SiglipPatchAndPosEmbedMatchPytorch) {
   ASSERT_NE(ctx_g, nullptr);
 
   // pixel_values: (W, H, C, N) = (224, 224, 3, 1).
-  struct ggml_tensor* pixels = ggml_new_tensor_4d(
-      ctx_g, GGML_TYPE_F32, IMAGE_SIZE, IMAGE_SIZE, 3, 1);
+  struct ggml_tensor* pixels =
+      ggml_new_tensor_4d(ctx_g, GGML_TYPE_F32, IMAGE_SIZE, IMAGE_SIZE, 3, 1);
   ASSERT_NE(pixels, nullptr);
 
   // Convert NCHW (cam0 fixture) → ggml's (W, H, C, N). The fixture is
@@ -188,27 +186,31 @@ TEST(Pi05M3_1, SiglipPatchAndPosEmbedMatchPytorch) {
   ggml_build_forward_expand(gf, outs.pos_embed_out);
 
   const int n_threads = 4;
-  ASSERT_EQ(ggml_graph_compute_with_ctx(ctx_g, gf, n_threads), GGML_STATUS_SUCCESS);
+  ASSERT_EQ(
+      ggml_graph_compute_with_ctx(ctx_g, gf, n_threads), GGML_STATUS_SUCCESS);
 
   // ── 4. Compare against PyTorch outputs ───────────────────────────────
-  ASSERT_EQ(ggml_nelements(outs.patch_embed_out),
-            static_cast<int64_t>(N_PATCHES * HIDDEN));
-  ASSERT_EQ(ggml_nelements(outs.pos_embed_out),
-            static_cast<int64_t>(N_PATCHES * HIDDEN));
+  ASSERT_EQ(
+      ggml_nelements(outs.patch_embed_out),
+      static_cast<int64_t>(N_PATCHES * HIDDEN));
+  ASSERT_EQ(
+      ggml_nelements(outs.pos_embed_out),
+      static_cast<int64_t>(N_PATCHES * HIDDEN));
 
   // ggml tensor ne=[HIDDEN, N_PATCHES] is byte-identical to numpy
   // (N_PATCHES, HIDDEN) row-major — same memory order.
-  const float* got_patch = static_cast<const float*>(outs.patch_embed_out->data);
+  const float* got_patch =
+      static_cast<const float*>(outs.patch_embed_out->data);
   const float* got_pos = static_cast<const float*>(outs.pos_embed_out->data);
 
-  const float cos_patch = cosineSim(got_patch, expected_patch.data(),
-                                     expected_patch.size());
-  const float diff_patch = maxAbsDiff(got_patch, expected_patch.data(),
-                                       expected_patch.size());
-  const float cos_pos = cosineSim(got_pos, expected_pos.data(),
-                                   expected_pos.size());
-  const float diff_pos = maxAbsDiff(got_pos, expected_pos.data(),
-                                     expected_pos.size());
+  const float cos_patch =
+      cosineSim(got_patch, expected_patch.data(), expected_patch.size());
+  const float diff_patch =
+      maxAbsDiff(got_patch, expected_patch.data(), expected_patch.size());
+  const float cos_pos =
+      cosineSim(got_pos, expected_pos.data(), expected_pos.size());
+  const float diff_pos =
+      maxAbsDiff(got_pos, expected_pos.data(), expected_pos.size());
 
   std::cerr << "[M3.1] patch_embed: cos=" << cos_patch
             << " max_abs_diff=" << diff_patch << "\n"

@@ -22,13 +22,12 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include <gguf.h>
-#include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
+#include <ggml.h>
+#include <gguf.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -130,10 +129,14 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   std::vector<float> k_cache_valid(
       VALID_PREFIX_LEN * EXPERT_N_KV_HEADS * VLM_KV_DIM);
   std::vector<float> v_cache_valid(k_cache_valid.size());
-  std::memcpy(k_cache_valid.data(), kv_keys_all.data(),
-              k_cache_valid.size() * sizeof(float));
-  std::memcpy(v_cache_valid.data(), kv_vals_all.data(),
-              v_cache_valid.size() * sizeof(float));
+  std::memcpy(
+      k_cache_valid.data(),
+      kv_keys_all.data(),
+      k_cache_valid.size() * sizeof(float));
+  std::memcpy(
+      v_cache_valid.data(),
+      kv_vals_all.data(),
+      v_cache_valid.size() * sizeof(float));
 
   // ── 2. GGUF weights. ──────────────────────────────────────────────────
   struct ggml_context* ctx_w = nullptr;
@@ -194,11 +197,17 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
       ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, N_ACT);
   ggml_set_name(act_pos_t, "in.act_pos");
   struct ggml_tensor* cached_k_t = ggml_new_tensor_3d(
-      ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+      ctx_g,
+      GGML_TYPE_F32,
+      EXPERT_HEAD_DIM,
+      VALID_PREFIX_LEN,
       EXPERT_N_KV_HEADS);
   ggml_set_name(cached_k_t, "in.cached_k");
   struct ggml_tensor* cached_v_t = ggml_new_tensor_3d(
-      ctx_g, GGML_TYPE_F32, EXPERT_HEAD_DIM, VALID_PREFIX_LEN,
+      ctx_g,
+      GGML_TYPE_F32,
+      EXPERT_HEAD_DIM,
+      VALID_PREFIX_LEN,
       EXPERT_N_KV_HEADS);
   ggml_set_name(cached_v_t, "in.cached_v");
   struct ggml_tensor* cond_t =
@@ -218,16 +227,28 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
 
   using qvac_lib_infer_vla_ggml::pi05BuildExpertBlockGraph;
   struct ggml_tensor* out = pi05BuildExpertBlockGraph(
-      ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond_t, bw,
-      EXPERT_HIDDEN, EXPERT_N_HEADS, EXPERT_N_KV_HEADS, EXPERT_HEAD_DIM,
-      VALID_PREFIX_LEN, N_ACT, EXPERT_RMS_EPS, EXPERT_ROPE_BASE);
+      ctx_g,
+      x_exp_t,
+      act_pos_t,
+      cached_k_t,
+      cached_v_t,
+      cond_t,
+      bw,
+      EXPERT_HIDDEN,
+      EXPERT_N_HEADS,
+      EXPERT_N_KV_HEADS,
+      EXPERT_HEAD_DIM,
+      VALID_PREFIX_LEN,
+      N_ACT,
+      EXPERT_RMS_EPS,
+      EXPERT_ROPE_BASE);
   ASSERT_NE(out, nullptr);
 
   struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 8192, false);
   ggml_build_forward_expand(gf, out);
 
-  ggml_gallocr_t allocr = ggml_gallocr_new(
-      ggml_backend_get_default_buffer_type(cpu_backend));
+  ggml_gallocr_t allocr =
+      ggml_gallocr_new(ggml_backend_get_default_buffer_type(cpu_backend));
   ASSERT_NE(allocr, nullptr);
   ASSERT_TRUE(ggml_gallocr_alloc_graph(allocr, gf));
 
@@ -236,26 +257,30 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   for (int i = 0; i < N_ACT; ++i) {
     act_pos_data[i] = VALID_PREFIX_LEN + i; // 832..881
   }
-  ggml_backend_tensor_set(noise_t, noise.data(), 0,
-                          noise.size() * sizeof(float));
-  ggml_backend_tensor_set(act_pos_t, act_pos_data.data(), 0,
-                          act_pos_data.size() * sizeof(int32_t));
-  ggml_backend_tensor_set(cached_k_t, k_cache_valid.data(), 0,
-                          k_cache_valid.size() * sizeof(float));
-  ggml_backend_tensor_set(cached_v_t, v_cache_valid.data(), 0,
-                          v_cache_valid.size() * sizeof(float));
-  ggml_backend_tensor_set(cond_t, cond_data.data(), 0,
-                          cond_data.size() * sizeof(float));
+  ggml_backend_tensor_set(
+      noise_t, noise.data(), 0, noise.size() * sizeof(float));
+  ggml_backend_tensor_set(
+      act_pos_t, act_pos_data.data(), 0, act_pos_data.size() * sizeof(int32_t));
+  ggml_backend_tensor_set(
+      cached_k_t,
+      k_cache_valid.data(),
+      0,
+      k_cache_valid.size() * sizeof(float));
+  ggml_backend_tensor_set(
+      cached_v_t,
+      v_cache_valid.data(),
+      0,
+      v_cache_valid.size() * sizeof(float));
+  ggml_backend_tensor_set(
+      cond_t, cond_data.data(), 0, cond_data.size() * sizeof(float));
 
-  ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf),
-            GGML_STATUS_SUCCESS);
+  ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
 
   // ── 5. Compare against expert.blk_0.out[t=1.0]. ──────────────────────
-  ASSERT_EQ(ggml_nelements(out),
-            static_cast<int64_t>(N_ACT * EXPERT_HIDDEN));
+  ASSERT_EQ(ggml_nelements(out), static_cast<int64_t>(N_ACT * EXPERT_HIDDEN));
   std::vector<float> got_vec(N_ACT * EXPERT_HIDDEN);
-  ggml_backend_tensor_get(out, got_vec.data(), 0,
-                          got_vec.size() * sizeof(float));
+  ggml_backend_tensor_get(
+      out, got_vec.data(), 0, got_vec.size() * sizeof(float));
   const float* got = got_vec.data();
   const size_t cmp_n = static_cast<size_t>(N_ACT * EXPERT_HIDDEN);
 
@@ -273,8 +298,7 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   }
   const float rms = static_cast<float>(std::sqrt(sum_sq / cmp_n));
   std::cerr << "[M3.9] expert.blk_0.out[t=1.0]: cos=" << cos
-            << " max_abs_diff=" << diff
-            << " rms_diff=" << rms
+            << " max_abs_diff=" << diff << " rms_diff=" << rms
             << " max_abs_expected=" << max_abs_expected
             << " rel_max=" << (diff / std::max(max_abs_expected, 1e-9f))
             << "\n";

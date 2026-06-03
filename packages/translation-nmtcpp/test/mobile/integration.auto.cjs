@@ -11,6 +11,10 @@ async function runIndictrans (options = {}) { // eslint-disable-line no-unused-v
   return runIntegrationModule('../integration/indictrans.test.js', options)
 }
 
+async function runOpenclCache (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/opencl-cache.test.js', options)
+}
+
 async function runPivotBergamot (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/pivot-bergamot.test.js', options)
 }

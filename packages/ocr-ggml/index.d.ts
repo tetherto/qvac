@@ -31,6 +31,13 @@ export interface OcrGgmlParams {
   pipelineType?: OcrGgmlPipelineType
   /** Detection magnification ratio (easyocr only). Default: 1.5. */
   magRatio?: number
+  /**
+   * EasyOCR `canvas_size`: detection canvas cap (long side, px) applied after
+   * `magRatio` scaling. Bounds CRAFT peak memory on dense/high-resolution
+   * pages; lower it (e.g. 1280) on memory-constrained targets such as mobile.
+   * Default: 2560 (matches `@qvac/ocr-onnx` / EasyOCR). easyocr only.
+   */
+  canvasSize?: number
   /** Rotation angles tried when the primary pass is low-confidence (easyocr only). Default: [90, 270]. */
   defaultRotationAngles?: number[]
   /** Retry low-confidence boxes with contrast adjustment (easyocr only). Default: false. */
