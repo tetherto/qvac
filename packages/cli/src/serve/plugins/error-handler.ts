@@ -103,7 +103,10 @@ const ZOD_PATH_TO_CODE: Record<string, string> = {
   query: 'missing_query',
   file_id: 'missing_file_id',
   voice: 'missing_voice',
-  mask: 'mask_not_supported'
+  mask: 'mask_not_supported',
+  size: 'invalid_size',
+  seconds: 'invalid_seconds',
+  input_reference: 'unsupported_param'
 }
 
 function headFromInstancePath (instancePath: string | undefined): string {

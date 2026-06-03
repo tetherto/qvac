@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import type { Tool } from "@/schemas";
 import {
@@ -774,23 +773,69 @@ test("parseQwen35Format: boolean param 'false' coerces to false", (t) => {
   t.is(result.toolCalls[0]?.arguments?.flag, false);
 });
 
-test("parseQwen35Format: boolean param 'True' (uppercase) surfaces PARSE_ERROR", (t) => {
-  const typedTool: Tool = {
-    type: "function",
-    name: "typed",
-    description: "typed",
-    parameters: {
-      type: "object",
-      properties: { count: { type: "integer" }, flag: { type: "boolean" } },
-      required: ["count"],
-    },
-  };
-  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=flag>True</parameter></function></tool_call>`;
-  const result = parseQwen35Format(text, [typedTool]);
+// Qwen3.5/3.6 intermittently emit Python-style capitalised booleans; all casing
+// variants must coerce so a valid tool call isn't silently dropped.
+const boolCaseTool: Tool = {
+  type: "function",
+  name: "typed",
+  description: "typed",
+  parameters: {
+    type: "object",
+    properties: { count: { type: "integer" }, flag: { type: "boolean" } },
+    required: ["count"],
+  },
+};
+
+for (const [literal, expected] of [
+  ["True", true],
+  ["False", false],
+  ["TRUE", true],
+  ["FALSE", false],
+] as const) {
+  test(`parseQwen35Format: boolean param '${literal}' coerces to ${expected}`, (t) => {
+    const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=flag>${literal}</parameter></function></tool_call>`;
+    const result = parseQwen35Format(text, [boolCaseTool]);
+    t.is(result.matched, true);
+    t.is(result.errors.length, 0);
+    t.is(result.toolCalls.length, 1);
+    t.is(result.toolCalls[0]?.arguments?.flag, expected);
+  });
+}
+
+test("parseQwen35Format: boolean param 'maybe' (invalid) surfaces PARSE_ERROR", (t) => {
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=flag>maybe</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [boolCaseTool]);
   t.is(result.matched, true);
   t.is(result.toolCalls.length, 0);
   t.is(result.errors.length, 1);
   t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: mixed-case boolean alongside string/number params parses fully", (t) => {
+  const execTool: Tool = {
+    type: "function",
+    name: "exec",
+    description: "exec",
+    parameters: {
+      type: "object",
+      properties: {
+        command: { type: "string" },
+        background: { type: "boolean" },
+        retries: { type: "integer" },
+      },
+      required: ["command"],
+    },
+  };
+  const text = `<tool_call><function=exec><parameter=background>False</parameter><parameter=command>curl -s example.com</parameter><parameter=retries>3</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [execTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls.length, 1);
+  t.alike(result.toolCalls[0]?.arguments, {
+    background: false,
+    command: "curl -s example.com",
+    retries: 3,
+  });
 });
 
 test("parseQwen35Format: integer param 'not-a-number' surfaces PARSE_ERROR", (t) => {

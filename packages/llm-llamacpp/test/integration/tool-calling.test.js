@@ -12,13 +12,9 @@ const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 
-// QVAC-17830: also honour NO_GPU=true so the `linux-x64-cpu` matrix
-// leg (ubuntu-22.04 runner with no_gpu='true') labels its perf rows
-// as [CPU] in the report. Previously useCpu was hardcoded to
-// isLinuxArm64, so on linux-x64-cpu the test ran on CPU (llama.cpp
-// fell back since no Vulkan device was present) but emitted rows
-// tagged [GPU] — making the combined report show GPU bars on a CPU
-// runner. Same NO_GPU detection pattern as _image-common.js.
+// QVAC-17830: also honour NO_GPU=true so CPU-only matrix legs label
+// their perf rows as [CPU] in the report. Same NO_GPU detection
+// pattern as _image-common.js.
 // Bare doesn't define `process` as a global at module-init time, so
 // the fallback to `process.env` is guarded with `typeof process`.
 const noGpuEnv = (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||

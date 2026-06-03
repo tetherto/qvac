@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import {
   processRegistryModel,
@@ -71,20 +70,20 @@ function processAndName(entry: TestModelEntry): {
 // toHexString
 // ---------------------------------------------------------------------------
 
-test("toHexString: converts Buffer to hex", (t: any) => {
+test("toHexString: converts Buffer to hex", (t) => {
   const buf = Buffer.from([0x34, 0xb0, 0xed, 0x5c, 0xad]);
   t.is(toHexString(buf), "34b0ed5cad");
 });
 
-test("toHexString: passes through a hex string unchanged", (t: any) => {
+test("toHexString: passes through a hex string unchanged", (t) => {
   t.is(toHexString("abcdef0123456789"), "abcdef0123456789");
 });
 
-test("toHexString: converts {data} object to hex", (t: any) => {
+test("toHexString: converts {data} object to hex", (t) => {
   t.is(toHexString({ data: [0xff, 0x00, 0xab] }), "ff00ab");
 });
 
-test("toHexString: returns empty string for undefined", (t: any) => {
+test("toHexString: returns empty string for undefined", (t) => {
   t.is(toHexString(undefined), "");
 });
 
@@ -92,7 +91,7 @@ test("toHexString: returns empty string for undefined", (t: any) => {
 // extractModelName
 // ---------------------------------------------------------------------------
 
-test("extractModelName: extracts second path segment", (t: any) => {
+test("extractModelName: extracts second path segment", (t) => {
   t.is(
     extractModelName(
       "ChristianAzinn/gte-large-gguf/blob/abc123/gte-large_fp16.gguf",
@@ -101,7 +100,7 @@ test("extractModelName: extracts second path segment", (t: any) => {
   );
 });
 
-test("extractModelName: extracts from s3-style path", (t: any) => {
+test("extractModelName: extracts from s3-style path", (t) => {
   t.is(
     extractModelName(
       "qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
@@ -114,7 +113,7 @@ test("extractModelName: extracts from s3-style path", (t: any) => {
 // Embeddings: GTE-Large FP16
 // ---------------------------------------------------------------------------
 
-test("embeddings: GTE-Large FP16 — full field mapping", (t: any) => {
+test("embeddings: GTE-Large FP16 — full field mapping", (t) => {
   const coreKey = Buffer.from(
     "34b0ed5cad561852a8a42288eb9b24a9d7859ab633a184ef0f433bf3bf19045e",
     "hex",
@@ -176,7 +175,7 @@ test("embeddings: GTE-Large FP16 — full field mapping", (t: any) => {
 // Whisper: tiny (no quant, legacy engine)
 // ---------------------------------------------------------------------------
 
-test("whisper: tiny — full field mapping with legacy engine", (t: any) => {
+test("whisper: tiny — full field mapping with legacy engine", (t) => {
   const coreKey = Buffer.from("aa".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -231,7 +230,7 @@ test("whisper: tiny — full field mapping with legacy engine", (t: any) => {
 // Whisper: English-only .en model
 // ---------------------------------------------------------------------------
 
-test("whisper: English-only small.en q8_0 — full field mapping", (t: any) => {
+test("whisper: English-only small.en q8_0 — full field mapping", (t) => {
   const coreKey = Buffer.from("bb".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -271,7 +270,7 @@ test("whisper: English-only small.en q8_0 — full field mapping", (t: any) => {
 // Whisper: large-v3-turbo
 // ---------------------------------------------------------------------------
 
-test("whisper: large-v3-turbo — full field mapping", (t: any) => {
+test("whisper: large-v3-turbo — full field mapping", (t) => {
   const coreKey = Buffer.from("cc".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -309,7 +308,7 @@ test("whisper: large-v3-turbo — full field mapping", (t: any) => {
 // VAD Silero (detected by filename despite whisper engine)
 // ---------------------------------------------------------------------------
 
-test("vad: silero model — engine whisper but filename silero overrides to VAD", (t: any) => {
+test("vad: silero model — engine whisper but filename silero overrides to VAD", (t) => {
   const coreKey = Buffer.from("dd".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -353,7 +352,7 @@ test("vad: silero model — engine whisper but filename silero overrides to VAD"
 // LLM: Qwen3-4B (legacy engine, s3 source)
 // ---------------------------------------------------------------------------
 
-test("llm: Qwen3-4B — full field mapping with legacy engine + s3 source", (t: any) => {
+test("llm: Qwen3-4B — full field mapping with legacy engine + s3 source", (t) => {
   const coreKey = Buffer.from("ee".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -409,7 +408,7 @@ test("llm: Qwen3-4B — full field mapping with legacy engine + s3 source", (t: 
 // LLM: Llama 3.2 (tag strips engine suffix for version recovery)
 // ---------------------------------------------------------------------------
 
-test("llm: Llama-3.2-1B — tag 'llama-ggml' version recovery from filename", (t: any) => {
+test("llm: Llama-3.2-1B — tag 'llama-ggml' version recovery from filename", (t) => {
   const coreKey = Buffer.from("ff".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -448,7 +447,7 @@ test("llm: Llama-3.2-1B — tag 'llama-ggml' version recovery from filename", (t
 // LLM: mmproj vision adapter (Qwen2.5-Omni)
 // ---------------------------------------------------------------------------
 
-test("llm: mmproj Qwen2.5-Omni — MMPROJ prefix + multimodal tag", (t: any) => {
+test("llm: mmproj Qwen2.5-Omni — MMPROJ prefix + multimodal tag", (t) => {
   const coreKey = Buffer.from("ab".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -489,7 +488,7 @@ test("llm: mmproj Qwen2.5-Omni — MMPROJ prefix + multimodal tag", (t: any) => 
 // LLM: sharded model (medgemma shard 1/5)
 // ---------------------------------------------------------------------------
 
-test("llm: medgemma sharded — shard detection + _SHARD suffix", (t: any) => {
+test("llm: medgemma sharded — shard detection + _SHARD suffix", (t) => {
   const coreKey = Buffer.from("cd".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -544,7 +543,7 @@ test("llm: medgemma sharded — shard detection + _SHARD suffix", (t: any) => {
 // LLM: tensors.txt metadata file
 // ---------------------------------------------------------------------------
 
-test("llm: medgemma tensors.txt — _TENSORS suffix", (t: any) => {
+test("llm: medgemma tensors.txt — _TENSORS suffix", (t) => {
   const coreKey = Buffer.from("de".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -590,7 +589,7 @@ test("llm: medgemma tensors.txt — _TENSORS suffix", (t: any) => {
 // LLM override: SmolVLM2 with translation engine → overridden to LLM
 // ---------------------------------------------------------------------------
 
-test("llm override: SmolVLM2 with translation engine + multimodal tag → treated as LLM", (t: any) => {
+test("llm override: SmolVLM2 with translation engine + multimodal tag → treated as LLM", (t) => {
   const coreKey = Buffer.from("ef".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -637,7 +636,7 @@ test("llm override: SmolVLM2 with translation engine + multimodal tag → treate
 // NMT: Salamandra (legacy @qvac/translation-llamacpp engine)
 // ---------------------------------------------------------------------------
 
-test("nmt: Salamandra 2B q8 — legacy translation-llamacpp engine", (t: any) => {
+test("nmt: Salamandra 2B q8 — legacy translation-llamacpp engine", (t) => {
   const coreKey = Buffer.from("11".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -674,7 +673,7 @@ test("nmt: Salamandra 2B q8 — legacy translation-llamacpp engine", (t: any) =>
 // NMT: Indictrans en-indic-1B
 // ---------------------------------------------------------------------------
 
-test("nmt: Indictrans en-indic 1B q0f16 — full field mapping", (t: any) => {
+test("nmt: Indictrans en-indic 1B q0f16 — full field mapping", (t) => {
   const coreKey = Buffer.from("22".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -712,7 +711,7 @@ test("nmt: Indictrans en-indic 1B q0f16 — full field mapping", (t: any) => {
 // NMT: Bergamot model file
 // ---------------------------------------------------------------------------
 
-test("nmt: Bergamot ar-en model file — full field mapping", (t: any) => {
+test("nmt: Bergamot ar-en model file — full field mapping", (t) => {
   const coreKey = Buffer.from("44".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -751,7 +750,7 @@ test("nmt: Bergamot ar-en model file — full field mapping", (t: any) => {
 // NMT: Bergamot vocab file
 // ---------------------------------------------------------------------------
 
-test("nmt: Bergamot ar-en vocab file — _VOCAB suffix", (t: any) => {
+test("nmt: Bergamot ar-en vocab file — _VOCAB suffix", (t) => {
   const coreKey = Buffer.from("55".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -785,7 +784,7 @@ test("nmt: Bergamot ar-en vocab file — _VOCAB suffix", (t: any) => {
 // NMT: Bergamot lex file
 // ---------------------------------------------------------------------------
 
-test("nmt: Bergamot ar-en lex file — _LEX suffix", (t: any) => {
+test("nmt: Bergamot ar-en lex file — _LEX suffix", (t) => {
   const coreKey = Buffer.from("66".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -819,7 +818,7 @@ test("nmt: Bergamot ar-en lex file — _LEX suffix", (t: any) => {
 // TTS: Piper Norman medium
 // ---------------------------------------------------------------------------
 
-test("tts: Piper Norman medium — full field mapping", (t: any) => {
+test("tts: Piper Norman medium — full field mapping", (t) => {
   const coreKey = Buffer.from("77".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -863,7 +862,7 @@ test("tts: Piper Norman medium — full field mapping", (t: any) => {
 // TTS: Piper config file (.onnx.json)
 // ---------------------------------------------------------------------------
 
-test("tts: Piper config file — _CONFIG suffix", (t: any) => {
+test("tts: Piper config file — _CONFIG suffix", (t) => {
   const coreKey = Buffer.from("88".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -904,7 +903,7 @@ test("tts: Piper config file — _CONFIG suffix", (t: any) => {
 // OCR: Recognizer English
 // ---------------------------------------------------------------------------
 
-test("ocr: recognizer english — full field mapping", (t: any) => {
+test("ocr: recognizer english — full field mapping", (t) => {
   const coreKey = Buffer.from("99".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -945,7 +944,7 @@ test("ocr: recognizer english — full field mapping", (t: any) => {
 // OCR: Detector CRAFT
 // ---------------------------------------------------------------------------
 
-test("ocr: detector craft — full field mapping", (t: any) => {
+test("ocr: detector craft — full field mapping", (t) => {
   const coreKey = Buffer.from("a1".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -979,7 +978,7 @@ test("ocr: detector craft — full field mapping", (t: any) => {
 // sha256 fallback: sha256 on blobBinding (runtime field, not on model.sha256)
 // ---------------------------------------------------------------------------
 
-test("sha256 fallback: reads from blobBinding.sha256 when model.sha256 is empty", (t: any) => {
+test("sha256 fallback: reads from blobBinding.sha256 when model.sha256 is empty", (t) => {
   const coreKey = Buffer.from("b2".repeat(32), "hex");
 
   const entry = {
@@ -1017,7 +1016,7 @@ test("sha256 fallback: reads from blobBinding.sha256 when model.sha256 is empty"
 // Unknown engine → processRegistryModel returns null
 // ---------------------------------------------------------------------------
 
-test("unknown engine: processRegistryModel returns null", (t: any) => {
+test("unknown engine: processRegistryModel returns null", (t) => {
   const coreKey = Buffer.from("c3".repeat(32), "hex");
 
   const model = processRegistryModel({
@@ -1044,7 +1043,7 @@ test("unknown engine: processRegistryModel returns null", (t: any) => {
 // Missing optional fields (no quantization, no params, no tags)
 // ---------------------------------------------------------------------------
 
-test("missing optional fields: defaults to empty strings/arrays", (t: any) => {
+test("missing optional fields: defaults to empty strings/arrays", (t) => {
   const coreKey = Buffer.from("d4".repeat(32), "hex");
 
   const { model } = processAndName({
@@ -1074,7 +1073,7 @@ test("missing optional fields: defaults to empty strings/arrays", (t: any) => {
 // Collision resolution: full pipeline with two models
 // ---------------------------------------------------------------------------
 
-test("collision: two identical whisper tiny models get unique names", (t: any) => {
+test("collision: two identical whisper tiny models get unique names", (t) => {
   const usedNames = new Set<string>();
   const coreKey = Buffer.from("e5".repeat(32), "hex");
 
@@ -1146,7 +1145,7 @@ test("collision: two identical whisper tiny models get unique names", (t: any) =
 // Whisper: language-specific (Japanese tiny f16)
 // ---------------------------------------------------------------------------
 
-test("whisper: Japanese tiny f16 — language-specific model", (t: any) => {
+test("whisper: Japanese tiny f16 — language-specific model", (t) => {
   const coreKey = Buffer.from("f6".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -1180,7 +1179,7 @@ test("whisper: Japanese tiny f16 — language-specific model", (t: any) => {
 // Embeddings: EmbeddingGemma 300M BF16 (canonical engine directly)
 // ---------------------------------------------------------------------------
 
-test("embeddings: EmbeddingGemma 300M BF16 — canonical engine name", (t: any) => {
+test("embeddings: EmbeddingGemma 300M BF16 — canonical engine name", (t) => {
   const coreKey = Buffer.from("a7".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -1219,7 +1218,7 @@ test("embeddings: EmbeddingGemma 300M BF16 — canonical engine name", (t: any) 
 // Shard grouping: full pipeline — 3 shard parts → 1 merged model
 // ---------------------------------------------------------------------------
 
-test("shard grouping: 3 shard parts merge into 1 model with shardMetadata", (t: any) => {
+test("shard grouping: 3 shard parts merge into 1 model with shardMetadata", (t) => {
   const coreKey = Buffer.from("ab".repeat(32), "hex");
 
   // Simulate 3 shard entries processed from the registry (out of order)
@@ -1374,7 +1373,7 @@ test("shard grouping: 3 shard parts merge into 1 model with shardMetadata", (t: 
 // Shard grouping → codegen: shardMetadata appears in generated output
 // ---------------------------------------------------------------------------
 
-test("shard grouping → codegen: generated output includes shardMetadata array", (t: any) => {
+test("shard grouping → codegen: generated output includes shardMetadata array", (t) => {
   const coreKey = Buffer.from("fa".repeat(32), "hex");
 
   const shard1 = processRegistryModel({
@@ -1450,7 +1449,7 @@ test("shard grouping → codegen: generated output includes shardMetadata array"
 // Diffusion: Stable Diffusion 2.1 Q8_0
 // ---------------------------------------------------------------------------
 
-test("diffusion: SD 2.1 Q8_0 — shortens stable-diffusion prefix", (t: any) => {
+test("diffusion: SD 2.1 Q8_0 — shortens stable-diffusion prefix", (t) => {
   const coreKey = Buffer.from("aa".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -1482,7 +1481,7 @@ test("diffusion: SD 2.1 Q8_0 — shortens stable-diffusion prefix", (t: any) => 
 // Diffusion: Stable Diffusion XL Q4_0
 // ---------------------------------------------------------------------------
 
-test("diffusion: SDXL Q4_0 — shortens stable-diffusion-xl prefix", (t: any) => {
+test("diffusion: SDXL Q4_0 — shortens stable-diffusion-xl prefix", (t) => {
   const coreKey = Buffer.from("bb".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -1513,7 +1512,7 @@ test("diffusion: SDXL Q4_0 — shortens stable-diffusion-xl prefix", (t: any) =>
 // Diffusion: FLUX.2 Klein 4B Q4_0
 // ---------------------------------------------------------------------------
 
-test("diffusion: FLUX.2 Klein 4B Q4_0 — strips params+quant from family", (t: any) => {
+test("diffusion: FLUX.2 Klein 4B Q4_0 — strips params+quant from family", (t) => {
   const coreKey = Buffer.from("cc".repeat(32), "hex");
 
   const { model, exportName } = processAndName({
@@ -1544,7 +1543,7 @@ test("diffusion: FLUX.2 Klein 4B Q4_0 — strips params+quant from family", (t: 
 // Diffusion: FLUX.2 VAE (tagged "vae")
 // ---------------------------------------------------------------------------
 
-test("diffusion: FLUX.2 VAE — vae tag produces _VAE suffix", (t: any) => {
+test("diffusion: FLUX.2 VAE — vae tag produces _VAE suffix", (t) => {
   const coreKey = Buffer.from("dd".repeat(32), "hex");
 
   const { model, exportName } = processAndName({

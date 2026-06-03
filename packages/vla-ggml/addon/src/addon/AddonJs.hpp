@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -109,12 +110,12 @@ inline VlaInput parseRunInput(js_env_t* env, js_value_t* inputVal) {
   in.imgWidth = obj.getPropertyAs<js::Number, int32_t>(env, "imgWidth");
   in.imgHeight = obj.getPropertyAs<js::Number, int32_t>(env, "imgHeight");
 
-  in.state = copyFloat32(
-      env, obj.getProperty<js::TypedArray<float>>(env, "state"));
-  in.tokens = copyInt32(
-      env, obj.getProperty<js::TypedArray<int32_t>>(env, "tokens"));
-  in.mask = copyUint8(
-      env, obj.getProperty<js::TypedArray<uint8_t>>(env, "mask"));
+  in.state =
+      copyFloat32(env, obj.getProperty<js::TypedArray<float>>(env, "state"));
+  in.tokens =
+      copyInt32(env, obj.getProperty<js::TypedArray<int32_t>>(env, "tokens"));
+  in.mask =
+      copyUint8(env, obj.getProperty<js::TypedArray<uint8_t>>(env, "mask"));
 
   if (auto noiseOpt =
           obj.getOptionalProperty<js::TypedArray<float>>(env, "noise")) {
@@ -157,8 +158,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
           args.getFunction(2, "outputCallback"),
           std::move(outHandlers));
 
-  auto addon = std::make_unique<AddonJs>(
-      env, std::move(callback), std::move(model));
+  auto addon =
+      std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -215,13 +216,18 @@ JSCATCH
 
 // getVlaHparams(instance) -> { chunkSize, actionDim, maxActionDim,
 //                              maxStateDim, tokenizerMaxLength,
-//                              visionImageSize }
+//                              visionImageSize, numCameras, stateInputMode }
+//
+// `numCameras` and `stateInputMode` let JS-side input validation
+// distinguish a SmolVLA model (2 cameras,
+// continuous state) from a π₀.₅ model (up to 3 cameras, discrete state
+// inlined into the prompt). The existing fields are unchanged.
 inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   VlaModel& model = detail::vlaFromInstance(env, args.get(0, "instance"));
-  const smolvla_hparams& hp = model.hparams();
+  const VlaHparamsGeneric& hp = model.hparams();
 
   js_value_t* obj = nullptr;
   if (js_create_object(env, &obj) != 0) {
@@ -232,12 +238,24 @@ inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
     js_create_int32(env, value, &v);
     js_set_named_property(env, obj, name, v);
   };
+  auto setStr = [&](const char* name, const char* value) {
+    js_value_t* v = nullptr;
+    js_create_string_utf8(
+        env, reinterpret_cast<const utf8_t*>(value), std::strlen(value), &v);
+    js_set_named_property(env, obj, name, v);
+  };
   setInt("chunkSize", hp.chunk_size);
   setInt("actionDim", hp.action_dim);
   setInt("maxActionDim", hp.max_action_dim);
   setInt("maxStateDim", hp.max_state_dim);
   setInt("tokenizerMaxLength", hp.tokenizer_max_length);
   setInt("visionImageSize", hp.vision_image_size);
+  setInt("numCameras", hp.num_cameras);
+  setStr(
+      "stateInputMode",
+      hp.state_input_mode == VlaHparamsGeneric::StateInputMode::Discrete
+          ? "discrete"
+          : "continuous");
   return obj;
 }
 JSCATCH
@@ -253,13 +271,13 @@ inline js_value_t* setVerbosity(js_env_t* env, js_callback_info_t* info) try {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
   JsArgsParser args(env, info);
-  const int32_t level =
-      js::Number(env, args.get(0, "level")).as<int32_t>(env);
+  const int32_t level = js::Number(env, args.get(0, "level")).as<int32_t>(env);
   Priority p = Priority::ERROR;
   if (level >= 0 && level <= static_cast<int32_t>(Priority::OFF)) {
     p = static_cast<Priority>(level);
   }
-  qvac_lib_infer_vla_ggml::logging::g_verbosityLevel = p;
+  qvac_lib_infer_vla_ggml::logging::g_verbosityLevel.store(
+      p, std::memory_order_relaxed);
 
   js_value_t* undef = nullptr;
   js_get_undefined(env, &undef);

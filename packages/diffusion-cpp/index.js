@@ -25,6 +25,31 @@ function assertAbsolute (key, value) {
 }
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+
+// Normalize image-bytes input from a variety of shapes that JS callers may
+// hand us:
+//   - Uint8Array  -> returned as-is
+//   - Buffer (Node) / Uint8ClampedArray / any ArrayBuffer.isView with 1-byte
+//     elements -> wrapped in a Uint8Array sharing the same memory
+//   - ArrayBuffer / SharedArrayBuffer -> wrapped in a Uint8Array view
+//
+// Throws TypeError on anything else so callers get a precise diagnostic
+// before the value reaches the native binding (which only accepts
+// Uint8Array).
+function _coerceToUint8 (name, value) {
+  if (value instanceof Uint8Array) return value
+  if (ArrayBuffer.isView(value) && value.BYTES_PER_ELEMENT === 1) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  }
+  if (value instanceof ArrayBuffer ||
+      (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)) {
+    return new Uint8Array(value)
+  }
+  throw new TypeError(
+    `${name} must be a Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes. ` +
+    `Got: ${value === null ? 'null' : typeof value}`
+  )
+}
 // Matches C++ int max: repeats are stored as int and used in native loop counters.
 const NATIVE_UPSCALE_REPEATS_MAX = 2147483647
 
@@ -44,20 +69,9 @@ function normalizeUpscaleRepeats (options) {
   return repeats
 }
 
-function applyFluxImg2ImgDimDefaults (params, pred, hasInitImages) {
-  const isFluxImg2Img = (params.init_image || hasInitImages) &&
-    (pred === 'flux2_flow')
-  if (!isFluxImg2Img) return params
-  const defaultDim = 1024
-  if (!params.width && !params.height) return { ...params, width: defaultDim, height: defaultDim }
-  if (!params.width) return { ...params, width: defaultDim }
-  if (!params.height) return { ...params, height: defaultDim }
-  return params
-}
-
 /**
  * Text-to-image and image-to-image generation using stable-diffusion.cpp.
- * Supports SD2.x, SDXL, SD3, and FLUX.2 [klein].
+ * Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2 [klein].
  */
 class ImgStableDiffusion {
   /**
@@ -113,9 +127,10 @@ class ImgStableDiffusion {
     this.logger.info('Starting stable-diffusion model load')
 
     // Route the primary model file to the correct stable-diffusion.cpp param:
-    //   path              — all-in-one checkpoints (SD2.x, SDXL, SD3 all-in-one GGUF)
+    //   path              — all-in-one checkpoints (SD1.x, SD2.x, SDXL, SD3 all-in-one GGUF)
     //   diffusionModelPath — standalone diffusion weights requiring separate encoders
-    //                        (FLUX.2 klein → llm, SD3 pure GGUF → t5Xxl + clipL + clipG)
+    //                        (FLUX.2 klein → llm, SD3 pure GGUF → t5Xxl + clipL + clipG,
+    //                         FLUX.1 → t5Xxl + clipL, etc.)
     // Any caller-supplied separate encoder implies the primary file is the standalone
     // diffusion model, not an all-in-one checkpoint.
     const isSplitLayout = !!this._files.llm || !!this._files.t5Xxl ||
@@ -129,6 +144,7 @@ class ImgStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: this._files.llm || '',
       vaePath: this._files.vae || '',
+      clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
       config: this._config
     }
@@ -206,7 +222,7 @@ class ImgStableDiffusion {
    *     attention with distinct RoPE positions. The target starts from pure noise,
    *     preserving features (skin tone, structure, etc.).
    *
-   *   SD2.x / SDXL / SD3 (all other prediction types):
+   *   SD1.x / SD2.x / SDXL / SD3 (all other prediction types):
    *     Uses traditional SDEdit (init_image). The input image is noised to the
    *     level set by `strength`, then denoised for the remaining steps. Lower
    *     strength = closer to the original image.
@@ -219,10 +235,10 @@ class ImgStableDiffusion {
    * @param {string} params.prompt                  - Text prompt
    * @param {string} [params.negative_prompt]       - Negative prompt
    * @param {number} [params.steps=20]              - Denoising step count
-   * @param {number} [params.width]                 - Output width (multiple of 8). FLUX img2img defaults to 1024 when omitted.
-   * @param {number} [params.height]                - Output height (multiple of 8). FLUX img2img defaults to 1024 when omitted.
+   * @param {number} [params.width=512]             - Output width (multiple of 8)
+   * @param {number} [params.height=512]            - Output height (multiple of 8)
    * @param {number} [params.guidance=3.5]          - Distilled guidance (FLUX.2)
-   * @param {number} [params.cfg_scale=7.0]         - CFG scale (SD2/SDXL/SD3)
+   * @param {number} [params.cfg_scale=7.0]         - CFG scale (SD1/SD2)
    * @param {string} [params.sampling_method]       - Sampler name
    * @param {string} [params.scheduler]             - Scheduler name
    * @param {number} [params.seed=-1]               - RNG seed; -1 = random
@@ -250,25 +266,51 @@ class ImgStableDiffusion {
     // Validate inputs first so callers get precise errors before any
     // readiness/busy checks.
 
+    // ── FLUX img2img dimension defaults ────────────────────────────────────────
+    // For FLUX in img2img/fusion mode, inject 1024 for omitted width/height axes.
+    // This must happen before dimension validation so FLUX defaults are checked
+    // against the multiple-of-8 constraint.
+    const isSingleImage = params.init_image != null
+    const maybeInitImages = Array.isArray(params.init_images) && params.init_images.length > 0
+    const predictionForDefaults = params.prediction || (this._config && this._config.prediction)
+    if ((isSingleImage || maybeInitImages) && predictionForDefaults) {
+      params = applyFluxImg2ImgDimDefaults(params, predictionForDefaults, maybeInitImages)
+    }
+
     // ── Dimension validation ────────────────────────────────────────────────
     // Only validate dimensions the caller actually provided. When width/height
     // are omitted the addon falls back to its defaults (512x512), and using
     // `undefined % 8` here would yield NaN which spuriously trips the guard
     // for every txt2img / img2img call that omits explicit dimensions.
+    // Note: in JS, `0 % 8 === 0` and `-8 % 8 === 0`, so `% alignTo !== 0`
+    // alone happily lets through zero / negative dimensions. We require
+    // positivity explicitly here to match the C++ handler invariant
+    // (`requirePositiveInt` in SdGenHandlers).
     const alignTo = 8
     const w = params.width
     const h = params.height
     const wProvided = w != null
     const hProvided = h != null
-    const wBad = wProvided && (!Number.isFinite(w) || w % alignTo !== 0)
-    const hBad = hProvided && (!Number.isFinite(h) || h % alignTo !== 0)
+    const wBad = wProvided && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
+    const hBad = hProvided && (!Number.isFinite(h) || h <= 0 || h % alignTo !== 0)
     if (wBad || hBad) {
-      const suggestW = Number.isFinite(w) ? Math.round(w / alignTo) * alignTo : 512
-      const suggestH = Number.isFinite(h) ? Math.round(h / alignTo) * alignTo : 512
+      const suggestW = Number.isFinite(w) && w > 0 ? Math.round(w / alignTo) * alignTo : 512
+      const suggestH = Number.isFinite(h) && h > 0 ? Math.round(h / alignTo) * alignTo : 512
       throw new Error(
-        `width and height must be multiples of ${alignTo}. ` +
+        `width and height must be positive multiples of ${alignTo}. ` +
         `Got: ${w}x${h}. ` +
         `Use ${suggestW}x${suggestH} instead.`
+      )
+    }
+
+    // ── Prompt validation ──────────────────────────────────────────────────
+    // The JSDoc + .d.ts both mark `prompt` as required; enforce that at
+    // runtime so callers get a precise JS-side error rather than the native
+    // layer either silently producing garbage or surfacing a generic
+    // "prompt must be a string" from the JSON handler chain.
+    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
+      throw new TypeError(
+        `params.prompt is required and must be a non-empty string. Got: ${typeof params.prompt}`
       )
     }
 
@@ -292,12 +334,16 @@ class ImgStableDiffusion {
       )
     }
 
-    // Single-image type check (Uint8Array only).
-    if (params.init_image != null && !(params.init_image instanceof Uint8Array)) {
-      throw new Error(
-        'init_image must be a Uint8Array (e.g. fs.readFileSync("image.png")). ' +
-        'Got: ' + typeof params.init_image
-      )
+    // Single-image type check.
+    //
+    // Accept any byte-shaped TypedArray (Uint8Array, Buffer, Uint8ClampedArray)
+    // **and** raw ArrayBuffer / SharedArrayBuffer, then normalize to a
+    // Uint8Array view that the native binding can accept. Bare/Node both
+    // hand back Buffer from fs.readFileSync, and Buffer is a Uint8Array
+    // subclass on Node but not always on Bare-managed runtimes; the
+    // explicit check via `ArrayBuffer.isView` keeps both paths working.
+    if (params.init_image != null) {
+      params.init_image = _coerceToUint8('init_image', params.init_image)
     }
 
     // Multi-image: check array is not empty.
@@ -308,16 +354,22 @@ class ImgStableDiffusion {
       )
     }
 
-    // Multi-image: every entry must be a non-empty Uint8Array.
+    // Multi-image: every entry must be a non-empty bytes-like view.
+    // Same coercion as init_image: accept Buffer / Uint8ClampedArray /
+    // ArrayBuffer in addition to plain Uint8Array.
     if (hasInitImages) {
       for (let i = 0; i < params.init_images.length; i++) {
         const img = params.init_images[i]
-        if (!(img instanceof Uint8Array) || img.length === 0) {
-          throw new Error(
-            `init_images[${i}] must be a non-empty Uint8Array (PNG/JPEG bytes). ` +
-            'Got: ' + (img === null ? 'null' : typeof img)
-          )
+        let coerced
+        try {
+          coerced = _coerceToUint8(`init_images[${i}]`, img)
+        } catch {
+          throw new TypeError(`init_images[${i}] must be a non-empty Uint8Array`)
         }
+        if (coerced.length === 0) {
+          throw new TypeError(`init_images[${i}] must be a non-empty Uint8Array`)
+        }
+        params.init_images[i] = coerced
       }
     }
 
@@ -331,7 +383,7 @@ class ImgStableDiffusion {
         throw new Error(
           'init_images (multi-reference fusion) requires a FLUX.2 model. ' +
           "Load a FLUX.2 [klein] checkpoint with files.llm set and pass config.prediction: 'flux2_flow'. " +
-          'Other architectures (SD2.x, SDXL, SD3, single-image FLUX.2) do not support ' +
+          'Other architectures (SD1.x, SD2.x, SDXL, SD3, single-image FLUX.2) do not support ' +
           '@image1/@imageN in-context references.'
         )
       }
@@ -419,13 +471,13 @@ class ImgStableDiffusion {
       throw new Error('ESRGAN upscale requested but files.esrgan was not provided')
     }
 
-    // FLUX.2 requires an explicit prediction type for img2img (single ref).
+    // FLUX models require an explicit prediction type for img2img (single ref).
     // The C++ addon auto-detects the model family at load time, but
     // SdModel::process() only enters the FLUX ref_images path when
-    // config_.prediction is FLUX2_FLOW_PRED. Without an explicit value
-    // the addon silently falls back to SDEdit.
+    // config_.prediction is FLUX_FLOW_PRED or FLUX2_FLOW_PRED. Without
+    // an explicit value the addon silently falls back to SDEdit.
     if (params.init_image && this._files.llm) {
-      if (pred !== 'flux2_flow') {
+      if (pred !== 'flux2_flow' && pred !== 'flux_flow') {
         throw new Error(
           'FLUX img2img requires an explicit prediction type in config. ' +
           "Set prediction: 'flux2_flow' (FLUX.2). " +
@@ -446,13 +498,11 @@ class ImgStableDiffusion {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
-    const runParams = applyFluxImg2ImgDimDefaults(params, pred, hasInitImages)
-
     const response = this._job.start()
 
     let accepted
     try {
-      accepted = await this.addon.runJob({ ...runParams, mode })
+      accepted = await this.addon.runJob({ ...params, mode })
     } catch (error) {
       this._job.fail(error)
       throw error
@@ -687,6 +737,45 @@ class EsrganUpscaler {
   }
 
   getState () { return this.state }
+}
+
+/**
+ * Apply default dimensions for FLUX img2img when width/height are omitted.
+ *
+ * FLUX img2img performs best with square 1024x1024 dimensions. When width/height
+ * are omitted, this helper injects 1024 for the missing axes (unless they are
+ * already explicit).
+ *
+ * For non-FLUX predictions (e.g., "v" for SD2) or when both width and height
+ * are explicit, the params are returned unchanged.
+ *
+ * @param {object} params - Generation parameters (prompt, init_image, width?, height?, ...)
+ * @param {string} prediction - Prediction type (e.g., "flux2_flow", "v")
+ * @param {boolean} hasInitImages - True if fusion mode (init_images present);
+ *   false for single init_image (img2img). Only affects classification; the
+ *   dimension logic is the same.
+ * @returns {object} Modified params with injected width/height if applicable
+ */
+function applyFluxImg2ImgDimDefaults (params, prediction, hasInitImages) {
+  // Only apply defaults for FLUX predictions in img2img/fusion mode.
+  // Do NOT apply for other predictions (SD1.x, SD2.x, SDXL, SD3) which use
+  // image-based defaults.
+  const isFlux = prediction === 'flux_flow' || prediction === 'flux2_flow'
+  if (!isFlux) {
+    return params
+  }
+
+  // If both width and height are already provided, return as-is.
+  if (params.width !== undefined && params.height !== undefined) {
+    return params
+  }
+
+  // Inject 1024 for any omitted axis.
+  return {
+    ...params,
+    width: params.width !== undefined ? params.width : 1024,
+    height: params.height !== undefined ? params.height : 1024
+  }
 }
 
 module.exports = ImgStableDiffusion

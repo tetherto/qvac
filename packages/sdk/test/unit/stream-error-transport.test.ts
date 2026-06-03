@@ -2,7 +2,7 @@ import test from "brittle";
 import { shouldUseStreamErrorTransport } from "@/server/rpc/transport-selector";
 import type { HandlerEntry } from "@/server/rpc/handler-utils";
 
-const noop = (() => {}) as HandlerEntry["handler"];
+const noop = (() => {}) as unknown as HandlerEntry["handler"];
 
 function raw(fields: Record<string, unknown>): Record<string, unknown> {
   return fields;
@@ -28,7 +28,7 @@ const progressFnEntry: HandlerEntry = {
 
 // ========== Stream handlers ==========
 
-test("stream handler uses stream transport", (t: { ok: Function }) => {
+test("stream handler uses stream transport", (t) => {
   t.ok(
     shouldUseStreamErrorTransport(
       streamEntry,
@@ -39,9 +39,7 @@ test("stream handler uses stream transport", (t: { ok: Function }) => {
 
 // ========== Progress reply handlers (withProgress: true) ==========
 
-test("reply handler with supportsProgress=true and withProgress uses stream transport", (t: {
-  ok: Function;
-}) => {
+test("reply handler with supportsProgress=true and withProgress uses stream transport", (t) => {
   t.ok(
     shouldUseStreamErrorTransport(
       progressAlwaysEntry,
@@ -50,9 +48,7 @@ test("reply handler with supportsProgress=true and withProgress uses stream tran
   );
 });
 
-test("reply handler with supportsProgress function and matching operation uses stream transport", (t: {
-  ok: Function;
-}) => {
+test("reply handler with supportsProgress function and matching operation uses stream transport", (t) => {
   t.ok(
     shouldUseStreamErrorTransport(
       progressFnEntry,
@@ -63,17 +59,13 @@ test("reply handler with supportsProgress function and matching operation uses s
 
 // ========== Must NOT use stream transport ==========
 
-test("reply handler without progress uses reply transport", (t: {
-  ok: Function;
-}) => {
+test("reply handler without progress uses reply transport", (t) => {
   t.ok(
     !shouldUseStreamErrorTransport(replyEntry, raw({ type: "getModelInfo" })),
   );
 });
 
-test("reply handler with supportsProgress=true but no withProgress uses reply transport", (t: {
-  ok: Function;
-}) => {
+test("reply handler with supportsProgress=true but no withProgress uses reply transport", (t) => {
   t.ok(
     !shouldUseStreamErrorTransport(
       progressAlwaysEntry,
@@ -82,9 +74,7 @@ test("reply handler with supportsProgress=true but no withProgress uses reply tr
   );
 });
 
-test("reply handler with supportsProgress function and non-matching operation uses reply transport", (t: {
-  ok: Function;
-}) => {
+test("reply handler with supportsProgress function and non-matching operation uses reply transport", (t) => {
   t.ok(
     !shouldUseStreamErrorTransport(
       progressFnEntry,
@@ -93,7 +83,7 @@ test("reply handler with supportsProgress function and non-matching operation us
   );
 });
 
-test("duplex handler uses reply transport", (t: { ok: Function }) => {
+test("duplex handler uses reply transport", (t) => {
   t.ok(
     !shouldUseStreamErrorTransport(
       duplexEntry,
@@ -102,10 +92,10 @@ test("duplex handler uses reply transport", (t: { ok: Function }) => {
   );
 });
 
-test("undefined entry uses reply transport", (t: { ok: Function }) => {
+test("undefined entry uses reply transport", (t) => {
   t.ok(!shouldUseStreamErrorTransport(undefined, raw({ type: "nonexistent" })));
 });
 
-test("undefined rawRequest uses reply transport", (t: { ok: Function }) => {
+test("undefined rawRequest uses reply transport", (t) => {
   t.ok(!shouldUseStreamErrorTransport(progressAlwaysEntry, undefined));
 });

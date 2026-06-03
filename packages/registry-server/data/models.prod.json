@@ -4349,6 +4349,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
     "quantization": "",
     "params": "",
@@ -4365,6 +4366,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "fp16",
     "params": "",
@@ -4381,6 +4383,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox S3Gen vocoder (GGUF, English)",
     "quantization": "",
     "params": "",
@@ -4397,6 +4400,7 @@
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
     "quantization": "fp16",
     "params": "",
@@ -4417,6 +4421,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
     "quantization": "q4_0",
     "params": "",
@@ -4437,6 +4442,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q8_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
     "quantization": "q8_0",
     "params": "",
@@ -4457,6 +4463,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "q4_0",
     "params": "",
@@ -4473,6 +4480,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q8_0.gguf",
     "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "q8_0",
     "params": "",
@@ -4482,6 +4490,146 @@
       "chatterbox",
       "t3-turbo",
       "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-turbo-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3-turbo",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-mtl-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3",
+      "multilingual",
+      "gguf",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q5_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://huggingface.co/ResembleAI/chatterbox",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "s3gen",
+      "multilingual",
       "gguf"
     ],
     "notes": ""
@@ -6086,6 +6234,49 @@
     "quantization": "fp16",
     "tags": [
       "text-encoder",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03/wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.1 image-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q4_K_M",
+    "params": "14B",
+    "tags": [
+      "generation",
+      "diffusion",
+      "video",
+      "480p",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/city96/Wan2.1-I2V-14B-720P-gguf/resolve/ea36d5421cc5f5c57e50067a432a8b2c16dd0dae/wan2.1-i2v-14b-720p-Q4_K_M.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.1 image-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-720P",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q4_K_M",
+    "params": "14B",
+    "tags": [
+      "generation",
+      "diffusion",
+      "video",
+      "720p",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/clip_vision/clip_vision_h.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "OpenCLIP ViT-H/14 vision encoder for Wan 2.1 image-to-video",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "vision-encoder",
+      "clip-vision",
       "wan"
     ]
   },

@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { z } from "zod";
 import { plugins } from "@/client/plugins-factory";

@@ -18,6 +18,7 @@
 #include <js.h>
 #include <whisper.h>
 
+#include "addon/GgmlLogForwarding.hpp"
 #include "model-interface/StreamingProcessor.hpp"
 #include "model-interface/WhisperTypes.hpp"
 #include "model-interface/whisper.cpp/WhisperModel.hpp"
@@ -33,8 +34,18 @@ inline std::unordered_map<
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
 
-inline void disableWhisperLogs(
-    enum ggml_log_level /*level*/, const char* /*text*/, void* /*userData*/) {}
+// whisper.cpp / ggml native-log forwarding lives in GgmlLogForwarding.hpp
+// (kept JS-free so the level mapping + per-call forwarding can be unit-tested).
+// createInstance() installs forwardGgmlLog() via whisper_log_set().
+//
+// Hook choice: whisper_log_set() — NOT a raw ggml_log_set(). whisper_log_set()
+// stores the callback in g_state.log_callback and re-applies it to ggml via
+// ggml_log_set(); whisper_backend_init_gpu() then re-applies
+// g_state.log_callback to ggml again during init (src/whisper.cpp). A raw
+// ggml_log_set() would therefore be clobbered, while whisper_log_set()
+// reliably captures BOTH whisper.cpp's own lines (whisper_model_load,
+// "whisper_backend_init_gpu: using <name> backend", ...) and ggml's
+// ("ggml_vulkan: Found N Vulkan devices ...").
 
 inline WhisperConfig
 createWhisperConfig(js_env_t* env, const js::Object& configurationParams) {
@@ -151,7 +162,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
-  whisper_log_set(disableWhisperLogs, nullptr);
+  whisper_log_set(forwardGgmlLog, nullptr);
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
 
