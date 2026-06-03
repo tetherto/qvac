@@ -269,7 +269,7 @@ test('Gemma 4 can describe an image', {
   // QVAC-18298: backend in the label so each platform x backend gets its own
   // aggregate.js cell (it groups perf rows by result.test).
   const backendTag = useCpu ? 'CPU' : 'GPU'
-  const perfLabel = `[gemma4-vl] [${backendTag}]`
+  const perfLabel = `[elephant] [gemma4-vl] [${backendTag}]`
 
   async function runImageInference (imageBytes) {
     const messages = [
