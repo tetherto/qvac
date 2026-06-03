@@ -1,4 +1,4 @@
-import QvacResponse from "@qvac/infer-base/src/QvacResponse";
+import type { QvacResponse } from "@qvac/infer-base";
 import type { LoggerInterface } from "@qvac/logging";
 import { Readable } from "stream";
 
@@ -69,6 +69,13 @@ declare interface WhisperStreamingOptions {
   conversationMode?: boolean;
   endOfTurnSilenceMs?: number;
   vadRunIntervalMs?: number;
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal;
+}
+
+declare interface WhisperRunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal;
 }
 
 declare interface VadStateEvent {
@@ -131,7 +138,8 @@ declare class TranscriptionWhispercpp {
    * Run transcription on an audio stream. When `opts.stats` was set on construction, `response.stats` matches {@link TranscriptionWhispercpp.RuntimeStats}.
    */
   run(
-    audioStream: Readable
+    audioStream: Readable,
+    runOptions?: WhisperRunOptions
   ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
 
   runStreaming(
@@ -242,6 +250,7 @@ declare namespace TranscriptionWhispercpp {
     TranscriptionWhispercppConfig,
     WhisperTranscriptionSegment,
     WhisperStreamingOptions,
+    WhisperRunOptions,
     VadStateEvent,
     EndOfTurnEvent,
     InferenceClientState,
