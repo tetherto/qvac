@@ -28,6 +28,7 @@ class OcrGgml {
    * @param {number} [args.params.recognizerBatchSize]
    * @param {number} [args.params.nThreads] - 0=auto (physical cores), >0=explicit, <0=leave default
    * @param {string} [args.params.backendsDir] - override directory for ggml backend shared libs
+   * @param {'cpu'|'vulkan'} [args.params.backendDevice='cpu'] - requested ggml backend device. `'vulkan'` opts in to GPU inference with transparent CPU fallback when no Vulkan device is present.
    * @param {Object} [args.opts]
    * @param {boolean} [args.opts.stats] - emit timing stats on finish
    * @param {Object} [args.logger]
@@ -41,6 +42,7 @@ class OcrGgml {
     this._packageVersion = require('./package.json').version
     this._job = createJobHandler({ cancel: () => this.addon && this.addon.cancel() })
     this._run = exclusiveRunQueue()
+    this._backendInfo = null
 
     this.state = {
       configLoaded: false,
@@ -72,11 +74,21 @@ class OcrGgml {
     return this._run(() => this._runInternal(input))
   }
 
+  /**
+   * Backend device the C++ pipeline resolved for inference. Available after
+   * `load()`; `null` before load or after unload.
+   * @returns {{ requested: string, backendDevice: string, backendName: string, fallbackReason: string }|null}
+   */
+  getBackendInfo () {
+    return this._backendInfo
+  }
+
   async unload () {
     if (this.addon) {
       await this.addon.destroy()
       this.addon = null
     }
+    this._backendInfo = null
     this.state.configLoaded = false
     this.state.weightsLoaded = false
   }
@@ -138,7 +150,8 @@ class OcrGgml {
       'lowConfidenceThreshold',
       'recognizerBatchSize',
       'nThreads',
-      'pipelineType'
+      'pipelineType',
+      'backendDevice'
     ]
     for (const field of optionalFields) {
       if (this.params[field] !== undefined) {
@@ -156,6 +169,20 @@ class OcrGgml {
     await this.addon.activate()
     this.state.configLoaded = true
     this.state.weightsLoaded = true
+
+    // Capture the backend device the C++ pipeline actually resolved (Vulkan vs
+    // CPU fallback). RuntimeStats can only carry numbers, so backend identity
+    // strings are surfaced here and via _getDiagnosticsJSON().
+    try {
+      this._backendInfo = this.addon.getBackendInfo()
+      if (this._backendInfo) {
+        this.logger.info('ocr-ggml backend: ' + JSON.stringify(this._backendInfo))
+      }
+    } catch (err) {
+      this.logger.warn('ocr-ggml: failed to read backend info: ' + err.message)
+      this._backendInfo = null
+    }
+
     this.logger.info('ocr-ggml model loaded')
   }
 
@@ -358,7 +385,8 @@ class OcrGgml {
       status: this.state.destroyed
         ? 'destroyed'
         : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
-      params: this.params
+      params: this.params,
+      backend: this._backendInfo
     })
   }
 

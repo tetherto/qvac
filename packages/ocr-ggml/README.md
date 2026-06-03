@@ -107,6 +107,7 @@ bare examples/quickstart.js \
 | `params.recognizerBatchSize` | `number` | | `32` | recognizer batch size (`easyocr` only) |
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
 | `params.backendsDir` | `string` | | `<package>/prebuilds` | directory holding `libggml-*.so` backend shared libs |
+| `params.backendDevice` | `'cpu'` \| `'vulkan'` | | `'cpu'` | ggml backend device. `'vulkan'` opts in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan) |
 | `opts.stats` | `boolean` | | `false` | emit timing stats on `finish` |
 | `logger` | `Object` | | `null` | optional `{ info, warn, error, debug }` — receives C++ log lines |
 
@@ -117,7 +118,47 @@ bare examples/quickstart.js \
 - `unload(): Promise<void>` — frees the addon (destroys ggml contexts + backends)
 - `destroy(): Promise<void>` — marks the instance as destroyed (no further use)
 - `getState(): InferenceClientState`
+- `getBackendInfo(): BackendInfo | null` — backend device resolved at `load()` (`{ requested, backendDevice, backendName, fallbackReason }`); `null` before `load()` / after `unload()`
 - `OcrGgml.getModelKey(): string` — `"ocr-ggml"`, used by the inference manager
+
+### Backend device (CPU / Vulkan)
+
+By default inference runs on the **CPU** ggml backend, which is always
+available. Set `params.backendDevice: 'vulkan'` to opt in to GPU inference:
+
+```js
+const ocr = new OcrGgml({
+  params: {
+    pathDetector: '/abs/path/craft_mlt_25k.gguf',
+    pathRecognizer: '/abs/path/english_g2.gguf',
+    langList: ['en'],
+    backendDevice: 'vulkan'   // default is 'cpu'
+  }
+})
+await ocr.load()
+console.log(ocr.getBackendInfo())
+// Vulkan available → { requested: 'vulkan', backendDevice: 'GPU',  backendName: 'Vulkan0', fallbackReason: '' }
+// no Vulkan device → { requested: 'vulkan', backendDevice: 'CPU',  backendName: 'CPU',     fallbackReason: 'Vulkan backend requested but no Vulkan-capable GPU device was found; falling back to CPU' }
+```
+
+Behaviour and expectations:
+
+- **Transparent CPU fallback.** When `'vulkan'` is requested but no
+  Vulkan-capable GPU device is registered, the pipeline falls back to CPU and
+  records a non-empty `fallbackReason` (also reflected by the numeric
+  `backendIsGpu` stat). It never silently does the wrong thing.
+- **Required backend libs.** Vulkan execution needs the `libggml-vulkan`
+  backend shared library (`libggml-vulkan.so` / `.dll` / `.dylib`) present in
+  `backendsDir` (default `<package>/prebuilds/<target>/`), plus a working
+  Vulkan driver/ICD and a Vulkan-capable GPU on the host. These libs are only
+  produced on platforms/feature sets where the upstream ggml port builds the
+  Vulkan backend; on other hosts the request quietly falls back to CPU.
+- **DocTR recognizer.** Only the MobileNetV3 feature-extractor graph runs on
+  the selected ggml device; the recognizer's downstream LSTM + linear
+  classifier always run on CPU (plain C++, no ggml graph), regardless of
+  `backendDevice`.
+- **Threads.** `nThreads` only affects the CPU backend; it is ignored when a
+  Vulkan device is selected.
 
 ### `run(input)` shape
 
@@ -151,7 +192,8 @@ This is byte-for-byte the same shape `@qvac/ocr-onnx` returns.
   totalTime: number,        // seconds
   detectionTime: number,    // seconds (CRAFT inference)
   recognitionTime: number,  // seconds (CRNN inference)
-  numBoxes: number          // total boxes (aligned + unaligned)
+  numBoxes: number,         // total boxes (aligned + unaligned)
+  backendIsGpu: number      // 1 if inference ran on a GPU (Vulkan) device, else 0
 }
 ```
 

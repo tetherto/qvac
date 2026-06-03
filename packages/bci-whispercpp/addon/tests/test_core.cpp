@@ -1,11 +1,16 @@
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <limits>
+#include <string>
+#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
 
-#include "model-interface/bci/NeuralProcessor.hpp"
 #include "model-interface/bci/BCIConfig.hpp"
+#include "model-interface/bci/BCIModel.hpp"
+#include "model-interface/bci/NeuralProcessor.hpp"
 
 using namespace qvac_lib_inference_addon_bci;
 
@@ -192,4 +197,75 @@ TEST(NeuralProcessor, PassthroughModeSkipsPreprocessing) {
       signal.data() + 2 * sizeof(uint32_t));
   EXPECT_FLOAT_EQ(result[0 * nFrames + 0], originalData[0 * C + 0]);
   EXPECT_FLOAT_EQ(result[1 * nFrames + 0], originalData[0 * C + 1]);
+}
+
+// QVAC-19235 dynamic-backend-loading plumbing. These tests exercise the
+// pieces that DON'T need a loaded whisper context, so they can run in
+// the existing GoogleTest binary without model fixtures or network.
+
+TEST(BCIConfig, BackendsDirDefaultsEmpty) {
+  BCIConfig config;
+  EXPECT_TRUE(config.backendsDir.empty());
+}
+
+TEST(BCIConfig, BackendsDirRoundTrip) {
+  BCIConfig config;
+  config.backendsDir = "/tmp/some/prebuilds/path";
+  EXPECT_EQ(config.backendsDir, "/tmp/some/prebuilds/path");
+
+  BCIConfig copy = config;
+  EXPECT_EQ(copy.backendsDir, "/tmp/some/prebuilds/path");
+}
+
+namespace {
+
+const std::variant<double, int64_t>* findStat(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& [name, value] : stats) {
+    if (name == key) {
+      return &value;
+    }
+  }
+  return nullptr;
+}
+
+int64_t statAsInt64(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  const auto* v = findStat(stats, key);
+  if (v == nullptr) {
+    ADD_FAILURE() << "RuntimeStats missing key: " << key;
+    return std::numeric_limits<int64_t>::min();
+  }
+  if (const auto* asInt = std::get_if<int64_t>(v)) {
+    return *asInt;
+  }
+  ADD_FAILURE() << "RuntimeStats key '" << key << "' is not int64";
+  return std::numeric_limits<int64_t>::min();
+}
+
+} // namespace
+
+TEST(BCIModel, RuntimeStatsExposesBackendIdentityKeys) {
+  BCIModel model{BCIConfig{}};
+  auto stats = model.runtimeStats();
+  for (const auto* key :
+       {"backendDevice", "backendId", "gpuMemTotalMb", "gpuMemFreeMb"}) {
+    EXPECT_NE(findStat(stats, key), nullptr)
+        << "RuntimeStats is missing required QVAC-19235 key: " << key;
+  }
+}
+
+TEST(BCIModel, BackendIdentityDefaultsToCPU) {
+  // Pre-load() defaults reported by runtimeStats() must match the
+  // post-fallback "no GPU device available / use_gpu=false" reading
+  // so downstream Device-Farm assertions don't get a misleading
+  // GPU-device value before the model is even initialised.
+  BCIModel model{BCIConfig{}};
+  auto stats = model.runtimeStats();
+  EXPECT_EQ(statAsInt64(stats, "backendDevice"), 0);
+  EXPECT_EQ(statAsInt64(stats, "backendId"), 0);
+  EXPECT_EQ(statAsInt64(stats, "gpuMemTotalMb"), -1);
+  EXPECT_EQ(statAsInt64(stats, "gpuMemFreeMb"), -1);
 }

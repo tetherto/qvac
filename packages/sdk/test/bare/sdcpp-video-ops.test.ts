@@ -1,25 +1,5 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
-
-type BrittleT = {
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-};
-
-const isBunUnitTestRunner =
-  typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
-// @ts-ignore Bare global only exists in Bare runtime
-const isBareRuntime =
-  !isBunUnitTestRunner && typeof globalThis.Bare !== "undefined";
-
-function bareTest(name: string, fn: (t: BrittleT) => Promise<void> | void) {
-  if (isBareRuntime) {
-    test(name, fn);
-  } else {
-    test.skip(`[bare-only] ${name}`, () => {});
-  }
-}
+import { VideoStableDiffusion } from "@qvac/diffusion-cpp";
 
 const PNG_B64 = "iVBORw0KGgoAAAANSUhEUg==";
 const JPEG_B64 = "/9j/4AAQSkZJRgABAQEASABIAAA=";
@@ -39,11 +19,10 @@ async function withRegisteredVideoModel<T>(
     [import("@/server/bare/registry/model-registry"), import("@/schemas")],
   );
   const modelId = makeId("test-video");
-  const fakeModel = {
-    load: async function () {},
-    run: runImpl,
-    cancel: cancelImpl,
-  };
+  const fakeModel = Object.create(VideoStableDiffusion.prototype) as Record<string, unknown>;
+  fakeModel["load"] = async function () {};
+  fakeModel["run"] = runImpl;
+  fakeModel["cancel"] = cancelImpl;
 
   try {
     registerModel(modelId, {
@@ -58,9 +37,9 @@ async function withRegisteredVideoModel<T>(
   }
 }
 
-bareTest(
+test(
   "video op: decodes base64 inputs, forwards mode, and emits stream responses",
-  async function (t: BrittleT) {
+  async function (t) {
     const { video: videoOp } =
       await import("@/server/bare/plugins/sdcpp-generation/ops/video");
     let observed: Record<string, unknown> | undefined;
@@ -121,9 +100,9 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "video op: broad cancel routes through registry and calls model.cancel",
-  async function (t: BrittleT) {
+  async function (t) {
     const [{ getRequestRegistry }, { video: videoOp }] = await Promise.all([
       import("@/server/bare/runtime"),
       import("@/server/bare/plugins/sdcpp-generation/ops/video"),

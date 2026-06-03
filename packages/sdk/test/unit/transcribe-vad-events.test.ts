@@ -1,4 +1,3 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 import {
   transcribeStreamRequestSchema,
@@ -10,21 +9,11 @@ import {
   type TranscribeStreamEvent,
 } from "@/schemas/transcription";
 
-type BrittleT = {
-  is: Function;
-  ok: Function;
-  exception: Function;
-  execution: Function;
-  not: Function;
-  alike: Function;
-  teardown: Function;
-};
-
 // =============================================================================
 // vadStateEventSchema / endOfTurnEventSchema round-trip
 // =============================================================================
 
-test("vadStateEventSchema: accepts a well-formed VAD payload", (t: BrittleT) => {
+test("vadStateEventSchema: accepts a well-formed VAD payload", (t) => {
   const result = vadStateEventSchema.safeParse({
     speaking: true,
     probability: 0.87,
@@ -32,7 +21,7 @@ test("vadStateEventSchema: accepts a well-formed VAD payload", (t: BrittleT) => 
   t.ok(result.success, "vad payload is valid");
 });
 
-test("vadStateEventSchema: rejects missing fields", (t: BrittleT) => {
+test("vadStateEventSchema: rejects missing fields", (t) => {
   const noProbability = vadStateEventSchema.safeParse({ speaking: false });
   t.ok(!noProbability.success, "vad without probability is rejected");
 
@@ -40,7 +29,7 @@ test("vadStateEventSchema: rejects missing fields", (t: BrittleT) => {
   t.ok(!noSpeaking.success, "vad without speaking is rejected");
 });
 
-test("endOfTurnEventSchema: accepts a well-formed whisper payload", (t: BrittleT) => {
+test("endOfTurnEventSchema: accepts a well-formed whisper payload", (t) => {
   const result = endOfTurnEventSchema.safeParse({
     source: "whisper",
     silenceDurationMs: 750,
@@ -48,14 +37,14 @@ test("endOfTurnEventSchema: accepts a well-formed whisper payload", (t: BrittleT
   t.ok(result.success, "whisper endOfTurn payload is valid");
 });
 
-test("endOfTurnEventSchema: accepts a well-formed parakeet payload (no silence window)", (t: BrittleT) => {
+test("endOfTurnEventSchema: accepts a well-formed parakeet payload (no silence window)", (t) => {
   // Parakeet's EOU is token-driven and surfaces the event without a
   // measured silence window.
   const result = endOfTurnEventSchema.safeParse({ source: "parakeet" });
   t.ok(result.success, "parakeet endOfTurn payload is valid");
 });
 
-test("whisperEndOfTurnEventSchema: rejects payload missing silenceDurationMs", (t: BrittleT) => {
+test("whisperEndOfTurnEventSchema: rejects payload missing silenceDurationMs", (t) => {
   // Whisper's silence window is the load-bearing field for downstream
   // consumers (UI captions, end-of-utterance detection, latency
   // metrics). Making it non-optional on the whisper variant catches
@@ -67,7 +56,7 @@ test("whisperEndOfTurnEventSchema: rejects payload missing silenceDurationMs", (
   );
 });
 
-test("endOfTurnEventSchema: rejects whisper payload missing silenceDurationMs", (t: BrittleT) => {
+test("endOfTurnEventSchema: rejects whisper payload missing silenceDurationMs", (t) => {
   // Same invariant exercised through the union — the whisper branch
   // must reject a missing silence window even when reached via the
   // discriminator.
@@ -78,7 +67,7 @@ test("endOfTurnEventSchema: rejects whisper payload missing silenceDurationMs", 
   );
 });
 
-test("endOfTurnEventSchema: normalizes legacy whisper wire without source", (t: BrittleT) => {
+test("endOfTurnEventSchema: normalizes legacy whisper wire without source", (t) => {
   // Pre-discriminated-union whisper addons emit `{ silenceDurationMs }`
   // only; preprocess maps that to the whisper branch.
   const result = endOfTurnEventSchema.safeParse({ silenceDurationMs: 500 });
@@ -86,7 +75,7 @@ test("endOfTurnEventSchema: normalizes legacy whisper wire without source", (t: 
   t.alike(result.data, { source: "whisper", silenceDurationMs: 500 });
 });
 
-test("endOfTurnEventSchema: rejects legacy shape without numeric silenceDurationMs", (t: BrittleT) => {
+test("endOfTurnEventSchema: rejects legacy shape without numeric silenceDurationMs", (t) => {
   const result = endOfTurnEventSchema.safeParse({ silenceDurationMs: "500" });
   t.ok(
     !result.success,
@@ -94,7 +83,7 @@ test("endOfTurnEventSchema: rejects legacy shape without numeric silenceDuration
   );
 });
 
-test("parakeetEndOfTurnEventSchema: rejects extraneous silenceDurationMs in strict mode", (t: BrittleT) => {
+test("parakeetEndOfTurnEventSchema: rejects extraneous silenceDurationMs in strict mode", (t) => {
   const result = parakeetEndOfTurnEventSchema.strict().safeParse({
     source: "parakeet",
     silenceDurationMs: 500,
@@ -109,7 +98,7 @@ test("parakeetEndOfTurnEventSchema: rejects extraneous silenceDurationMs in stri
 // transcribeStreamRequestSchema — conversation opt-in fields
 // =============================================================================
 
-test("transcribeStreamRequestSchema: accepts emitVadEvents: true", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: accepts emitVadEvents: true", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "m",
@@ -119,7 +108,7 @@ test("transcribeStreamRequestSchema: accepts emitVadEvents: true", (t: BrittleT)
   if (result.success) t.is(result.data.emitVadEvents, true, "flag preserved");
 });
 
-test("transcribeStreamRequestSchema: accepts endOfTurnSilenceMs and vadRunIntervalMs", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: accepts endOfTurnSilenceMs and vadRunIntervalMs", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "m",
@@ -134,7 +123,7 @@ test("transcribeStreamRequestSchema: accepts endOfTurnSilenceMs and vadRunInterv
   }
 });
 
-test("transcribeStreamRequestSchema: rejects negative endOfTurnSilenceMs", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: rejects negative endOfTurnSilenceMs", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "m",
@@ -143,7 +132,7 @@ test("transcribeStreamRequestSchema: rejects negative endOfTurnSilenceMs", (t: B
   t.ok(!result.success, "negative silence is rejected");
 });
 
-test("transcribeStreamRequestSchema: rejects non-positive vadRunIntervalMs", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: rejects non-positive vadRunIntervalMs", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "m",
@@ -152,7 +141,7 @@ test("transcribeStreamRequestSchema: rejects non-positive vadRunIntervalMs", (t:
   t.ok(!result.success, "zero interval is rejected");
 });
 
-test("transcribeStreamRequestSchema: conversation opts are optional", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: conversation opts are optional", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "m",
@@ -169,7 +158,7 @@ test("transcribeStreamRequestSchema: conversation opts are optional", (t: Brittl
 // transcribeStreamResponseSchema — vad / endOfTurn frames
 // =============================================================================
 
-test("transcribeStreamResponseSchema: round-trips a vad frame", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: round-trips a vad frame", (t) => {
   const wire = {
     type: "transcribeStream" as const,
     vad: { speaking: true, probability: 0.92 },
@@ -179,7 +168,7 @@ test("transcribeStreamResponseSchema: round-trips a vad frame", (t: BrittleT) =>
   if (parsed.success) t.alike(parsed.data.vad, wire.vad, "vad preserved");
 });
 
-test("transcribeStreamResponseSchema: round-trips a whisper endOfTurn frame", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: round-trips a whisper endOfTurn frame", (t) => {
   const wire = {
     type: "transcribeStream" as const,
     endOfTurn: { source: "whisper" as const, silenceDurationMs: 1200 },
@@ -191,7 +180,7 @@ test("transcribeStreamResponseSchema: round-trips a whisper endOfTurn frame", (t
   }
 });
 
-test("transcribeStreamResponseSchema: round-trips a parakeet endOfTurn frame", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: round-trips a parakeet endOfTurn frame", (t) => {
   const wire = {
     type: "transcribeStream" as const,
     endOfTurn: { source: "parakeet" as const },
@@ -203,7 +192,7 @@ test("transcribeStreamResponseSchema: round-trips a parakeet endOfTurn frame", (
   }
 });
 
-test("transcribeStreamResponseSchema: text frames remain valid alongside event fields", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: text frames remain valid alongside event fields", (t) => {
   const parsed = transcribeStreamResponseSchema.safeParse({
     type: "transcribeStream",
     text: "hello",
@@ -220,7 +209,7 @@ test("transcribeStreamResponseSchema: text frames remain valid alongside event f
 // TranscribeStreamEvent discriminated union — exhaustiveness sanity check
 // =============================================================================
 
-test("TranscribeStreamEvent: discriminated union narrows correctly", (t: BrittleT) => {
+test("TranscribeStreamEvent: discriminated union narrows correctly", (t) => {
   const events: TranscribeStreamEvent[] = [
     { type: "text", text: "hi" },
     {

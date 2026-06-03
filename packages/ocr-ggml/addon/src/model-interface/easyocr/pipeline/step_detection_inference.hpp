@@ -28,6 +28,7 @@
 
 // NOLINTBEGIN(readability-identifier-naming,readability-identifier-length)
 using ggml_backend_t = struct ggml_backend*;
+using ggml_backend_dev_t = struct ggml_backend_device*;
 using ggml_gallocr_t = struct ggml_gallocr*;
 struct ggml_cgraph;
 struct ggml_context;
@@ -117,11 +118,15 @@ public:
   // (which scales with canvas area). Default 2560 matches @qvac/ocr-onnx and
   // EasyOCR; lower it on memory-constrained targets (e.g. mobile) to avoid the
   // dense-page OOM in QVAC-19340. Values <= 0 fall back to the 2560 default.
+  // backendDevice: the ggml device the CRAFT graph runs on (selected by
+  // `Pipeline` via `ocr_backend_selection`). nullptr resolves to the CPU
+  // device, preserving the historical CPU-only behaviour for direct callers.
   explicit StepDetectionInference(
       // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
       const std::string& gguf_path, float magRatio = 1.5F, int nThreads = 0,
       const std::string& backendsDir = "",
-      int maxImageSize = kDefaultCanvasSize);
+      int maxImageSize = kDefaultCanvasSize,
+      ggml_backend_dev_t backendDevice = nullptr);
   ~StepDetectionInference();
 
   StepDetectionInference(const StepDetectionInference&) = delete;

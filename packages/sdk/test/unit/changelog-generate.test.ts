@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { execFileSync } from "child_process";
 import fs from "fs";

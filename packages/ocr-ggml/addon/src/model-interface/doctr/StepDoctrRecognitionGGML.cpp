@@ -22,13 +22,16 @@
 
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)
 // DSP / LSTM / CRNN inner loops use raw pointer arithmetic, single-letter
 // math identifiers (x, t, c, h, bn), snake_case to mirror upstream PyTorch
 // state-dict paths, and layer-dim magic numbers that are themselves part
 // of the model architecture. Bounds-checking, renaming, or "constant-ising"
 // these would either change the source diff against upstream or measurably
-// regress hot-path CTC decode / LSTM gate compute throughput.
+// regress hot-path CTC decode / LSTM gate compute throughput. The ggml
+// C-API boundary (device/backend handles) only exposes raw pointers, so the
+// unchecked-access and implicit-bool checks are suppressed here too, matching
+// the sibling easyocr inference steps.
 
 namespace doctr::ggml::pipeline {
 
@@ -529,15 +532,26 @@ struct StepDoctrRecognitionGGML::Impl {
   std::vector<float> linearWeight;
   std::vector<float> linearBias;
 
-  explicit Impl(const std::string& pathRecognizer) { load(pathRecognizer); }
+  explicit Impl(
+      const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
+    load(pathRecognizer, backendDevice);
+  }
 
-  void load(const std::string& pathRecognizer) {
+  void
+  load(const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
     graph.reset();
-    ggml_backend_dev_t cpuDev =
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-    graph.backend = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
+    ggml_backend_dev_t dev =
+        (backendDevice != nullptr)
+            ? backendDevice
+            : ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    // Only the MobileNetV3 feature-extractor graph runs on this ggml backend.
+    // The downstream bidirectional LSTM and the final linear classifier are
+    // implemented as plain CPU C++ (no ggml graph), so they always execute on
+    // the CPU even when VULKAN is the selected device — that fallback for the
+    // recurrent/linear tail is by design.
+    graph.backend = dev ? ggml_backend_dev_init(dev, nullptr) : nullptr;
     if (graph.backend == nullptr) {
-      raise("failed to initialize ggml CPU backend");
+      raise("failed to initialize ggml backend");
     }
 
     struct ggml_context* ggufGgmlCtx = nullptr;
@@ -968,9 +982,11 @@ private:
 };
 
 StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
-    const std::string& pathRecognizer, int batchSize, DecodingMethod decoding)
-    : impl_(std::make_unique<Impl>(pathRecognizer)), batchSize_(batchSize),
-      decodingMethod_(decoding), vocabChars_(parseVocabToChars(VOCAB)) {
+    const std::string& pathRecognizer, int batchSize, DecodingMethod decoding,
+    ggml_backend_dev_t backendDevice)
+    : impl_(std::make_unique<Impl>(pathRecognizer, backendDevice)),
+      batchSize_(batchSize), decodingMethod_(decoding),
+      vocabChars_(parseVocabToChars(VOCAB)) {
   const std::string decodingStr =
       (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(
@@ -1170,4 +1186,4 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
 
 } // namespace doctr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)

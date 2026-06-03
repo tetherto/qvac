@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import {
   createRequestRegistry,
@@ -24,18 +23,8 @@ import {
 //   - RequestIdConflictError is thrown on duplicate ids.
 // -----------------------------------------------------------------------------
 
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-  exception: (
-    fn: () => Promise<unknown> | unknown,
-    matcher?: unknown,
-    msg?: string,
-  ) => Promise<void>;
-};
 
-test("registry: begin/get/list track in-flight requests", async (t: T) => {
+test("registry: begin/get/list track in-flight requests", async (t) => {
   const r = createRequestRegistry();
   await using a = r.begin({
     requestId: "r-a",
@@ -58,7 +47,7 @@ test("registry: begin/get/list track in-flight requests", async (t: T) => {
   t.is(b.kind, "embeddings");
 });
 
-test("registry: dispose removes the slot and flips state", async (t: T) => {
+test("registry: dispose removes the slot and flips state", async (t) => {
   const r = createRequestRegistry();
 
   async function run() {
@@ -76,7 +65,7 @@ test("registry: dispose removes the slot and flips state", async (t: T) => {
   t.is(r.get("r-1"), null);
 });
 
-test("registry: cancel by requestId aborts only that signal", async (t: T) => {
+test("registry: cancel by requestId aborts only that signal", async (t) => {
   const r = createRequestRegistry();
   await using a = r.begin({
     requestId: "r-a",
@@ -97,7 +86,7 @@ test("registry: cancel by requestId aborts only that signal", async (t: T) => {
   t.is(b.state, "running");
 });
 
-test("registry: cancel-by-requestId is idempotent and counts only first abort", async (t: T) => {
+test("registry: cancel-by-requestId is idempotent and counts only first abort", async (t) => {
   const r = createRequestRegistry();
   await using ctx = r.begin({
     requestId: "r-1",
@@ -109,7 +98,7 @@ test("registry: cancel-by-requestId is idempotent and counts only first abort", 
   t.is(ctx.signal.aborted, true);
 });
 
-test("registry: cancel by modelId fans out across that model only", async (t: T) => {
+test("registry: cancel by modelId fans out across that model only", async (t) => {
   const r = createRequestRegistry();
   await using a = r.begin({
     requestId: "r-a",
@@ -134,7 +123,7 @@ test("registry: cancel by modelId fans out across that model only", async (t: T)
   t.is(c.signal.aborted, false);
 });
 
-test("registry: cancel by modelId + kind narrows the target", async (t: T) => {
+test("registry: cancel by modelId + kind narrows the target", async (t) => {
   const r = createRequestRegistry();
   await using a = r.begin({
     requestId: "r-a",
@@ -153,7 +142,7 @@ test("registry: cancel by modelId + kind narrows the target", async (t: T) => {
   t.is(b.signal.aborted, false);
 });
 
-test("registry: cancelAll fires every signal", async (t: T) => {
+test("registry: cancelAll fires every signal", async (t) => {
   const r = createRequestRegistry();
   await using a = r.begin({
     requestId: "r-a",
@@ -176,7 +165,7 @@ test("registry: cancelAll fires every signal", async (t: T) => {
   t.is(c.signal.aborted, true);
 });
 
-test("registry: parentSignal already aborted aborts the new context", async (t: T) => {
+test("registry: parentSignal already aborted aborts the new context", async (t) => {
   const r = createRequestRegistry();
   const parent = new AbortController();
   parent.abort("shutdown");
@@ -193,7 +182,7 @@ test("registry: parentSignal already aborted aborts the new context", async (t: 
   t.is(ctx.state, "cancelling");
 });
 
-test("registry: parentSignal aborts propagate to children", async (t: T) => {
+test("registry: parentSignal aborts propagate to children", async (t) => {
   const r = createRequestRegistry();
   const parent = new AbortController();
   await using ctx = r.begin({
@@ -207,7 +196,7 @@ test("registry: parentSignal aborts propagate to children", async (t: T) => {
   t.is(ctx.signal.aborted, true);
 });
 
-test("registry: duplicate requestId throws RequestIdConflictError", async (t: T) => {
+test("registry: duplicate requestId throws RequestIdConflictError", async (t) => {
   const r = createRequestRegistry();
   await using first = r.begin({
     requestId: "r-1",
@@ -217,10 +206,10 @@ test("registry: duplicate requestId throws RequestIdConflictError", async (t: T)
   t.is(first.kind, "completion");
   await t.exception(() => {
     r.begin({ requestId: "r-1", kind: "completion", modelId: "m1" });
-  }, RequestIdConflictError);
+  }, RequestIdConflictError as unknown as new () => Error);
 });
 
-test("registry: end(requestId) sets state, disposes scope, and removes slot", async (t: T) => {
+test("registry: end(requestId) sets state, disposes scope, and removes slot", async (t) => {
   const r = createRequestRegistry();
   let cleanupRan = 0;
   const ctx = r.begin({
@@ -238,14 +227,14 @@ test("registry: end(requestId) sets state, disposes scope, and removes slot", as
   t.is(r.get("r-1"), null);
 });
 
-test("registry: end without prior begin is a no-op", async (t: T) => {
+test("registry: end without prior begin is a no-op", async (t) => {
   const r = createRequestRegistry();
   await r.end("does-not-exist", "completed");
   // no throw, no entries
   t.is(r.list().length, 0);
 });
 
-test("registry: end() detaches parent listener so long-lived parents don't accumulate listeners", async (t: T) => {
+test("registry: end() detaches parent listener so long-lived parents don't accumulate listeners", async (t) => {
   // The `parentSignal` composition exists so a worker-level shutdown
   // signal can compose into per-request signals. Without an explicit
   // `detachParent` discipline, every `begin(...)` would leave a listener
@@ -288,7 +277,7 @@ test("registry: end() detaches parent listener so long-lived parents don't accum
   );
 });
 
-test("registry: same-tick cancel-before-begin retroactively aborts the later begin() (Stop-button race close)", async (t: T) => {
+test("registry: same-tick cancel-before-begin retroactively aborts the later begin() (Stop-button race close)", async (t) => {
   // Stop-button race: the client generates a `requestId`
   // and the user clicks Stop before the server-side `begin(...)` for
   // that id has landed. The registry has nothing to abort, so the
@@ -329,7 +318,7 @@ test("registry: same-tick cancel-before-begin retroactively aborts the later beg
   );
 });
 
-test("registry: a second begin() with the same id (UUID retry) after the race is consumed runs cleanly", async (t: T) => {
+test("registry: a second begin() with the same id (UUID retry) after the race is consumed runs cleanly", async (t) => {
   // The Stop-button race close consumes its entry on the matching
   // `begin(...)`. In practice ids are UUIDv4 and never reused, but a
   // buggy client could retry an id whose first attempt was already
@@ -364,7 +353,7 @@ test("registry: a second begin() with the same id (UUID retry) after the race is
   );
 });
 
-test("registry: bounded cancel-before-begin set does not grow past its cap (TTL + size eviction)", async (t: T) => {
+test("registry: bounded cancel-before-begin set does not grow past its cap (TTL + size eviction)", async (t) => {
   // The race-close map must be bounded so a malicious / buggy client
   // can't fire 100k `cancel({ requestId: <unique> })` calls and grow
   // the registry's memory unboundedly. The cap is documented at the
@@ -413,7 +402,7 @@ test("registry: bounded cancel-before-begin set does not grow past its cap (TTL 
   );
 });
 
-test("registry: derived terminal state is 'cancelled' if signal aborted, 'completed' otherwise", async (t: T) => {
+test("registry: derived terminal state is 'cancelled' if signal aborted, 'completed' otherwise", async (t) => {
   const r = createRequestRegistry();
 
   async function cancelledRun() {
@@ -451,7 +440,7 @@ test("registry: derived terminal state is 'cancelled' if signal aborted, 'comple
 // be exercised without contaminating the worker-wide one.
 // -----------------------------------------------------------------------------
 
-test("policy: oneAtATimePerModel rejects a second begin on the same (kind, modelId)", async (t: T) => {
+test("policy: oneAtATimePerModel rejects a second begin on the same (kind, modelId)", async (t) => {
   const r = createRequestRegistry();
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
@@ -470,7 +459,7 @@ test("policy: oneAtATimePerModel rejects a second begin on the same (kind, model
       kind: "completion",
       modelId: "m1",
     });
-  }, RequestRejectedByPolicyError);
+  }, RequestRejectedByPolicyError as unknown as new () => Error);
 
   // The rejected begin must not leave a slot behind — the registry's
   // in-flight set still only carries the first request.
@@ -478,7 +467,7 @@ test("policy: oneAtATimePerModel rejects a second begin on the same (kind, model
   t.is(r.get("r-2"), null);
 });
 
-test("policy: oneAtATimePerModel scopes admission per (kind, modelId), not globally", async (t: T) => {
+test("policy: oneAtATimePerModel scopes admission per (kind, modelId), not globally", async (t) => {
   const r = createRequestRegistry();
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
@@ -509,7 +498,7 @@ test("policy: oneAtATimePerModel scopes admission per (kind, modelId), not globa
   t.is(r.list().length, 3);
 });
 
-test("policy: oneAtATimePerModel ignores requests without modelId", async (t: T) => {
+test("policy: oneAtATimePerModel ignores requests without modelId", async (t) => {
   const r = createRequestRegistry();
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
@@ -524,7 +513,7 @@ test("policy: oneAtATimePerModel ignores requests without modelId", async (t: T)
   t.is(r.list().length, 2);
 });
 
-test("policy: disposing the holder releases admission for the next request", async (t: T) => {
+test("policy: disposing the holder releases admission for the next request", async (t) => {
   const r = createRequestRegistry();
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
@@ -548,7 +537,7 @@ test("policy: disposing the holder releases admission for the next request", asy
   await runFirstThenSecond();
 });
 
-test("policy: cancel without dispose does NOT release admission", async (t: T) => {
+test("policy: cancel without dispose does NOT release admission", async (t) => {
   // The slot is held until the handler scope unwinds, not when the
   // request is cancelled — the addon's KV-cache / decode loop is
   // still owned by the cancelled request as it drains. A future
@@ -573,12 +562,12 @@ test("policy: cancel without dispose does NOT release admission", async (t: T) =
         kind: "completion",
         modelId: "m1",
       }),
-    RequestRejectedByPolicyError,
+    RequestRejectedByPolicyError as unknown as new () => Error,
   );
   t.is(r.list().length, 1);
 });
 
-test("policy: registering a second time replaces the previous policy", async (t: T) => {
+test("policy: registering a second time replaces the previous policy", async (t) => {
   const r = createRequestRegistry();
   r.policy({ kind: "completion", oneAtATimePerModel: true });
   r.policy({ kind: "completion", oneAtATimePerModel: false });
@@ -600,7 +589,7 @@ test("policy: registering a second time replaces the previous policy", async (t:
   t.is(b.modelId, "m1");
 });
 
-test("policy: kinds without a registered policy are unconstrained", async (t: T) => {
+test("policy: kinds without a registered policy are unconstrained", async (t) => {
   const r = createRequestRegistry();
   // No `r.policy(...)` call for `embeddings` — admission must stay
   // open even though `completion` carries a strict rule.
