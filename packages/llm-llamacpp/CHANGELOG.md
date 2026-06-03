@@ -9,6 +9,7 @@
 ### Added
 
 - **OpenMP feature for Android**: Added `openmp` default feature that enables OpenMP support on Android ARM64 via the `qvac-fabric` dependency. This improves parallelization on supported Android devices.
+
 ## [0.23.2] - 2026-06-03
 
 ### Fixed

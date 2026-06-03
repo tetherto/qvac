@@ -48,7 +48,10 @@ if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
 endif()
 if(ANDROID)
-  
+  if(NOT IS_DIRECTORY "$ENV{ANDROID_NDK}")
+    message(FATAL_ERROR "ANDROID_NDK is not set or does not point to a valid directory: '$ENV{ANDROID_NDK}'")
+  endif()
+
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(NDK_HOST "windows-x86_64")
   elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
@@ -57,28 +60,27 @@ if(ANDROID)
     set(NDK_HOST "darwin-x86_64")
   endif()
 
-  set(LIBOMP_PATHS
-    "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib/clang/21/lib/linux/aarch64/libomp.so"
-  )
-  
-  set(LIBOMP_FOUND_PATH "")
-  foreach(path ${LIBOMP_PATHS})
-    file(TO_CMAKE_PATH "${path}" path_normalized)
-    if(EXISTS ${path_normalized})
-      set(LIBOMP_FOUND_PATH ${path_normalized})
-      break()
-    endif()
-  endforeach()
-  
-  if(NOT LIBOMP_FOUND_PATH)
-    file(GLOB_RECURSE LIBOMP_SEARCH 
-      "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/lib*/**/libomp.so"
-    )
-    if(LIBOMP_SEARCH)
-      list(GET LIBOMP_SEARCH 0 LIBOMP_FOUND_PATH)
-    endif()
+  set(NDK_PREBUILT "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}")
+
+  # Discover libomp.so for the correct ABI via version-agnostic glob.
+  # NDK LLVM major changes per release (r26→17, r27→18, r28→19, r29→21),
+  # so we avoid hardcoding a specific clang version.
+  file(GLOB LIBOMP_CANDIDATES "${NDK_PREBUILT}/lib/clang/*/lib/linux/aarch64/libomp.so")
+  if(NOT LIBOMP_CANDIDATES)
+    file(GLOB LIBOMP_CANDIDATES "${NDK_PREBUILT}/lib64/clang/*/lib/linux/aarch64/libomp.so")
   endif()
 
+  set(LIBOMP_FOUND_PATH "")
+  if(LIBOMP_CANDIDATES)
+    list(GET LIBOMP_CANDIDATES 0 LIBOMP_FOUND_PATH)
+    message(STATUS "Found libomp.so for aarch64: ${LIBOMP_FOUND_PATH}")
+  else()
+    message(WARNING
+      "libomp.so not found under ${NDK_PREBUILT}/lib/clang/*/lib/linux/aarch64/. "
+      "OpenMP will be disabled for this Android ARM64 build even though the "
+      "'openmp' vcpkg feature is active. Check your NDK installation."
+    )
+  endif()
 endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
@@ -97,15 +99,17 @@ add_bare_module(inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
 
 if(ANDROID AND LIBOMP_FOUND_PATH)
   message(STATUS "Installing libomp.so from: ${LIBOMP_FOUND_PATH}")
-  
-  install(FILES ${LIBOMP_FOUND_PATH} 
-  DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/android-arm64/qvac__llm-llamacpp
-  RENAME libomp.so
+
+  install(FILES ${LIBOMP_FOUND_PATH}
+    DESTINATION ${BACKENDS_SUBDIR_VALUE}
+    RENAME libomp.so
   )
-  
+
   target_link_libraries(${inference-addon-llama} PRIVATE ${LIBOMP_FOUND_PATH})
   target_compile_options(${inference-addon-llama} PRIVATE -fopenmp)
-  
+  target_link_libraries(${inference-addon-llama}_module PRIVATE ${LIBOMP_FOUND_PATH})
+  target_compile_options(${inference-addon-llama}_module PRIVATE -fopenmp)
+
   add_custom_command(TARGET ${inference-addon-llama}_module POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       ${LIBOMP_FOUND_PATH}
