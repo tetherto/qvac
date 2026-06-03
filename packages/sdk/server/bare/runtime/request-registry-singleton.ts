@@ -17,10 +17,27 @@ import {
 let registry: RequestRegistry | null = null;
 
 function installDefaultPolicies(r: RequestRegistry): void {
-  // The llama.cpp addon owns one KV-cache + one decode loop per model,
-  // so two concurrent `completionStream` requests on the same model
-  // would interleave their token streams on the same logical session.
-  r.policy({ kind: "completion", oneAtATimePerModel: true });
+  // A loaded llama.cpp model is one native context: one KV-cache, one
+  // single-slot decode loop. Two concurrent `completion` requests on the
+  // same model can't actually run in parallel — the legacy
+  // `oneAtATimePerModel` rule rejected the second with
+  // `RequestRejectedByPolicyError`. But coding agents (OpenCode, Cline, …)
+  // routinely fire a main chat completion plus a background title /
+  // summary call at the same model, so rejecting broke them and forced a
+  // wasteful two-model-file workaround.
+  //
+  // Instead of rejecting, serialize: the second concurrent same-model
+  // completion waits FIFO for the first to finish, then runs.
+  // `maxConcurrentPerModel: 1` is the single-context reality today; bump it
+  // to the addon's slot count once continuous batching lands and this flips
+  // to N-way concurrent with no other change. The depth cap bounds memory
+  // so a runaway client can't queue without limit (the 65th waiter rejects).
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+    maxQueueDepthPerModel: 64,
+  });
 }
 
 export function getRequestRegistry(): RequestRegistry {

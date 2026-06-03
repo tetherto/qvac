@@ -127,7 +127,7 @@ export async function startFinetune(
   // `cancel: { scope: "model", hard: true }` declaration. The legacy
   // `cancelFinetune(modelId)` wrapper below now goes through the
   // registry instead of touching the addon directly.
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateServerRequestId(),
     kind: "finetune",
     modelId: request.modelId,

@@ -145,7 +145,7 @@ export const llmPlugin = definePlugin({
         // client can target this run with `cancel({ requestId })`.
         // Falls back to a server-generated id if the client (e.g. an
         // older release) didn't send one.
-        await using ctx = getRequestRegistry().begin({
+        await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
           kind: "completion",
           modelId: request.modelId,
