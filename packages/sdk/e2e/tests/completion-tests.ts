@@ -637,6 +637,18 @@ export const completionResponseFormatWithToolsRejected: TestDefinition = {
   metadata: { category: "completion", dependency: "none", estimatedDurationMs: 5000 },
 };
 
+export const completionStats: TestDefinition = {
+  testId: "completion-stats",
+  params: {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { temp: 0, predict: 32 },
+  },
+  // Completion had no stats test; executor also asserts the stats shape.
+  expectation: { validation: "contains-all", contains: ["4"] },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
 export const completionTests = [
   completionStreaming,
   completionContextSize512,
@@ -683,4 +695,5 @@ export const completionTests = [
   completionResponseFormatWithToolsRejected,
   completionReasoningBudgetDisabled,
   completionReasoningBudgetUnrestricted,
+  completionStats,
 ];
