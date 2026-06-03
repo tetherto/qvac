@@ -98,9 +98,9 @@ bool isVulkanBackendName(std::string_view backendName) {
 
 bool isMetalBackendName(std::string_view backendName) {
   // ggml's Metal backend identifies as "MTL": the backend registration is named
-  // "MTL" and devices are "MTL0"/"MTL1"… (the human-readable description carries
-  // the GPU model, e.g. "Apple M3 Ultra", and varies per device). Match the
-  // stable "MTL" prefix so selection is generic across all Apple GPUs; also
+  // "MTL" and devices are "MTL0"/"MTL1"… (the human-readable description
+  // carries the GPU model, e.g. "Apple M3 Ultra", and varies per device). Match
+  // the stable "MTL" prefix so selection is generic across all Apple GPUs; also
   // accept a "metal" prefix defensively in case a future ggml renames the
   // backend. Prefix (not substring) matching mirrors tts-ggml /
   // transcription-parakeet and avoids false positives on unrelated names that
@@ -131,9 +131,9 @@ bool trySelectGpu(
             (descRaw != nullptr ? descRaw : "") + ")");
     return true;
   }
-  sel.fallbackReason = std::string(label) +
-      " backend requested but no " + label +
-      "-capable GPU device was found; falling back to CPU";
+  sel.fallbackReason = std::string(label) + " backend requested but no " +
+                       label +
+                       "-capable GPU device was found; falling back to CPU";
   QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
   return false;
 }
@@ -163,8 +163,7 @@ BackendSelection selectBackendDevice(BackendDevice requested) {
     // not silently masquerade as an explicit CPU request. Record the fallback
     // so getBackendInfo() surfaces the gap instead of reporting a clean CPU.
     sel.requested = "unknown";
-    sel.fallbackReason =
-        "Unsupported backendDevice value; falling back to CPU";
+    sel.fallbackReason = "Unsupported backendDevice value; falling back to CPU";
     QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
     break;
   }
