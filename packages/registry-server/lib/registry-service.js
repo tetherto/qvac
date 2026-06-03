@@ -210,6 +210,13 @@ class RegistryService extends ReadyResource {
       const peerKey = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : null
 
       this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection opened')
+      conn.on('error', err => {
+        this.logger.warn({
+          peer: peerKey || 'unknown',
+          error: err.message,
+          code: err.code
+        }, 'Swarm connection error')
+      })
       conn.on('close', () => {
         this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection closed')
       })
