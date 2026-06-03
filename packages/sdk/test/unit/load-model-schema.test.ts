@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { loadModelSrcRequestSchema } from "@/schemas/load-model";
 import { ModelType } from "@/schemas";

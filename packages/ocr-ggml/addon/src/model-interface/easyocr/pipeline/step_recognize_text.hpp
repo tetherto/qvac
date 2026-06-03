@@ -40,6 +40,7 @@
 #include "steps.hpp"
 
 using ggml_backend_t = struct ggml_backend*;
+using ggml_backend_dev_t = struct ggml_backend_device*;
 using ggml_gallocr_t = struct ggml_gallocr*;
 using OcrGgmlCGraphPtr = struct ggml_cgraph*;
 using OcrGgmlContextPtr = struct ggml_context*;
@@ -119,6 +120,9 @@ public:
     // negative = leave at GGML default, positive = exact count.
     int nThreads{-1};
     std::string backendsDir{};
+    // ggml device the CRNN graph runs on (resolved by `Pipeline` via
+    // `ocr_backend_selection`). nullptr -> CPU device (historical default).
+    ggml_backend_dev_t backendDevice{nullptr};
 
     Config() : defaultRotationAngles{90, 270} {}
     Config(

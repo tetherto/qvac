@@ -21,6 +21,7 @@
 #include <memory>
 #include <span>
 #include <utility>
+#include <vector>
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/JsInterface.hpp>
@@ -61,10 +62,7 @@ createArrayFromElements(js_env_t* env, std::span<js_value_t*> elements) {
 js_value_t*
 outputToJs(js_env_t* env, const Pipeline::Output& inferredTextList) {
   const size_t n = inferredTextList.size();
-  auto jsInferredTextListElements = std::make_unique<
-      js_value_t*[]>( // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
-                      // - std::make_unique<T[]> idiom
-      n);
+  std::vector<js_value_t*> jsInferredTextListElements(n);
 
   for (size_t i = 0; i < n; ++i) {
     constexpr size_t kBoxLen = 4;
@@ -74,10 +72,10 @@ outputToJs(js_env_t* env, const Pipeline::Output& inferredTextList) {
       std::array<js_value_t*, kPairLen> jsCoordinatePairElement{};
       jsCoordinatePairElement.at(0) =
           qvac_lib_inference_addon_cpp::js::Number::create(
-              env, inferredTextList[i].boxCoordinates.at(boxIdx).x);
+              env, inferredTextList.at(i).boxCoordinates.at(boxIdx).x);
       jsCoordinatePairElement.at(1) =
           qvac_lib_inference_addon_cpp::js::Number::create(
-              env, inferredTextList[i].boxCoordinates.at(boxIdx).y);
+              env, inferredTextList.at(i).boxCoordinates.at(boxIdx).y);
       jsBoxCoordinatesElements.at(boxIdx) =
           createArrayFromElements(env, std::span{jsCoordinatePairElement});
     }
@@ -87,16 +85,16 @@ outputToJs(js_env_t* env, const Pipeline::Output& inferredTextList) {
     jsRowElements.at(0) =
         createArrayFromElements(env, std::span{jsBoxCoordinatesElements});
     jsRowElements.at(1) = qvac_lib_inference_addon_cpp::js::String::create(
-        env, inferredTextList[i].text);
+        env, inferredTextList.at(i).text);
     jsRowElements.at(2) = qvac_lib_inference_addon_cpp::js::Number::create(
-        env, inferredTextList[i].confidenceScore);
+        env, inferredTextList.at(i).confidenceScore);
 
-    jsInferredTextListElements[i] =
+    jsInferredTextListElements.at(i) =
         createArrayFromElements(env, std::span{jsRowElements});
   }
 
   return createArrayFromElements(
-      env, std::span<js_value_t*>{jsInferredTextListElements.get(), n});
+      env, std::span<js_value_t*>{jsInferredTextListElements.data(), n});
 }
 
 class OcrOutputHandler
@@ -125,6 +123,56 @@ getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
   return path.as<std::string>(env);
 }
 
+// Optional `params.backendDevice` ('cpu' | 'vulkan'). Default keeps CPU
+// inference; 'vulkan' requests a Vulkan-capable GPU with transparent CPU
+// fallback (see OcrBackendSelection). Extracted from createInstance to keep
+// that factory's cognitive complexity under the clang-tidy threshold.
+void applyBackendDevice(
+    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
+    OcrConfig& config) {
+  using namespace qvac_lib_inference_addon_cpp;
+  auto optBackendDevice =
+      params.getOptionalProperty<js::String>(env, "backendDevice");
+  if (!optBackendDevice) {
+    return;
+  }
+  const auto backendDevice = optBackendDevice->as<std::string>(env);
+  if (backendDevice == "vulkan") {
+    config.backendDevice = BackendDevice::VULKAN;
+  } else if (backendDevice == "cpu") {
+    config.backendDevice = BackendDevice::CPU;
+  } else {
+    throw StatusError{
+        general_error::InvalidArgument,
+        "backendDevice must be 'cpu' or 'vulkan'"};
+  }
+}
+
+// Optional `params.pipelineType` ('easyocr' | 'doctr'). Default matches the
+// JS / TS / CLI / README contract: EasyOCR is the primary pipeline; callers
+// opt in to DocTR explicitly. `config.mode` defaults to PipelineMode::EASYOCR
+// in OcrTypes.hpp.
+void applyPipelineMode(
+    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
+    OcrConfig& config) {
+  using namespace qvac_lib_inference_addon_cpp;
+  auto optPipeline =
+      params.getOptionalProperty<js::String>(env, "pipelineType");
+  if (!optPipeline) {
+    return;
+  }
+  const auto pipelineType = optPipeline->as<std::string>(env);
+  if (pipelineType == "doctr") {
+    config.mode = PipelineMode::DOCTR;
+  } else if (pipelineType == "easyocr") {
+    config.mode = PipelineMode::EASYOCR;
+  } else {
+    throw StatusError{
+        general_error::InvalidArgument,
+        "pipelineType must be 'easyocr' or 'doctr'"};
+  }
+}
+
 } // namespace
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -136,17 +184,17 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
         general_error::InvalidArgument,
         "Incorrect number of parameters. Expected 3 parameters"};
   }
-  if (!js::is<js::Object>(env, args[1])) {
+  if (!js::is<js::Object>(env, args.at(1))) {
     throw StatusError{
         general_error::InvalidArgument,
         "Expected configurationParams as object"};
   }
-  if (!js::is<js::Function>(env, args[2])) {
+  if (!js::is<js::Function>(env, args.at(2))) {
     throw StatusError{
         general_error::InvalidArgument, "Expected output callback as function"};
   }
 
-  auto args1 = js::Object::fromValue(args[1]);
+  auto args1 = js::Object::fromValue(args.at(1));
   auto pathDetector =
       getPath(env, args1.getProperty<js::String>(env, "pathDetector"));
   auto pathRecognizer =
@@ -196,24 +244,12 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     config.backendsDir = optBackendsDir->as<std::string>(env);
   }
 
-  // Default matches the JS / TS / CLI / README contract: EasyOCR is the
-  // primary pipeline; callers opt in to DocTR explicitly via
-  // `params.pipelineType: 'doctr'`. `config.mode` defaults to
-  // `PipelineMode::EASYOCR` in OcrTypes.hpp.
-  if (auto optPipeline =
-          args1.getOptionalProperty<js::String>(env, "pipelineType");
-      optPipeline) {
-    const auto pipelineType = optPipeline->as<std::string>(env);
-    if (pipelineType == "doctr") {
-      config.mode = PipelineMode::DOCTR;
-    } else if (pipelineType == "easyocr") {
-      config.mode = PipelineMode::EASYOCR;
-    } else {
-      throw StatusError{
-          general_error::InvalidArgument,
-          "pipelineType must be 'easyocr' or 'doctr'"};
-    }
-  }
+  // Optional opt-in backend device and pipeline selection. Both default via
+  // OcrConfig (CPU inference, EasyOCR pipeline) when the property is absent;
+  // parsing is delegated to helpers to keep this factory's cognitive
+  // complexity under the clang-tidy threshold.
+  applyBackendDevice(env, args1, config);
+  applyPipelineMode(env, args1, config);
 
   auto model = std::make_unique<Pipeline>(
       pathDetector,
@@ -226,7 +262,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   std::unique_ptr<OutputCallBackInterface> callback =
       std::make_unique<OutputCallBackJs>(
-          env, args[0], args[2], std::move(outHandlers));
+          env, args.at(0), args.at(2), std::move(outHandlers));
 
   auto addon =
       std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
@@ -242,10 +278,10 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   if (args.size() != 2) {
     throw StatusError{general_error::InvalidArgument, "Expected 2 parameters"};
   }
-  if (!js::is<js::Object>(env, args[1])) {
+  if (!js::is<js::Object>(env, args.at(1))) {
     throw StatusError{general_error::InvalidArgument, "Expected Object"};
   }
-  auto args1 = js::Object::fromValue(args[1]);
+  auto args1 = js::Object::fromValue(args.at(1));
   auto type = args1.getProperty<js::String>(env, "type").as<std::string>(env);
 
   if (type != "image") {
@@ -297,9 +333,48 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  JsInterface::getInstance(env, args[0])
+  JsInterface::getInstance(env, args.at(0))
       .addonCpp->runJob(std::any(std::move(modelInput)));
   return nullptr;
+}
+JSCATCH
+
+// Returns the backend device the pipeline resolved for inference as a JS
+// object: `{ requested, backendDevice, backendName, fallbackReason }`. This is
+// the programmatic surface for the selected ggml backend (RuntimeStats can only
+// carry numbers, so backend identity strings are exposed here). Consumed by
+// `OcrGgml._getDiagnosticsJSON()` and the Vulkan integration test.
+inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  auto args = js::getArguments(env, info);
+  if (args.size() != 1) {
+    throw StatusError{
+        general_error::InvalidArgument,
+        "Expected 1 parameter (instance handle)"};
+  }
+
+  auto& instance = JsInterface::getInstance(env, args.at(0));
+  auto* pipeline = dynamic_cast<Pipeline*>(&instance.addonCpp->model.get());
+  if (pipeline == nullptr) {
+    throw StatusError{
+        general_error::InvalidArgument,
+        "getBackendInfo: instance is not an ocr-ggml Pipeline"};
+  }
+
+  const auto& backendInfo = pipeline->backendInfo();
+  auto result = js::Object::create(env);
+  result.setProperty(
+      env, "requested", js::String::create(env, backendInfo.requested));
+  result.setProperty(
+      env, "backendDevice", js::String::create(env, backendInfo.backendDevice));
+  result.setProperty(
+      env, "backendName", js::String::create(env, backendInfo.backendName));
+  result.setProperty(
+      env,
+      "fallbackReason",
+      js::String::create(env, backendInfo.fallbackReason));
+  return result;
 }
 JSCATCH
 
