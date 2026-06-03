@@ -640,12 +640,13 @@ export const completionResponseFormatWithToolsRejected: TestDefinition = {
 export const completionStats: TestDefinition = {
   testId: "completion-stats",
   params: {
-    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    history: [{ role: "user", content: "Say hello in one short sentence." }],
     stream: false,
-    generationParams: { temp: 0, predict: 32 },
+    generationParams: { predict: 32 },
   },
-  // Completion had no stats test; executor also asserts the stats shape.
-  expectation: { validation: "contains-all", contains: ["4"] },
+  // Behavior/API check: text is non-empty (type), executor asserts the stats
+  // object exposes numeric timing fields. No model-content assertion.
+  expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
 };
 
