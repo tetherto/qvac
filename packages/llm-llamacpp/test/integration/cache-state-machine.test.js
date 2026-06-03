@@ -494,6 +494,21 @@ safeTest('Options: prefill with saveCacheToDisk persists cache file', { timeout:
   t.ok(fs.statSync(sessionName).size > 0, 'persisted prefill cache file is non-empty')
 })
 
+safeTest('saveCacheToDisk to unwritable path rejects with UnableToSaveSessionFile', { timeout: 600_000 }, async t => {
+  const { model } = await setupModel(t)
+  const badPath = path.join(os.tmpdir(), 'qvac-nonexistent-dir-' + Date.now(), 'session.bin')
+  try {
+    const response = await model.run([...BASE_PROMPT], { cacheKey: badPath, saveCacheToDisk: true })
+    await response.await()
+    t.fail('should have thrown on unwritable cache path')
+  } catch (err) {
+    t.ok(
+      /failed to save session file|failed to promote tmp file/.test(err.message),
+      'rejection message identifies the save failure'
+    )
+  }
+})
+
 safeTest('Options: prefilled cache primes a follow-up conversation', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'opts-prefill-followup.bin')

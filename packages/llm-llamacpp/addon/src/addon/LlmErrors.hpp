@@ -30,6 +30,7 @@ enum LlmErrorCode : uint32_t {
   UnableToDeleteThreadPool = 22,
   UnableToLoadMetadata = 23,
   ReloadNotSupportedForStreamedModel = 24,
+  UnableToSaveSessionFile = 25,
   // mode llm spesific errors here
 };
 
@@ -81,6 +82,8 @@ inline std::string toString(LlmErrorCode code) {
     return "UnableToLoadMetadata";
   case ReloadNotSupportedForStreamedModel:
     return "ReloadNotSupportedForStreamedModel";
+  case UnableToSaveSessionFile:
+    return "UnableToSaveSessionFile";
   default:
     return "UnknownLLMError";
   }

@@ -6238,6 +6238,49 @@
     ]
   },
   {
+    "source": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03/wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.1 image-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q4_K_M",
+    "params": "14B",
+    "tags": [
+      "generation",
+      "diffusion",
+      "video",
+      "480p",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/city96/Wan2.1-I2V-14B-720P-gguf/resolve/ea36d5421cc5f5c57e50067a432a8b2c16dd0dae/wan2.1-i2v-14b-720p-Q4_K_M.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.1 image-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-720P",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q4_K_M",
+    "params": "14B",
+    "tags": [
+      "generation",
+      "diffusion",
+      "video",
+      "720p",
+      "wan"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/clip_vision/clip_vision_h.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "OpenCLIP ViT-H/14 vision encoder for Wan 2.1 image-to-video",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "vision-encoder",
+      "clip-vision",
+      "wan"
+    ]
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/gpt-oss-120b-GGUF/blob/main/Q4_K_M/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
