@@ -97,9 +97,34 @@ jobs:
           if [ ! -d "package/prebuilds" ]; then
             echo "ERROR: no prebuilds in package"; exit 1
           fi
+          node -p "require('./package/package.json').version" > addon-version.txt 2>/dev/null || echo "?" > addon-version.txt
           mv package/prebuilds ./prebuilds
           rm -rf package *.tgz
+          echo "addon @qvac/llm-llamacpp version: $(cat addon-version.txt)"
           ls -la prebuilds/
+
+      - name: Collect provenance (HW/SW)
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          P="prov-${{ matrix.label }}.md"
+          GPU=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1)
+          [ -z "$GPU" ] && GPU=$(vulkaninfo --summary 2>/dev/null | sed -n 's/.*deviceName[[:space:]]*=[[:space:]]*//p' | head -1)
+          [ -z "$GPU" ] && GPU=$(lspci 2>/dev/null | grep -iE 'vga|3d controller|display' | head -1 | sed 's/.*: //')
+          [ -z "$GPU" ] && GPU="(none / CPU-only)"
+          BACKEND="${{ matrix.devices == 'gpu' && 'Vulkan (GPU)' || 'CPU' }}"
+          {
+            echo "**Host — ${{ matrix.label }} (compute: $BACKEND)**"
+            echo ""
+            echo "- OS: \`$(uname -srm)\` ($(. /etc/os-release 2>/dev/null; echo "$PRETTY_NAME"))"
+            echo "- CPU: \`$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)\` — $(nproc) threads"
+            echo "- RAM: \`$(free -h | awk '/Mem:/{print $2}')\`"
+            echo "- GPU: \`$GPU\`"
+            echo "- node \`$(node -v)\` · bare \`$(bare --version 2>/dev/null | head -1)\` · @qvac/llm-llamacpp \`$(cat addon-version.txt 2>/dev/null)\`"
+            echo ""
+          } > "$P"
+          cat "$P"
 
       - name: Run VLM matrix (${{ matrix.devices }})
         working-directory: ${{ env.WORKDIR }}
@@ -121,11 +146,12 @@ jobs:
         run: |
           node benchmarks/vlm-matrix/aggregate.js \
             --title "Linux ${{ matrix.label }}" \
+            --provenance prov-${{ matrix.label }}.md \
             --out vlm-matrix-${{ matrix.label }}.md \
             vlm-output-${{ matrix.label }}.log
           cat vlm-matrix-${{ matrix.label }}.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload rows + matrix
+      - name: Upload rows + matrix + provenance
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -133,6 +159,7 @@ jobs:
           path: |
             ${{ env.WORKDIR }}/vlm-output-${{ matrix.label }}.log
             ${{ env.WORKDIR }}/vlm-matrix-${{ matrix.label }}.md
+            ${{ env.WORKDIR }}/prov-${{ matrix.label }}.md
           retention-days: 90
           if-no-files-found: ignore
 
@@ -158,9 +185,11 @@ jobs:
         shell: bash
         run: |
           LOGS=$(find legs -name 'vlm-output-*.log' | tr '\n' ' ')
-          echo "logs: $LOGS"
+          PROV=$(find legs -name 'prov-*.md' | sed 's/^/--provenance /' | tr '\n' ' ')
+          echo "logs: $LOGS"; echo "prov: $PROV"
           node packages/llm-llamacpp/benchmarks/vlm-matrix/aggregate.js \
-            --title "VLM Matrix — Linux (CPU + GPU)" \
+            --title "VLM Matrix — Linux (CPU + GPU) · registry f16 vs candidate Q8 mmproj" \
+            $PROV \
             --out combined-linux.md $LOGS
           cat combined-linux.md >> "$GITHUB_STEP_SUMMARY"
 

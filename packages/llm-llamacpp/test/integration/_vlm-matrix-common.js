@@ -42,23 +42,37 @@ function selectedItems () {
   })
 }
 
-const HF_QWEN = 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/main'
-const HF_GEMMA = 'https://huggingface.co/mradermacher/gemma-4-E2B-it-ultra-uncensored-heretic-GGUF/resolve/main'
-
+// FINAL registry-compatibility test: the MAIN model + the f16 mmproj are the EXACT files
+// already in the QVAC registry ("as-is"); the q8 slot is the Q8 mmproj CANDIDATE we want
+// to add. So q8-vs-f16 here = candidate-vs-registry on the registry's own main. All HF
+// URLs pinned to the registry's / candidate's commit SHAs (immutable provenance).
+const SHA = {
+  qwenUnsloth: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0', // registry main + f16 mmproj
+  qwenMrader: '9d48fdbc0d8f133716da87ec1d904e5d2c7175a6',  // candidate q8 mmproj
+  gemmaBart: 'b5e99bd964eaacc27ba484bb2eb3e9f6160b9143',   // registry main + f16 mmproj
+  gemmaGgml: 'a1dac71d3ab220618f5a7573a52acdc4baf3ae3b'    // candidate q8 mmproj
+}
+const HF = (repo, sha, file) => `https://huggingface.co/${repo}/resolve/${sha}/${file}`
 const MODELS = {
   qwen: {
-    main: { modelName: 'vlmx-qwen3.5-0.8b-Q8_0.gguf', downloadUrl: HF_QWEN + '/Qwen3.5-0.8B.Q8_0.gguf' },
+    main: { modelName: 'reg-qwen-unsloth-Q8_0.gguf', origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} (registry main)`,
+            downloadUrl: HF('unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf') },
     mmproj: {
-      q8: { modelName: 'vlmx-qwen-mmproj-Q8_0.gguf', downloadUrl: HF_QWEN + '/Qwen3.5-0.8B.mmproj-Q8_0.gguf' },
-      f16: { modelName: 'vlmx-qwen-mmproj-f16.gguf', downloadUrl: HF_QWEN + '/Qwen3.5-0.8B.mmproj-f16.gguf' }
+      f16: { modelName: 'reg-qwen-unsloth-mmproj-F16.gguf', origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} (registry f16)`,
+             downloadUrl: HF('unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'mmproj-F16.gguf') },
+      q8: { modelName: 'cand-qwen-mradermacher-mmproj-Q8_0.gguf', origin: `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} (CANDIDATE q8)`,
+            downloadUrl: HF('mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf') }
     },
     ctx_size: '4096'
   },
   gemma: {
-    main: { modelName: 'vlmx-gemma-4-e2b-IQ4_XS.gguf', downloadUrl: HF_GEMMA + '/gemma-4-E2B-it-ultra-uncensored-heretic.IQ4_XS.gguf' },
+    main: { modelName: 'reg-gemma-bartowski-Q4_K_M.gguf', origin: `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} (registry main)`,
+            downloadUrl: HF('bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'google_gemma-4-E2B-it-Q4_K_M.gguf') },
     mmproj: {
-      q8: { modelName: 'vlmx-gemma-mmproj-Q8_0.gguf', downloadUrl: HF_GEMMA + '/gemma-4-E2B-it-ultra-uncensored-heretic.mmproj-Q8_0.gguf' },
-      f16: { modelName: 'vlmx-gemma-mmproj-f16.gguf', downloadUrl: HF_GEMMA + '/gemma-4-E2B-it-ultra-uncensored-heretic.mmproj-f16.gguf' }
+      f16: { modelName: 'reg-gemma-bartowski-mmproj-f16.gguf', origin: `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} (registry f16)`,
+             downloadUrl: HF('bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'mmproj-google_gemma-4-E2B-it-f16.gguf') },
+      q8: { modelName: 'cand-gemma-ggml-mmproj-Q8_0.gguf', origin: `ggml-org/gemma-4-E2B-it-GGUF@${SHA.gemmaGgml.slice(0, 10)} (CANDIDATE q8)`,
+            downloadUrl: HF('ggml-org/gemma-4-E2B-it-GGUF', SHA.gemmaGgml, 'mmproj-gemma-4-E2B-it-Q8_0.gguf') }
     },
     ctx_size: '4096'
   }
@@ -131,6 +145,12 @@ function runVlmCell (modelKey, mmprojKey) {
     test(`vlm-matrix ${cell} [${dev}]`, { timeout: 30 * 60 * 1000 }, async t => {
       const [mainName, dir] = await ensureModel(cfg.main)
       const [projName] = await ensureModel(cfg.mmproj[mmprojKey])
+      // model-origin provenance (stderr, parsed host-side into the report)
+      console.error('[VLMMETA]' + JSON.stringify({
+        cell, model: modelKey, mmproj: mmprojKey,
+        main_origin: cfg.main.origin, main_url: cfg.main.downloadUrl,
+        mmproj_origin: cfg.mmproj[mmprojKey].origin, mmproj_url: cfg.mmproj[mmprojKey].downloadUrl
+      }) + '[/VLMMETA]')
       const inference = new LlmLlamacpp({
         files: { model: [path.join(dir, mainName)], projectionModel: path.join(dir, projName) },
         config: {

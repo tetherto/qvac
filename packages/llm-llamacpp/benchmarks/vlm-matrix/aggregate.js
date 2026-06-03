@@ -71,10 +71,11 @@ const SCORERS = {
 function score (metric, pred, golds) { return (SCORERS[metric] || (() => 0))(pred, golds) }
 
 function parseArgs (argv) {
-  const out = { files: [], title: 'VLM Matrix', outFile: null }
+  const out = { files: [], title: 'VLM Matrix', outFile: null, prov: [] }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--title') out.title = argv[++i]
     else if (argv[i] === '--out') out.outFile = argv[++i]
+    else if (argv[i] === '--provenance') out.prov.push(argv[++i])
     else out.files.push(argv[i])
   }
   return out
@@ -86,6 +87,7 @@ const PROMPT_RE = /prompt eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+to
 const EVAL_RE = /(?<!prompt )eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+(?:tokens|runs)\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i
 const ROW_RE = /\[VLMROW\](.*?)\[\/VLMROW\]/
 const SEG_RE = /\[VLMSEG\](.*?)\[\/VLMSEG\]/
+const META_RE = /\[VLMMETA\](.*?)\[\/VLMMETA\]/
 
 // Per-cell vision-encode comes from [VLMSEG] segments (stderr, same stream as the
 // `image slice encoded` lines) — alignment-proof. Per-row quality/TTFT/TPS come from
@@ -93,11 +95,14 @@ const SEG_RE = /\[VLMSEG\](.*?)\[\/VLMSEG\]/
 function parseLog (files) {
   const rows = []
   const vision = {} // cell|device -> { sumMs, segs, enc }
+  const meta = {} // cell -> { main_origin, mmproj_origin, ... }
   for (const f of files) {
     let txt = ''
     try { txt = fs.readFileSync(f, 'utf-8') } catch (_) { continue }
     let cur = null
     for (const line of txt.split(/\r?\n/)) {
+      const mm = line.match(META_RE)
+      if (mm) { try { const m = JSON.parse(mm[1]); meta[m.cell] = m } catch (_) {} continue }
       const sm = line.match(SEG_RE)
       if (sm) {
         try {
@@ -114,13 +119,13 @@ function parseLog (files) {
       if (rm) { try { rows.push(JSON.parse(rm[1])) } catch (_) {} }
     }
   }
-  return { rows, vision }
+  return { rows, vision, meta }
 }
 const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null
 const fmtPct = x => x == null ? '—' : (100 * x).toFixed(1)
 const fmtNum = (x, d = 1) => x == null ? '—' : Number(x).toFixed(d)
 
-function build (rows, vision, title) {
+function build (rows, vision, meta, provText, title) {
   const visMean = key => (vision[key] && vision[key].segs) ? vision[key].sumMs / vision[key].segs : null
   const visSlices = key => (vision[key] && vision[key].segs) ? vision[key].enc / vision[key].segs : null
   // group key = cell|device
@@ -134,7 +139,24 @@ function build (rows, vision, title) {
   keys.sort()
   const L = []
   L.push(`## ${title}\n`)
-  L.push(`Rows = model·mmproj · device. Quality = lmms-eval metrics (VQA-acc / ANLS / relaxed / MC). Overall % = equal-weight mean across tasks.\n`)
+  L.push(`Engine: **@qvac/llm-llamacpp addon**. Rows = model·mmproj · device. ` +
+    `**f16 = mmproj already in the registry; q8 = candidate.** Quality = lmms-eval metrics ` +
+    `(VQA-acc / ANLS / relaxed / MC); Overall % = equal-weight mean across tasks.\n`)
+  // Provenance (HW/SW from the workflow) + model origins (from [VLMMETA])
+  if (provText && provText.trim()) {
+    L.push('### Provenance — hardware & software\n')
+    L.push(provText.trim() + '\n')
+  }
+  if (Object.keys(meta).length) {
+    L.push('### Models & origins (pinned commits)\n')
+    L.push('| Cell | main model | mmproj |')
+    L.push('|---|---|---|')
+    for (const cell of Object.keys(meta).sort()) {
+      const m = meta[cell]
+      L.push(`| \`${cell}\` | ${m.main_origin || '—'} | ${m.mmproj_origin || '—'} |`)
+    }
+    L.push('')
+  }
   // Quality
   L.push('### Quality (%)\n')
   L.push('| Config | ' + TASKS.join(' | ') + ' | **Overall %** |')
@@ -189,7 +211,8 @@ function build (rows, vision, title) {
 }
 
 const args = parseArgs(process.argv)
-const { rows, vision } = parseLog(args.files)
-const md = build(rows, vision, args.title)
+const { rows, vision, meta } = parseLog(args.files)
+const provText = args.prov.map(p => { try { return fs.readFileSync(p, 'utf-8') } catch (_) { return '' } }).join('\n')
+const md = build(rows, vision, meta, provText, args.title)
 process.stdout.write(md + '\n')
 if (args.outFile) fs.writeFileSync(args.outFile, md + '\n')
