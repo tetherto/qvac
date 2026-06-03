@@ -9,6 +9,16 @@
 ### Added
 
 - **OpenMP feature for Android**: Added `openmp` default feature that enables OpenMP support on Android ARM64 via the `qvac-fabric` dependency. This improves parallelization on supported Android devices.
+## [0.23.2] - 2026-06-03
+
+### Fixed
+
+- **Multi-GPU params rejected on Android/iOS**: passing `split-mode` (non-`none`), `main-gpu`, or `tensor-split` on a mobile device now throws `InvalidArgument` immediately in `commonParamsParse`, before any backend selection occurs. Previously these parameters could reach the Adreno OpenCL backend and trigger a native `ggml_abort` (SIGABRT) after a full inference suite. Use single-GPU config (`split-mode: "none"` or omit the field) on mobile.
+
+## Pull Requests
+
+- [#2351](https://github.com/tetherto/qvac/pull/2351) - QVAC-18802: reject multi-GPU config on Android/iOS
+
 ## [0.23.1] - 2026-06-02
 
 ### Changed
