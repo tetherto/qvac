@@ -20,7 +20,8 @@
       "runLifecycleTest",
       "runOcrBasicTest",
       "runParamValidationTest",
-      "runPipelineTest"
+      "runPipelineTest",
+      "runSignalForwardingTest"
     ]
   },
   "ios": {
@@ -44,7 +45,8 @@
       "runLifecycleTest",
       "runOcrBasicTest",
       "runParamValidationTest",
-      "runPipelineTest"
+      "runPipelineTest",
+      "runSignalForwardingTest"
     ]
   },
   "perf_report_filter": "clinical_chemistry|ct_scan_report|lab_results|liver_function_test"

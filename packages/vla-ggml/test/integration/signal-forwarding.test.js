@@ -52,11 +52,15 @@ function buildModel () {
 }
 
 function validInput () {
+  const w = 1
+  const h = 1
   return {
-    images: [new Float32Array(4)],
-    state: new Float32Array(4),
+    imgWidth: w,
+    imgHeight: h,
+    images: [new Float32Array(3 * w * h)],
+    state: new Float32Array(1),
     tokens: new Int32Array(1),
-    mask: new Int32Array(1)
+    mask: new Uint8Array(1)
   }
 }
 

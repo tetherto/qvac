@@ -81,3 +81,7 @@ async function runPipelineTest (options = {}) { // eslint-disable-line no-unused
 async function runRunInternalOrderingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/run-internal-ordering.test.js', options)
 }
+
+async function runSignalForwardingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/signal-forwarding.test.js', options)
+}
