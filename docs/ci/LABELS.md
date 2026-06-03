@@ -69,6 +69,7 @@ If you previously thought "review" was a label, it's not — it's an issue/PR co
 
 ## See also
 
+- [`docs/ci/SELF-HOSTED-RUNNERS.md`](SELF-HOSTED-RUNNERS.md) — Manual Workspace Cleanup, `working-directory: .`, and `runner.environment` on `qvac-*` workflows.
 - [`docs/ci/TEAMS.md`](TEAMS.md) — who is in `qvac-internal-dev` / `merge` / `release` / `qvac-external`, and what they can do.
 - [`.github/actions/label-gate/README.md`](../../.github/actions/label-gate/README.md) — full `label-gate` trust model and configuration reference.
 - [`docs/gitflow.md`](../gitflow.md) — branch model and release flow.

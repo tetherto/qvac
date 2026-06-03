@@ -147,8 +147,8 @@ jobs:
         id: detect
         shell: bash
         run: |
-          # Default pkg_manager to "npm" when not specified in config
-          ALL_PACKAGES=$(jq -c '[.[] | .pkg_manager //= "npm"]' .github/sdk-pod-checks.json)
+          # Default optional fields when not specified in config
+          ALL_PACKAGES=$(jq -c '[.[] | .pkg_manager //= "npm" | .needs_bare //= false | .tests_bare //= false]' .github/sdk-pod-checks.json)
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # workflow_dispatch: run all packages
@@ -225,7 +225,7 @@ jobs:
           fi
 
       - name: Install Bare runtime
-        if: matrix.package == 'rag' || matrix.package == 'error'
+        if: matrix.needs_bare == true
         run: npm install -g --force bare
 
       # All script steps use npm run --if-present (bun lacks --if-present).
@@ -250,6 +250,12 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: npm run --if-present test:unit
+
+      - name: Run bare tests
+        id: run_bare_tests
+        if: matrix.tests_bare == true
+        continue-on-error: true
+        run: npm run --if-present test:bare
 
       - name: Run e2e tests
         id: run_e2e_tests
@@ -351,6 +357,10 @@ jobs:
           fi
           if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
             echo "::error::Unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_bare_tests.outcome }}" = "failure" ]; then
+            echo "::error::Bare tests failed"
             count=$((count + 1))
           fi
           if [ "${{ steps.run_e2e_tests.outcome }}" = "failure" ]; then

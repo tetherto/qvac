@@ -18,13 +18,20 @@
  * this script handles the layout entirely in user-space.
  *
  * URL → file mapping:
- *   '/'                    → out/index.md
- *   '/quickstart'          → out/quickstart.md
- *   '/reference/api'       → out/reference/api.md
+ *   '/'                            → out/index.md
+ *   '/quickstart'                  → out/quickstart.md
+ *   '/reference/api'               → out/reference/api.md
+ *   '/reference/api/v0.10.x'       → out/reference/api/v0.10.x.md  (archived)
  *
- * Archived per-section versions (e.g. `/reference/api/v0.7.0`) are not in
- * the manifest, so they are not emitted as `.md` either — consistent with
- * `llms.txt`, `llms-full.txt`, `sitemap.xml`, and per-page `noindex`.
+ * Archived per-section versions ARE included in the manifest. The HTML
+ * for those pages renders publicly (with `noindex` + canonical-to-latest
+ * for SEO posture); the per-page `.md` is just its Markdown
+ * representation, so it must exist for the in-page "Copy as Markdown"
+ * action and the `Accept: text/markdown` content-negotiation flow
+ * (configured in `public/_redirects`) to resolve cleanly. The aggregate
+ * catalogs (`llms.txt`, `llms-full.txt`, `sitemap.xml`) keep filtering
+ * archives — see the comment in `llm-md-manifest.json/route.ts` for the
+ * rationale.
  *
  * Usage (invoked from `package.json` after `next build`):
  *   bun run scripts/generate-llm-md-files.ts

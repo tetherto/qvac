@@ -2,7 +2,9 @@
   {
     "package": "sdk",
     "path": "packages/sdk",
-    "pkg_manager": "bun"
+    "pkg_manager": "bun",
+    "needs_bare": true,
+    "tests_bare": true
   },
   {
     "package": "cli",
@@ -10,7 +12,8 @@
   },
   {
     "package": "rag",
-    "path": "packages/rag"
+    "path": "packages/rag",
+    "needs_bare": true
   },
   {
     "package": "logging",
@@ -18,7 +21,8 @@
   },
   {
     "package": "error",
-    "path": "packages/error"
+    "path": "packages/error",
+    "needs_bare": true
   },
   {
     "package": "ai-sdk-provider",

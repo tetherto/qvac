@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.1] - 2026-06-02
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
 ## [0.3.0]
 
 - feat: π₀.₅ support behind GGUF `general.architecture=pi05`. The addon

@@ -36,6 +36,11 @@ on:
         type: boolean
         required: false
         default: false
+      test_groups:
+        description: "JSON array of {name,grep} overrides. When set, replaces auto-detected test-groups.json shards."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -165,6 +170,7 @@ jobs:
           qvac-perf-runs: ${{ inputs.qvac_perf_runs }}
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
+          test-groups: ${{ inputs.test_groups }}
 
       - name: Schedule Device Farm test runs
         id: schedule

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.23.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
 ## [0.23.0] - 2026-06-02
 
 Minor bump: `UnableToSaveSessionFile` is now a new observable throw on paths that previously succeeded silently, which is a new public error surface.

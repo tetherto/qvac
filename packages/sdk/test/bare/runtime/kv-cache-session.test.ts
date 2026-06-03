@@ -1,8 +1,7 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 
 // -----------------------------------------------------------------------------
-// `KvCacheSession` unit tests.
+// `KvCacheSession` — Bare runtime tests.
 //
 // The session is the single owner of the three KV-cache bookkeeping layers
 // (on-disk `.bin`, `initializedCaches` set, `cachedMessageCounts` map).
@@ -35,54 +34,18 @@ import test from "brittle";
 // scope (production code path — the session resolves real on-disk
 // cache files). `bare-path/lib/posix.js` references `Bare.platform` at
 // import time, and `bare-os` carries N-API bindings — neither resolves
-// in Bun. To keep the file importable by `bun run test:unit` without
-// crashing the suite, the tests below load the session module via
-// dynamic `import()` from inside a `bareTest(...)` wrapper that
-// `test.skip`s when running under Bun. The full suite runs under the
-// Bare runtime (when a Bare unit-test entry exists for this directory)
-// and serves as documentation + readable contract under Bun.
-//
-// This mirrors the pattern established in `test/unit/path-security.test.ts`
-// for similar bare-only coverage.
+// in Bun. These tests live in `test/bare/` and run exclusively under
+// the Bare runtime via `npm run test:bare`.
 // -----------------------------------------------------------------------------
 
-const isBunUnitTestRunner =
-  typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
-// @ts-ignore Bare global only exists in Bare runtime
-const isBareRuntime =
-  !isBunUnitTestRunner && typeof globalThis.Bare !== "undefined";
-
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-  pass: (msg?: string) => void;
-  fail: (msg?: string) => void;
-  exception: (
-    fn: () => Promise<unknown> | unknown,
-    matcher?: unknown,
-    msg?: string,
-  ) => Promise<void>;
-};
-
-function bareTest(name: string, fn: (t: T) => Promise<void> | void) {
-  if (isBareRuntime) {
-    test(name, fn);
-  } else {
-    test.skip(`[bare-only] ${name}`, () => {});
-  }
-}
-
-// Lazy loader for the session module. Only invoked inside test
-// bodies; never runs under Bun because the `bareTest` wrapper above
-// short-circuits to `test.skip`.
 async function loadSession() {
-  const fs = await import("fs");
-  const os = await import("os");
-  const path = await import("path");
+  const fs = await import("bare-fs");
+  const os = await import("bare-os");
+  const path = await import("bare-path");
+  const bareProcess = await import("bare-process");
 
   const testHome = fs.mkdtempSync(path.join(os.tmpdir(), "qvac-kvcache-"));
-  process.env["HOME"] = testHome;
+  bareProcess.default.env["HOME"] = testHome;
 
   const mod =
     await import("@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session");
@@ -99,13 +62,19 @@ async function loadSession() {
     }
   }
 
-  return { fs, mod, cleanup };
+  function writeFakeCache(cachePath: string) {
+    const dir = path.dirname(cachePath);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(cachePath, "fake-kv-cache-bytes");
+  }
+
+  return { fs, path, mod, cleanup, writeFakeCache };
 }
 
-bareTest(
+test(
   "kv-cache-session: beginTurn primes the cache on first use, reuses on second",
-  async (t: T) => {
-    const { mod, cleanup } = await loadSession();
+  async (t) => {
+    const { mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash(
@@ -113,8 +82,9 @@ bareTest(
         [],
       );
       let primeCallCount = 0;
-      const primeIfMissing = async () => {
+      const primeIfMissing = async (cachePath: string) => {
         primeCallCount++;
+        writeFakeCache(cachePath);
       };
 
       const firstTurn = await session.beginTurn({
@@ -161,14 +131,14 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: commitTurn records the new saved count and suppresses rollback",
-  async (t: T) => {
-    const { fs, mod, cleanup } = await loadSession();
+  async (t) => {
+    const { fs, mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
-      const primeIfMissing = async () => {};
+      const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
       const turn = await session.beginTurn({
         kind: "custom",
@@ -216,14 +186,14 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: rollback wipes all three layers atomically",
-  async (t: T) => {
-    const { fs, mod, cleanup } = await loadSession();
+  async (t) => {
+    const { fs, mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
-      const primeIfMissing = async () => {};
+      const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
       const turn = await session.beginTurn({
         kind: "custom",
@@ -261,14 +231,14 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: rollback tolerates a missing on-disk file",
-  async (t: T) => {
-    const { mod, cleanup } = await loadSession();
+  async (t) => {
+    const { fs, mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
-      const primeIfMissing = async () => {};
+      const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
       const turn = await session.beginTurn({
         kind: "custom",
@@ -277,9 +247,9 @@ bareTest(
         primeIfMissing,
       });
       mod.__kvCacheSessionTestHooks.setSavedCountForTest(turn.cachePath, 2);
-      // Intentionally do NOT create the file. Cancelled mid-write
-      // turns hit this branch — the session must still clear the
-      // in-memory state cleanly when there's nothing to unlink.
+      // Delete the file after beginTurn succeeds — simulates a cancelled
+      // mid-write turn where the file was removed externally.
+      fs.unlinkSync(turn.cachePath);
 
       await session.rollback(turn);
 
@@ -303,12 +273,12 @@ bareTest(
   },
 );
 
-bareTest("kv-cache-session: double-rollback is idempotent", async (t: T) => {
-  const { fs, mod, cleanup } = await loadSession();
+test("kv-cache-session: double-rollback is idempotent", async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession();
   try {
     const session = mod.createKvCacheSession("test-model");
     const configHash = mod.generateConfigHash("sys", []);
-    const primeIfMissing = async () => {};
+    const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
     const turn = await session.beginTurn({
       kind: "custom",
@@ -326,14 +296,14 @@ bareTest("kv-cache-session: double-rollback is idempotent", async (t: T) => {
   }
 });
 
-bareTest(
+test(
   "kv-cache-session: dropStaleSavedCount forgets the count without touching the file or init flag",
-  async (t: T) => {
-    const { fs, mod, cleanup } = await loadSession();
+  async (t) => {
+    const { fs, mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
-      const primeIfMissing = async () => {};
+      const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
       const turn = await session.beginTurn({
         kind: "custom",
@@ -369,14 +339,14 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: deleteKvCacheState({ kvCacheKey }) wipes every layer for the targeted key",
-  async (t: T) => {
-    const { fs, mod, cleanup } = await loadSession();
+  async (t) => {
+    const { fs, mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
-      const primeIfMissing = async () => {};
+      const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
       const turn = await session.beginTurn({
         kind: "custom",
@@ -414,14 +384,14 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: deleteKvCacheState({ all: true }) wipes everything",
-  async (t: T) => {
-    const { fs, mod, cleanup } = await loadSession();
+  async (t) => {
+    const { fs, mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
-      const primeIfMissing = async () => {};
+      const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
       const t1 = await session.beginTurn({
         kind: "custom",
@@ -476,9 +446,9 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: beginTurn throws if prime closure resolves but no cache file is on disk",
-  async (t: T) => {
+  async (t) => {
     // Mirrors the existing `verifySaveAndRecord` access-probe at
     // commit time, applied at prime time. The addon's
     // `model.run({ saveSessionPath })` swallows save errors silently
@@ -537,9 +507,9 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: beginTurn throws and removes the empty file when prime resolves with a zero-byte cache",
-  async (t: T) => {
+  async (t) => {
     // The addon ignores `llama_state_save_file`'s return value, so an
     // out-of-space / fs flap mid-save can leave an empty file on
     // disk while the prime closure still resolves cleanly. Trusting
@@ -549,7 +519,7 @@ bareTest(
     // session's `initializedCaches` flag would mistakenly say
     // "primed". `verifyPrimedFile` removes the empty file and
     // surfaces the failure to the handler.
-    const { fs, mod, cleanup } = await loadSession();
+    const { fs, path, mod, cleanup } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
@@ -557,6 +527,7 @@ bareTest(
       let observedPath: string | null = null;
       const primeIfMissing = async (cachePath: string) => {
         observedPath = cachePath;
+        fs.mkdirSync(path.dirname(cachePath), { recursive: true });
         fs.writeFileSync(cachePath, "");
       };
 
@@ -578,8 +549,9 @@ bareTest(
           caught.message.includes("cache file is empty"),
         "error message identifies the empty-file failure mode",
       );
+      t.ok(observedPath, "observedPath must be set before file-existence check");
       t.is(
-        fs.existsSync(observedPath as unknown as string),
+        fs.existsSync(observedPath!),
         false,
         "empty cache file was removed so the next probe doesn't trust it",
       );
@@ -598,19 +570,19 @@ bareTest(
   },
 );
 
-bareTest(
+test(
   "kv-cache-session: commitTurn rolls back if the addon did not persist the file",
-  async (t: T) => {
+  async (t) => {
     // The addon currently swallows save errors silently — a missing
     // file after a save-disk turn means the next turn must NOT slice
     // against a stale saved count. The session's
     // `verifySaveAndRecord` probe turns this into a rollback instead
     // of a phantom commit.
-    const { mod, cleanup } = await loadSession();
+    const { fs, mod, cleanup, writeFakeCache } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
-      const primeIfMissing = async () => {};
+      const primeIfMissing = async (p: string) => { writeFakeCache(p); };
 
       const turn = await session.beginTurn({
         kind: "custom",
@@ -618,8 +590,9 @@ bareTest(
         configHash,
         primeIfMissing,
       });
-      // Intentionally do NOT create the file — simulate a swallowed
-      // addon save error.
+      // Delete the file after prime — simulate a swallowed addon save
+      // error where the file was removed externally.
+      fs.unlinkSync(turn.cachePath);
 
       await session.commitTurn(turn, { kind: "static", messageCount: 5 });
 

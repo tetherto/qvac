@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
 ## [0.7.0]
 
 In this release we validate the duplex-streaming end-of-utterance (EOU) surface of `parakeet-cpp` end-to-end and bump the native dependency to the latest port (`2026-05-26`), which carries the streaming-EOU plumbing plus the AOSC review-fixup follow-ups. There are no public addon API changes; the JS surface is unchanged and the bump is a runtime/native-dep upgrade plus mobile provisioning catch-up for the new Sortformer-Streaming v2.1 GGUF.

@@ -117,6 +117,18 @@ This outputs a tarball under `dist/sdk-{version}.tgz` that you can install in yo
 npm i path/to/sdk-0.3.0.tgz
 ```
 
+## Testing
+
+The SDK test suite is organized into three buckets by runtime:
+
+| Bucket | Runtime | Location | Command |
+|--------|---------|----------|---------|
+| Unit | Bun / Node | `test/unit/` | `bun run test:unit` |
+| Server (Bare) | Bare | `test/bare/` | `bun run test:bare` |
+| Client (consumer) | Node / RN | `e2e/` | See [`e2e/README.md`](./e2e/README.md) |
+
+See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
+
 ## Contributing
 
 ### Commit Message and PR Title Format

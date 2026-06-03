@@ -82,6 +82,7 @@ bun run format      # prettier check
 **Testing:**
 ```bash
 bun run test:unit
+bun run test:bare
 bun run test:security
 bun run test:security:bare
 ```
@@ -195,6 +196,7 @@ When a question relates to one of these topics, read the corresponding knowledge
 | Topic | When to read | File |
 |-------|-------------|------|
 | CI / GitHub Actions | CI failures, workflow triggers, validation, publishing | `packages/ocr-onnx/.agent/knowledge/ci-validation.md` |
+| Self-hosted CI runners | Manual Workspace Cleanup, `working-directory: .`, `runner.environment`, `qvac-*` labels | `docs/ci/SELF-HOSTED-RUNNERS.md` |
 | vcpkg / native builds | vcpkg deps, triplets, registries, CMake integration, build failures | `packages/ocr-onnx/.agent/knowledge/vcpkg-management.md` |
 | llama.cpp Android | Cross-compiling llama.cpp, ADB deployment, Vulkan GPU, Android inference | `packages/ocr-onnx/.agent/knowledge/llama-cpp-android.md` |
 | Model registry | Adding/updating models, registry format, vcpkg port config | `packages/ocr-onnx/.agent/knowledge/registry-models.md` |

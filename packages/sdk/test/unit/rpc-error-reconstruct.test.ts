@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { reconstructError, RPCError } from "@/client/rpc/rpc-error";
 import { createErrorResponse } from "@/schemas/error";
