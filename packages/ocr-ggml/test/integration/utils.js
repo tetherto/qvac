@@ -35,6 +35,9 @@ try {
     }
 
     return {
+      setDeviceGpu (name) {
+        if (name && !_device.gpu) _device.gpu = name
+      },
       record (testName, metrics, extra) {
         const entry = {
           test: testName,
@@ -366,10 +369,42 @@ function getBackendDevice () {
  */
 function createOcrGgml (params = {}, opts) {
   const { OcrGgml } = require('../..')
-  return new OcrGgml({
+  const instance = new OcrGgml({
     params: { backendDevice: getBackendDevice(), ...params },
     opts
   })
+  // After load() resolves the backend, record the actual GPU/backend name on
+  // the shared perf reporter (no-op on CPU). Wrapping load() here means every
+  // test using createOcrGgml() contributes the GPU name without extra wiring.
+  const _origLoad = instance.load.bind(instance)
+  instance.load = async function (...args) {
+    const result = await _origLoad(...args)
+    setReportedGpuName(instance)
+    return result
+  }
+  return instance
+}
+
+/**
+ * Records the resolved GPU/backend name on the shared performance reporter's
+ * device block so `performance-report.json` carries a concrete name (e.g.
+ * 'Vulkan0') on GPU runs even when the host's GPU probe returns null on a
+ * minimal runner container. Only acts when a GPU backend was actually selected
+ * and the name is non-empty; CPU runs leave `device.gpu` null.
+ *
+ * @param {Object} ocrGgml - A loaded OcrGgml instance (call after `load()`)
+ */
+function setReportedGpuName (ocrGgml) {
+  try {
+    if (!ocrGgml || typeof ocrGgml.getBackendInfo !== 'function') return
+    const info = ocrGgml.getBackendInfo()
+    if (!info) return
+    const isGpu = info.backendDevice === 'GPU' || info.backendDevice === 'IGPU'
+    if (!isGpu) return
+    if (info.backendName && typeof _perfReporter.setDeviceGpu === 'function') {
+      _perfReporter.setDeviceGpu(info.backendName)
+    }
+  } catch (_) {}
 }
 
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
@@ -600,6 +635,30 @@ async function ensureDoctrModels () {
 }
 
 /**
+ * Normalizes the `[CPU]`/`[GPU]` backend token inside a test label so it
+ * reflects the backend the addon actually used.
+ *
+ *   - `device === 'gpu'` -> the token becomes `[GPU]`
+ *   - `device === 'cpu'` -> the token becomes `[CPU]`
+ *
+ * Handles labels that already contain `[CPU]`/`[GPU]` (replaced), and labels
+ * with no backend token (the resolved token is appended). When `device` is
+ * unknown (null) the label is returned unchanged.
+ *
+ * @param {string} label - Original test label (may hardcode the wrong token)
+ * @param {'cpu'|'gpu'|null} device - Resolved backend, derived from stats
+ * @returns {string} Label with a backend token matching the actual backend
+ */
+function _normalizeBackendToken (label, device) {
+  if (device !== 'gpu' && device !== 'cpu') return label
+  const token = device === 'gpu' ? '[GPU]' : '[CPU]'
+  if (/\[(?:cpu|gpu)\]/i.test(label)) {
+    return label.replace(/\[(?:cpu|gpu)\]/gi, token)
+  }
+  return `${label} ${token}`
+}
+
+/**
  * Formats OCR performance metrics for test output.
  *
  * @param {string} label - Test label prefix (e.g., '[OCR] [GPU]')
@@ -627,6 +686,14 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
       ? 'cpu'
       : /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
 
+  // Normalize the `[CPU]`/`[GPU]` token in the label so it matches the actual
+  // backend the addon resolved (see `device` above). Several callers hardcode
+  // `[CPU]` regardless of where inference ran (e.g. the DocTR suites always
+  // pass `device='cpu'`), which mislabels GPU rows in the combined perf report.
+  // Replacing the token centrally keeps every printed line AND the recorded
+  // perf-report test name truthful without editing every test file.
+  const normalizedLabel = _normalizeBackendToken(label, device)
+
   let quality = null
   const gt = (opts && opts.groundTruth) || (opts && opts.imagePath ? findGroundTruth(opts.imagePath) : null)
   if (gt && outputTexts.length > 0) {
@@ -638,7 +705,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   }
 
   if (!(opts && opts.skipReport)) {
-    _perfReporter.record(label, {
+    _perfReporter.record(normalizedLabel, {
       total_time_ms: Math.round(totalTimeMs),
       detection_time_ms: Math.round(detectionTimeMs),
       recognition_time_ms: Math.round(recognitionTimeMs),
@@ -658,7 +725,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
     }
   }
 
-  let out = `${label} Performance Metrics:
+  let out = `${normalizedLabel} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
     - Detection time: ${detectionTimeMs.toFixed(0)}ms
     - Recognition time: ${recognitionTimeMs.toFixed(0)}ms
@@ -736,6 +803,7 @@ async function runDoctrOCR (t, params, imagePath) {
   })
 
   await ocrGgml.load()
+  setReportedGpuName(ocrGgml)
   console.log('[runDoctrOCR] loaded, starting run...')
 
   try {
@@ -776,6 +844,7 @@ module.exports = {
   findVulkanBackendLib,
   getBackendDevice,
   createOcrGgml,
+  setReportedGpuName,
   getImagePath,
   ensureModelPath,
   ensureDoctrModels,
