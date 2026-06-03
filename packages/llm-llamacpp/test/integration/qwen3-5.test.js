@@ -270,10 +270,6 @@ test('Qwen3.5-0.8B supports tool calling', {
   }
 })
 
-// QVAC-18298: functional image check only (single small image). The
-// multi-image perf rows live in qwen3-5-image-perf.test.js so they run in an
-// isolated Device Farm group and don't push this functional suite over the
-// 30-minute mobile cap.
 test('Qwen3.5-0.8B can describe an image', {
   timeout: 1_800_000
 }, async t => {
@@ -294,7 +290,6 @@ test('Qwen3.5-0.8B can describe an image', {
     ctx_size: '4096',
     temp: '0',
     seed: '42',
-    'reasoning-budget': '0',
     verbosity: '2'
   }
 
@@ -305,7 +300,9 @@ test('Qwen3.5-0.8B can describe an image', {
   })
 
   try {
+    const t0 = Date.now()
     await inference.load()
+    console.log(`  model.load() took ${Date.now() - t0} ms`)
 
     const imageFilePath = getMediaPath('elephant.jpg')
     t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
@@ -319,14 +316,22 @@ test('Qwen3.5-0.8B can describe an image', {
     const response = await inference.run(messages)
     const generatedText = []
     let error = null
+
     response.onUpdate(data => { generatedText.push(data) })
       .onError(err => { error = err })
+
     await response.await()
-    if (error) throw new Error('Inference error: ' + error)
+
+    if (error) {
+      throw new Error('Inference error: ' + error)
+    }
 
     const output = generatedText.join('')
     t.ok(output.length > 0, `image inference produced output (${output.length} chars)`)
-    t.ok(/elephant/.test(output.toLowerCase()), `output mentions elephant: "${output.slice(0, 100)}"`)
+    console.log(`  output: "${output.slice(0, 200)}"`)
+
+    const lowerOutput = output.toLowerCase()
+    t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${output.slice(0, 100)}"`)
   } finally {
     await inference.unload().catch(() => {})
   }
