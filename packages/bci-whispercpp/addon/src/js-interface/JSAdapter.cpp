@@ -105,6 +105,16 @@ BCIConfig JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env) {
     loadBCIParams(bciConfigObj.value(), env, config);
   }
 
+  // Top-level `configurationParams.backendsDir`. Read directly (not through
+  // `loadMap` / handler dispatch) because routing it through any of the
+  // sub-section maps would either throw on an unrecognised key or pollute
+  // a config namespace the BCI handlers don't own. Consumed by
+  // `BCIModel::load()` on Android only; ignored on other platforms.
+  auto backendsDirJs = jsObject.getOptionalProperty<String>(env, "backendsDir");
+  if (backendsDirJs.has_value()) {
+    config.backendsDir = backendsDirJs.value().as<std::string>(env);
+  }
+
   return config;
 }
 

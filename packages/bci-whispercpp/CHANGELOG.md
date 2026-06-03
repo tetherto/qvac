@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2]
+
+Android dynamic-backend-loading infrastructure (QVAC-19235). Behaviour
+on every platform is unchanged today because `bci-whispercpp` still
+pins `whisper-cpp@1.8.4.2`, whose port builds ggml with the static-
+backend registry (`GGML_BACKEND_DL=OFF`). This PR is the "safety net"
+that lets the follow-up `whisper-cpp@1.8.5` bump (QVAC-19009) flip
+`GGML_BACKEND_DL=ON` on Android without reproducing the `SIGABRT` on
+model load that hit `transcription-whispercpp` on its PR #2124. See
+`aiDocs/15-android-mobile-test-crash-fix.md` for the post-mortem.
+
+### Added
+
+- Native `BCIConfig::backendsDir` field plus JS-side `configurationParams.backendsDir`
+  pass-through (defaults to `<addon>/prebuilds` resolved via
+  `bare-path`). Surfaces on `BCIWhispercppConfig.backendsDir`.
+- Android-only `ensureBackendsLoadedAndroid()` in `BCIModel::load()`
+  (process-local `std::call_once`); resolves the per-arch backend
+  subdir from `backendsDir / BACKENDS_SUBDIR` and dispatches to
+  `ggml_backend_load_all_from_path()`.
+- `captureActiveBackendInfo(useGpu, gpuDevice)` in `BCIModel::load()`:
+  enumerates `ggml_backend_dev_*` after backend registration and
+  snapshots the active backend identity + device memory. New
+  `RuntimeStats` keys: `backendDevice`, `backendId`, `gpuMemTotalMb`,
+  `gpuMemFreeMb`. The numeric mapping (CPU=0 / Metal=1 / CUDA=2 /
+  Vulkan=3 / OpenCL=4 / other=99) is lock-stepped with
+  `transcription-whispercpp 0.9.0` and `transcription-parakeet` for
+  cross-addon Device Farm comparability. Backend selection is sourced
+  from the exact `whisper_context_params` the context was built with
+  (use_gpu/gpu_device), walks the `whisper_backend_init_gpu()`-filtered
+  GPU **and IGPU** device list (Mali / Adreno-via-Vulkan / Intel iGPU
+  report as IGPU), and applies the Adreno OpenCL preference — mirroring
+  `transcription-whispercpp` PR #2270 + #2343. Inert on
+  `whisper-cpp@1.8.4.2` (no GPU backends registered).
+- `CMakeLists.txt`: `bare_target` + `bare_module_target` discovery,
+  `BACKENDS_SUBDIR` compile define, `BACKEND_DL_LIBS` (IMPORTED
+  `ggml::*` targets) + `BACKEND_DL_LOOSE_SOS` (loose
+  `libqvac-speech-ggml-*.so` staging) plumbing, parity with
+  `transcription-whispercpp` / `transcription-parakeet`. Inactive
+  today (no MODULE backends produced at `whisper-cpp@1.8.4.2`);
+  activates on the QVAC-19009 bump.
+
+### Added (tests)
+
+- `BCIConfig.backendsDirDefaultsEmpty`, `BCIConfig.backendsDirRoundTrip`:
+  guard the new config field's defaults and copy semantics.
+- `BCIModel.runtimeStatsExposesBackendIdentityKeys`,
+  `BCIModel.backendIdentityDefaultsToCPU`: guard the new
+  `RuntimeStats` keys + default-CPU contract without requiring a
+  loaded model (mirrors transcription-whispercpp's `BackendInfo`
+  unit-test pattern).
 ## [0.1.1] - 2026-06-02
 
 ### Changed

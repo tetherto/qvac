@@ -94,15 +94,22 @@ export interface ArchivePageRef {
  * `SECTIONS_HIDDEN_FROM_INDEXING`). Consumed by:
  *
  * - `sitemap.ts` — to omit hidden archives from `sitemap.xml`.
- * - `llms.txt`, `llms-full.txt`, `llm-md-manifest.json` — to omit them from
- *   the LLM index / dump / per-page `.md` files.
+ * - `llms.txt`, `llms-full.txt` — to omit them from the aggregate AI
+ *   catalogs (training-corpus artefacts where excluding archives
+ *   meaningfully reduces cross-version ingestion).
  * - `page.tsx` (via `isArchivedVersionSlug`) — to add `noindex` metadata.
  * - `docs-json-ld.ts` (via `isArchivedVersionSlug`) — to skip JSON-LD.
  *
+ * NOT consumed by `llm-md-manifest.json`: per-page `.md` files are emitted
+ * for every page regardless of archive status, because they are alternate
+ * representations of already-public HTML pages and gating them only breaks
+ * the "Copy as Markdown" action and the `Accept: text/markdown` content-
+ * negotiation flow without adding SEO/AI protection. See the comment in
+ * `src/app/llm-md-manifest.json/route.ts` for the full rationale.
+ *
  * Returns `false` for archived snapshots of sections that we intentionally
  * keep indexed (e.g. release-notes back-versions): those pages are visible
- * to crawlers, listed in the sitemap, included in llms.txt and have their
- * own per-page `.md` file.
+ * to crawlers and listed in the sitemap / llms.txt / llms-full.txt.
  *
  * Also returns `true` for legacy bundle-style URLs (`/vX.Y.Z/...` with the
  * version slug as the first segment), as a defensive fallback against any
@@ -140,11 +147,18 @@ export function isArchivedVersionSlug(slugs: string[] | undefined): boolean {
  * and exported for non-canonical Open Graph use cases (e.g. share URLs that
  * always point at the exact page the user is on, regardless of whether it
  * is the SEO canonical).
+ *
+ * Always returns URLs **with a trailing slash** to match the site's
+ * canonical form (Next.js is configured with `trailingSlash: true`, and
+ * Sevalla's Pretty URLs feature 301-redirects bare paths to the trailing-
+ * slash variant). Keeping every emitted URL aligned with that canonical
+ * form avoids contradictory signals across `<link rel="canonical">`,
+ * `sitemap.xml`, and JSON-LD breadcrumbs.
  */
 export function buildCanonicalDocsUrl(slugs: string[] | undefined): string {
   if (!slugs?.length) return `${DOCS_SITE_ORIGIN}/`;
   const path = slugs.map((s) => encodeURIComponent(s)).join('/');
-  return `${DOCS_SITE_ORIGIN}/${path}`;
+  return `${DOCS_SITE_ORIGIN}/${path}/`;
 }
 
 /**
@@ -153,15 +167,18 @@ export function buildCanonicalDocsUrl(slugs: string[] | undefined): string {
  * For archived pages in sections whose back-versions are hidden from
  * indexing (currently the API summary), this returns the URL of the
  * section's **latest** (the bare basePath) — so search engines consolidate
- * authority on `/reference/api` instead of treating each `/reference/api/vX.Y.Z`
- * snapshot as its own canonical document. The HTML page also carries
- * `<meta robots="noindex">` (set in `page.tsx`), so the canonical + noindex
- * pair is the textbook "this is a near-duplicate, prefer the canonical"
- * signal.
+ * authority on `/reference/api/` instead of treating each
+ * `/reference/api/vX.Y.Z/` snapshot as its own canonical document. The HTML
+ * page also carries `<meta robots="noindex">` (set in `page.tsx`), so the
+ * canonical + noindex pair is the textbook "this is a near-duplicate,
+ * prefer the canonical" signal.
  *
  * For every other page — including archived release-notes, which stay
  * indexed as standalone historical documents — this returns the page's own
  * self-URL.
+ *
+ * Always returns URLs **with a trailing slash** (see `buildCanonicalDocsUrl`
+ * for the rationale).
  *
  * @see https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
  */
@@ -170,7 +187,7 @@ export function buildPageCanonicalUrl(slugs: string[] | undefined): string {
   const url = '/' + slugs.join('/');
   const hiddenSection = HIDDEN_ARCHIVED_PAGE_TO_SECTION.get(url);
   if (hiddenSection) {
-    return `${DOCS_SITE_ORIGIN}${hiddenSection.basePath}`;
+    return `${DOCS_SITE_ORIGIN}${hiddenSection.basePath}/`;
   }
   return buildCanonicalDocsUrl(slugs);
 }
