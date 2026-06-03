@@ -82,7 +82,6 @@ function report(title: string, outcomes: Outcome[]): void {
 try {
   const modelA = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
-    modelType: "llm",
     modelConfig: { ctx_size: 4096 },
   });
 
@@ -110,7 +109,6 @@ try {
   // Part 2 — different models, two concurrent completions (the "parallel that works").
   const modelB = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     modelConfig: { ctx_size: 4096 },
   });
   const differentModels = await Promise.all([
