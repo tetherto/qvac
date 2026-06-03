@@ -1,6 +1,6 @@
 # Changelog
 
-# QVAC AI SDK Provider v0.1.0 Release Notes
+## [0.1.0]
 
 Release Date: 2026-05-27
 
