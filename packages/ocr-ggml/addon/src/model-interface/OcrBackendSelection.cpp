@@ -22,8 +22,8 @@ using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
 std::string toLower(std::string_view value) {
   std::string lower(value);
-  std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
+  std::ranges::transform(lower, lower.begin(), [](unsigned char chr) {
+    return static_cast<char>(std::tolower(chr));
   });
   return lower;
 }

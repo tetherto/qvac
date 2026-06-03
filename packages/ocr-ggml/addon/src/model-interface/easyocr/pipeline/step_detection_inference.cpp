@@ -190,8 +190,7 @@ StepDetectionInference::StepDetectionInference(
   }
   // Thread-count tuning only applies to the CPU backend; GPU backends (Vulkan)
   // ignore it, so gate the call on the selected device being CPU.
-  const bool isCpu =
-      ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
+  const bool isCpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
   if (isCpu && nThreads >= 0) {
     const int effective =
         (nThreads == 0) ? defaultPhysicalThreadCount() : nThreads;

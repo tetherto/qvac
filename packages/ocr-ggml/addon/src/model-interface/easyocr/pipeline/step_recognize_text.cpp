@@ -669,13 +669,11 @@ StepRecognizeText::StepRecognizeText(
           : ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   backend_ = dev ? ggml_backend_dev_init(dev, nullptr) : nullptr;
   if (backend_ == nullptr) {
-    throw std::runtime_error(
-        "StepRecognizeText: failed to init ggml backend");
+    throw std::runtime_error("StepRecognizeText: failed to init ggml backend");
   }
   // Thread-count tuning only applies to the CPU backend; GPU backends (Vulkan)
   // ignore it, so gate the call on the selected device being CPU.
-  const bool isCpu =
-      ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
+  const bool isCpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
   if (isCpu && config_.nThreads >= 0) {
     const int effective = (config_.nThreads == 0)
                               ? defaultPhysicalThreadCount()

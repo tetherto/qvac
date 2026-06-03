@@ -32,10 +32,7 @@ enum class PipelineMode : std::uint8_t {
 // Vulkan-capable device is present, otherwise the steps fall back to CPU
 // (see `OcrBackendSelection`). Mirrors the opt-in GPU pattern in
 // `vla_backend_selection`.
-enum class BackendDevice : std::uint8_t {
-  CPU,
-  VULKAN
-};
+enum class BackendDevice : std::uint8_t { CPU, VULKAN };
 
 // Mirrors @qvac/ocr-onnx's PipelineInput so the JS side can interchangeably
 // drive both addons. Either pass an encoded JPEG/PNG byte buffer (set

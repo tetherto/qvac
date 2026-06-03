@@ -22,13 +22,16 @@
 
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)
 // DSP / LSTM / CRNN inner loops use raw pointer arithmetic, single-letter
 // math identifiers (x, t, c, h, bn), snake_case to mirror upstream PyTorch
 // state-dict paths, and layer-dim magic numbers that are themselves part
 // of the model architecture. Bounds-checking, renaming, or "constant-ising"
 // these would either change the source diff against upstream or measurably
-// regress hot-path CTC decode / LSTM gate compute throughput.
+// regress hot-path CTC decode / LSTM gate compute throughput. The ggml
+// C-API boundary (device/backend handles) only exposes raw pointers, so the
+// unchecked-access and implicit-bool checks are suppressed here too, matching
+// the sibling easyocr inference steps.
 
 namespace doctr::ggml::pipeline {
 
@@ -534,7 +537,8 @@ struct StepDoctrRecognitionGGML::Impl {
     load(pathRecognizer, backendDevice);
   }
 
-  void load(const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
+  void
+  load(const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
     graph.reset();
     ggml_backend_dev_t dev =
         (backendDevice != nullptr)
@@ -1182,4 +1186,4 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
 
 } // namespace doctr::ggml::pipeline
 
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)

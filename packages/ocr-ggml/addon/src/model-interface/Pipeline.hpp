@@ -25,10 +25,9 @@
 #include <string>
 #include <vector>
 
-#include <opencv2/core.hpp>
-
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
+#include <opencv2/core.hpp>
 
 #include "OcrBackendSelection.hpp"
 #include "OcrLazyInitializeBackend.hpp"
