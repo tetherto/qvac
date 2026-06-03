@@ -80,13 +80,10 @@ export const cancelBroadTranslateLlm: TestDefinition = {
   },
 };
 
-export const policyRejectConcurrentCompletion: TestDefinition = {
-  testId: "policy-reject-concurrent-completion",
+export const serializeConcurrentCompletion: TestDefinition = {
+  testId: "serialize-concurrent-completion",
   params: {
-    prompt:
-      "Write a long, detailed essay about the history of computing, " +
-      "starting with the abacus and continuing through the modern era. " +
-      "Be thorough and use complete paragraphs.",
+    prompt: "Reply with one short sentence naming your favourite colour.",
   },
   expectation: { validation: "function", fn: () => true },
   metadata: {
@@ -151,7 +148,7 @@ export const cancellationTests = [
   cancelThenResumeKvCache,
   cancelBroadEmbeddings,
   cancelBroadTranslateLlm,
-  policyRejectConcurrentCompletion,
+  serializeConcurrentCompletion,
   cancelByRequestIdEmbed,
   cancelByRequestIdTranscribe,
   cancelByRequestIdRagIngest,

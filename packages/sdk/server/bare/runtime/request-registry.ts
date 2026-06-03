@@ -574,7 +574,13 @@ export function createRequestRegistry(options?: {
   }
 
   async function begin(opts: BeginOpts): Promise<ManagedRequestContext> {
-    if (entries.has(opts.requestId)) {
+    // A request id is reserved for its whole lifecycle, including the time
+    // it spends *queued* for an admission slot. `waitersById` holds the
+    // still-queued begins (they aren't in `entries` yet), so a duplicate id
+    // must be rejected against both maps — otherwise a second begin with the
+    // same id would enqueue behind the first and overwrite its `waitersById`
+    // index, leaving the original waiter unreachable by `cancel({ requestId })`.
+    if (entries.has(opts.requestId) || waitersById.has(opts.requestId)) {
       throw new RequestIdConflictError(opts.requestId);
     }
 

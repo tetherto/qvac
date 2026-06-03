@@ -898,6 +898,47 @@ test("queue: cancel({ requestId }) on a queued waiter cancels it promptly", asyn
   t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
 });
 
+test("queue: a duplicate requestId while queued is rejected and the original waiter survives", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  // r-2 queues behind the holder.
+  const queuedPromise = r.begin({
+    requestId: "r-2",
+    kind: "completion",
+    modelId: "m1",
+  });
+  await settle();
+
+  // A begin reusing the still-queued id must conflict, not silently enqueue a
+  // duplicate that overwrites r-2's `waitersById` index (which would leave the
+  // original r-2 unreachable by `cancel({ requestId })`).
+  await t.exception(async () => {
+    await r.begin({ requestId: "r-2", kind: "completion", modelId: "m1" });
+  }, RequestIdConflictError as unknown as new () => Error);
+
+  // The original r-2 waiter is intact: cancelling it by id still finds and
+  // cancels exactly one queued request.
+  const cancelled = r.cancel({ requestId: "r-2", reason: "stop-button" });
+  t.is(cancelled, 1, "the original queued waiter is still reachable by id");
+
+  const queued = await queuedPromise;
+  t.is(queued.signal.aborted, true, "original queued waiter resolves aborted");
+
+  await queued[Symbol.asyncDispose]();
+  await holder[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
 test("queue: cancel({ modelId }) drains queued waiters for that model", async (t) => {
   const r = createRequestRegistry();
   r.policy({

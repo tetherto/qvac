@@ -119,6 +119,14 @@ export async function startFinetune(
   const model = getModel(request.modelId) as FinetuneCapableModel;
   validateExplicitFinetuneOperation(request);
 
+  // Mark the run RUNNING *before* the (now-async) registry begin. A caller
+  // that kicks off finetune and immediately polls `getFinetuneState` must
+  // still observe RUNNING — `begin()` yields a microtask even when
+  // uncontended, so registering after it would briefly report IDLE. If
+  // `begin()` rejects (id conflict / policy) we clear the flag again so a
+  // failed start doesn't leave the model wedged as RUNNING.
+  registerRunningFinetune(request.modelId);
+
   // Open a request-scoped lifecycle so finetune slots into the same
   // registry-driven cancel surface as the streaming inference kinds.
   // `cancel({ requestId })` and broad `cancel({ modelId, kind: "finetune" })`
@@ -127,14 +135,17 @@ export async function startFinetune(
   // `cancel: { scope: "model", hard: true }` declaration. The legacy
   // `cancelFinetune(modelId)` wrapper below now goes through the
   // registry instead of touching the addon directly.
-  await using ctx = await getRequestRegistry().begin({
-    requestId: request.requestId ?? generateServerRequestId(),
-    kind: "finetune",
-    modelId: request.modelId,
-  });
+  await using ctx = await getRequestRegistry()
+    .begin({
+      requestId: request.requestId ?? generateServerRequestId(),
+      kind: "finetune",
+      modelId: request.modelId,
+    })
+    .catch((err: unknown) => {
+      clearFinetuneRuntimeState(request.modelId);
+      throw err;
+    });
   const requestLogger = withRequestContext(getServerLogger(), ctx);
-
-  registerRunningFinetune(request.modelId);
   // Two-level try/finally collapses into a pair of `scope.defer`
   // registrations. LIFO order — the listener-detach defer is
   // registered after `clearFinetuneRuntimeState`, so on scope unwind

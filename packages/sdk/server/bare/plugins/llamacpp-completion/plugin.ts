@@ -153,6 +153,31 @@ export const llmPlugin = definePlugin({
 
         const requestLogger = withRequestContext(getServerLogger(), ctx);
 
+        // The request can come back from `begin()` already aborted: the
+        // client hit Stop while this completion was queued behind another
+        // same-model request (or the cancel beat `begin()`). It never
+        // acquired a real slot and never started decoding, so it must not
+        // touch the shared model — calling `completion()` here would fire
+        // `addon.cancel()` and `model.run()` on the single native context
+        // the *active* request is currently decoding on, cancelling or
+        // corrupting the very request the queue exists to protect. Emit a
+        // clean cancelled terminal and return without constructing the stream.
+        //
+        // `Boolean(...)` (not a bare `if (ctx.signal.aborted)` or a direct
+        // alias) so TS doesn't narrow `ctx.signal.aborted` to `false` for the
+        // rest of the function — the downstream `const cancelled =
+        // ctx.signal.aborted` must stay a plain `boolean` because the addon
+        // can flip the signal mid-stream.
+        const abortedBeforeRun = Boolean(ctx.signal.aborted);
+        if (abortedBeforeRun) {
+          yield {
+            type: "completionStream" as const,
+            done: true,
+            events: normalizer.finish({ stopReason: "cancelled" as const }),
+          };
+          return;
+        }
+
         const stream = completion(
           {
             history: filteredHistory,
