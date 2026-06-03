@@ -198,7 +198,7 @@
   "dependencies": {
     "@qvac/classification-ggml": "^0.3.0",
     "@qvac/decoder-audio": "^0.3.7",
-    "@qvac/diffusion-cpp": "^0.11.1",
+    "@qvac/diffusion-cpp": "^0.11.2",
     "@qvac/embed-llamacpp": "^0.19.0",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",

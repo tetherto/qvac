@@ -12,6 +12,8 @@ import {
 import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { videoTests } from "../../video-tests.js";
 
+type VideoMode = "txt2vid" | "img2vid";
+
 function readImageBytes(name: string): Uint8Array {
   const fileName = name.split("/").pop()!;
   const filePath = path.resolve(process.cwd(), "assets/images", fileName);
@@ -42,6 +44,15 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
       out.control_frames = (p.control_frames as string[]).map(readImageBytes);
     }
 
+    if (p.init_image !== undefined) {
+      if (typeof p.init_image !== "string") {
+        throw new Error(
+          "init_image in test params must be an image filename",
+        );
+      }
+      out.init_image = readImageBytes(p.init_image);
+    }
+
     return out;
   }
 
@@ -49,11 +60,19 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
     modelId: string,
     p: Record<string, unknown>,
   ): VideoClientParams {
-    const params: VideoClientParams = {
-      modelId,
-      mode: (p.mode as VideoClientParams["mode"]) ?? "txt2vid",
-      prompt: p.prompt as string,
-    };
+    const mode: VideoMode = p.mode === "img2vid" ? "img2vid" : "txt2vid";
+    const params: VideoClientParams = mode === "img2vid"
+      ? {
+          modelId,
+          mode,
+          prompt: p.prompt as string,
+          init_image: p.init_image as Uint8Array,
+        } as VideoClientParams
+      : {
+          modelId,
+          mode,
+          prompt: p.prompt as string,
+        };
 
     if (p.negative_prompt != null) params.negative_prompt = p.negative_prompt as string;
     if (p.width != null) params.width = p.width as number;
@@ -82,6 +101,9 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
     if (p.moe_boundary != null) params.moe_boundary = p.moe_boundary as number;
     if (p.vace_strength != null) params.vace_strength = p.vace_strength as number;
     if (p.control_frames != null) params.control_frames = p.control_frames as Uint8Array[];
+    if (mode === "img2vid" && p.strength != null) {
+      (params as VideoClientParams & { strength?: number }).strength = p.strength as number;
+    }
     if (p.vae_tiling != null) params.vae_tiling = p.vae_tiling as boolean;
     if (p.vae_tile_size != null) {
       params.vae_tile_size = p.vae_tile_size as VideoClientParams["vae_tile_size"];
@@ -100,7 +122,9 @@ export class VideoExecutor extends AbstractModelExecutor<typeof videoTests> {
     const p = await this.resolveParams(params as Record<string, unknown>);
 
     try {
-      const modelId = await this.resources.ensureLoaded("video");
+      const modelId = await this.resources.ensureLoaded(
+        p.mode === "img2vid" ? "video-img2vid" : "video",
+      );
       const run = video(this.buildParams(modelId, p));
       const outputs = await run.outputs;
       const stats = await run.stats;
