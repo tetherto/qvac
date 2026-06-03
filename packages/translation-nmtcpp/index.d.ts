@@ -93,6 +93,11 @@ export interface InferenceClientState {
   destroyed: boolean
 }
 
+export interface RunOptions {
+  /** When aborted, the returned promise rejects with the abort reason. */
+  signal?: AbortSignal
+}
+
 /**
  * Stats returned via `response.stats` when the addon is constructed with
  * `opts.stats = true`. Field set differs by backend:
@@ -123,8 +128,8 @@ export default class TranslationNmtcpp {
   constructor(args: TranslationNmtcppArgs)
   getState(): InferenceClientState
   load(): Promise<void>
-  run(input: string): Promise<QvacResponse<string>>
-  runBatch(texts: string[]): Promise<string[]>
+  run(input: string, runOptions?: RunOptions): Promise<QvacResponse<string>>
+  runBatch(texts: string[], runOptions?: RunOptions): Promise<string[]>
   unload(): Promise<void>
   destroy(): Promise<void>
 

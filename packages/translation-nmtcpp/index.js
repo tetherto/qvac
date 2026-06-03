@@ -141,10 +141,12 @@ class TranslationNmtcpp {
   /**
    * Runs inference on the given input. Serialized — only one job at a time.
    * @param {string} input - Text to translate
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
-  async run (input) {
-    return this._run(() => this._runInternal(input))
+  async run (input, runOptions = {}) {
+    return this._run(() => this._runInternal(input, runOptions))
   }
 
   /**
@@ -298,7 +300,7 @@ class TranslationNmtcpp {
    * @param {string} input - Input text to translate
    * @returns {Promise<QvacIndicTransResponse>} Translation response
    */
-  async _runIndicTrans (input) {
+  async _runIndicTrans (input, signal) {
     const processor = new IndicProcessor()
     const [processedText] = processor.preprocessBatch(
       [input],
@@ -306,18 +308,25 @@ class TranslationNmtcpp {
       this._params.dstLang
     )
 
-    await this.addon.runJob({
-      type: 'text',
-      input: processedText
-    })
-
     const response = new QvacIndicTransResponse(
       processor,
       this._params.dstLang,
-      { cancelHandler: () => this.addon.cancel() }
+      { cancelHandler: () => this.addon.cancel(), signal }
     )
 
-    return this._job.startWith(response)
+    this._job.startWith(response)
+
+    try {
+      await this.addon.runJob({
+        type: 'text',
+        input: processedText
+      })
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+
+    return response
   }
 
   /**
@@ -338,8 +347,8 @@ class TranslationNmtcpp {
    * @private
    * @returns {QvacResponse} Response object with configured handlers
    */
-  _createStandardResponse () {
-    const response = new QvacResponse({ cancelHandler: () => this.addon.cancel() })
+  _createStandardResponse (signal) {
+    const response = new QvacResponse({ cancelHandler: () => this.addon.cancel(), signal })
 
     const originalOnUpdate = response.onUpdate.bind(response)
     response.onUpdate = function (callback) {
@@ -358,28 +367,39 @@ class TranslationNmtcpp {
    * @param {string} input - Input text to translate
    * @returns {Promise<QvacResponse>} Translation response
    */
-  async _runStandardTranslation (input) {
+  async _runStandardTranslation (input, signal) {
     const text = this._prepareInputText(input)
-    await this.addon.runJob({ type: 'text', input: text })
-    const response = this._createStandardResponse()
+    const response = this._createStandardResponse(signal)
 
-    return this._job.startWith(response)
+    this._job.startWith(response)
+
+    try {
+      await this.addon.runJob({ type: 'text', input: text })
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+
+    return response
   }
 
-  async _runInternal (input) {
+  async _runInternal (input, runOptions = {}) {
+    const signal = runOptions && runOptions.signal
     if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans) {
-      return this._runIndicTrans(input)
+      return this._runIndicTrans(input, signal)
     }
-    return this._runStandardTranslation(input)
+    return this._runStandardTranslation(input, signal)
   }
 
   /**
    * Translates multiple texts in a single batch for better performance.
    *
    * @param {string[]} texts - Array of texts to translate
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned promise rejects with the abort reason.
    * @returns {Promise<string[]>} - Array of translated texts (same order as input)
    */
-  async runBatch (texts) {
+  async runBatch (texts, runOptions = {}) {
     if (!this.addon) {
       throw new Error('Model not loaded. Call load() first.')
     }
@@ -402,11 +422,9 @@ class TranslationNmtcpp {
       processedTexts = texts.map(text => this._prepareInputText(text))
     }
 
-    await this.addon.runJob({ type: 'sequences', input: processedTexts })
+    const response = this._job.start({ signal: runOptions && runOptions.signal })
 
-    const response = this._job.start()
-
-    return new Promise((resolve, reject) => {
+    const settled = new Promise((resolve, reject) => {
       response.onFinish(([batchResults]) => {
         if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans && processor) {
           resolve(processor.postprocessBatch(batchResults, this._params.dstLang))
@@ -420,6 +438,14 @@ class TranslationNmtcpp {
         reject(error)
       })
     })
+
+    try {
+      await this.addon.runJob({ type: 'sequences', input: processedTexts })
+    } catch (error) {
+      this._job.fail(error)
+    }
+
+    return settled
   }
 
   _addonOutputCallback (addon, event, data, error) {

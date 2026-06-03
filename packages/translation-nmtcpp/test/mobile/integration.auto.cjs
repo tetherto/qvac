@@ -18,3 +18,7 @@ async function runOpenclCache (options = {}) { // eslint-disable-line no-unused-
 async function runPivotBergamot (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/pivot-bergamot.test.js', options)
 }
+
+async function runSignalForwarding (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/signal-forwarding.test.js', options)
+}

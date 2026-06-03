@@ -1,7 +1,6 @@
 'use strict'
 
 const test = require('brittle')
-const FakeDL = require('../mocks/loader.fake.js')
 
 // Mock TranslationNmtcpp to test Opus deprecation without loading the native addon.
 // The real index.js eagerly loads the C++ binding via require('./marian') → require('./binding')
@@ -9,16 +8,13 @@ const FakeDL = require('../mocks/loader.fake.js')
 // These tests only verify JS-level behavior (ModelTypes enum and constructor guard),
 // so we replicate the relevant logic from index.js here.
 
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-
-class MockTranslationNmtcpp extends BaseInference {
+class MockTranslationNmtcpp {
   static ModelTypes = {
     IndicTrans: 'IndicTrans',
     Bergamot: 'Bergamot'
   }
 
-  constructor ({ loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args }, config = {}) {
-    super({ logger, exclusiveRun, ...args })
+  constructor ({ config = {} } = {}) {
     const { modelType } = config
 
     if (modelType === 'Opus') {
@@ -44,16 +40,8 @@ test('ModelTypes.IndicTrans equals "IndicTrans"', (t) => {
 })
 
 test('Constructor throws deprecation error when modelType is Opus', (t) => {
-  const fakeDL = new FakeDL({})
-  const args = {
-    loader: fakeDL,
-    diskPath: '/tmp/fake',
-    modelName: 'fake-model.bin',
-    params: { srcLang: 'en', dstLang: 'fr' }
-  }
-
   try {
-    const _ = new MockTranslationNmtcpp(args, { modelType: 'Opus' }) // eslint-disable-line no-unused-vars
+    const _ = new MockTranslationNmtcpp({ config: { modelType: 'Opus' } }) // eslint-disable-line no-unused-vars
     t.fail('Expected constructor to throw for Opus modelType')
   } catch (err) {
     t.ok(err.message.includes('deprecated'), 'Error message mentions deprecation')
