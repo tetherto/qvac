@@ -251,7 +251,8 @@ class LlmLlamacpp {
   /**
    * Public API entrypoint for inference.
    * @param {Message[]} prompt - Input prompt array of messages
-   * @param {RunOptions} [runOptions] - Optional run settings (prefill, generationParams, cacheKey, saveCacheToDisk)
+   * @param {RunOptions} [runOptions] - Optional run settings (prefill, generationParams, cacheKey, saveCacheToDisk, signal)
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>}
    */
   async run (prompt, runOptions = {}) {
@@ -270,6 +271,7 @@ class LlmLlamacpp {
       throw new TypeError('Prompt input must be Message[]')
     }
     const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
+    const signal = runOptions && runOptions.signal
 
     this.logger.info('Starting inference with prompt:', sanitizePromptForLog(prompt))
 
@@ -304,7 +306,7 @@ class LlmLlamacpp {
       saveCacheToDisk
     })
 
-    const response = this._job.start()
+    const response = this._job.start({ signal })
 
     let accepted
     try {
@@ -333,9 +335,12 @@ class LlmLlamacpp {
     if (!finetuningOptions) {
       throw new Error('Finetuning parameters are required.')
     }
-    const paramsToSend = normalizeFinetuneParams(finetuningOptions)
+    // Pull `signal` out before normalization so it forwards to the response
+    // (abort backstop) without leaking into the native finetune params.
+    const { signal, ...finetuneParams } = finetuningOptions
+    const paramsToSend = normalizeFinetuneParams(finetuneParams)
     this.logger.info('finetune() called')
-    this.logger.info('Finetuning parameters:', finetuningOptions)
+    this.logger.info('Finetuning parameters:', finetuneParams)
 
     return this._run(async () => {
       if (!this.addon) {
@@ -348,7 +353,7 @@ class LlmLlamacpp {
         this._checkpointSaveDir = finetuningOptions.checkpointSaveDir
       }
 
-      const response = this._job.start()
+      const response = this._job.start({ signal })
       let accepted
       try {
         accepted = await this.addon.finetune(paramsToSend)

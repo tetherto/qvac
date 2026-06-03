@@ -148,6 +148,8 @@ export interface RunOptions {
   generationParams?: GenerationParams
   cacheKey?: string
   saveCacheToDisk?: boolean
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
 }
 
 export interface RuntimeStats {
@@ -231,6 +233,8 @@ export interface FinetuneOptions {
   warmupStepsSet?: boolean
   /** Weight decay. Default 0.01. */
   weightDecay?: number
+  /** When aborted, the returned finetune handle fails with the abort reason. */
+  signal?: AbortSignal
 }
 
 export interface FinetuneProgressStats {
