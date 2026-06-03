@@ -1,4 +1,4 @@
-import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
+import type { QvacResponse } from '@qvac/infer-base'
 
 /**
  * LavaSR enhancer configuration.
@@ -147,9 +147,10 @@ declare class ONNXTTS {
    */
   run(
     input: ONNXTTS.TTSRunInput & { streamOutput: true },
+    runOptions?: ONNXTTS.TTSRunOptions,
   ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
 
-  run(input: ONNXTTS.TTSRunInput): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
+  run(input: ONNXTTS.TTSRunInput, runOptions?: ONNXTTS.TTSRunOptions): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
 
   /**
    * Chunked streaming synthesis: forwards to `run({ input: text, streamOutput: true, ... })`.
@@ -187,11 +188,18 @@ declare namespace ONNXTTS {
     sentenceChunk?: string
   }
 
+  export interface TTSRunOptions {
+    /** When aborted, the returned response fails with the abort reason. */
+    signal?: AbortSignal
+  }
+
   export interface SentenceStreamOptions {
     /** BCP-47 locale for Intl.Segmenter when available. */
     locale?: string
     /** Max graphemes per chunk (defaults: 300, or 120 when language is ko). */
     maxChunkScalars?: number
+    /** When aborted, the returned response fails with the abort reason. */
+    signal?: AbortSignal
   }
 
   /** Input accepted by `runStreaming`. */
@@ -215,6 +223,8 @@ declare namespace ONNXTTS {
     maxBufferScalars?: number
     /** Idle time after the last fragment before flushing the buffer (timer resets on each fragment). Default 500. */
     flushAfterMs?: number
+    /** When aborted, the returned response fails with the abort reason. */
+    signal?: AbortSignal
   }
 
   export type TTSRunInput = {
@@ -248,7 +258,8 @@ declare namespace ONNXTTS {
     RunStreamingOptions,
     TextStreamInput,
     TTSOutputChunk,
-    TTSRunInput
+    TTSRunInput,
+    TTSRunOptions
   }
 }
 
