@@ -285,9 +285,18 @@ test('Qwen3.5-0.8B supports tool calling', {
   }
 })
 
-test('Qwen3.5-0.8B can describe an image', {
-  timeout: 1_800_000
-}, async t => {
+// QVAC-18298: VLM perf coverage matches the SmolVLM2 image-*.test.js set
+// (elephant / fruit plate / high-res aurora) so a Phase-3 optimization that
+// only regresses large or high-resolution inputs is still caught. Each image
+// reloads the model fresh and unloads after, so peak memory stays bounded per
+// image (mirrors the per-file split SmolVLM2 uses for iOS Jetsam isolation).
+const QWEN35_IMAGE_CASES = [
+  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'] },
+  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'] },
+  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'] }
+]
+
+async function runQwen35ImagePerf (t, imageCase) {
   const [modelName, dirPath] = await ensureModel({
     modelName: QWEN3_5_MODEL.name,
     downloadUrl: QWEN3_5_MODEL.url
@@ -317,15 +326,15 @@ test('Qwen3.5-0.8B can describe an image', {
     opts: { stats: true }
   })
 
-  // QVAC-18298: backend in the label so each platform x backend gets its own
-  // aggregate.js cell (it groups perf rows by result.test).
+  // QVAC-18298: [image] [model] [backend] so the GitHub summary Test column
+  // shows the image under test, matching the [elephant] [GPU] image rows.
   const backendTag = useCpu ? 'CPU' : 'GPU'
-  const perfLabel = `[elephant] [qwen3.5-vl] [${backendTag}]`
+  const perfLabel = `[${imageCase.name}] [qwen3.5-vl] [${backendTag}]`
 
   async function runImageInference (imageBytes) {
     const messages = [
       { role: 'user', type: 'media', content: imageBytes },
-      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
+      { role: 'user', content: 'Describe the image briefly in one sentence.' }
     ]
     const startTime = Date.now()
     const response = await inference.run(messages)
@@ -345,10 +354,10 @@ test('Qwen3.5-0.8B can describe an image', {
   try {
     const t0 = Date.now()
     await inference.load()
-    console.log(`  model.load() took ${Date.now() - t0} ms`)
+    console.log(`  ${perfLabel} model.load() took ${Date.now() - t0} ms`)
 
-    const imageFilePath = getMediaPath('elephant.jpg')
-    t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
+    const imageFilePath = getMediaPath(imageCase.imageFile)
+    t.ok(fs.existsSync(imageFilePath), `${imageCase.imageFile} image file should exist`)
 
     const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
@@ -374,14 +383,24 @@ test('Qwen3.5-0.8B can describe an image', {
       }))
     }
 
-    t.ok(lastOutput.length > 0, `image inference produced output (${lastOutput.length} chars)`)
+    t.ok(lastOutput.length > 0, `${perfLabel} image inference produced output (${lastOutput.length} chars)`)
 
     const lowerOutput = lastOutput.toLowerCase()
-    t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${lastOutput.slice(0, 100)}"`)
+    const matched = imageCase.keywords.some(k => new RegExp(`\\b${k}\\b`, 'i').test(lowerOutput))
+    t.ok(matched,
+      `${perfLabel} output should mention one of ${imageCase.keywords.join(', ')}: "${lastOutput.slice(0, 150)}"`)
   } finally {
     await inference.unload().catch(() => {})
   }
-})
+}
+
+for (const imageCase of QWEN35_IMAGE_CASES) {
+  test(`Qwen3.5-0.8B can describe an image [${imageCase.name}]`, {
+    timeout: 1_800_000
+  }, async t => {
+    await runQwen35ImagePerf(t, imageCase)
+  })
+}
 
 test('Qwen3.5-0.8B reasoning-budget=0 disables thinking', {
   timeout: 600_000

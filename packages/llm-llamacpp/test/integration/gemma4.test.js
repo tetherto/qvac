@@ -216,36 +216,27 @@ test('Gemma 4 supports multi-turn conversation with KV cache', {
   }
 })
 
-test('Gemma 4 can describe an image', {
-  timeout: 1_800_000
-}, async t => {
+// QVAC-18298: VLM perf coverage matches the SmolVLM2 image-*.test.js set
+// (elephant / fruit plate / high-res aurora) so a Phase-3 optimization that
+// only regresses large or high-resolution inputs is still caught. Each image
+// reloads the model fresh and unloads after, so peak memory stays bounded per
+// image (mirrors the per-file split SmolVLM2 uses for iOS Jetsam isolation)
+// rather than holding the VLM + every image in one process at once.
+const GEMMA4_IMAGE_CASES = [
+  { name: 'elephant', imageFile: 'elephant.jpg', keywords: ['elephant', 'elephants'] },
+  { name: 'fruit plate', imageFile: 'fruitPlate.png', keywords: ['fruit', 'fruits', 'plate', 'apple', 'banana', 'orange'] },
+  { name: 'high-res aurora', imageFile: 'highRes3000x4000.jpg', keywords: ['aurora', 'sky', 'night', 'green', 'light', 'lights'] }
+]
+
+async function runGemma4ImagePerf (t, imageCase) {
   const [modelName, dirPath] = await ensureModel(GEMMA4_MODEL.llmModel)
   const [projModelName] = await ensureModel(GEMMA4_MODEL.projModel)
   const modelPath = path.join(dirPath, modelName)
   const projectionModelPath = path.join(dirPath, projModelName)
 
-  // ctx_size: a single elephant.jpg encodes to ~260 mtmd image tokens; the
-  // system turn, user message and the answer fit comfortably even at 4096
-  // (~15x headroom over the ~275 tokens actually used). 8192 was originally
-  // chosen to leave room for Gemma 4's CoT preamble, but reasoning-budget=0
-  // below already suppresses CoT, so the extra 4k cells were dead KV cache
-  // weight ridden by jetsam on iPhone 16 -- which has a tighter per-process
-  // memory ceiling than iPhone 17 and was timing out at 20 min on test 3.
-  // Halving the KV cache cuts ~75 MB on the GPU side without affecting any
-  // image-token, prompt or answer fit.
-  // reasoning-budget: 0 -- we ask the model for a one-word answer and don't
-  // need the <|channel>thought ...<channel|> preamble. Without this, Gemma 4
-  // happily generates 8k+ tokens of CoT for a vision question and the
-  // generation loop overflows ctx_size before reaching <eos>.
-  // ubatch-size: 320 -- the LLM's Metal compute buffer is sized by n_ubatch
-  // (default 512), and at default it lands around 830 MiB for Gemma 4.
-  // Together with the ~1 GB base model and ~941 MB bf16 mmproj that pushes
-  // iPhone 17 over its per-process jetsam ceiling and the app hangs. Lowering
-  // ubatch shrinks the compute buffer proportionally. CLIP's vision encoder
-  // uses non-causal attention which asserts n_ubatch >= n_tokens_per_call,
-  // and elephant.jpg encodes to ~260 mtmd image tokens, so 320 is the
-  // smallest 64-aligned value that still fits the image in one call while
-  // saving ~40% of the compute buffer vs the default 512.
+  // ctx_size 4096 / ubatch 320 / reasoning-budget 0 keep Gemma 4's compute
+  // buffer + KV cache under the iPhone Jetsam ceiling while still fitting the
+  // image tokens. See the original single-image notes for the full rationale.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
@@ -266,15 +257,15 @@ test('Gemma 4 can describe an image', {
     opts: { stats: true }
   })
 
-  // QVAC-18298: backend in the label so each platform x backend gets its own
-  // aggregate.js cell (it groups perf rows by result.test).
+  // QVAC-18298: [image] [model] [backend] so the GitHub summary Test column
+  // shows the image under test, matching the [elephant] [GPU] image rows.
   const backendTag = useCpu ? 'CPU' : 'GPU'
-  const perfLabel = `[elephant] [gemma4-vl] [${backendTag}]`
+  const perfLabel = `[${imageCase.name}] [gemma4-vl] [${backendTag}]`
 
   async function runImageInference (imageBytes) {
     const messages = [
       { role: 'user', type: 'media', content: imageBytes },
-      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
+      { role: 'user', content: 'Describe the image briefly in one sentence.' }
     ]
     const startTime = Date.now()
     const response = await inference.run(messages)
@@ -294,10 +285,10 @@ test('Gemma 4 can describe an image', {
   try {
     const t0 = Date.now()
     await inference.load()
-    console.log(`  model.load() took ${Date.now() - t0} ms`)
+    console.log(`  ${perfLabel} model.load() took ${Date.now() - t0} ms`)
 
-    const imageFilePath = getMediaPath('elephant.jpg')
-    t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
+    const imageFilePath = getMediaPath(imageCase.imageFile)
+    t.ok(fs.existsSync(imageFilePath), `${imageCase.imageFile} image file should exist`)
 
     const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
@@ -323,14 +314,24 @@ test('Gemma 4 can describe an image', {
       }))
     }
 
-    t.ok(lastOutput.length > 0, `image inference produced output (${lastOutput.length} chars)`)
+    t.ok(lastOutput.length > 0, `${perfLabel} image inference produced output (${lastOutput.length} chars)`)
 
     const lowerOutput = lastOutput.toLowerCase()
-    t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${lastOutput.slice(0, 100)}"`)
+    const matched = imageCase.keywords.some(k => new RegExp(`\\b${k}\\b`, 'i').test(lowerOutput))
+    t.ok(matched,
+      `${perfLabel} output should mention one of ${imageCase.keywords.join(', ')}: "${lastOutput.slice(0, 150)}"`)
   } finally {
     await inference.unload().catch(() => {})
   }
-})
+}
+
+for (const imageCase of GEMMA4_IMAGE_CASES) {
+  test(`Gemma 4 can describe an image [${imageCase.name}]`, {
+    timeout: 1_800_000
+  }, async t => {
+    await runGemma4ImagePerf(t, imageCase)
+  })
+}
 
 test('Gemma 4 supports tool calling', {
   timeout: 600_000
