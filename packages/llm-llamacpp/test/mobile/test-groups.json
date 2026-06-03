@@ -28,10 +28,12 @@
       "runTurboquantTest",
       "runUtf8OutputTest"
     ],
-    "vlmPerf": [
+    "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
       "runGemma4ImageFruitPlatePerfTest",
-      "runGemma4ImageHighResAuroraPerfTest",
+      "runGemma4ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest"
@@ -68,10 +70,12 @@
       "runImageFruitPlateTest",
       "runImageHighResAuroraTest"
     ],
-    "vlmPerf": [
+    "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
       "runGemma4ImageFruitPlatePerfTest",
-      "runGemma4ImageHighResAuroraPerfTest",
+      "runGemma4ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest"
