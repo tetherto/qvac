@@ -1,23 +1,26 @@
 'use strict'
 
 const test = require('brittle')
-const { detectPlatform } = require('./helpers.js')
 const { runMobilePerfCase } = require('./mobile-perf-runner.js')
 
+// NOTE: this case is deliberately ordered LAST in the mobile suite (see
+// test/mobile/integration.auto.cjs — `runMobilePerfTinyGpuTest` is the final
+// entry). Whisper's GPU teardown has historically crashed the bare app on
+// Samsung Galaxy S25 Ultra (State=1 after-test in the Device Farm wdio crash
+// detector; see WhisperConfig.cpp + whisper.cpp#2373 re: ggml backend static
+// cleanup at process exit). The Device Farm runs both devices off one spec, so
+// we cannot skip per-device. Running this case last means that if the Samsung
+// teardown still crashes, it cannot drop any *other* test's coverage on that
+// device — every earlier case has already reported. The mobile job itself is
+// `continue-on-error: true`, so this is also non-blocking for the PR.
+//
+// We enable it on Android (previously quarantined skip-as-pass) specifically to
+// PROVE the dynamic GPU backend engages on the Device Farm matrix:
+//   Pixel 9 (Mali)    -> Vulkan  (backendId 3)
+//   Samsung S25 (Adreno) -> OpenCL (backendId 4)
+// The assertions live in runMobilePerfCase (mobile-perf-runner.js). NO_GPU=true
+// still skips the GPU half on runners without a real GPU.
 test('Mobile perf tiny GPU', { timeout: 600000 }, async (t) => {
-  // Whisper's GPU teardown crashes the bare app on Samsung Galaxy S25 Ultra
-  // (State=1 after-test:runMobilePerfTinyGpuTest in the Device Farm wdio
-  // crash detector). Pixel 9 Pro XL handles the same path fine, but the
-  // mobile workflow runs both devices off a single test spec so we can't
-  // skip the case per-device. Mirrors parakeet's "iOS Sortformer GPU"
-  // quarantine — keep the case skip-as-pass on Android until the
-  // underlying whisper GPU shutdown issue is fixed and the Samsung path
-  // is stable.
-  if (detectPlatform().startsWith('android')) {
-    t.pass('Whisper tiny GPU quarantined on Android pending Samsung crash investigation')
-    return
-  }
-
   await runMobilePerfCase(t, {
     modelFile: 'ggml-tiny.bin',
     useGPU: true

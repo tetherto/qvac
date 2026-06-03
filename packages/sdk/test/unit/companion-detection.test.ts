@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { groupCompanionSets } from "@/models/update-models/companions";
 import type { ProcessedModel } from "@/models/update-models/types";
@@ -25,7 +24,7 @@ function makeModel(
   };
 }
 
-test("groupCompanionSets: pairs .onnx with _data companion", (t: { ok: Function; is: Function; absent: Function }) => {
+test("groupCompanionSets: pairs .onnx with _data companion", (t) => {
   const primary = makeModel({ registryPath: "repo/model.onnx" });
   const data = makeModel({ registryPath: "repo/model.onnx_data" });
 
@@ -41,7 +40,7 @@ test("groupCompanionSets: pairs .onnx with _data companion", (t: { ok: Function;
   t.is(result[1]!.isCompanionOnly, true);
 });
 
-test("groupCompanionSets: pairs .onnx with .data companion", (t: { ok: Function; is: Function }) => {
+test("groupCompanionSets: pairs .onnx with .data companion", (t) => {
   const primary = makeModel({ registryPath: "repo/encoder.onnx" });
   const data = makeModel({ registryPath: "repo/encoder.onnx.data" });
 
@@ -52,7 +51,7 @@ test("groupCompanionSets: pairs .onnx with .data companion", (t: { ok: Function;
   t.is(result[1]!.isCompanionOnly, true);
 });
 
-test("groupCompanionSets: onnx without companion gets no companionSet", (t: { is: Function; absent: Function }) => {
+test("groupCompanionSets: onnx without companion gets no companionSet", (t) => {
   const standalone = makeModel({ registryPath: "repo/decoder.onnx" });
 
   const result = groupCompanionSets([standalone]);
@@ -62,7 +61,7 @@ test("groupCompanionSets: onnx without companion gets no companionSet", (t: { is
   t.is(result.length, 1);
 });
 
-test("groupCompanionSets: non-onnx files are skipped", (t: { absent: Function }) => {
+test("groupCompanionSets: non-onnx files are skipped", (t) => {
   const gguf = makeModel({ registryPath: "repo/model.gguf" });
   const bin = makeModel({ registryPath: "repo/vocab.txt" });
 
@@ -74,7 +73,7 @@ test("groupCompanionSets: non-onnx files are skipped", (t: { absent: Function })
   t.absent(result[1]!.isCompanionOnly);
 });
 
-test("groupCompanionSets: cross-source models are not paired", (t: { absent: Function }) => {
+test("groupCompanionSets: cross-source models are not paired", (t) => {
   const primary = makeModel({
     registryPath: "repo/model.onnx",
     registrySource: "hf",
@@ -91,7 +90,7 @@ test("groupCompanionSets: cross-source models are not paired", (t: { absent: Fun
   t.absent(result[1]!.isCompanionOnly);
 });
 
-test("groupCompanionSets: setKey is deterministic", (t: { ok: Function; is: Function }) => {
+test("groupCompanionSets: setKey is deterministic", (t) => {
   const primary = makeModel({ registryPath: "repo/model.onnx" });
   const data = makeModel({ registryPath: "repo/model.onnx_data" });
 
@@ -105,7 +104,7 @@ test("groupCompanionSets: setKey is deterministic", (t: { ok: Function; is: Func
 
 // --- Bergamot companion detection ---
 
-test("groupCompanionSets: bergamot shared vocab (4-file set)", (t: { ok: Function; is: Function; absent: Function }) => {
+test("groupCompanionSets: bergamot shared vocab (4-file set)", (t) => {
   const dir = "bergamot/bergamot-enfr/2025-01-01/";
   const model = makeModel({ registryPath: `${dir}model.enfr.intgemm.alphas.bin` });
   const lex = makeModel({ registryPath: `${dir}lex.50.50.enfr.s2t.bin` });
@@ -131,7 +130,7 @@ test("groupCompanionSets: bergamot shared vocab (4-file set)", (t: { ok: Functio
   t.is(keys[3], "metadataPath");
 });
 
-test("groupCompanionSets: bergamot split vocab CJK (5-file set)", (t: { ok: Function; is: Function }) => {
+test("groupCompanionSets: bergamot split vocab CJK (5-file set)", (t) => {
   const dir = "bergamot/bergamot-enja/2025-01-01/";
   const model = makeModel({ registryPath: `${dir}model.enja.intgemm.alphas.bin` });
   const lex = makeModel({ registryPath: `${dir}lex.50.50.enja.s2t.bin` });
@@ -151,7 +150,7 @@ test("groupCompanionSets: bergamot split vocab CJK (5-file set)", (t: { ok: Func
   t.is(result[3]!.isCompanionOnly, true);
 });
 
-test("groupCompanionSets: bergamot no-vocab (3-file set)", (t: { ok: Function; is: Function }) => {
+test("groupCompanionSets: bergamot no-vocab (3-file set)", (t) => {
   const dir = "bergamot/bergamot-aren/2025-01-01/";
   const model = makeModel({ registryPath: `${dir}model.aren.intgemm.alphas.bin` });
   const lex = makeModel({ registryPath: `${dir}lex.50.50.aren.s2t.bin` });
@@ -163,7 +162,7 @@ test("groupCompanionSets: bergamot no-vocab (3-file set)", (t: { ok: Function; i
   t.is(result[0]!.companionSet!.files.length, 3);
 });
 
-test("groupCompanionSets: bergamot model without companions gets no set", (t: { absent: Function }) => {
+test("groupCompanionSets: bergamot model without companions gets no set", (t) => {
   const model = makeModel({
     registryPath: "bergamot/bergamot-xxxx/model.xxxx.intgemm.alphas.bin",
   });
@@ -174,7 +173,7 @@ test("groupCompanionSets: bergamot model without companions gets no set", (t: { 
   t.absent(result[0]!.isCompanionOnly);
 });
 
-test("groupCompanionSets: bergamot cross-source not paired", (t: { absent: Function }) => {
+test("groupCompanionSets: bergamot cross-source not paired", (t) => {
   const dir = "bergamot/bergamot-enfr/2025-01-01/";
   const model = makeModel({
     registryPath: `${dir}model.enfr.intgemm.alphas.bin`,

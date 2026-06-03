@@ -2,22 +2,21 @@
 
 using namespace qvac_lib_inference_addon_cpp::logger;
 
-namespace qvac_lib_inference_addon_sd::logging {
+namespace qvac_lib_inference_addon_sd {
+namespace logging {
 
 // Default to ERROR to prevent log spam before verbosity is configured
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 Priority g_verbosityLevel = Priority::ERROR;
 
 void setVerbosityLevel(
     std::unordered_map<std::string, std::string>& configMap) {
-  auto verbosityIt = configMap.find("verbosity");
-  if (verbosityIt == configMap.end()) {
+  auto it = configMap.find("verbosity");
+  if (it == configMap.end())
     return;
-  }
 
   try {
-    const int level = std::stoi(verbosityIt->second);
-    switch (level) {
+    const int v = std::stoi(it->second);
+    switch (v) {
     case 0:
       g_verbosityLevel = Priority::ERROR;
       break;
@@ -36,7 +35,8 @@ void setVerbosityLevel(
     g_verbosityLevel = Priority::ERROR;
   }
 
-  configMap.erase(verbosityIt);
+  configMap.erase(it);
 }
 
-} // namespace qvac_lib_inference_addon_sd::logging
+} // namespace logging
+} // namespace qvac_lib_inference_addon_sd

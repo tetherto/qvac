@@ -3,11 +3,11 @@
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
-const { SdInterface, mapAddonEvent, readImageDimensions } = require('./addon')
+const { SdInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'esrgan']
+const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'clipVision', 'esrgan']
 
-const VIDEO_MODES = new Set(['txt2vid', 'img2vid', 'flf2vid'])
+const VIDEO_MODES = new Set(['txt2vid', 'img2vid'])
 
 function assertAbsolute (key, value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -30,7 +30,15 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 // larger Wan variants (14B, future checkpoints) may extend that range, but
 // the error message points users to the recommended set.
 function validateVideoFrames (n) {
-  if (!Number.isFinite(n) || n < 5 || (n - 1) % 4 !== 0) {
+  // Two distinct error classes: shape (must be an integer) vs. value
+  // (the 4*k+1 / >= 5 invariant). Tests rely on these messages staying
+  // separable; merging them obscures which one tripped.
+  if (!Number.isInteger(n)) {
+    throw new Error(
+      `video_frames must be an integer of the form (4*k + 1) with k >= 1. Got: ${n}`
+    )
+  }
+  if (n < 5 || (n - 1) % 4 !== 0) {
     throw new Error(
       'video_frames must be an integer >= 5 of the form (4*k + 1). ' +
       'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
@@ -40,9 +48,64 @@ function validateVideoFrames (n) {
   }
 }
 
+// See index.js::_coerceToUint8 for the long form of this contract — duplicated
+// here only because video.js does not depend on index.js (separate entry
+// points). Keep both copies in sync.
+function _coerceToUint8 (name, value) {
+  if (value instanceof Uint8Array) return value
+  if (ArrayBuffer.isView(value) && value.BYTES_PER_ELEMENT === 1) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  }
+  if (value instanceof ArrayBuffer ||
+      (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)) {
+    return new Uint8Array(value)
+  }
+  throw new TypeError(
+    `${name} must be a Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes. ` +
+    `Got: ${value === null ? 'null' : typeof value}`
+  )
+}
+
+// Read image width/height from a PNG or JPEG header without decoding pixels.
+// Returns { w, h } on success, or null if the buffer is too short/unrecognised.
+// Used to pre-validate off-grid frame dimensions before dispatching to C++.
+function peekImageDims (buf) {
+  if (!buf || buf.length < 8) return null
+  // PNG: 8-byte signature → 4-byte IHDR length → "IHDR" → 4-byte width → 4-byte height
+  if (
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
+    buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A
+  ) {
+    if (buf.length < 24) return null
+    const w = ((buf[16] << 24) | (buf[17] << 16) | (buf[18] << 8) | buf[19]) >>> 0
+    const h = ((buf[20] << 24) | (buf[21] << 16) | (buf[22] << 8) | buf[23]) >>> 0
+    return { w, h }
+  }
+  // JPEG: scan segments for SOF0–SOF3 (0xFF 0xC0–0xC3) which carry height/width
+  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    let i = 2
+    while (i + 3 < buf.length) {
+      if (buf[i] !== 0xFF) break
+      const marker = buf[i + 1]
+      if (marker === 0xD9 || marker === 0xDA) break // EOI or SOS
+      const segLen = (buf[i + 2] << 8) | buf[i + 3]
+      if (marker >= 0xC0 && marker <= 0xC3) {
+        if (buf.length >= i + 9) {
+          const h = (buf[i + 5] << 8) | buf[i + 6]
+          const w = (buf[i + 7] << 8) | buf[i + 8]
+          return { w, h }
+        }
+        break
+      }
+      i += 2 + segLen
+    }
+  }
+  return null
+}
+
 /**
- * Text-to-video, image-to-video, and first-last-frame video generation
- * using stable-diffusion.cpp's `generate_video()` path. Supports Wan 2.1
+ * Text-to-video and image-to-video generation using stable-diffusion.cpp's
+ * `generate_video()` path. Supports Wan 2.1
  * (single expert) and Wan 2.2 (mixture-of-experts with low- and high-noise
  * denoisers).
  *
@@ -68,6 +131,9 @@ class VideoStableDiffusion {
    *        encoder (Wan uses the `t5xxl_path` slot for UMT5). Absolute path.
    * @param {string} [args.files.vae]                     - Absolute path to
    *        the Wan VAE.
+   * @param {string} [args.files.clipVision]              - Absolute path to
+   *        clip_vision_h.safetensors (OpenCLIP ViT-H/14). Required for
+   *        img2vid; omit for txt2vid.
    * @param {string} [args.files.esrgan]                  - Optional; forwarded
    *        to the native ctx as `esrganPath` (empty string when unset). Video
    *        generation does not use ESRGAN — same binding shape as image mode.
@@ -139,6 +205,7 @@ class VideoStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: '',
       vaePath: this._files.vae || '',
+      clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
       config: this._config
     }
@@ -204,18 +271,15 @@ class VideoStableDiffusion {
    * Generate a video.
    *
    * Mode is **required** for video (no auto-detect). Choose one of:
-   *   - `'txt2vid'`  — prompt-only; rejects `init_image` and `end_image`.
-   *   - `'img2vid'`  — animate a single starting frame; requires
-   *                    `init_image`; rejects `end_image`.
-   *   - `'flf2vid'`  — interpolate between two frames; requires both
-   *                    `init_image` (first) and `end_image` (last).
+   *   - `'txt2vid'`  — prompt-only; rejects `init_image`.
+   *   - `'img2vid'`  — animate a single starting frame; requires `init_image`.
    *
    * Output stream (via `QvacResponse.onUpdate(data)`):
    *   - `Uint8Array` — a single MJPG AVI buffer at end-of-job.
    *   - `string`     — per-step progress JSON `{"step":N,"total":M,"elapsed_ms":T}`
    *
    * @param {object} params
-   * @param {'txt2vid'|'img2vid'|'flf2vid'} params.mode - Required.
+   * @param {'txt2vid'|'img2vid'} params.mode - Required.
    * @param {string} params.prompt                      - Required.
    * @param {string} [params.negative_prompt]
    * @param {number} [params.width=480]                 - Default portrait (phone-screen friendly).
@@ -234,10 +298,9 @@ class VideoStableDiffusion {
    * @param {number} [params.high_noise_cfg_scale]      - Wan 2.2 only.
    * @param {number} [params.high_noise_flow_shift]     - Wan 2.2 only.
    * @param {number} [params.moe_boundary]              - Wan 2.2 MoE split point [0,1].
-   * @param {number} [params.strength]                  - img2vid / flf2vid denoise strength.
+   * @param {number} [params.strength]                  - img2vid denoise strength.
    * @param {number} [params.vace_strength]             - VACE control-frame guidance.
-   * @param {Uint8Array}   [params.init_image]          - First frame (PNG/JPEG).
-   * @param {Uint8Array}   [params.end_image]           - flf2vid only: last frame.
+   * @param {Uint8Array}   [params.init_image]          - First frame (PNG/JPEG). Required for img2vid.
    * @param {Uint8Array[]} [params.control_frames]      - Optional VACE guidance frames.
    * @param {boolean} [params.vae_tiling]
    * @param {number|string} [params.vae_tile_size]
@@ -256,38 +319,35 @@ class VideoStableDiffusion {
       throw new TypeError('run(params): params must be an object')
     }
 
-    // ── Mode is required and must be one of the three video modes ──────
+    // The native handler enforces this too, but failing here gives a
+    // precise JS-side error and avoids a roundtrip to C++ for trivially
+    // invalid input.
+    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
+      throw new TypeError(
+        `params.prompt is required and must be a non-empty string. Got: ${typeof params.prompt}`
+      )
+    }
+
+    // ── Mode is required and must be one of the two video modes ────────
     if (typeof params.mode !== 'string' || !VIDEO_MODES.has(params.mode)) {
       throw new Error(
         'VideoStableDiffusion.run: params.mode is required and must be one of ' +
-        `'txt2vid' | 'img2vid' | 'flf2vid'. Got: ${JSON.stringify(params.mode)}`
+        `'txt2vid' | 'img2vid'. Got: ${JSON.stringify(params.mode)}`
       )
     }
     const { mode } = params
+    // True when the caller omits both width and height, meaning C++ will infer
+    // them from the input image. In that case we pre-validate that the image
+    // header dimensions are on the multiple-of-16 grid so the error message
+    // names the actual pixels rather than an internal derived value.
+    const dimsImplicit = params.width == null && params.height == null
 
-    // ── Prompt is required ─────────────────────────────────────────────
-    // JSDoc declares `params.prompt` as Required, but it's never type-checked
-    // here. Without this guard:
-    //   prompt: undefined  → JSON.stringify strips the key → C++
-    //                        SdVidGenConfig::prompt stays "" → noise-y, empty-
-    //                        prompt clip with no diagnostic.
-    //   prompt: ""         → SdParsers::requireStr accepts (no length check)
-    //                        → same outcome.
-    //   prompt: 42         → stringifies to "42" → requireStr throws in the
-    //                        native handler, far from this layer (confusing).
-    // Catch all three here so the JS caller gets one clear error at the
-    // wrapper boundary.
-    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
-      throw new TypeError(
-        'params.prompt is required and must be a non-empty string'
-      )
-    }
-
-    // ── Dimension alignment (multiples of 8) ─────────────────────────────
-    // Only validate provided dims; C++ falls back to 480x832 (portrait,
-    // phone-screen friendly) when omitted. Override either field for
-    // landscape (832x480 is Wan 1.3B's training res).
-    const alignTo = 8
+    // ── Dimension alignment (multiples of 16) ────────────────────────────
+    // Wan's spatial compression requires 16-aligned width/height (see
+    // addon.js::_fillDimsFromImage). Only validate provided dims; C++ falls
+    // back to 480x832 (portrait, phone-screen friendly) when omitted. Override
+    // either field for landscape (832x480 is Wan 1.3B's training res).
+    const alignTo = 16
     const w = params.width
     const h = params.height
     const wBad = w != null && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
@@ -319,62 +379,45 @@ class VideoStableDiffusion {
       }
     }
 
-    // ── init_image / end_image type checks ───────────────────────────────
-    if (params.init_image != null && !(params.init_image instanceof Uint8Array)) {
-      throw new TypeError(
-        'init_image must be a Uint8Array (e.g. fs.readFileSync("frame.png")). ' +
-        `Got: ${typeof params.init_image}`
-      )
-    }
-    if (params.end_image != null && !(params.end_image instanceof Uint8Array)) {
-      throw new TypeError(
-        `end_image must be a Uint8Array. Got: ${typeof params.end_image}`
-      )
-    }
-    if (params.init_image instanceof Uint8Array && params.init_image.length === 0) {
-      throw new Error('init_image must not be empty')
-    }
-    if (params.end_image instanceof Uint8Array && params.end_image.length === 0) {
-      throw new Error('end_image must not be empty')
+    // ── init_image type checks ────────────────────────────────────────────
+    // Accept Buffer / Uint8ClampedArray / ArrayBuffer in addition to plain
+    // Uint8Array; see _coerceToUint8 above for the contract.
+    if (params.init_image != null) {
+      params.init_image = _coerceToUint8('init_image', params.init_image)
+      if (params.init_image.length === 0) {
+        throw new Error('init_image must not be empty')
+      }
+      if (dimsImplicit) {
+        const dims = peekImageDims(params.init_image)
+        if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
+          throw new Error(
+            `init_image dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
+            'Pass explicit width/height to override or pre-scale the image.'
+          )
+        }
+      }
     }
 
     // ── init_images is an image-only feature ─────────────────────────────
     if (params.init_images != null) {
       throw new Error(
         'VideoStableDiffusion does not accept init_images (FLUX fusion is ' +
-        'image-only). Use init_image (and end_image for flf2vid), or ' +
-        'control_frames for VACE guidance.'
+        'image-only). Use init_image or control_frames for VACE guidance.'
       )
     }
 
-    // ── Mode-vs-inputs invariants (mirror SdModel::processVideo) ─────────
+    // ── Mode-vs-inputs invariants ─────────────────────────────────────────
     if (mode === 'txt2vid') {
       if (params.init_image != null) {
         throw new Error(
-          "txt2vid does not accept init_image. Use mode='img2vid' or " +
-          "'flf2vid' instead."
+          "txt2vid does not accept init_image. Use mode='img2vid' instead."
         )
-      }
-      if (params.end_image != null) {
-        throw new Error('txt2vid does not accept end_image.')
       }
     } else if (mode === 'img2vid') {
+      // After coercion above, init_image is either a normalized Uint8Array
+      // or null/undefined.
       if (!(params.init_image instanceof Uint8Array)) {
-        throw new Error('img2vid requires init_image (Uint8Array of PNG/JPEG bytes).')
-      }
-      if (params.end_image != null) {
-        throw new Error(
-          "end_image is only valid for mode='flf2vid'. Use flf2vid to " +
-          'interpolate between a first and last frame.'
-        )
-      }
-    } else {
-      // flf2vid
-      if (!(params.init_image instanceof Uint8Array)) {
-        throw new Error('flf2vid requires init_image (first frame, Uint8Array).')
-      }
-      if (!(params.end_image instanceof Uint8Array)) {
-        throw new Error('flf2vid requires end_image (last frame, Uint8Array).')
+        throw new Error('img2vid requires init_image (Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes).')
       }
     }
 
@@ -393,11 +436,26 @@ class VideoStableDiffusion {
         )
       }
       for (let i = 0; i < params.control_frames.length; i++) {
-        const f = params.control_frames[i]
-        if (!(f instanceof Uint8Array) || f.length === 0) {
-          throw new Error(
-            `control_frames[${i}] must be a non-empty Uint8Array (PNG/JPEG bytes).`
-          )
+        let coerced
+        try {
+          coerced = _coerceToUint8(`control_frames[${i}]`, params.control_frames[i])
+        } catch (_) {
+          throw new TypeError(`control_frames[${i}] must be a non-empty Uint8Array`)
+        }
+        if (coerced.length === 0) {
+          throw new TypeError(`control_frames[${i}] must be a non-empty Uint8Array`)
+        }
+        params.control_frames[i] = coerced
+      }
+      if (dimsImplicit) {
+        for (let i = 0; i < params.control_frames.length; i++) {
+          const dims = peekImageDims(params.control_frames[i])
+          if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
+            throw new Error(
+              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
+              'Pass explicit width/height to override or pre-scale the frame.'
+            )
+          }
         }
       }
     }
@@ -414,40 +472,17 @@ class VideoStableDiffusion {
       )
     }
 
-    // ── Off-grid image probe (implicit-dim path) ─────────────────────────
-    // Native processVideo() strict-compares every decoded init/end/control
-    // frame against vid.width / vid.height. When the caller doesn't pass
-    // explicit width/height, addon.js infers them from the first image's
-    // actual pixel dims (verbatim -- no silent rounding). Wan requires
-    // multiples of 8, so an off-grid image here would fail deep in the
-    // native pipeline with a cryptic stride error. Catch it up front and
-    // tell the user exactly which image and how to fix it.
-    if (params.width == null || params.height == null) {
-      const offGrid = (label, buf) => {
-        const d = readImageDimensions(buf)
-        if (!d) return null
-        if (d.width % alignTo !== 0 || d.height % alignTo !== 0) {
-          return `${label} dimensions ${d.width}x${d.height} must be ` +
-            `multiples of ${alignTo}. Pre-align the image, or pass ` +
-            `explicit width/height (also multiples of ${alignTo}) so the ` +
-            'video pipeline uses those dims instead.'
-        }
-        return null
-      }
-      if (params.init_image instanceof Uint8Array) {
-        const err = offGrid('init_image', params.init_image)
-        if (err) throw new Error(err)
-      }
-      if (params.end_image instanceof Uint8Array) {
-        const err = offGrid('end_image', params.end_image)
-        if (err) throw new Error(err)
-      }
-      if (Array.isArray(params.control_frames)) {
-        for (let i = 0; i < params.control_frames.length; i++) {
-          const err = offGrid(`control_frames[${i}]`, params.control_frames[i])
-          if (err) throw new Error(err)
-        }
-      }
+    // ── Wan 2.1 I2V CLIP vision sanity check ───────────────────────────────
+    // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
+    // conditioning in Wan 2.1 I2V. Without it the C++ layer cannot build the
+    // img_emb projection and will produce garbage or crash.
+    if (mode === 'img2vid' && !this._files.clipVision) {
+      throw new TypeError(
+        `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
+        'Download clip_vision_h.safetensors from ' +
+        'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +
+        'files.clipVision.'
+      )
     }
 
     // ── Wan 2.2 sanity check ─────────────────────────────────────────────
@@ -472,18 +507,12 @@ class VideoStableDiffusion {
       }
     }
 
-    // ── LoRA: not yet supported on the video path ────────────────────────
-    // `SD_VID_GEN_HANDLERS` has no "lora" entry and `SdModel::processVideo`
-    // never touches `sd_vid_gen_params_t::loras` / `lora_count`, so any LoRA
-    // path passed through here is silently dropped by the native side. Fail
-    // loudly at the JS boundary instead of silently producing LoRA-less
-    // output -- callers can re-enable this once the native handler + wiring
-    // land (mirror of `processImage` + `prepareLoras()`).
+    // ── LoRA is not supported for video generation ────────────────────────
     if (params.lora != null) {
-      throw new TypeError(
+      throw new Error(
         'params.lora is not supported for video generation yet. ' +
-        'LoRA is currently only wired through the image path ' +
-        '(ImgStableDiffusion); the Wan video pipeline ignores it.'
+        'Video generation uses distinct diffusion and expert components ' +
+        'that do not yet support LoRA injection.'
       )
     }
 
