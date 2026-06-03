@@ -180,3 +180,157 @@ jobs:
           path: ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
           retention-days: 90
           if-no-files-found: ignore
+
+  # Vulkan GPU variant of the desktop integration suite. Mirrors
+  # run-integration-tests but pins the matrix to the two Vulkan-capable GPU
+  # runners and selects the ggml Vulkan backend via OCR_GGML_BACKEND=vulkan.
+  # The full EasyOCR/DocTR suites (same assertions as CPU) must pass on GPU.
+  run-integration-tests-vulkan:
+    timeout-minutes: 30
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    name: test-vulkan-${{ matrix.platform }}-${{ matrix.arch }}
+
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64-gpu
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          git config --global core.longpaths true
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      # EasyOCR + Doctr GGUFs live in S3 under date-stamped snapshot
+      # directories. Bump the date segments below when new snapshots are
+      # published.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
+        run: |
+          if ! [[ "$PREBUILD_PACKAGE" =~ ^@?[A-Za-z0-9._/~^>=<-]+$ ]]; then
+            echo "ERROR: invalid prebuild_package spec" >&2
+            exit 1
+          fi
+          mkdir -p prebuilds
+          PACK_DIR="$(mktemp -d -t ocr-ggml-prebuild.XXXXXX)"
+          PACK_OUTPUT="$(npm pack "$PREBUILD_PACKAGE" --pack-destination "$PACK_DIR" --json | jq -r '.[0].filename')"
+          tar -xzf "$PACK_DIR/$PACK_OUTPUT" -C "$PACK_DIR"
+          cp -r "$PACK_DIR/package/prebuilds/." prebuilds/
+
+      # Diagnostic only: the GPU runners ship a Vulkan driver/ICD. Surface the
+      # available Vulkan devices for debugging, installing the loader + tools if
+      # they are missing. Non-fatal — the tests themselves still select the GPU
+      # (and report an explicit CPU fallback if no device is found).
+      - name: Vulkan sanity check (Linux)
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        continue-on-error: true
+        run: |
+          if ! command -v vulkaninfo >/dev/null 2>&1; then
+            echo "vulkaninfo not found; installing Vulkan loader + tools"
+            sudo apt-get update
+            sudo apt-get install -y mesa-vulkan-drivers vulkan-tools
+          fi
+          vulkaninfo --summary || echo "vulkaninfo unavailable; tests will still attempt GPU selection"
+
+      - name: Vulkan sanity check (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $vk = Get-Command vulkaninfo -ErrorAction SilentlyContinue
+          if ($null -eq $vk) {
+            Write-Host "vulkaninfo not on PATH; relying on the installed Vulkan runtime/driver"
+          } else {
+            vulkaninfo --summary
+          }
+
+      - name: Download EasyOCR + Doctr GGUF model files
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          mkdir -p models
+          aws s3 cp \
+            "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/" \
+            models/ \
+            --recursive
+          aws s3 cp \
+            "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/" \
+            models/ \
+            --recursive
+          ls -lh models/
+
+      - name: Run integration tests (Vulkan)
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: npm run test:integration
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          OCR_GGML_BACKEND: vulkan
+          OCR_GGML_DETECTOR: models/craft_mlt_25k.gguf
+          OCR_GGML_RECOGNIZER: models/latin_g2.gguf
+          OCR_GGML_DOCTR_DETECTOR: models/db_mobilenet_v3_large.gguf
+          OCR_GGML_DOCTR_RECOGNIZER: models/crnn_mobilenet_v3_small.gguf
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+        with:
+          name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-vulkan-${{ github.run_number }}
+          path: ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
+          retention-days: 90
+          if-no-files-found: ignore
