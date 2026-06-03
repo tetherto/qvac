@@ -1,5 +1,4 @@
 #include <bare.h>
-
 #include <inference-addon-cpp/JsInterface.hpp>
 
 #include "../addon/AddonJs.hpp"

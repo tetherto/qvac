@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { assertModelSrcMatchesModelType } from "@/utils/load-model-validation";
 import { ModelSrcTypeMismatchError } from "@/utils/errors-client";

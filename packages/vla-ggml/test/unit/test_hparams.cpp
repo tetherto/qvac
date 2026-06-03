@@ -3,7 +3,7 @@
 #include "model-interface/smolvla.hpp"
 
 TEST(SmolvlaHparams, DefaultsMatchSmolVlaConfig) {
-  smolvla_hparams hp;
+  SmolvlaHparams hp;
   EXPECT_EQ(hp.vision_image_size, 512);
   EXPECT_EQ(hp.vision_patch_size, 16);
   EXPECT_EQ(hp.vision_hidden_size, 768);
@@ -16,11 +16,11 @@ TEST(SmolvlaHparams, DefaultsMatchSmolVlaConfig) {
 }
 
 TEST(SmolvlaHparams, DerivedShapesMatchPaper) {
-  smolvla_hparams hp;
+  SmolvlaHparams hp;
   // (512/16)^2 = 1024 patches per image
-  EXPECT_EQ(hp.patches_per_image(), 1024);
+  EXPECT_EQ(hp.patchesPerImage(), 1024);
   // 1024 / (4*4) = 64 tokens per image
-  EXPECT_EQ(hp.tokens_per_image(), 64);
+  EXPECT_EQ(hp.tokensPerImage(), 64);
   // 768 * 4 * 4 = 12288 connector input features
-  EXPECT_EQ(hp.connector_in_features(), 12288);
+  EXPECT_EQ(hp.connectorInFeatures(), 12288);
 }

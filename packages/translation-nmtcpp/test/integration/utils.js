@@ -158,7 +158,8 @@ try {
       { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'validated 2026-04-23 (informal register)' }
     ],
     'indictrans.quality.json': [
-      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'validated 2026-04-23 (formal register, आप)' }
+      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'validated 2026-04-23 (formal register, आप)' },
+      { source: 'नमस्ते, आप कैसे हैं?', src_lang: 'hin_Deva', dst_lang: 'eng_Latn', reference: 'Hello, how are you?', notes: 'validated 2026-06-01 (reverse direction, QVAC-19836)' }
     ],
     'pivot-bergamot.quality.json': [
       { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'validated 2026-04-23 (informal register)' },
