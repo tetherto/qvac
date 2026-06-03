@@ -27,6 +27,8 @@ export interface ClassifyOptions {
   height?: number;
   /** Channel count. Must be `3` when passing raw RGB bytes. */
   channels?: 3;
+  /** When aborted, the in-flight inference rejects with the abort reason. */
+  signal?: AbortSignal;
 }
 
 export interface ImageClassifierLogger {

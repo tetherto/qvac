@@ -8,6 +8,7 @@ async function runTests () {
   test.pause()
 
   await import('./map-addon-event.test.js')
+  await import('./signal-forwarding.test.js')
 
   test.resume()
 }
