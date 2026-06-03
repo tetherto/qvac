@@ -75,10 +75,10 @@ if(ANDROID)
     list(GET LIBOMP_CANDIDATES 0 LIBOMP_FOUND_PATH)
     message(STATUS "Found libomp.so for aarch64: ${LIBOMP_FOUND_PATH}")
   else()
-    message(WARNING
+    message(FATAL_ERROR
       "libomp.so not found under ${NDK_PREBUILT}/lib/clang/*/lib/linux/aarch64/. "
-      "OpenMP will be disabled for this Android ARM64 build even though the "
-      "'openmp' vcpkg feature is active. Check your NDK installation."
+      "OpenMP is enabled via the 'openmp' vcpkg feature but the NDK does not "
+      "provide libomp.so for aarch64. Check your NDK installation."
     )
   endif()
 endif()
