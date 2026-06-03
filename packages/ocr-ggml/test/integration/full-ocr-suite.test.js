@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, createOcrGgml } = require('./utils')
 
 test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async function (t) {
   const detectorPath = await ensureModelPath('detector_craft')
@@ -31,14 +30,11 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
     }
   ]
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
   t.pass('OCR model loaded')

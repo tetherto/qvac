@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, platform, getImagePath, ensureModelPath, formatOCRPerformanceMetrics } = require('./utils')
+const { isMobile, platform, getImagePath, ensureModelPath, formatOCRPerformanceMetrics, createOcrGgml } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -16,14 +15,11 @@ test('OCR basic test', { timeout: TEST_TIMEOUT }, async function (t) {
   t.comment('Testing basic OCR with image: ' + imagePath)
   t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
   t.pass('OCR model loaded successfully')
@@ -53,7 +49,10 @@ test('OCR basic test', { timeout: TEST_TIMEOUT }, async function (t) {
     // Display stats
     const stats = response.stats || {}
     t.comment('Native addon stats: ' + JSON.stringify(stats))
-    t.comment(formatOCRPerformanceMetrics('[EasyOCR basic_test] [CPU]', stats, outputTexts))
+    // Reflect the ACTUAL backend the addon resolved (CPU stays the default;
+    // Vulkan runs report GPU, a Vulkan-requested CPU fallback reports CPU).
+    const backendTag = stats.backendIsGpu === 1 ? 'GPU' : 'CPU'
+    t.comment(formatOCRPerformanceMetrics(`[EasyOCR basic_test] [${backendTag}]`, stats, outputTexts))
 
     t.pass('OCR basic test completed successfully')
   } catch (e) {

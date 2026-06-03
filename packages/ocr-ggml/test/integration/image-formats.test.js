@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, createOcrGgml } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -17,14 +16,11 @@ test('OCR processes JPEG images correctly', { timeout: TEST_TIMEOUT }, async fun
 
   t.comment('Testing JPEG format with image: ' + imagePath)
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
 
@@ -65,14 +61,11 @@ test('OCR processes PNG images correctly', { timeout: TEST_TIMEOUT }, async func
 
   t.comment('Testing PNG format with image: ' + imagePath)
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
 
@@ -112,14 +105,11 @@ test('BMP and JPEG produce consistent results', { timeout: TEST_TIMEOUT }, async
   const bmpPath = getImagePath('/test/images/basic_test.bmp')
   const jpgPath = getImagePath('/test/images/basic_test.jpg')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
 

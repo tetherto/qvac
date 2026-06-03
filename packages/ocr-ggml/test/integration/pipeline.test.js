@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, createOcrGgml } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 60 * 1000 // 1 minute for desktop
@@ -15,14 +14,11 @@ test('Test for a fix of missing end of job event', { timeout: TEST_TIMEOUT }, as
 
   t.comment('Testing with image: ' + imagePath)
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
 

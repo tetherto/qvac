@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, createOcrGgml } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -24,14 +23,11 @@ test('Large images are resized internally with coordinates in original space', {
 
   t.comment('Testing internal resize with image: ' + imagePath + ' (' + originalImageWidth + 'x' + originalImageHeight + ')')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
 

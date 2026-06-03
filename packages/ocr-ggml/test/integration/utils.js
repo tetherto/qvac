@@ -292,6 +292,38 @@ function _envInt (key, fallback) {
   return Number.isFinite(v) && v > 0 ? v : fallback
 }
 
+/**
+ * Resolves the ggml backend device for the integration suite from the
+ * OCR_GGML_BACKEND env var (mirrors the `_envInt` lookup pattern so it works
+ * under both bare-os and node). Returns 'vulkan' only when the value is exactly
+ * `vulkan` (case-insensitive); everything else (unset / 'cpu' / garbage)
+ * defaults to 'cpu'. CPU is always available; 'vulkan' opts in to GPU inference
+ * and transparently falls back to CPU when no Vulkan device is present.
+ * @returns {'cpu'|'vulkan'}
+ */
+function getBackendDevice () {
+  let raw = ''
+  if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
+  if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
+  return String(raw).trim().toLowerCase() === 'vulkan' ? 'vulkan' : 'cpu'
+}
+
+/**
+ * Shared OcrGgml constructor for the integration suite. Injects the
+ * env-selected `backendDevice` (see {@link getBackendDevice}) so every test
+ * honours OCR_GGML_BACKEND, while a caller-provided `backendDevice` still wins.
+ * @param {Object} [params] - OcrGgml params (merged over the injected backendDevice)
+ * @param {Object} [opts] - OcrGgml opts (e.g. { stats: true })
+ * @returns {Object} new OcrGgml instance
+ */
+function createOcrGgml (params = {}, opts) {
+  const { OcrGgml } = require('../..')
+  return new OcrGgml({
+    params: { backendDevice: getBackendDevice(), ...params },
+    opts
+  })
+}
+
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
 
 // Singleton performance reporter — collects metrics across all OCR integration tests
@@ -537,7 +569,15 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   const textRegionsCount = stats.textRegionsCount || 0
   const totalSeconds = (totalTimeMs / 1000).toFixed(2)
 
-  const device = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  // Prefer the ACTUAL backend reported by the native addon so
+  // `execution_provider` stays truthful even on a Vulkan-requested CPU
+  // fallback. Fall back to the label regex when the stat is unavailable
+  // (e.g. DocTR `skipReport` calls on hosts without the stat).
+  const device = stats.backendIsGpu === 1
+    ? 'gpu'
+    : stats.backendIsGpu === 0
+      ? 'cpu'
+      : /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
 
   let quality = null
   const gt = (opts && opts.groundTruth) || (opts && opts.imagePath ? findGroundTruth(opts.imagePath) : null)
@@ -641,6 +681,7 @@ async function runDoctrOCR (t, params, imagePath) {
       langList: ['en'],
       pipelineType: 'doctr',
       nThreads: 4,
+      backendDevice: getBackendDevice(),
       ...params
     },
     opts: { stats: true }
@@ -683,6 +724,8 @@ module.exports = {
   isWindows,
   platform,
   PERF_RUNS,
+  getBackendDevice,
+  createOcrGgml,
   getImagePath,
   ensureModelPath,
   ensureDoctrModels,

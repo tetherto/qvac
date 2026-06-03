@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, createOcrGgml } = require('./utils')
 
 // 10 minutes: the dense page is heavy on slow CI runners.
 const TEST_TIMEOUT = 600 * 1000
@@ -25,15 +24,12 @@ test('canvasSize bounds the detection canvas and still recognizes a dense page',
   // that triggered the original Android OOM.
   const imagePath = getImagePath('/test/images/lab_results.png')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en'],
-      canvasSize: 1280
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en'],
+    canvasSize: 1280
+  }, { stats: true })
 
   await ocrGgml.load()
   t.pass('Loaded with reduced canvasSize=1280')
