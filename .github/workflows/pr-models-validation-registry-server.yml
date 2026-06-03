@@ -256,7 +256,7 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: node scripts/sync-models.js --file=./data/models.prod.json
-        timeout-minutes: 30
+        timeout-minutes: 70
 
   smoke-test:
     needs:
