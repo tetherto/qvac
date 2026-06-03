@@ -83,6 +83,7 @@ declare module "bare-fs" {
     path: string,
     options?: WriteStreamOptions,
   ): WriteStream;
+  export function mkdtempSync(prefix: string): string;
   export function existsSync(path: string): boolean;
   export const constants: {
     F_OK: number;

@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import {
   loadModelOptionsToRequestSchema,
@@ -22,12 +21,8 @@ import { ModelType } from "@/schemas/model-types";
 // `cancelHandler.ts`.
 // -----------------------------------------------------------------------------
 
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-};
 
-test("loadModelOptionsToRequestSchema: forwards requestId onto the wire envelope", (t: T) => {
+test("loadModelOptionsToRequestSchema: forwards requestId onto the wire envelope", (t) => {
   const parsed = loadModelOptionsToRequestSchema.parse({
     modelType: ModelType.llamacppCompletion,
     modelSrc: "/tmp/model.gguf",
@@ -40,7 +35,7 @@ test("loadModelOptionsToRequestSchema: forwards requestId onto the wire envelope
   );
 });
 
-test("loadModelOptionsToRequestSchema: requestId is optional (legacy clients)", (t: T) => {
+test("loadModelOptionsToRequestSchema: requestId is optional (legacy clients)", (t) => {
   const parsed = loadModelOptionsToRequestSchema.parse({
     modelType: ModelType.llamacppCompletion,
     modelSrc: "/tmp/model.gguf",
@@ -52,7 +47,7 @@ test("loadModelOptionsToRequestSchema: requestId is optional (legacy clients)", 
   );
 });
 
-test("downloadAssetOptionsToRequestSchema: forwards requestId onto the wire envelope", (t: T) => {
+test("downloadAssetOptionsToRequestSchema: forwards requestId onto the wire envelope", (t) => {
   const parsed = downloadAssetOptionsToRequestSchema.parse({
     assetSrc: "/tmp/asset.bin",
     requestId: "client-uuid-dl",
@@ -64,14 +59,14 @@ test("downloadAssetOptionsToRequestSchema: forwards requestId onto the wire enve
   );
 });
 
-test("downloadAssetOptionsToRequestSchema: requestId is optional", (t: T) => {
+test("downloadAssetOptionsToRequestSchema: requestId is optional", (t) => {
   const parsed = downloadAssetOptionsToRequestSchema.parse({
     assetSrc: "/tmp/asset.bin",
   });
   t.is((parsed as { requestId?: string }).requestId, undefined);
 });
 
-test("ragRequestSchema: forwards requestId for ingest", (t: T) => {
+test("ragRequestSchema: forwards requestId for ingest", (t) => {
   const parsed = ragRequestSchema.parse({
     type: "rag",
     operation: "ingest",
@@ -87,7 +82,7 @@ test("ragRequestSchema: forwards requestId for ingest", (t: T) => {
   );
 });
 
-test("ragRequestSchema: requestId is optional for ingest", (t: T) => {
+test("ragRequestSchema: requestId is optional for ingest", (t) => {
   const parsed = ragRequestSchema.parse({
     type: "rag",
     operation: "ingest",
@@ -98,7 +93,7 @@ test("ragRequestSchema: requestId is optional for ingest", (t: T) => {
   t.is((parsed as { requestId?: string }).requestId, undefined);
 });
 
-test("ragRequestSchema: forwards requestId for reindex (storage-only op)", (t: T) => {
+test("ragRequestSchema: forwards requestId for reindex (storage-only op)", (t) => {
   const parsed = ragRequestSchema.parse({
     type: "rag",
     operation: "reindex",
@@ -108,7 +103,7 @@ test("ragRequestSchema: forwards requestId for reindex (storage-only op)", (t: T
   t.is((parsed as { requestId?: string }).requestId, "client-uuid-reindex");
 });
 
-test("ragRequestSchema: forwards requestId for saveEmbeddings", (t: T) => {
+test("ragRequestSchema: forwards requestId for saveEmbeddings", (t) => {
   const parsed = ragRequestSchema.parse({
     type: "rag",
     operation: "saveEmbeddings",

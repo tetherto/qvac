@@ -1,4 +1,3 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 
 // Exercises the close-vs-respawn race: a stale exit handler must not

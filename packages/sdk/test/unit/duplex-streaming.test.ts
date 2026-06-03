@@ -1,4 +1,3 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 import { z } from "zod";
 import {
@@ -16,21 +15,11 @@ import {
 import { createErrorResponse } from "@/schemas/error";
 import { textToSpeechStreamRequestSchema } from "@/schemas/text-to-speech";
 
-type BrittleT = {
-  is: Function;
-  ok: Function;
-  exception: Function;
-  execution: Function;
-  not: Function;
-  alike: Function;
-  teardown: Function;
-};
-
 // =============================================================================
 // defineDuplexHandler — type-safe definition without unsafe casts
 // =============================================================================
 
-test("defineDuplexHandler: returns a valid PluginHandlerDefinition with duplex flag", (t: BrittleT) => {
+test("defineDuplexHandler: returns a valid PluginHandlerDefinition with duplex flag", (t) => {
   const requestSchema = z.object({ modelId: z.string() });
   const responseSchema = z.object({ text: z.string() });
 
@@ -51,7 +40,7 @@ test("defineDuplexHandler: returns a valid PluginHandlerDefinition with duplex f
   t.ok(handler.responseSchema === responseSchema, "responseSchema preserved");
 });
 
-test("defineDuplexHandler: handler receives inputStream as AsyncIterable<Buffer>", async (t: BrittleT) => {
+test("defineDuplexHandler: handler receives inputStream as AsyncIterable<Buffer>", async (t) => {
   const requestSchema = z.object({ modelId: z.string() });
   const responseSchema = z.object({ text: z.string() });
   let receivedStream: AsyncIterable<Buffer> | undefined;
@@ -77,7 +66,7 @@ test("defineDuplexHandler: handler receives inputStream as AsyncIterable<Buffer>
   t.ok(receivedStream !== undefined, "inputStream was passed to handler");
 });
 
-test("defineHandler: still works for non-duplex handlers", (t: BrittleT) => {
+test("defineHandler: still works for non-duplex handlers", (t) => {
   const requestSchema = z.object({ value: z.string() });
   const responseSchema = z.object({ ok: z.boolean() });
 
@@ -98,13 +87,13 @@ test("defineHandler: still works for non-duplex handlers", (t: BrittleT) => {
 // createErrorResponse — consistent error shape
 // =============================================================================
 
-test("createErrorResponse: produces { type: 'error' } envelope", (t: BrittleT) => {
+test("createErrorResponse: produces { type: 'error' } envelope", (t) => {
   const response = createErrorResponse(new Error("test failure"));
   t.is(response.type, "error", "type is 'error'");
   t.ok("message" in response, "has message field");
 });
 
-test("createErrorResponse: handles non-Error values", (t: BrittleT) => {
+test("createErrorResponse: handles non-Error values", (t) => {
   const response = createErrorResponse("string error");
   t.is(response.type, "error", "type is 'error' for string input");
 });
@@ -113,7 +102,7 @@ test("createErrorResponse: handles non-Error values", (t: BrittleT) => {
 // TranscribeStreamSession — destroy() interface
 // =============================================================================
 
-test("TranscribeStreamSession: interface includes destroy()", (t: BrittleT) => {
+test("TranscribeStreamSession: interface includes destroy()", (t) => {
   let destroyed = false;
 
   const session: TranscribeStreamSession = {
@@ -135,7 +124,7 @@ test("TranscribeStreamSession: interface includes destroy()", (t: BrittleT) => {
   t.ok(destroyed, "destroy() was called");
 });
 
-test("TranscribeStreamSession: destroy() tears down both streams", (t: BrittleT) => {
+test("TranscribeStreamSession: destroy() tears down both streams", (t) => {
   let writeDestroyed = false;
   let readDestroyed = false;
 
@@ -185,7 +174,7 @@ test("TranscribeStreamSession: destroy() tears down both streams", (t: BrittleT)
 // Schema validation — transcribeStream schemas
 // =============================================================================
 
-test("transcribeStreamRequestSchema: validates minimal request", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: validates minimal request", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "test-model",
@@ -193,7 +182,7 @@ test("transcribeStreamRequestSchema: validates minimal request", (t: BrittleT) =
   t.ok(result.success, "valid request passes");
 });
 
-test("transcribeStreamRequestSchema: does not require audioChunk", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: does not require audioChunk", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "test-model",
@@ -201,7 +190,7 @@ test("transcribeStreamRequestSchema: does not require audioChunk", (t: BrittleT)
   t.ok(result.success, "request without audioChunk is valid (duplex sends audio via stream)");
 });
 
-test("transcribeStreamResponseSchema: validates response with text", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: validates response with text", (t) => {
   const result = transcribeStreamResponseSchema.safeParse({
     type: "transcribeStream",
     text: "hello world",
@@ -209,7 +198,7 @@ test("transcribeStreamResponseSchema: validates response with text", (t: Brittle
   t.ok(result.success, "response with text is valid");
 });
 
-test("transcribeStreamResponseSchema: validates done response", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: validates done response", (t) => {
   const result = transcribeStreamResponseSchema.safeParse({
     type: "transcribeStream",
     done: true,
@@ -217,7 +206,7 @@ test("transcribeStreamResponseSchema: validates done response", (t: BrittleT) =>
   t.ok(result.success, "done response is valid");
 });
 
-test("transcribeStreamResponseSchema: validates error response", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: validates error response", (t) => {
   const result = transcribeStreamResponseSchema.safeParse({
     type: "transcribeStream",
     error: "model failed",
@@ -229,7 +218,7 @@ test("transcribeStreamResponseSchema: validates error response", (t: BrittleT) =
 // PluginHandlerDefinition — duplex flag in runtime schema
 // =============================================================================
 
-test("pluginHandlerDefinition: duplex field is optional in runtime validation", (t: BrittleT) => {
+test("pluginHandlerDefinition: duplex field is optional in runtime validation", (t) => {
   const withoutDuplex = pluginHandlerDefinitionRuntimeSchema.safeParse({
     requestSchema: { safeParse: () => {} },
     responseSchema: { safeParse: () => {} },
@@ -314,7 +303,7 @@ async function runMockDuplexHandler(
   return outputLines;
 }
 
-test("duplex integration: end-to-end text segments from audio chunks", async (t: BrittleT) => {
+test("duplex integration: end-to-end text segments from audio chunks", async (t) => {
   async function* echoHandler(
     _request: Record<string, unknown>,
     inputStream: AsyncIterable<Buffer>,
@@ -346,7 +335,7 @@ test("duplex integration: end-to-end text segments from audio chunks", async (t:
   t.ok(segments[1]!.includes("3200"), "second segment reflects second chunk size");
 });
 
-test("duplex integration: server error propagates as error response", async (t: BrittleT) => {
+test("duplex integration: server error propagates as error response", async (t) => {
   async function* failingHandler(
     _request: Record<string, unknown>,
     _inputStream: AsyncIterable<Buffer>,
@@ -367,7 +356,7 @@ test("duplex integration: server error propagates as error response", async (t: 
   );
 });
 
-test("duplex integration: session single-use iteration guard", async (t: BrittleT) => {
+test("duplex integration: session single-use iteration guard", async (t) => {
   let consumed = false;
   const fakeResponses = (async function* () {
     yield "hello";
@@ -398,7 +387,7 @@ test("duplex integration: session single-use iteration guard", async (t: Brittle
   t.ok(threw, "second iteration throws");
 });
 
-test("duplex integration: line-delimited parser handles residual buffer without trailing newline", async (t: BrittleT) => {
+test("duplex integration: line-delimited parser handles residual buffer without trailing newline", async (t) => {
   async function* mockStream(): AsyncIterable<Buffer> {
     yield Buffer.from(
       JSON.stringify({ type: "transcribeStream", text: "hello" }) + "\n" +
@@ -430,7 +419,7 @@ test("duplex integration: line-delimited parser handles residual buffer without 
   t.is(texts[2], "residual", "residual buffer was processed");
 });
 
-test("duplex integration: line-delimited parser handles chunked delivery across multiple yields", async (t: BrittleT) => {
+test("duplex integration: line-delimited parser handles chunked delivery across multiple yields", async (t) => {
   const full =
     JSON.stringify({ type: "transcribeStream", text: "first" }) + "\n" +
     JSON.stringify({ type: "transcribeStream", text: "second" }) + "\n";
@@ -465,7 +454,7 @@ test("duplex integration: line-delimited parser handles chunked delivery across 
 // Backwards-compatible overload — schema validation for both paths
 // =============================================================================
 
-test("transcribeRequestSchema requires audioChunk (batch overload path)", (t: BrittleT) => {
+test("transcribeRequestSchema requires audioChunk (batch overload path)", (t) => {
   const valid = transcribeRequestSchema.safeParse({
     type: "transcribe",
     modelId: "test-model",
@@ -480,7 +469,7 @@ test("transcribeRequestSchema requires audioChunk (batch overload path)", (t: Br
   t.ok(!missing.success, "batch request without audioChunk is rejected");
 });
 
-test("transcribeStreamRequestSchema does not include audioChunk (duplex overload path)", (t: BrittleT) => {
+test("transcribeStreamRequestSchema does not include audioChunk (duplex overload path)", (t) => {
   const valid = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "test-model",
@@ -496,7 +485,7 @@ test("transcribeStreamRequestSchema does not include audioChunk (duplex overload
   t.ok(!("audioChunk" in (withExtra.data ?? {})), "audioChunk absent from parsed output");
 });
 
-test("textToSpeechStreamRequestSchema accepts duplex TTS params", (t: BrittleT) => {
+test("textToSpeechStreamRequestSchema accepts duplex TTS params", (t) => {
   const valid = textToSpeechStreamRequestSchema.safeParse({
     type: "textToSpeechStream",
     modelId: "tts-1",
@@ -513,7 +502,7 @@ test("textToSpeechStreamRequestSchema accepts duplex TTS params", (t: BrittleT) 
   }
 });
 
-test("duplex integration: empty/done-only handler produces no text segments", async (t: BrittleT) => {
+test("duplex integration: empty/done-only handler produces no text segments", async (t) => {
   async function* emptyHandler(
     _request: Record<string, unknown>,
     _inputStream: AsyncIterable<Buffer>,

@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { decoratePromise } from "@/utils/decorate-promise";
 
@@ -20,18 +19,8 @@ import { decoratePromise } from "@/utils/decorate-promise";
 //     promise's `.then` chain keeps working without re-wrapping.
 // -----------------------------------------------------------------------------
 
-type T = {
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  ok: (value: unknown, msg?: string) => void;
-  exception: (
-    fn: () => Promise<unknown> | unknown,
-    matcher?: unknown,
-    msg?: string,
-  ) => Promise<void>;
-};
 
-test("decoratePromise: await still unwraps to T (backward-compat)", async (t: T) => {
+test("decoratePromise: await still unwraps to T (backward-compat)", async (t) => {
   const inner = Promise.resolve("model-id-123");
   const op = decoratePromise(inner, { requestId: "abc" });
 
@@ -44,7 +33,7 @@ test("decoratePromise: await still unwraps to T (backward-compat)", async (t: T)
   t.is(typeof result, "string", "result type is preserved");
 });
 
-test("decoratePromise: metadata reachable synchronously before settle", async (t: T) => {
+test("decoratePromise: metadata reachable synchronously before settle", async (t) => {
   // Promise that won't settle for a tick — we want to read `requestId`
   // synchronously before it does.
   let resolveInner!: (value: string) => void;
@@ -65,7 +54,7 @@ test("decoratePromise: metadata reachable synchronously before settle", async (t
   t.is(op.requestId, "sync-id", "metadata still present after settle");
 });
 
-test("decoratePromise: rejection propagates through await", async (t: T) => {
+test("decoratePromise: rejection propagates through await", async (t) => {
   const inner = Promise.reject(new Error("inner failure"));
   const op = decoratePromise(inner, { requestId: "rej-id" });
 
@@ -78,20 +67,18 @@ test("decoratePromise: rejection propagates through await", async (t: T) => {
   }, /inner failure/);
 });
 
-test("decoratePromise: returns the same object identity (in-place assign)", (t: T) => {
+test("decoratePromise: returns the same object identity (in-place assign)", (t) => {
   const inner = Promise.resolve(42);
   const op = decoratePromise(inner, { requestId: "id-1" });
 
   t.is(
     op,
-    // @ts-expect-error -- this is the identity check that motivates the
-    // helper's return-same-instance contract.
     inner,
     "decoratePromise must mutate in place; the returned promise is the input promise",
   );
 });
 
-test("decoratePromise: .then / .catch / .finally chain intact", async (t: T) => {
+test("decoratePromise: .then / .catch / .finally chain intact", async (t) => {
   const inner = Promise.resolve("piped");
   const op = decoratePromise(inner, { requestId: "chain-id" });
 
@@ -111,7 +98,7 @@ test("decoratePromise: .then / .catch / .finally chain intact", async (t: T) => 
   );
 });
 
-test("decoratePromise: multiple metadata fields are all attached", async (t: T) => {
+test("decoratePromise: multiple metadata fields are all attached", async (t) => {
   const inner = Promise.resolve("v");
   const op = decoratePromise(inner, {
     requestId: "multi-id",
