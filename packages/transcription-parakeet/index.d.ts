@@ -1,4 +1,4 @@
-import QvacResponse from '@qvac/infer-base/src/QvacResponse'
+import type { QvacResponse } from '@qvac/infer-base'
 import type { LoggerInterface } from '@qvac/logging'
 import { Readable } from 'stream'
 
@@ -232,6 +232,16 @@ declare interface StreamingRunConfig {
   chunkRightContextMs?: number
   /** AOSC: FIFO-overflow pop-out count (overrides `streamingSpkCacheUpdatePeriod`). */
   spkCacheUpdatePeriod?: number
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
+}
+
+/**
+ * Per-call options for `TranscriptionParakeet.run()`.
+ */
+declare interface ParakeetRunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
 }
 
 /**
@@ -293,7 +303,8 @@ declare class TranscriptionParakeet {
    * construction, `response.stats` matches {@link TranscriptionParakeet.RuntimeStats}.
    */
   run(
-    audioStream: Readable
+    audioStream: Readable,
+    runOptions?: ParakeetRunOptions
   ): Promise<QvacResponse<TranscriptionParakeet.ParakeetRunOutput>>
 
   /**
@@ -396,7 +407,8 @@ declare namespace TranscriptionParakeet {
     Addon,
     BackendId,
     InferenceClientState,
-    StreamingRunConfig
+    StreamingRunConfig,
+    ParakeetRunOptions
   }
 }
 

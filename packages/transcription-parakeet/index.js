@@ -166,11 +166,17 @@ class TranscriptionParakeet {
     this.state.weightsLoaded = true
   }
 
-  async run (input) {
+  /**
+   * @param {AsyncIterable<Buffer>|Buffer|Float32Array} input - audio input
+   * @param {Object} [runOptions]
+   * @param {AbortSignal} [runOptions.signal] - When aborted, the returned response fails with the abort reason.
+   * @returns {Promise<QvacResponse>}
+   */
+  async run (input, runOptions = {}) {
     if (this.exclusiveRun) {
-      return await this._withExclusiveRun(() => this._runInternal(input))
+      return await this._withExclusiveRun(() => this._runInternal(input, runOptions))
     }
-    return await this._runInternal(input)
+    return await this._runInternal(input, runOptions)
   }
 
   /**
@@ -196,6 +202,8 @@ class TranscriptionParakeet {
    *   segments on chunk boundaries (default true)
    * @param {boolean} [streamingConfig.emitEnergyVad] - surface
    *   energy-VAD events for CTC/TDT
+   * @param {AbortSignal} [streamingConfig.signal] - When aborted, the
+   *   returned response fails with the abort reason.
    * @returns {Promise<QvacResponse>} - response object exposing
    *   `onUpdate(seg => ...).await()`
    */
@@ -206,6 +214,17 @@ class TranscriptionParakeet {
       )
     }
     return await this._runStreamingInternal(audioStream, streamingConfig)
+  }
+
+  /**
+   * Removes `signal` from a per-call options object before it is forwarded to
+   * the native addon (which does not understand AbortSignal). Returns the
+   * extracted signal plus the cleaned object.
+   */
+  _extractSignal (options) {
+    if (!options || typeof options !== 'object') return { signal: undefined, rest: options }
+    const { signal, ...rest } = options
+    return { signal, rest }
   }
 
   async _withExclusiveRun (fn) {
@@ -238,8 +257,8 @@ class TranscriptionParakeet {
    * @param {AsyncIterable<Buffer>} audioStream - Stream of audio data (16kHz mono, Float32 or s16le)
    * @returns {Promise<QvacResponse>} - Response object for tracking the transcription job
    */
-  async _runInternal (audioStream) {
-    const response = this._job.start()
+  async _runInternal (audioStream, runOptions = {}) {
+    const response = this._job.start({ signal: runOptions && runOptions.signal })
 
     let normalized
     try {
@@ -257,11 +276,12 @@ class TranscriptionParakeet {
   }
 
   async _runStreamingInternal (audioStream, streamingConfig) {
+    const { signal, rest: nativeStreamingConfig } = this._extractSignal(streamingConfig)
     const normalized = this._normalizeAudioStream(audioStream)
-    const response = this._job.start()
+    const response = this._job.start({ signal })
 
     try {
-      await this.addon.startStreaming(streamingConfig || {})
+      await this.addon.startStreaming(nativeStreamingConfig || {})
     } catch (error) {
       this._job.fail(error)
       throw error
