@@ -314,6 +314,7 @@ case only when the corresponding GGUFs are present on disk:
 | `OCR_GGML_DOCTR_DETECTOR` | Doctr | Doctr case |
 | `OCR_GGML_DOCTR_RECOGNIZER` | Doctr | Doctr case |
 | `OCR_GGML_IMAGE` | — | overrides the default sample image |
+| `OCR_GGML_BACKEND` | — | ggml backend device for the whole suite: `cpu` (default) or `vulkan` |
 
 CI sets these automatically; locally you can:
 
@@ -322,6 +323,27 @@ OCR_GGML_DETECTOR=$PWD/models/craft_mlt_25k.gguf \
 OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
 npm run test:integration
 ```
+
+### Running the suite on Vulkan (GPU)
+
+By default the integration suite runs CPU-only. Set `OCR_GGML_BACKEND=vulkan`
+to run every EasyOCR + DocTR case through the ggml Vulkan backend (with the
+same expected-text / quality assertions as CPU):
+
+```bash
+OCR_GGML_BACKEND=vulkan \
+OCR_GGML_DETECTOR=$PWD/models/craft_mlt_25k.gguf \
+OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
+npm run test:integration
+```
+
+On a host without a Vulkan-capable GPU (or without the `libggml-vulkan`
+backend lib), the request transparently falls back to CPU and the suite still
+passes — the recorded `execution_provider` reflects the backend actually used
+(driven by the `backendIsGpu` stat), not the request. In CI, the dedicated
+`test-vulkan-<platform>-<arch>` job runs this suite on the two Vulkan-capable
+GPU runners (`qvac-ubuntu2404-x64-gpu`, `qvac-win25-x64-gpu`); the CPU
+`test-<platform>-<arch>` matrix is unchanged.
 
 ## Repository layout
 
