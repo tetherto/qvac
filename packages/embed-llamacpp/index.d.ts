@@ -37,6 +37,11 @@ export interface GGMLBertArgs {
   opts?: { stats?: boolean }
 }
 
+export interface RunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
+}
+
 export interface AddonConfigurationParams {
   path: string
   config: GGMLConfig
@@ -61,7 +66,7 @@ export default class GGMLBert {
   constructor(args: GGMLBertArgs)
 
   load(): Promise<void>
-  run(text: string | string[]): Promise<QvacResponse>
+  run(text: string | string[], runOptions?: RunOptions): Promise<QvacResponse>
   unload(): Promise<void>
   cancel(): Promise<void>
   getState(): { configLoaded: boolean }
