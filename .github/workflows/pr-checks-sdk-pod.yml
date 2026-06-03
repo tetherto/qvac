@@ -1,13 +1,17 @@
 name: PR Checks (SDK Pod)
 
 on:
+  # Plain `pull_request` (NOT pull_request_target): fork PRs run with a
+  # read-only token and no secrets, so it is safe to check out and execute PR
+  # code (install/lint/build/test). These checks need no secrets, so the
+  # privileged context would buy nothing and only add "pwn request" risk.
+  #
   # No trigger-level `paths:` filter on purpose: this workflow publishes the
   # required "SDK Pod Checks" status, which must report on EVERY PR or GitHub
-  # blocks unrelated PRs ("waiting for status to be reported"). A trigger-level
-  # path filter would skip the whole workflow and wedge those PRs. Instead the
-  # single job below detects SDK pod changes itself and is a fast no-op when
-  # nothing relevant changed.
-  pull_request_target:
+  # blocks unrelated PRs ("waiting for status to be reported"). The single job
+  # below detects SDK pod changes itself and is a fast no-op when nothing
+  # relevant changed.
+  pull_request:
     types:
       - opened
       - synchronize
@@ -39,36 +43,30 @@ jobs:
   # no-op (detect step only) when no SDK pod files changed, so unrelated PRs are
   # unaffected. Mark THIS job's name ("SDK Pod Checks") required in the ruleset.
   #
-  #   - no SDK pod files changed     -> pass (no PR code is checked out or run)
+  #   - no SDK pod files changed     -> pass (no checks run)
   #   - changed + checks pass        -> pass
-  #   - changed + unauthorized fork  -> fail (needs the safe-to-test label)
   #   - changed + a check fails      -> fail (blocks the merge)
   #   - changed + a check fails, but the 'skip-sdk-pod-checks' label is set
   #                                  -> pass (audited override for e.g. a
   #                                     confirmed false-positive test; the
   #                                     failure is still run and logged)
   #
-  # Security (pull_request_target): the PR head is only checked out / executed
-  # after the authorization gate passes. Trusted = same-repo PRs, actors with
-  # write, org members/collaborators, or fork PRs carrying the safe-to-test
-  # label. On a new push from an external fork the label is stripped first, to
-  # force re-review of the updated code.
-  #
+  # The package config and the diff baseline are read from the trusted base
+  # commit (not the PR), so a PR cannot edit the config to skip its own checks.
   # Packages are checked sequentially in this single job (instead of a parallel
   # matrix) so that exactly one check appears on every PR.
   # ---------------------------------------------------------------------------
   sdk-pod-checks:
     name: SDK Pod Checks
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      # Checkout the base branch (trusted). Used only to read the config and to
-      # diff changed file names — no PR code is executed in this step.
+      # Checkout the trusted base commit. The package config and the diff
+      # baseline are read from here — never from the PR — so a PR cannot edit
+      # the config to exclude itself from its own checks.
       - name: Checkout base
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ github.event.pull_request.base.sha || github.ref }}
           fetch-depth: 0
 
       - name: Detect changed SDK pod packages
@@ -80,6 +78,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # Fail closed: any error here (git fetch/diff, jq) fails the step and
+          # therefore the whole "SDK Pod Checks" job — never a silent green.
+          set -euo pipefail
+
           # Default optional fields when not specified in config
           ALL_PACKAGES=$(jq -c '[.[] | .pkg_manager //= "npm" | .needs_bare //= false | .tests_bare //= false]' .github/sdk-pod-checks.json)
 
@@ -87,7 +89,7 @@ jobs:
             # workflow_dispatch: run all packages
             PACKAGES="$ALL_PACKAGES"
           else
-            # Fetch PR head (available on base repo via pull refs)
+            # Fetch PR head (available on the repo via pull refs)
             git fetch origin "refs/pull/${PR_NUMBER}/head"
 
             # Filter to only packages with changed files in this PR
@@ -109,113 +111,35 @@ jobs:
 
       # ----- Everything below runs only when SDK pod files changed -----
 
-      - name: Check actor write permission
-        id: perm
-        if: steps.detect.outputs.has_changes == 'true'
-        uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3 # 1.0.6
-        with:
-          required-permission: write
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Authorize (strip stale safe-to-test on new fork pushes)
-        id: authz
-        if: steps.detect.outputs.has_changes == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT: ${{ github.event_name }}
-          ACTION: ${{ github.event.action }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPO: ${{ github.repository }}
-          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
-          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'safe-to-test') }}
-          HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -uo pipefail
-
-          if [ "$EVENT" = "workflow_dispatch" ]; then
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # New push from an external fork without write permission: strip the
-          # safe-to-test label so the updated code must be re-reviewed.
-          if [ "$HAS_WRITE" != "1" ] && [ "$ACTION" = "synchronize" ] && [ "$HEAD_REPO" != "$BASE_REPO" ]; then
-            gh api -X DELETE "repos/${BASE_REPO}/issues/${PR_NUMBER}/labels/safe-to-test" 2>/dev/null || true
-            echo "::warning::Removed safe-to-test label - new commits pushed. Re-review required."
-            echo "allowed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Same-repo PRs are always trusted
-          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
-            echo "::notice::Same-repo PR - authorized"
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "::notice::Actor '$GITHUB_ACTOR' has write-or-higher permission: $HAS_WRITE"
-
-          # Actor with write (or higher) is trusted even when author_association is not MEMBER/COLLABORATOR.
-          if [ "$HAS_WRITE" = "1" ]; then
-            echo "::notice::Actor has write-or-higher permission - authorized"
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Org members / collaborators (by author_association) are trusted even from forks
-          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
-            echo "::notice::Trusted author ($AUTHOR_ASSOC) - authorized"
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # External fork PRs require the safe-to-test label
-          if [ "$HAS_LABEL" = "true" ]; then
-            echo "::notice::Fork PR with safe-to-test label - authorized"
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::External fork PR without safe-to-test label - a team member must review the code and apply the 'safe-to-test' label"
-            echo "allowed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Block unauthorized fork PR
-        if: steps.detect.outputs.has_changes == 'true' && steps.authz.outputs.allowed != 'true'
-        shell: bash
-        run: |
-          echo "::error::SDK pod files changed but the checks are not authorized to run. A team member must review the code and apply the 'safe-to-test' label."
-          exit 1
-
-      # PR head checkout and all script execution happen ONLY when authorized.
+      # Safe under `pull_request`: fork PRs get a read-only token and no secrets,
+      # so checking out and executing PR code cannot exfiltrate anything.
       - name: Checkout PR head
-        if: steps.detect.outputs.has_changes == 'true' && steps.authz.outputs.allowed == 'true'
+        if: steps.detect.outputs.has_changes == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Bun
-        if: steps.detect.outputs.has_changes == 'true' && steps.authz.outputs.allowed == 'true'
+        if: steps.detect.outputs.has_changes == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
           bun-version: latest
 
       - name: Setup Node
-        if: steps.detect.outputs.has_changes == 'true' && steps.authz.outputs.allowed == 'true'
+        if: steps.detect.outputs.has_changes == 'true'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
 
       - name: Run SDK pod checks
-        if: steps.detect.outputs.has_changes == 'true' && steps.authz.outputs.allowed == 'true'
+        if: steps.detect.outputs.has_changes == 'true'
         shell: bash
         env:
           PACKAGES: ${{ steps.detect.outputs.packages }}
           # Maintainer escape hatch: when this label is present the gate still
           # runs and logs failures, but reports success so an urgent fix can
           # land over a confirmed false-positive check. Audited via the label
-          # and the warning below; does NOT bypass the authorization gate.
+          # and the warning below.
           OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'skip-sdk-pod-checks') }}
         run: |
           set -uo pipefail
