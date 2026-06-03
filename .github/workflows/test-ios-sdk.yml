@@ -855,48 +855,9 @@ jobs:
 
       - name: Fail on e2e result failures
         if: success() || failure()
-        working-directory: ${{ inputs.working-directory }}
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-
-          const reportDir = 'reports';
-          if (!fs.existsSync(reportDir)) {
-            console.error('❌ No reports directory found; cannot verify e2e result summary.');
-            process.exit(1);
-          }
-
-          const resultFiles = fs.readdirSync(reportDir)
-            .filter((file) => file.startsWith('results-') && file.endsWith('.json'))
-            .sort();
-          if (resultFiles.length === 0) {
-            console.error('❌ No results-*.json files found; cannot verify e2e result summary.');
-            process.exit(1);
-          }
-
-          let failed = 0;
-          let total = 0;
-          for (const file of resultFiles) {
-            const fullPath = path.join(reportDir, file);
-            const report = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-            if (!report.summary || typeof report.summary.failed !== 'number') {
-              console.error(`❌ ${fullPath} does not contain a numeric summary.failed value.`);
-              process.exit(1);
-            }
-
-            const fileTotal = typeof report.summary.total === 'number' ? report.summary.total : 0;
-            failed += report.summary.failed;
-            total += fileTotal;
-            console.log(`${file}: ${report.summary.failed} failed / ${fileTotal} total`);
-          }
-
-          if (failed > 0) {
-            console.error(`❌ E2E results contain ${failed} failed test(s) across ${resultFiles.length} report(s).`);
-            process.exit(1);
-          }
-
-          console.log(`✅ E2E result summaries are green (${total} total tests across ${resultFiles.length} report(s)).`);
+        uses: ./.github/actions/sdk-e2e-fail-on-failures
+        with:
+          report-dir: ${{ inputs.working-directory }}/reports
 
   cleanup-device-farm:
     name: "[ios] cleanup-device-farm"
