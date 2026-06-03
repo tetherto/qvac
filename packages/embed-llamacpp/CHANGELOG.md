@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.2] - 2026-06-03
+
+### Fixed
+
+- **Multi-GPU params rejected on Android/iOS**: passing `split-mode` (non-`none`), `main-gpu`, or `tensor-split` on a mobile device now throws `InvalidArgument` immediately in `setupParams`, before any backend selection occurs. Previously these parameters could silently cause undefined behaviour on mobile. Use single-GPU config on mobile.
+
+## Pull Requests
+
+- [#2352](https://github.com/tetherto/qvac/pull/2352) - QVAC-18802: reject multi-GPU config on Android/iOS
+
 ## [0.18.1] - 2026-06-02
 
 ### Changed
