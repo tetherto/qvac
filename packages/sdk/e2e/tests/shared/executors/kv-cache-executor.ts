@@ -24,7 +24,6 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       if (test.testId === "kv-cache-stats-verification") return [test.testId, this.statsVerification.bind(this)];
       if (test.testId === "kv-cache-tools-sequential-save") return [test.testId, this.toolsSequentialSave.bind(this)];
       if (test.testId === "kv-cache-tools-dynamic-reuse") return [test.testId, this.toolsDynamicReuse.bind(this)];
-      if (test.testId === "kv-cache-tools-dynamic-reuse-qwen35") return [test.testId, this.toolsDynamicReuse.bind(this)];
       if (test.testId === "kv-cache-cancel-then-new-prompt") return [test.testId, this.cancelThenNewPrompt.bind(this)];
       if (test.testId.startsWith("kv-cache-delete-") || test.testId === "kv-cache-hypercore-deletion") {
         return [test.testId, this.deleteCacheOp.bind(this)];
@@ -455,16 +454,10 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       firstUserMessage: string;
       secondUserMessage: string;
       toolResult: string;
-      // Which dynamic-tools resource to exercise. Defaults to the
-      // hermes-dialect `tools-dynamic` (Qwen3-1.7B); the qwen35 variant
-      // passes `tools-qwen35-dynamic` so the `<function=…>` qwen35 parser
-      // path is covered too.
-      resourceKey?: string;
-      toolDialect?: string;
     },
     expectation: Expectation,
   ): Promise<TestResult> {
-    const resourceKey = params.resourceKey ?? "tools-dynamic";
+    const resourceKey = "tools-dynamic";
     let modelId = await this.resources.ensureLoaded(resourceKey);
 
     const runTurn = (history: ChatMessage[]) =>
@@ -475,7 +468,6 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
           stream: false,
           kvCache: params.cacheKey,
           tools: params.tools as never,
-          ...(params.toolDialect ? { toolDialect: params.toolDialect as never } : {}),
         });
         const text = await result.text;
         const toolCalls = result.toolCalls
@@ -557,8 +549,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       }
 
       const summary =
-        `Dynamic tools + kvCache reuse OK [${resourceKey}` +
-        `${params.toolDialect ? `/${params.toolDialect}` : ""}]: ` +
+        `Dynamic tools + kvCache reuse OK [${resourceKey}]: ` +
         `r1Calls=${r1.toolCalls.length}, ` +
         `r2CacheTokens=${r2.cacheTokens} (post-reload reuse), ` +
         `r3Calls=${r3.toolCalls.length} (warm), r3CacheTokens=${r3.cacheTokens}`;

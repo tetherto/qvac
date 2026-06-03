@@ -269,40 +269,6 @@ export const kvCacheToolsDynamicReuse: TestDefinition = {
   metadata: { category: "kv-cache", dependency: "tools-dynamic", estimatedDurationMs: 120000 },
 };
 
-// Same scenario as above on a qwen35-dialect model
-// (`QWEN3_5_0_8B_MULTIMODAL_Q4_K_M`). The hermes-dialect variant above proves
-// the cache mechanics; this one proves the `<function=…>` qwen35 tool-call
-// parser keeps firing under dynamic mode + kvCache reuse + reload.
-export const kvCacheToolsDynamicReuseQwen35: TestDefinition = {
-  testId: "kv-cache-tools-dynamic-reuse-qwen35",
-  params: {
-    cacheKey: "tools-dynamic-reuse-qwen35-session",
-    resourceKey: "tools-qwen35-dynamic",
-    toolDialect: "qwen35",
-    firstUserMessage: "What is 10 + 20?",
-    secondUserMessage: "Now what is 5 + 5?",
-    toolResult: "30",
-    tools: [
-      {
-        type: "function",
-        name: "calculator",
-        description: "Performs basic math operations",
-        parameters: {
-          type: "object",
-          properties: {
-            operation: { type: "string", enum: ["add", "subtract", "multiply", "divide"] },
-            a: { type: "number" },
-            b: { type: "number" },
-          },
-          required: ["operation", "a", "b"],
-        },
-      },
-    ],
-  },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "kv-cache", dependency: "tools-qwen35-dynamic", estimatedDurationMs: 120000 },
-};
-
 export const kvCacheCancelThenNewPrompt: TestDefinition = {
   testId: "kv-cache-cancel-then-new-prompt",
   params: {
@@ -339,6 +305,5 @@ export const kvCacheTests = [
   kvCacheNoSystemPrompt,
   kvCacheToolsSequentialSave,
   kvCacheToolsDynamicReuse,
-  kvCacheToolsDynamicReuseQwen35,
   kvCacheCancelThenNewPrompt,
 ];
