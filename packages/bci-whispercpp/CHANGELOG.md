@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3]
+
+vcpkg dependency consistency with `transcription-whispercpp` (QVAC-19009).
+Bumps the whisper-cpp port to `1.8.5#1` (which consumes
+`ggml-speech@2026-06-02`) and aligns the shared C++ dependencies. No
+JS/native source changes; no public API change.
+
+### Changed
+
+- `vcpkg.json`: `whisper-cpp` override `1.8.4.2` → `1.8.5#1`
+  (matches `transcription-whispercpp`'s current pin, which pulls
+  `ggml-speech@2026-06-02`); `qvac-lint-cpp` (unpinned) → `>=1.4.4#3`.
+  `qvac-lib-inference-addon-cpp` is already `>=1.2.1` on `main` (#2355).
+- `vcpkg-configuration.json`: `default-registry.baseline`
+  `acdd94de…` → `a9d7e924…` — the **same baseline
+  `transcription-whispercpp` uses**, not registry HEAD. The newer
+  `whisper-cpp` / `ggml-speech` are pulled from the registry's version
+  history via the `overrides` + transitive `version>=` constraints, not
+  by moving the baseline to HEAD; the baseline only had to advance far
+  enough to contain a `ggml-speech` port entry (bci's previous
+  `acdd94de` predated that port).
+- `vcpkg-configuration.json`: route `vulkan` / `vulkan-headers` /
+  `vulkan-loader` / `spirv-headers` to the Microsoft registry — required
+  for baseline validation because `ggml-speech` (pulled transitively by
+  `whisper-cpp`) declares a `vulkan` default-feature whose
+  `spirv-headers` dependency the qvac registry does not vendor.
+
+### Android: dynamic backend loading activates
+
+`whisper-cpp@1.8.5#1` consumes the `ggml-speech` port, which on Android
+builds ggml with `GGML_BACKEND_DL=ON` + `GGML_CPU_ALL_VARIANTS=ON`. The
+android-arm64 prebuild now ships the per-arch CPU backend modules
+(`libqvac-speech-ggml-cpu-android_armv8.0_1.so` …
+`…_armv9.2_2.so`) loaded at runtime via `dlopen`. The loader added in
+`0.1.2` (`ensureBackendsLoadedAndroid()`) is what makes this safe. No
+GPU backends yet (that is `0.2.0` / QVAC-19234). Verified locally by
+cross-building the android-arm64 prebuild with the NDK.
+
 ## [0.1.2]
 
 Android dynamic-backend-loading infrastructure (QVAC-19235). Behaviour
