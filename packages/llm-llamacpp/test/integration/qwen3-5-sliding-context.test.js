@@ -376,20 +376,40 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
 
   await model.load()
 
-  const run = await runAndCollect(model, [
+  const seedRun = await runAndCollect(model, [
     { role: 'system', content: 'You are a storyteller. Write detailed stories with many characters.' },
-    { role: 'user', content: 'Tell a long story about a brave knight on many adventures.' }
+    { role: 'user', content: 'Continue with simple filler words until you reach the token limit.' }
   ], {
+    cacheKey: cachePath,
+    saveCacheToDisk: true,
     generationParams: {
-      predict: 512,
+      predict: 160,
       seed: 42,
       temp: 0,
       top_k: 1
     }
   })
 
-  t.ok(run.output.length > 0, `${options.label} produced output`)
-  t.ok(run.stats.contextSlides > 0, `${options.label} exercised CPU context sliding`)
+  t.ok(seedRun.output.length > 0, `${options.label} seeded cache`)
+
+  const run = await runAndCollect(model, [
+    {
+      role: 'user',
+      content: `Answer "ok" after reading this prefill pressure. ${' blue'.repeat(440)}`
+    }
+  ], {
+    cacheKey: cachePath,
+    saveCacheToDisk: true,
+    generationParams: {
+      predict: 8,
+      seed: 42,
+      temp: 0,
+      top_k: 1
+    }
+  })
+
+  t.ok(run.output.length > 0, `${options.label} produced output after prefill slide`)
+  t.ok(run.stats.contextSlides > 0, `${options.label} exercised prefill context sliding`)
   t.ok(run.stats.CacheTokens < 512, `${options.label} cache stays within context (${run.stats.CacheTokens})`)
 }
 
@@ -497,15 +517,28 @@ safeTest('[qwen3.5-sliding-context] pq4 K-cache shifts multimodal and text token
   })
 })
 
-safeTest('[qwen3.5-sliding-context] llama3.2 CPU pq4 K-cache shifts text tokens', {
+safeTest('[qwen3.5-sliding-context] llama3.2 pq4 K-cache prefill-slides text tokens', {
   timeout: 900_000,
   skip: skipTbqPq
 }, async t => {
   await runLlamaSlidingCacheCase(t, {
-    label: 'llama3.2 pq4 K-cache',
-    cacheFileName: 'llama3-2-cpu-pq4-kcache-sliding-cache.bin',
+    label: 'llama3.2 pq4 K-cache prefill',
+    cacheFileName: 'llama3-2-pq4-kcache-prefill-sliding-cache.bin',
     extraConfig: {
       'cache-type-k': 'pq4_0'
+    }
+  })
+})
+
+safeTest('[qwen3.5-sliding-context] llama3.2 tbq4 K-cache prefill-slides text tokens', {
+  timeout: 900_000,
+  skip: skipTbqPq
+}, async t => {
+  await runLlamaSlidingCacheCase(t, {
+    label: 'llama3.2 tbq4 K-cache prefill',
+    cacheFileName: 'llama3-2-tbq4-kcache-prefill-sliding-cache.bin',
+    extraConfig: {
+      'cache-type-k': 'tbq4_0'
     }
   })
 })

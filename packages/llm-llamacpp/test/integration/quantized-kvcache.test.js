@@ -10,6 +10,7 @@
 // TBQ/PQ KV memory than f16 when native stats are available.
 
 const test = require('brittle')
+const fs = require('bare-fs')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
@@ -73,6 +74,13 @@ const CACHE_CONFIGS = [
 // if the parsed value rounds identically in rare configurations.
 const MEM_EPSILON_MIB = 0.1
 
+function normalizeStats (rawStats = {}) {
+  return {
+    CacheTokens: Number(rawStats.CacheTokens || rawStats.cacheTokens || 0),
+    contextSlides: Number(rawStats.contextSlides || 0)
+  }
+}
+
 // Extract the KV-cache size (MiB) for the current smoke run from the native
 // llama.cpp logs. Two defences against cross-test log leakage:
 //
@@ -112,6 +120,17 @@ function parseKvCacheMiB (logs, cfg) {
 
 function isTurboQuantUnsupported (err) {
   return /TurboQuant.*not supported/i.test(err && err.message ? err.message : '')
+}
+
+async function runAndCollect (model, prompt, runOptions) {
+  const response = await model.run(prompt, runOptions)
+  const chunks = []
+  await response.onUpdate(data => { chunks.push(data) }).await()
+
+  return {
+    output: chunks.join(''),
+    stats: normalizeStats(response.stats)
+  }
 }
 
 async function runBenchmark (cfg, modelInfo) {
@@ -162,6 +181,81 @@ async function runBenchmark (cfg, modelInfo) {
   }
 }
 
+async function runPrefillSlidingSmoke (t, cfg, modelInfo, label) {
+  const [modelName, dirPath] = await ensureModel({
+    modelName: modelInfo.name,
+    downloadUrl: modelInfo.url
+  })
+
+  const cachePath = path.join(dirPath, `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-prefill-sliding-cache.bin`)
+  try { fs.unlinkSync(cachePath) } catch (_) {}
+
+  const model = new LlmLlamacpp({
+    files: { model: [path.join(dirPath, modelName)] },
+    config: {
+      device: 'gpu',
+      gpu_layers: '999',
+      ctx_size: '512',
+      n_discarded: '64',
+      temp: '0',
+      seed: '42',
+      verbosity: '2',
+      'cache-type-k': cfg.k
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  try {
+    await model.load()
+
+    const seedRun = await runAndCollect(model, [
+      { role: 'system', content: 'You are a storyteller. Write detailed stories with many characters.' },
+      { role: 'user', content: 'Continue with simple filler words until you reach the token limit.' }
+    ], {
+      cacheKey: cachePath,
+      saveCacheToDisk: true,
+      generationParams: {
+        predict: 160,
+        seed: 42,
+        temp: 0,
+        top_k: 1
+      }
+    })
+
+    t.ok(seedRun.output.length > 0, `${label}: seeded cache`)
+
+    const run = await runAndCollect(model, [
+      {
+        role: 'user',
+        content: `Answer "ok" after reading this prefill pressure. ${' blue'.repeat(440)}`
+      }
+    ], {
+      cacheKey: cachePath,
+      saveCacheToDisk: true,
+      generationParams: {
+        predict: 8,
+        seed: 42,
+        temp: 0,
+        top_k: 1
+      }
+    })
+
+    t.ok(run.output.length > 0, `${label}: produced output after prefill slide`)
+    t.ok(run.stats.contextSlides > 0, `${label}: exercised prefill context sliding`)
+    t.ok(run.stats.CacheTokens < 512, `${label}: cache stays within context (${run.stats.CacheTokens})`)
+  } catch (err) {
+    if (isTurboQuantUnsupported(err)) {
+      t.comment(`${label}: SKIPPED (tbq/pq unsupported on this backend: ${err.message})`)
+      return
+    }
+    throw err
+  } finally {
+    try { fs.unlinkSync(cachePath) } catch (_) {}
+    await model.unload().catch(() => { })
+  }
+}
+
 async function runHeadDimSmoke (t, modelInfo, label) {
   const results = []
 
@@ -201,6 +295,14 @@ test('Quantized KV cache head_dim=64 smoke: Llama 3.2 1B TBQ/PQ', { skip: skipRe
 
 test('Quantized KV cache head_dim=128 smoke: Llama 3.2 3B TBQ/PQ', { skip: skipReason, timeout: 900_000 }, async t => {
   await runHeadDimSmoke(t, MODEL_3B, 'Llama 3.2 3B')
+})
+
+test('Quantized KV cache head_dim=128 prefill sliding: Llama 3.2 3B pq4 K-cache', { skip: skipReason, timeout: 900_000 }, async t => {
+  await runPrefillSlidingSmoke(t, { k: 'pq4_0' }, MODEL_3B, 'Llama 3.2 3B pq4 K-cache')
+})
+
+test('Quantized KV cache head_dim=128 prefill sliding: Llama 3.2 3B tbq4 K-cache', { skip: skipReason, timeout: 900_000 }, async t => {
+  await runPrefillSlidingSmoke(t, { k: 'tbq4_0' }, MODEL_3B, 'Llama 3.2 3B tbq4 K-cache')
 })
 
 test('Quantized KV cache head_dim=256 smoke: Qwen3.5 TBQ/PQ', { skip: skipReason, timeout: 900_000 }, async t => {
