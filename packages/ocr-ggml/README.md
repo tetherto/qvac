@@ -107,7 +107,7 @@ bare examples/quickstart.js \
 | `params.recognizerBatchSize` | `number` | | `32` | recognizer batch size (`easyocr` only) |
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
 | `params.backendsDir` | `string` | | `<package>/prebuilds` | directory holding `libggml-*.so` backend shared libs |
-| `params.backendDevice` | `'cpu'` \| `'vulkan'` | | `'cpu'` | ggml backend device. `'vulkan'` opts in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan) |
+| `params.backendDevice` | `'cpu'` \| `'vulkan'` \| `'metal'` | | `'cpu'` | ggml backend device. `'vulkan'` (Linux/Windows/Android) and `'metal'` (Apple) opt in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan--metal) |
 | `opts.stats` | `boolean` | | `false` | emit timing stats on `finish` |
 | `logger` | `Object` | | `null` | optional `{ info, warn, error, debug }` — receives C++ log lines |
 
@@ -121,10 +121,11 @@ bare examples/quickstart.js \
 - `getBackendInfo(): BackendInfo | null` — backend device resolved at `load()` (`{ requested, backendDevice, backendName, fallbackReason }`); `null` before `load()` / after `unload()`
 - `OcrGgml.getModelKey(): string` — `"ocr-ggml"`, used by the inference manager
 
-### Backend device (CPU / Vulkan)
+### Backend device (CPU / Vulkan / Metal)
 
 By default inference runs on the **CPU** ggml backend, which is always
-available. Set `params.backendDevice: 'vulkan'` to opt in to GPU inference:
+available. Set `params.backendDevice` to `'vulkan'` (Linux/Windows/Android) or
+`'metal'` (Apple) to opt in to GPU inference:
 
 ```js
 const ocr = new OcrGgml({
@@ -132,33 +133,46 @@ const ocr = new OcrGgml({
     pathDetector: '/abs/path/craft_mlt_25k.gguf',
     pathRecognizer: '/abs/path/english_g2.gguf',
     langList: ['en'],
-    backendDevice: 'vulkan'   // default is 'cpu'
+    backendDevice: 'metal'   // 'cpu' (default) | 'vulkan' | 'metal'
   }
 })
 await ocr.load()
 console.log(ocr.getBackendInfo())
 // Vulkan available → { requested: 'vulkan', backendDevice: 'GPU',  backendName: 'Vulkan0', fallbackReason: '' }
 // no Vulkan device → { requested: 'vulkan', backendDevice: 'CPU',  backendName: 'CPU',     fallbackReason: 'Vulkan backend requested but no Vulkan-capable GPU device was found; falling back to CPU' }
+// Metal available  → { requested: 'metal',  backendDevice: 'GPU',  backendName: 'MTL0',    fallbackReason: '' }  // device name; 'MTL1'… on a multi-GPU host
+// no Metal device  → { requested: 'metal',  backendDevice: 'CPU',  backendName: 'CPU',     fallbackReason: 'Metal backend requested but no Metal-capable GPU device was found; falling back to CPU' }
 ```
 
 Behaviour and expectations:
 
-- **Transparent CPU fallback.** When `'vulkan'` is requested but no
-  Vulkan-capable GPU device is registered, the pipeline falls back to CPU and
+- **Transparent CPU fallback.** When `'vulkan'` / `'metal'` is requested but no
+  matching GPU device is registered, the pipeline falls back to CPU and
   records a non-empty `fallbackReason` (also reflected by the numeric
   `backendIsGpu` stat). It never silently does the wrong thing.
 - **Required backend libs.** Vulkan execution needs the `libggml-vulkan`
   backend shared library (`libggml-vulkan.so` / `.dll` / `.dylib`) present in
   `backendsDir` (default `<package>/prebuilds/<target>/`), plus a working
-  Vulkan driver/ICD and a Vulkan-capable GPU on the host. These libs are only
-  produced on platforms/feature sets where the upstream ggml port builds the
-  Vulkan backend; on other hosts the request quietly falls back to CPU.
+  Vulkan driver/ICD and a Vulkan-capable GPU on the host. **Metal** is compiled
+  into the addon (no extra shared library), and is available whenever ggml was
+  built with the qvac-fabric `gpu-backends` feature (the default on Apple).
+  These GPU backends are only produced on platforms/feature sets where the
+  upstream ggml port builds them; on other hosts the request quietly falls back
+  to CPU.
 - **DocTR recognizer.** Only the MobileNetV3 feature-extractor graph runs on
   the selected ggml device; the recognizer's downstream LSTM + linear
   classifier always run on CPU (plain C++, no ggml graph), regardless of
   `backendDevice`.
 - **Threads.** `nThreads` only affects the CPU backend; it is ignored when a
-  Vulkan device is selected.
+  Vulkan or Metal device is selected.
+- **Performance guidance (Metal).** The win depends on the detector. The
+  EasyOCR pipeline's CRAFT detector is dense-convolution and benefits strongly
+  from the GPU (≈4.5× faster on Metal on an Apple M3 Ultra vs CPU). The DocTR
+  detector is MobileNetV3 (depthwise-separable convolutions) — a low-arithmetic
+  -intensity, GPU-unfriendly workload that runs *slower* on Metal than on CPU;
+  output is identical either way. Recommended default: **EasyOCR → `'metal'`,
+  DocTR → `'cpu'`** on Apple. Since `backendDevice` is per-instance, you can mix
+  both. (Numbers are workload/hardware dependent — measure for your case.)
 
 ### `run(input)` shape
 
@@ -193,7 +207,7 @@ This is byte-for-byte the same shape `@qvac/ocr-onnx` returns.
   detectionTime: number,    // seconds (CRAFT inference)
   recognitionTime: number,  // seconds (CRNN inference)
   numBoxes: number,         // total boxes (aligned + unaligned)
-  backendIsGpu: number      // 1 if inference ran on a GPU (Vulkan) device, else 0
+  backendIsGpu: number      // 1 if inference ran on a GPU (Vulkan/Metal) device, else 0
 }
 ```
 

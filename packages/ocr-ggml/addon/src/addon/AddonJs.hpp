@@ -123,10 +123,11 @@ getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
   return path.as<std::string>(env);
 }
 
-// Optional `params.backendDevice` ('cpu' | 'vulkan'). Default keeps CPU
-// inference; 'vulkan' requests a Vulkan-capable GPU with transparent CPU
-// fallback (see OcrBackendSelection). Extracted from createInstance to keep
-// that factory's cognitive complexity under the clang-tidy threshold.
+// Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal'). Default keeps
+// CPU inference; 'vulkan' (Linux/Windows/Android) and 'metal' (Apple) request a
+// matching GPU with transparent CPU fallback (see OcrBackendSelection).
+// Extracted from createInstance to keep that factory's cognitive complexity
+// under the clang-tidy threshold.
 void applyBackendDevice(
     js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
     OcrConfig& config) {
@@ -139,12 +140,14 @@ void applyBackendDevice(
   const auto backendDevice = optBackendDevice->as<std::string>(env);
   if (backendDevice == "vulkan") {
     config.backendDevice = BackendDevice::VULKAN;
+  } else if (backendDevice == "metal") {
+    config.backendDevice = BackendDevice::METAL;
   } else if (backendDevice == "cpu") {
     config.backendDevice = BackendDevice::CPU;
   } else {
     throw StatusError{
         general_error::InvalidArgument,
-        "backendDevice must be 'cpu' or 'vulkan'"};
+        "backendDevice must be 'cpu', 'vulkan', or 'metal'"};
   }
 }
 

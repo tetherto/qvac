@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <format>
 #include <string>
 #include <string_view>
 
@@ -43,8 +44,14 @@ const char* deviceTypeName(enum ggml_backend_dev_type type) {
   }
 }
 
-// First Vulkan-capable GPU/iGPU device, or nullptr if none is registered.
-ggml_backend_dev_t findVulkanGpuDevice() {
+// First GPU/iGPU device whose backend name satisfies `matches`, or nullptr if
+// none is registered. Used to resolve both Vulkan and Metal requests.
+//
+// Matches against BOTH the device name and its backend-registration name: ggml
+// names Vulkan devices "Vulkan0" (so the device name carries the backend), but
+// Metal devices are named "MTL0"/"MTL1" while the backing registration is named
+// "Metal". Checking the reg name lets the Metal request resolve correctly.
+ggml_backend_dev_t findGpuDeviceByName(bool (*matches)(std::string_view)) {
   const size_t count = ggml_backend_dev_count();
   for (size_t i = 0; i < count; ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
@@ -56,8 +63,14 @@ ggml_backend_dev_t findVulkanGpuDevice() {
         type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
       continue;
     }
-    const char* nameRaw = ggml_backend_dev_name(dev);
-    if (isVulkanBackendName(nameRaw != nullptr ? nameRaw : "")) {
+    const char* devNameRaw = ggml_backend_dev_name(dev);
+    if (devNameRaw != nullptr && matches(devNameRaw)) {
+      return dev;
+    }
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const char* regNameRaw =
+        (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
+    if (regNameRaw != nullptr && matches(regNameRaw)) {
       return dev;
     }
   }
@@ -84,35 +97,88 @@ bool isVulkanBackendName(std::string_view backendName) {
   return toLower(backendName).find("vulkan") != std::string::npos;
 }
 
+bool isMetalBackendName(std::string_view backendName) {
+  // ggml's Metal backend identifies as "MTL": the backend registration is named
+  // "MTL" and devices are "MTL0"/"MTL1"… (the human-readable description
+  // carries the GPU model, e.g. "Apple M3 Ultra", and varies per device). Match
+  // the stable "MTL" prefix so selection is generic across all Apple GPUs; also
+  // accept a "metal" prefix defensively in case a future ggml renames the
+  // backend. Prefix (not substring) matching mirrors tts-ggml /
+  // transcription-parakeet and avoids false positives on unrelated names that
+  // merely contain "mtl".
+  const std::string lower = toLower(backendName);
+  return lower.rfind("mtl", 0) == 0 || lower.rfind("metal", 0) == 0;
+}
+
+namespace {
+
+// Resolve a GPU-backed request (Vulkan or Metal). On success fills `sel` with
+// the matched device and returns true; otherwise records a CPU-fallback reason
+// and returns false (the caller then resolves the CPU device).
+bool trySelectGpu(
+    BackendSelection& sel, std::string_view label,
+    bool (*matches)(std::string_view)) {
+  ggml_backend_dev_t dev = findGpuDeviceByName(matches);
+  if (dev != nullptr) {
+    sel.device = dev;
+    const char* nameRaw = ggml_backend_dev_name(dev);
+    sel.backendName =
+        (nameRaw != nullptr) ? std::string(nameRaw) : std::string(label);
+    sel.backendDevice = deviceTypeName(ggml_backend_dev_type(dev));
+    const char* descRaw = ggml_backend_dev_description(dev);
+    QLOG(
+        Priority::INFO,
+        std::format(
+            "ocr-ggml: selected {} backend '{}' ({}, {})",
+            label,
+            sel.backendName,
+            sel.backendDevice,
+            descRaw != nullptr ? descRaw : ""));
+    return true;
+  }
+  sel.fallbackReason = std::format(
+      "{} backend requested but no {}-capable GPU device was found; falling "
+      "back to CPU",
+      label,
+      label);
+  QLOG(Priority::WARN, std::format("ocr-ggml: {}", sel.fallbackReason));
+  return false;
+}
+
+} // namespace
+
 BackendSelection selectBackendDevice(BackendDevice requested) {
   BackendSelection sel;
-  sel.requested = (requested == BackendDevice::VULKAN) ? "vulkan" : "cpu";
-
-  if (requested == BackendDevice::VULKAN) {
-    ggml_backend_dev_t vulkanDev = findVulkanGpuDevice();
-    if (vulkanDev != nullptr) {
-      sel.device = vulkanDev;
-      const char* nameRaw = ggml_backend_dev_name(vulkanDev);
-      sel.backendName = (nameRaw != nullptr) ? nameRaw : "vulkan";
-      sel.backendDevice = deviceTypeName(ggml_backend_dev_type(vulkanDev));
-      const char* descRaw = ggml_backend_dev_description(vulkanDev);
-      QLOG(
-          Priority::INFO,
-          std::string("ocr-ggml: selected Vulkan backend '") + sel.backendName +
-              "' (" + sel.backendDevice + ", " +
-              (descRaw != nullptr ? descRaw : "") + ")");
+  switch (requested) {
+  case BackendDevice::VULKAN:
+    sel.requested = "vulkan";
+    if (trySelectGpu(sel, "Vulkan", isVulkanBackendName)) {
       return sel;
     }
-    sel.fallbackReason =
-        "Vulkan backend requested but no Vulkan-capable GPU device was found; "
-        "falling back to CPU";
-    QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
+    break;
+  case BackendDevice::METAL:
+    sel.requested = "metal";
+    if (trySelectGpu(sel, "Metal", isMetalBackendName)) {
+      return sel;
+    }
+    break;
+  case BackendDevice::CPU:
+    sel.requested = "cpu";
+    break;
+  default:
+    // Defensive: a BackendDevice value added without updating this switch must
+    // not silently masquerade as an explicit CPU request. Record the fallback
+    // so getBackendInfo() surfaces the gap instead of reporting a clean CPU.
+    sel.requested = "unknown";
+    sel.fallbackReason = "Unsupported backendDevice value; falling back to CPU";
+    QLOG(Priority::WARN, std::format("ocr-ggml: {}", sel.fallbackReason));
+    break;
   }
 
   sel = selectCpu(std::move(sel));
   QLOG(
       Priority::INFO,
-      std::string("ocr-ggml: using CPU backend '") + sel.backendName + "'");
+      std::format("ocr-ggml: using CPU backend '{}'", sel.backendName));
   return sel;
 }
 

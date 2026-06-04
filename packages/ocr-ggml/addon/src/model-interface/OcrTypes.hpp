@@ -28,11 +28,11 @@ enum class PipelineMode : std::uint8_t {
 };
 
 // Selects which ggml backend device the inference steps run on. `CPU` is the
-// always-available default; `VULKAN` opts in to GPU execution when a
-// Vulkan-capable device is present, otherwise the steps fall back to CPU
-// (see `OcrBackendSelection`). Mirrors the opt-in GPU pattern in
-// `vla_backend_selection`.
-enum class BackendDevice : std::uint8_t { CPU, VULKAN };
+// always-available default; `VULKAN` (Linux/Windows/Android) and `METAL`
+// (Apple) opt in to GPU execution when a matching device is present, otherwise
+// the steps fall back to CPU (see `OcrBackendSelection`). Mirrors the opt-in
+// GPU pattern in `vla_backend_selection`.
+enum class BackendDevice : std::uint8_t { CPU, VULKAN, METAL };
 
 // Mirrors @qvac/ocr-onnx's PipelineInput so the JS side can interchangeably
 // drive both addons. Either pass an encoded JPEG/PNG byte buffer (set
@@ -73,8 +73,8 @@ struct OcrConfig {
   // path.
   std::string backendsDir;
   // Requested ggml backend device. CPU is the default and is always available;
-  // VULKAN opts in to GPU inference and transparently falls back to CPU when no
-  // Vulkan-capable device is present (mapped from `params.backendDevice` in
+  // VULKAN / METAL opt in to GPU inference and transparently fall back to CPU
+  // when no matching device is present (mapped from `params.backendDevice` in
   // AddonJs.hpp).
   BackendDevice backendDevice{BackendDevice::CPU};
 };
