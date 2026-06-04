@@ -787,15 +787,34 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+  # ── Matrix mode: Samsung S25 (AWS Device Farm) ─────────────────────
+  # Reuses the Android-only mobile workflow to run the SAME matrix harness
+  # on-device. qvac_perf_only restricts the run to perf-tests.json
+  # (runVlmMatrixTest) → only the vlmMatrix group is scheduled. The active
+  # preset on-device is config.defaultPreset (Device Farm forwards no custom
+  # env), so vlm-matrix.config.cjs defaultPreset governs the S25 set. The
+  # raw on-device log (bare_console.log) carries the [VLMROW] markers and is
+  # uploaded by collect-and-upload-logs as console-logs-llamacpp-llm-Android.
+  matrix-s25:
+    needs: context
+    if: inputs.run_matrix && inputs.run_matrix_s25
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.context.outputs.ref }}
+      repository: ${{ needs.context.outputs.repository }}
+      qvac_perf_only: true
+
   # ── Matrix mode: combine ───────────────────────────────────────────
   # Aggregates [VLMROW]/[VLMSEG]/[VLMMETA] markers from every matrix log
-  # (Linux now, S25 once wired) into one quality+speed report via
+  # (Linux .log + S25 bare_console.log) into one quality+speed report via
   # vlm-matrix/aggregate.js, surfaced to the step summary + PR comment.
   # This is the mechanism that makes mobile (Device Farm) results visible.
   matrix-combine:
     needs:
       - context
       - matrix-linux
+      - matrix-s25
     if: always() && inputs.run_matrix && needs.context.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -814,10 +833,19 @@ jobs:
         with:
           node-version: 22
 
-      - name: Download matrix logs
+      - name: Download Linux matrix logs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: vlm-matrix-log-*-${{ github.run_number }}
+          path: matrix-logs
+
+      # S25 raw device logs (bare_console.log holds the [VLMROW] markers).
+      # continue-on-error so a Linux-only run (no S25 artifact) still combines.
+      - name: Download S25 device logs
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: console-logs-*
           path: matrix-logs
 
       - name: Aggregate matrix logs
