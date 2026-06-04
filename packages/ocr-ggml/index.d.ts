@@ -58,13 +58,17 @@ export interface OcrGgmlParams {
   /**
    * Requested ggml backend device. Default: `'cpu'`.
    *   - `'cpu'`: run inference on the CPU backend (always available).
-   *   - `'vulkan'`: opt in to GPU inference on a Vulkan-capable device. When no
-   *     Vulkan device is present the pipeline transparently falls back to CPU
-   *     and records the reason (see {@link BackendInfo.fallbackReason}).
-   * Requires the `libggml-vulkan` backend shared library to be present in
-   * `backendsDir`.
+   *   - `'vulkan'`: opt in to GPU inference on a Vulkan-capable device
+   *     (Linux/Windows/Android). Requires the `libggml-vulkan` backend shared
+   *     library to be present in `backendsDir`.
+   *   - `'metal'`: opt in to GPU inference on a Metal-capable device (Apple).
+   *     The Metal backend is compiled into the addon, so no extra shared
+   *     library is required.
+   * When the requested GPU device is not present the pipeline transparently
+   * falls back to CPU and records the reason (see
+   * {@link BackendInfo.fallbackReason}).
    */
-  backendDevice?: 'cpu' | 'vulkan'
+  backendDevice?: 'cpu' | 'vulkan' | 'metal'
 }
 
 /**
@@ -72,7 +76,7 @@ export interface OcrGgmlParams {
  * {@link OcrGgml.getBackendInfo}.
  */
 export interface BackendInfo {
-  /** Requested device (`'cpu'` | `'vulkan'`). */
+  /** Requested device (`'cpu'` | `'vulkan'` | `'metal'`). */
   requested: string
   /** Resolved device type (`'CPU'` | `'GPU'` | `'IGPU'` | `'ACCEL'`). */
   backendDevice: string
