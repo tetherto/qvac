@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -130,6 +130,11 @@
     "./commands": {
       "types": "./dist/commands/index.d.ts",
       "import": "./dist/commands/index.js"
+    },
+    "./models": {
+      "types": "./dist/models/registry/index.d.ts",
+      "import": "./dist/models/registry/index.js",
+      "require": "./dist/models/registry/index.js"
     },
     "./pear-pre": "./dist/pear/pre.js"
   },
