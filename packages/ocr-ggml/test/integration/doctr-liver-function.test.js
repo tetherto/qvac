@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const { getImagePath, formatOCRPerformanceMetrics, runDoctrOCR, ensureDoctrModels, PERF_RUNS } = require('./utils')
+const { getImagePath, runDoctrComparison, ensureDoctrModels, PERF_RUNS } = require('./utils')
 
 const DOCTR_TEST_TIMEOUT = 180 * 1000
 
@@ -41,24 +41,33 @@ function runLiverFunctionTest (device, run) {
     t.comment(`Testing DocTR on liver function test (LFT) image [${tag}] (run ${run}/${PERF_RUNS})`)
     t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
 
-    const { results, stats } = await runDoctrOCR(t, {
-      pathDetector: DB_MOBILENET,
-      pathRecognizer: CRNN_MOBILENET
-    }, imagePath)
+    // On a GPU host this records a Vulkan ([GPU]) and a forced-CPU ([CPU]) row
+    // for the same test; on non-GPU/local it stays a single CPU pass. The
+    // assertions run on each pass. The `[${tag}]` token (always CPU here) is
+    // normalized to the actual backend by formatOCRPerformanceMetrics.
+    await runDoctrComparison(t, {
+      params: {
+        pathDetector: DB_MOBILENET,
+        pathRecognizer: CRNN_MOBILENET
+      },
+      imagePath,
+      perfLabel: `[DocTR liver_function_test] [${tag}]`,
+      perfOpts: { imagePath },
+      assertResult (results) {
+        const texts = results.map(r => r.text)
+        t.comment('Detected texts: ' + JSON.stringify(texts))
 
-    const texts = results.map(r => r.text)
-    t.comment('Detected texts: ' + JSON.stringify(texts))
-    t.comment(formatOCRPerformanceMetrics(`[DocTR liver_function_test] [${tag}]`, stats, texts, { imagePath }))
+        t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
-    t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
-
-    const lowerTexts = texts.map(w => w.toLowerCase())
-    for (const word of EXPECTED_WORDS) {
-      t.ok(
-        lowerTexts.some(w => w.includes(word)),
-        `should detect "${word}" in liver function test report`
-      )
-    }
+        const lowerTexts = texts.map(w => w.toLowerCase())
+        for (const word of EXPECTED_WORDS) {
+          t.ok(
+            lowerTexts.some(w => w.includes(word)),
+            `should detect "${word}" in liver function test report`
+          )
+        }
+      }
+    })
 
     t.pass(`DocTR liver function test [${tag}] run ${run} completed successfully`)
   })

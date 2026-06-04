@@ -37,14 +37,8 @@ interface CompletionTestParams {
   stream?: boolean;
   responseFormat?: ResponseFormat;
   tools?: ReadonlyArray<Record<string, unknown>>;
-  generationParams?: GenerationParams;
-  temperature?: number;
-  topP?: number;
-  maxTokens?: number;
-  frequencyPenalty?: number;
-  presencePenalty?: number;
-  seed?: number;
   stopSequences?: ReadonlyArray<string>;
+  generationParams?: GenerationParams;
 }
 
 type CompletionFnParams = Parameters<typeof completion>[0];
@@ -68,6 +62,12 @@ export class CompletionExecutor extends AbstractModelExecutor<
       if (test.testId === "completion-response-format-with-tools-rejected") {
         return [test.testId, this.responseFormatWithToolsRejected.bind(this)];
       }
+      if (test.testId === "completion-concurrent-requests") {
+        return [test.testId, this.concurrentRequests.bind(this)];
+      }
+      if (test.testId === "completion-seed-reproducibility") {
+        return [test.testId, this.seedReproducibility.bind(this)];
+      }
       return [test.testId, this.generic.bind(this)];
     }),
   ) as never;
@@ -90,9 +90,103 @@ export class CompletionExecutor extends AbstractModelExecutor<
     return result.text;
   }
 
-  async generic(params: unknown, expectation: unknown): Promise<TestResult> {
-    const text = await this.runCompletion(params as CompletionTestParams);
-    return ValidationHelpers.validate(text, expectation as Expectation);
+  async generic(
+    params: CompletionTestParams,
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    const text = await this.runCompletion(params);
+    return ValidationHelpers.validate(text, expectation);
+  }
+
+  // Issues several completions against the same model in the same tick and
+  // asserts the registry's single-flight concurrency policy: exactly the
+  // in-flight request runs to completion while the rest are rejected with the
+  // policy error (never a crash), and the model stays usable afterwards.
+  async concurrentRequests(
+    params: CompletionTestParams,
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded("llm");
+    const CONCURRENCY = 3;
+
+    const settled = await Promise.allSettled(
+      Array.from({ length: CONCURRENCY }, () =>
+        completion({
+          modelId: llmModelId,
+          ...params,
+          stream: false,
+        } as CompletionFnParams).text,
+      ),
+    );
+
+    const fulfilled = settled.filter(
+      (s): s is PromiseFulfilledResult<string> => s.status === "fulfilled",
+    );
+    const rejected = settled.filter(
+      (s): s is PromiseRejectedResult => s.status === "rejected",
+    );
+
+    if (fulfilled.length !== 1 || rejected.length !== CONCURRENCY - 1) {
+      return {
+        passed: false,
+        output:
+          `Expected single-flight shape: 1 fulfilled and ${CONCURRENCY - 1} rejected by policy; ` +
+          `got ${fulfilled.length} fulfilled and ${rejected.length} rejected`,
+      };
+    }
+
+    // Any rejection must be the expected concurrency policy, not a crash/other error.
+    const unexpected = rejected.find(
+      (r) => !/concurrency policy|already running/i.test(String(r.reason)),
+    );
+    if (unexpected) {
+      return {
+        passed: false,
+        output: `Concurrent request rejected for an unexpected reason: ${String(unexpected.reason)}`,
+      };
+    }
+
+    // The request that did run must still produce a valid response.
+    const runResult = ValidationHelpers.validate(
+      fulfilled[0]!.value,
+      expectation,
+    );
+    if (!runResult.passed) {
+      return {
+        passed: false,
+        output: `In-flight completion failed expectation: ${runResult.output}`,
+      };
+    }
+
+    return {
+      passed: true,
+      output:
+        `Single-flight concurrency policy enforced: ${fulfilled.length} ran, ` +
+        `${rejected.length} rejected by policy (of ${CONCURRENCY} issued)`,
+    };
+  }
+
+  // Runs the same prompt twice with a fixed seed and asserts byte-identical
+  // output, proving seeded sampling is reproducible.
+  async seedReproducibility(params: CompletionTestParams): Promise<TestResult> {
+    const first = await this.runCompletion(params);
+    const second = await this.runCompletion(params);
+
+    if (first.length === 0) {
+      return { passed: false, output: "First run returned an empty response" };
+    }
+    if (first !== second) {
+      return {
+        passed: false,
+        output:
+          `Same seed produced different output.\nRun 1: ${JSON.stringify(first.slice(0, 200))}\n` +
+          `Run 2: ${JSON.stringify(second.slice(0, 200))}`,
+      };
+    }
+    return {
+      passed: true,
+      output: `Seeded output reproducible (${first.length} chars identical across 2 runs)`,
+    };
   }
 
   async responseFormatJsonObject(
