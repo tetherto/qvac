@@ -95,7 +95,11 @@ async function fetchFromRegistry (source, destPath) {
   const coreKey = env('QVAC_REGISTRY_CORE_KEY')
   if (!coreKey) throw new Error('registry source requires QVAC_REGISTRY_CORE_KEY')
   let QVACRegistryClient
-  try { ({ QVACRegistryClient } = require('@qvac/registry-client')) } catch (_) {
+  // Indirect the specifier so the mobile static bundler doesn't try to resolve
+  // this optional P2P dep (only needed for registry sources on Linux/desktop;
+  // a literal require() makes `npm run bundle` bail with MODULE_NOT_FOUND).
+  const pkg = '@qvac/registry-client'
+  try { ({ QVACRegistryClient } = require(pkg)) } catch (_) {
     throw new Error("registry source requires '@qvac/registry-client' (not installed)")
   }
   const client = new QVACRegistryClient({ registryCoreKey: coreKey })
