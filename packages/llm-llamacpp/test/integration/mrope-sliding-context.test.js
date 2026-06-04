@@ -401,7 +401,7 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
   const run = await runAndCollect(model, [
     {
       role: 'user',
-      content: `Answer "ok" after reading this prefill pressure. ${' blue'.repeat(440)}`
+      content: `Answer "ok" after reading this prefill pressure. ${' blue'.repeat(260)}`
     }
   ], {
     cacheKey: cachePath,
