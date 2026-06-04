@@ -71,12 +71,20 @@ const SCORERS = {
 function score (metric, pred, golds) { return (SCORERS[metric] || (() => 0))(pred, golds) }
 
 function parseArgs (argv) {
-  const out = { files: [], title: 'VLM Matrix', outFile: null, prov: [] }
+  const out = { files: [], inputs: [], title: 'VLM Matrix', outFile: null, prov: [] }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--title') out.title = argv[++i]
     else if (argv[i] === '--out') out.outFile = argv[++i]
     else if (argv[i] === '--provenance') out.prov.push(argv[++i])
-    else out.files.push(argv[i])
+    // --in <host-label> <file>: tag every marker in <file> with a platform
+    // label (e.g. linux / s25). [VLMROW].device only carries cpu/gpu, so the
+    // caller — which knows which artifact is which platform — supplies the
+    // host here; otherwise S25 rows would collapse onto the Linux rows.
+    else if (argv[i] === '--in') {
+      const label = argv[++i]
+      const file = argv[++i]
+      out.inputs.push({ label, file })
+    } else out.files.push(argv[i])
   }
   return out
 }
@@ -92,13 +100,14 @@ const META_RE = /\[VLMMETA\](.*?)\[\/VLMMETA\]/
 // Per-cell vision-encode comes from [VLMSEG] segments (stderr, same stream as the
 // `image slice encoded` lines) — alignment-proof. Per-row quality/TTFT/TPS come from
 // the [VLMROW] markers (stdout). They're joined on the cell|device key, not position.
-function parseLog (files) {
+function parseLog (inputs) {
   const rows = []
-  const vision = {} // cell|device -> { segMs: [perSegmentSummedMs], segTiles: [perSegmentEncodeCount] }
+  const vision = {} // host|cell|device -> { segMs: [perSegmentSummedMs], segTiles: [perSegmentEncodeCount] }
   const meta = {} // cell -> { main_origin, mmproj_origin, ... }
-  for (const f of files) {
+  for (const { label, file } of inputs) {
+    const host = label || ''
     let txt = ''
-    try { txt = fs.readFileSync(f, 'utf-8') } catch (_) { continue }
+    try { txt = fs.readFileSync(file, 'utf-8') } catch (_) { continue }
     let cur = null
     for (const line of txt.split(/\r?\n/)) {
       const mm = line.match(META_RE)
@@ -107,7 +116,7 @@ function parseLog (files) {
       if (sm) {
         try {
           const s = JSON.parse(sm[1])
-          cur = `${s.cell}|${s.device}`
+          cur = `${host}|${s.cell}|${s.device}`
           if (!vision[cur]) vision[cur] = { segMs: [], segTiles: [] }
           vision[cur].segMs.push(0); vision[cur].segTiles.push(0)
         } catch (_) {}
@@ -120,7 +129,7 @@ function parseLog (files) {
         continue
       }
       const rm = line.match(ROW_RE)
-      if (rm) { try { rows.push(JSON.parse(rm[1])) } catch (_) {} }
+      if (rm) { try { const r = JSON.parse(rm[1]); r.__host = host; rows.push(r) } catch (_) {} }
     }
   }
   return { rows, vision, meta }
@@ -142,11 +151,11 @@ function build (rows, vision, meta, provText, title) {
   }
   const visMean = key => visStats(key).mean
   const visSlices = key => visStats(key).tiles
-  // group key = cell|device
+  // group key = host|cell|device (host distinguishes linux vs s25, etc.)
   const keys = []
   const byKey = {}
   for (const r of rows) {
-    const k = `${r.cell}|${r.device}`
+    const k = `${r.__host || ''}|${r.cell}|${r.device}`
     if (!byKey[k]) { byKey[k] = []; keys.push(k) }
     byKey[k].push(r)
   }
@@ -173,8 +182,8 @@ function build (rows, vision, meta, provText, title) {
   }
   // Quality
   L.push('### Quality (%)\n')
-  L.push('| Config | ' + TASKS.join(' | ') + ' | **Overall %** |')
-  L.push('|' + '---|'.repeat(TASKS.length + 2))
+  L.push('| Config | host | ' + TASKS.join(' | ') + ' | **Overall %** |')
+  L.push('|' + '---|'.repeat(TASKS.length + 3))
   for (const k of keys) {
     const rs = byKey[k]
     const perTask = TASKS.map(t => {
@@ -182,14 +191,14 @@ function build (rows, vision, meta, provText, title) {
       return mean(sc)
     })
     const overall = mean(perTask.filter(v => v != null))
-    const [cell, dev] = k.split('|')
-    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ` + perTask.map(fmtPct).join(' | ') + ` | **${fmtPct(overall)}** |`)
+    const [host, cell, dev] = k.split('|')
+    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${host || '—'} | ` + perTask.map(fmtPct).join(' | ') + ` | **${fmtPct(overall)}** |`)
   }
   L.push('')
   // Speed — mmproj/vision-encode time is the headline metric for Q8 vs f16
   L.push('### Speed (mmproj vision-encode is the headline metric)\n')
-  L.push('| Config | n | err | **mmproj enc (ms)** | tiles | TTFT (ms) | decode TPS | wall (ms) |')
-  L.push('|---|---|---|---|---|---|---|---|')
+  L.push('| Config | host | n | err | **mmproj enc (ms)** | tiles | TTFT (ms) | decode TPS | wall (ms) |')
+  L.push('|---|---|---|---|---|---|---|---|---|')
   for (const k of keys) {
     const rs = byKey[k]
     const okRows = rs.filter(r => !r.error)
@@ -199,24 +208,27 @@ function build (rows, vision, meta, provText, title) {
     const tt = mean(okRows.map(r => r.ttft_ms).filter(v => v != null))
     const dt = mean(okRows.map(r => r.decode_tps).filter(v => v != null))
     const wall = mean(okRows.map(r => r.ms).filter(v => v != null))
-    const [cell, dev] = k.split('|')
-    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${okRows.length} | ${errs} | ${fmtNum(ve, 1)} | ${fmtNum(sl, 1)} | ${fmtNum(tt, 0)} | ${fmtNum(dt, 1)} | ${fmtNum(wall, 0)} |`)
+    const [host, cell, dev] = k.split('|')
+    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${host || '—'} | ${okRows.length} | ${errs} | ${fmtNum(ve, 1)} | ${fmtNum(sl, 1)} | ${fmtNum(tt, 0)} | ${fmtNum(dt, 1)} | ${fmtNum(wall, 0)} |`)
   }
   L.push('')
   // The headline of the whole exercise: mmproj Q8 vs f16 vision-encode delta.
   L.push('### mmproj Q8 vs f16 — vision-encode time (lower = faster; +% = Q8 faster)\n')
-  L.push('| Model | Device | Q8 enc (ms) | f16 enc (ms) | tiles | **Q8 faster by** |')
-  L.push('|---|---|---|---|---|---|')
+  L.push('| Model | host | Device | Q8 enc (ms) | f16 enc (ms) | tiles | **Q8 faster by** |')
+  L.push('|---|---|---|---|---|---|---|')
+  const hosts = [...new Set(rows.map(r => r.__host || ''))].sort()
   const models = [...new Set(rows.map(r => r.model).filter(Boolean))].sort()
   const devs = [...new Set(rows.map(r => r.device).filter(Boolean))].sort()
-  for (const md of models) {
-    for (const dv of devs) {
-      const q = visMean(`${md}-q8|${dv}`)
-      const f = visMean(`${md}-f16|${dv}`)
-      if (q == null && f == null) continue
-      const tiles = visSlices(`${md}-q8|${dv}`)
-      const pct = (q != null && f != null && f !== 0) ? ((f - q) / f * 100) : null
-      L.push(`| ${md} | ${dv.toUpperCase()} | ${fmtNum(q, 1)} | ${fmtNum(f, 1)} | ${fmtNum(tiles, 1)} | ${pct == null ? '—' : (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'} |`)
+  for (const host of hosts) {
+    for (const md of models) {
+      for (const dv of devs) {
+        const q = visMean(`${host}|${md}-q8|${dv}`)
+        const f = visMean(`${host}|${md}-f16|${dv}`)
+        if (q == null && f == null) continue
+        const tiles = visSlices(`${host}|${md}-q8|${dv}`)
+        const pct = (q != null && f != null && f !== 0) ? ((f - q) / f * 100) : null
+        L.push(`| ${md} | ${host || '—'} | ${dv.toUpperCase()} | ${fmtNum(q, 1)} | ${fmtNum(f, 1)} | ${fmtNum(tiles, 1)} | ${pct == null ? '—' : (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'} |`)
+      }
     }
   }
   L.push('')
@@ -225,7 +237,9 @@ function build (rows, vision, meta, provText, title) {
 }
 
 const args = parseArgs(process.argv)
-const { rows, vision, meta } = parseLog(args.files)
+// Labelled inputs (--in host file) plus any bare positional files (host '').
+const allInputs = args.inputs.concat(args.files.map(f => ({ label: '', file: f })))
+const { rows, vision, meta } = parseLog(allInputs)
 const provText = args.prov.map(p => { try { return fs.readFileSync(p, 'utf-8') } catch (_) { return '' } }).join('\n')
 const md = build(rows, vision, meta, provText, args.title)
 process.stdout.write(md + '\n')

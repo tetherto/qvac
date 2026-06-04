@@ -852,16 +852,26 @@ jobs:
         shell: bash
         run: |
           mkdir -p consolidated
-          # S25 device-farm logs land as bare_console.log; Linux as *.log.
-          LOGS=$(find matrix-logs -type f \( -name '*.log' -o -name '*bare_console*' \) 2>/dev/null | sort)
-          if [ -z "$LOGS" ]; then
+          # Tag each input with its platform host so S25 rows don't collapse
+          # onto the Linux rows ([VLMROW].device is only cpu/gpu).
+          ARGS=""
+          # Linux legs: one log per backend (device field carries cpu/gpu).
+          for f in $(find matrix-logs -name 'vlm-matrix-linux-*.log' 2>/dev/null | sort); do
+            ARGS="$ARGS --in linux $f"
+          done
+          # S25: the Samsung device's full logcat carries the [VLMROW] markers
+          # (the Android pool may also include a Pixel; we surface S25 here).
+          for f in $(find matrix-logs -name '*Galaxy_S25*logcat_full*' 2>/dev/null | sort); do
+            ARGS="$ARGS --in s25 $f"
+          done
+          echo "aggregate inputs:$ARGS"
+          if [ -z "$ARGS" ]; then
             echo "> No VLM matrix logs found for run #${{ github.run_number }}." > consolidated/vlm-matrix-consolidated.md
           else
-            echo "Aggregating logs:"; echo "$LOGS"
             node packages/llm-llamacpp/benchmarks/vlm-matrix/aggregate.js \
               --title "VLM Matrix — preset=${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
               --out consolidated/vlm-matrix-consolidated.md \
-              $LOGS
+              $ARGS
           fi
 
       - name: Post step summary
