@@ -67,8 +67,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            no_gpu: 'true'
-            runner: qvac-ubuntu2204-x64
+            runner: qvac-ubuntu2204-x64-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -103,7 +102,8 @@ jobs:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
-        if: startsWith(matrix.runner, 'qvac-')
+        working-directory: .
+        if: runner.environment != 'github-hosted'
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -184,53 +184,21 @@ jobs:
         name: Set Vulkan SDK Path on Windows Server 2025
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      # Pin to 3.11 (not 3.12) because numba 0.65+ stopped shipping
-      # darwin-x86_64 wheels for Python 3.12.  librosa pulls in numba
-      # transitively; on 3.12 + macos-15-large pip falls back to building
-      # llvmlite from source which fails because the runner doesn't have
-      # an LLVM 15 development install.  3.11 has prebuilt darwin-x64
-      # wheels for the entire numba/llvmlite/librosa stack and is fine
-      # for every other converter dependency we use.
-      - name: Setup Python (HF -> .gguf conversion)
-        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
-        uses: actions/setup-python@v5
+      - name: Cache TTS GGML GGUF models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
         with:
-          python-version: '3.11'
+          package: tts-ggml
+          paths: packages/tts-ggml/models
+          hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
+          enable-cross-os: 'true'
 
-      # Cache the Python venv + every Chatterbox + Supertonic GGUF the
-      # integration suite can exercise.  Mirrors the mobile workflow's
-      # caching pattern (integration-mobile-test-tts-ggml.yml).  Without
-      # this every desktop matrix entry re-pays the multi-GB HF download
-      # + Torch install + multi-arch GGUF convert (~10-30 min cold) on
-      # six runners per PR.  Each `ensure*Models` helper in
-      # test/utils/downloadModel.js gracefully skips its test when the
-      # matching GGUF isn't on disk, so partial cache misses degrade
-      # rather than abort the whole matrix.
-      - name: Cache TTS GGML venv + GGUFs
-        id: cache-tts-ggml-models
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ github.workspace }}/packages/tts-ggml/venv
-            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-t3-turbo.gguf
-            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-s3gen.gguf
-            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-t3-mtl.gguf
-            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-s3gen-mtl.gguf
-            ${{ github.workspace }}/packages/tts-ggml/models/supertonic.gguf
-            ${{ github.workspace }}/packages/tts-ggml/models/supertonic2.gguf
-          key: tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/tts-ggml/scripts/convert-models.sh', 'packages/tts-ggml/scripts/setup-venv.sh', 'packages/tts-ggml/scripts/requirements.txt', 'packages/tts-ggml/scripts/convert-t3-turbo-to-gguf.py', 'packages/tts-ggml/scripts/convert-t3-mtl-to-gguf.py', 'packages/tts-ggml/scripts/convert-s3gen-to-gguf.py', 'packages/tts-ggml/scripts/convert-supertonic2-to-gguf.py') }}
-          restore-keys: |
-            tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-
-          # No-op today (key still includes platform/arch because of the
-          # venv); kept for a follow-up split of venv (OS-keyed) vs
-          # GGUFs (cross-OS).
-          enableCrossOsArchive: true
-
-      - name: Stage GGUF models (npm run setup-models)
-        if: steps.cache-tts-ggml-models.outputs.cache-hit != 'true'
+      - name: Download GGUF models from registry
+        if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/tts-ggml
-        run: npm run setup-models
+        run: npm run download-models:registry
 
       - name: Run integration test
         if: ${{ inputs.run_integration_tests != false }}

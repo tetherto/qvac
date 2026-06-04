@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import {
   buildBergamotVocabSources,
@@ -62,40 +61,30 @@ const FREN_PEAR =
 // Pure derivation helpers
 // ---------------------------------------------------------------------------
 
-test("buildBergamotVocabSources: shared vocab for non-CJK pair", (t: {
-  is: Function;
-}) => {
+test("buildBergamotVocabSources: shared vocab for non-CJK pair", (t) => {
   const result = buildBergamotVocabSources("registry://s3/foo/", "fren");
   t.is(result.srcVocabSrc, "registry://s3/foo/vocab.fren.spm");
   t.is(result.dstVocabSrc, "registry://s3/foo/vocab.fren.spm");
 });
 
-test("buildBergamotVocabSources: split src/trg vocab for CJK pair", (t: {
-  is: Function;
-}) => {
+test("buildBergamotVocabSources: split src/trg vocab for CJK pair", (t) => {
   const result = buildBergamotVocabSources("registry://s3/foo/", "enja");
   t.is(result.srcVocabSrc, "registry://s3/foo/srcvocab.enja.spm");
   t.is(result.dstVocabSrc, "registry://s3/foo/trgvocab.enja.spm");
 });
 
-test("deriveBergamotVocabSources: parses pear:// model URL", (t: {
-  is: Function;
-}) => {
+test("deriveBergamotVocabSources: parses pear:// model URL", (t) => {
   const result = deriveBergamotVocabSources(FREN_PEAR);
   t.is(result?.srcVocabSrc, "pear://abc123def456/vocab.fren.spm");
   t.is(result?.dstVocabSrc, "pear://abc123def456/vocab.fren.spm");
 });
 
-test("deriveBergamotVocabSources: returns null for non-Bergamot URL", (t: {
-  is: Function;
-}) => {
+test("deriveBergamotVocabSources: returns null for non-Bergamot URL", (t) => {
   t.is(deriveBergamotVocabSources("pear://abc/some-other-model.bin"), null);
   t.is(deriveBergamotVocabSources("https://example.com/x"), null);
 });
 
-test("deriveBergamotRegistryVocabSources: parses registry:// model URL", (t: {
-  is: Function;
-}) => {
+test("deriveBergamotRegistryVocabSources: parses registry:// model URL", (t) => {
   const result = deriveBergamotRegistryVocabSources(FREN_REGISTRY);
   t.is(
     result?.srcVocabSrc,
@@ -114,11 +103,7 @@ test("deriveBergamotRegistryVocabSources: parses registry:// model URL", (t: {
 // the vocabs next to the primary model and createModel derives those paths
 // via deriveColocatedBergamotVocabPaths.
 
-test("resolveBergamotVocab: registry:// + auto-derived vocabs → no resolveModelPath calls (non-pivot)", async (t: {
-  is: Function;
-  ok: Function;
-  absent: Function;
-}) => {
+test("resolveBergamotVocab: registry:// + auto-derived vocabs → no resolveModelPath calls (non-pivot)", async (t) => {
   const { ctx, calls } = makeCtx({ modelSrc: FREN_REGISTRY });
 
   const result = await resolveBergamotVocab(
@@ -137,10 +122,7 @@ test("resolveBergamotVocab: registry:// + auto-derived vocabs → no resolveMode
   t.is(result.config, bergamotConfig);
 });
 
-test("resolveBergamotVocab: registry:// + user-supplied srcVocabSrc → falls through to per-vocab resolution", async (t: {
-  is: Function;
-  ok: Function;
-}) => {
+test("resolveBergamotVocab: registry:// + user-supplied srcVocabSrc → falls through to per-vocab resolution", async (t) => {
   const { ctx, calls } = makeCtx({ modelSrc: FREN_REGISTRY });
   const userSrc = "registry://s3/custom/vocab.custom.spm";
 
@@ -161,9 +143,7 @@ test("resolveBergamotVocab: registry:// + user-supplied srcVocabSrc → falls th
   t.ok(result.artifacts, "artifacts populated when full resolution runs");
 });
 
-test("resolveBergamotVocab: registry:// + user-supplied dstVocabSrc → falls through to per-vocab resolution", async (t: {
-  is: Function;
-}) => {
+test("resolveBergamotVocab: registry:// + user-supplied dstVocabSrc → falls through to per-vocab resolution", async (t) => {
   const { ctx, calls } = makeCtx({ modelSrc: FREN_REGISTRY });
   const userDst = "registry://s3/custom/vocab.custom.spm";
 
@@ -178,9 +158,7 @@ test("resolveBergamotVocab: registry:// + user-supplied dstVocabSrc → falls th
   t.is(calls.length, 2, "any user-supplied vocab disables the optimization");
 });
 
-test("resolveBergamotVocab: pear:// source still resolves vocabs explicitly (optimization is registry-only)", async (t: {
-  is: Function;
-}) => {
+test("resolveBergamotVocab: pear:// source still resolves vocabs explicitly (optimization is registry-only)", async (t) => {
   const { ctx, calls } = makeCtx({ modelSrc: FREN_PEAR });
 
   await resolveBergamotVocab(
@@ -198,9 +176,7 @@ test("resolveBergamotVocab: pear:// source still resolves vocabs explicitly (opt
   );
 });
 
-test("resolveBergamotVocab: throws when vocab cannot be derived (no overrides, unsupported source)", async (t: {
-  ok: Function;
-}) => {
+test("resolveBergamotVocab: throws when vocab cannot be derived (no overrides, unsupported source)", async (t) => {
   const { ctx } = makeCtx({ modelSrc: "https://example.com/model.bin" });
 
   await t.exception(
@@ -215,10 +191,7 @@ test("resolveBergamotVocab: throws when vocab cannot be derived (no overrides, u
 // resolveBergamotVocab — pivot branch
 // ---------------------------------------------------------------------------
 
-test("resolveBergamotVocab: registry:// primary + registry:// pivot, all derived → only pivot model resolved", async (t: {
-  is: Function;
-  ok: Function;
-}) => {
+test("resolveBergamotVocab: registry:// primary + registry:// pivot, all derived → only pivot model resolved", async (t) => {
   const { ctx, calls } = makeCtx({ modelSrc: FREN_REGISTRY });
   const pivotModel: PivotModelConfig = { modelSrc: ENFR_REGISTRY };
 
@@ -244,9 +217,7 @@ test("resolveBergamotVocab: registry:// primary + registry:// pivot, all derived
   );
 });
 
-test("resolveBergamotVocab: pivot with user-supplied pivot vocab → all five resolves run", async (t: {
-  is: Function;
-}) => {
+test("resolveBergamotVocab: pivot with user-supplied pivot vocab → all five resolves run", async (t) => {
   const { ctx, calls } = makeCtx({ modelSrc: FREN_REGISTRY });
   const pivotModel: PivotModelConfig = {
     modelSrc: ENFR_REGISTRY,
@@ -268,9 +239,7 @@ test("resolveBergamotVocab: pivot with user-supplied pivot vocab → all five re
   );
 });
 
-test("resolveBergamotVocab: pivot with pear:// pivot model → optimization skipped (pear:// has no companion set)", async (t: {
-  is: Function;
-}) => {
+test("resolveBergamotVocab: pivot with pear:// pivot model → optimization skipped (pear:// has no companion set)", async (t) => {
   const { ctx, calls } = makeCtx({ modelSrc: FREN_REGISTRY });
   const pivotModel: PivotModelConfig = { modelSrc: FREN_PEAR };
 
@@ -289,9 +258,7 @@ test("resolveBergamotVocab: pivot with pear:// pivot model → optimization skip
   );
 });
 
-test("resolveBergamotVocab: pivot throws when pivot vocab cannot be derived", async (t: {
-  ok: Function;
-}) => {
+test("resolveBergamotVocab: pivot throws when pivot vocab cannot be derived", async (t) => {
   const { ctx } = makeCtx({ modelSrc: FREN_REGISTRY });
   const pivotModel: PivotModelConfig = {
     modelSrc: "https://example.com/pivot.bin",

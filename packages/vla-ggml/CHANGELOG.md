@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.3.1] - 2026-06-02
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
+## [0.3.0]
+
+- feat: π₀.₅ support behind GGUF `general.architecture=pi05`. The addon
+  now loads and runs the Physical Intelligence π₀.₅ model alongside
+  existing SmolVLA — no behaviour change for SmolVLA callers. The
+  polymorphic `IVlaModel` interface dispatches based on the GGUF
+  architecture key; legacy v0.1.0 weights without the key keep loading
+  as SmolVLA.
+- `VlaModel.run()` accepts up to 3 camera images (vs SmolVLA's 2);
+  `getVlaHparams()` reports `numCameras: 3` and `stateInputMode:
+  'discrete'` for π₀.₅. The discrete-state path tokenises robot state
+  into digit tokens inside the language prompt — the caller passes an
+  empty (or any) `state` Float32Array, which π₀.₅ ignores.
+- `runtimeStats()` adds architecture-neutral `prefill_compute_ms` /
+  `prefill_total_ms` keys alongside the legacy `smollm2_*` aliases
+  (kept for back-compat with existing JS consumers).
+- Every sub-graph (SigLIP per-block, full SigLIP tower, PaliGemma
+  embedder, Gemma-1 VLM block + full prefill, time-cond + adaRMSNorm
+  split, expert block with joint attention, full expert pass, Euler
+  step, full 10-step ODE loop, end-to-end prefill + ODE) is
+  parity-tested against a PyTorch reference. All gates pass at
+  cos > 0.999.
+- C++ + JS integration tests drive a real `pi05_base.gguf` through
+  the production `Pi05Model::infer` / `VlaModel.run()` paths and
+  assert the returned action chunk vs PyTorch reference actions
+  (cos > 0.999, rel-max < 5 % on CPU).
+- `convert_pi05_to_gguf.py` converts LeRobot/openpi checkpoints to
+  GGUF with quantization variants (q_aggressive, all-q8, all-q4).
+- New JS integration test `test/integration/pi05.test.js` mirrors the
+  shape of `addon.test.js` (exports surface, validator error paths,
+  img-shape mismatch, end-to-end inference parity).
+
 ## [0.2.1] - 2026-05-26
 
 - Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2`.
@@ -21,10 +57,3 @@
 - Input validation: `model.run()` rejects mismatched `imgWidth` /
   `imgHeight` (must equal `hparams.visionImageSize`), `n_images`,
   `lang_len`, and `state_dim` at both the JS and C++ layers.
-- GGUF load rejects malformed files with out-of-range hparams,
-  mismatched `text_num_layers` / `expert_num_layers`, missing required
-  tensors, or per-tensor `(offset, nbytes)` pointing outside the mmap
-  region.
-- Integration test includes a tolerance-based assertion against a
-  committed PyTorch reference output and wires the shared performance
-  reporter (`addonType: 'vla'`).

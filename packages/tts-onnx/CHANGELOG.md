@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Internal RTF + streaming benchmark suite for Chatterbox and Supertonic, runnable via the `Benchmark RTF (ONNX TTS)` GitHub Actions workflow. CI-only; not shipped with the npm package.
 
+## [0.9.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
 ## [0.9.0]
 
 ### Fixed

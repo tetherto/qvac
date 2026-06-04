@@ -1,6 +1,7 @@
-import * as sdk from '@qvac/sdk'
 import type { ModelConstant } from '@qvac/sdk'
 import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
+import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from './aliases/sdcpp-video.js'
+import { loadModelConstants } from './sdk-constants.js'
 
 const ENDPOINT_CATEGORY: Record<string, string> = {
   llm: 'chat',
@@ -70,14 +71,13 @@ export function parseServeConfig (rawConfig: RawServeConfig, cliOptions: CLIServ
   const rawModels = serve.models ?? {}
 
   const models = new Map<string, ResolvedModelEntry>()
-  const registry = loadModelConstants()
 
   for (const [alias, entry] of Object.entries(rawModels)) {
     let resolved: ResolvedModelEntry
     if (typeof entry === 'string') {
-      resolved = resolveModelConstant(alias, entry, registry)
+      resolved = resolveModelConstant(alias, { model: entry })
     } else if (isConstantModelEntry(entry)) {
-      resolved = resolveModelConstant(alias, entry.model, registry, entry)
+      resolved = resolveModelConstant(alias, entry)
     } else {
       resolved = parseExplicitEntry(alias, entry as ExplicitModelEntry)
     }
@@ -186,11 +186,18 @@ const VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION = 'whispercpp-audio-translation'
  * (whisper modelConfig is flat whisper fields, not a nested whisperConfig object).
  * Exported for unit tests.
  */
-export function resolveExplicitServeModel (type: string, config: Record<string, unknown>): {
+export function resolveExplicitServeModel (
+  type: string,
+  config: Record<string, unknown>
+): {
   sdkType: string
   endpointCategory: string
   config: Record<string, unknown>
 } {
+  if (type === SDCPP_VIDEO_TYPE) {
+    return resolveSdcppVideoAlias(config)
+  }
+
   if (type !== VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION) {
     return {
       sdkType: type,
@@ -231,18 +238,18 @@ function isConstantModelEntry (entry: unknown): entry is ConstantModelEntry {
   )
 }
 
-export function resolveModelConstant (alias: string, constantName: string, registry: Map<string, ModelConstant>, overrides?: ConstantModelEntry): ResolvedModelEntry {
-  const model = registry.get(constantName)
+export function resolveModelConstant (alias: string, entry: ConstantModelEntry): ResolvedModelEntry {
+  const model = loadModelConstants().get(entry.model)
   if (!model) {
     throw new Error(
-      `serve.models.${alias}: unknown model constant "${constantName}". ` +
+      `serve.models.${alias}: unknown model constant "${entry.model}". ` +
       'Use a valid SDK model name (e.g. QWEN3_600M_INST_Q4).'
     )
   }
 
-  const rawConfig = overrides?.config ?? {}
-  const resolved = overrides?.type
-    ? resolveExplicitServeModel(overrides.type, rawConfig)
+  const rawConfig = entry.config ?? {}
+  const resolved = entry.type
+    ? resolveExplicitServeModel(entry.type, rawConfig)
     : {
         sdkType: model.addon,
         endpointCategory: normalizeEndpointCategory(model.addon),
@@ -254,13 +261,16 @@ export function resolveModelConstant (alias: string, constantName: string, regis
     modelSrc: model,
     sdkType: resolved.sdkType,
     endpointCategory: resolved.endpointCategory,
-    isDefault: overrides?.default === true,
-    preload: overrides?.preload !== false,
+    isDefault: entry.default === true,
+    preload: entry.preload !== false,
     config: resolved.config
   }
 }
 
-function parseExplicitEntry (alias: string, entry: ExplicitModelEntry): ResolvedModelEntry {
+function parseExplicitEntry (
+  alias: string,
+  entry: ExplicitModelEntry
+): ResolvedModelEntry {
   if (!entry.src) {
     throw new Error(`serve.models.${alias}: "src" is required`)
   }
@@ -271,9 +281,15 @@ function parseExplicitEntry (alias: string, entry: ExplicitModelEntry): Resolved
   const rawConfig = entry.config ?? {}
   const resolved = resolveExplicitServeModel(entry.type, rawConfig)
 
+  // Allow `entry.src` to be either a path or a known SDK model-constant name.
+  // Constant names look like `WAN2_1_T2V_1_3B_FP16`; paths contain `/` or
+  // start with `.`. If the string is a registered constant, swap in the
+  // ModelConstant object so the P2P registry resolves it.
+  const modelSrc: string | ModelConstant = loadModelConstants().get(entry.src) ?? entry.src
+
   return {
     alias,
-    modelSrc: entry.src,
+    modelSrc,
     sdkType: resolved.sdkType,
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
@@ -309,22 +325,4 @@ export function resolveModelAlias (serveConfig: ServeConfig, modelName: string |
 
 function srcOf (modelSrc: string | ModelConstant): string {
   return typeof modelSrc === 'string' ? modelSrc : modelSrc.src
-}
-
-function loadModelConstants (): Map<string, ModelConstant> {
-  const map = new Map<string, ModelConstant>()
-  for (const value of Object.values(sdk)) {
-    if (isModelConstant(value)) map.set(value.name, value)
-  }
-  return map
-}
-
-function isModelConstant (value: unknown): value is ModelConstant {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    'src' in value &&
-    'name' in value &&
-    'addon' in value
-  )
 }

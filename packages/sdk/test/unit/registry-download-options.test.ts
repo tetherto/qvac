@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import {
   DEFAULT_REGISTRY_STREAM_TIMEOUT_MS,

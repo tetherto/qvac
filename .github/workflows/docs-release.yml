@@ -145,13 +145,14 @@ jobs:
           title: "doc[notask]: release docs v${{ steps.setup.outputs.version }} (${{ steps.kind.outputs.kind }})"
           # `add-paths` restricts what gets staged to the generated surfaces;
           # anything else accidentally modified by the run is dropped.
-          # Minor releases also touch `api-data.json`; patch releases don't,
-          # but listing the path here is harmless when nothing changed.
+          # NB: api-data.json is intentionally git-ignored (a generated TypeDoc
+          # artifact) so it is never committed on any flow. It must NOT be listed
+          # here: as a literal pathspec it makes `git add` fail fatally on patch
+          # runs, which never regenerate it (`pathspec ... did not match any files`).
           add-paths: |
             docs/website/content/docs/reference/api/**
             docs/website/content/docs/reference/release-notes/**
             docs/website/src/lib/versions.ts
-            docs/website/scripts/api-docs/api-data.json
           labels: documentation, auto-generated
           body: |
             ## Auto-generated ${{ steps.kind.outputs.kind }} release docs

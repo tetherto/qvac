@@ -1,6 +1,6 @@
 {
   "name": "@qvac/cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -35,7 +35,6 @@
   },
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/cli#readme",
   "scripts": {
-    "preinstall": "node scripts/preinstall-build-local-sdk.cjs",
     "prepublishOnly": "node scripts/check-publish-ready.cjs",
     "build": "rm -rf dist && tsc",
     "build:watch": "tsc --watch",
@@ -54,7 +53,7 @@
     "@fastify/multipart": "^9.0.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
-    "@qvac/sdk": "file:../sdk",
+    "@qvac/sdk": "^0.12.0",
     "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",
     "fastify": "^5.0.0",

@@ -4,6 +4,23 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Opt-in **Metal** GPU backend on Apple via `params.backendDevice: 'metal'`,
+  extending the existing `backendDevice` option (`'cpu'` | `'vulkan'`). The
+  Metal backend is compiled into the addon (no extra shared library); requested
+  Metal transparently falls back to CPU — with an explicit `fallbackReason` —
+  when no Metal-capable device is present. Enabled by requesting the
+  `qvac-fabric` `gpu-backends` feature, which builds ggml with Metal on Apple.
+  Validated CPU↔Metal output parity on Apple M3 Ultra for both the EasyOCR and
+  DocTR pipelines.
+
+## [0.1.1] - 2026-06-02
+
+### Changed
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
 ## [0.1.0] - 2026-05-25
 
 Initial release.

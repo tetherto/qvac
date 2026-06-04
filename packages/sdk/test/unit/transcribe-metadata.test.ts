@@ -1,4 +1,3 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 import {
   transcribeRequestSchema,
@@ -17,21 +16,11 @@ import {
 } from "@/server/bare/utils/transcribe-metadata";
 import { TranscriptionFailedError } from "@/utils/errors-server";
 
-type BrittleT = {
-  is: Function;
-  ok: Function;
-  exception: Function;
-  execution: Function;
-  not: Function;
-  alike: Function;
-  teardown: Function;
-};
-
 // =============================================================================
 // Schema round-trip — transcribeSegmentSchema / transcribeResponseSchema
 // =============================================================================
 
-test("transcribeSegmentSchema: accepts a well-formed segment", (t: BrittleT) => {
+test("transcribeSegmentSchema: accepts a well-formed segment", (t) => {
   const result = transcribeSegmentSchema.safeParse({
     text: "hello world",
     startMs: 1200,
@@ -42,7 +31,7 @@ test("transcribeSegmentSchema: accepts a well-formed segment", (t: BrittleT) => 
   t.ok(result.success, "well-formed segment is valid");
 });
 
-test("transcribeSegmentSchema: rejects missing fields", (t: BrittleT) => {
+test("transcribeSegmentSchema: rejects missing fields", (t) => {
   const missingText = transcribeSegmentSchema.safeParse({
     startMs: 0,
     endMs: 1000,
@@ -68,7 +57,7 @@ test("transcribeSegmentSchema: rejects missing fields", (t: BrittleT) => {
   t.ok(!wrongTypes.success, "non-number timing is rejected");
 });
 
-test("transcribeResponseSchema: round-trips a segment payload", (t: BrittleT) => {
+test("transcribeResponseSchema: round-trips a segment payload", (t) => {
   const segment: TranscribeSegment = {
     text: "round trip",
     startMs: 500,
@@ -88,7 +77,7 @@ test("transcribeResponseSchema: round-trips a segment payload", (t: BrittleT) =>
   }
 });
 
-test("transcribeStreamResponseSchema: round-trips a segment payload", (t: BrittleT) => {
+test("transcribeStreamResponseSchema: round-trips a segment payload", (t) => {
   const segment: TranscribeSegment = {
     text: "stream seg",
     startMs: 100,
@@ -104,7 +93,7 @@ test("transcribeStreamResponseSchema: round-trips a segment payload", (t: Brittl
   if (parsed.success) t.alike(parsed.data.segment, segment, "segment preserved");
 });
 
-test("transcribeResponseSchema: done frame can still omit segment", (t: BrittleT) => {
+test("transcribeResponseSchema: done frame can still omit segment", (t) => {
   const parsed = transcribeResponseSchema.safeParse({
     type: "transcribe",
     text: "",
@@ -117,7 +106,7 @@ test("transcribeResponseSchema: done frame can still omit segment", (t: BrittleT
 // Schema round-trip — metadata flag on request schemas
 // =============================================================================
 
-test("transcribeRequestSchema: accepts metadata: true", (t: BrittleT) => {
+test("transcribeRequestSchema: accepts metadata: true", (t) => {
   const result = transcribeRequestSchema.safeParse({
     type: "transcribe",
     modelId: "m",
@@ -128,7 +117,7 @@ test("transcribeRequestSchema: accepts metadata: true", (t: BrittleT) => {
   if (result.success) t.is(result.data.metadata, true, "metadata preserved");
 });
 
-test("transcribeRequestSchema: metadata remains optional", (t: BrittleT) => {
+test("transcribeRequestSchema: metadata remains optional", (t) => {
   const result = transcribeRequestSchema.safeParse({
     type: "transcribe",
     modelId: "m",
@@ -138,7 +127,7 @@ test("transcribeRequestSchema: metadata remains optional", (t: BrittleT) => {
   if (result.success) t.is(result.data.metadata, undefined, "metadata absent");
 });
 
-test("transcribeRequestSchema: rejects non-boolean metadata", (t: BrittleT) => {
+test("transcribeRequestSchema: rejects non-boolean metadata", (t) => {
   const result = transcribeRequestSchema.safeParse({
     type: "transcribe",
     modelId: "m",
@@ -148,7 +137,7 @@ test("transcribeRequestSchema: rejects non-boolean metadata", (t: BrittleT) => {
   t.ok(!result.success, "non-boolean metadata is rejected");
 });
 
-test("transcribeStreamRequestSchema: accepts metadata: true", (t: BrittleT) => {
+test("transcribeStreamRequestSchema: accepts metadata: true", (t) => {
   const result = transcribeStreamRequestSchema.safeParse({
     type: "transcribeStream",
     modelId: "m",
@@ -162,7 +151,7 @@ test("transcribeStreamRequestSchema: accepts metadata: true", (t: BrittleT) => {
 // toTranscribeSegment — seconds → ms, defaults for missing fields
 // =============================================================================
 
-test("toTranscribeSegment: converts seconds to milliseconds", (t: BrittleT) => {
+test("toTranscribeSegment: converts seconds to milliseconds", (t) => {
   const segment = toTranscribeSegment({
     text: "hello",
     start: 1.25,
@@ -177,7 +166,7 @@ test("toTranscribeSegment: converts seconds to milliseconds", (t: BrittleT) => {
   t.is(segment.id, 42, "id passes through");
 });
 
-test("toTranscribeSegment: handles zero-second boundaries", (t: BrittleT) => {
+test("toTranscribeSegment: handles zero-second boundaries", (t) => {
   const segment = toTranscribeSegment({
     text: "",
     start: 0,
@@ -191,7 +180,7 @@ test("toTranscribeSegment: handles zero-second boundaries", (t: BrittleT) => {
   t.is(segment.id, 0, "id 0");
 });
 
-test("toTranscribeSegment: defaults missing optional fields", (t: BrittleT) => {
+test("toTranscribeSegment: defaults missing optional fields", (t) => {
   const segment = toTranscribeSegment({ text: "hi" });
   t.is(segment.startMs, 0, "missing start defaults to 0ms");
   t.is(segment.endMs, 0, "missing end defaults to 0ms");
@@ -199,7 +188,7 @@ test("toTranscribeSegment: defaults missing optional fields", (t: BrittleT) => {
   t.is(segment.id, 0, "missing id defaults to 0");
 });
 
-test("toTranscribeSegment: fractional seconds round-trip through * 1000", (t: BrittleT) => {
+test("toTranscribeSegment: fractional seconds round-trip through * 1000", (t) => {
   const segment = toTranscribeSegment({
     text: "x",
     start: 0.123,
@@ -209,7 +198,7 @@ test("toTranscribeSegment: fractional seconds round-trip through * 1000", (t: Br
   t.is(segment.endMs, 456, "0.456s → 456ms");
 });
 
-test("toTranscribeSegment: output validates against transcribeSegmentSchema", (t: BrittleT) => {
+test("toTranscribeSegment: output validates against transcribeSegmentSchema", (t) => {
   const segment = toTranscribeSegment({
     text: "schema-check",
     start: 1,
@@ -225,7 +214,7 @@ test("toTranscribeSegment: output validates against transcribeSegmentSchema", (t
 // assertMetadataSupported — engine guard
 // =============================================================================
 
-test("assertMetadataSupported: no-op when metadata is falsy", (t: BrittleT) => {
+test("assertMetadataSupported: no-op when metadata is falsy", (t) => {
   t.execution(() => {
     assertMetadataSupported("m", ModelType.parakeetTranscription, false);
   }, "metadata=false does not throw for any engine");
@@ -234,13 +223,13 @@ test("assertMetadataSupported: no-op when metadata is falsy", (t: BrittleT) => {
   }, "metadata=undefined does not throw for any engine");
 });
 
-test("assertMetadataSupported: passes for whisper engine", (t: BrittleT) => {
+test("assertMetadataSupported: passes for whisper engine", (t) => {
   t.execution(() => {
     assertMetadataSupported("m", ModelType.whispercppTranscription, true);
   }, "metadata=true on whisper does not throw");
 });
 
-test("assertMetadataSupported: throws TranscriptionFailedError for parakeet", (t: BrittleT) => {
+test("assertMetadataSupported: throws TranscriptionFailedError for parakeet", (t) => {
   let caught: unknown;
   try {
     assertMetadataSupported("my-model", ModelType.parakeetTranscription, true);
@@ -258,7 +247,7 @@ test("assertMetadataSupported: throws TranscriptionFailedError for parakeet", (t
   );
 });
 
-test("assertMetadataSupported: throws for unknown / empty engine", (t: BrittleT) => {
+test("assertMetadataSupported: throws for unknown / empty engine", (t) => {
   let caught: unknown;
   try {
     assertMetadataSupported("m", "", true);
@@ -335,7 +324,7 @@ async function runMockDuplexMetadataHandler(
   return outputLines;
 }
 
-test("duplex metadata integration: end-to-end segments from audio chunks", async (t: BrittleT) => {
+test("duplex metadata integration: end-to-end segments from audio chunks", async (t) => {
   async function* segmentHandler(
     _request: Record<string, unknown>,
     inputStream: AsyncIterable<Buffer>,
@@ -386,7 +375,7 @@ test("duplex metadata integration: end-to-end segments from audio chunks", async
   );
 });
 
-test("duplex metadata integration: line-delimited parser round-trips segment frames", async (t: BrittleT) => {
+test("duplex metadata integration: line-delimited parser round-trips segment frames", async (t) => {
   const frames: TranscribeStreamResponse[] = [
     {
       type: "transcribeStream",

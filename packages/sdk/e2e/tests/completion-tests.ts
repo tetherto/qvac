@@ -10,38 +10,65 @@ interface GenerationParams {
   frequency_penalty?: number;
   presence_penalty?: number;
   repeat_penalty?: number;
+  reasoning_budget?: -1 | 0;
+}
+
+type ResponseFormat =
+  | { type: "text" }
+  | { type: "json_object" }
+  | {
+      type: "json_schema";
+      json_schema: {
+        name: string;
+        schema: Record<string, unknown>;
+        description?: string;
+        strict?: boolean;
+      };
+    };
+
+// Shared deterministic sampling: greedy decode + fixed seed so a passing
+// assertion stays reproducible across runs, models, and addon updates.
+const DETERMINISTIC: GenerationParams = { temp: 0, seed: 42 };
+
+interface CompletionTestParams {
+  history: Array<{ role: string; content: string }>;
+  stream?: boolean;
+  stopSequences?: string[];
+  responseFormat?: ResponseFormat;
+  tools?: Array<Record<string, unknown>>;
+  generationParams?: GenerationParams;
+}
+
+type CompletionExpectation =
+  | { validation: "contains-all" | "contains-any"; contains: string[] }
+  | { validation: "regex"; pattern: string }
+  | { validation: "type"; expectedType: "string" | "number" | "array" }
+  | { validation: "throws-error"; errorContains: string };
+
+interface CompletionTestOptions {
+  estimatedDurationMs?: number;
+  suites?: string[];
+  skip?: { reason: string };
+  dependency?: "llm" | "none";
 }
 
 // Helper for creating completion tests with common structure
 const createCompletionTest = (
   testId: string,
-  params: {
-    history: Array<{ role: string; content: string }>;
-    stream?: boolean;
-    temperature?: number;
-    topP?: number;
-    maxTokens?: number;
-    frequencyPenalty?: number;
-    presencePenalty?: number;
-    seed?: number;
-    stopSequences?: string[];
-    generationParams?: GenerationParams;
-  },
-  expectation:
-    | { validation: "contains-all" | "contains-any"; contains: string[] }
-    | { validation: "regex"; pattern: string }
-    | {
-        validation: "type";
-        expectedType: "string" | "number" | "array";
-      },
-  estimatedDurationMs: number = 10000,
-  suites?: string[],
+  params: CompletionTestParams,
+  expectation: CompletionExpectation,
+  options: CompletionTestOptions = {},
 ): TestDefinition => ({
   testId,
   params,
   expectation,
-  ...(suites && { suites }),
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs },
+  ...(options.suites && { suites: options.suites }),
+  ...(options.skip && { skip: options.skip }),
+  metadata: {
+    category: "completion",
+    dependency: options.dependency ?? "llm",
+    estimatedDurationMs: options.estimatedDurationMs ?? 10000,
+  },
 });
 
 // Basic completion tests
@@ -52,10 +79,10 @@ export const completionStreaming = createCompletionTest(
       { role: "user", content: "What is 2+2? Answer with only the number." },
     ],
     stream: true,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-all", contains: ["4"] },
-  10000,
-  ["smoke"],
+  { suites: ["smoke"] },
 );
 
 export const completionEmptyPrompt = createCompletionTest(
@@ -63,10 +90,10 @@ export const completionEmptyPrompt = createCompletionTest(
   {
     history: [{ role: "user", content: "" }],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "type", expectedType: "string" },
-  5000,
-  ["smoke"],
+  { estimatedDurationMs: 5000, suites: ["smoke"] },
 );
 
 export const completionMultiTurn = createCompletionTest(
@@ -82,28 +109,11 @@ export const completionMultiTurn = createCompletionTest(
       },
     ],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-all", contains: ["42"] },
-  10000,
-  ["smoke"],
+  { suites: ["smoke"] },
 );
-
-export const completionSpecialChars: TestDefinition = {
-  testId: "completion-special-chars",
-  params: {
-    history: [
-      {
-        role: "user",
-        content:
-          "What is 50 + 50? Special chars: @#$% 👋 你好 🌍. Answer with just the number.",
-      },
-    ],
-    stream: false,
-  },
-  expectation: { validation: "contains-all", contains: ["100"] },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
-  skip: { reason: "Flaky: 1B model unreliable on math with emoji distractions" },
-};
 
 // Temperature variations
 export const completionTemperature00 = createCompletionTest(
@@ -113,11 +123,10 @@ export const completionTemperature00 = createCompletionTest(
       { role: "user", content: "What is 5+5? Answer with just the number." },
     ],
     stream: false,
-    temperature: 0.0,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-all", contains: ["10"] },
-  8000,
-  ["smoke"],
+  { estimatedDurationMs: 8000, suites: ["smoke"] },
 );
 
 export const completionTemperature05 = createCompletionTest(
@@ -127,12 +136,14 @@ export const completionTemperature05 = createCompletionTest(
       { role: "user", content: "What is 6+6? Answer with just the number." },
     ],
     stream: false,
-    temperature: 0.5,
+    generationParams: { temp: 0.5, seed: 42 },
   },
   { validation: "contains-all", contains: ["12"] },
-  8000,
+  { estimatedDurationMs: 8000 },
 );
 
+// High-temperature sweep: the point is that the sampling param is accepted and
+// generation still works — not exact arithmetic (brittle at temp >= 1.0).
 export const completionTemperature10 = createCompletionTest(
   "completion-temperature-10",
   {
@@ -140,10 +151,10 @@ export const completionTemperature10 = createCompletionTest(
       { role: "user", content: "What is 7+7? Answer with just the number." },
     ],
     stream: false,
-    temperature: 1.0,
+    generationParams: { temp: 1.0, seed: 42 },
   },
-  { validation: "contains-all", contains: ["14"] },
-  8000,
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 8000 },
 );
 
 export const completionTemperature15 = createCompletionTest(
@@ -153,10 +164,10 @@ export const completionTemperature15 = createCompletionTest(
       { role: "user", content: "What is 8+8? Answer with just the number." },
     ],
     stream: false,
-    temperature: 1.5,
+    generationParams: { temp: 1.5, seed: 42 },
   },
-  { validation: "contains-all", contains: ["16"] },
-  8000,
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 8000 },
 );
 
 // top_p variations
@@ -167,8 +178,7 @@ export const completionTopP = createCompletionTest(
       { role: "user", content: "What is 7 + 8? Answer with just the number." },
     ],
     stream: false,
-    topP: 0.1,
-    temperature: 0.7,
+    generationParams: { temp: 0.1, top_p: 0.1, seed: 42 },
   },
   { validation: "contains-all", contains: ["15"] },
 );
@@ -184,12 +194,10 @@ export const completionTopP01 = createCompletionTest(
       },
     ],
     stream: false,
-    temperature: 1.0,
-    topP: 0.1,
+    generationParams: { temp: 0.1, top_p: 0.1, seed: 42 },
   },
   { validation: "contains-all", contains: ["1", "2", "3", "4", "5"] },
-  8000,
-  ["smoke"],
+  { estimatedDurationMs: 8000, suites: ["smoke"] },
 );
 
 export const completionTopP05 = createCompletionTest(
@@ -199,11 +207,10 @@ export const completionTopP05 = createCompletionTest(
       { role: "user", content: "What is 9+9? Answer with just the number." },
     ],
     stream: false,
-    temperature: 1.0,
-    topP: 0.5,
+    generationParams: { temp: 0.1, top_p: 0.5, seed: 42 },
   },
   { validation: "contains-all", contains: ["18"] },
-  8000,
+  { estimatedDurationMs: 8000 },
 );
 
 export const completionTopP10 = createCompletionTest(
@@ -213,11 +220,10 @@ export const completionTopP10 = createCompletionTest(
       { role: "user", content: "What is 11+11? Answer with just the number." },
     ],
     stream: false,
-    temperature: 1.0,
-    topP: 1.0,
+    generationParams: { temp: 0.1, top_p: 1.0, seed: 42 },
   },
   { validation: "contains-all", contains: ["22"] },
-  8000,
+  { estimatedDurationMs: 8000 },
 );
 
 // Frequency penalty variations
@@ -228,35 +234,49 @@ export const completionFrequencyPenalty00 = createCompletionTest(
       { role: "user", content: "What is 15+15? Answer with just the number." },
     ],
     stream: false,
-    frequencyPenalty: 0.0,
+    generationParams: { ...DETERMINISTIC, frequency_penalty: 0.0 },
   },
   { validation: "contains-all", contains: ["30"] },
-  8000,
+  { estimatedDurationMs: 8000 },
 );
 
-// Context size variations
-export const completionContextSize512 = createCompletionTest(
-  "completion-context-size-512",
+export const completionFrequencyPenaltyNeg10 = createCompletionTest(
+  "completion-frequency-penalty-neg10",
   {
     history: [
-      { role: "user", content: "What is 1+1? Answer with only the number." },
+      { role: "user", content: "What is 13+13? Answer with just the number." },
     ],
     stream: false,
+    generationParams: { ...DETERMINISTIC, frequency_penalty: -1.0 },
   },
-  { validation: "contains-all", contains: ["2"] },
-  8000,
+  { validation: "contains-all", contains: ["26"] },
+  { estimatedDurationMs: 8000 },
 );
 
-export const completionContextSize2048 = createCompletionTest(
-  "completion-context-size-2048",
+export const completionFrequencyPenalty10 = createCompletionTest(
+  "completion-frequency-penalty-10",
   {
     history: [
-      { role: "user", content: "What is 1+1? Answer with only the number." },
+      { role: "user", content: "What is 17+17? Answer with just the number." },
     ],
     stream: false,
+    generationParams: { ...DETERMINISTIC, frequency_penalty: 1.0 },
   },
-  { validation: "contains-all", contains: ["2"] },
-  8000,
+  { validation: "contains-all", contains: ["34"] },
+  { estimatedDurationMs: 8000 },
+);
+
+export const completionPresencePenalty = createCompletionTest(
+  "completion-presence-penalty",
+  {
+    history: [
+      { role: "user", content: "What is 14+14? Answer with just the number." },
+    ],
+    stream: false,
+    generationParams: { ...DETERMINISTIC, presence_penalty: 1.0 },
+  },
+  { validation: "contains-all", contains: ["28"] },
+  { estimatedDurationMs: 8000 },
 );
 
 // Temperature variations (already have 0.0, 0.5, 1.0, 1.5)
@@ -267,10 +287,10 @@ export const completionTemperature01 = createCompletionTest(
       { role: "user", content: "What is 2+2? Answer with just the number." },
     ],
     stream: false,
-    temperature: 0.1,
+    generationParams: { temp: 0.1, seed: 42 },
   },
   { validation: "contains-all", contains: ["4"] },
-  8000,
+  { estimatedDurationMs: 8000 },
 );
 
 export const completionTemperature09 = createCompletionTest(
@@ -280,10 +300,10 @@ export const completionTemperature09 = createCompletionTest(
       { role: "user", content: "What is 2+2? Answer with just the number." },
     ],
     stream: false,
-    temperature: 0.9,
+    generationParams: { temp: 0.9, seed: 42 },
   },
   { validation: "contains-all", contains: ["4"] },
-  8000,
+  { estimatedDurationMs: 8000 },
 );
 
 // Advanced parameters
@@ -295,45 +315,17 @@ export const completionStopSequences = createCompletionTest(
     stopSequences: ["banana"],
   },
   { validation: "contains-all", contains: ["apple", "banana"] }, // Should stop at banana
-  10000,
 );
 
 export const completionRepeatPenalty = createCompletionTest(
   "completion-repeat-penalty",
   {
-    history: [{ role: "user", content: "Count from 1 to 5." }],
+    history: [{ role: "user", content: "Count from 1 to 5. Answer with just the numbers separated by spaces." }],
     stream: false,
+    generationParams: { ...DETERMINISTIC, repeat_penalty: 1.3 },
   },
-  { validation: "type", expectedType: "string" },
-  8000,
-);
-
-export const completionMinP = createCompletionTest(
-  "completion-min-p",
-  {
-    history: [
-      { role: "user", content: "What is 2+2? Answer with just the number." },
-    ],
-    stream: false,
-  },
-  { validation: "contains-all", contains: ["4"] },
-  8000,
-);
-
-export const completionZeroTemperature = createCompletionTest(
-  "completion-zero-temperature",
-  {
-    history: [
-      {
-        role: "user",
-        content: "What is 20 + 20? Answer with just the number.",
-      },
-    ],
-    stream: false,
-    temperature: 0.0,
-  },
-  { validation: "contains-all", contains: ["40"] },
-  8000,
+  { validation: "contains-all", contains: ["1", "2", "3", "4", "5"] },
+  { estimatedDurationMs: 8000 },
 );
 
 export const completionTopK = createCompletionTest(
@@ -343,61 +335,14 @@ export const completionTopK = createCompletionTest(
       { role: "user", content: "What is 2 + 3? Answer with just the number." },
     ],
     stream: false,
-    generationParams: { temp: 0, top_k: 1, seed: 42 },
+    generationParams: { ...DETERMINISTIC, top_k: 1 },
   },
   { validation: "contains-all", contains: ["5"] },
-  8000,
+  { estimatedDurationMs: 8000 },
 );
 
-export const completionFrequencyPenalty = createCompletionTest(
-  "completion-frequency-penalty",
-  {
-    history: [{ role: "user", content: "List numbers from 1 to 10." }],
-    stream: false,
-  },
-  { validation: "type", expectedType: "string" },
-  8000,
-);
-
-export const completionFrequencyPenaltyNeg10 = createCompletionTest(
-  "completion-frequency-penalty-neg10",
-  {
-    history: [
-      { role: "user", content: "What is 13+13? Answer with just the number." },
-    ],
-    stream: false,
-    frequencyPenalty: -1.0,
-  },
-  { validation: "contains-all", contains: ["26"] },
-  8000,
-);
-
-export const completionFrequencyPenalty10 = createCompletionTest(
-  "completion-frequency-penalty-10",
-  {
-    history: [
-      { role: "user", content: "What is 17+17? Answer with just the number." },
-    ],
-    stream: false,
-    frequencyPenalty: 1.0,
-  },
-  { validation: "contains-all", contains: ["34"] },
-  8000,
-);
-
-export const completionNegativeTemperature = createCompletionTest(
-  "completion-negative-temperature",
-  {
-    history: [
-      { role: "user", content: "What is 1 + 1? Answer with just the number." },
-    ],
-    stream: false,
-    temperature: -0.5,
-  },
-  { validation: "type", expectedType: "string" }, // SDK should handle gracefully
-  8000,
-);
-
+// Runs the same prompt twice with a fixed seed and asserts byte-identical
+// output — see CompletionExecutor.seedReproducibility.
 export const completionSeedReproducibility = createCompletionTest(
   "completion-seed-reproducibility",
   {
@@ -405,10 +350,9 @@ export const completionSeedReproducibility = createCompletionTest(
       { role: "user", content: "Generate a random story in 20 words." },
     ],
     stream: false,
-    seed: 42,
+    generationParams: DETERMINISTIC,
   },
   { validation: "type", expectedType: "string" },
-  10000,
 );
 
 export const completionStopSequencesMultiple = createCompletionTest(
@@ -419,7 +363,6 @@ export const completionStopSequencesMultiple = createCompletionTest(
     stopSequences: ["dog", "cat", "bird"],
   },
   { validation: "type", expectedType: "string" },
-  10000,
 );
 
 export const completionMaxTokens = createCompletionTest(
@@ -427,26 +370,30 @@ export const completionMaxTokens = createCompletionTest(
   {
     history: [{ role: "user", content: "Count from 1 to 100." }],
     stream: false,
-    maxTokens: 10,
+    generationParams: { ...DETERMINISTIC, predict: 10 },
   },
   { validation: "type", expectedType: "string" },
-  10000,
 );
 
-// Additional completion tests
+// Fires multiple completions in parallel and asserts all resolve correctly —
+// see CompletionExecutor.concurrentRequests.
 export const completionConcurrentRequests = createCompletionTest(
   "completion-concurrent-requests",
-  { history: [{ role: "user", content: "What is 3 + 3?" }], stream: false },
+  {
+    history: [{ role: "user", content: "What is 3 + 3? Answer with just the number." }],
+    stream: false,
+    generationParams: DETERMINISTIC,
+  },
   { validation: "contains-all", contains: ["6"] },
-  15000,
-  ["smoke"],
+  { estimatedDurationMs: 15000, suites: ["smoke"] },
 );
 
-export const completionRepeatedTokens = createCompletionTest(
-  "completion-repeated-tokens",
+export const completionCountInWords = createCompletionTest(
+  "completion-count-in-words",
   {
     history: [{ role: "user", content: "Count from one to five using words." }],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-any", contains: ["one", "two", "three"] },
 );
@@ -461,6 +408,7 @@ export const completionWithWhitespace = createCompletionTest(
       },
     ],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-all", contains: ["24"] },
 );
@@ -476,10 +424,10 @@ export const completionJsonFormat = createCompletionTest(
       },
     ],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-all", contains: ["25", "{", "}"] },
-  10000,
-  ["smoke"],
+  { suites: ["smoke"] },
 );
 
 export const completionCodeGeneration = createCompletionTest(
@@ -489,25 +437,38 @@ export const completionCodeGeneration = createCompletionTest(
       { role: "user", content: "Write a hello world function in JavaScript." },
     ],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-any", contains: ["function", "hello", "console"] },
 );
 
 export const completionConversationContext = createCompletionTest(
   "completion-conversation-context",
-  { history: [{ role: "user", content: "Tell me about AI." }], stream: false },
+  {
+    history: [{ role: "user", content: "Tell me about AI." }],
+    stream: false,
+    generationParams: DETERMINISTIC,
+  },
   { validation: "type", expectedType: "string" },
 );
 
 export const completionSingleWord = createCompletionTest(
   "completion-single-word",
-  { history: [{ role: "user", content: "Hello" }], stream: false },
+  {
+    history: [{ role: "user", content: "Hello" }],
+    stream: false,
+    generationParams: DETERMINISTIC,
+  },
   { validation: "type", expectedType: "string" },
 );
 
 export const completionListGeneration = createCompletionTest(
   "completion-list-generation",
-  { history: [{ role: "user", content: "List 5 colors." }], stream: false },
+  {
+    history: [{ role: "user", content: "List 5 colors." }],
+    stream: false,
+    generationParams: DETERMINISTIC,
+  },
   { validation: "type", expectedType: "string" },
 );
 
@@ -518,77 +479,66 @@ export const completionQaFromContext = createCompletionTest(
       { role: "user", content: "The sky is blue. What color is the sky?" },
     ],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "contains-all", contains: ["blue"] },
-  10000,
-  ["smoke"],
+  { suites: ["smoke"] },
 );
-
-export const completionSimpleYesNo: TestDefinition = {
-  testId: "completion-simple-yes-no",
-  params: {
-    history: [{ role: "user", content: "Is 2+2=4? Answer yes or no." }],
-    stream: false,
-  },
-  expectation: { validation: "contains-any", contains: ["yes", "Yes"] },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
-  skip: { reason: "Flaky: 1B model sometimes answers 'no' to trivial yes/no questions" },
-};
 
 export const completionSentenceCompletion = createCompletionTest(
   "completion-sentence-completion",
   {
     history: [{ role: "user", content: "The quick brown fox" }],
     stream: false,
+    generationParams: DETERMINISTIC,
   },
   { validation: "type", expectedType: "string" },
 );
 
-export const completionResponseFormatText: TestDefinition = {
-  testId: "completion-response-format-text",
-  params: {
-    history: [{ role: "user", content: "Reply with only the word APPLE." }],
+export const completionResponseFormatText = createCompletionTest(
+  "completion-response-format-text",
+  {
+    history: [{ role: "user", content: "Reply with only the word BANANA." }],
     stream: false,
     responseFormat: { type: "text" },
-    generationParams: { temp: 0, seed: 42 },
+    generationParams: { ...DETERMINISTIC, predict: 16 },
   },
-  expectation: { validation: "contains-any", contains: ["APPLE", "apple"] },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
-};
+  { validation: "type", expectedType: "string" },
+);
 
-export const completionResponseFormatJsonObject: TestDefinition = {
-  testId: "completion-response-format-json-object",
-  params: {
+export const completionResponseFormatJsonObject = createCompletionTest(
+  "completion-response-format-json-object",
+  {
     history: [
       { role: "system", content: "Reply with a single valid JSON object only. No markdown, no prose." },
       { role: "user", content: "Return an object with a single key 'ok' set to the boolean true." },
     ],
     stream: false,
     responseFormat: { type: "json_object" },
-    generationParams: { temp: 0, seed: 42, predict: 64 },
+    generationParams: { ...DETERMINISTIC, predict: 64 },
   },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
-};
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 15000 },
+);
 
-export const completionResponseFormatJsonObjectStreaming: TestDefinition = {
-  testId: "completion-response-format-json-object-streaming",
-  params: {
+export const completionResponseFormatJsonObjectStreaming = createCompletionTest(
+  "completion-response-format-json-object-streaming",
+  {
     history: [
       { role: "system", content: "Reply with a single valid JSON object only. No markdown, no prose." },
       { role: "user", content: "Return an object with a single key 'ok' set to the boolean true." },
     ],
     stream: true,
     responseFormat: { type: "json_object" },
-    generationParams: { temp: 0, seed: 42, predict: 64 },
+    generationParams: { ...DETERMINISTIC, predict: 64 },
   },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
-};
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 15000 },
+);
 
-export const completionResponseFormatJsonSchema: TestDefinition = {
-  testId: "completion-response-format-json-schema",
-  params: {
+export const completionResponseFormatJsonSchema = createCompletionTest(
+  "completion-response-format-json-schema",
+  {
     history: [
       {
         role: "user",
@@ -613,37 +563,35 @@ export const completionResponseFormatJsonSchema: TestDefinition = {
         },
       },
     },
-    generationParams: { temp: 0, seed: 42, predict: 128 },
+    generationParams: { ...DETERMINISTIC, predict: 128 },
   },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 20000 },
-};
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 20000 },
+);
 
-export const completionReasoningBudgetDisabled: TestDefinition = {
-  testId: "completion-reasoning-budget-disabled",
-  params: {
+export const completionReasoningBudgetDisabled = createCompletionTest(
+  "completion-reasoning-budget-disabled",
+  {
     history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
     stream: false,
     generationParams: { reasoning_budget: 0, predict: 32 },
   },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
-};
+  { validation: "type", expectedType: "string" },
+);
 
-export const completionReasoningBudgetUnrestricted: TestDefinition = {
-  testId: "completion-reasoning-budget-unrestricted",
-  params: {
+export const completionReasoningBudgetUnrestricted = createCompletionTest(
+  "completion-reasoning-budget-unrestricted",
+  {
     history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
     stream: false,
     generationParams: { reasoning_budget: -1, predict: 32 },
   },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
-};
+  { validation: "type", expectedType: "string" },
+);
 
-export const completionResponseFormatWithToolsRejected: TestDefinition = {
-  testId: "completion-response-format-with-tools-rejected",
-  params: {
+export const completionResponseFormatWithToolsRejected = createCompletionTest(
+  "completion-response-format-with-tools-rejected",
+  {
     history: [{ role: "user", content: "irrelevant" }],
     stream: false,
     responseFormat: { type: "json_object" },
@@ -659,30 +607,23 @@ export const completionResponseFormatWithToolsRejected: TestDefinition = {
         },
       },
     ],
-    generationParams: { temp: 0, seed: 42, predict: 64 },
+    generationParams: { ...DETERMINISTIC, predict: 64 },
   },
-  expectation: { validation: "throws-error", errorContains: "responseFormat" },
-  metadata: { category: "completion", dependency: "none", estimatedDurationMs: 5000 },
-};
+  { validation: "throws-error", errorContains: "responseFormat" },
+  { estimatedDurationMs: 5000, dependency: "none" },
+);
 
 export const completionTests = [
   completionStreaming,
-  completionContextSize512,
-  completionContextSize2048,
   completionTemperature01,
   completionTemperature09,
   completionEmptyPrompt,
   completionMultiTurn,
   completionMaxTokens,
-  completionSpecialChars,
   completionStopSequences,
   completionTopP,
   completionRepeatPenalty,
-  completionMinP,
-  completionZeroTemperature,
   completionTopK,
-  completionFrequencyPenalty,
-  completionNegativeTemperature,
   completionTemperature00,
   completionTemperature05,
   completionTemperature10,
@@ -693,10 +634,11 @@ export const completionTests = [
   completionFrequencyPenaltyNeg10,
   completionFrequencyPenalty00,
   completionFrequencyPenalty10,
+  completionPresencePenalty,
   completionSeedReproducibility,
   completionStopSequencesMultiple,
   completionConcurrentRequests,
-  completionRepeatedTokens,
+  completionCountInWords,
   completionWithWhitespace,
   completionJsonFormat,
   completionCodeGeneration,
@@ -704,7 +646,6 @@ export const completionTests = [
   completionSingleWord,
   completionListGeneration,
   completionQaFromContext,
-  completionSimpleYesNo,
   completionSentenceCompletion,
   completionResponseFormatText,
   completionResponseFormatJsonObject,

@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import {
   decideCachedHistorySlice,
@@ -31,12 +30,8 @@ import {
 // state.
 // -----------------------------------------------------------------------------
 
-type T = {
-  alike: (actual: unknown, expected: unknown, msg?: string) => void;
-  is: (actual: unknown, expected: unknown, msg?: string) => void;
-};
 
-test("decideCachedHistorySlice: baseline slice when savedCount is valid", (t: T) => {
+test("decideCachedHistorySlice: baseline slice when savedCount is valid", (t) => {
   const history: HistoryMessage[] = [
     { role: "system", content: "sys" },
     { role: "user", content: "hi" },
@@ -55,7 +50,7 @@ test("decideCachedHistorySlice: baseline slice when savedCount is valid", (t: T)
   t.is(clearStaleCount, false);
 });
 
-test("decideCachedHistorySlice: stale count (slice would be empty) falls back and flags clear", (t: T) => {
+test("decideCachedHistorySlice: stale count (slice would be empty) falls back and flags clear", (t) => {
   const history: HistoryMessage[] = [
     { role: "system", content: "sys" },
     { role: "user", content: "u1" },
@@ -77,7 +72,7 @@ test("decideCachedHistorySlice: stale count (slice would be empty) falls back an
   );
 });
 
-test("decideCachedHistorySlice: savedCount > history.length falls back and flags clear", (t: T) => {
+test("decideCachedHistorySlice: savedCount > history.length falls back and flags clear", (t) => {
   const history: HistoryMessage[] = [
     { role: "system", content: "sys" },
     { role: "user", content: "u1" },
@@ -91,7 +86,7 @@ test("decideCachedHistorySlice: savedCount > history.length falls back and flags
   t.is(clearStaleCount, true);
 });
 
-test("decideCachedHistorySlice: savedCount = 0, cache exists → strip system, no clear", (t: T) => {
+test("decideCachedHistorySlice: savedCount = 0, cache exists → strip system, no clear", (t) => {
   const history: HistoryMessage[] = [
     { role: "system", content: "sys" },
     { role: "user", content: "u1" },
@@ -105,7 +100,7 @@ test("decideCachedHistorySlice: savedCount = 0, cache exists → strip system, n
   t.is(clearStaleCount, false);
 });
 
-test("decideCachedHistorySlice: cache does not exist → strip system regardless of savedCount", (t: T) => {
+test("decideCachedHistorySlice: cache does not exist → strip system regardless of savedCount", (t) => {
   const history: HistoryMessage[] = [
     { role: "system", content: "sys" },
     { role: "user", content: "u1" },
@@ -123,13 +118,13 @@ test("decideCachedHistorySlice: cache does not exist → strip system regardless
   );
 });
 
-test("decideCachedHistorySlice: empty history returns empty, no clear", (t: T) => {
+test("decideCachedHistorySlice: empty history returns empty, no clear", (t) => {
   const { messages, clearStaleCount } = decideCachedHistorySlice(2, true, []);
   t.alike(messages, []);
   t.is(clearStaleCount, false);
 });
 
-test("decideCachedHistorySlice: savedCount = history.length slices to [] and flags clear", (t: T) => {
+test("decideCachedHistorySlice: savedCount = history.length slices to [] and flags clear", (t) => {
   // Exact shape of the reported QVAC-17780 bug: a cancelled turn records
   // `history.length + 1` for a 2-message history; the user's next turn
   // has 3 messages and a savedCount of 3 — slicing yields []. The
@@ -151,7 +146,7 @@ test("decideCachedHistorySlice: savedCount = history.length slices to [] and fla
   t.is(clearStaleCount, true);
 });
 
-test("regression: an externally-seeded stale savedCount still triggers the fallback", (t: T) => {
+test("regression: an externally-seeded stale savedCount still triggers the fallback", (t) => {
   // Belt-and-suspenders test: simulate an externally-poisoned savedCount
   // (e.g. from a pre-upgrade SDK instance still running in memory) and
   // confirm that `decideCachedHistorySlice` refuses to emit an empty

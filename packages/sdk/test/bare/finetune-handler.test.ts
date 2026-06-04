@@ -1,14 +1,7 @@
-// NOTE:
-// This test file is temporarily disabled by filename so the Bun unit runner does not import it.
-// Importing `@/server/bare/plugins/llamacpp-completion/ops/finetune` loads `bare-fs` at module scope,
-// which currently crashes under Bun.
-// This seems to be a bug in Bun itself.
-
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "bare-fs";
+import os from "bare-os";
+import path from "bare-path";
 import { z } from "zod";
 import {
   clearRegistry,
@@ -47,7 +40,8 @@ function registerFinetunePlugin() {
         requestSchema: finetuneRequestSchema,
         responseSchema: finetuneResponseSchema,
         streaming: false,
-        handler: finetuneOp,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        handler: finetuneOp as any,
       }),
     },
   });
@@ -59,7 +53,6 @@ function registerFinetuneModel(modelId: string, model: AnyModel) {
     path: "/tmp/test-model.gguf",
     config: {},
     modelType: ModelType.llamacppCompletion,
-    loader: {} as never,
   });
 }
 
@@ -71,7 +64,7 @@ function cleanupCheckpointDir(baseDir: string) {
   fs.rmSync(baseDir, { recursive: true, force: true });
 }
 
-test.skip("handleFinetune: wraps progress callbacks for start requests", async (t) => {
+test("handleFinetune: wraps progress callbacks for start requests", async (t) => {
   clearRegistry();
   const modelId = "finetune-progress-model";
   const updates: Array<ReturnType<typeof finetuneProgressResponseSchema.parse>> = [];
@@ -157,7 +150,7 @@ test.skip("handleFinetune: wraps progress callbacks for start requests", async (
   }
 });
 
-test.skip("handleFinetune: wraps progress callbacks for omitted-operation requests", async (t) => {
+test("handleFinetune: wraps progress callbacks for omitted-operation requests", async (t) => {
   clearRegistry();
   const modelId = "finetune-auto-progress-model";
   const updates: Array<ReturnType<typeof finetuneProgressResponseSchema.parse>> = [];
@@ -234,7 +227,7 @@ test.skip("handleFinetune: wraps progress callbacks for omitted-operation reques
   }
 });
 
-test.skip("handleFinetune: dispatches start requests without progress callbacks", async (t) => {
+test("handleFinetune: dispatches start requests without progress callbacks", async (t) => {
   clearRegistry();
   clearPlugins();
   const modelId = "finetune-dispatch-start-model";
@@ -287,7 +280,7 @@ test.skip("handleFinetune: dispatches start requests without progress callbacks"
   }
 });
 
-test.skip("handleFinetune: dispatches getState requests through plugin reply handler", async (t) => {
+test("handleFinetune: dispatches getState requests through plugin reply handler", async (t) => {
   clearRegistry();
   clearPlugins();
   const modelId = "finetune-get-state-model";
@@ -325,7 +318,7 @@ test.skip("handleFinetune: dispatches getState requests through plugin reply han
   }
 });
 
-test.skip("handleFinetune: dispatches pause requests through plugin reply handler", async (t) => {
+test("handleFinetune: dispatches pause requests through plugin reply handler", async (t) => {
   clearRegistry();
   clearPlugins();
   const modelId = "finetune-dispatch-pause-model";

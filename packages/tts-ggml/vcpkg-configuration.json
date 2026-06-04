@@ -13,7 +13,8 @@
         "gtest",
         "vulkan",
         "vulkan-headers",
-        "vulkan-loader"
+        "vulkan-loader",
+        "spirv-headers"
       ]
     }
   ]

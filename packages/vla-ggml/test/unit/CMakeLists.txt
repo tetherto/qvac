@@ -4,6 +4,25 @@ add_executable(
   addon-test
   test_hparams.cpp
   test_backend_selection.cpp
+  test_model_factory.cpp
+  test_pi05_m3_1_siglip.cpp
+  test_pi05_m3_2_siglip_block.cpp
+  test_pi05_m3_3_siglip_tower.cpp
+  test_pi05_m3_4_vlm_embed.cpp
+  test_pi05_m3_5_vlm_block.cpp
+  test_pi05_m3_6_vlm_prefill.cpp
+  test_pi05_m3_7_time_cond.cpp
+  test_pi05_m3_8_adarms_split.cpp
+  test_pi05_m3_9_expert_block.cpp
+  test_pi05_m3_10_expert_full.cpp
+  test_pi05_m3_11_euler_step.cpp
+  test_pi05_m3_12_ode_loop.cpp
+  test_pi05_m3_13_end_to_end.cpp
+  test_pi05_integration.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla_adapter.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/pi05.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/model_factory.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
 )
@@ -33,7 +52,7 @@ target_link_libraries(
     GTest::gmock_main
 )
 
-add_test(NAME SmolvlaUnit COMMAND addon-test)
-set_tests_properties(SmolvlaUnit PROPERTIES
+add_test(NAME VlaGgmlUnit COMMAND addon-test)
+set_tests_properties(VlaGgmlUnit PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  TIMEOUT 120)
+  TIMEOUT 900)
