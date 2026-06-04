@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Help an author draft a QIP before posting to Slack Canvas.
 
+Core principle: a QIP draft is earned by evidence, decision context, and explicit trade-offs. Do not treat this as a template-filling or content-generation task.
+
 ## When to use this skill
 
 **Use when:**
@@ -29,11 +31,36 @@ Read before drafting:
 - [references/qip-template.md](references/qip-template.md)
 - `docs/architecture/PRINCIPLES.md` for lightweight principle checks
 
+## Question-first default
+
+For every new QIP request, ask at least one clarifying question before drafting unless the user explicitly says:
+
+- `draft with assumptions`
+- `make a first pass`
+- `no questions`
+- `use my brief as final context`
+
+A terse slash-command prompt with only a title, technology list, package name, or desired outcome is fuzzy idea mode. Examples:
+
+- `/qv-qip-create Kotlin SDK Android Coroutines JNI Maven Central`
+- `/qv-qip-create native mobile SDK`
+- `/qv-qip-create improve registry replication`
+
+If the prompt names several possible motivations, ask the user to choose the primary driver instead of guessing.
+
 ## Entry modes
 
 ### Clear proposal mode
 
-Use when the user already has problem, solution, affected area or team, and known consequences.
+Use only when the user already provided:
+
+- Problem: what is broken, missing, risky, or strategically needed
+- Timing: why this needs attention now
+- Chosen direction: what decision is being proposed
+- Affected surface: packages, products, teams, users, public APIs, runtime boundaries, or release flows
+- Trade-offs: at least one cost, rejected option, or consequence reviewers must accept
+
+Do not classify a request as clear proposal mode just because it contains many solution details. A rich technology list is still fuzzy idea mode if the problem, timing, affected surface, and trade-offs are not explicit.
 
 Ask only for missing essentials.
 
@@ -51,6 +78,56 @@ Ask short questions one at a time until enough context exists:
 6. What is explicitly out of scope for the first proposal?
 
 Do not dump all questions at once unless the user asks for a batch.
+
+## Draft readiness gate
+
+Before saving or presenting a QIP draft, confirm these are known:
+
+- Problem and timing
+- Affected surface
+- Existing option or current behavior
+- Chosen direction
+- At least one credible alternative
+- Trade-offs and new responsibilities
+- Trust boundary impact, if any
+- Compatibility, migration, and release impact, if any
+
+If two or more are unknown, do not draft. Ask the next most important question. If exactly one is unknown, either ask or label it clearly as an assumption.
+
+## Evidence and assumption rules
+
+Do not invent:
+
+- production motivations
+- team commitments
+- implementation strategy
+- supported platforms or ABIs
+- release plans
+- security properties
+- performance claims
+- ownership decisions
+
+Every substantive claim in the QIP must come from one of:
+
+- user-provided context
+- existing repo documentation
+- existing code
+- a clearly labeled assumption
+
+Prefer questions over assumptions for architectural proposals. If the draft includes assumptions, keep them explicit and easy for the author to confirm or delete.
+
+## Architecture-change verification
+
+If the proposal affects SDK API, native bindings, runtime, mobile support, storage, transport, model registry, release flow, or security boundaries, inspect relevant repo docs or code before drafting.
+
+Minimum verification:
+
+- Read current architecture principles
+- Search for existing implementation or docs in the affected area
+- Identify current behavior and the proposed delta
+- State unknowns explicitly
+
+Do not produce a full QIP from general knowledge alone.
 
 ## Consultation note
 
@@ -81,6 +158,7 @@ Advice is direction plus reasoning, not a vote.
 - Add a diagram only when runtime, package, or approval boundaries are non-obvious
 - Do not invent approvals, commitments, or team decisions
 - Do not claim the QIP is approved
+- Keep drafts concise. If the available context only supports a problem-framing note, write that instead of padding a full QIP.
 
 ## Proposal substance checks
 
@@ -91,6 +169,17 @@ Before finalizing, check whether the proposal needs any of these:
 - Compatibility / release impact: call out observable behavior changes, public API changes, dependency/install-contract changes, migration needs, and expected versioning impact when relevant. If there is no breaking change, say so briefly.
 
 If the rationale or impact is unclear, investigate the existing code/docs enough to form a grounded draft or ask the user for the missing decision context.
+
+## Red flags - stop and ask
+
+Stop drafting and ask a question when you notice any of these:
+
+- You are choosing the primary motivation yourself
+- You are describing implementation details the user did not provide and the repo does not verify
+- You are writing benefits without corresponding trade-offs
+- You are naming affected teams, platforms, security properties, or release plans from inference alone
+- The draft reads like generic SDK marketing copy instead of a decision artifact
+- You cannot explain what reviewers are being asked to approve
 
 ## Output format
 
