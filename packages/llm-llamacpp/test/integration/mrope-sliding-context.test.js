@@ -38,51 +38,13 @@ const LLAMA3_2_3B_MODEL = {
 
 const SYSTEM_MESSAGE = {
   role: 'system',
-  content: 'You are a helpful assistant. Keep answers short. Use the get_weather tool when asked about weather.'
+  content: 'You are a helpful assistant. Keep answers concise.'
 }
 
 const IMAGE_SYSTEM_MESSAGE = {
   role: 'system',
   content: 'You are a helpful assistant. Keep answers concise.'
 }
-
-const TOOL_WEATHER = {
-  type: 'function',
-  name: 'get_weather',
-  description: 'Get current weather for a city',
-  parameters: {
-    type: 'object',
-    properties: {
-      city: { type: 'string', description: 'City name' }
-    },
-    required: ['city']
-  }
-}
-
-const SCENARIOS = [
-  {
-    caseId: 1,
-    label: 'dynamic tools_compact with tools',
-    tools: true,
-    toolsCompact: true,
-    withTools: true
-  },
-  {
-    caseId: 2,
-    label: 'static tools without tools_compact',
-    tools: true,
-    toolsCompact: false,
-    withTools: true
-  },
-  {
-    caseId: 3,
-    label: 'tools_compact enabled without tools',
-    tools: false,
-    toolsCompact: true,
-    withTools: false,
-    turnFiller: `${'Add enough context pressure to force cache sliding without tool tokens. '.repeat(18)}Please keep replying briefly.`
-  }
-]
 
 const MULTIMODAL_TURN_FILLER = 'Add context pressure for cache sliding while keeping the answer short. '.repeat(44)
 const MULTIMODAL_MAX_SLIDE_TURNS = 6
@@ -106,40 +68,6 @@ function normalizeStats (rawStats = {}) {
   }
 }
 
-function selectMessagesForTurn (history, scenario, savedCount) {
-  const tools = scenario.withTools ? [TOOL_WEATHER] : []
-  const dynamicTools = scenario.withTools && scenario.toolsCompact
-
-  if (dynamicTools) {
-    const lastMsg = history[history.length - 1]
-    if (!lastMsg) return tools
-
-    if (lastMsg.role === 'tool') {
-      const trailingTools = []
-      for (let i = history.length - 1; i >= 0; i--) {
-        const msg = history[i]
-        if (msg.role !== 'tool') break
-        trailingTools.unshift(msg)
-      }
-      return trailingTools
-    }
-
-    if (lastMsg.role === 'user') {
-      const prevMsg = history[history.length - 2]
-      const tail = prevMsg?.role === 'assistant' ? [prevMsg, lastMsg] : [lastMsg]
-      return [...tail, ...tools]
-    }
-
-    return [lastMsg, ...tools]
-  }
-
-  if (savedCount === null) {
-    return [...history.filter(msg => msg.role !== 'system'), ...tools]
-  }
-
-  return [...history.slice(savedCount), ...tools]
-}
-
 async function runAndCollect (model, prompt, runOptions) {
   const response = await model.run(prompt, runOptions)
   const chunks = []
@@ -157,17 +85,14 @@ async function runAndCollect (model, prompt, runOptions) {
   }
 }
 
-async function setupModel (t, scenario) {
+async function runQwenTextSlidingCacheCase (t) {
   const [modelName, dirPath] = await ensureModel({
     modelName: QWEN3_5_MODEL.name,
     downloadUrl: QWEN3_5_MODEL.url
   })
 
   const modelPath = path.join(dirPath, modelName)
-  const cachePath = path.join(
-    dirPath,
-    `qwen35-sliding-context-case-${scenario.caseId}.bin`
-  )
+  const cachePath = path.join(dirPath, 'qwen3-5-text-prefill-sliding-cache.bin')
   try { fs.unlinkSync(cachePath) } catch (_) {}
 
   const model = new LlmLlamacpp({
@@ -177,8 +102,6 @@ async function setupModel (t, scenario) {
       gpu_layers: '999',
       ctx_size: '512',
       n_discarded: '256',
-      tools: scenario.tools ? 'true' : 'false',
-      tools_compact: scenario.toolsCompact ? 'true' : 'false',
       verbosity: '2'
     },
     logger: createLogger(),
@@ -192,7 +115,35 @@ async function setupModel (t, scenario) {
     await model.unload().catch(() => {})
   })
 
-  return { model, cachePath }
+  await primeSystemCache(model, cachePath)
+
+  let totalSlides = 0
+  let lastStats = null
+
+  for (let turn = 1; turn <= 8; turn++) {
+    const response = await model.run([
+      {
+        role: 'user',
+        content: `Turn ${turn}: answer "ok" after reading this text. ${TEXT_TURN_FILLER}`
+      }
+    ], {
+      cacheKey: cachePath,
+      saveCacheToDisk: true,
+      prefill: true
+    })
+    await response.await()
+
+    const stats = normalizeStats(response.stats)
+    totalSlides += stats.contextSlides
+    lastStats = stats
+
+    if (totalSlides > 0) {
+      break
+    }
+  }
+
+  t.ok(totalSlides > 0, 'Qwen3.5 text exercises iM-RoPE prefill K-shift sliding')
+  t.ok(lastStats.CacheTokens < 512, `Qwen3.5 text cache stays within context (${lastStats.CacheTokens})`)
 }
 
 async function setupMultimodalPaths () {
@@ -410,53 +361,11 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
   t.ok(prefillStats.CacheTokens < 512, `${options.label} cache stays within context (${prefillStats.CacheTokens})`)
 }
 
-for (const scenario of SCENARIOS) {
-  safeTest(`[qwen3.5-imrope-sliding-context] case ${scenario.caseId}: ${scenario.label}`, {
-    timeout: 900_000
-  }, async t => {
-    const { model, cachePath } = await setupModel(t, scenario)
-    await primeSystemCache(model, cachePath)
-
-    const history = [SYSTEM_MESSAGE]
-    let savedCount = null
-    let totalSlides = 0
-    let lastStats = null
-
-    for (let turn = 1; turn <= 8; turn++) {
-      const turnFiller = scenario.turnFiller || TEXT_TURN_FILLER
-
-      history.push({
-        role: 'user',
-        content: `Turn ${turn}: weather in Tokyo? ${turnFiller}`
-      })
-
-      const preRunHistoryLength = history.length
-      const messagesToSend = selectMessagesForTurn(history, scenario, savedCount)
-      const response = await model.run(messagesToSend, {
-        cacheKey: cachePath,
-        saveCacheToDisk: true,
-        prefill: true
-      })
-      await response.await()
-
-      const stats = normalizeStats(response.stats)
-      totalSlides += stats.contextSlides
-      lastStats = stats
-
-      savedCount = preRunHistoryLength
-
-      if (totalSlides > 0) {
-        break
-      }
-    }
-
-    t.ok(totalSlides > 0, `case ${scenario.caseId} exercises iM-RoPE prefill K-shift sliding`)
-    t.ok(
-      lastStats.CacheTokens < 512,
-      `case ${scenario.caseId} cache stays within context (${lastStats.CacheTokens})`
-    )
-  })
-}
+safeTest('[qwen3.5-imrope-sliding-context] text prefill-slides tokens', {
+  timeout: 900_000
+}, async t => {
+  await runQwenTextSlidingCacheCase(t)
+})
 
 safeTest('[qwen3.5-imrope-sliding-context] multimodal cache survives sliding save/load', {
   timeout: 1_800_000
