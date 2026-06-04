@@ -1,9 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "e0b1cc3c321951f53f95fe663b1dc785dc095eeb",
-    "reference": "tts-cpp-multilingual-23langs",
-    "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git"
+    "baseline": "88663627cb9667b04b2b034045b7d3d65e8b8fc4",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
