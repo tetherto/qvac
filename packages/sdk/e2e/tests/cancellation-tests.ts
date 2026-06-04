@@ -86,6 +86,7 @@ export const serializeConcurrentCompletion: TestDefinition = {
     prompt: "Reply with one short sentence naming your favourite colour.",
   },
   expectation: { validation: "function", fn: () => true },
+  suites: ["smoke"],
   metadata: {
     category: "cancellation",
     dependency: "llm",
