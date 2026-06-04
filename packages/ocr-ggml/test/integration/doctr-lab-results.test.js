@@ -47,6 +47,9 @@ function runLabResultsTest (device, run) {
 
     const texts = results.map(r => r.text)
     t.comment('Detected texts: ' + JSON.stringify(texts))
+    // Tag the perf record with the backend the pipeline actually resolved:
+    // a 'vulkan' request transparently falls back to CPU on hosts without a
+    // Vulkan device, so record GPU only when inference really ran on the GPU.
     const resolvedTag = stats.backendIsGpu ? 'GPU' : 'CPU'
     t.comment(formatOCRPerformanceMetrics(`[DocTR lab_results] [${resolvedTag}]`, stats, texts, { imagePath }))
 

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <exception>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -258,6 +259,9 @@ std::vector<std::string> parseVocabToChars(const std::string& vocab) {
 // Run `fn(i)` for i in [0,count) across up to `workers` threads. Each index is
 // handled by exactly one thread, so `fn` writing to a distinct slot per index
 // needs no synchronisation. Falls back to a serial loop for tiny workloads.
+// An exception escaping `fn` in a worker would otherwise call std::terminate,
+// so each worker captures the first exception it throws; after all threads are
+// joined the first captured exception is rethrown to the caller.
 void parallelFor(int count, int workers, const std::function<void(int)>& fn) {
   if (count <= 0) {
     return;
@@ -271,15 +275,25 @@ void parallelFor(int count, int workers, const std::function<void(int)>& fn) {
   }
   std::vector<std::thread> threads;
   threads.reserve(static_cast<size_t>(n));
+  std::vector<std::exception_ptr> errors(static_cast<size_t>(n));
   for (int w = 0; w < n; ++w) {
-    threads.emplace_back([w, n, count, &fn]() {
-      for (int i = w; i < count; i += n) {
-        fn(i);
+    threads.emplace_back([w, n, count, &fn, &errors]() {
+      try {
+        for (int i = w; i < count; i += n) {
+          fn(i);
+        }
+      } catch (...) {
+        errors[static_cast<size_t>(w)] = std::current_exception();
       }
     });
   }
   for (auto& th : threads) {
     th.join();
+  }
+  for (const auto& err : errors) {
+    if (err) {
+      std::rethrow_exception(err);
+    }
   }
 }
 
@@ -1078,6 +1092,8 @@ void StepDoctrRecognitionGGML::packCropIntoBatch(
   CV_Assert(image.channels() == kInputChannels);
   const size_t planeFloats = static_cast<size_t>(RECOG_WIDTH) * RECOG_HEIGHT;
   const size_t cropStride = planeFloats * kInputChannels;
+  CV_Assert(slot >= 0);
+  CV_Assert((static_cast<size_t>(slot) + 1) * cropStride <= batchInput.size());
   float* dst = batchInput.data() + (static_cast<size_t>(slot) * cropStride);
 
   std::vector<cv::Mat> channels;
@@ -1095,6 +1111,9 @@ void StepDoctrRecognitionGGML::packCropIntoBatch(
 std::pair<std::string, float>
 StepDoctrRecognitionGGML::decodeLogits(const std::vector<float>& logits) {
   const std::array<int, 3> sizes = {1, kSequenceLength, kVocabSize};
+  // cv::Mat needs a non-const pointer, but decodeCTC/decodeAttention only read
+  // through `preds` (softmaxArgmax -> ptr<float>()), so the buffer is never
+  // mutated; the const_cast is safe.
   cv::Mat preds(
       3,
       sizes.data(),
@@ -1218,7 +1237,13 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
   // once (one thread-spawn wave, best load balance).
   std::vector<float> batchInput(static_cast<size_t>(batchSize_) * cropStride);
   std::vector<float> allFeatures(static_cast<size_t>(total) * featStride);
-  bool cancelled = false;
+
+  // Number of crops whose features were actually computed. The cancel check
+  // fires at a batch boundary, so every batch before `batchStart` is complete
+  // and exactly `batchStart` crops are ready when we break (this is NOT the
+  // largest multiple of batchSize_ <= total — they differ for any cancellation
+  // before the final full-batch boundary).
+  int decodeCount = total;
 
   for (int batchStart = 0; batchStart < total; batchStart += batchSize_) {
     if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
@@ -1226,7 +1251,7 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
           "[DoctrRecognitionGGML] Cancelled at batch offset " +
               std::to_string(batchStart));
-      cancelled = true;
+      decodeCount = batchStart;
       break;
     }
 
@@ -1242,16 +1267,12 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
     // One batched feature-extractor compute (unused tail slots produce ignored
     // outputs); copy this batch's features into the global buffer.
     std::vector<float> features = impl_->runFeatureExtractor(batchInput);
+    CV_Assert(features.size() >= static_cast<size_t>(count) * featStride);
     std::memcpy(
         allFeatures.data() + (static_cast<size_t>(batchStart) * featStride),
         features.data(),
         static_cast<size_t>(count) * featStride * sizeof(float));
   }
-
-  // When cancelled mid-feature-extraction, only decode the crops whose
-  // features were actually computed (the whole completed batches).
-  const int decodeCount =
-      cancelled ? ((total / batchSize_) * batchSize_) : total;
 
   // LSTM + linear + CTC/attention decode for every crop, parallel across the
   // whole set (each thread reads a distinct feature span, writes a distinct
