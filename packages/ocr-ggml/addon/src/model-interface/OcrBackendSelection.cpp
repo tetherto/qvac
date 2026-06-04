@@ -64,13 +64,13 @@ ggml_backend_dev_t findGpuDeviceByName(bool (*matches)(std::string_view)) {
       continue;
     }
     const char* devNameRaw = ggml_backend_dev_name(dev);
-    if (matches(devNameRaw != nullptr ? devNameRaw : "")) {
+    if (devNameRaw != nullptr && matches(devNameRaw)) {
       return dev;
     }
     ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
     const char* regNameRaw =
         (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
-    if (matches(regNameRaw != nullptr ? regNameRaw : "")) {
+    if (regNameRaw != nullptr && matches(regNameRaw)) {
       return dev;
     }
   }
