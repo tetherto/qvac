@@ -835,6 +835,130 @@ async function runDoctrOCR (t, params, imagePath) {
   }
 }
 
+/**
+ * Runs a single EasyOCR-style inference pass: constructs an OcrGgml instance
+ * (forcing CPU when `forceCpu` is set), loads, runs, records perf and invokes
+ * the caller's `assertResult`. Always unloads + waits before returning so a
+ * follow-up pass starts from a clean state. Internal helper for
+ * {@link runOcrComparison}.
+ *
+ * @param {Object} t - brittle test handle
+ * @param {Object} cfg - see {@link runOcrComparison}
+ * @param {boolean} forceCpu - when true, override `params.backendDevice` to 'cpu'
+ * @returns {Promise<{output: Array, stats: Object, backendInfo: Object|null, isGpuPass: boolean}>}
+ */
+async function _runOcrPass (t, cfg, forceCpu) {
+  const { params, imagePath, runOptions, perfLabel, perfOpts, assertResult } = cfg
+  const passParams = forceCpu ? { ...params, backendDevice: 'cpu' } : { ...params }
+  const ocrGgml = createOcrGgml(passParams, { stats: true })
+
+  await ocrGgml.load()
+
+  let output = []
+  try {
+    const response = await ocrGgml.run({
+      path: imagePath,
+      options: runOptions || { paragraph: false }
+    })
+
+    await response
+      .onUpdate(o => { output = o })
+      .onError(error => { t.fail('unexpected error: ' + JSON.stringify(error)) })
+      .await()
+
+    const stats = response.stats || {}
+    const backendInfo = typeof ocrGgml.getBackendInfo === 'function' ? ocrGgml.getBackendInfo() : null
+    const isGpuPass = stats.backendIsGpu === 1 ||
+      (!!backendInfo && (backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'))
+
+    if (perfLabel) {
+      t.comment(formatOCRPerformanceMetrics(perfLabel, stats, output.map(o => o[1]), perfOpts))
+    }
+
+    if (typeof assertResult === 'function') {
+      assertResult(output, { stats, backendInfo, isGpuPass })
+    }
+
+    return { output, stats, backendInfo, isGpuPass }
+  } finally {
+    await safeUnload(ocrGgml)
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+}
+
+/**
+ * Runs an EasyOCR-style inference twice for same-machine CPU/GPU comparison.
+ *
+ * Pass 1 uses the auto-selected backend (Vulkan when a Vulkan lib is shipped in
+ * prebuilds/, else CPU — see {@link getBackendDevice}). Pass 2 runs ONLY when
+ * pass 1 actually executed on a GPU device (`stats.backendIsGpu === 1` /
+ * `backendInfo.backendDevice` GPU|IGPU): it forces `backendDevice: 'cpu'` so a
+ * GPU host records BOTH a `[GPU]` and a `[CPU]` perf row for the same test. On
+ * non-GPU/local hosts pass 1 already ran on CPU, so the second pass is skipped
+ * and the suite stays single-pass (one `[CPU]` row, unchanged).
+ *
+ * `formatOCRPerformanceMetrics` normalizes the `[CPU]`/`[GPU]` token from the
+ * resolved backend, so passing one `perfLabel` yields distinct, correctly
+ * labelled rows per pass. The caller's `assertResult` runs on EACH pass, which
+ * also proves CPU/Vulkan parity on GPU hosts.
+ *
+ * @param {Object} t - brittle test handle
+ * @param {Object} cfg
+ * @param {Object} cfg.params - OcrGgml params (detector/recognizer paths, langList, ...)
+ * @param {string} cfg.imagePath - image to run
+ * @param {Object} [cfg.runOptions] - options passed to `run({ path, options })` (default `{ paragraph: false }`)
+ * @param {string} [cfg.perfLabel] - perf-report label (backend token appended/normalized per pass)
+ * @param {Object} [cfg.perfOpts] - extra opts for {@link formatOCRPerformanceMetrics} (e.g. `{ imagePath }`)
+ * @param {Function} [cfg.assertResult] - `assertResult(output, { stats, backendInfo, isGpuPass })`, run per pass
+ * @returns {Promise<{output: Array, stats: Object, backendInfo: Object|null, isGpuPass: boolean}>} pass-1 result
+ */
+async function runOcrComparison (t, cfg) {
+  const pass1 = await _runOcrPass(t, cfg, false)
+  if (pass1.isGpuPass) {
+    await _runOcrPass(t, cfg, true)
+  }
+  return pass1
+}
+
+/**
+ * DocTR analogue of {@link runOcrComparison}. Drives {@link runDoctrOCR} for a
+ * preferred-backend pass and, only when that ran on GPU, a forced-CPU pass —
+ * recording perf and running the caller's `assertResult` on each. Non-GPU hosts
+ * stay single-pass. `runDoctrOCR` already handles load/unload + inter-pass delay.
+ *
+ * @param {Object} t - brittle test handle
+ * @param {Object} cfg
+ * @param {Object} cfg.params - DocTR params (pathDetector, pathRecognizer, ...)
+ * @param {string} cfg.imagePath - image to run
+ * @param {string} [cfg.perfLabel] - perf-report label (backend token normalized per pass)
+ * @param {Object} [cfg.perfOpts] - extra opts for {@link formatOCRPerformanceMetrics} (e.g. `{ imagePath }` or `{ skipReport: true }`)
+ * @param {Function} [cfg.assertResult] - `assertResult(results, { stats, isGpuPass })`, run per pass
+ * @returns {Promise<{results: Array, stats: Object}>} last-pass result (CPU pass on GPU hosts, else the single pass)
+ */
+async function runDoctrComparison (t, cfg) {
+  const { params, imagePath, perfLabel, perfOpts, assertResult } = cfg
+
+  const pass1 = await runDoctrOCR(t, params, imagePath)
+  const isGpuPass1 = !!(pass1.stats && pass1.stats.backendIsGpu === 1)
+  if (perfLabel) {
+    t.comment(formatOCRPerformanceMetrics(perfLabel, pass1.stats, pass1.results.map(r => r.text), perfOpts))
+  }
+  if (typeof assertResult === 'function') {
+    assertResult(pass1.results, { stats: pass1.stats, isGpuPass: isGpuPass1 })
+  }
+
+  if (!isGpuPass1) return pass1
+
+  const pass2 = await runDoctrOCR(t, { ...params, backendDevice: 'cpu' }, imagePath)
+  if (perfLabel) {
+    t.comment(formatOCRPerformanceMetrics(perfLabel, pass2.stats, pass2.results.map(r => r.text), perfOpts))
+  }
+  if (typeof assertResult === 'function') {
+    assertResult(pass2.results, { stats: pass2.stats, isGpuPass: false })
+  }
+  return pass2
+}
+
 module.exports = {
   isMobile,
   isWindows,
@@ -852,5 +976,7 @@ module.exports = {
   formatOCRPerformanceMetrics,
   safeUnload,
   runDoctrOCR,
+  runOcrComparison,
+  runDoctrComparison,
   flushPerfReport: _flushPerfReport
 }
