@@ -95,13 +95,11 @@ jobs:
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
-            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
-            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
           - os: windows-2025

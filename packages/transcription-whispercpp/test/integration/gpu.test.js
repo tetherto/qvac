@@ -39,16 +39,6 @@ const NO_GPU = process.env && process.env.NO_GPU === 'true'
 
 const SAMPLE_AUDIO_NAME = 'sample.raw'
 
-function expectsGpu () {
-  return (
-    platform === 'darwin' ||
-    platform === 'ios' ||
-    platform === 'linux' ||
-    platform === 'win32' ||
-    platform === 'android'
-  )
-}
-
 function backendIdToName (id) {
   switch (id) {
     case 0: return 'CPU'
@@ -152,12 +142,6 @@ function assertGpuBackend (t, label, stats) {
   const id = stats.backendId
   const name = backendIdToName(id)
   console.log(`[${label}] backendDevice=${dev} backendId=${id} (${name})`)
-
-  if (!expectsGpu()) {
-    t.is(dev, 0,
-      `${label}/${platform}: backendDevice must be 0 (CPU) on platforms with no GPU wired in`)
-    return
-  }
 
   if (dev !== 1) {
     const msg = `${label}/${platform}: expected GPU backend, got ${name} ` +
