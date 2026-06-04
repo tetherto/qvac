@@ -98,43 +98,39 @@ jobs:
           prebuild-artifact-prefix: 'parakeet-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
-      # GGML model provisioning. q4_0 TDT/EOU/Sortformer/Sortformer-Streaming
-      # v2.1 GGUFs (~570 MB) get staged into test/mobile/testAssets/ before
-      # build-mobile-app so they end up in the test bundle. CTC is intentionally
-      # skipped (shares FastConformer encoder with TDT; bundle-size pure cost).
-      # Cache covers .nemo checkpoints + GGUFs + venv together — ~10
-      # min cold, ~0s warm.
-      - name: Setup Python (.nemo -> .gguf conversion, iOS only)
-        if: matrix.platform == 'iOS' && runner.environment == 'github-hosted'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          python-version: '3.12'
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
-      - name: Cache Parakeet .nemo + q4 GGUFs + Python venv
+      - name: Cache Parakeet q4 GGUFs (registry + staged copies)
         id: cache-parakeet-models
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: |
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/nemo
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-tdt-0.6b-v3.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-eou-120m-v1.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/sortformer-4spk-v1.q4_0.gguf
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf
-          key: parakeet-mobile-q4-tdt-eou-sortformer-streaming-v1-${{ hashFiles(format('{0}/scripts/convert-nemo-to-gguf.py', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/convert-nemo.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/download-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/requirements.txt', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet')), format('{0}/scripts/provision-mobile-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet'))) }}
+            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/parakeet-tdt-0.6b-v3.q4_0.gguf
+            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/parakeet-eou-120m-v1.q4_0.gguf
+            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/sortformer-4spk-v1.q4_0.gguf
+            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf
+          key: parakeet-mobile-q4-registry-v1-${{ hashFiles(format('{0}/scripts/provision-mobile-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet'))) }}
           restore-keys: |
-            parakeet-mobile-q4-tdt-eou-sortformer-streaming-v1-
+            parakeet-mobile-q4-registry-v1-
 
-      - name: Provision Parakeet GGUFs (cache miss)
+      - name: Provision Parakeet q4 GGUFs from registry (cache miss)
         if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
         working-directory: addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}
         shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           chmod +x scripts/provision-mobile-models.sh
           scripts/provision-mobile-models.sh
 
-      # Cache-hit path still needs the bundled .gguf files staged into
-      # testAssets — the cache restores models/*.gguf but not the
-      # testAssets/ copies.
       - name: Stage q4 GGUFs into test/mobile/testAssets/ (cache hit)
         if: steps.cache-parakeet-models.outputs.cache-hit == 'true'
         working-directory: addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}

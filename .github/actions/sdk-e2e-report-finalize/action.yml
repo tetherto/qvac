@@ -277,10 +277,14 @@ runs:
 
           const summaryPath = process.env.GITHUB_STEP_SUMMARY;
 
+          const failedPlatforms = [];
+          const missingPlatforms = [];
+
           for (const platform of platforms) {
             const resultsPath = findResultsJson(platform);
             let body;
             if (!resultsPath) {
+              missingPlatforms.push(platform);
               const linksLine = buildLinksLine(platform);
               body = [
                 marker(platform),
@@ -299,6 +303,11 @@ runs:
                 results = { summary: {}, categories: {}, tests: [] };
               }
               body = buildBody(platform, results);
+
+              const pFailed = Number(results.summary?.failed || 0);
+              if (pFailed > 0) {
+                failedPlatforms.push({ platform, failed: pFailed });
+              }
             }
 
             if (summaryPath && updateSummary) {
@@ -320,4 +329,16 @@ runs:
             } else if (pr) {
               core.info(`No comment-id recorded for ${platform}; skipping update.`);
             }
+          }
+
+          const problems = [];
+          if (failedPlatforms.length > 0) {
+            const details = failedPlatforms.map((p) => `${p.platform} (${p.failed} failed)`).join(', ');
+            problems.push(`test failures on: ${details}`);
+          }
+          if (missingPlatforms.length > 0) {
+            problems.push(`missing results for: ${missingPlatforms.join(', ')}`);
+          }
+          if (problems.length > 0) {
+            core.setFailed(`E2E aggregate check failed — ${problems.join('; ')}`);
           }

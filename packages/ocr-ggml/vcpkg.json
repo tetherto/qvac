@@ -16,7 +16,10 @@
     {
       "name": "qvac-fabric",
       "default-features": false,
-      "version>=": "8189.0.2"
+      "version>=": "8828.0.2",
+      "features": [
+        "gpu-backends"
+      ]
     },
     {
       "name": "qvac-lib-inference-addon-cpp",

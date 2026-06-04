@@ -97,6 +97,14 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
 
       logger.info('RPC Client: Connected to server', { peer: peerKey })
 
+      conn.on('error', err => {
+        logger.warn({
+          peer: peerKey,
+          error: err.message,
+          code: err.code
+        }, 'RPC Client: connection error')
+      })
+
       const rpc = new ProtomuxRPC(conn, {
         protocol: 'qvac-registry-rpc',
         valueEncoding: cenc.json
