@@ -12032,6 +12032,22 @@
     "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
   },
   {
+    "source": "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/a1dac71d3ab220618f5a7573a52acdc4baf3ae3b/mmproj-gemma-4-E2B-it-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Gemma 4 E2B",
+    "quantization": "q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from ggml-org (the registry's bartowski gemma-4-E2B-it repo ships only f16/bf16 mmproj). Same official google/gemma-4-E2B-it model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF"
+  },
+  {
     "source": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/c04cb322fd63e347db759a08b6249b867488ccf8/google_gemma-4-E4B-it-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Gemma 4 E4B instruct multimodal model",
@@ -12222,6 +12238,22 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/9d48fdbc0d8f133716da87ec1d904e5d2c7175a6/Qwen3.5-0.8B.mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 0.8B",
+    "quantization": "q8_0",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from mradermacher (the registry's unsloth Qwen3.5-0.8B repo ships only F16/BF16 mmproj). Same base Qwen3.5-0.8B model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF"
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-BF16.gguf",
