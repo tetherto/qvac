@@ -26,6 +26,11 @@ const QWEN3_5_PROJ_MODEL = {
   url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
 }
 
+const LLAMA3_2_1B_MODEL = {
+  name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
+  url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
+}
+
 const SYSTEM_MESSAGE = {
   role: 'system',
   content: 'You are a helpful assistant. Keep answers short. Use the get_weather tool when asked about weather.'
@@ -338,6 +343,56 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
   t.ok(reloadRun.stats.CacheTokens > 0, `reload used restored cache (${reloadRun.stats.CacheTokens} tokens)`)
 }
 
+async function runLlamaCpuSlidingCacheCase (t, options = {}) {
+  const [modelName, dirPath] = await ensureModel({
+    modelName: LLAMA3_2_1B_MODEL.name,
+    downloadUrl: LLAMA3_2_1B_MODEL.url
+  })
+
+  const modelPath = path.join(dirPath, modelName)
+  const cachePath = path.join(dirPath, options.cacheFileName)
+  try { fs.unlinkSync(cachePath) } catch (_) {}
+
+  const model = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config: {
+      device: 'cpu',
+      gpu_layers: '0',
+      ctx_size: '512',
+      n_discarded: '64',
+      temp: '0',
+      seed: '42',
+      verbosity: '2',
+      ...options.extraConfig
+    },
+    logger: createLogger(),
+    opts: { stats: true }
+  })
+
+  t.teardown(async () => {
+    try { fs.unlinkSync(cachePath) } catch (_) {}
+    await model.unload().catch(() => {})
+  })
+
+  await model.load()
+
+  const run = await runAndCollect(model, [
+    { role: 'system', content: 'You are a storyteller. Write detailed stories with many characters.' },
+    { role: 'user', content: 'Tell a long story about a brave knight on many adventures.' }
+  ], {
+    generationParams: {
+      predict: 512,
+      seed: 42,
+      temp: 0,
+      top_k: 1
+    }
+  })
+
+  t.ok(run.output.length > 0, `${options.label} produced output`)
+  t.ok(run.stats.contextSlides > 0, `${options.label} exercised CPU context sliding`)
+  t.ok(run.stats.CacheTokens < 512, `${options.label} cache stays within context (${run.stats.CacheTokens})`)
+}
+
 for (const scenario of SCENARIOS) {
   safeTest(`[qwen3.5-sliding-context] case ${scenario.caseId}: ${scenario.label}`, {
     timeout: 900_000
@@ -436,6 +491,19 @@ safeTest('[qwen3.5-sliding-context] pq4 K-cache shifts multimodal and text token
   await runMultimodalSlidingCacheCase(t, {
     label: 'pq4 K-cache multimodal',
     cacheFileName: 'qwen3-5-pq4-kcache-multimodal-sliding-cache.bin',
+    extraConfig: {
+      'cache-type-k': 'pq4_0'
+    }
+  })
+})
+
+safeTest('[qwen3.5-sliding-context] llama3.2 CPU pq4 K-cache shifts text tokens', {
+  timeout: 900_000,
+  skip: skipTbqPq
+}, async t => {
+  await runLlamaCpuSlidingCacheCase(t, {
+    label: 'llama3.2 CPU pq4 K-cache',
+    cacheFileName: 'llama3-2-cpu-pq4-kcache-sliding-cache.bin',
     extraConfig: {
       'cache-type-k': 'pq4_0'
     }
