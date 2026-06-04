@@ -328,10 +328,38 @@ case only when the corresponding GGUFs are present on disk:
 | `OCR_GGML_DOCTR_DETECTOR` | Doctr | Doctr case |
 | `OCR_GGML_DOCTR_RECOGNIZER` | Doctr | Doctr case |
 | `OCR_GGML_IMAGE` | — | overrides the default sample image |
+| `OCR_GGML_BACKEND` | — | manual ggml backend override for the whole suite: `cpu` or `vulkan` (otherwise auto-detected, see below) |
 
 CI sets these automatically; locally you can:
 
 ```bash
+OCR_GGML_DETECTOR=$PWD/models/craft_mlt_25k.gguf \
+OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
+npm run test:integration
+```
+
+### Running the suite on Vulkan (GPU)
+
+The harness **auto-detects** the backend. When the package ships a
+`ggml-vulkan` backend lib in `prebuilds/` (as the merged desktop CI prebuilds
+do), the whole integration suite — every EasyOCR + DocTR case, with the same
+expected-text / quality assertions as CPU — automatically runs through the
+ggml Vulkan backend. This means the existing desktop `test-<platform>-<arch>`
+integration job exercises Vulkan on the Vulkan-capable GPU runner (e.g.
+`qvac-ubuntu2404-x64-gpu`) with no separate CI job.
+
+On a host without a Vulkan-capable GPU (or without the `ggml-vulkan` backend
+lib — e.g. local dev with unmerged prebuilds), the suite stays on CPU: when no
+lib is present it never requests Vulkan, and when the lib is present but no GPU
+is available the request transparently falls back to CPU. Either way the suite
+still passes, and the recorded `execution_provider` reflects the backend
+actually used (driven by the `backendIsGpu` stat), not the request.
+
+`OCR_GGML_BACKEND` remains a manual override that takes precedence over
+auto-detection — force the GPU path (or force CPU) with:
+
+```bash
+OCR_GGML_BACKEND=vulkan \
 OCR_GGML_DETECTOR=$PWD/models/craft_mlt_25k.gguf \
 OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
 npm run test:integration

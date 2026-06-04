@@ -2,9 +2,7 @@
 
 const { OcrGgml } = require('../..')
 const test = require('brittle')
-const fs = require('bare-fs')
-const path = require('bare-path')
-const { isMobile, platform, getImagePath, ensureModelPath, safeUnload } = require('./utils')
+const { isMobile, platform, getImagePath, ensureModelPath, safeUnload, findVulkanBackendLib, PREBUILDS_DIR } = require('./utils')
 
 // QVAC-19797: opt-in Vulkan GGML backend. Requesting `backendDevice: 'vulkan'`
 // must EITHER run inference on a Vulkan device, OR report an explicit CPU
@@ -21,33 +19,6 @@ const { isMobile, platform, getImagePath, ensureModelPath, safeUnload } = requir
 
 const TEST_TIMEOUT = 120 * 1000
 
-// Recursively search prebuilds/ for a ggml Vulkan backend shared library.
-function findVulkanBackendLib (dir) {
-  let entries
-  try {
-    entries = fs.readdirSync(dir)
-  } catch (_) {
-    return null
-  }
-  for (const name of entries) {
-    const full = path.join(dir, name)
-    let st
-    try {
-      st = fs.statSync(full)
-    } catch (_) {
-      continue
-    }
-    if (st.isDirectory()) {
-      const nested = findVulkanBackendLib(full)
-      if (nested) return nested
-    } else if (/ggml-vulkan/i.test(name) && /\.(so|dll|dylib)$/i.test(name)) {
-      return full
-    }
-  }
-  return null
-}
-
-const PREBUILDS_DIR = path.join(__dirname, '..', '..', 'prebuilds')
 const vulkanBackendLib = findVulkanBackendLib(PREBUILDS_DIR)
 
 // Skip on mobile (prebuilds layout / device provisioning differ) and on any

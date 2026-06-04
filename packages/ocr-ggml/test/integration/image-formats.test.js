@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, createOcrGgml, runOcrComparison } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -17,45 +16,30 @@ test('OCR processes JPEG images correctly', { timeout: TEST_TIMEOUT }, async fun
 
   t.comment('Testing JPEG format with image: ' + imagePath)
 
-  const ocrGgml = new OcrGgml({
+  await runOcrComparison(t, {
     params: {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en']
     },
-    opts: { stats: true }
+    imagePath,
+    runOptions: { paragraph: false },
+    perfLabel: '[EasyOCR JPEG]',
+    perfOpts: { imagePath },
+    assertResult (output) {
+      t.ok(Array.isArray(output), 'JPEG: output should be an array')
+      t.ok(output.length === IMAGE_FORMAT_EXPECTED_TEXTS.length, `JPEG: output length should be ${IMAGE_FORMAT_EXPECTED_TEXTS.length}, got ${output.length}`)
+
+      const texts = output.map(o => o[1])
+      t.comment('JPEG output texts: ' + JSON.stringify(texts))
+
+      for (let i = 0; i < IMAGE_FORMAT_EXPECTED_TEXTS.length; i++) {
+        t.ok(texts.includes(IMAGE_FORMAT_EXPECTED_TEXTS[i]), `JPEG: should contain text "${IMAGE_FORMAT_EXPECTED_TEXTS[i]}"`)
+      }
+    }
   })
 
-  await ocrGgml.load()
-
-  try {
-    const response = await ocrGgml.run({
-      path: imagePath,
-      options: { paragraph: false }
-    })
-
-    await response
-      .onUpdate(output => {
-        t.ok(Array.isArray(output), 'JPEG: output should be an array')
-        t.ok(output.length === IMAGE_FORMAT_EXPECTED_TEXTS.length, `JPEG: output length should be ${IMAGE_FORMAT_EXPECTED_TEXTS.length}, got ${output.length}`)
-
-        const texts = output.map(o => o[1])
-        t.comment('JPEG output texts: ' + JSON.stringify(texts))
-
-        for (let i = 0; i < IMAGE_FORMAT_EXPECTED_TEXTS.length; i++) {
-          t.ok(texts.includes(IMAGE_FORMAT_EXPECTED_TEXTS[i]), `JPEG: should contain text "${IMAGE_FORMAT_EXPECTED_TEXTS[i]}"`)
-        }
-      })
-      .onError(error => {
-        t.fail('JPEG: unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
-
-    t.pass('JPEG format processing completed successfully')
-  } finally {
-    await ocrGgml.unload()
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  }
+  t.pass('JPEG format processing completed successfully')
 })
 
 test('OCR processes PNG images correctly', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -65,61 +49,46 @@ test('OCR processes PNG images correctly', { timeout: TEST_TIMEOUT }, async func
 
   t.comment('Testing PNG format with image: ' + imagePath)
 
-  const ocrGgml = new OcrGgml({
+  await runOcrComparison(t, {
     params: {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en']
     },
-    opts: { stats: true }
+    imagePath,
+    runOptions: { paragraph: false },
+    perfLabel: '[EasyOCR PNG]',
+    perfOpts: { imagePath },
+    assertResult (output) {
+      t.ok(Array.isArray(output), 'PNG: output should be an array')
+      t.ok(output.length === IMAGE_FORMAT_EXPECTED_TEXTS.length, `PNG: output length should be ${IMAGE_FORMAT_EXPECTED_TEXTS.length}, got ${output.length}`)
+
+      const texts = output.map(o => o[1])
+      t.comment('PNG output texts: ' + JSON.stringify(texts))
+
+      for (let i = 0; i < IMAGE_FORMAT_EXPECTED_TEXTS.length; i++) {
+        t.ok(texts.includes(IMAGE_FORMAT_EXPECTED_TEXTS[i]), `PNG: should contain text "${IMAGE_FORMAT_EXPECTED_TEXTS[i]}"`)
+      }
+    }
   })
 
-  await ocrGgml.load()
-
-  try {
-    const response = await ocrGgml.run({
-      path: imagePath,
-      options: { paragraph: false }
-    })
-
-    await response
-      .onUpdate(output => {
-        t.ok(Array.isArray(output), 'PNG: output should be an array')
-        t.ok(output.length === IMAGE_FORMAT_EXPECTED_TEXTS.length, `PNG: output length should be ${IMAGE_FORMAT_EXPECTED_TEXTS.length}, got ${output.length}`)
-
-        const texts = output.map(o => o[1])
-        t.comment('PNG output texts: ' + JSON.stringify(texts))
-
-        for (let i = 0; i < IMAGE_FORMAT_EXPECTED_TEXTS.length; i++) {
-          t.ok(texts.includes(IMAGE_FORMAT_EXPECTED_TEXTS[i]), `PNG: should contain text "${IMAGE_FORMAT_EXPECTED_TEXTS[i]}"`)
-        }
-      })
-      .onError(error => {
-        t.fail('PNG: unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
-
-    t.pass('PNG format processing completed successfully')
-  } finally {
-    await ocrGgml.unload()
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  }
+  t.pass('PNG format processing completed successfully')
 })
 
+// Cross-format consistency check: a single loaded instance runs BMP then JPEG
+// and compares their outputs. This is a same-backend equality test (not a
+// backend comparison), so it stays single-pass and is left unchanged.
 test('BMP and JPEG produce consistent results', { timeout: TEST_TIMEOUT }, async function (t) {
   const detectorPath = await ensureModelPath('detector_craft')
   const recognizerPath = await ensureModelPath('recognizer_latin')
   const bmpPath = getImagePath('/test/images/basic_test.bmp')
   const jpgPath = getImagePath('/test/images/basic_test.jpg')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   await ocrGgml.load()
 
