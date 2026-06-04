@@ -81,12 +81,14 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
   }, []);
 
   // Theme-aware palette for the container and the (themed) second card.
+  // Light mode mirrors the dark treatment: a bottom-left teal "glow" radial
+  // and a surrounding teal aura, tuned softer so it reads well on white.
   const containerBg = isDark
     ? 'radial-gradient(80% 80% at 10% 140%, #16E3C1, #171817)'
-    : 'linear-gradient(140deg, #ffffff 40%, #ecf1ee 100%)';
+    : 'radial-gradient(80% 80% at 10% 140%, #16E3C1, #ffffff 70%)';
   const containerShadow = isDark
     ? '0 0 10px 0 #16E3C1'
-    : '0 10px 40px 0 rgba(0, 0, 0, 0.15)';
+    : '0 0 18px 0 rgba(22, 227, 193, 0.55), 0 10px 40px 0 rgba(0, 0, 0, 0.15)';
   // Both cards share the same solid, theme-aware treatment.
   const accent = isDark ? TEAL : '#00AF92';
   const cardBg = isDark ? DARK : '#ffffff';
