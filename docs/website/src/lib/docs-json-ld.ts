@@ -78,7 +78,7 @@ function buildBreadcrumbList(slugs: string[]): JsonLdBlock {
       '@type': 'ListItem',
       position: i + 2,
       name: slugs[i],
-      item: `${DOCS_SITE_ORIGIN}${accumulatedPath}`,
+      item: `${DOCS_SITE_ORIGIN}${accumulatedPath}/`,
     });
   }
 

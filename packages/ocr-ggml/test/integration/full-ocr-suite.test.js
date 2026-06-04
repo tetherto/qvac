@@ -1,8 +1,7 @@
 'use strict'
 
-const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, runOcrComparison } = require('./utils')
 
 test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async function (t) {
   const detectorPath = await ensureModelPath('detector_craft')
@@ -31,53 +30,37 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
     }
   ]
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const params = {
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }
 
-  await ocrGgml.load()
-  t.pass('OCR model loaded')
+  for (const testCase of testCases) {
+    const imagePath = getImagePath(testCase.imagePath)
+    const baseName = testCase.imagePath.split('/').pop()
+    t.comment('\n\nImage Path: ' + testCase.imagePath)
 
-  try {
-    for (const testCase of testCases) {
-      const imagePath = getImagePath(testCase.imagePath)
-      t.comment('\n\nImage Path: ' + testCase.imagePath)
+    // Per image: GPU hosts get a Vulkan + forced-CPU pass (two rows); non-GPU
+    // hosts stay single CPU pass. Expectations run on each pass.
+    await runOcrComparison(t, {
+      params,
+      imagePath,
+      runOptions: testCase.options,
+      perfLabel: `[EasyOCR full-suite ${baseName}]`,
+      perfOpts: { imagePath },
+      assertResult (output) {
+        t.ok(Array.isArray(output), testCase.imagePath + ': output should be an array')
+        const texts = output.map(o => o[1])
+        t.comment('Detected texts: ' + JSON.stringify(texts))
 
-      const response = await ocrGgml.run({ path: imagePath, options: testCase.options })
+        for (const expected of testCase.expectedTexts) {
+          const found = texts.some(w => w.toLowerCase().includes(expected.toLowerCase()))
+          t.ok(found, testCase.imagePath + `: should detect "${expected}"`)
+        }
+      }
+    })
 
-      await response
-        .onUpdate(output => {
-          t.ok(Array.isArray(output), testCase.imagePath + ': output should be an array')
-          const texts = output.map(o => o[1])
-          t.comment('Detected texts: ' + JSON.stringify(texts))
-
-          for (const expected of testCase.expectedTexts) {
-            const found = texts.some(w => w.toLowerCase().includes(expected.toLowerCase()))
-            t.ok(found, testCase.imagePath + `: should detect "${expected}"`)
-          }
-        })
-        .onError(error => {
-          t.fail(testCase.imagePath + ': unexpected error: ' + JSON.stringify(error))
-        })
-        .await()
-
-      t.comment('OCR processing complete for ' + testCase.imagePath)
-      await new Promise(resolve => setTimeout(resolve, 2000))
-    }
-  } catch (err) {
-    t.fail('Error running test suite: ' + err)
-  } finally {
-    try {
-      await ocrGgml.unload()
-      t.comment('Successfully unloaded model')
-    } catch (err) {
-      t.comment('unload() failed: ' + err.message)
-    }
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    t.comment('OCR processing complete for ' + testCase.imagePath)
   }
 })

@@ -1,5 +1,6 @@
 'use strict'
 
+const path = require('bare-path')
 const fs = require('bare-fs')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue, QvacResponse } = require('@qvac/infer-base')
@@ -13,6 +14,14 @@ const {
   buildWindowBuffer,
   stitchSegments
 } = require('./lib/stream')
+
+// Default prebuilds folder for dynamically-loaded ggml backend `.so`
+// files. Consumed by the native addon on Android only (no-op
+// elsewhere). The CMake build stages the per-arch backends into
+// `<addon>/prebuilds/<bare_target>/<module_name>/`; the native side
+// joins `backendsDir` with the compile-time `BACKENDS_SUBDIR` before
+// calling `ggml_backend_load_all_from_path()`.
+const PREBUILDS_DIR = path.join(__dirname, 'prebuilds')
 
 // Sliding-window streaming constants.
 //
@@ -155,7 +164,16 @@ class BCIWhispercpp {
       miscConfig: {
         caption_enabled: false,
         ...(this._config.miscConfig || {})
-      }
+      },
+      // Override-only key. Native side falls back to `ggml_backend_load_all()`
+      // (default search path) on Android when this is empty -- which fails
+      // inside an APK with the standard packaging options that compress
+      // native libs. Defaulting to the in-package prebuilds dir keeps
+      // mobile builds working out of the box, parity with transcription-
+      // whispercpp 0.9.0.
+      backendsDir: typeof this._config.backendsDir === 'string' && this._config.backendsDir.length > 0
+        ? this._config.backendsDir
+        : PREBUILDS_DIR
     }
 
     if (this._config.bciConfig) {

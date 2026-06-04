@@ -640,7 +640,9 @@ jobs:
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: ${{ inputs.project-directory }}
+          sparse-checkout: |
+            ${{ inputs.project-directory }}
+            .github/actions/sdk-e2e-fail-on-failures
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -852,6 +854,12 @@ jobs:
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
+
+      - name: Fail on e2e result failures
+        if: success() || failure()
+        uses: ./.github/actions/sdk-e2e-fail-on-failures
+        with:
+          report-dir: ${{ inputs.working-directory }}/reports
 
   cleanup-device-farm:
     name: "[ios] cleanup-device-farm"

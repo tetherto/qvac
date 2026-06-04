@@ -44,6 +44,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -146,11 +147,11 @@ jobs:
         name: Set Vulkan SDK Path on Windows Server 2025
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - name: Setup Python (for .nemo -> .gguf conversion)
-        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
-        uses: actions/setup-python@v5
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          python-version: '3.12'
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - name: Cache Parakeet GGUF models
         id: model-cache
@@ -159,14 +160,20 @@ jobs:
         with:
           package: transcription-parakeet
           paths: packages/transcription-parakeet/models
-          hash-files-glob: packages/transcription-parakeet/scripts/download-models.sh
+          hash-files-glob: .github/workflows/integration-test-transcription-parakeet.yml
           enable-cross-os: 'false'
 
-      - name: Stage GGUF models (npm run setup-models)
+      - name: Download Parakeet GGUFs from QVAC registry (q8_0)
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
-        run: npm run setup-models
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/ models/ \
+            --recursive --exclude "*" --include "*.q8_0.gguf"
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf models/
+          ls -lh models/
 
       - name: Run integration test
         if: ${{ inputs.run_integration_tests != false }}

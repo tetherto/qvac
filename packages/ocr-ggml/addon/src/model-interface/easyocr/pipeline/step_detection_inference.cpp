@@ -174,21 +174,27 @@ cv::Mat StepDetectionInference::preprocess(
 StepDetectionInference::StepDetectionInference(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const std::string& gguf_path, float magRatio, int nThreads,
-    const std::string& backendsDir, int maxImageSize)
+    const std::string& backendsDir, int maxImageSize,
+    ggml_backend_dev_t backendDevice)
     : magRatio_(magRatio),
       maxImageSize_(maxImageSize > 0 ? maxImageSize : MAX_IMAGE_SIZE),
       backendsHandle_(backendsDir) {
-  ggml_backend_dev_t cpuDev =
-      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  backend_ = cpuDev ? ggml_backend_dev_init(cpuDev, nullptr) : nullptr;
+  ggml_backend_dev_t dev =
+      (backendDevice != nullptr)
+          ? backendDevice
+          : ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  backend_ = dev ? ggml_backend_dev_init(dev, nullptr) : nullptr;
   if (backend_ == nullptr) {
     throw std::runtime_error(
-        "StepDetectionInference: failed to init CPU backend");
+        "StepDetectionInference: failed to init ggml backend");
   }
-  if (nThreads >= 0) {
+  // Thread-count tuning only applies to the CPU backend; GPU backends (Vulkan)
+  // ignore it, so gate the call on the selected device being CPU.
+  const bool isCpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
+  if (isCpu && nThreads >= 0) {
     const int effective =
         (nThreads == 0) ? defaultPhysicalThreadCount() : nThreads;
-    ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(cpuDev);
+    ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(dev);
     auto* fn_set_n_threads =
         cpuReg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
                      cpuReg, "ggml_backend_set_n_threads")
