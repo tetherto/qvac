@@ -20,6 +20,7 @@ const os = require('bare-os')
 const { ensureModel, getMediaPath } = require('./utils')
 const LlmLlamacpp = require('../../index.js')
 const fixture = require('./vlm-fixture.data.cjs')
+const config = require('./vlm-matrix.config.cjs')
 
 function env (key) {
   if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
@@ -31,51 +32,100 @@ const isMobile = os.platform() === 'android' || os.platform() === 'ios'
 // it there; on desktop gate behind QVAC_VLM_MATRIX so the normal suite skips the 6 GB.
 const ENABLED = isMobile || env('QVAC_VLM_MATRIX') === '1'
 function intEnv (k) { const v = parseInt(env(k), 10); return Number.isFinite(v) && v > 0 ? v : null }
-// samples/task: mobile defaults low to fit the 30-min Device Farm ceiling; override via
-// QVAC_VLM_SAMPLES, or on mobile via the qvac_perf_runs dispatch input (pushed as QVAC_PERF_RUNS).
-const SAMPLES_PER_TASK = intEnv('QVAC_VLM_SAMPLES') || intEnv('QVAC_PERF_RUNS') || (isMobile ? 2 : 5)
+
+// Active preset selects which cells/tasks/samples/devices run. QVAC_VLM_PRESET
+// overrides config.defaultPreset on Linux; on S25 there is no env passthrough, so
+// config.defaultPreset is the only knob. Unknown name => an all-defaults preset.
+const PRESET = config.presets[env('QVAC_VLM_PRESET') || config.defaultPreset] ||
+  { cells: null, tasks: null, samplesPerTask: null, devices: null }
+
+// samples/task precedence: explicit env > preset > (mobile 2 / desktop 5). Mobile
+// defaults low to fit the 30-min Device Farm ceiling; qvac_perf_runs lands here.
+const SAMPLES_PER_TASK = intEnv('QVAC_VLM_SAMPLES') || intEnv('QVAC_PERF_RUNS') ||
+  PRESET.samplesPerTask || (isMobile ? 2 : 5)
+
+// tasks: QVAC_VLM_TASKS (csv) > preset.tasks > all fixture tasks (null = no filter).
+const TASKS = (() => {
+  const raw = env('QVAC_VLM_TASKS')
+  if (raw) return raw.split(',').map(s => s.trim()).filter(Boolean)
+  return PRESET.tasks || null
+})()
+
 function selectedItems () {
   const seen = {}
   return fixture.items.filter(it => {
+    if (TASKS && !TASKS.includes(it.task)) return false
     seen[it.task] = (seen[it.task] || 0) + 1
     return seen[it.task] <= SAMPLES_PER_TASK
   })
 }
 
-// FINAL registry-compatibility test: the MAIN model + the f16 mmproj are the EXACT files
-// already in the QVAC registry ("as-is"); the q8 slot is the Q8 mmproj CANDIDATE we want
-// to add. So q8-vs-f16 here = candidate-vs-registry on the registry's own main. All HF
-// URLs pinned to the registry's / candidate's commit SHAs (immutable provenance).
-const SHA = {
-  qwenUnsloth: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0', // registry main + f16 mmproj
-  qwenMrader: '9d48fdbc0d8f133716da87ec1d904e5d2c7175a6',  // candidate q8 mmproj
-  gemmaBart: 'b5e99bd964eaacc27ba484bb2eb3e9f6160b9143',   // registry main + f16 mmproj
-  gemmaGgml: 'a1dac71d3ab220618f5a7573a52acdc4baf3ae3b'    // candidate q8 mmproj
-}
+// Cells, models and their per-blob source descriptors live in vlm-matrix.config.cjs
+// (the registry-compatibility story — f16 = registry mmproj, q8 = candidate — is
+// documented there). The harness only resolves descriptors to concrete files.
+const MODELS = config.models
+
 const HF = (repo, sha, file) => `https://huggingface.co/${repo}/resolve/${sha}/${file}`
-const MODELS = {
-  qwen: {
-    main: { modelName: 'reg-qwen-unsloth-Q8_0.gguf', origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} (registry main)`,
-            downloadUrl: HF('unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf') },
-    mmproj: {
-      f16: { modelName: 'reg-qwen-unsloth-mmproj-F16.gguf', origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} (registry f16)`,
-             downloadUrl: HF('unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'mmproj-F16.gguf') },
-      q8: { modelName: 'cand-qwen-mradermacher-mmproj-Q8_0.gguf', origin: `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} (CANDIDATE q8)`,
-            downloadUrl: HF('mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf') }
-    },
-    ctx_size: '4096'
-  },
-  gemma: {
-    main: { modelName: 'reg-gemma-bartowski-Q4_K_M.gguf', origin: `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} (registry main)`,
-            downloadUrl: HF('bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'google_gemma-4-E2B-it-Q4_K_M.gguf') },
-    mmproj: {
-      f16: { modelName: 'reg-gemma-bartowski-mmproj-f16.gguf', origin: `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} (registry f16)`,
-             downloadUrl: HF('bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'mmproj-google_gemma-4-E2B-it-f16.gguf') },
-      q8: { modelName: 'cand-gemma-ggml-mmproj-Q8_0.gguf', origin: `ggml-org/gemma-4-E2B-it-GGUF@${SHA.gemmaGgml.slice(0, 10)} (CANDIDATE q8)`,
-            downloadUrl: HF('ggml-org/gemma-4-E2B-it-GGUF', SHA.gemmaGgml, 'mmproj-gemma-4-E2B-it-Q8_0.gguf') }
-    },
-    ctx_size: '4096'
+
+// Map a blob's `source` descriptor to a download plan ensureBlob() can act on:
+//   { modelName, downloadUrl }     — HTTP(S): hf / url / s3 (presigned)
+//   { modelName, fetch(destPath) } — custom downloader: registry (P2P)
+// A literal `downloadUrl` on the blob (legacy shape) still wins.
+function resolveBlob (blob) {
+  if (blob.downloadUrl) return { modelName: blob.modelName, downloadUrl: blob.downloadUrl }
+  const s = blob.source || {}
+  switch (s.type) {
+    case 'hf':
+      return { modelName: blob.modelName, downloadUrl: HF(s.repo, s.sha, s.file) }
+    case 'url':
+    case 's3': // S3 objects are fetched via a presigned URL (no SigV4 signing here)
+      if (!s.url) throw new Error(`${blob.modelName}: source.type='${s.type}' requires source.url`)
+      return { modelName: blob.modelName, downloadUrl: s.url }
+    case 'registry':
+      return { modelName: blob.modelName, fetch: (destPath) => fetchFromRegistry(s, destPath) }
+    default:
+      throw new Error(`${blob.modelName}: unknown source.type '${s.type}'`)
   }
+}
+
+// QVAC registry is a P2P (Hyperswarm/Hyperblobs) store, not an HTTP endpoint, so it
+// needs @qvac/registry-client + QVAC_REGISTRY_CORE_KEY. Lazily required so the
+// hf/url/s3 paths never depend on it; throws a clear error when unavailable.
+async function fetchFromRegistry (source, destPath) {
+  const coreKey = env('QVAC_REGISTRY_CORE_KEY')
+  if (!coreKey) throw new Error('registry source requires QVAC_REGISTRY_CORE_KEY')
+  let QVACRegistryClient
+  try { ({ QVACRegistryClient } = require('@qvac/registry-client')) } catch (_) {
+    throw new Error("registry source requires '@qvac/registry-client' (not installed)")
+  }
+  const client = new QVACRegistryClient({ registryCoreKey: coreKey })
+  try {
+    await client.downloadModel(source.path, source.source, { outputFile: destPath, timeout: 5 * 60 * 1000 })
+  } finally {
+    try { await client.close() } catch (_) {}
+  }
+}
+
+// Download a blob to test/model/, honouring its source descriptor. Mirrors
+// ensureModel()'s cache-by-name behaviour for the custom-fetch (registry) path.
+async function ensureBlob (blob) {
+  const plan = resolveBlob(blob)
+  if (plan.downloadUrl) return ensureModel({ modelName: plan.modelName, downloadUrl: plan.downloadUrl })
+  const modelDir = path.resolve(__dirname, '../model')
+  const modelPath = path.join(modelDir, plan.modelName)
+  if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 0) return [plan.modelName, modelDir]
+  fs.mkdirSync(modelDir, { recursive: true })
+  console.log(`[download] Fetching ${plan.modelName} from registry...`)
+  await plan.fetch(modelPath)
+  return [plan.modelName, modelDir]
+}
+
+// Human-readable origin URL for the [VLMMETA] provenance marker.
+function displayUrl (blob) {
+  const plan = resolveBlob(blob)
+  if (plan.downloadUrl) return plan.downloadUrl
+  const s = blob.source || {}
+  return `registry:${s.source || ''}/${s.path || ''}`
 }
 
 // Same patterns benchmarks/vlm-performance/stdout-parser.js uses. Vision-encode is
@@ -108,6 +158,7 @@ function createLogTap () {
 function devicesToRun () {
   const raw = env('QVAC_VLM_DEVICES')
   if (raw) return raw.split(',').map(s => s.trim()).filter(Boolean)
+  if (PRESET.devices) return PRESET.devices.slice()
   const noGpu = String(env('NO_GPU')).toLowerCase() === 'true'
   return noGpu ? ['cpu'] : ['cpu', 'gpu']
 }
@@ -143,13 +194,13 @@ function runVlmCell (modelKey, mmprojKey) {
   for (const device of devicesToRun()) {
     const dev = device.toUpperCase()
     test(`vlm-matrix ${cell} [${dev}]`, { timeout: 30 * 60 * 1000 }, async t => {
-      const [mainName, dir] = await ensureModel(cfg.main)
-      const [projName] = await ensureModel(cfg.mmproj[mmprojKey])
+      const [mainName, dir] = await ensureBlob(cfg.main)
+      const [projName] = await ensureBlob(cfg.mmproj[mmprojKey])
       // model-origin provenance (stderr, parsed host-side into the report)
       console.error('[VLMMETA]' + JSON.stringify({
         cell, model: modelKey, mmproj: mmprojKey,
-        main_origin: cfg.main.origin, main_url: cfg.main.downloadUrl,
-        mmproj_origin: cfg.mmproj[mmprojKey].origin, mmproj_url: cfg.mmproj[mmprojKey].downloadUrl
+        main_origin: cfg.main.origin, main_url: displayUrl(cfg.main),
+        mmproj_origin: cfg.mmproj[mmprojKey].origin, mmproj_url: displayUrl(cfg.mmproj[mmprojKey])
       }) + '[/VLMMETA]')
       const inference = new LlmLlamacpp({
         files: { model: [path.join(dir, mainName)], projectionModel: path.join(dir, projName) },
@@ -199,12 +250,11 @@ function runVlmCell (modelKey, mmprojKey) {
   }
 }
 
-// Loops the whole matrix (2 models x 2 mmproj) in one test file -> one mobile test
-// function -> one Device Farm spec -> single-spec dual-flagship -> Samsung S25.
+// Loops the active preset's cells (model · mmproj) in one test file -> one mobile
+// test function -> one Device Farm spec -> single-spec dual-flagship -> Samsung S25.
 function runAllCells () {
-  for (const [model, mmproj] of [['qwen', 'q8'], ['qwen', 'f16'], ['gemma', 'q8'], ['gemma', 'f16']]) {
-    runVlmCell(model, mmproj)
-  }
+  const cells = PRESET.cells || config.allCells
+  for (const c of cells) runVlmCell(c.model, c.mmproj)
 }
 
 module.exports = { runVlmCell, runAllCells, MODELS }

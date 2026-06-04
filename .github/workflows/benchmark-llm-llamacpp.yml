@@ -82,6 +82,31 @@ on:
         required: false
         type: string
         default: "3"
+      # ── Matrix mode (config-driven quality+speed matrix) ──────
+      # Orthogonal to the source-engines benchmark above. When on, runs
+      # the @qvac/llm-llamacpp addon over the vlm-matrix fixture (lmms-eval
+      # quality + vision-encode speed) on Linux (and S25), driven by
+      # packages/llm-llamacpp/test/integration/vlm-matrix.config.cjs.
+      run_matrix:
+        description: "── MATRIX ── run the config-driven VLM quality+speed matrix (addon, Linux + S25)"
+        required: false
+        type: boolean
+        default: false
+      matrix_preset:
+        description: "  matrix preset: smoke (1 cell/1 task/1 sample) or full (real set). Overrides config.defaultPreset on Linux."
+        required: false
+        type: string
+        default: "smoke"
+      matrix_linux:
+        description: "  Linux matrix legs, comma-sep: linux-cpu,linux-gpu"
+        required: false
+        type: string
+        default: "linux-cpu,linux-gpu"
+      run_matrix_s25:
+        description: "  also run the matrix on Samsung S25 (AWS Device Farm)"
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
   packages: read
@@ -103,6 +128,8 @@ jobs:
       ref: ${{ steps.ctx.outputs.ref }}
       desktop_matrix: ${{ steps.matrix.outputs.value }}
       desktop_count: ${{ steps.matrix.outputs.count }}
+      linux_matrix: ${{ steps.lmatrix.outputs.value }}
+      linux_count: ${{ steps.lmatrix.outputs.count }}
       merge_base: ${{ steps.commits.outputs.merge_base }}
       head_sha: ${{ steps.commits.outputs.head_sha }}
       head_title: ${{ steps.commits.outputs.head_title }}
@@ -208,6 +235,34 @@ jobs:
           echo "value=$cells" >> "$GITHUB_OUTPUT"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "Desktop matrix ($count entries): $cells"
+      # Linux legs for the config-driven matrix mode (addon over the
+      # vlm-matrix fixture). Independent of the source-engines matrix above.
+      - id: lmatrix
+        shell: bash
+        env:
+          RUN_MATRIX: ${{ inputs.run_matrix }}
+          MATRIX_LINUX: ${{ inputs.matrix_linux }}
+        run: |
+          cells='[]'
+          if [[ "$RUN_MATRIX" == "true" ]]; then
+            IFS=',' read -ra tokens <<< "${MATRIX_LINUX:-linux-cpu}"
+            for raw in "${tokens[@]}"; do
+              sel=$(echo "$raw" | xargs)
+              case "$sel" in
+                linux-cpu) backend=cpu; runner=qvac-ubuntu2204-x64;      no_gpu=true ;;
+                linux-gpu) backend=gpu; runner=qvac-ubuntu2404-x64-gpu;  no_gpu=false ;;
+                "") continue ;;
+                *) echo "::warning::Unknown matrix_linux token '$sel' (known: linux-cpu, linux-gpu)"; continue ;;
+              esac
+              cells=$(echo "$cells" | jq -c \
+                --arg b "$backend" --arg r "$runner" --arg n "$no_gpu" \
+                '. + [{"backend":$b,"runner":$r,"no_gpu":$n}]')
+            done
+          fi
+          count=$(echo "$cells" | jq 'length')
+          echo "value=$cells" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Linux matrix ($count entries): $cells"
       # Resolve commit metadata so the consolidated report can show what
       # the candidate ref + merge-base actually point at (hash, title,
       # date). Needs a real clone — sparse checkout doesn't give us git
@@ -540,7 +595,7 @@ jobs:
       - context
       - desktop
       - android
-    if: always() && needs.context.result == 'success'
+    if: always() && needs.context.result == 'success' && needs.context.outputs.desktop_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -635,6 +690,188 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: vlm-perf-consolidated-${{ github.run_number }}
+          path: consolidated/
+          retention-days: 30
+          if-no-files-found: warn
+
+  # ── Matrix mode: Linux legs ────────────────────────────────────────
+  # Runs the @qvac/llm-llamacpp addon (published linux-x64 prebuild, which
+  # is CPU + Vulkan-GPU capable) over the vlm-matrix fixture. Branch JS
+  # (harness/config/fixture) + published native prebuild. One leg per
+  # backend; each emits [VLMROW]/[VLMSEG]/[VLMMETA] markers to a log that
+  # matrix-combine aggregates with vlm-matrix/aggregate.js.
+  matrix-linux:
+    needs: context
+    if: needs.context.outputs.linux_count != '0'
+    name: vlm-matrix-linux-${{ matrix.backend }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.context.outputs.linux_matrix) }}
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      WORKDIR: packages/llm-llamacpp
+    steps:
+      - name: Manual Workspace Cleanup
+        if: startsWith(matrix.runner, 'qvac-')
+        shell: bash
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Install addon deps
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: npm install --no-audit --no-fund
+
+      - name: Install bare tooling
+        shell: bash
+        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
+
+      # Branch JS + published native prebuild: pull the linux-x64 prebuild
+      # from the public npm package into the workspace so the harness's
+      # require('../../index.js') loads. The published prebuild handles both
+      # cpu and (Vulkan) gpu via runtime device selection.
+      - name: Fetch published prebuilds
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          npm pack @qvac/llm-llamacpp@latest
+          tar -xzf *.tgz
+          rm -rf prebuilds
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+          ls -la prebuilds/
+
+      # GPU runners ship the Vulkan SDK at the well-known path; stamp the
+      # env so the addon's loader finds it. No-op on the cpu leg.
+      - name: Configure Vulkan SDK env (Linux GPU)
+        if: matrix.backend == 'gpu'
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
+          echo "/opt/vulkansdk/x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Run VLM matrix
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          QVAC_VLM_MATRIX: "1"
+          QVAC_VLM_PRESET: ${{ inputs.matrix_preset }}
+          QVAC_VLM_DEVICES: ${{ matrix.backend }}
+          NO_GPU: ${{ matrix.no_gpu }}
+        run: |
+          # Regenerate the brittle runner to include ONLY the matrix test,
+          # then run it under bare (same pattern as the perf-only path).
+          npx brittle -r test/integration/all.js test/integration/vlm-matrix.test.js
+          bare test/integration/all.js --exit 2>&1 | tee "vlm-matrix-linux-${{ matrix.backend }}.log"
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload matrix log
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-matrix-log-linux-${{ matrix.backend }}-${{ github.run_number }}
+          path: ${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  # ── Matrix mode: combine ───────────────────────────────────────────
+  # Aggregates [VLMROW]/[VLMSEG]/[VLMMETA] markers from every matrix log
+  # (Linux now, S25 once wired) into one quality+speed report via
+  # vlm-matrix/aggregate.js, surfaced to the step summary + PR comment.
+  # This is the mechanism that makes mobile (Device Farm) results visible.
+  matrix-combine:
+    needs:
+      - context
+      - matrix-linux
+    if: always() && inputs.run_matrix && needs.context.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/llm-llamacpp/benchmarks/vlm-matrix
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Download matrix logs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: vlm-matrix-log-*-${{ github.run_number }}
+          path: matrix-logs
+
+      - name: Aggregate matrix logs
+        shell: bash
+        run: |
+          mkdir -p consolidated
+          # S25 device-farm logs land as bare_console.log; Linux as *.log.
+          LOGS=$(find matrix-logs -type f \( -name '*.log' -o -name '*bare_console*' \) 2>/dev/null | sort)
+          if [ -z "$LOGS" ]; then
+            echo "> No VLM matrix logs found for run #${{ github.run_number }}." > consolidated/vlm-matrix-consolidated.md
+          else
+            echo "Aggregating logs:"; echo "$LOGS"
+            node packages/llm-llamacpp/benchmarks/vlm-matrix/aggregate.js \
+              --title "VLM Matrix — preset=${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
+              --out consolidated/vlm-matrix-consolidated.md \
+              $LOGS
+          fi
+
+      - name: Post step summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "# VLM Matrix — Consolidated"
+            echo ""
+            cat consolidated/vlm-matrix-consolidated.md 2>/dev/null || echo "No consolidated matrix report generated."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post PR comment
+        if: always() && hashFiles('consolidated/vlm-matrix-consolidated.md') != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ needs.context.outputs.ref }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "$REF" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "No open PR found for ref $REF — skipping PR comment."
+            exit 0
+          fi
+          {
+            echo "## VLM Matrix Benchmark"
+            echo ""
+            echo "_Run #${{ github.run_number }} — [full report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+            echo ""
+            cat consolidated/vlm-matrix-consolidated.md
+          } > /tmp/matrix-comment.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/matrix-comment.md
+
+      - name: Upload consolidated matrix report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-matrix-consolidated-${{ github.run_number }}
           path: consolidated/
           retention-days: 30
           if-no-files-found: warn
