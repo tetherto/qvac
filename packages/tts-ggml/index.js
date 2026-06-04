@@ -72,7 +72,7 @@ function normalizeGgmlFiles (files) {
     // the Cangjie TSV (Chinese).  The host resolves/stages these (e.g.
     // from the QVAC model registry) and passes the local paths; the
     // addon only forwards them to tts-cpp's EngineOptions.
-    mecabDictDir: firstNonEmpty(f.mecabDictDir, f.mecabDict, f.mecabDictPath),
+    mecabDictDir: firstNonEmpty(f.mecabDictDir, f.mecabDictPath),
     cangjieTsvPath: firstNonEmpty(f.cangjieTsvPath, f.cangjieTsv)
   }
 }
