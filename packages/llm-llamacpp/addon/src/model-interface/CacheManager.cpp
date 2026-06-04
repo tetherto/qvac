@@ -9,6 +9,10 @@
 #include "addon/LlmErrors.hpp"
 #include "utils/LoggingMacros.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
@@ -43,7 +47,13 @@ bool CacheManager::handleCache(
               "%s: No cacheKey provided, clearing existing cache '%s'\n",
               __func__,
               sessionPath_.c_str()));
-      saveCache();
+      try {
+        saveCache();
+      } catch (...) {
+        resetStateCallback_(true);
+        invalidate();
+        throw;
+      }
       resetStateCallback_(true);
       sessionPath_.clear();
       cacheDisabled_ = true;
@@ -65,7 +75,13 @@ bool CacheManager::handleCache(
             __func__,
             sessionPath_.c_str(),
             cacheKey.c_str()));
-    saveCache();
+    try {
+      saveCache();
+    } catch (...) {
+      resetStateCallback_(true);
+      invalidate();
+      throw;
+    }
   }
 
   resetStateCallback_(true);
@@ -162,13 +178,69 @@ void CacheManager::saveCache() {
 
 void CacheManager::writeCacheFile(const std::string& path) {
   llama_context* ctx = llmContext_->getCtx();
+  const std::string tmpPath = path + ".tmp";
   QLOG_IF(
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
   llama_token sessionTokens[2] = {
       static_cast<llama_token>(llmContext_->getNPast()),
       static_cast<llama_token>(llmContext_->getFirstMsgTokens())};
-  llama_state_save_file(ctx, path.c_str(), sessionTokens, 2);
+  if (!llama_state_save_file(ctx, tmpPath.c_str(), sessionTokens, 2)) {
+    std::error_code ec;
+    std::filesystem::remove(tmpPath, ec);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        string_format(
+            "%s: failed to save session file to '%s'\n",
+            __func__,
+            path.c_str()));
+  }
+  atomicPromoteFile(tmpPath, path);
+}
+
+void CacheManager::atomicPromoteFile(
+    const std::string& from, const std::string& to) {
+#ifdef _WIN32
+  // MoveFileExW atomically replaces the destination on NTFS — unlike
+  // delete-then-rename, the old canonical file is preserved if promotion fails.
+  // NOTE: path() from std::string uses the system ANSI code page on MSVC, not
+  // UTF-8. Non-ASCII paths are already broken for llama_state_save_file (which
+  // calls fopen with the same string), so this is a pre-existing issue across
+  // the whole CacheManager — not introduced here.
+  if (!MoveFileExW(
+          std::filesystem::path(from).wstring().c_str(),
+          std::filesystem::path(to).wstring().c_str(),
+          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    const std::error_code moveEc(
+        static_cast<int>(GetLastError()), std::system_category());
+    std::error_code ec;
+    std::filesystem::remove(from, ec);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        string_format(
+            "%s: failed to promote tmp file to '%s': %s\n",
+            __func__,
+            to.c_str(),
+            moveEc.message().c_str()));
+  }
+#else
+  std::error_code renameEc;
+  std::filesystem::rename(from, to, renameEc);
+  if (renameEc) {
+    std::error_code ec;
+    std::filesystem::remove(from, ec);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        string_format(
+            "%s: failed to promote tmp file to '%s': %s\n",
+            __func__,
+            to.c_str(),
+            renameEc.message().c_str()));
+  }
+#endif
 }
 
 void CacheManager::invalidate() {

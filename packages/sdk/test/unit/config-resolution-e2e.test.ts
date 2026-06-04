@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { ModelType, type RuntimeContext, type DevicePattern } from "@/schemas";
 import {

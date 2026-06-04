@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.23.2] - 2026-06-03
+
+### Fixed
+
+- **Multi-GPU params rejected on Android/iOS**: passing `split-mode` (non-`none`), `main-gpu`, or `tensor-split` on a mobile device now throws `InvalidArgument` immediately in `commonParamsParse`, before any backend selection occurs. Previously these parameters could reach the Adreno OpenCL backend and trigger a native `ggml_abort` (SIGABRT) after a full inference suite. Use single-GPU config (`split-mode: "none"` or omit the field) on mobile.
+
+## Pull Requests
+
+- [#2351](https://github.com/tetherto/qvac/pull/2351) - QVAC-18802: reject multi-GPU config on Android/iOS
+
+## [0.23.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
+## [0.23.0] - 2026-06-02
+
+Minor bump: `UnableToSaveSessionFile` is now a new observable throw on paths that previously succeeded silently, which is a new public error surface.
+
+### Fixed
+
+#### KV-cache file writes are now atomic; save failure throws `UnableToSaveSessionFile`
+
+`CacheManager::writeCacheFile` previously discarded `llama_state_save_file`'s return value, silently leaving a partial or missing `.bin` at the canonical cache path on failure. The SDK worked around this with `fsPromises.access` probes, but those cannot detect partial-but-nonzero files.
+
+The write is now atomic: state is saved to `path + ".tmp"` first, then renamed to the canonical path on success. `llama_state_save_file` returning `false`, or a subsequent rename failure, both throw `qvac_errors::StatusError` with the new `UnableToSaveSessionFile` error code (25). The `.tmp` file is removed in both error cases so no partial write can ever reach the canonical path.
+
+`UnableToSaveSessionFile` can now surface from any of the four `saveCache()` call sites:
+
+- **Explicit save** (`LlamaModel.cpp`) — when the caller sets `saveCacheToDisk: true`.
+- **Cache switch** (`CacheManager::handleCache`) — when a new `cacheKey` is passed while a different cache is active; the old cache is flushed before loading the new one.
+- **Cache clear** (`CacheManager::handleCache`) — when `cacheKey` is empty while a cache is active; the active cache is flushed before the state is cleared.
+- **Pre-finetune flush** (`LlamaFinetuner.cpp`) — the active cache is flushed to disk before fine-tuning begins.
+
+In the cache-switch and cache-clear paths, a failed save now calls `resetStateCallback_(true)` and then `invalidate()` before re-throwing. `resetStateCallback_` clears the in-memory KV state immediately so that any retry with a new `cacheKey` starts from a clean context rather than stale KV from the previous session. `invalidate()` clears `sessionPath_` and disables caching so the next prompt does not attempt to flush the failed path again. The explicit-save and pre-finetune paths do not call `invalidate()`:
+
+- **Pre-finetune**: the model is about to be rebuilt by the finetune reload path; `CacheManager` state does not carry over.
+- **Explicit save**: inference already completed and the in-memory KV state is valid — only the disk write failed. Leaving `sessionPath_` intact lets the caller retry or continue from the existing in-memory state. Callers that cannot recover should call the manager's `invalidate()` themselves before discarding the model.
+
+#### Cache-file overwrite on Windows is now atomic on NTFS
+
+`std::filesystem::rename` on Windows fails when the destination file already exists, so second-and-later saves to a given `cacheKey` would throw `UnableToSaveSessionFile` even though the write to `.tmp` succeeded. The promotion step now uses `MoveFileExW(tmp, canonical, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)` on Windows, which atomically replaces the destination on NTFS — the old canonical file is preserved intact if promotion fails, eliminating the data-loss window that a delete-then-rename fallback would create.
+
+## Pull Requests
+
+- [#2354](https://github.com/tetherto/qvac/pull/2354) - fix: throw UnableToSaveSessionFile when llama_state_save_file fails
+
 ## [0.22.1] - 2026-05-26
 
 ### Changed

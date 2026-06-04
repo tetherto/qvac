@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { deduplicateModels } from "@/models/update-models/registry";
 import { groupCompanionSets } from "@/models/update-models/companions";
@@ -29,10 +28,7 @@ function makeModel(
   };
 }
 
-test("deduplicateModels: drops plain checksum duplicates", (t: {
-  is: Function;
-  ok: Function;
-}) => {
+test("deduplicateModels: drops plain checksum duplicates", (t) => {
   const a = makeModel({ registryPath: "pkg/a.gguf", sha256Checksum: "SHA1" });
   const b = makeModel({ registryPath: "pkg/b.gguf", sha256Checksum: "SHA1" });
 
@@ -42,9 +38,7 @@ test("deduplicateModels: drops plain checksum duplicates", (t: {
   t.is(result[0]!.registryPath, "pkg/a.gguf", "keeps the first");
 });
 
-test("deduplicateModels: keeps empty-checksum entries as-is", (t: {
-  is: Function;
-}) => {
+test("deduplicateModels: keeps empty-checksum entries as-is", (t) => {
   const a = makeModel({ registryPath: "pkg/a.gguf", sha256Checksum: "" });
   const b = makeModel({ registryPath: "pkg/b.gguf", sha256Checksum: "" });
 
@@ -65,10 +59,7 @@ test("deduplicateModels: keeps empty-checksum entries as-is", (t: {
 // fallback uses `expectedSize = 0`, causing the cached file to be unlinked and
 // re-downloaded on every `loadModel` call.
 
-test("deduplicateModels: preserves companion-referenced duplicates (QVAC-18420)", (t: {
-  is: Function;
-  ok: Function;
-}) => {
+test("deduplicateModels: preserves companion-referenced duplicates (QVAC-18420)", (t) => {
   const sharedSha = "783abf3abe075afdf8d85d233994bef2c3a064e935ab1bed946820aff6ac002a";
 
   const modelEnFr = makeModel({
@@ -104,11 +95,7 @@ test("deduplicateModels: preserves companion-referenced duplicates (QVAC-18420)"
   );
 });
 
-test("deduplicateModels: still drops non-companion duplicates even when others are companions", (t: {
-  is: Function;
-  ok: Function;
-  absent: Function;
-}) => {
+test("deduplicateModels: still drops non-companion duplicates even when others are companions", (t) => {
   const sharedSha = "shared-vocab-sha";
 
   const modelFrEn = makeModel({
@@ -141,9 +128,7 @@ test("deduplicateModels: still drops non-companion duplicates even when others a
   );
 });
 
-test("deduplicateModels: preserves companion references across different companion sets", (t: {
-  ok: Function;
-}) => {
+test("deduplicateModels: preserves companion references across different companion sets", (t) => {
   // Two distinct primaries each referencing the same shared vocab path in
   // their own companion sets (e.g. split-vocab scenario in tests). The dedup
   // walker should not touch the vocab since it is companion-referenced.
