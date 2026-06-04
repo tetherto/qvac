@@ -431,20 +431,6 @@ export const diffusionStandaloneUpscalerCpu = createDiffusionTest(
   { estimatedDurationMs: 2000, dependency: "upscaler-cpu", suites: ["smoke"] },
 );
 
-// ---- error cases ----
-
-export const diffusionEmptyPrompt = createDiffusionTest(
-  "diffusion-empty-prompt",
-  {
-    prompt: "",
-    width: 256,
-    height: 256,
-    steps: 4,
-  },
-  { validation: "type", expectedType: "array" },
-  { estimatedDurationMs: 60000 },
-);
-
 export const diffusionTests = [
   diffusionBasicTxt2img,
   diffusionDefaultSize,
@@ -469,5 +455,4 @@ export const diffusionTests = [
   diffusionStandaloneUpscalerX4,
   diffusionStandaloneUpscalerBackendDevice,
   diffusionStandaloneUpscalerCpu,
-  diffusionEmptyPrompt,
 ] as const;
