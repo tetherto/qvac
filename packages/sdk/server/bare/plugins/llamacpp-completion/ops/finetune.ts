@@ -123,8 +123,14 @@ export async function startFinetune(
   // that kicks off finetune and immediately polls `getFinetuneState` must
   // still observe RUNNING — `begin()` yields a microtask even when
   // uncontended, so registering after it would briefly report IDLE. If
-  // `begin()` rejects (id conflict / policy) we clear the flag again so a
-  // failed start doesn't leave the model wedged as RUNNING.
+  // `begin()` rejects (id conflict) we clear the flag again so a failed
+  // start doesn't leave the model wedged as RUNNING — but only when *this*
+  // call actually set it. The flag is a modelId-keyed Set, so `register`
+  // is a no-op add when a finetune is already running on this model. In
+  // that case `begin()` can still reject (a colliding `requestId` from a
+  // different in-flight lifecycle), and clearing unconditionally would wipe
+  // the genuinely-running finetune's flag. Capture ownership first.
+  const wasRunning = getRunningFinetuneState(request.modelId);
   registerRunningFinetune(request.modelId);
 
   // Open a request-scoped lifecycle so finetune slots into the same
@@ -142,7 +148,7 @@ export async function startFinetune(
       modelId: request.modelId,
     })
     .catch((err: unknown) => {
-      clearFinetuneRuntimeState(request.modelId);
+      if (!wasRunning) clearFinetuneRuntimeState(request.modelId);
       throw err;
     });
   const requestLogger = withRequestContext(getServerLogger(), ctx);
