@@ -2,7 +2,7 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
-const { getImagePath, formatOCRPerformanceMetrics, runDoctrOCR, ensureDoctrModels } = require('./utils')
+const { getImagePath, runDoctrOCR, runDoctrComparison, ensureDoctrModels } = require('./utils')
 
 const TEST_TIMEOUT = 180 * 1000
 
@@ -52,25 +52,30 @@ test('DocTR CTC - db_mobilenet + crnn_mobilenet on english.bmp', { timeout: TEST
   const imagePath = getImagePath('/test/images/english.bmp')
   t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small')
 
-  const { results, stats } = await runDoctrOCR(t, {
-    pathDetector: DB_MOBILENET,
-    pathRecognizer: CRNN_MOBILENET
-  }, imagePath)
+  await runDoctrComparison(t, {
+    params: {
+      pathDetector: DB_MOBILENET,
+      pathRecognizer: CRNN_MOBILENET
+    },
+    imagePath,
+    perfLabel: '[CTC mobilenet]',
+    perfOpts: { skipReport: true },
+    assertResult (results) {
+      const texts = results.map(r => r.text)
+      t.comment('Detected: ' + JSON.stringify(texts))
 
-  const texts = results.map(r => r.text)
-  t.comment('Detected: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[CTC mobilenet]', stats, texts, { skipReport: true }))
+      // Should detect many text regions from the infographic
+      t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
 
-  // Should detect many text regions from the infographic
-  t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
+      // All confidences should be valid numbers in [0, 1]
+      for (const r of results) {
+        t.ok(r.confidence >= 0 && r.confidence <= 1, `confidence ${r.confidence.toFixed(3)} in [0,1]`)
+      }
 
-  // All confidences should be valid numbers in [0, 1]
-  for (const r of results) {
-    t.ok(r.confidence >= 0 && r.confidence <= 1, `confidence ${r.confidence.toFixed(3)} in [0,1]`)
-  }
-
-  // Verify expected words are detected
-  assertExpectedWords(t, texts, ENGLISH_EXPECTED_WORDS, '[CTC mobilenet]')
+      // Verify expected words are detected
+      assertExpectedWords(t, texts, ENGLISH_EXPECTED_WORDS, '[CTC mobilenet]')
+    }
+  })
 })
 
 // -------------------------------------------------------------------
@@ -80,17 +85,22 @@ test('DocTR repeated run - should not crash and produce valid output', { timeout
   const imagePath = getImagePath('/test/images/english.bmp')
   t.comment('Testing repeated DocTR run on english.bmp')
 
-  const { results, stats } = await runDoctrOCR(t, {
-    pathDetector: DB_MOBILENET,
-    pathRecognizer: CRNN_MOBILENET
-  }, imagePath)
+  await runDoctrComparison(t, {
+    params: {
+      pathDetector: DB_MOBILENET,
+      pathRecognizer: CRNN_MOBILENET
+    },
+    imagePath,
+    perfLabel: '[DocTR repeated]',
+    perfOpts: { skipReport: true },
+    assertResult (results) {
+      const texts = results.map(r => r.text)
+      t.comment('Detected texts: ' + JSON.stringify(texts))
 
-  const texts = results.map(r => r.text)
-  t.comment('Detected texts: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[DocTR repeated]', stats, texts, { skipReport: true }))
-
-  t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
-  assertExpectedWords(t, texts, ENGLISH_EXPECTED_WORDS, '[DocTR repeated]')
+      t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
+      assertExpectedWords(t, texts, ENGLISH_EXPECTED_WORDS, '[DocTR repeated]')
+    }
+  })
 })
 
 // -------------------------------------------------------------------

@@ -35,6 +35,9 @@ try {
     }
 
     return {
+      setDeviceGpu (name) {
+        if (name && !_device.gpu) _device.gpu = name
+      },
       record (testName, metrics, extra) {
         const entry = {
           test: testName,
@@ -292,6 +295,118 @@ function _envInt (key, fallback) {
   return Number.isFinite(v) && v > 0 ? v : fallback
 }
 
+// Resolves to packages/ocr-ggml/prebuilds (utils.js lives in
+// test/integration/, so two levels up reaches the package root).
+const PREBUILDS_DIR = path.join(__dirname, '..', '..', 'prebuilds')
+
+/**
+ * Recursively search a directory for a ggml Vulkan backend shared library
+ * (`*ggml-vulkan*.so/.dll/.dylib`). Returns the full path of the first match,
+ * or null when none is found (including when the directory does not exist).
+ * @param {string} dir - directory to search (typically {@link PREBUILDS_DIR})
+ * @returns {string|null}
+ */
+function findVulkanBackendLib (dir) {
+  let entries
+  try {
+    entries = fs.readdirSync(dir)
+  } catch (_) {
+    return null
+  }
+  for (const name of entries) {
+    const full = path.join(dir, name)
+    let st
+    try {
+      st = fs.statSync(full)
+    } catch (_) {
+      continue
+    }
+    if (st.isDirectory()) {
+      const nested = findVulkanBackendLib(full)
+      if (nested) return nested
+    } else if (/ggml-vulkan/i.test(name) && /\.(so|dll|dylib)$/i.test(name)) {
+      return full
+    }
+  }
+  return null
+}
+
+/**
+ * Resolves the ggml backend device for the integration suite.
+ *
+ * Precedence:
+ *   1. Explicit `OCR_GGML_BACKEND` (via `os.getEnv` then `process.env`) wins —
+ *      'vulkan' only when exactly `vulkan` (case-insensitive), else 'cpu'. This
+ *      preserves a manual override (e.g. workflow_dispatch / forcing CPU).
+ *   2. Else, on desktop, auto-select 'vulkan' when a `ggml-vulkan` backend lib
+ *      is shipped in prebuilds/. On desktop CI the merged prebuilds/ contains
+ *      that lib, so the suites attempt Vulkan; only the GPU runner actually
+ *      executes on Vulkan, while other runners report an explicit CPU fallback.
+ *      Local dev without merged prebuilds (no lib) stays on CPU. The addon
+ *      gracefully falls back to CPU when no Vulkan GPU is present, so requesting
+ *      'vulkan' is safe on non-GPU hosts.
+ *   3. Else 'cpu'.
+ * @returns {'cpu'|'vulkan'}
+ */
+function getBackendDevice () {
+  let raw = ''
+  if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
+  if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
+  if (String(raw).trim() !== '') {
+    return String(raw).trim().toLowerCase() === 'vulkan' ? 'vulkan' : 'cpu'
+  }
+  if (!isMobile && findVulkanBackendLib(PREBUILDS_DIR)) return 'vulkan'
+  return 'cpu'
+}
+
+/**
+ * Shared OcrGgml constructor for the integration suite. Injects the
+ * env-selected `backendDevice` (see {@link getBackendDevice}) so every test
+ * honours OCR_GGML_BACKEND, while a caller-provided `backendDevice` still wins.
+ * @param {Object} [params] - OcrGgml params (merged over the injected backendDevice)
+ * @param {Object} [opts] - OcrGgml opts (e.g. { stats: true })
+ * @returns {Object} new OcrGgml instance
+ */
+function createOcrGgml (params = {}, opts) {
+  const { OcrGgml } = require('../..')
+  const instance = new OcrGgml({
+    params: { backendDevice: getBackendDevice(), ...params },
+    opts
+  })
+  // After load() resolves the backend, record the actual GPU/backend name on
+  // the shared perf reporter (no-op on CPU). Wrapping load() here means every
+  // test using createOcrGgml() contributes the GPU name without extra wiring.
+  const _origLoad = instance.load.bind(instance)
+  instance.load = async function (...args) {
+    const result = await _origLoad(...args)
+    setReportedGpuName(instance)
+    return result
+  }
+  return instance
+}
+
+/**
+ * Records the resolved GPU/backend name on the shared performance reporter's
+ * device block so `performance-report.json` carries a concrete name (e.g.
+ * 'Vulkan0') on GPU runs even when the host's GPU probe returns null on a
+ * minimal runner container. Only acts when a GPU backend was actually selected
+ * and the name is non-empty; CPU runs leave `device.gpu` null.
+ *
+ * @param {Object} ocrGgml - A loaded OcrGgml instance (call after `load()`)
+ */
+function setReportedGpuName (ocrGgml) {
+  try {
+    if (!ocrGgml || typeof ocrGgml.getBackendInfo !== 'function') return
+    const info = ocrGgml.getBackendInfo()
+    if (!info) return
+    const isGpu = info.backendDevice === 'GPU' || info.backendDevice === 'IGPU'
+    if (!isGpu) return
+    if (info.backendName && typeof _perfReporter.setDeviceGpu === 'function') {
+      _perfReporter.setDeviceGpu(info.backendName)
+    }
+  } catch (_) {}
+}
+
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
 
 // Singleton performance reporter — collects metrics across all OCR integration tests
@@ -520,6 +635,30 @@ async function ensureDoctrModels () {
 }
 
 /**
+ * Normalizes the `[CPU]`/`[GPU]` backend token inside a test label so it
+ * reflects the backend the addon actually used.
+ *
+ *   - `device === 'gpu'` -> the token becomes `[GPU]`
+ *   - `device === 'cpu'` -> the token becomes `[CPU]`
+ *
+ * Handles labels that already contain `[CPU]`/`[GPU]` (replaced), and labels
+ * with no backend token (the resolved token is appended). When `device` is
+ * unknown (null) the label is returned unchanged.
+ *
+ * @param {string} label - Original test label (may hardcode the wrong token)
+ * @param {'cpu'|'gpu'|null} device - Resolved backend, derived from stats
+ * @returns {string} Label with a backend token matching the actual backend
+ */
+function _normalizeBackendToken (label, device) {
+  if (device !== 'gpu' && device !== 'cpu') return label
+  const token = device === 'gpu' ? '[GPU]' : '[CPU]'
+  if (/\[(?:cpu|gpu)\]/i.test(label)) {
+    return label.replace(/\[(?:cpu|gpu)\]/gi, token)
+  }
+  return `${label} ${token}`
+}
+
+/**
  * Formats OCR performance metrics for test output.
  *
  * @param {string} label - Test label prefix (e.g., '[OCR] [GPU]')
@@ -537,7 +676,23 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   const textRegionsCount = stats.textRegionsCount || 0
   const totalSeconds = (totalTimeMs / 1000).toFixed(2)
 
-  const device = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  // Prefer the ACTUAL backend reported by the native addon so
+  // `execution_provider` stays truthful even on a Vulkan-requested CPU
+  // fallback. Fall back to the label regex when the stat is unavailable
+  // (e.g. DocTR `skipReport` calls on hosts without the stat).
+  const device = stats.backendIsGpu === 1
+    ? 'gpu'
+    : stats.backendIsGpu === 0
+      ? 'cpu'
+      : /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+
+  // Normalize the `[CPU]`/`[GPU]` token in the label so it matches the actual
+  // backend the addon resolved (see `device` above). Several callers hardcode
+  // `[CPU]` regardless of where inference ran (e.g. the DocTR suites always
+  // pass `device='cpu'`), which mislabels GPU rows in the combined perf report.
+  // Replacing the token centrally keeps every printed line AND the recorded
+  // perf-report test name truthful without editing every test file.
+  const normalizedLabel = _normalizeBackendToken(label, device)
 
   let quality = null
   const gt = (opts && opts.groundTruth) || (opts && opts.imagePath ? findGroundTruth(opts.imagePath) : null)
@@ -550,7 +705,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   }
 
   if (!(opts && opts.skipReport)) {
-    _perfReporter.record(label, {
+    _perfReporter.record(normalizedLabel, {
       total_time_ms: Math.round(totalTimeMs),
       detection_time_ms: Math.round(detectionTimeMs),
       recognition_time_ms: Math.round(recognitionTimeMs),
@@ -570,7 +725,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
     }
   }
 
-  let out = `${label} Performance Metrics:
+  let out = `${normalizedLabel} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
     - Detection time: ${detectionTimeMs.toFixed(0)}ms
     - Recognition time: ${recognitionTimeMs.toFixed(0)}ms
@@ -641,12 +796,14 @@ async function runDoctrOCR (t, params, imagePath) {
       langList: ['en'],
       pipelineType: 'doctr',
       nThreads: 4,
+      backendDevice: getBackendDevice(),
       ...params
     },
     opts: { stats: true }
   })
 
   await ocrGgml.load()
+  setReportedGpuName(ocrGgml)
   console.log('[runDoctrOCR] loaded, starting run...')
 
   try {
@@ -678,11 +835,140 @@ async function runDoctrOCR (t, params, imagePath) {
   }
 }
 
+/**
+ * Runs a single EasyOCR-style inference pass: constructs an OcrGgml instance
+ * (forcing CPU when `forceCpu` is set), loads, runs, records perf and invokes
+ * the caller's `assertResult`. Always unloads + waits before returning so a
+ * follow-up pass starts from a clean state. Internal helper for
+ * {@link runOcrComparison}.
+ *
+ * @param {Object} t - brittle test handle
+ * @param {Object} cfg - see {@link runOcrComparison}
+ * @param {boolean} forceCpu - when true, override `params.backendDevice` to 'cpu'
+ * @returns {Promise<{output: Array, stats: Object, backendInfo: Object|null, isGpuPass: boolean}>}
+ */
+async function _runOcrPass (t, cfg, forceCpu) {
+  const { params, imagePath, runOptions, perfLabel, perfOpts, assertResult } = cfg
+  const passParams = forceCpu ? { ...params, backendDevice: 'cpu' } : { ...params }
+  const ocrGgml = createOcrGgml(passParams, { stats: true })
+
+  await ocrGgml.load()
+
+  let output = []
+  try {
+    const response = await ocrGgml.run({
+      path: imagePath,
+      options: runOptions || { paragraph: false }
+    })
+
+    await response
+      .onUpdate(o => { output = o })
+      .onError(error => { t.fail('unexpected error: ' + JSON.stringify(error)) })
+      .await()
+
+    const stats = response.stats || {}
+    const backendInfo = typeof ocrGgml.getBackendInfo === 'function' ? ocrGgml.getBackendInfo() : null
+    const isGpuPass = stats.backendIsGpu === 1 ||
+      (!!backendInfo && (backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'))
+
+    if (perfLabel) {
+      t.comment(formatOCRPerformanceMetrics(perfLabel, stats, output.map(o => o[1]), perfOpts))
+    }
+
+    if (typeof assertResult === 'function') {
+      assertResult(output, { stats, backendInfo, isGpuPass })
+    }
+
+    return { output, stats, backendInfo, isGpuPass }
+  } finally {
+    await safeUnload(ocrGgml)
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+}
+
+/**
+ * Runs an EasyOCR-style inference twice for same-machine CPU/GPU comparison.
+ *
+ * Pass 1 uses the auto-selected backend (Vulkan when a Vulkan lib is shipped in
+ * prebuilds/, else CPU — see {@link getBackendDevice}). Pass 2 runs ONLY when
+ * pass 1 actually executed on a GPU device (`stats.backendIsGpu === 1` /
+ * `backendInfo.backendDevice` GPU|IGPU): it forces `backendDevice: 'cpu'` so a
+ * GPU host records BOTH a `[GPU]` and a `[CPU]` perf row for the same test. On
+ * non-GPU/local hosts pass 1 already ran on CPU, so the second pass is skipped
+ * and the suite stays single-pass (one `[CPU]` row, unchanged).
+ *
+ * `formatOCRPerformanceMetrics` normalizes the `[CPU]`/`[GPU]` token from the
+ * resolved backend, so passing one `perfLabel` yields distinct, correctly
+ * labelled rows per pass. The caller's `assertResult` runs on EACH pass, which
+ * also proves CPU/Vulkan parity on GPU hosts.
+ *
+ * @param {Object} t - brittle test handle
+ * @param {Object} cfg
+ * @param {Object} cfg.params - OcrGgml params (detector/recognizer paths, langList, ...)
+ * @param {string} cfg.imagePath - image to run
+ * @param {Object} [cfg.runOptions] - options passed to `run({ path, options })` (default `{ paragraph: false }`)
+ * @param {string} [cfg.perfLabel] - perf-report label (backend token appended/normalized per pass)
+ * @param {Object} [cfg.perfOpts] - extra opts for {@link formatOCRPerformanceMetrics} (e.g. `{ imagePath }`)
+ * @param {Function} [cfg.assertResult] - `assertResult(output, { stats, backendInfo, isGpuPass })`, run per pass
+ * @returns {Promise<{output: Array, stats: Object, backendInfo: Object|null, isGpuPass: boolean}>} pass-1 result
+ */
+async function runOcrComparison (t, cfg) {
+  const pass1 = await _runOcrPass(t, cfg, false)
+  if (pass1.isGpuPass) {
+    await _runOcrPass(t, cfg, true)
+  }
+  return pass1
+}
+
+/**
+ * DocTR analogue of {@link runOcrComparison}. Drives {@link runDoctrOCR} for a
+ * preferred-backend pass and, only when that ran on GPU, a forced-CPU pass —
+ * recording perf and running the caller's `assertResult` on each. Non-GPU hosts
+ * stay single-pass. `runDoctrOCR` already handles load/unload + inter-pass delay.
+ *
+ * @param {Object} t - brittle test handle
+ * @param {Object} cfg
+ * @param {Object} cfg.params - DocTR params (pathDetector, pathRecognizer, ...)
+ * @param {string} cfg.imagePath - image to run
+ * @param {string} [cfg.perfLabel] - perf-report label (backend token normalized per pass)
+ * @param {Object} [cfg.perfOpts] - extra opts for {@link formatOCRPerformanceMetrics} (e.g. `{ imagePath }` or `{ skipReport: true }`)
+ * @param {Function} [cfg.assertResult] - `assertResult(results, { stats, isGpuPass })`, run per pass
+ * @returns {Promise<{results: Array, stats: Object}>} last-pass result (CPU pass on GPU hosts, else the single pass)
+ */
+async function runDoctrComparison (t, cfg) {
+  const { params, imagePath, perfLabel, perfOpts, assertResult } = cfg
+
+  const pass1 = await runDoctrOCR(t, params, imagePath)
+  const isGpuPass1 = !!(pass1.stats && pass1.stats.backendIsGpu === 1)
+  if (perfLabel) {
+    t.comment(formatOCRPerformanceMetrics(perfLabel, pass1.stats, pass1.results.map(r => r.text), perfOpts))
+  }
+  if (typeof assertResult === 'function') {
+    assertResult(pass1.results, { stats: pass1.stats, isGpuPass: isGpuPass1 })
+  }
+
+  if (!isGpuPass1) return pass1
+
+  const pass2 = await runDoctrOCR(t, { ...params, backendDevice: 'cpu' }, imagePath)
+  if (perfLabel) {
+    t.comment(formatOCRPerformanceMetrics(perfLabel, pass2.stats, pass2.results.map(r => r.text), perfOpts))
+  }
+  if (typeof assertResult === 'function') {
+    assertResult(pass2.results, { stats: pass2.stats, isGpuPass: false })
+  }
+  return pass2
+}
+
 module.exports = {
   isMobile,
   isWindows,
   platform,
   PERF_RUNS,
+  PREBUILDS_DIR,
+  findVulkanBackendLib,
+  getBackendDevice,
+  createOcrGgml,
+  setReportedGpuName,
   getImagePath,
   ensureModelPath,
   ensureDoctrModels,
@@ -690,5 +976,7 @@ module.exports = {
   formatOCRPerformanceMetrics,
   safeUnload,
   runDoctrOCR,
+  runOcrComparison,
+  runDoctrComparison,
   flushPerfReport: _flushPerfReport
 }

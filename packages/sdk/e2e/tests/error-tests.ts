@@ -61,7 +61,7 @@ export const errorTranscriptionFailed: TestDefinition = {
 
 export const errorCompletionNegativeTemperature: TestDefinition = {
   testId: "error-completion-negative-temperature",
-  params: { history: [{ role: "user", content: "Test" }], stream: false, temperature: -0.5 },
+  params: { history: [{ role: "user", content: "Test" }], stream: false, generationParams: { temp: -0.5 } },
   expectation: { validation: "throws-error", errorContains: "" },
   suites: ["smoke"],
   metadata: { category: "error", dependency: "llm", estimatedDurationMs: 3000 },
@@ -69,21 +69,21 @@ export const errorCompletionNegativeTemperature: TestDefinition = {
 
 export const errorCompletionExcessiveTemperature: TestDefinition = {
   testId: "error-completion-excessive-temperature",
-  params: { history: [{ role: "user", content: "Test" }], stream: false, temperature: 3.0 },
+  params: { history: [{ role: "user", content: "Test" }], stream: false, generationParams: { temp: 3.0 } },
   expectation: { validation: "throws-error", errorContains: "" },
   metadata: { category: "error", dependency: "llm", estimatedDurationMs: 3000 },
 };
 
 export const errorCompletionInvalidTopP: TestDefinition = {
   testId: "error-completion-invalid-topp",
-  params: { history: [{ role: "user", content: "Test" }], stream: false, topP: 1.5 },
+  params: { history: [{ role: "user", content: "Test" }], stream: false, generationParams: { top_p: 1.5 } },
   expectation: { validation: "throws-error", errorContains: "" },
   metadata: { category: "error", dependency: "llm", estimatedDurationMs: 3000 },
 };
 
 export const errorCompletionNegativeMaxTokens: TestDefinition = {
   testId: "error-completion-negative-maxtokens",
-  params: { history: [{ role: "user", content: "Test" }], stream: false, maxTokens: -10 },
+  params: { history: [{ role: "user", content: "Test" }], stream: false, generationParams: { predict: -10 } },
   expectation: { validation: "throws-error", errorContains: "" },
   metadata: { category: "error", dependency: "llm", estimatedDurationMs: 3000 },
 };

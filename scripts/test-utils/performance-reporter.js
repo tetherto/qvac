@@ -517,6 +517,19 @@ function createPerformanceReporter (opts) {
       results.push(entry)
     },
 
+    /**
+     * Set `device.gpu` after construction — e.g. once an addon has resolved
+     * the actual GPU/backend name it ran on. Only fills a missing value, so a
+     * richer name from the `detectDevice()` probe (nvidia-smi/lspci/vulkaninfo)
+     * still wins; this is purely a fallback for minimal runners where those
+     * probes return null even though inference ran on a GPU.
+     *
+     * @param {string} name - Resolved GPU/backend name (e.g. 'Vulkan0')
+     */
+    setDeviceGpu (name) {
+      if (name && !device.gpu) device.gpu = name
+    },
+
     /** Build the full JSON report object. */
     toJSON () {
       return {
