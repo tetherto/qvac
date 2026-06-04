@@ -31,6 +31,11 @@ const LLAMA3_2_1B_MODEL = {
   url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
 }
 
+const LLAMA3_2_3B_MODEL = {
+  name: 'llama-3.2-3b-instruct-q4_0.gguf',
+  url: 'https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/main/llama-3.2-3b-instruct-q4_0.gguf'
+}
+
 const SYSTEM_MESSAGE = {
   role: 'system',
   content: 'You are a helpful assistant. Keep answers short. Use the get_weather tool when asked about weather.'
@@ -344,9 +349,10 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
 }
 
 async function runLlamaSlidingCacheCase (t, options = {}) {
+  const modelInfo = options.modelInfo || LLAMA3_2_1B_MODEL
   const [modelName, dirPath] = await ensureModel({
-    modelName: LLAMA3_2_1B_MODEL.name,
-    downloadUrl: LLAMA3_2_1B_MODEL.url
+    modelName: modelInfo.name,
+    downloadUrl: modelInfo.url
   })
 
   const modelPath = path.join(dirPath, modelName)
@@ -537,6 +543,34 @@ safeTest('[qwen3.5-sliding-context] llama3.2 tbq4 K-cache prefill-slides text to
   await runLlamaSlidingCacheCase(t, {
     label: 'llama3.2 tbq4 K-cache prefill',
     cacheFileName: 'llama3-2-tbq4-kcache-prefill-sliding-cache.bin',
+    extraConfig: {
+      'cache-type-k': 'tbq4_0'
+    }
+  })
+})
+
+safeTest('[qwen3.5-sliding-context] llama3.2 3B pq4 K-cache prefill-slides text tokens', {
+  timeout: 900_000,
+  skip: skipTbqPq
+}, async t => {
+  await runLlamaSlidingCacheCase(t, {
+    modelInfo: LLAMA3_2_3B_MODEL,
+    label: 'llama3.2 3B pq4 K-cache prefill',
+    cacheFileName: 'llama3-2-3b-pq4-kcache-prefill-sliding-cache.bin',
+    extraConfig: {
+      'cache-type-k': 'pq4_0'
+    }
+  })
+})
+
+safeTest('[qwen3.5-sliding-context] llama3.2 3B tbq4 K-cache prefill-slides text tokens', {
+  timeout: 900_000,
+  skip: skipTbqPq
+}, async t => {
+  await runLlamaSlidingCacheCase(t, {
+    modelInfo: LLAMA3_2_3B_MODEL,
+    label: 'llama3.2 3B tbq4 K-cache prefill',
+    cacheFileName: 'llama3-2-3b-tbq4-kcache-prefill-sliding-cache.bin',
     extraConfig: {
       'cache-type-k': 'tbq4_0'
     }
