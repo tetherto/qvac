@@ -59,6 +59,10 @@ jobs:
   sdk-pod-checks:
     name: SDK Pod Checks
     runs-on: ubuntu-latest
+    # Hard cap so a hung job can't hog runners or burn minutes. Slightly above
+    # the 30-min default because this rollup runs up to 6 packages sequentially
+    # (incl. the SDK build + bare/e2e tests and the two consumer installs).
+    timeout-minutes: 45
     steps:
       # Checkout the trusted base commit. The package config and the diff
       # baseline are read from here — never from the PR — so a PR cannot edit
@@ -71,6 +75,7 @@ jobs:
 
       - name: Detect changed SDK pod packages
         id: detect
+        timeout-minutes: 5
         shell: bash
         env:
           EVENT: ${{ github.event_name }}
@@ -133,6 +138,7 @@ jobs:
 
       - name: Run SDK pod checks
         if: steps.detect.outputs.has_changes == 'true'
+        timeout-minutes: 40
         shell: bash
         env:
           PACKAGES: ${{ steps.detect.outputs.packages }}
