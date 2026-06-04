@@ -5,13 +5,16 @@
 import fs from "bare-fs";
 import path from "bare-path";
 import process from "bare-process";
+import { validateConfig, type QvacConfig } from "./config-utils";
 import {
-  validateConfig,
-  parseJsonConfig,
-  type QvacConfig,
-} from "./config-utils";
-import { ConfigFileParseFailedError } from "@/utils/errors-client";
+  ConfigFileInvalidError,
+  ConfigFileParseFailedError,
+} from "@/utils/errors-client";
 import { getClientLogger } from "@/logging";
+
+declare function require(modulePath: string): { default?: unknown };
+
+const SUPPORTED_CONFIG_FILE_EXTS = [".js", ".json"];
 
 const logger = getClientLogger();
 
@@ -23,21 +26,20 @@ function fileExists(filePath: string): boolean {
   return fs.existsSync(filePath);
 }
 
-function readFile(filePath: string): string {
-  const result = fs.readFileSync(filePath, "utf-8");
-  return typeof result === "string" ? result : result.toString("utf-8");
+function assertBareConfigExtension(filePath: string) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (!SUPPORTED_CONFIG_FILE_EXTS.includes(ext)) {
+    throw new ConfigFileInvalidError(
+      filePath,
+      "Given config file format unsupported on this platform. Use qvac.config.js or qvac.config.json in the project root, or set QVAC_CONFIG_PATH to a .js or .json file.",
+    );
+  }
 }
 
-function loadJsonConfig(filePath: string): QvacConfig {
-  const content = readFile(filePath);
-  const parsed = parseJsonConfig(content, filePath);
-  return validateConfig(parsed);
-}
-
-async function loadJsConfig(filePath: string): Promise<QvacConfig> {
+function loadConfigFromPath(filePath: string): QvacConfig {
+  assertBareConfigExtension(filePath);
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const configModule: { default?: unknown } = await import(filePath);
+    const configModule: { default?: unknown } = require(filePath);
     return validateConfig(configModule.default || configModule);
   } catch (error) {
     throw new ConfigFileParseFailedError(
@@ -48,19 +50,15 @@ async function loadJsConfig(filePath: string): Promise<QvacConfig> {
   }
 }
 
-function findConfigFile(
-  searchDir: string,
-): { path: string; type: "json" | "js" | "ts" } | undefined {
-  const configFiles = [
-    { name: "qvac.config.ts", type: "ts" as const },
-    { name: "qvac.config.js", type: "js" as const },
-    { name: "qvac.config.json", type: "json" as const },
-  ];
+function findConfigFile(searchDir: string): string | undefined {
+  const configFiles = SUPPORTED_CONFIG_FILE_EXTS.map(
+    (ext) => `qvac.config${ext}`,
+  );
 
-  for (const { name, type } of configFiles) {
+  for (const name of configFiles) {
     const filePath = path.resolve(searchDir, name);
     if (fileExists(filePath)) {
-      return { path: filePath, type };
+      return filePath;
     }
   }
 
@@ -70,9 +68,10 @@ function findConfigFile(
 /**
  * Resolution order for Bare:
  * 1. QVAC_CONFIG_PATH environment variable
- * 2. Config file in project root (qvac.config.ts, qvac.config.js, qvac.config.json)
+ * 2. Config file in project root (qvac.config.js, qvac.config.json)
  * 3. SDK defaults
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- matches Node/Expo resolver signature
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
   const configPath = process.env["QVAC_CONFIG_PATH"];
 
@@ -80,15 +79,7 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
     const normalizedPath = path.resolve(configPath);
 
     if (fileExists(normalizedPath)) {
-      const ext = normalizedPath.endsWith(".json")
-        ? "json"
-        : normalizedPath.endsWith(".ts")
-          ? "ts"
-          : "js";
-      const config =
-        ext === "json"
-          ? loadJsonConfig(normalizedPath)
-          : await loadJsConfig(normalizedPath);
+      const config = loadConfigFromPath(normalizedPath);
 
       logger.info(`✅ Loaded config from: ${normalizedPath}`);
       return config;
@@ -97,14 +88,11 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
 
   const projectRoot = findProjectRoot();
   if (projectRoot) {
-    const configFile = findConfigFile(projectRoot);
-    if (configFile) {
-      const config =
-        configFile.type === "json"
-          ? loadJsonConfig(configFile.path)
-          : await loadJsConfig(configFile.path);
+    const configFilePath = findConfigFile(projectRoot);
+    if (configFilePath) {
+      const config = loadConfigFromPath(configFilePath);
 
-      logger.info(`✅ Loaded config from: ${configFile.path}`);
+      logger.info(`✅ Loaded config from: ${configFilePath}`);
       return config;
     }
   }
