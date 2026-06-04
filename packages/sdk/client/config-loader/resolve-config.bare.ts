@@ -13,6 +13,8 @@ import {
 import { ConfigFileParseFailedError } from "@/utils/errors-client";
 import { getClientLogger } from "@/logging";
 
+declare function require(modulePath: string): { default?: unknown };
+
 const logger = getClientLogger();
 
 function findProjectRoot(): string {
@@ -34,10 +36,9 @@ function loadJsonConfig(filePath: string): QvacConfig {
   return validateConfig(parsed);
 }
 
-async function loadJsConfig(filePath: string): Promise<QvacConfig> {
+function loadJsConfig(filePath: string): QvacConfig {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const configModule: { default?: unknown } = await import(filePath);
+    const configModule: { default?: unknown } = require(filePath);
     return validateConfig(configModule.default || configModule);
   } catch (error) {
     throw new ConfigFileParseFailedError(
@@ -73,6 +74,7 @@ function findConfigFile(
  * 2. Config file in project root (qvac.config.ts, qvac.config.js, qvac.config.json)
  * 3. SDK defaults
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- matches Node/Expo resolver signature
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
   const configPath = process.env["QVAC_CONFIG_PATH"];
 
@@ -88,7 +90,7 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
       const config =
         ext === "json"
           ? loadJsonConfig(normalizedPath)
-          : await loadJsConfig(normalizedPath);
+          : loadJsConfig(normalizedPath);
 
       logger.info(`✅ Loaded config from: ${normalizedPath}`);
       return config;
@@ -102,7 +104,7 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
       const config =
         configFile.type === "json"
           ? loadJsonConfig(configFile.path)
-          : await loadJsConfig(configFile.path);
+          : loadJsConfig(configFile.path);
 
       logger.info(`✅ Loaded config from: ${configFile.path}`);
       return config;
