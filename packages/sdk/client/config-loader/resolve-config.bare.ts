@@ -14,6 +14,8 @@ import { getClientLogger } from "@/logging";
 
 declare function require(modulePath: string): { default?: unknown };
 
+const SUPPORTED_CONFIG_FILE_EXTS = [".js", ".json"];
+
 const logger = getClientLogger();
 
 function findProjectRoot(): string {
@@ -26,10 +28,10 @@ function fileExists(filePath: string): boolean {
 
 function assertBareConfigExtension(filePath: string) {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".ts" || ext === ".mts" || ext === ".cts") {
+  if (!SUPPORTED_CONFIG_FILE_EXTS.includes(ext)) {
     throw new ConfigFileInvalidError(
       filePath,
-      "TypeScript config is not supported. Use qvac.config.js or qvac.config.json in the project root, or set QVAC_CONFIG_PATH to a .js or .json file.",
+      "Given config file format unsupported on this platform. Use qvac.config.js or qvac.config.json in the project root, or set QVAC_CONFIG_PATH to a .js or .json file.",
     );
   }
 }
@@ -49,7 +51,9 @@ function loadConfigFromPath(filePath: string): QvacConfig {
 }
 
 function findConfigFile(searchDir: string): string | undefined {
-  const configFiles = ["qvac.config.js", "qvac.config.json"];
+  const configFiles = SUPPORTED_CONFIG_FILE_EXTS.map(
+    (ext) => `qvac.config${ext}`,
+  );
 
   for (const name of configFiles) {
     const filePath = path.resolve(searchDir, name);
