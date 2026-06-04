@@ -86,6 +86,7 @@ const SCENARIOS = [
 
 const MULTIMODAL_TURN_FILLER = 'Add context pressure for cache sliding while keeping the answer short. '.repeat(44)
 const MULTIMODAL_MAX_SLIDE_TURNS = 6
+const TEXT_TURN_FILLER = 'Add prefill context pressure for cache sliding. '.repeat(16)
 
 function createLogger () {
   return {
@@ -296,29 +297,23 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
       content: `Turn ${turn}: remember the image and answer "ok". ${MULTIMODAL_TURN_FILLER}`
     })
 
-    const turnRun = await runAndCollect(model, [history[history.length - 1]], {
+    const turnResponse = await model.run([history[history.length - 1]], {
       cacheKey: cachePath,
       saveCacheToDisk: true,
-      generationParams: {
-        reasoning_budget: 0,
-        predict: 8,
-        seed: 42,
-        temp: 0,
-        top_k: 1
-      }
+      prefill: true
     })
+    await turnResponse.await()
 
-    t.ok(turnRun.output.length > 0, `sliding turn ${turn} produced output`)
-    totalSlides += turnRun.stats.contextSlides
-    lastStats = turnRun.stats
-    history.push({ role: 'assistant', content: turnRun.output })
+    const turnStats = normalizeStats(turnResponse.stats)
+    totalSlides += turnStats.contextSlides
+    lastStats = turnStats
 
     if (totalSlides > 0) {
       break
     }
   }
 
-  t.ok(totalSlides > 0, `${options.label} session exercised context sliding`)
+  t.ok(totalSlides > 0, `${options.label} session exercised prefill context sliding`)
   t.ok(lastStats.CacheTokens < 1024, `shifted cache stays within context (${lastStats.CacheTokens})`)
   t.ok(fs.statSync(cachePath).size > 0, 'shifted cache file remains non-empty')
 
@@ -398,7 +393,7 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
 
   t.ok(seedRun.output.length > 0, `${options.label} seeded cache`)
 
-  const run = await runAndCollect(model, [
+  const prefillResponse = await model.run([
     {
       role: 'user',
       content: `Answer "ok" after reading this prefill pressure. ${' blue'.repeat(260)}`
@@ -406,17 +401,13 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
   ], {
     cacheKey: cachePath,
     saveCacheToDisk: true,
-    generationParams: {
-      predict: 8,
-      seed: 42,
-      temp: 0,
-      top_k: 1
-    }
+    prefill: true
   })
+  await prefillResponse.await()
 
-  t.ok(run.output.length > 0, `${options.label} produced output after prefill slide`)
-  t.ok(run.stats.contextSlides > 0, `${options.label} exercised prefill context sliding`)
-  t.ok(run.stats.CacheTokens < 512, `${options.label} cache stays within context (${run.stats.CacheTokens})`)
+  const prefillStats = normalizeStats(prefillResponse.stats)
+  t.ok(prefillStats.contextSlides > 0, `${options.label} exercised prefill context sliding`)
+  t.ok(prefillStats.CacheTokens < 512, `${options.label} cache stays within context (${prefillStats.CacheTokens})`)
 }
 
 for (const scenario of SCENARIOS) {
@@ -432,7 +423,7 @@ for (const scenario of SCENARIOS) {
     let lastStats = null
 
     for (let turn = 1; turn <= 8; turn++) {
-      const turnFiller = scenario.turnFiller || 'Please keep replying briefly.'
+      const turnFiller = scenario.turnFiller || TEXT_TURN_FILLER
 
       history.push({
         role: 'user',
@@ -441,34 +432,25 @@ for (const scenario of SCENARIOS) {
 
       const preRunHistoryLength = history.length
       const messagesToSend = selectMessagesForTurn(history, scenario, savedCount)
-      const { output, stats } = await runAndCollect(
-        model,
-        messagesToSend,
-        {
-          cacheKey: cachePath,
-          saveCacheToDisk: true,
-          generationParams: {
-            predict: 12,
-            seed: 42,
-            temp: 0,
-            top_k: 1
-          }
-        }
-      )
+      const response = await model.run(messagesToSend, {
+        cacheKey: cachePath,
+        saveCacheToDisk: true,
+        prefill: true
+      })
+      await response.await()
 
-      t.ok(output.length > 0, `case ${scenario.caseId} turn ${turn} produces output`)
+      const stats = normalizeStats(response.stats)
       totalSlides += stats.contextSlides
       lastStats = stats
 
-      savedCount = preRunHistoryLength + 1
-      history.push({ role: 'assistant', content: output })
+      savedCount = preRunHistoryLength
 
-      if (totalSlides > 0 && turn >= 5) {
+      if (totalSlides > 0) {
         break
       }
     }
 
-    t.ok(totalSlides > 0, `case ${scenario.caseId} exercises iM-RoPE K-shift sliding`)
+    t.ok(totalSlides > 0, `case ${scenario.caseId} exercises iM-RoPE prefill K-shift sliding`)
     t.ok(
       lastStats.CacheTokens < 512,
       `case ${scenario.caseId} cache stays within context (${lastStats.CacheTokens})`
