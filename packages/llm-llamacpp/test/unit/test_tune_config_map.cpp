@@ -15,32 +15,33 @@ protected:
   std::unordered_map<std::string, std::string> configFilemap_;
 };
 
-// ---- Non-BitNet: no modifications ----
-
-TEST_F(TuneConfigMapTest, NonBitnet_NoChanges) {
+TEST_F(TuneConfigMapTest, NonBitnet_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "llama");
 
   LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
 
-  EXPECT_EQ(configFilemap_.count("flash-attn"), 0);
+  ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
+  EXPECT_EQ(configFilemap_["flash-attn"], "on");
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
 
-TEST_F(TuneConfigMapTest, OneBitButNotBitnetArch_NoChanges) {
+TEST_F(TuneConfigMapTest, OneBitButNotBitnetArch_FlashAttnDefaultsOn) {
   MockModelMetaData meta(true, "llama");
 
   LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
 
-  EXPECT_EQ(configFilemap_.count("flash-attn"), 0);
+  ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
+  EXPECT_EQ(configFilemap_["flash-attn"], "on");
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
 
-TEST_F(TuneConfigMapTest, BitnetArchButNotOneBit_NoChanges) {
+TEST_F(TuneConfigMapTest, BitnetArchButNotOneBit_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "bitnet");
 
   LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
 
-  EXPECT_EQ(configFilemap_.count("flash-attn"), 0);
+  ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
+  EXPECT_EQ(configFilemap_["flash-attn"], "on");
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
 
@@ -190,16 +191,16 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno799_UbatchUnchanged) {
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
 
-// ---- OpenCL backend: flash-attn disabled by default unless user-set ----
+// ---- OpenCL backend: flash-attn defaulted ON like every other GPU path ----
 
-TEST_F(TuneConfigMapTest, OpenCl_NonBitnet_FlashAttnDisabledByDefault) {
+TEST_F(TuneConfigMapTest, OpenCl_NonBitnet_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "llama");
 
   LlamaModel::tuneConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
-  EXPECT_EQ(configFilemap_["flash-attn"], "off");
+  EXPECT_EQ(configFilemap_["flash-attn"], "on");
 }
 
 TEST_F(TuneConfigMapTest, OpenCl_UserSetFlashAttnHyphen_Respected) {
@@ -223,13 +224,14 @@ TEST_F(TuneConfigMapTest, OpenCl_UserSetFlashAttnUnderscore_Respected) {
   EXPECT_EQ(configFilemap_["flash_attn"], "on");
 }
 
-TEST_F(TuneConfigMapTest, NotOpenCl_NonBitnet_FlashAttnUnchanged) {
+TEST_F(TuneConfigMapTest, NotOpenCl_NonBitnet_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "llama");
 
   LlamaModel::tuneConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/false);
 
-  EXPECT_EQ(configFilemap_.count("flash-attn"), 0);
+  ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
+  EXPECT_EQ(configFilemap_["flash-attn"], "on");
 }
 
 // ---- Finetuning: flash-attn disabled for any architecture ----

@@ -144,13 +144,12 @@ void LlamaModel::tuneConfigMap(
     QLOG_IF(
         Priority::INFO,
         "[LlamaModel] BitNet model detected: disabling flash attention\n");
-  } else if (isOpenCl && notUserSet("flash-attn", "flash_attn")) {
+  } else if (notUserSet("flash-attn", "flash_attn")) {
     configFilemap.erase("flash_attn");
-    configFilemap["flash-attn"] = "off";
+    configFilemap["flash-attn"] = "on";
     QLOG_IF(
         Priority::INFO,
-        "[LlamaModel] OpenCL backend selected: disabling flash attention by "
-        "default (not reliably supported on OpenCL)\n");
+        "[LlamaModel] Enabling flash attention by default\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
