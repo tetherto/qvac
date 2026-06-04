@@ -420,7 +420,7 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
 }
 
 for (const scenario of SCENARIOS) {
-  safeTest(`[qwen3.5-sliding-context] case ${scenario.caseId}: ${scenario.label}`, {
+  safeTest(`[qwen3.5-imrope-sliding-context] case ${scenario.caseId}: ${scenario.label}`, {
     timeout: 900_000
   }, async t => {
     const { model, cachePath } = await setupModel(t, scenario)
@@ -468,7 +468,7 @@ for (const scenario of SCENARIOS) {
       }
     }
 
-    t.ok(totalSlides > 0, `case ${scenario.caseId} exercises M-RoPE K-shift sliding`)
+    t.ok(totalSlides > 0, `case ${scenario.caseId} exercises iM-RoPE K-shift sliding`)
     t.ok(
       lastStats.CacheTokens < 512,
       `case ${scenario.caseId} cache stays within context (${lastStats.CacheTokens})`
@@ -476,7 +476,7 @@ for (const scenario of SCENARIOS) {
   })
 }
 
-safeTest('[qwen3.5-sliding-context] multimodal cache survives sliding save/load', {
+safeTest('[qwen3.5-imrope-sliding-context] multimodal cache survives sliding save/load', {
   timeout: 1_800_000
 }, async t => {
   await runMultimodalSlidingCacheCase(t, {
@@ -485,7 +485,7 @@ safeTest('[qwen3.5-sliding-context] multimodal cache survives sliding save/load'
   })
 })
 
-safeTest('[qwen3.5-sliding-context] q8 K-cache shifts multimodal and text tokens', {
+safeTest('[qwen3.5-imrope-sliding-context] q8 K-cache shifts multimodal and text tokens', {
   timeout: 1_800_000
 }, async t => {
   await runMultimodalSlidingCacheCase(t, {
@@ -497,7 +497,7 @@ safeTest('[qwen3.5-sliding-context] q8 K-cache shifts multimodal and text tokens
   })
 })
 
-safeTest('[qwen3.5-sliding-context] tbq4 K-cache shifts multimodal and text tokens', {
+safeTest('[qwen3.5-imrope-sliding-context] tbq4 K-cache shifts multimodal and text tokens', {
   timeout: 1_800_000,
   skip: skipTbqPq
 }, async t => {
@@ -510,7 +510,7 @@ safeTest('[qwen3.5-sliding-context] tbq4 K-cache shifts multimodal and text toke
   })
 })
 
-safeTest('[qwen3.5-sliding-context] pq4 K-cache shifts multimodal and text tokens', {
+safeTest('[qwen3.5-imrope-sliding-context] pq4 K-cache shifts multimodal and text tokens', {
   timeout: 1_800_000,
   skip: skipTbqPq
 }, async t => {
@@ -523,7 +523,7 @@ safeTest('[qwen3.5-sliding-context] pq4 K-cache shifts multimodal and text token
   })
 })
 
-safeTest('[qwen3.5-sliding-context] llama3.2 pq4 K-cache prefill-slides text tokens', {
+safeTest('[llama3.2-rope-sliding-context] 1B pq4 K-cache prefill-slides text tokens', {
   timeout: 900_000,
   skip: skipTbqPq
 }, async t => {
@@ -536,7 +536,7 @@ safeTest('[qwen3.5-sliding-context] llama3.2 pq4 K-cache prefill-slides text tok
   })
 })
 
-safeTest('[qwen3.5-sliding-context] llama3.2 tbq4 K-cache prefill-slides text tokens', {
+safeTest('[llama3.2-rope-sliding-context] 1B tbq4 K-cache prefill-slides text tokens', {
   timeout: 900_000,
   skip: skipTbqPq
 }, async t => {
@@ -549,7 +549,7 @@ safeTest('[qwen3.5-sliding-context] llama3.2 tbq4 K-cache prefill-slides text to
   })
 })
 
-safeTest('[qwen3.5-sliding-context] llama3.2 3B pq4 K-cache prefill-slides text tokens', {
+safeTest('[llama3.2-rope-sliding-context] 3B pq4 K-cache prefill-slides text tokens', {
   timeout: 900_000,
   skip: skipTbqPq
 }, async t => {
@@ -563,7 +563,7 @@ safeTest('[qwen3.5-sliding-context] llama3.2 3B pq4 K-cache prefill-slides text 
   })
 })
 
-safeTest('[qwen3.5-sliding-context] llama3.2 3B tbq4 K-cache prefill-slides text tokens', {
+safeTest('[llama3.2-rope-sliding-context] 3B tbq4 K-cache prefill-slides text tokens', {
   timeout: 900_000,
   skip: skipTbqPq
 }, async t => {
