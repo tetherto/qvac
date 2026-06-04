@@ -6,7 +6,10 @@ import fs from "bare-fs";
 import path from "bare-path";
 import process from "bare-process";
 import { validateConfig, type QvacConfig } from "./config-utils";
-import { ConfigFileParseFailedError } from "@/utils/errors-client";
+import {
+  ConfigFileInvalidError,
+  ConfigFileParseFailedError,
+} from "@/utils/errors-client";
 import { getClientLogger } from "@/logging";
 
 declare function require(modulePath: string): { default?: unknown };
@@ -21,7 +24,18 @@ function fileExists(filePath: string): boolean {
   return fs.existsSync(filePath);
 }
 
+function assertBareConfigExtension(filePath: string) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".ts" || ext === ".mts" || ext === ".cts") {
+    throw new ConfigFileInvalidError(
+      filePath,
+      "TypeScript config is not supported. Use qvac.config.js or qvac.config.json in the project root, or set QVAC_CONFIG_PATH to a .js or .json file.",
+    );
+  }
+}
+
 function loadConfigFromPath(filePath: string): QvacConfig {
+  assertBareConfigExtension(filePath);
   try {
     const configModule: { default?: unknown } = require(filePath);
     return validateConfig(configModule.default || configModule);
@@ -35,11 +49,7 @@ function loadConfigFromPath(filePath: string): QvacConfig {
 }
 
 function findConfigFile(searchDir: string): string | undefined {
-  const configFiles = [
-    "qvac.config.ts",
-    "qvac.config.js",
-    "qvac.config.json",
-  ];
+  const configFiles = ["qvac.config.js", "qvac.config.json"];
 
   for (const name of configFiles) {
     const filePath = path.resolve(searchDir, name);
@@ -54,7 +64,7 @@ function findConfigFile(searchDir: string): string | undefined {
 /**
  * Resolution order for Bare:
  * 1. QVAC_CONFIG_PATH environment variable
- * 2. Config file in project root (qvac.config.ts, qvac.config.js, qvac.config.json)
+ * 2. Config file in project root (qvac.config.js, qvac.config.json)
  * 3. SDK defaults
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- matches Node/Expo resolver signature
