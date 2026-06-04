@@ -2,72 +2,23 @@
 
 // GPU test for transcription-whispercpp.
 //
-// Mirrors the intent of transcription-parakeet/test/integration/gpu-smoke.test.js
-// and tts-ggml/test/integration/gpu-smoke.test.js (those packages call the
-// equivalent file `gpu-smoke.test.js`): prove that the addon really engages a
-// GPU backend on platforms where vcpkg.json wires one in, and prove that
-// use_gpu=false really pins the engine to CPU. CI runs this on every matrix
-// entry; runners without a real GPU export NO_GPU=true to skip the GPU half
-// (CPU half always runs).
+// Mirrors transcription-parakeet/test/integration/gpu-smoke.test.js: prove that
+// the addon really engages a GPU backend on platforms where vcpkg.json wires one
+// in, and prove that use_gpu=false really pins the engine to CPU.
 //
-// IMPORTANT DIFFERENCE vs parakeet / tts-ggml:
+// Strict gate via response.stats.backendDevice (0=CPU, 1=GPU) and
+// response.stats.backendId (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL,
+// 99=other), surfaced by WhisperModel::runtimeStats() and documented in
+// index.d.ts (RuntimeStats + BackendId enum). A use_gpu=true request that falls
+// back to CPU surfaces as backendDevice=0, which fails the GPU assertion.
 //
-// parakeet and tts-ggml surface `stats.backendDevice` (0=CPU, 1=GPU) and
-// `stats.backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other)
-// through their RuntimeStats. That is the *strict* gate they use to detect a
-// silent GPU->CPU fallback in CI. The whispercpp addon does NOT expose those
-// fields today (see index.d.ts -> RuntimeStats). To get parity, the addon's
-// JS binding + the underlying whisper.cpp Engine would need to grow
-// `backend_device()` / `backend_name()` accessors and the addon would need to
-// merge them into runtimeStats() (see follow-up note below).
+// Per vcpkg.json the expected GPU backend is Metal on darwin/ios, Vulkan on
+// linux/win32, and Vulkan or OpenCL on android.
 //
-// Until then this test runs a three-layer gate:
-//
-//   1. CONTRACT (strict): load with use_gpu=true on a GPU-capable platform
-//      must (a) not throw, (b) produce a non-null stats object with sane
-//      shape, and (c) emit at least one transcription segment. The mirror
-//      CPU run with use_gpu=false must do the same. This catches build /
-//      linkage / kernel-init regressions that show up as throws or empty
-//      output, which is the dominant failure mode anyway.
-//
-//   2. ENCODE-TIME RATIO (strict, when GPU expected): on the same platform
-//      and same audio, run the engine twice -- once with use_gpu=true and
-//      once with use_gpu=false -- and compare stats.whisperEncodeMs. The
-//      Whisper encoder is the GPU-dominated phase; if Metal / Vulkan / CUDA
-//      are really engaged its wall-time is multiple x faster than the CPU
-//      reference. We require gpuEncodeMs / cpuEncodeMs < ENCODE_RATIO_MAX
-//      (default 0.6, i.e. GPU must be at least ~1.67x faster than CPU in
-//      the encode step). This detects a silent GPU->CPU fallback even
-//      though whispercpp does not yet surface backendId in stats. Set
-//      QVAC_WHISPER_GPU_RELAX=1 to downgrade the assertion to a
-//      warning (useful for hosted runners where Paravirtual / emulated
-//      GPUs barely move the needle on tiny.bin).
-//
-//   3. BEST-EFFORT BACKEND DETECTION (informational): we install a logger
-//      that captures every native log line the addon emits during load + run
-//      into an in-memory buffer. If the buffer mentions the expected backend
-//      token for the platform (e.g. /metal/i on darwin, /vulkan/i on linux)
-//      we surface a pass; if it does not we surface a console warning but
-//      DO NOT fail the test, because matching against upstream log strings
-//      is inherently brittle and a future whisper.cpp bump might change the
-//      wording. Note that today the ggml backend usually logs to stderr via
-//      printf, not via the addon's setLogger callback, so this layer is
-//      effectively a no-op on most platforms -- it is kept for free
-//      observability if/when upstream pipes ggml logs through our logger.
-//
-// CI runners without a real GPU (or hosted macOS where the Paravirtual Metal
-// device crashes ggml's encoder) export NO_GPU=true to skip the GPU half.
-// Real GPU runners (qvac-ubuntu2404-x64-gpu, qvac-win25-x64-gpu) and local
-// developer machines leave NO_GPU unset so the contract gate still fires.
-// Pattern lifted from transcription-parakeet/test/integration/gpu-smoke.test.js
-// (kept identical in spirit even though we drop the "smoke" suffix here).
-//
-// Follow-up to reach strict parity with parakeet / tts-ggml:
-//   - expose Engine::backend_device() / Engine::backend_name() in
-//     qvac-ext-lib-whisper.cpp (analog to qvac-parakeet.cpp@366c3f1).
-//   - surface backendDevice / backendId in WhisperModel::runtimeStats().
-//   - add backendDevice / backendId to index.d.ts RuntimeStats.
-//   - migrate the assertions below from logs to stats.
+// CI runners without a real GPU export NO_GPU=true to skip the GPU half; the CPU
+// half always runs. QVAC_WHISPER_GPU_RELAX=1 downgrades the GPU assertion to a
+// warning for hosts where the GPU is genuinely unavailable (emulated /
+// Paravirtual / low-tier mobile GPU).
 
 const fs = require('bare-fs')
 const os = require('bare-os')
@@ -75,7 +26,6 @@ const process = require('bare-process')
 const test = require('brittle')
 
 const TranscriptionWhispercpp = require('../../index.js')
-const binding = require('../../binding')
 const {
   getAssetPath,
   getTestPaths,
@@ -88,9 +38,6 @@ const RELAX = process.env && process.env.QVAC_WHISPER_GPU_RELAX === '1'
 const NO_GPU = process.env && process.env.NO_GPU === 'true'
 
 const SAMPLE_AUDIO_NAME = 'sample.raw'
-const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
-const ENCODE_RATIO_MAX = 0.6
-const ENCODE_RATIO_MIN_CPU_MS = 10
 
 function expectsGpu () {
   return (
@@ -102,41 +49,16 @@ function expectsGpu () {
   )
 }
 
-function expectedBackendDescription (plat) {
-  if (plat === 'darwin' || plat === 'ios') return 'Metal'
-  if (plat === 'linux' || plat === 'win32') return 'Vulkan'
-  if (plat === 'android') return 'Vulkan or OpenCL'
-  return 'CPU'
-}
-
-function expectedBackendTokens (plat) {
-  if (plat === 'darwin' || plat === 'ios') return [/metal/i, /apple\s*gpu/i]
-  if (plat === 'linux' || plat === 'win32') return [/vulkan/i]
-  if (plat === 'android') return [/vulkan/i, /opencl/i]
-  return []
-}
-
-function backendTokensMatch (logBuffer, plat) {
-  const tokens = expectedBackendTokens(plat)
-  for (const t of tokens) if (t.test(logBuffer)) return true
-  return false
-}
-
-function makeLogCapture () {
-  return { value: '' }
-}
-
-function attachCapturingLogger (captured) {
-  binding.setLogger((priority, message) => {
-    const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
-    const line = `[C++ ${priorityName}] ${message}`
-    captured.value += line + '\n'
-    console.log(line)
-  })
-}
-
-function releaseLogger () {
-  try { binding.releaseLogger() } catch (_) { /* ignore */ }
+function backendIdToName (id) {
+  switch (id) {
+    case 0: return 'CPU'
+    case 1: return 'Metal'
+    case 2: return 'CUDA'
+    case 3: return 'Vulkan'
+    case 4: return 'OpenCL'
+    case 99: return 'other-GPU'
+    default: return `unknown(${id})`
+  }
 }
 
 function locateSampleAudio () {
@@ -211,90 +133,88 @@ function assertStatsShape (t, label, stats) {
     typeof stats.realTimeFactor === 'number' && stats.realTimeFactor >= 0,
     `${label}: stats.realTimeFactor must be a non-negative number`
   )
+  t.ok(
+    typeof stats.backendDevice === 'number',
+    `${label}: stats.backendDevice must be a number`
+  )
+  t.ok(
+    typeof stats.backendId === 'number',
+    `${label}: stats.backendId must be a number`
+  )
 }
 
-function assertGpuFasterThanCpu (t, gpuEncodeMs, cpuEncodeMs) {
+function assertGpuBackend (t, label, stats) {
+  if (!stats) {
+    t.fail(`${label}: no response.stats returned (cannot verify backend)`)
+    return
+  }
+  const dev = stats.backendDevice
+  const id = stats.backendId
+  const name = backendIdToName(id)
+  console.log(`[${label}] backendDevice=${dev} backendId=${id} (${name})`)
+
   if (!expectsGpu()) {
-    t.pass(`platform=${platform} wires no GPU backend; skipping encode-time ratio check`)
+    t.is(dev, 0,
+      `${label}/${platform}: backendDevice must be 0 (CPU) on platforms with no GPU wired in`)
     return
   }
-  if (typeof gpuEncodeMs !== 'number' || typeof cpuEncodeMs !== 'number') {
-    t.comment(`[WARN] cannot compute encode-time ratio: gpuEncodeMs=${gpuEncodeMs} cpuEncodeMs=${cpuEncodeMs}`)
+
+  if (dev !== 1) {
+    const msg = `${label}/${platform}: expected GPU backend, got ${name} ` +
+                `(backendDevice=${dev}, backendId=${id}). ` +
+                'use_gpu=true was requested but the engine fell back to CPU. ' +
+                'Set QVAC_WHISPER_GPU_RELAX=1 to downgrade this to a warning ' +
+                'on hosts without a usable GPU.'
+    if (RELAX) {
+      t.comment(`WARNING (relaxed): ${msg}`)
+      t.pass(`${label}: GPU smoke completed (relaxed)`)
+    } else {
+      t.fail(msg)
+    }
     return
   }
-  if (cpuEncodeMs < ENCODE_RATIO_MIN_CPU_MS) {
-    t.comment(`[WARN] cpuEncodeMs=${cpuEncodeMs}ms below ${ENCODE_RATIO_MIN_CPU_MS}ms floor; ratio would be noisy, skipping`)
-    return
-  }
-  const ratio = gpuEncodeMs / cpuEncodeMs
-  const baseMsg = `gpu/cpu encode-time ratio=${ratio.toFixed(3)} (gpu=${gpuEncodeMs}ms cpu=${cpuEncodeMs}ms threshold<${ENCODE_RATIO_MAX})`
-  console.log(`[ratio] ${baseMsg}`)
-  if (ratio < ENCODE_RATIO_MAX) {
-    t.pass(`GPU encode is at least ${(1 / ENCODE_RATIO_MAX).toFixed(2)}x faster than CPU encode (${baseMsg})`)
-    return
-  }
-  const failMsg =
-    `${baseMsg}. GPU encode was not measurably faster than CPU encode -- ` +
-    'this strongly suggests a silent fallback to CPU even though use_gpu=true ' +
-    'was requested. Set QVAC_WHISPER_GPU_RELAX=1 to downgrade this ' +
-    'failure to a warning on runners where the GPU is genuinely slow ' +
-    '(emulated / Paravirtual / low-tier mobile GPU).'
-  if (RELAX) {
-    t.comment(`WARNING (relaxed): ${failMsg}`)
-    t.pass('GPU encode-time ratio check downgraded by QVAC_WHISPER_GPU_RELAX=1')
-  } else {
-    t.fail(failMsg)
+
+  if (platform === 'darwin' || platform === 'ios') {
+    t.is(id, 1, `${label}/${platform}: expected Metal backendId=1, got ${name}`)
+  } else if (platform === 'linux' || platform === 'win32') {
+    t.is(id, 3, `${label}/${platform}: expected Vulkan backendId=3, got ${name}`)
+  } else if (platform === 'android') {
+    t.ok(id === 3 || id === 4,
+      `${label}/${platform}: expected Vulkan(3) or OpenCL(4) backendId, got ${name}`)
   }
 }
 
-function assertGpuBackendBestEffort (t, capturedLogs) {
-  if (!expectsGpu()) {
-    t.pass(`platform=${platform} wires no GPU backend in vcpkg.json; nothing to detect`)
+function assertCpuBackend (t, label, stats) {
+  if (!stats) {
+    t.fail(`${label}: no response.stats returned (cannot verify backend)`)
     return
   }
-  const expected = expectedBackendDescription(platform)
-  if (backendTokensMatch(capturedLogs, platform)) {
-    t.pass(`GPU backend tokens for ${expected} detected in native logs`)
-    return
-  }
-  const baseMsg =
-    `expected ${expected} backend tokens in native logs (use_gpu=true on ${platform}) ` +
-    'but none were found. This is informational only: whispercpp does not yet ' +
-    'expose backendId/backendDevice in RuntimeStats, so the gate falls back to ' +
-    'matching upstream log strings which can change between whisper.cpp versions. ' +
-    'See file header for the follow-up that turns this into a strict gate.'
-  if (RELAX) {
-    t.comment(`[INFO] best-effort backend detection skipped (QVAC_WHISPER_GPU_RELAX=1): ${baseMsg}`)
-  } else {
-    t.comment(`[WARN] ${baseMsg}`)
-  }
-  t.pass('GPU contract completed (best-effort backend detection inconclusive)')
+  const dev = stats.backendDevice
+  const id = stats.backendId
+  console.log(`[${label}] backendDevice=${dev} backendId=${id} (${backendIdToName(id)})`)
+  t.is(dev, 0,
+    `${label}: use_gpu=false must pin the engine to CPU (backendDevice=0), ` +
+    `got backendDevice=${dev} (${backendIdToName(id)})`)
 }
 
 async function runCase (t, { useGpu, label }) {
-  const captured = makeLogCapture()
-  attachCapturingLogger(captured)
-  try {
-    const modelPath = await ensureTinyModel()
-    if (!modelPath) { t.pass(`${label}: skipped — ggml-tiny.bin not available locally`); return null }
-    const samplePath = locateSampleAudio()
-    if (!samplePath) { t.pass(`${label}: skipped — ${SAMPLE_AUDIO_NAME} not available locally`); return null }
+  const modelPath = await ensureTinyModel()
+  if (!modelPath) { t.pass(`${label}: skipped — ggml-tiny.bin not available locally`); return null }
+  const samplePath = locateSampleAudio()
+  if (!samplePath) { t.pass(`${label}: skipped — ${SAMPLE_AUDIO_NAME} not available locally`); return null }
 
-    const result = await loadAndTranscribe({ modelPath, samplePath, useGpu })
-    console.log(`[${label}] segments=${result.segments.length} captured_log_bytes=${captured.value.length}`)
-    assertStatsShape(t, label, result.stats)
-    t.ok(
-      result.segments.length > 0,
-      `${label}: must produce at least 1 segment (got ${result.segments.length})`
-    )
-    return { ...result, capturedLogs: captured.value }
-  } finally {
-    releaseLogger()
-  }
+  const result = await loadAndTranscribe({ modelPath, samplePath, useGpu })
+  console.log(`[${label}] segments=${result.segments.length}`)
+  assertStatsShape(t, label, result.stats)
+  t.ok(
+    result.segments.length > 0,
+    `${label}: must produce at least 1 segment (got ${result.segments.length})`
+  )
+  return result
 }
 
 test(
-  'Whisper GPU - use_gpu=true loads, transcribes and reports stats on GPU-capable platforms',
+  'Whisper GPU - use_gpu=true must engage the GPU backend on GPU-capable platforms',
   { timeout: 600000, skip: NO_GPU },
   async (t) => {
     if (platform === 'android') {
@@ -303,23 +223,16 @@ test(
     }
     const gpuRun = await runCase(t, { useGpu: true, label: 'GPU' })
     if (!gpuRun) return
-    assertGpuBackendBestEffort(t, gpuRun.capturedLogs)
-
-    if (!expectsGpu()) return
-    const cpuRef = await runCase(t, { useGpu: false, label: 'CPU reference' })
-    if (!cpuRef) return
-    assertGpuFasterThanCpu(
-      t,
-      gpuRun.stats && gpuRun.stats.whisperEncodeMs,
-      cpuRef.stats && cpuRef.stats.whisperEncodeMs
-    )
+    assertGpuBackend(t, 'GPU', gpuRun.stats)
   }
 )
 
 test(
-  'Whisper CPU - use_gpu=false loads, transcribes and reports stats on every platform',
+  'Whisper CPU - use_gpu=false pins the engine to CPU on every platform',
   { timeout: 600000 },
   async (t) => {
-    await runCase(t, { useGpu: false, label: 'CPU' })
+    const cpuRun = await runCase(t, { useGpu: false, label: 'CPU' })
+    if (!cpuRun) return
+    assertCpuBackend(t, 'CPU', cpuRun.stats)
   }
 )
