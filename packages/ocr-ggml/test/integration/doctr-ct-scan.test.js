@@ -42,12 +42,14 @@ function runCtScanTest (device, run) {
 
     const { results, stats } = await runDoctrOCR(t, {
       pathDetector: DB_MOBILENET,
-      pathRecognizer: CRNN_MOBILENET
+      pathRecognizer: CRNN_MOBILENET,
+      backendDevice: device
     }, imagePath)
 
     const texts = results.map(r => r.text)
     t.comment('Detected texts: ' + JSON.stringify(texts))
-    t.comment(formatOCRPerformanceMetrics(`[DocTR ct_scan_report] [${tag}]`, stats, texts, { imagePath }))
+    const resolvedTag = stats.backendIsGpu ? 'GPU' : 'CPU'
+    t.comment(formatOCRPerformanceMetrics(`[DocTR ct_scan_report] [${resolvedTag}]`, stats, texts, { imagePath }))
 
     t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
@@ -64,3 +66,5 @@ function runCtScanTest (device, run) {
 }
 
 for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('cpu', i)
+// Vulkan opt-in: GPU path on Vulkan-capable runners, CPU fallback elsewhere.
+for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('vulkan', i)

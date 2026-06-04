@@ -40,12 +40,17 @@ function runClinicalChemistryTest (device, run) {
 
     const { results, stats } = await runDoctrOCR(t, {
       pathDetector: DB_MOBILENET,
-      pathRecognizer: CRNN_MOBILENET
+      pathRecognizer: CRNN_MOBILENET,
+      backendDevice: device
     }, imagePath)
 
     const texts = results.map(r => r.text)
     t.comment('Detected texts: ' + JSON.stringify(texts))
-    t.comment(formatOCRPerformanceMetrics(`[DocTR clinical_chemistry] [${tag}]`, stats, texts, { imagePath }))
+    // Tag the perf record with the backend the pipeline actually resolved:
+    // a 'vulkan' request transparently falls back to CPU on hosts without a
+    // Vulkan device, so record GPU only when inference really ran on the GPU.
+    const resolvedTag = stats.backendIsGpu ? 'GPU' : 'CPU'
+    t.comment(formatOCRPerformanceMetrics(`[DocTR clinical_chemistry] [${resolvedTag}]`, stats, texts, { imagePath }))
 
     t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
@@ -62,3 +67,6 @@ function runClinicalChemistryTest (device, run) {
 }
 
 for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest('cpu', i)
+// Vulkan opt-in: exercises the GPU path on Vulkan-capable runners and the
+// transparent CPU fallback elsewhere (see runDoctrOCR / OcrBackendSelection).
+for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest('vulkan', i)

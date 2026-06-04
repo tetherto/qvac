@@ -29,7 +29,7 @@ public:
   explicit StepDoctrRecognitionGGML(
       const std::string& pathRecognizer, int batchSize = DEFAULT_BATCH_SIZE,
       DecodingMethod decoding = DecodingMethod::CTC,
-      ggml_backend_dev_t backendDevice = nullptr);
+      ggml_backend_dev_t backendDevice = nullptr, int nThreads = 0);
   ~StepDoctrRecognitionGGML();
 
   StepDoctrRecognitionGGML(const StepDoctrRecognitionGGML&) = delete;
@@ -55,17 +55,23 @@ private:
 
   int batchSize_;
   DecodingMethod decodingMethod_;
+  int nThreads_;
 
   static const std::string VOCAB;
   static constexpr int SPECIAL_TOKEN_IDX = 126;
 
   std::vector<std::string> vocabChars_;
-  std::vector<float> inputBuffer_;
-  std::vector<float> logitsBuffer_;
 
   static cv::Mat preprocessCrop(
       const cv::Mat& origImg, const std::array<cv::Point2f, 4>& polygon);
-  cv::Mat runSingleInference(const cv::Mat& image);
+
+  // Pack a preprocessed crop (CV_32FC3, RECOG_HEIGHT x RECOG_WIDTH) into the
+  // WHCN feature-extractor input buffer at the given batch slot.
+  static void packCropIntoBatch(
+      const cv::Mat& image, std::vector<float>& batchInput, int slot);
+
+  // Decode the LSTM+linear logits for one crop into (text, confidence).
+  std::pair<std::string, float> decodeLogits(const std::vector<float>& logits);
 
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   static SoftmaxResult softmaxArgmax(
