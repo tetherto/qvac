@@ -122,6 +122,11 @@
     "./commands": {
       "types": "./dist/_sdk/commands/index.d.ts",
       "import": "./dist/_sdk/commands/index.js"
+    },
+    "./models": {
+      "types": "./dist/_sdk/models/registry/index.d.ts",
+      "import": "./dist/_sdk/models/registry/index.js",
+      "require": "./dist/_sdk/models/registry/index.js"
     }
   },
   "imports": {
