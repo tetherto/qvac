@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <format>
 #include <string>
 #include <string_view>
 
@@ -128,20 +127,15 @@ bool trySelectGpu(
     const char* descRaw = ggml_backend_dev_description(dev);
     QLOG(
         Priority::INFO,
-        std::format(
-            "ocr-ggml: selected {} backend '{}' ({}, {})",
-            label,
-            sel.backendName,
-            sel.backendDevice,
-            descRaw != nullptr ? descRaw : ""));
+        std::string("ocr-ggml: selected ") + std::string(label) +
+            " backend '" + sel.backendName + "' (" + sel.backendDevice + ", " +
+            (descRaw != nullptr ? descRaw : "") + ")");
     return true;
   }
-  sel.fallbackReason = std::format(
-      "{} backend requested but no {}-capable GPU device was found; falling "
-      "back to CPU",
-      label,
-      label);
-  QLOG(Priority::WARN, std::format("ocr-ggml: {}", sel.fallbackReason));
+  sel.fallbackReason = std::string(label) + " backend requested but no " +
+                       std::string(label) +
+                       "-capable GPU device was found; falling back to CPU";
+  QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
   return false;
 }
 
@@ -171,14 +165,14 @@ BackendSelection selectBackendDevice(BackendDevice requested) {
     // so getBackendInfo() surfaces the gap instead of reporting a clean CPU.
     sel.requested = "unknown";
     sel.fallbackReason = "Unsupported backendDevice value; falling back to CPU";
-    QLOG(Priority::WARN, std::format("ocr-ggml: {}", sel.fallbackReason));
+    QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
     break;
   }
 
   sel = selectCpu(std::move(sel));
   QLOG(
       Priority::INFO,
-      std::format("ocr-ggml: using CPU backend '{}'", sel.backendName));
+      std::string("ocr-ggml: using CPU backend '") + sel.backendName + "'");
   return sel;
 }
 
