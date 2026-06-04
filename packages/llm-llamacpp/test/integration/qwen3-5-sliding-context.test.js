@@ -343,7 +343,7 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
   t.ok(reloadRun.stats.CacheTokens > 0, `reload used restored cache (${reloadRun.stats.CacheTokens} tokens)`)
 }
 
-async function runLlamaCpuSlidingCacheCase (t, options = {}) {
+async function runLlamaSlidingCacheCase (t, options = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: LLAMA3_2_1B_MODEL.name,
     downloadUrl: LLAMA3_2_1B_MODEL.url
@@ -356,8 +356,8 @@ async function runLlamaCpuSlidingCacheCase (t, options = {}) {
   const model = new LlmLlamacpp({
     files: { model: [modelPath] },
     config: {
-      device: 'cpu',
-      gpu_layers: '0',
+      device: useCpu ? 'cpu' : 'gpu',
+      gpu_layers: '99',
       ctx_size: '512',
       n_discarded: '64',
       temp: '0',
@@ -501,8 +501,8 @@ safeTest('[qwen3.5-sliding-context] llama3.2 CPU pq4 K-cache shifts text tokens'
   timeout: 900_000,
   skip: skipTbqPq
 }, async t => {
-  await runLlamaCpuSlidingCacheCase(t, {
-    label: 'llama3.2 CPU pq4 K-cache',
+  await runLlamaSlidingCacheCase(t, {
+    label: 'llama3.2 pq4 K-cache',
     cacheFileName: 'llama3-2-cpu-pq4-kcache-sliding-cache.bin',
     extraConfig: {
       'cache-type-k': 'pq4_0'
