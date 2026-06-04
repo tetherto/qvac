@@ -428,3 +428,16 @@ safeTest('[qwen3.5-sliding-context] tbq4 K-cache shifts multimodal and text toke
     }
   })
 })
+
+safeTest('[qwen3.5-sliding-context] pq4 K-cache shifts multimodal and text tokens', {
+  timeout: 1_800_000,
+  skip: skipTbqPq
+}, async t => {
+  await runMultimodalSlidingCacheCase(t, {
+    label: 'pq4 K-cache multimodal',
+    cacheFileName: 'qwen3-5-pq4-kcache-multimodal-sliding-cache.bin',
+    extraConfig: {
+      'cache-type-k': 'pq4_0'
+    }
+  })
+})
