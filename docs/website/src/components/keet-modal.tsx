@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { QRCodeSVG } from 'qrcode.react';
-import { Check, Copy, X } from 'lucide-react';
-import { FaApple, FaGooglePlay } from 'react-icons/fa6';
+import { Check, Copy, Download, X } from 'lucide-react';
 import { KeetIcon } from '@/components/keet-icon';
 
 // Copy is kept verbatim from the main site (https://qvac.tether.io) modal.
@@ -18,9 +17,7 @@ const KEET = {
     title: 'Download Keet App!',
     subtext:
       'In order to have access to our Room, you need to download Keet app before',
-    googlePlayLink: 'https://play.google.com/store/apps/details?id=io.keet.app',
-    appStoreLink:
-      'https://apps.apple.com/app/keet-private-encrypted-chat/id6443880549',
+    downloadLink: 'https://keet.io/download/',
   },
   card2: {
     step: 'Step 2',
@@ -156,24 +153,14 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
               <KeetMascot className="my-1 size-[88px]" />
               <div className="flex w-full flex-col items-center gap-2">
                 <a
-                  href={KEET.card1.googlePlayLink}
+                  href={KEET.card1.downloadLink}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex w-[180px] max-w-full items-center justify-center gap-2 rounded-[8px] border px-4 py-[6px] text-[15px] leading-[22px] no-underline transition-opacity hover:opacity-70 hover:no-underline"
                   style={{ borderColor: fg, color: fg }}
                 >
-                  <FaGooglePlay className="size-[15px]" />
-                  Google Play
-                </a>
-                <a
-                  href={KEET.card1.appStoreLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex w-[180px] max-w-full items-center justify-center gap-2 rounded-[8px] border px-4 py-[6px] text-[15px] leading-[22px] no-underline transition-opacity hover:opacity-70 hover:no-underline"
-                  style={{ borderColor: fg, color: fg }}
-                >
-                  <FaApple className="size-[17px]" />
-                  App Store
+                  <Download className="size-[15px]" />
+                  Download
                 </a>
               </div>
             </div>
