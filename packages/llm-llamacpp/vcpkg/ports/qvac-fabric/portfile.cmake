@@ -1,8 +1,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO gianni-cor/qvac-fabric-llm.cpp
-  REF 7b0906c3b3c19d0210cbe43f304694bebbe1964f
-  SHA512 420fafaed10decdffb98ef0fce07a0b9a3b58cc8a41a20e8bdf94117253d9aa099d86e7fc1687011ed4c8b5cbd4c52d79393f6675e14bbd4a6e3ac7494895fc7
+  REF 312e4a4bae57f1b75ed253d94a0b891d0c71ef66
+  SHA512 13b7ee2d006bf28dc28e953ca4a0a6106e8dc46e004b83983ab1d2561680124634e2f14e0d6b11936b9ea62a158ea8a237bf6bc39bb4210b3c651406a0c6e699
   HEAD_REF feat/mrope-imrope-k-shift
 )
 
