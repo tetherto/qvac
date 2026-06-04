@@ -233,7 +233,7 @@ TEST_F(ContextSliderTest, PrefillFullWipeWhenPartialSlideCannotFit) {
       /*nPast=*/474,
       /*firstMsgTokens=*/25,
       /*nTokensToAppend=*/308,
-      /*nDiscarded=*/256,
+      /*nDiscarded=*/512,
       controller,
       ops);
 
@@ -252,6 +252,31 @@ TEST_F(ContextSliderTest, PrefillFullWipeWhenPartialSlideCannotFit) {
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 473);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 474);
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -448);
+}
+
+TEST_F(ContextSliderTest, PrefillFullWipeRespectsDiscardBudget) {
+  ToolsCompactController controller(ToolsCompactProfile{});
+  FakeLlamaContextOps ops(/*ctxSize=*/512);
+
+  controller.onTokenize(474, 25);
+  controller.onEvalComplete(474, 474);
+
+  ContextSlideOutcome outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      /*nPast=*/474,
+      /*firstMsgTokens=*/25,
+      /*nTokensToAppend=*/308,
+      /*nDiscarded=*/256,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Overflow);
+  EXPECT_EQ(outcome.newNPast, 474);
+  EXPECT_EQ(outcome.discarded, 0);
+  EXPECT_EQ(controller.anchor(), 25);
+  EXPECT_EQ(ops.memoryCalls(), 0);
+  EXPECT_TRUE(ops.seqRmCalls().empty());
+  EXPECT_TRUE(ops.seqAddCalls().empty());
 }
 
 TEST_F(ContextSliderTest, PrefillSlideScenario_Overflow) {

@@ -72,9 +72,13 @@ ContextSlideOutcome trySlidePrefill(
   // so decoding can continue with a best-effort contaminated state.
   if (nDiscarded > 0) {
     const llama_pos tail = nPast - 1;
-    const bool exactWipeFits = firstMsgTokens + nTokensToAppend < nCtx;
+    const llama_pos exactWipe = nPast - firstMsgTokens;
+    const llama_pos tailPreservingWipe = tail - firstMsgTokens;
+    const bool exactWipeFits = exactWipe <= nDiscarded &&
+        firstMsgTokens + nTokensToAppend < nCtx;
     const bool tailPreservingWipeFits =
-        tail > firstMsgTokens && firstMsgTokens + 1 + nTokensToAppend < nCtx;
+        tail > firstMsgTokens && tailPreservingWipe <= nDiscarded &&
+        firstMsgTokens + 1 + nTokensToAppend < nCtx;
 
     if (!exactWipeFits && !tailPreservingWipeFits) {
       return {ContextSlideOutcome::Kind::Overflow, nPast, 0};
@@ -85,11 +89,10 @@ ContextSlideOutcome trySlidePrefill(
 
     if (exactWipeFits) {
       if (ops.seqRm(mem, 0, firstMsgTokens, nPast)) {
-        llama_pos wiped = nPast - firstMsgTokens;
         if (tools.enabled()) {
           tools.reset();
         }
-        return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens, wiped};
+        return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens, exactWipe};
       }
       memoryOperationFailed = true;
     }
@@ -97,11 +100,13 @@ ContextSlideOutcome trySlidePrefill(
     if (tailPreservingWipeFits) {
       if (ops.seqRm(mem, 0, firstMsgTokens, tail)) {
         ops.seqAdd(mem, 0, tail, nPast, firstMsgTokens - tail);
-        llama_pos wiped = tail - firstMsgTokens;
         if (tools.enabled()) {
           tools.reset();
         }
-        return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens + 1, wiped};
+        return {
+            ContextSlideOutcome::Kind::FullWipe,
+            firstMsgTokens + 1,
+            tailPreservingWipe};
       }
       memoryOperationFailed = true;
     }
