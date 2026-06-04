@@ -671,36 +671,40 @@ http_status() {
   assert_error "${body}" "missing_input"
 }
 
-@test "speech: mp3 response_format returns 400 unsupported_response_format" {
-  local body
+@test "speech: mp3 response_format — transcode_unavailable without ffmpeg, model_not_found with ffmpeg" {
+  local body expected
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
     -H "Content-Type: application/json" \
     -d '{"model":"test","voice":"alloy","input":"hi","response_format":"mp3"}')
-  assert_error "${body}" "unsupported_response_format"
+  if command -v ffmpeg >/dev/null 2>&1; then expected="model_not_found"; else expected="transcode_unavailable"; fi
+  assert_error "${body}" "${expected}"
 }
 
-@test "speech: opus response_format returns 400 unsupported_response_format" {
-  local body
+@test "speech: opus response_format — transcode_unavailable without ffmpeg, model_not_found with ffmpeg" {
+  local body expected
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
     -H "Content-Type: application/json" \
     -d '{"model":"test","voice":"alloy","input":"hi","response_format":"opus"}')
-  assert_error "${body}" "unsupported_response_format"
+  if command -v ffmpeg >/dev/null 2>&1; then expected="model_not_found"; else expected="transcode_unavailable"; fi
+  assert_error "${body}" "${expected}"
 }
 
-@test "speech: aac response_format returns 400 unsupported_response_format" {
-  local body
+@test "speech: aac response_format — transcode_unavailable without ffmpeg, model_not_found with ffmpeg" {
+  local body expected
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
     -H "Content-Type: application/json" \
     -d '{"model":"test","voice":"alloy","input":"hi","response_format":"aac"}')
-  assert_error "${body}" "unsupported_response_format"
+  if command -v ffmpeg >/dev/null 2>&1; then expected="model_not_found"; else expected="transcode_unavailable"; fi
+  assert_error "${body}" "${expected}"
 }
 
-@test "speech: flac response_format returns 400 unsupported_response_format" {
-  local body
+@test "speech: flac response_format — transcode_unavailable without ffmpeg, model_not_found with ffmpeg" {
+  local body expected
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
     -H "Content-Type: application/json" \
     -d '{"model":"test","voice":"alloy","input":"hi","response_format":"flac"}')
-  assert_error "${body}" "unsupported_response_format"
+  if command -v ffmpeg >/dev/null 2>&1; then expected="model_not_found"; else expected="transcode_unavailable"; fi
+  assert_error "${body}" "${expected}"
 }
 
 @test "speech: unknown response_format returns 400 invalid_response_format" {

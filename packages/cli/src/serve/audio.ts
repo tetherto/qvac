@@ -4,8 +4,20 @@
 //   2) serve.models["${model}-${voice}"]
 //   3) serve.models[model]
 
+import { ENCODED_SPEECH_FORMATS, type EncodedSpeechFormat } from './lib/audio-transcode.js'
+
 const NATIVE_FORMATS = new Set(['wav', 'pcm'])
-const TRANSCODED_FORMATS = new Set(['mp3', 'opus', 'aac', 'flac'])
+
+// Content-Type per ffmpeg-encoded format. opus rides in an Ogg container, so it
+// is `audio/ogg` rather than `audio/opus`.
+const ENCODED_CONTENT_TYPE: Record<EncodedSpeechFormat, string> = {
+  mp3: 'audio/mpeg',
+  opus: 'audio/ogg',
+  aac: 'audio/aac',
+  flac: 'audio/flac'
+}
+
+const ALL_FORMATS_HINT = `Use "wav", "pcm", ${ENCODED_SPEECH_FORMATS.map((f) => `"${f}"`).join(', ')}.`
 
 export type SpeechResponseFormat = 'wav' | 'pcm'
 
@@ -15,10 +27,10 @@ export interface SpeechFormatNative {
   contentType: string
 }
 
-export interface SpeechFormatUnsupported {
-  kind: 'unsupported'
-  format: string
-  message: string
+export interface SpeechFormatTranscoded {
+  kind: 'transcoded'
+  format: EncodedSpeechFormat
+  contentType: string
 }
 
 export interface SpeechFormatInvalid {
@@ -29,12 +41,12 @@ export interface SpeechFormatInvalid {
 
 export type MappedSpeechFormat =
   | SpeechFormatNative
-  | SpeechFormatUnsupported
+  | SpeechFormatTranscoded
   | SpeechFormatInvalid
 
-// Default to wav (the simplest container we can produce without a transcoder).
-// OpenAI's documented default is mp3, which we cannot encode natively yet —
-// see docs/openai-api-coverage.md for the gap and follow-up plan.
+// Default stays wav: it needs no transcoder, so it works on every host
+// regardless of whether ffmpeg is installed. OpenAI's documented default is
+// mp3, but switching to it would 503 wherever ffmpeg is absent.
 export const DEFAULT_SPEECH_FORMAT: SpeechResponseFormat = 'wav'
 
 export function mapResponseFormat (input: unknown): MappedSpeechFormat {
@@ -56,18 +68,15 @@ export function mapResponseFormat (input: unknown): MappedSpeechFormat {
     return formatNative(normalized as SpeechResponseFormat)
   }
 
-  if (TRANSCODED_FORMATS.has(normalized)) {
-    return {
-      kind: 'unsupported',
-      format: normalized,
-      message: `response_format "${normalized}" requires an audio transcoder which is not bundled with this CLI yet. Use "wav" or "pcm".`
-    }
+  if ((ENCODED_SPEECH_FORMATS as readonly string[]).includes(normalized)) {
+    const format = normalized as EncodedSpeechFormat
+    return { kind: 'transcoded', format, contentType: ENCODED_CONTENT_TYPE[format] }
   }
 
   return {
     kind: 'invalid',
     format: normalized,
-    message: `Unknown response_format "${normalized}". Use "wav" or "pcm".`
+    message: `Unknown response_format "${normalized}". ${ALL_FORMATS_HINT}`
   }
 }
 
