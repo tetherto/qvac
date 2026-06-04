@@ -5,11 +5,7 @@
 import fs from "bare-fs";
 import path from "bare-path";
 import process from "bare-process";
-import {
-  validateConfig,
-  parseJsonConfig,
-  type QvacConfig,
-} from "./config-utils";
+import { validateConfig, type QvacConfig } from "./config-utils";
 import { ConfigFileParseFailedError } from "@/utils/errors-client";
 import { getClientLogger } from "@/logging";
 
@@ -25,18 +21,7 @@ function fileExists(filePath: string): boolean {
   return fs.existsSync(filePath);
 }
 
-function readFile(filePath: string): string {
-  const result = fs.readFileSync(filePath, "utf-8");
-  return typeof result === "string" ? result : result.toString("utf-8");
-}
-
-function loadJsonConfig(filePath: string): QvacConfig {
-  const content = readFile(filePath);
-  const parsed = parseJsonConfig(content, filePath);
-  return validateConfig(parsed);
-}
-
-function loadJsConfig(filePath: string): QvacConfig {
+function loadConfigFromPath(filePath: string): QvacConfig {
   try {
     const configModule: { default?: unknown } = require(filePath);
     return validateConfig(configModule.default || configModule);
@@ -49,19 +34,17 @@ function loadJsConfig(filePath: string): QvacConfig {
   }
 }
 
-function findConfigFile(
-  searchDir: string,
-): { path: string; type: "json" | "js" | "ts" } | undefined {
+function findConfigFile(searchDir: string): string | undefined {
   const configFiles = [
-    { name: "qvac.config.ts", type: "ts" as const },
-    { name: "qvac.config.js", type: "js" as const },
-    { name: "qvac.config.json", type: "json" as const },
+    "qvac.config.ts",
+    "qvac.config.js",
+    "qvac.config.json",
   ];
 
-  for (const { name, type } of configFiles) {
+  for (const name of configFiles) {
     const filePath = path.resolve(searchDir, name);
     if (fileExists(filePath)) {
-      return { path: filePath, type };
+      return filePath;
     }
   }
 
@@ -82,15 +65,7 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
     const normalizedPath = path.resolve(configPath);
 
     if (fileExists(normalizedPath)) {
-      const ext = normalizedPath.endsWith(".json")
-        ? "json"
-        : normalizedPath.endsWith(".ts")
-          ? "ts"
-          : "js";
-      const config =
-        ext === "json"
-          ? loadJsonConfig(normalizedPath)
-          : loadJsConfig(normalizedPath);
+      const config = loadConfigFromPath(normalizedPath);
 
       logger.info(`✅ Loaded config from: ${normalizedPath}`);
       return config;
@@ -99,14 +74,11 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
 
   const projectRoot = findProjectRoot();
   if (projectRoot) {
-    const configFile = findConfigFile(projectRoot);
-    if (configFile) {
-      const config =
-        configFile.type === "json"
-          ? loadJsonConfig(configFile.path)
-          : loadJsConfig(configFile.path);
+    const configFilePath = findConfigFile(projectRoot);
+    if (configFilePath) {
+      const config = loadConfigFromPath(configFilePath);
 
-      logger.info(`✅ Loaded config from: ${configFile.path}`);
+      logger.info(`✅ Loaded config from: ${configFilePath}`);
       return config;
     }
   }
