@@ -62,6 +62,30 @@ struct ChatterboxConfig {
    */
   std::string backendsDir;
   std::string openclCacheDir;
+
+  /**
+   * Multilingual text preprocessing dictionaries (multilingual variant
+   * only; ignored by the Turbo English GGUF).  The actual MeCab /
+   * Cangjie segmentation happens inside tts-cpp; the addon just forwards
+   * the host-resolved paths into
+   * `tts_cpp::chatterbox::EngineOptions::mecab_dict_path` /
+   * `cangjie_tsv_path`.
+   *
+   *   mecabDictPath:  directory holding the compiled IPAdic dictionary
+   *                   (char.bin, dicrc, matrix.bin, mecabrc, sys.dic,
+   *                   unk.dic).  Required for Japanese ("ja"); when empty
+   *                   tts-cpp falls back to character-level handling and
+   *                   kanji degrade to [UNK].
+   *
+   *   cangjieTsvPath: Cangjie hanzi->code TSV used for Chinese ("zh").
+   *                   zh is currently excluded from the multilingual
+   *                   tokenizer's supported_languages(), so this stays
+   *                   wired but unused until the Cangjie path is reworked.
+   *
+   * Empty -> leave the corresponding EngineOptions field empty.
+   */
+  std::string mecabDictPath;
+  std::string cangjieTsvPath;
 };
 
 } // namespace qvac::ttsggml::chatterbox

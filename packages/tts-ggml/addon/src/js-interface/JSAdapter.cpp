@@ -125,6 +125,8 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
   cfg.backendsDir    = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir = readOptionalString(configurationParams, env, "openclCacheDir");
+  cfg.mecabDictPath  = readOptionalString(configurationParams, env, "mecabDictPath");
+  cfg.cangjieTsvPath = readOptionalString(configurationParams, env, "cangjieTsvPath");
   return cfg;
 }
 

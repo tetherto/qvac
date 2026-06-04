@@ -130,7 +130,8 @@ Pipeline::Pipeline(
             pathRecognizer,
             config_.recognizerBatchSize,
             doctr::ggml::pipeline::DecodingMethod::CTC,
-            selectedDevice);
+            selectedDevice,
+            config_.nThreads);
   } else {
     easyDetector_ =
         std::make_unique<easyocr::ggml::pipeline::StepDetectionInference>(

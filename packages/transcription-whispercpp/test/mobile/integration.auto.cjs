@@ -19,6 +19,10 @@ async function runCorruptedModelTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/corrupted-model.test.js', options)
 }
 
+async function runGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/gpu.test.js', options)
+}
+
 async function runLiveStreamSimulationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/live-stream-simulation.test.js', options)
 }
@@ -46,4 +50,18 @@ async function runMultipleTranscriptionsTest (options = {}) { // eslint-disable-
 // test/integration/mobile-perf-tiny-gpu.test.js for the full rationale.
 async function runMobilePerfTinyGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/mobile-perf-tiny-gpu.test.js', options)
+}
+
+module.exports = {
+  runAccuracyMultilangTest,
+  runAudioCtxChunkingTest,
+  runColdStartTimingTest,
+  runCorruptedModelTest,
+  runGpuTest,
+  runLiveStreamSimulationTest,
+  runLongEsTest,
+  runMobilePerfTinyCpuTest,
+  runMobilePerfTinyGpuTest,
+  runModelFileValidationTest,
+  runMultipleTranscriptionsTest
 }
