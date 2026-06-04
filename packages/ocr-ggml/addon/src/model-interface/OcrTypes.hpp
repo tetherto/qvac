@@ -77,6 +77,13 @@ struct OcrConfig {
   // when no matching device is present (mapped from `params.backendDevice` in
   // AddonJs.hpp).
   BackendDevice backendDevice{BackendDevice::CPU};
+  // Optional explicit GPU device selection (mapped from `params.gpuDevice`).
+  // 0-based index into the matching GPU/iGPU devices for the requested backend,
+  // in ggml enumeration order. When unset (the default), selection prefers a
+  // discrete GPU and falls back to an integrated GPU. When set out of range,
+  // the pipeline falls back to CPU (see `OcrBackendSelection`). Ignored for the
+  // CPU backend.
+  std::optional<int> gpuDevice;
 };
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 

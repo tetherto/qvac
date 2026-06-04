@@ -116,8 +116,8 @@ Pipeline::Pipeline(
   // to enumerate devices and resolve the requested backend. The resolved
   // device is handed to every inference step; CPU is selected when VULKAN was
   // requested but unavailable (see OcrBackendSelection).
-  backendInfo_ =
-      ocr_backend_selection::selectBackendDevice(config_.backendDevice);
+  backendInfo_ = ocr_backend_selection::selectBackendDevice(
+      config_.backendDevice, config_.gpuDevice);
   ggml_backend_dev_t selectedDevice = backendInfo_.device;
 
   if (config_.mode == PipelineMode::DOCTR) {
