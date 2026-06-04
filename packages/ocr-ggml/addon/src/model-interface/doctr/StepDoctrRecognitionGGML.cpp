@@ -5,10 +5,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <exception>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -251,6 +254,47 @@ std::vector<std::string> parseVocabToChars(const std::string& vocab) {
 
 [[noreturn]] void raise(const std::string& message) {
   throw std::runtime_error("[DoctrRecognitionGGML] " + message);
+}
+
+// Run `fn(i)` for i in [0,count) across up to `workers` threads. Each index is
+// handled by exactly one thread, so `fn` writing to a distinct slot per index
+// needs no synchronisation. Falls back to a serial loop for tiny workloads.
+// An exception escaping `fn` in a worker would otherwise call std::terminate,
+// so each worker captures the first exception it throws; after all threads are
+// joined the first captured exception is rethrown to the caller.
+void parallelFor(int count, int workers, const std::function<void(int)>& fn) {
+  if (count <= 0) {
+    return;
+  }
+  const int n = std::max(1, std::min(workers, count));
+  if (n == 1) {
+    for (int i = 0; i < count; ++i) {
+      fn(i);
+    }
+    return;
+  }
+  std::vector<std::thread> threads;
+  threads.reserve(static_cast<size_t>(n));
+  std::vector<std::exception_ptr> errors(static_cast<size_t>(n));
+  for (int w = 0; w < n; ++w) {
+    threads.emplace_back([w, n, count, &fn, &errors]() {
+      try {
+        for (int i = w; i < count; i += n) {
+          fn(i);
+        }
+      } catch (...) {
+        errors[static_cast<size_t>(w)] = std::current_exception();
+      }
+    });
+  }
+  for (auto& th : threads) {
+    th.join();
+  }
+  for (const auto& err : errors) {
+    if (err) {
+      std::rethrow_exception(err);
+    }
+  }
 }
 
 void fp16ToFp32(const void* src, float* out, size_t count) {
@@ -531,9 +575,13 @@ struct StepDoctrRecognitionGGML::Impl {
       lstm{};
   std::vector<float> linearWeight;
   std::vector<float> linearBias;
+  // Number of crops the feature-extractor graph processes per compute call.
+  int batchSize = 1;
 
   explicit Impl(
-      const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
+      const std::string& pathRecognizer, ggml_backend_dev_t backendDevice,
+      int batchSizeArg)
+      : batchSize(batchSizeArg > 0 ? batchSizeArg : 1) {
     load(pathRecognizer, backendDevice);
   }
 
@@ -591,7 +639,7 @@ struct StepDoctrRecognitionGGML::Impl {
   }
 
   [[nodiscard]] std::vector<float>
-  runLstmLinear(const std::vector<float>& featureWhcn) const {
+  runLstmLinear(const float* featureWhcn) const {
     std::vector<float> layerInput(
         static_cast<size_t>(kSequenceLength) * kFeatureChannels);
     for (int t = 0; t < kSequenceLength; ++t) {
@@ -947,7 +995,12 @@ private:
 
     struct ggml_context* ctx = graph.graphCtx.get();
     graph.input = ggml_new_tensor_4d(
-        ctx, GGML_TYPE_F32, RECOG_WIDTH, RECOG_HEIGHT, kInputChannels, 1);
+        ctx,
+        GGML_TYPE_F32,
+        RECOG_WIDTH,
+        RECOG_HEIGHT,
+        kInputChannels,
+        batchSize);
     ggml_set_name(graph.input, "recognition_input");
     ggml_set_input(graph.input);
 
@@ -983,9 +1036,9 @@ private:
 
 StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
     const std::string& pathRecognizer, int batchSize, DecodingMethod decoding,
-    ggml_backend_dev_t backendDevice)
-    : impl_(std::make_unique<Impl>(pathRecognizer, backendDevice)),
-      batchSize_(batchSize), decodingMethod_(decoding),
+    ggml_backend_dev_t backendDevice, int nThreads)
+    : impl_(std::make_unique<Impl>(pathRecognizer, backendDevice, batchSize)),
+      batchSize_(batchSize), decodingMethod_(decoding), nThreads_(nThreads),
       vocabChars_(parseVocabToChars(VOCAB)) {
   const std::string decodingStr =
       (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
@@ -1033,12 +1086,15 @@ cv::Mat StepDoctrRecognitionGGML::preprocessCrop(
   return floatImg;
 }
 
-cv::Mat StepDoctrRecognitionGGML::runSingleInference(const cv::Mat& image) {
+void StepDoctrRecognitionGGML::packCropIntoBatch(
+    const cv::Mat& image, std::vector<float>& batchInput, int slot) {
   CV_Assert(image.rows == RECOG_HEIGHT && image.cols == RECOG_WIDTH);
   CV_Assert(image.channels() == kInputChannels);
-  const size_t planeFloats =
-      static_cast<size_t>(RECOG_WIDTH) * RECOG_HEIGHT;
-  inputBuffer_.assign(planeFloats * kInputChannels, 0.0F);
+  const size_t planeFloats = static_cast<size_t>(RECOG_WIDTH) * RECOG_HEIGHT;
+  const size_t cropStride = planeFloats * kInputChannels;
+  CV_Assert(slot >= 0);
+  CV_Assert((static_cast<size_t>(slot) + 1) * cropStride <= batchInput.size());
+  float* dst = batchInput.data() + (static_cast<size_t>(slot) * cropStride);
 
   std::vector<cv::Mat> channels;
   cv::split(image, channels);
@@ -1046,16 +1102,26 @@ cv::Mat StepDoctrRecognitionGGML::runSingleInference(const cv::Mat& image) {
   for (int c = 0; c < kInputChannels; ++c) {
     CV_Assert(channels[c].isContinuous() && channels[c].type() == CV_32F);
     std::memcpy(
-        inputBuffer_.data() + (planeFloats * static_cast<size_t>(c)),
+        dst + (planeFloats * static_cast<size_t>(c)),
         channels[c].ptr<float>(),
         planeFloats * sizeof(float));
   }
+}
 
-  std::vector<float> features = impl_->runFeatureExtractor(inputBuffer_);
-  logitsBuffer_ = impl_->runLstmLinear(features);
-
+std::pair<std::string, float>
+StepDoctrRecognitionGGML::decodeLogits(const std::vector<float>& logits) {
   const std::array<int, 3> sizes = {1, kSequenceLength, kVocabSize};
-  return cv::Mat(3, sizes.data(), CV_32F, logitsBuffer_.data()).clone();
+  // cv::Mat needs a non-const pointer, but decodeCTC/decodeAttention only read
+  // through `preds` (softmaxArgmax -> ptr<float>()), so the buffer is never
+  // mutated; the const_cast is safe.
+  cv::Mat preds(
+      3,
+      sizes.data(),
+      CV_32F,
+      const_cast<float*>(
+          logits.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast)
+  return (decodingMethod_ == DecodingMethod::CTC) ? decodeCTC(preds, 0)
+                                                  : decodeAttention(preds, 0);
 }
 
 StepDoctrRecognitionGGML::SoftmaxResult StepDoctrRecognitionGGML::softmaxArgmax(
@@ -1146,35 +1212,94 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
   Output results;
   results.reserve(input.polygons.size());
 
-  for (size_t batchStart = 0; batchStart < input.polygons.size();
-       batchStart += static_cast<size_t>(batchSize_)) {
+  // Worker count for the CPU-bound preprocessing + LSTM/linear/decode stages.
+  // The feature-extractor graph itself runs as one batched compute on the
+  // selected ggml backend (GPU when Vulkan was resolved); only this CPU tail
+  // is threaded across crops.
+  int workers = nThreads_;
+  if (workers <= 0) {
+    workers = static_cast<int>(std::thread::hardware_concurrency());
+  }
+  if (workers <= 0) {
+    workers = 1;
+  }
+
+  const size_t cropStride =
+      static_cast<size_t>(RECOG_WIDTH) * RECOG_HEIGHT * kInputChannels;
+  const size_t featStride =
+      static_cast<size_t>(kSequenceLength) * kFeatureChannels;
+  const int total = static_cast<int>(input.polygons.size());
+
+  // MobileNet feature extraction: run the graph in batches of `batchSize_`
+  // crops (one ggml backend compute per batch, on the GPU when Vulkan was
+  // resolved). All batches' features are collected into `allFeatures` so the
+  // CPU-bound LSTM/linear tail can then be parallelised across every crop at
+  // once (one thread-spawn wave, best load balance).
+  std::vector<float> batchInput(static_cast<size_t>(batchSize_) * cropStride);
+  std::vector<float> allFeatures(static_cast<size_t>(total) * featStride);
+
+  // Number of crops whose features were actually computed. The cancel check
+  // fires at a batch boundary, so every batch before `batchStart` is complete
+  // and exactly `batchStart` crops are ready when we break (this is NOT the
+  // largest multiple of batchSize_ <= total — they differ for any cancellation
+  // before the final full-batch boundary).
+  int decodeCount = total;
+
+  for (int batchStart = 0; batchStart < total; batchStart += batchSize_) {
     if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
           "[DoctrRecognitionGGML] Cancelled at batch offset " +
               std::to_string(batchStart));
+      decodeCount = batchStart;
       break;
     }
 
-    const size_t batchEnd = std::min(
-        batchStart + static_cast<size_t>(batchSize_), input.polygons.size());
-    for (size_t i = batchStart; i < batchEnd; ++i) {
-      cv::Mat crop = preprocessCrop(origImg, input.polygons[i]);
-      cv::Mat preds = runSingleInference(crop);
-      auto [text, confidence] = (decodingMethod_ == DecodingMethod::CTC)
-                                    ? decodeCTC(preds, 0)
-                                    : decodeAttention(preds, 0);
+    const int count = std::min(batchSize_, total - batchStart);
 
-      std::array<cv::Point2f, 4> polygon = input.polygons[i];
-      if (input.context.initialResizeRatio != 1.0F) {
-        const float scaleBack = 1.0F / input.context.initialResizeRatio;
-        for (auto& pt : polygon) {
-          pt.x *= scaleBack;
-          pt.y *= scaleBack;
-        }
+    // Preprocess + pack each crop into its batch slot (parallel; each thread
+    // writes a distinct slot of `batchInput`).
+    parallelFor(count, workers, [&](int j) {
+      cv::Mat crop = preprocessCrop(origImg, input.polygons[batchStart + j]);
+      packCropIntoBatch(crop, batchInput, j);
+    });
+
+    // One batched feature-extractor compute (unused tail slots produce ignored
+    // outputs); copy this batch's features into the global buffer.
+    std::vector<float> features = impl_->runFeatureExtractor(batchInput);
+    CV_Assert(features.size() >= static_cast<size_t>(count) * featStride);
+    std::memcpy(
+        allFeatures.data() + (static_cast<size_t>(batchStart) * featStride),
+        features.data(),
+        static_cast<size_t>(count) * featStride * sizeof(float));
+  }
+
+  // LSTM + linear + CTC/attention decode for every crop, parallel across the
+  // whole set (each thread reads a distinct feature span, writes a distinct
+  // result slot).
+  std::vector<std::pair<std::string, float>> decoded(
+      static_cast<size_t>(decodeCount));
+  parallelFor(decodeCount, workers, [&](int j) {
+    const float* featSpan =
+        allFeatures.data() + (static_cast<size_t>(j) * featStride);
+    std::vector<float> logits = impl_->runLstmLinear(featSpan);
+    decoded[static_cast<size_t>(j)] = decodeLogits(logits);
+  });
+
+  // Assemble results in order (cheap, serial).
+  for (int j = 0; j < decodeCount; ++j) {
+    std::array<cv::Point2f, 4> polygon = input.polygons[j];
+    if (input.context.initialResizeRatio != 1.0F) {
+      const float scaleBack = 1.0F / input.context.initialResizeRatio;
+      for (auto& pt : polygon) {
+        pt.x *= scaleBack;
+        pt.y *= scaleBack;
       }
-      results.emplace_back(polygon, text, confidence);
     }
+    results.emplace_back(
+        polygon,
+        decoded[static_cast<size_t>(j)].first,
+        decoded[static_cast<size_t>(j)].second);
   }
 
   QLOG(
