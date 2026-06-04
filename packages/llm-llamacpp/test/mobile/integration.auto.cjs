@@ -86,6 +86,11 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/model-loading.test.js', options)
 }
 
+async function runMropeSlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMropeSlidingContextTest')) return __FILTERED
+  return runIntegrationModule('../integration/mrope-sliding-context.test.js', options)
+}
+
 async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiGpuTest')) return __FILTERED
   return runIntegrationModule('../integration/multi-gpu.test.js', options)
@@ -124,11 +129,6 @@ async function runQwen35ImageFruitPlatePerfTest (options = {}) { // eslint-disab
 async function runQwen35ImageHighResAuroraPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-perf.test.js', options)
-}
-
-async function runQwen35SlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35SlidingContextTest')) return __FILTERED
-  return runIntegrationModule('../integration/mrope-sliding-context.test.js', options)
 }
 
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars

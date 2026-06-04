@@ -24,8 +24,8 @@
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
+      "runMropeSlidingContextTest",
       "runQwen35Test",
-      "runQwen35SlidingContextTest",
       "runTurboquantTest",
       "runUtf8OutputTest"
     ],
@@ -48,10 +48,10 @@
       "runFinetuningPauseResumeTest",
       "runGenerationParamsTest",
       "runGrammarTest",
+      "runMropeSlidingContextTest",
       "runMultiInstanceTest",
       "runQuantizedKvcacheTest",
       "runQwen35Test",
-      "runQwen35SlidingContextTest",
       "runReasoningTest",
       "runToolsCompactTest",
       "runTurboquantTest"
