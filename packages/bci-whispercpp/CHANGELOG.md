@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0]
+
+Explicit per-platform GPU backend selection (QVAC-19234). Vulkan and
+OpenCL GPU acceleration on Android, Vulkan on Linux/Windows, Metal on
+macOS — declared as explicit `whisper-cpp` features instead of relying
+on `ggml-speech`'s platform default-features.
+
+### Changed
+
+- `vcpkg.json`: the bare `whisper-cpp` dependency is replaced with
+  per-platform feature selections mirroring `transcription-whispercpp`:
+  - `whisper-cpp[opencl, vulkan]` on `android`
+  - `whisper-cpp[vulkan]` on `!(osx | ios | android)` (Linux / Windows)
+  - `whisper-cpp[metal]` on `osx`
+  - `whisper-cpp` (no GPU feature) on `ios` — iOS stays CPU-only until
+    the upstream Metal XPC issue is resolved (parity with the
+    `whisper-cpp` port's iOS `GGML_METAL=OFF`).
+
+### Why explicit (vs. relying on defaults)
+
+`0.1.3` already pulled the Android GPU backends transitively because
+`ggml-speech` lists `opencl`/`vulkan` as Android default-features. This
+release makes the selection **explicit and deterministic** so
+`bci-whispercpp` owns its GPU matrix: a future change to `ggml-speech`'s
+default-features can no longer silently add or drop a backend, and the
+desktop (Vulkan) / Apple (Metal) / iOS (CPU) choices are now intentional
+and reviewer-auditable.
+
+### Android prebuild (verified locally via NDK cross-build)
+
+`prebuilds/android-arm64/qvac__bci-whispercpp/` ships the dynamically
+loaded backend modules picked up at runtime by
+`ensureBackendsLoadedAndroid()`:
+
+```
+libqvac-speech-ggml-cpu-android_armv8.0_1.so   (+ 8.2_1, 8.2_2, 8.6_1,
+                                                  9.0_1, 9.2_1, 9.2_2)
+libqvac-speech-ggml-opencl.so
+libqvac-speech-ggml-vulkan.so
+```
+
+The active backend is reported through `RuntimeStats.backendId`
+(OpenCL = 4, Vulkan = 3, CPU = 0) captured by `captureActiveBackendInfo()`,
+which walks the GPU **and IGPU** device list and applies the Adreno
+OpenCL preference (mirrors `transcription-whispercpp` #2343).
+
 ## [0.1.3]
 
 vcpkg dependency consistency with `transcription-whispercpp` (QVAC-19009).

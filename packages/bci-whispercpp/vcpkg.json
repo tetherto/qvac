@@ -10,7 +10,25 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
-    "whisper-cpp"
+    {
+      "name": "whisper-cpp",
+      "features": ["opencl", "vulkan"],
+      "platform": "android"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["vulkan"],
+      "platform": "!(osx | ios | android)"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["metal"],
+      "platform": "osx"
+    },
+    {
+      "name": "whisper-cpp",
+      "platform": "ios"
+    }
   ],
   "features": {
     "tests": {
