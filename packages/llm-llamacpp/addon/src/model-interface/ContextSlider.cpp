@@ -91,39 +91,31 @@ ContextSlideOutcome trySlidePrefillImpl(
     }
 
     auto mem = ops.memory(lctx);
-    bool memoryOperationFailed = false;
 
-    if (exactWipeFits) {
-      if (ops.seqRm(mem, 0, protectedPrefixPos, currentPos)) {
-        if (tools.enabled()) {
-          tools.reset();
-        }
-        return {
-            ContextSlideOutcome::Kind::FullWipe,
-            protectedPrefixPos,
-            exactWipe};
+    if (exactWipeFits &&
+        ops.seqRm(mem, 0, protectedPrefixPos, currentPos)) {
+      if (tools.enabled()) {
+        tools.reset();
       }
-      memoryOperationFailed = true;
-    }
-
-    if (tailPreservingWipeFits) {
-      if (ops.seqRm(mem, 0, protectedPrefixPos, tail)) {
-        ops.seqAdd(mem, 0, tail, currentPos, protectedPrefixPos - tail);
-        if (tools.enabled()) {
-          tools.reset();
-        }
-        return {
-            ContextSlideOutcome::Kind::FullWipe,
-            protectedPrefixPos + 1,
-            tailPreservingWipe};
-      }
-      memoryOperationFailed = true;
-    }
-
-    if (memoryOperationFailed) {
       return {
-          ContextSlideOutcome::Kind::MemoryOperationFailed, currentPos, 0};
+          ContextSlideOutcome::Kind::FullWipe,
+          protectedPrefixPos,
+          exactWipe};
     }
+
+    if (tailPreservingWipeFits &&
+        ops.seqRm(mem, 0, protectedPrefixPos, tail)) {
+      ops.seqAdd(mem, 0, tail, currentPos, protectedPrefixPos - tail);
+      if (tools.enabled()) {
+        tools.reset();
+      }
+      return {
+          ContextSlideOutcome::Kind::FullWipe,
+          protectedPrefixPos + 1,
+          tailPreservingWipe};
+    }
+
+    return {ContextSlideOutcome::Kind::MemoryOperationFailed, currentPos, 0};
   }
 
   // Cannot free enough space
