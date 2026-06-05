@@ -423,7 +423,7 @@ function createPauseResumeTestDataset (filePath, count = 8) {
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
   const content = samples.map(s => JSON.stringify(s)).join('\n')
-  fs.writeFileSync(filePath, content)
+  fs.writeFileSync(filePath, content + '\n')
   return filePath
 }
 

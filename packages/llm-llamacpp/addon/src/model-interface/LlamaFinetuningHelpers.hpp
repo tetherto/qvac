@@ -73,6 +73,7 @@ struct TrainingCheckpointState {
   uint32_t targetModules = 0;
   LoraLrSchedulerState* scheduler = nullptr;
   std::atomic<bool> pauseRequested{false};
+  std::atomic<bool> savePauseCheckpoint{true};
   std::atomic<bool> shouldExit{false};
   std::atomic<bool> pauseCheckpointSaved{false};
   std::filesystem::path pauseCheckpointPath;
