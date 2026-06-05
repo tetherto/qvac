@@ -386,11 +386,20 @@ function createOcrGgml (params = {}, opts) {
 }
 
 /**
- * Records the resolved GPU/backend name on the shared performance reporter's
- * device block so `performance-report.json` carries a concrete name (e.g.
- * 'Vulkan0') on GPU runs even when the host's GPU probe returns null on a
- * minimal runner container. Only acts when a GPU backend was actually selected
- * and the name is non-empty; CPU runs leave `device.gpu` null.
+ * Records the resolved accelerator on the shared performance reporter's device
+ * block so `performance-report.json` (and the combined report's column header /
+ * per-device subline) names the ACTUAL hardware that ran inference rather than
+ * the bare ggml ordinal.
+ *
+ * The ggml backend name is just an ordinal (`Vulkan0`, `Vulkan1`, …) which is
+ * meaningless on its own — reviewers can't tell which physical GPU `Vulkan1`
+ * is (QVAC-19986 review feedback). `getBackendInfo()` also exposes
+ * `backendDescription` (the ggml device description, i.e. the real GPU model,
+ * e.g. "NVIDIA RTX A4000") and `deviceIndex`, so we surface the description and
+ * keep the ordinal as a suffix for provenance: `"NVIDIA RTX A4000 (Vulkan0)"`.
+ *
+ * Only acts when a GPU backend was actually selected; CPU runs leave
+ * `device.gpu` null. Falls back to the ordinal when no description is reported.
  *
  * @param {Object} ocrGgml - A loaded OcrGgml instance (call after `load()`)
  */
@@ -401,9 +410,18 @@ function setReportedGpuName (ocrGgml) {
     if (!info) return
     const isGpu = info.backendDevice === 'GPU' || info.backendDevice === 'IGPU'
     if (!isGpu) return
-    if (info.backendName && typeof _perfReporter.setDeviceGpu === 'function') {
-      _perfReporter.setDeviceGpu(info.backendName)
+    if (typeof _perfReporter.setDeviceGpu !== 'function') return
+
+    const ordinal = (info.backendName || '').trim()
+    const description = (info.backendDescription || '').trim()
+    // Prefer the real hardware description; append the ggml ordinal so a
+    // multi-GPU host still disambiguates which device served the run. Avoid a
+    // redundant "(Vulkan0)" when the description already equals the ordinal.
+    let label = description || ordinal
+    if (description && ordinal && description !== ordinal) {
+      label = `${description} (${ordinal})`
     }
+    if (label) _perfReporter.setDeviceGpu(label)
   } catch (_) {}
 }
 
