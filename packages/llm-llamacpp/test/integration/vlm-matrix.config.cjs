@@ -82,7 +82,11 @@ const MODELS = {
   }
 }
 
-// Every (model · mmproj) cell available in `blobs` mode. A preset picks a subset.
+// Open-licensed fixture tasks (regenerate/curate via scripts/build-vlm-fixture.cjs;
+// per-image attribution in vlm-fixture.NOTICE.md).
+const TASKS = ['textvqa', 'vizwiz', 'gqa', 'docvqa', 'ai2d']
+
+// Every (model · mmproj) cell, used by two-models mode. A preset picks a subset.
 const ALL_CELLS = [
   { model: 'qwen', mmproj: 'q8' },
   { model: 'qwen', mmproj: 'f16' },
@@ -91,55 +95,47 @@ const ALL_CELLS = [
 ]
 
 module.exports = {
-  models: MODELS,
-  allCells: ALL_CELLS,
-
-  // mode: 'two-models'     — vary (model · mmproj); the engine is FIXED (see
-  //                          `engine`). base = f16 mmproj, candidate = q8. Runs on
-  //                          all platforms. (This is the active mode.)
-  //       'several-sources' — vary the engine (addon/fabric-cli/upstream-cli); the
-  //                          model is FIXED. Desktop-only CLI engines.
+  // ════════════════════════ MODES ════════════════════════
+  // The benchmark runs in ONE comparison mode. The workflow's `matrix_mode` input
+  // sets it on Linux (env QVAC_VLM_MODE); on the S25 device leg (no env passthrough)
+  // the active preset's `mode` / `mode` below decides.
+  //
+  //   two-models       vary the MODEL blob (base vs candidate mmproj); engine FIXED.
+  //                    Cross-platform: Linux CPU/GPU + Samsung S25 CPU/GPU.
+  //   several-sources  vary the ENGINE (addon / fabric-cli / upstream-cli); model FIXED.
+  //                    Linux only — fabric/upstream are native llama-mtmd-cli binaries.
   mode: 'two-models',
 
-  // Inference engine for two-models mode (the fixed parameter). Linux can override
-  // with QVAC_VLM_ENGINE; mobile uses this default. 'addon' = @qvac/llm-llamacpp JS
-  // binding (built on the qvac-fabric fork; runs on Linux + S25). 'fabric-cli' /
-  // 'upstream-cli' = native llama-mtmd-cli (desktop-only; not yet wired here).
-  engine: 'addon',
-  base: 'f16',
-  candidate: 'q8',
+  // ── two-models settings ──
+  base: 'f16', //       baseline mmproj label (shown as the "base" column)
+  candidate: 'q8', //   candidate mmproj label (the "candidate" column)
+  engine: 'addon', //   the fixed engine (addon | fabric-cli | upstream-cli)
 
-  // Active preset for the device leg (and the Linux default). Override on Linux
-  // with QVAC_VLM_PRESET. 'compare' = the current focus (Qwen3.5 f16-vs-q8 mmproj,
-  // a few samples so quality is non-zero); 'smoke' = 1-cell/1-task/1-sample wiring
-  // check; 'full' = the real test set.
+  // ── several-sources settings ──
+  engines: ['addon', 'fabric-cli', 'upstream-cli'], // engines compared (model fixed below)
+
+  // ════════════════════════ SHARED ════════════════════════
+  models: MODELS, //    model catalog (each blob has a source descriptor + registry tag)
+  allCells: ALL_CELLS,
+
+  // Active preset for the S25 device leg AND the Linux default. Override on Linux with
+  // QVAC_VLM_PRESET. A preset bundles the run settings; per-field env overrides:
+  //   QVAC_VLM_SAMPLES→samplesPerTask · QVAC_VLM_REPEATS→repeats
+  //   QVAC_VLM_DEVICES→devices (csv) · QVAC_VLM_TASKS→tasks (csv)
+  // `null` = harness default (all cells / all fixture tasks / cpu+gpu).
   defaultPreset: 'compare',
 
-  // A preset narrows the matrix. `null` fields fall back to the harness defaults
-  // (all cells / all fixture tasks / samples=isMobile?2:5 / devices=cpu+gpu).
   presets: {
-    full: { cells: ALL_CELLS, tasks: null, samplesPerTask: null, devices: null },
-    smoke: { cells: [{ model: 'qwen', mmproj: 'q8' }], tasks: ['vqav2'], samplesPerTask: 1, devices: null },
-    // Qwen3.5: registry f16 mmproj vs registry q8 mmproj. 5 cleanly open-licensed
-    // tasks (TextVQA/VizWiz/GQA = CC-BY-4.0, DocVQA = Apache-2.0, AI2D = CC-BY-SA-4.0)
-    // × 3 samples = 15 images, all ≤1024 px (see scripts/build-vlm-fixture.cjs).
-    compare: {
-      cells: [{ model: 'qwen', mmproj: 'f16' }, { model: 'qwen', mmproj: 'q8' }],
-      tasks: ['textvqa', 'vizwiz', 'gqa', 'docvqa', 'ai2d'],
-      samplesPerTask: 3,
-      devices: null
-    },
-    // Several-sources mode: ONE fixed model (Qwen3.5 + q8 mmproj) compared across
-    // 3 inference engines (addon + fabric-cli + upstream-cli). Linux-only — the CLI
-    // engines are native binaries (Android is out of scope for this mode). The
-    // workflow runs the addon (this harness) + two CLI runners over the same fixture.
-    sources: {
-      mode: 'several-sources',
-      cells: [{ model: 'qwen', mmproj: 'q8' }],
-      engines: ['addon', 'fabric-cli', 'upstream-cli'],
-      tasks: ['textvqa', 'vizwiz', 'gqa', 'docvqa', 'ai2d'],
-      samplesPerTask: 3,
-      devices: null
-    }
+    // ── two-models presets ──────────────────────────────────────────────
+    // f16 vs q8 mmproj on Qwen3.5, the 5 open-licensed tasks (15 images ≤1024px).
+    compare: { mode: 'two-models', cells: [{ model: 'qwen', mmproj: 'f16' }, { model: 'qwen', mmproj: 'q8' }], tasks: TASKS, samplesPerTask: 3, repeats: 3, devices: null },
+    // The full matrix (all model·mmproj cells × all tasks).
+    full: { mode: 'two-models', cells: ALL_CELLS, tasks: null, samplesPerTask: 5, repeats: 3, devices: null },
+    // 1 cell / 1 task / 1 sample — pipeline wiring check.
+    smoke: { mode: 'two-models', cells: [{ model: 'qwen', mmproj: 'q8' }], tasks: ['textvqa'], samplesPerTask: 1, repeats: 1, devices: null },
+
+    // ── several-sources preset (Linux only) ─────────────────────────────
+    // ONE fixed model (Qwen3.5 + q8 mmproj) across addon + fabric-cli + upstream-cli.
+    sources: { mode: 'several-sources', cells: [{ model: 'qwen', mmproj: 'q8' }], engines: ['addon', 'fabric-cli', 'upstream-cli'], tasks: TASKS, samplesPerTask: 3, repeats: 3, devices: null }
   }
 }
