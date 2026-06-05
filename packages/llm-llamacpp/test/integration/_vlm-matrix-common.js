@@ -50,6 +50,11 @@ const SOURCE = env('QVAC_VLM_ENGINE') || config.engine || 'addon'
 const SAMPLES_PER_TASK = intEnv('QVAC_VLM_SAMPLES') || intEnv('QVAC_PERF_RUNS') ||
   PRESET.samplesPerTask || (isMobile ? 2 : 5)
 
+// Repeats per (sample): each inference is run N times so the report's timings are a
+// mean over repeats and any nondeterminism is visible. Default 3 on desktop; 1 on
+// mobile to stay under the Device Farm ceiling. Override with QVAC_VLM_REPEATS.
+const REPEATS = intEnv('QVAC_VLM_REPEATS') || PRESET.repeats || (isMobile ? 1 : 3)
+
 // tasks: QVAC_VLM_TASKS (csv) > preset.tasks > all fixture tasks (null = no filter).
 const TASKS = (() => {
   const raw = env('QVAC_VLM_TASKS')
@@ -264,27 +269,28 @@ function runVlmCell (modelKey, mmprojKey) {
       const items = selectedItems()
       let ok = 0
       for (const item of items) {
-        // segment marker on STDERR — same stream as llama.cpp's `image slice encoded`
-        // lines, so host-side attribution is alignment-proof (stdout [VLMROW] markers
-        // can interleave unpredictably after 2>&1).
-        console.error('[VLMSEG]' + JSON.stringify({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, id: item.id }) + '[/VLMSEG]')
-        try {
-          const r = await runOne(inference, getMediaPath(item.image), item.prompt)
-          const st = r.stats || {}
-          emitRow({
-            cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device,
-            task: item.task, id: item.id, metric: item.metric, gold: item.gold,
-            pred: String(r.text).slice(0, 600),
-            img: item.image, img_w: r.dims.w, img_h: r.dims.h,
-            ms: r.ms,
-            decode_tps: st.TPS != null ? st.TPS : null,
-            ttft_ms: st.TTFT != null ? st.TTFT : null,
-            gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
-            prompt_tokens: st.promptTokens != null ? st.promptTokens : null
-          })
-          ok++
-        } catch (e) {
-          emitRow({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) })
+        for (let rep = 0; rep < REPEATS; rep++) {
+          // SEG per repeat so each run's `image slice encoded` lines attribute to its
+          // own segment (stderr — same stream as the native timing lines).
+          console.error('[VLMSEG]' + JSON.stringify({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, id: item.id, rep }) + '[/VLMSEG]')
+          try {
+            const r = await runOne(inference, getMediaPath(item.image), item.prompt)
+            const st = r.stats || {}
+            emitRow({
+              cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, rep,
+              task: item.task, id: item.id, metric: item.metric, gold: item.gold,
+              pred: String(r.text).slice(0, 600),
+              img: item.image, img_w: r.dims.w, img_h: r.dims.h,
+              ms: r.ms,
+              decode_tps: st.TPS != null ? st.TPS : null,
+              ttft_ms: st.TTFT != null ? st.TTFT : null,
+              gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
+              prompt_tokens: st.promptTokens != null ? st.promptTokens : null
+            })
+            ok++
+          } catch (e) {
+            emitRow({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, rep, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) })
+          }
         }
       }
       t.ok(ok > 0, `${cell} [${dev}] produced ${ok}/${items.length} predictions`)

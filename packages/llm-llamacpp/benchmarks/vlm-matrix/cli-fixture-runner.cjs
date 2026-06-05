@@ -25,6 +25,7 @@ const LLM = arg('llm')
 const MMPROJ = arg('mmproj')
 const BACKEND = arg('backend', 'cpu')
 const SAMPLES = parseInt(arg('samples', '3'), 10)
+const REPEATS = parseInt(arg('repeats', '3'), 10)
 const TASKS = (arg('tasks', '') || '').split(',').map(s => s.trim()).filter(Boolean)
 const MAIN_ORIGIN = arg('main-origin', 'Qwen3.5-0.8B-Q8_0')
 const MMPROJ_ORIGIN = arg('mmproj-origin', 'Qwen3.5-0.8B mmproj-Q8_0')
@@ -54,7 +55,6 @@ function main () {
   const items = selectedItems()
   let ok = 0
   for (const item of items) {
-    console.error('[VLMSEG]' + JSON.stringify({ cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, id: item.id }) + '[/VLMSEG]')
     const spec = {
       cliBinaryPath: BINARY,
       llmPath: LLM,
@@ -67,33 +67,37 @@ function main () {
       temperature: 0,
       seed: 42,
       thinkingEnabled: false, // match the addon harness (reasoning-budget=0)
+      verbosePrompt: true, // print the rendered prompt for prompt-parity audits
       perRunTimeoutMs: 5 * 60 * 1000
     }
-    try {
-      const r = runOnceCli(spec)
-      if (r.stderr) process.stderr.write(r.stderr + '\n') // surfaces `image ... encoded in N ms` after the [VLMSEG]
-      const m = parseStdoutMetrics(r.stderr || '')
-      const ttft = (m.visionEncodeMs != null || m.promptEvalMs != null)
-        ? (m.visionEncodeMs || 0) + (m.promptEvalMs || 0)
-        : null
-      console.log('[VLMROW]' + JSON.stringify({
-        cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND,
-        task: item.task, id: item.id, metric: item.metric, gold: item.gold,
-        pred: String(r.text).slice(0, 600),
-        img: item.image, img_w: item.width || null, img_h: item.height || null,
-        ms: r.wallMs,
-        decode_tps: m.decodeTps != null ? m.decodeTps : null,
-        ttft_ms: ttft,
-        gen_tokens: m.decodeTokens != null ? m.decodeTokens : null,
-        prompt_tokens: m.promptTokens != null ? m.promptTokens : null
-      }) + '[/VLMROW]')
-      ok++
-    } catch (e) {
-      console.log('[VLMROW]' + JSON.stringify({
-        cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND,
-        task: item.task, id: item.id, metric: item.metric, gold: item.gold,
-        error: String((e && e.message) || e)
-      }) + '[/VLMROW]')
+    for (let rep = 0; rep < REPEATS; rep++) {
+      console.error('[VLMSEG]' + JSON.stringify({ cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, id: item.id, rep }) + '[/VLMSEG]')
+      try {
+        const r = runOnceCli(spec)
+        if (r.stderr) process.stderr.write(r.stderr + '\n') // surfaces `image ... encoded in N ms` after the [VLMSEG]
+        const m = parseStdoutMetrics(r.stderr || '')
+        const ttft = (m.visionEncodeMs != null || m.promptEvalMs != null)
+          ? (m.visionEncodeMs || 0) + (m.promptEvalMs || 0)
+          : null
+        console.log('[VLMROW]' + JSON.stringify({
+          cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, rep,
+          task: item.task, id: item.id, metric: item.metric, gold: item.gold,
+          pred: String(r.text).slice(0, 600),
+          img: item.image, img_w: item.width || null, img_h: item.height || null,
+          ms: r.wallMs,
+          decode_tps: m.decodeTps != null ? m.decodeTps : null,
+          ttft_ms: ttft,
+          gen_tokens: m.decodeTokens != null ? m.decodeTokens : null,
+          prompt_tokens: m.promptTokens != null ? m.promptTokens : null
+        }) + '[/VLMROW]')
+        ok++
+      } catch (e) {
+        console.log('[VLMROW]' + JSON.stringify({
+          cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, rep,
+          task: item.task, id: item.id, metric: item.metric, gold: item.gold,
+          error: String((e && e.message) || e)
+        }) + '[/VLMROW]')
+      }
     }
   }
   console.error(`[cli-fixture] ${SOURCE}/${BACKEND}: ${ok}/${items.length} ok`)

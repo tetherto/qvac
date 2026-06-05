@@ -139,6 +139,9 @@ function buildCliArgs (spec) {
     args.push('--chat-template', patched)
   }
 
+  // Opt-in: print the fully-rendered prompt (after chat-template) for parity audits.
+  if (spec.verbosePrompt) args.push('--verbose-prompt')
+
   args.push('-p', spec.prompt)
 
   return args
