@@ -2,6 +2,7 @@ declare module "hyperdrive" {
   import type { EventEmitter } from "events";
   import type { Readable } from "stream";
   import type { Connection } from "hyperswarm";
+  import { type Buffer } from "bare-buffer";
 
   export interface HyperdriveOptions {
     extension?: boolean;

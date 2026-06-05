@@ -42,6 +42,7 @@ import {
   unregisterCorestore,
 } from "@/server/bare/runtime-lifecycle";
 import type { DownloadHooks } from "./types";
+import { Buffer } from "bare-buffer";
 
 const logger = getServerLogger();
 
