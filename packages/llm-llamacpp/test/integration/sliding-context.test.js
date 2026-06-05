@@ -2,7 +2,7 @@
 
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest } = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModel, safeTest } = require('./utils')
 const os = require('bare-os')
 
 const platform = os.platform()
@@ -245,6 +245,7 @@ safeTest('Cached follow-up discards middle tokens to fit new message', {
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
     'sliding-prefill-branch1.bin'
   )
+  cleanupIntegrationCacheFiles(cachePath)
 
   const { model } = await setupModel(t, {
     n_predict: '430',
@@ -286,6 +287,7 @@ safeTest('Cached follow-up clears all middle tokens when discard window is exhau
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
     'sliding-prefill-branch2.bin'
   )
+  cleanupIntegrationCacheFiles(cachePath)
 
   const { model } = await setupModel(t, {
     n_predict: '430',
@@ -327,6 +329,7 @@ safeTest('Cached follow-up overflows when sliding is disabled and context is ful
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
     'sliding-prefill-branch3.bin'
   )
+  cleanupIntegrationCacheFiles(cachePath)
 
   const { model } = await setupModel(t, {
     n_predict: '430',

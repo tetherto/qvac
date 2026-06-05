@@ -4,7 +4,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, getMediaPath, safeTest } = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModel, getMediaPath, safeTest } = require('./utils')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -96,7 +96,7 @@ async function runQwenTextSlidingCacheCase (t) {
 
   const modelPath = path.join(dirPath, modelName)
   const cachePath = path.join(dirPath, 'qwen3-5-text-prefill-sliding-cache.bin')
-  try { fs.unlinkSync(cachePath) } catch (_) {}
+  cleanupIntegrationCacheFiles(cachePath)
 
   const model = new LlmLlamacpp({
     files: { model: [modelPath] },
@@ -197,7 +197,7 @@ async function primeSystemCache (model, cachePath) {
 async function runMultimodalSlidingCacheCase (t, options = {}) {
   const { dirPath, modelPath, projectionModelPath } = await setupMultimodalPaths()
   const cachePath = path.join(dirPath, options.cacheFileName)
-  try { fs.unlinkSync(cachePath) } catch (_) {}
+  cleanupIntegrationCacheFiles(cachePath)
 
   const imageFilePath = getMediaPath('elephant.jpg')
   t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
@@ -306,7 +306,7 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
 
   const modelPath = path.join(dirPath, modelName)
   const cachePath = path.join(dirPath, options.cacheFileName)
-  try { fs.unlinkSync(cachePath) } catch (_) {}
+  cleanupIntegrationCacheFiles(cachePath)
 
   const model = new LlmLlamacpp({
     files: { model: [modelPath] },

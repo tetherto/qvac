@@ -10,6 +10,24 @@ const TRANSIENT_ERROR_CODES = new Set([
   'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
 ])
 
+const cleanedIntegrationCacheFiles = new Set()
+
+function cleanupIntegrationCacheFiles (...cachePaths) {
+  for (const cachePath of cachePaths.flat()) {
+    if (!cachePath || cleanedIntegrationCacheFiles.has(cachePath)) continue
+    if (!path.isAbsolute(cachePath)) {
+      throw new Error(`integration cache cleanup requires an absolute path: ${cachePath}`)
+    }
+
+    cleanedIntegrationCacheFiles.add(cachePath)
+    try {
+      fs.unlinkSync(cachePath)
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
+    }
+  }
+}
+
 function isTransientError (err) {
   if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
   if (err.statusCode) {
@@ -550,6 +568,7 @@ function safeTest (name, opts, fn) {
 }
 
 module.exports = {
+  cleanupIntegrationCacheFiles,
   ensureModel,
   ensureModelPath,
   getMediaPath,
