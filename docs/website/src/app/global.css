@@ -47,13 +47,29 @@
  * Padding is intentionally NOT overridden here: the default
  * `xl:px-8` (32px) already matches what the `docs` layout shipped.
  */
+/*
+ * `margin-inline: auto` centers the article in the (wide) desktop grid
+ * track. But on a CSS grid item, auto inline margins also make it
+ * shrink-to-fit its *max-content* instead of stretching to the track.
+ * An unwrapped Shiki code block renders `<pre class="w-max">`
+ * (`width: max-content`); `overflow: auto` zeroes its min-content but
+ * NOT its max-content, so a long code line inflates the article's
+ * max-content past narrow viewports and the `overflow-x-clip` notebook
+ * layout clips it (page wider than viewport on mobile, only on pages
+ * that contain a long-line code block).
+ *
+ * Capping `max-width` to `min(<desktop-cap>, 100%)` keeps the desktop
+ * width identical (track is wider than the cap) while clamping the
+ * article to the track on mobile, so the code block's own
+ * `overflow-x: auto` container scrolls instead of widening the page.
+ */
 #nd-page {
-  max-width: 900px;
+  max-width: min(900px, 100%);
   margin-inline: auto;
 }
 
 #nd-page[data-full='true'] {
-  max-width: 1200px;
+  max-width: min(1200px, 100%);
 }
 
 /*
