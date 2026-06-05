@@ -28,6 +28,22 @@ declare interface TTSGgmlFiles {
   supertonic?: string
   /** Optional directory containing baked Chatterbox voice profiles. */
   voicesDir?: string
+  /**
+   * Chatterbox MTL only: directory holding the compiled MeCab/IPAdic
+   * dictionary (char.bin/matrix.bin/sys.dic/unk.dic/dicrc/mecabrc) used
+   * for Japanese ("ja") morphological segmentation.  Forwarded to
+   * tts-cpp's `EngineOptions::mecab_dict_path`.  Other languages ignore
+   * it.  Alias: top-level `mecabDictPath`.
+   */
+  mecabDictDir?: string
+  mecabDictPath?: string
+  /**
+   * Chatterbox MTL only: path to the Cangjie TSV used for Chinese
+   * ("zh") romanisation.  Forwarded to tts-cpp's
+   * `EngineOptions::cangjie_tsv_path`.
+   */
+  cangjieTsvPath?: string
+  cangjieTsv?: string
 }
 
 declare interface TTSGgmlRuntimeConfig {
@@ -78,6 +94,10 @@ declare interface TTSGgmlOptions {
   backendsDir?: string
   /** Directory where ggml-opencl persists its compiled program-binary */
   openclCacheDir?: string
+  /** Chatterbox MTL only: MeCab/IPAdic dictionary dir for Japanese ("ja"). Alias of `files.mecabDictDir`. */
+  mecabDictPath?: string
+  /** Chatterbox MTL only: Cangjie TSV for Chinese ("zh"). Alias of `files.cangjieTsvPath`. */
+  cangjieTsvPath?: string
   opts?: object
   exclusiveRun?: boolean
 }

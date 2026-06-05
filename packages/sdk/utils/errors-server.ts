@@ -409,10 +409,12 @@ export class RequestNotFoundError extends QvacErrorBase {
 }
 
 /**
- * Thrown by `RequestRegistry.begin(...)` when a registered concurrency
- * policy rejects the request (e.g. `oneAtATimePerModel` for the
- * `completion` kind). Distinct from `RequestIdConflictError`, which
- * only fires on UUID collisions.
+ * Thrown by `await RequestRegistry.begin(...)` when a registered concurrency
+ * policy refuses the request. Under the default queue policy a same-model
+ * request waits FIFO rather than rejecting, so this fires on the bounded-queue
+ * cases: an explicit `onOverflow: "reject"`, the per-model queue-depth cap, or
+ * a `queueTimeoutMs` elapsing while waiting for a slot. Distinct from
+ * `RequestIdConflictError`, which only fires on UUID collisions.
  */
 export class RequestRejectedByPolicyError extends QvacErrorBase {
   readonly requestId: string;

@@ -26,12 +26,12 @@ import {
 
 test("registry: begin/get/list track in-flight requests", async (t) => {
   const r = createRequestRegistry();
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "embeddings",
     modelId: "m2",
@@ -51,7 +51,7 @@ test("registry: dispose removes the slot and flips state", async (t) => {
   const r = createRequestRegistry();
 
   async function run() {
-    await using ctx = r.begin({
+    await using ctx = await r.begin({
       requestId: "r-1",
       kind: "completion",
       modelId: "m1",
@@ -67,12 +67,12 @@ test("registry: dispose removes the slot and flips state", async (t) => {
 
 test("registry: cancel by requestId aborts only that signal", async (t) => {
   const r = createRequestRegistry();
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "completion",
     modelId: "m1",
@@ -88,7 +88,7 @@ test("registry: cancel by requestId aborts only that signal", async (t) => {
 
 test("registry: cancel-by-requestId is idempotent and counts only first abort", async (t) => {
   const r = createRequestRegistry();
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -100,17 +100,17 @@ test("registry: cancel-by-requestId is idempotent and counts only first abort", 
 
 test("registry: cancel by modelId fans out across that model only", async (t) => {
   const r = createRequestRegistry();
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "embeddings",
     modelId: "m1",
   });
-  await using c = r.begin({
+  await using c = await r.begin({
     requestId: "r-c",
     kind: "completion",
     modelId: "m2",
@@ -125,12 +125,12 @@ test("registry: cancel by modelId fans out across that model only", async (t) =>
 
 test("registry: cancel by modelId + kind narrows the target", async (t) => {
   const r = createRequestRegistry();
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "embeddings",
     modelId: "m1",
@@ -144,17 +144,17 @@ test("registry: cancel by modelId + kind narrows the target", async (t) => {
 
 test("registry: cancelAll fires every signal", async (t) => {
   const r = createRequestRegistry();
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "loadModel",
     modelId: "m2",
   });
-  await using c = r.begin({
+  await using c = await r.begin({
     requestId: "r-c",
     kind: "rag",
   });
@@ -169,7 +169,7 @@ test("registry: parentSignal already aborted aborts the new context", async (t) 
   const r = createRequestRegistry();
   const parent = new AbortController();
   parent.abort("shutdown");
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -185,7 +185,7 @@ test("registry: parentSignal already aborted aborts the new context", async (t) 
 test("registry: parentSignal aborts propagate to children", async (t) => {
   const r = createRequestRegistry();
   const parent = new AbortController();
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -198,21 +198,21 @@ test("registry: parentSignal aborts propagate to children", async (t) => {
 
 test("registry: duplicate requestId throws RequestIdConflictError", async (t) => {
   const r = createRequestRegistry();
-  await using first = r.begin({
+  await using first = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
   });
   t.is(first.kind, "completion");
-  await t.exception(() => {
-    r.begin({ requestId: "r-1", kind: "completion", modelId: "m1" });
+  await t.exception(async () => {
+    await r.begin({ requestId: "r-1", kind: "completion", modelId: "m1" });
   }, RequestIdConflictError as unknown as new () => Error);
 });
 
 test("registry: end(requestId) sets state, disposes scope, and removes slot", async (t) => {
   const r = createRequestRegistry();
   let cleanupRan = 0;
-  const ctx = r.begin({
+  const ctx = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -260,7 +260,7 @@ test("registry: end() detaches parent listener so long-lived parents don't accum
   const r = createRequestRegistry();
   for (let i = 0; i < 5; i++) {
     const id = `r-${i}`;
-    const ctx = r.begin({
+    const ctx = await r.begin({
       requestId: id,
       kind: "completion",
       modelId: "m1",
@@ -296,7 +296,7 @@ test("registry: same-tick cancel-before-begin retroactively aborts the later beg
     "no entry yet — cancel still returns 0 (race remembered, not retroactively counted)",
   );
 
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -328,7 +328,7 @@ test("registry: a second begin() with the same id (UUID retry) after the race is
   r.cancel({ requestId: "r-1" });
 
   async function firstAttempt() {
-    await using ctx = r.begin({
+    await using ctx = await r.begin({
       requestId: "r-1",
       kind: "completion",
       modelId: "m1",
@@ -341,7 +341,7 @@ test("registry: a second begin() with the same id (UUID retry) after the race is
   }
   await firstAttempt();
 
-  await using second = r.begin({
+  await using second = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -377,7 +377,7 @@ test("registry: bounded cancel-before-begin set does not grow past its cap (TTL 
   // The oldest entries should have been evicted; the most recently
   // inserted id should still be honoured on the matching begin(...).
   const newestId = `r-${overshoot - 1}`;
-  await using newest = r.begin({
+  await using newest = await r.begin({
     requestId: newestId,
     kind: "completion",
     modelId: "m1",
@@ -390,7 +390,7 @@ test("registry: bounded cancel-before-begin set does not grow past its cap (TTL 
 
   // And one of the early (presumed-evicted) ids should NOT trigger a
   // retroactive abort, because its entry was bumped out by the cap.
-  await using ancient = r.begin({
+  await using ancient = await r.begin({
     requestId: "r-0",
     kind: "completion",
     modelId: "m1",
@@ -406,7 +406,7 @@ test("registry: derived terminal state is 'cancelled' if signal aborted, 'comple
   const r = createRequestRegistry();
 
   async function cancelledRun() {
-    await using ctx = r.begin({
+    await using ctx = await r.begin({
       requestId: "r-cancelled",
       kind: "completion",
       modelId: "m1",
@@ -418,7 +418,7 @@ test("registry: derived terminal state is 'cancelled' if signal aborted, 'comple
   t.is(cancelled.state, "cancelled");
 
   async function happyRun() {
-    await using ctx = r.begin({
+    await using ctx = await r.begin({
       requestId: "r-happy",
       kind: "completion",
       modelId: "m1",
@@ -444,7 +444,7 @@ test("policy: oneAtATimePerModel rejects a second begin on the same (kind, model
   const r = createRequestRegistry();
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
-  await using first = r.begin({
+  await using first = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -453,8 +453,8 @@ test("policy: oneAtATimePerModel rejects a second begin on the same (kind, model
 
   // Throws the dedicated policy class so handler / RPC code can
   // `instanceof` narrow without parsing the error message.
-  await t.exception(() => {
-    r.begin({
+  await t.exception(async () => {
+    await r.begin({
       requestId: "r-2",
       kind: "completion",
       modelId: "m1",
@@ -472,12 +472,12 @@ test("policy: oneAtATimePerModel scopes admission per (kind, modelId), not globa
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
   // Same kind, different model — allowed.
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "completion",
     modelId: "m2",
@@ -488,7 +488,7 @@ test("policy: oneAtATimePerModel scopes admission per (kind, modelId), not globa
   // Different kind, same model — allowed because the policy is keyed
   // by `kind`. (Today only `completion` carries a policy; an
   // embeddings request piggy-backing on the same model is fine.)
-  await using c = r.begin({
+  await using c = await r.begin({
     requestId: "r-c",
     kind: "embeddings",
     modelId: "m1",
@@ -506,8 +506,8 @@ test("policy: oneAtATimePerModel ignores requests without modelId", async (t) =>
   // both are admitted. This is the documented behaviour for
   // model-less requests (e.g. handlers that don't yet attach a
   // modelId to their `begin(...)` call).
-  await using a = r.begin({ requestId: "r-a", kind: "completion" });
-  await using b = r.begin({ requestId: "r-b", kind: "completion" });
+  await using a = await r.begin({ requestId: "r-a", kind: "completion" });
+  await using b = await r.begin({ requestId: "r-b", kind: "completion" });
   t.is(a.modelId, undefined);
   t.is(b.modelId, undefined);
   t.is(r.list().length, 2);
@@ -519,7 +519,7 @@ test("policy: disposing the holder releases admission for the next request", asy
 
   async function runFirstThenSecond() {
     {
-      await using first = r.begin({
+      await using first = await r.begin({
         requestId: "r-1",
         kind: "completion",
         modelId: "m1",
@@ -527,7 +527,7 @@ test("policy: disposing the holder releases admission for the next request", asy
       t.is(first.requestId, "r-1");
     }
     // Once the await-using block above unwinds, the slot is released.
-    await using second = r.begin({
+    await using second = await r.begin({
       requestId: "r-2",
       kind: "completion",
       modelId: "m1",
@@ -546,7 +546,7 @@ test("policy: cancel without dispose does NOT release admission", async (t) => {
   const r = createRequestRegistry();
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
-  await using first = r.begin({
+  await using first = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -574,12 +574,12 @@ test("policy: registering a second time replaces the previous policy", async (t)
 
   // Disabling the rule re-opens admission — concurrent begins on the
   // same `(kind, modelId)` are accepted again.
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "completion",
     modelId: "m1",
@@ -595,12 +595,12 @@ test("policy: kinds without a registered policy are unconstrained", async (t) =>
   // open even though `completion` carries a strict rule.
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "embeddings",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "embeddings",
     modelId: "m1",
@@ -608,4 +608,413 @@ test("policy: kinds without a registered policy are unconstrained", async (t) =>
   t.is(r.list().length, 2);
   t.is(a.kind, "embeddings");
   t.is(b.kind, "embeddings");
+});
+
+// -----------------------------------------------------------------------------
+// Per-(kind, modelId) FIFO admission queue (QVAC-19346)
+//
+// The completion policy now serializes instead of rejecting: a second
+// concurrent request to the same (kind, modelId) waits FIFO for a slot
+// rather than throwing. `maxConcurrentPerModel` is the slot count (1 today,
+// the addon's batching width later); `onOverflow`, `maxQueueDepthPerModel`,
+// and `queueTimeoutMs` bound the wait. These tests drive the queue with an
+// isolated registry and manual dispose so the FIFO ordering, hand-off, and
+// teardown invariants are pinned without relying on the worker singleton.
+// -----------------------------------------------------------------------------
+
+/** Let any already-scheduled microtasks/timers settle. */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 5));
+}
+
+function keyStateProbe(r: ReturnType<typeof createRequestRegistry>): {
+  __keyStateSize: () => number;
+} {
+  return r as unknown as { __keyStateSize: () => number };
+}
+
+test("queue: a second same-model begin waits FIFO until the first disposes", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  const first = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+
+  let secondResolved = false;
+  const secondPromise = r
+    .begin({ requestId: "r-2", kind: "completion", modelId: "m1" })
+    .then((ctx) => {
+      secondResolved = true;
+      return ctx;
+    });
+
+  await settle();
+  t.is(secondResolved, false, "second begin is queued, not yet admitted");
+  t.is(r.list().length, 1, "only the first request is in flight");
+
+  await first[Symbol.asyncDispose]();
+  const second = await secondPromise;
+  t.is(secondResolved, true, "disposing the first admitted the queued second");
+  t.is(second.requestId, "r-2");
+  t.is(r.list().length, 1, "now only the second is in flight");
+
+  await second[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: waiters are admitted in FIFO enqueue order", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+
+  const admitted: string[] = [];
+  const enqueue = (id: string) =>
+    r
+      .begin({ requestId: id, kind: "completion", modelId: "m1" })
+      .then((ctx) => {
+        admitted.push(id);
+        return ctx;
+      });
+
+  const p2 = enqueue("r-2");
+  const p3 = enqueue("r-3");
+  const p4 = enqueue("r-4");
+  await settle();
+  t.alike(admitted, [], "nothing admitted while the holder runs");
+
+  await holder[Symbol.asyncDispose]();
+  const c2 = await p2;
+  await c2[Symbol.asyncDispose]();
+  const c3 = await p3;
+  await c3[Symbol.asyncDispose]();
+  const c4 = await p4;
+  await c4[Symbol.asyncDispose]();
+
+  t.alike(admitted, ["r-2", "r-3", "r-4"], "admitted strictly in enqueue order");
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: a different model is never blocked by another model's queue", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  await using m1 = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+
+  // m1 is at capacity, but m2 must be admitted immediately — gating is
+  // strictly per (kind, modelId).
+  await using m2 = await r.begin({
+    requestId: "r-2",
+    kind: "completion",
+    modelId: "m2",
+  });
+
+  t.is(m1.modelId, "m1");
+  t.is(m2.modelId, "m2");
+  t.is(r.list().length, 2, "both run concurrently — distinct models");
+});
+
+test("queue: maxConcurrentPerModel = 2 runs two and queues the third", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 2,
+    onOverflow: "queue",
+  });
+
+  const c1 = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  const c2 = await r.begin({
+    requestId: "r-2",
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(r.list().length, 2, "two slots ⇒ two run concurrently");
+
+  let thirdResolved = false;
+  const thirdPromise = r
+    .begin({ requestId: "r-3", kind: "completion", modelId: "m1" })
+    .then((ctx) => {
+      thirdResolved = true;
+      return ctx;
+    });
+  await settle();
+  t.is(thirdResolved, false, "third waits while both slots are taken");
+
+  await c1[Symbol.asyncDispose]();
+  const c3 = await thirdPromise;
+  t.is(thirdResolved, true, "freeing one slot admitted the third");
+
+  await c2[Symbol.asyncDispose]();
+  await c3[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: onOverflow 'reject' still throws RequestRejectedByPolicyError", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "reject",
+  });
+
+  await using first = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(first.requestId, "r-1");
+
+  await t.exception(
+    () => r.begin({ requestId: "r-2", kind: "completion", modelId: "m1" }),
+    RequestRejectedByPolicyError as unknown as new () => Error,
+  );
+  t.is(r.list().length, 1, "rejected begin left no slot behind");
+});
+
+test("queue: maxQueueDepthPerModel caps the queue and rejects the overflow", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+    maxQueueDepthPerModel: 2,
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  // Two waiters fill the queue (depth 2).
+  const p2 = r.begin({ requestId: "r-2", kind: "completion", modelId: "m1" });
+  const p3 = r.begin({ requestId: "r-3", kind: "completion", modelId: "m1" });
+  await settle();
+
+  // The third waiter would exceed the depth cap ⇒ reject immediately.
+  await t.exception(
+    () => r.begin({ requestId: "r-4", kind: "completion", modelId: "m1" }),
+    RequestRejectedByPolicyError as unknown as new () => Error,
+  );
+
+  // Drain the legitimately-queued waiters so the test leaves nothing pending.
+  await holder[Symbol.asyncDispose]();
+  const c2 = await p2;
+  await c2[Symbol.asyncDispose]();
+  const c3 = await p3;
+  await c3[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: a waiter past queueTimeoutMs rejects; a timely hand-off clears its timer", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+    queueTimeoutMs: 20,
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+
+  // r-2 waits behind the still-running holder and times out.
+  await t.exception(
+    () => r.begin({ requestId: "r-2", kind: "completion", modelId: "m1" }),
+    RequestRejectedByPolicyError as unknown as new () => Error,
+  );
+
+  // A waiter that is handed a slot before its timeout must have its timer
+  // cleared (no late rejection, no leaked timer keeping the process alive).
+  const p3 = r.begin({ requestId: "r-3", kind: "completion", modelId: "m1" });
+  await holder[Symbol.asyncDispose]();
+  const c3 = await p3;
+  await c3[Symbol.asyncDispose]();
+  await settle();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: cancel({ requestId }) on a queued waiter cancels it promptly", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  const queuedPromise = r.begin({
+    requestId: "r-2",
+    kind: "completion",
+    modelId: "m1",
+  });
+  await settle();
+
+  // Stop button on the still-queued request: counted as one cancelled, and
+  // its begin resolves into an already-aborted context (clean cancel, not a
+  // thrown error) — it never had to wait for the holder to finish.
+  const cancelled = r.cancel({ requestId: "r-2", reason: "stop-button" });
+  t.is(cancelled, 1, "the queued request was cancelled");
+
+  const queued = await queuedPromise;
+  t.is(queued.signal.aborted, true, "queued begin resolves aborted");
+  t.is(queued.state, "cancelling", "and starts in a coherent cancelling state");
+
+  await queued[Symbol.asyncDispose]();
+  await holder[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: a duplicate requestId while queued is rejected and the original waiter survives", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  // r-2 queues behind the holder.
+  const queuedPromise = r.begin({
+    requestId: "r-2",
+    kind: "completion",
+    modelId: "m1",
+  });
+  await settle();
+
+  // A begin reusing the still-queued id must conflict, not silently enqueue a
+  // duplicate that overwrites r-2's `waitersById` index (which would leave the
+  // original r-2 unreachable by `cancel({ requestId })`).
+  await t.exception(async () => {
+    await r.begin({ requestId: "r-2", kind: "completion", modelId: "m1" });
+  }, RequestIdConflictError as unknown as new () => Error);
+
+  // The original r-2 waiter is intact: cancelling it by id still finds and
+  // cancels exactly one queued request.
+  const cancelled = r.cancel({ requestId: "r-2", reason: "stop-button" });
+  t.is(cancelled, 1, "the original queued waiter is still reachable by id");
+
+  const queued = await queuedPromise;
+  t.is(queued.signal.aborted, true, "original queued waiter resolves aborted");
+
+  await queued[Symbol.asyncDispose]();
+  await holder[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: cancel({ modelId }) drains queued waiters for that model", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  const queuedPromise = r.begin({
+    requestId: "r-2",
+    kind: "completion",
+    modelId: "m1",
+  });
+  await settle();
+
+  // Broad cancel: the in-flight holder is aborted (1) and the queued waiter
+  // is drained (1) — both counted.
+  const cancelled = r.cancel({ modelId: "m1" });
+  t.is(cancelled, 2, "in-flight + queued both cancelled");
+
+  const queued = await queuedPromise;
+  t.is(queued.signal.aborted, true, "drained waiter resolves aborted");
+
+  await queued[Symbol.asyncDispose]();
+  await holder[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
+});
+
+test("queue: cancelAll drains queued waiters so no begin() promise hangs", async (t) => {
+  const r = createRequestRegistry();
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+  });
+
+  const holder = await r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  // Attach the rejection handler synchronously so the teardown rejection is
+  // never an unhandled promise.
+  const p2 = r
+    .begin({ requestId: "r-2", kind: "completion", modelId: "m1" })
+    .then(
+      () => "resolved" as const,
+      (err) => err,
+    );
+  const p3 = r
+    .begin({ requestId: "r-3", kind: "completion", modelId: "m1" })
+    .then(
+      () => "resolved" as const,
+      (err) => err,
+    );
+  await settle();
+
+  await r.cancelAll("modelUnload");
+
+  const e2 = await p2;
+  const e3 = await p3;
+  t.ok(
+    e2 instanceof RequestRejectedByPolicyError,
+    "queued waiter rejected on teardown",
+  );
+  t.ok(
+    e3 instanceof RequestRejectedByPolicyError,
+    "second queued waiter rejected on teardown",
+  );
+  t.is(holder.signal.aborted, true, "the in-flight holder was aborted too");
+
+  await holder[Symbol.asyncDispose]();
+  t.is(keyStateProbe(r).__keyStateSize(), 0, "no KeyState leak after drain");
 });

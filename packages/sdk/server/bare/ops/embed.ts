@@ -44,7 +44,7 @@ export async function embed(
   // `cancel({ requestId })` and broad `cancel({ modelId, kind: "embeddings" })`
   // straight to this context's signal. Falls back to a server-generated
   // id if the client didn't send one (older releases).
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: "embeddings",
     modelId,
