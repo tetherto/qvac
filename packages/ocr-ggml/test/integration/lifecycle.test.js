@@ -2,7 +2,7 @@
 
 const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, createOcrGgml } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 120 * 1000
@@ -13,14 +13,11 @@ async function createAndLoadOcr (t) {
   const recognizerPath = await ensureModelPath('recognizer_latin')
   const imagePath = getImagePath('/test/images/basic_test.bmp')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en']
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en']
+  }, { stats: true })
 
   return { ocrGgml, imagePath }
 }
@@ -230,17 +227,14 @@ test('Performance parameters are accepted without error', { timeout: TEST_TIMEOU
   const recognizerPath = await ensureModelPath('recognizer_latin')
   const imagePath = getImagePath('/test/images/basic_test.bmp')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en'],
-      magRatio: 1.5,
-      recognizerBatchSize: 4,
-      lowConfidenceThreshold: 0.3
-    },
-    opts: { stats: true }
-  })
+  const ocrGgml = createOcrGgml({
+    pathDetector: detectorPath,
+    pathRecognizer: recognizerPath,
+    langList: ['en'],
+    magRatio: 1.5,
+    recognizerBatchSize: 4,
+    lowConfidenceThreshold: 0.3
+  }, { stats: true })
 
   await ocrGgml.load()
 
