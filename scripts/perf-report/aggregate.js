@@ -47,6 +47,9 @@ function parseArgs (argv) {
     // with anything that already passes it.
     mdDeviceDetails: false,
     htmlDeviceDetails: false,
+    // QVAC-18298: case-insensitive, pipe-separated test-name filter (same
+    // convention as extract-from-log.js's --filter).
+    filter: null,
     help: false
   }
 
@@ -62,6 +65,7 @@ function parseArgs (argv) {
       case '--output-json': args.outputJson = argv[++i]; break
       case '--output-html': args.outputHtml = argv[++i]; break
       case '--repo': args.repo = argv[++i]; break
+      case '--filter': args.filter = argv[++i]; break
       case '--device-details':
         args.mdDeviceDetails = true
         args.htmlDeviceDetails = true
@@ -97,6 +101,10 @@ OPTIONS:
                         (recommended for combined GH step summaries — keeps the
                         markdown squashed to mean ± std while the HTML keeps the
                         full per-device breakdown)
+  --filter <pattern>    Pipe-separated, case-insensitive substrings matched
+                        against each result's test name. Only matching rows are
+                        aggregated (e.g. "gemma4-vl|qwen3.5-vl"). Use to carve a
+                        focused section out of a shared addon's artifacts.
   -h, --help            Show this help
 
 EXAMPLES:
@@ -147,6 +155,41 @@ function downloadAndCollect (workflow, runs, addon, repo) {
 }
 
 // ---------------------------------------------------------------------------
+// Result filtering (QVAC-18298)
+// ---------------------------------------------------------------------------
+
+/**
+ * Restricts each report's `results` to rows whose `test` name contains one
+ * of the pipe-separated, case-insensitive substrings in `pattern`. Reports
+ * left with no matching rows are dropped. Returns input unchanged when
+ * `pattern` is falsy. Lets perf-report.yml carve a focused section out of
+ * a shared addon's artifacts.
+ */
+function filterReports (reports, pattern) {
+  if (!pattern) return reports
+  const keywords = pattern
+    .split('|')
+    .map(k => k.trim().toLowerCase())
+    .filter(Boolean)
+  if (!keywords.length) return reports
+
+  let kept = 0
+  let dropped = 0
+  const out = []
+  for (const report of reports) {
+    const results = (report.results || []).filter(r => {
+      const name = (r.test || '').toLowerCase()
+      return keywords.some(k => name.includes(k))
+    })
+    dropped += (report.results || []).length - results.length
+    kept += results.length
+    if (results.length) out.push(Object.assign({}, report, { results }))
+  }
+  console.log(`Filter "${pattern}": kept ${kept} row(s), dropped ${dropped}, ${out.length}/${reports.length} report(s) retained`)
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -174,6 +217,14 @@ function main () {
   if (!reports.length) {
     console.error('No performance reports found.')
     process.exit(1)
+  }
+
+  if (args.filter) {
+    reports = filterReports(reports, args.filter)
+    if (!reports.length) {
+      console.error(`No performance reports left after applying --filter "${args.filter}".`)
+      process.exit(1)
+    }
   }
 
   console.log(`\nAggregating ${reports.length} report(s)...`)
