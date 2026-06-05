@@ -57,8 +57,9 @@ The model must be registered with sdkType
   speech: `
 Synthesize speech from \`input\` text. **The response is raw audio bytes**
 (not JSON) with the appropriate \`Content-Type\` (\`audio/wav\`,
-\`audio/x-pcm\`, etc.) and \`X-Audio-Sample-Rate\` / \`X-Audio-Channels\` /
-\`X-Audio-Bits-Per-Sample\` headers.
+\`audio/L16; rate=<sr>; channels=1\`, \`audio/mpeg\`, etc.). The
+\`X-Audio-Sample-Rate\` / \`X-Audio-Channels\` / \`X-Audio-Bits-Per-Sample\`
+headers are sent for the native \`wav\`/\`pcm\` bodies only.
 
 **Model lookup is voice-aware** (multi-stage): the server first checks the
 \`serve.openai.audio.speech.voices\` map (\`voice → alias\`), then a hyphen

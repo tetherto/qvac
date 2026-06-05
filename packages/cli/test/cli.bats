@@ -751,6 +751,28 @@ http_status() {
   assert_error "${body}" "invalid_api_key"
 }
 
+@test "GET /v1/audio/models returns empty list when no speech models loaded" {
+  local body object count
+  body=$(curl -sf "http://127.0.0.1:19920/v1/audio/models")
+  object=$(echo "${body}" | jq -r '.object')
+  count=$(echo "${body}" | jq -r '.data | length')
+  [[ "${object}" == "list" ]] || return 1
+  [[ "${count}" == "0" ]]
+}
+
+@test "GET /v1/audio/voices returns the default alloy voice" {
+  # No voices map is configured on the default server, so the catalog is just
+  # the default voice ("alloy"), surfaced in both the flat array and the data.
+  local body object voices first
+  body=$(curl -sf "http://127.0.0.1:19920/v1/audio/voices")
+  object=$(echo "${body}" | jq -r '.object')
+  voices=$(echo "${body}" | jq -c '.voices')
+  first=$(echo "${body}" | jq -c '.data[0]')
+  [[ "${object}" == "list" ]] || return 1
+  [[ "${voices}" == '["alloy"]' ]] || return 1
+  [[ "${first}" == '{"id":"alloy","object":"audio.voice","model":null}' ]]
+}
+
 # ── Serve: routing ────────────────────────────────────────────────────
 
 @test "GET /unknown returns 404" {
