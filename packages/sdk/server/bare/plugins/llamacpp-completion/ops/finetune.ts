@@ -119,28 +119,29 @@ export async function startFinetune(
   const model = getModel(request.modelId) as FinetuneCapableModel;
   validateExplicitFinetuneOperation(request);
 
-  // Open a request-scoped lifecycle so finetune slots into the same
-  // registry-driven cancel surface as the streaming inference kinds.
-  // `cancel({ requestId })` and broad `cancel({ modelId, kind: "finetune" })`
-  // both route through this context's signal — the `onAbort` listener
-  // forwards to `model.cancel()` to match the plugin's
-  // `cancel: { scope: "model", hard: true }` declaration. The legacy
-  // `cancelFinetune(modelId)` wrapper below now goes through the
-  // registry instead of touching the addon directly.
-  await using ctx = getRequestRegistry().begin({
-    requestId: request.requestId ?? generateServerRequestId(),
-    kind: "finetune",
-    modelId: request.modelId,
-  });
-  const requestLogger = withRequestContext(getServerLogger(), ctx);
-
+  // Mark RUNNING before the async begin() so an immediate getFinetuneState()
+  // poll observes RUNNING, not IDLE. register is a no-op when a finetune is
+  // already running on this model, so only clear on a failed begin() if this
+  // call actually set the flag.
+  const wasRunning = getRunningFinetuneState(request.modelId);
   registerRunningFinetune(request.modelId);
-  // Two-level try/finally collapses into a pair of `scope.defer`
-  // registrations. LIFO order — the listener-detach defer is
-  // registered after `clearFinetuneRuntimeState`, so on scope unwind
-  // the listener is removed first, then the runtime-state flag is
-  // cleared. This mirrors the legacy `finally` nesting where the inner
-  // `removeListener` ran before the outer `clearFinetuneRuntimeState`.
+
+  // Scope the run into the registry so cancel({ requestId }) and
+  // cancel({ modelId, kind: "finetune" }) reach it; onAbort forwards to
+  // model.cancel().
+  await using ctx = await getRequestRegistry()
+    .begin({
+      requestId: request.requestId ?? generateServerRequestId(),
+      kind: "finetune",
+      modelId: request.modelId,
+    })
+    .catch((err: unknown) => {
+      if (!wasRunning) clearFinetuneRuntimeState(request.modelId);
+      throw err;
+    });
+  const requestLogger = withRequestContext(getServerLogger(), ctx);
+  // Cleared on scope unwind; deferred before the listener detach so LIFO
+  // removes the listener first.
   ctx.scope.defer(() => {
     clearFinetuneRuntimeState(request.modelId);
   });
@@ -186,20 +187,11 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
   };
 }
 
-// Thin compat wrapper over the request registry. The in-flight
-// finetune is tracked by a `RequestContext` (kind `"finetune"`), and
-// the registry owns the broadcast to its `AbortSignal`. `startFinetune`
-// installs the addon-level `model.cancel()` listener tied to that
-// signal, so callers see the same observable effect as a direct
-// `model.cancel()` call. The addon-call wiring is centralised there —
-// never invoke `model.cancel()` here.
+// Routes cancellation through the registry; the model.cancel() forward is
+// installed by startFinetune, so never call model.cancel() here.
 export function cancelFinetune(modelId: string): Promise<FinetuneResult> {
-  // `registry.cancel(...)` is synchronous — it triggers the matching
-  // requests' abort signals and returns the cancelled count. Scope
-  // unwinding (and the `model.cancel()` forward installed by
-  // `startFinetune`) happens on the handler's own dispose path. The
-  // outer `Promise.resolve(...)` keeps the legacy `cancelFinetune`
-  // return shape (`Promise<FinetuneResult>`) intact for callers.
+  // cancel() is synchronous; Promise.resolve keeps the Promise<FinetuneResult>
+  // return shape.
   getRequestRegistry().cancel({ modelId, kind: "finetune" });
 
   return Promise.resolve({

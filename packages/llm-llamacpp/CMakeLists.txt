@@ -47,7 +47,41 @@ find_package(nlohmann_json CONFIG REQUIRED)
 if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
 endif()
+if(ANDROID AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
+  if(NOT IS_DIRECTORY "$ENV{ANDROID_NDK}")
+    message(FATAL_ERROR "ANDROID_NDK is not set or does not point to a valid directory: '$ENV{ANDROID_NDK}'")
+  endif()
 
+  if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+    set(NDK_HOST "windows-x86_64")
+  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    set(NDK_HOST "linux-x86_64")
+  else()
+    set(NDK_HOST "darwin-x86_64")
+  endif()
+
+  set(NDK_PREBUILT "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}")
+
+  # Discover libomp.so for the correct ABI via version-agnostic glob.
+  # NDK LLVM major changes per release (r26→17, r27→18, r28→19, r29→21),
+  # so we avoid hardcoding a specific clang version.
+  file(GLOB LIBOMP_CANDIDATES "${NDK_PREBUILT}/lib/clang/*/lib/linux/aarch64/libomp.so")
+  if(NOT LIBOMP_CANDIDATES)
+    file(GLOB LIBOMP_CANDIDATES "${NDK_PREBUILT}/lib64/clang/*/lib/linux/aarch64/libomp.so")
+  endif()
+
+  set(LIBOMP_FOUND_PATH "")
+  if(LIBOMP_CANDIDATES)
+    list(GET LIBOMP_CANDIDATES 0 LIBOMP_FOUND_PATH)
+    message(STATUS "Found libomp.so for aarch64: ${LIBOMP_FOUND_PATH}")
+  else()
+    message(FATAL_ERROR
+      "libomp.so not found under ${NDK_PREBUILT}/lib/clang/*/lib/linux/aarch64/. "
+      "OpenMP is enabled via the 'openmp' vcpkg feature but the NDK does not "
+      "provide libomp.so for aarch64. Check your NDK installation."
+    )
+  endif()
+endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
@@ -62,6 +96,30 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()
 
 add_bare_module(inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
+
+if(ANDROID AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64" AND LIBOMP_FOUND_PATH)
+  message(STATUS "Installing libomp.so from: ${LIBOMP_FOUND_PATH}")
+
+  install(FILES ${LIBOMP_FOUND_PATH}
+    DESTINATION ${BACKENDS_SUBDIR_VALUE}
+    RENAME libomp.so
+  )
+
+  add_library(OpenMP::omp SHARED IMPORTED)
+  set_target_properties(OpenMP::omp PROPERTIES IMPORTED_LOCATION "${LIBOMP_FOUND_PATH}")
+
+  target_link_libraries(${inference-addon-llama} PRIVATE OpenMP::omp)
+  target_compile_options(${inference-addon-llama} PRIVATE -fopenmp)
+  target_link_libraries(${inference-addon-llama}_module PRIVATE OpenMP::omp)
+  target_compile_options(${inference-addon-llama}_module PRIVATE -fopenmp)
+
+  add_custom_command(TARGET ${inference-addon-llama}_module POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      ${LIBOMP_FOUND_PATH}
+      $<TARGET_FILE_DIR:${inference-addon-llama}_module>/libomp.so
+    COMMENT "Copying libomp.so to build directory"
+  )
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
