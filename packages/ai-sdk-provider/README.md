@@ -149,11 +149,9 @@ The resolved provider also exposes `provider.port`, `provider.pid`, and `provide
 
 QVAC's primary v1 use case is wiring local AI into coding agents (OpenCode, Cline, Aider, Continue, Roo). The OpenAI-compatible bridge works end-to-end, but a few `qvac serve` behaviours need explicit configuration before an agent harness will feel right.
 
-### 1. Concurrent requests collide on a single model instance
+### 1. Same-model requests queue instead of failing
 
-The underlying llama.cpp addon serializes inference per native model context and **rejects** concurrent requests rather than queuing them. The server log shows `Cannot set new job: a job is already set or being processed`; clients see `500 An internal error occurred`.
-
-Coding agents routinely fire concurrent requests — typically a main chat completion plus a "title generation" call for the conversation panel. To get parallel inference today you need **two different model files** loaded under two aliases. Same-file aliases collapse to one native context because the SDK deduplicates `loadModel` by `modelSrc`, so two aliases pointing at the same `QWEN3_4B_INST_Q4_K_M` get the same `sdkModelId` and share the same job lock.
+Coding agents routinely fire concurrent requests — typically a main chat completion plus a title, summary, or compaction call. `qvac serve` now queues same-model completion requests per loaded model context, so an agent can point both chat and utility calls at one serve alias and the utility call will wait its turn instead of failing with a native job-lock collision.
 
 ```json
 // qvac.config.json — agent-friendly setup
@@ -167,35 +165,27 @@ Coding agents routinely fire concurrent requests — typically a main chat compl
           "ctx_size": 16384,
           "reasoning_budget": 0
         }
-      },
-      "qwen3-1_7b-title": {
-        "model": "QWEN3_1_7B_INST_Q4",
-        "preload": true,
-        "config": {
-          "ctx_size": 4096,
-          "reasoning_budget": 0
-        }
       }
     }
   }
 }
 ```
 
-Then map the two aliases to your harness's chat vs. utility model slots — for OpenCode:
+Then point your harness at the alias. For OpenCode, `model` and `small_model` can use the same local model:
 
 ```json
 // opencode.json
 {
   "model":       "qvac/qwen3-8b-chat",
-  "small_model": "qvac/qwen3-1_7b-title"
+  "small_model": "qvac/qwen3-8b-chat"
 }
 ```
 
-A proper per-`sdkModelId` request queue inside `qvac serve` would obsolete this workaround; tracked as a follow-up on the CLI side.
+You can still configure a separate, lighter `small_model` if you want title, summary, and compaction calls to avoid waiting behind the main chat decode, but it is no longer required for correctness.
 
 ### 2. `ctx_size` defaults to 1024 — too small for agents
 
-The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat, `4096` is plenty for title gen) or you'll see context fills and truncated responses well before the model misbehaves.
+The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat; use 8192+ for a separate utility model that handles summaries or compaction) or you'll see context fills and truncated responses well before the model misbehaves.
 
 ### 3. `reasoning_budget: 0` to suppress `<think>` blocks
 
