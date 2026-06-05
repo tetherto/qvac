@@ -119,28 +119,16 @@ export async function startFinetune(
   const model = getModel(request.modelId) as FinetuneCapableModel;
   validateExplicitFinetuneOperation(request);
 
-  // Mark the run RUNNING *before* the (now-async) registry begin. A caller
-  // that kicks off finetune and immediately polls `getFinetuneState` must
-  // still observe RUNNING — `begin()` yields a microtask even when
-  // uncontended, so registering after it would briefly report IDLE. If
-  // `begin()` rejects (id conflict) we clear the flag again so a failed
-  // start doesn't leave the model wedged as RUNNING — but only when *this*
-  // call actually set it. The flag is a modelId-keyed Set, so `register`
-  // is a no-op add when a finetune is already running on this model. In
-  // that case `begin()` can still reject (a colliding `requestId` from a
-  // different in-flight lifecycle), and clearing unconditionally would wipe
-  // the genuinely-running finetune's flag. Capture ownership first.
+  // Mark RUNNING before the async begin() so an immediate getFinetuneState()
+  // poll observes RUNNING, not IDLE. register is a no-op when a finetune is
+  // already running on this model, so only clear on a failed begin() if this
+  // call actually set the flag.
   const wasRunning = getRunningFinetuneState(request.modelId);
   registerRunningFinetune(request.modelId);
 
-  // Open a request-scoped lifecycle so finetune slots into the same
-  // registry-driven cancel surface as the streaming inference kinds.
-  // `cancel({ requestId })` and broad `cancel({ modelId, kind: "finetune" })`
-  // both route through this context's signal — the `onAbort` listener
-  // forwards to `model.cancel()` to match the plugin's
-  // `cancel: { scope: "model", hard: true }` declaration. The legacy
-  // `cancelFinetune(modelId)` wrapper below now goes through the
-  // registry instead of touching the addon directly.
+  // Scope the run into the registry so cancel({ requestId }) and
+  // cancel({ modelId, kind: "finetune" }) reach it; onAbort forwards to
+  // model.cancel().
   await using ctx = await getRequestRegistry()
     .begin({
       requestId: request.requestId ?? generateServerRequestId(),
@@ -152,12 +140,8 @@ export async function startFinetune(
       throw err;
     });
   const requestLogger = withRequestContext(getServerLogger(), ctx);
-  // Two-level try/finally collapses into a pair of `scope.defer`
-  // registrations. LIFO order — the listener-detach defer is
-  // registered after `clearFinetuneRuntimeState`, so on scope unwind
-  // the listener is removed first, then the runtime-state flag is
-  // cleared. This mirrors the legacy `finally` nesting where the inner
-  // `removeListener` ran before the outer `clearFinetuneRuntimeState`.
+  // Cleared on scope unwind; deferred before the listener detach so LIFO
+  // removes the listener first.
   ctx.scope.defer(() => {
     clearFinetuneRuntimeState(request.modelId);
   });
@@ -203,20 +187,11 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
   };
 }
 
-// Thin compat wrapper over the request registry. The in-flight
-// finetune is tracked by a `RequestContext` (kind `"finetune"`), and
-// the registry owns the broadcast to its `AbortSignal`. `startFinetune`
-// installs the addon-level `model.cancel()` listener tied to that
-// signal, so callers see the same observable effect as a direct
-// `model.cancel()` call. The addon-call wiring is centralised there —
-// never invoke `model.cancel()` here.
+// Routes cancellation through the registry; the model.cancel() forward is
+// installed by startFinetune, so never call model.cancel() here.
 export function cancelFinetune(modelId: string): Promise<FinetuneResult> {
-  // `registry.cancel(...)` is synchronous — it triggers the matching
-  // requests' abort signals and returns the cancelled count. Scope
-  // unwinding (and the `model.cancel()` forward installed by
-  // `startFinetune`) happens on the handler's own dispose path. The
-  // outer `Promise.resolve(...)` keeps the legacy `cancelFinetune`
-  // return shape (`Promise<FinetuneResult>`) intact for callers.
+  // cancel() is synchronous; Promise.resolve keeps the Promise<FinetuneResult>
+  // return shape.
   getRequestRegistry().cancel({ modelId, kind: "finetune" });
 
   return Promise.resolve({

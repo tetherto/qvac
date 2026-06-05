@@ -153,21 +153,11 @@ export const llmPlugin = definePlugin({
 
         const requestLogger = withRequestContext(getServerLogger(), ctx);
 
-        // The request can come back from `begin()` already aborted: the
-        // client hit Stop while this completion was queued behind another
-        // same-model request (or the cancel beat `begin()`). It never
-        // acquired a real slot and never started decoding, so it must not
-        // touch the shared model — calling `completion()` here would fire
-        // `addon.cancel()` and `model.run()` on the single native context
-        // the *active* request is currently decoding on, cancelling or
-        // corrupting the very request the queue exists to protect. Emit a
-        // clean cancelled terminal and return without constructing the stream.
-        //
-        // `Boolean(...)` (not a bare `if (ctx.signal.aborted)` or a direct
-        // alias) so TS doesn't narrow `ctx.signal.aborted` to `false` for the
-        // rest of the function — the downstream `const cancelled =
-        // ctx.signal.aborted` must stay a plain `boolean` because the addon
-        // can flip the signal mid-stream.
+        // begin() can return already-aborted when the client cancels while
+        // this completion is queued behind another same-model one. It never
+        // decoded, so it must not touch the shared native context — emit a
+        // cancelled terminal and return. Boolean(...) keeps ctx.signal.aborted
+        // a boolean so the mid-stream check below isn't narrowed to false.
         const abortedBeforeRun = Boolean(ctx.signal.aborted);
         if (abortedBeforeRun) {
           yield {
@@ -210,12 +200,8 @@ export const llmPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats, toolCalls } = result.value;
-          // `stopReason: "cancelled"` rides the success-done path: the
-          // events stream ends normally, the cancellation is observable
-          // via the last event's `stopReason`, and the client-side
-          // `CompletionRun` aggregates (`final` / `text` / `toolCalls` /
-          // `stats`) reject with `InferenceCancelledError` carrying the
-          // partial state.
+          // Cancellation rides the done path: observable via the last event's
+          // stopReason; client aggregates reject with InferenceCancelledError.
           const cancelled = ctx.signal.aborted;
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
