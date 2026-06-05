@@ -5,6 +5,7 @@ import { envSchema, type FirewallConfig } from "@/schemas/provide";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
 import { registerSwarm, unregisterSwarm } from "@/server/bare/runtime-lifecycle";
 import { getServerLogger } from "@/logging";
+import { Buffer } from "bare-buffer";
 
 const logger = getServerLogger();
 
