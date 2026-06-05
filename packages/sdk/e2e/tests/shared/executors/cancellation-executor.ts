@@ -9,7 +9,6 @@ import {
   ragDeleteWorkspace,
   ragIngest,
   RAG_ERROR_CODES,
-  RequestRejectedByPolicyError,
   SDK_SERVER_ERROR_CODES,
   transcribe,
   translate,
@@ -27,7 +26,7 @@ import {
   cancelByRequestIdRagIngest,
   cancelMidStreamCompletion,
   cancelThenResumeKvCache,
-  policyRejectConcurrentCompletion,
+  serializeConcurrentCompletion,
 } from "../../cancellation-tests.js";
 
 export type CancelForm = "broad" | "requestId";
@@ -82,8 +81,6 @@ export interface TranscribeCancelParams {
 }
 
 const INFERENCE_CANCELLED_CODE = SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED;
-const REQUEST_REJECTED_BY_POLICY_CODE =
-  SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY;
 const RAG_OPERATION_CANCELLED_CODE = RAG_ERROR_CODES.OPERATION_CANCELLED;
 const ADDON_CANCEL_MESSAGE = "Job cancelled";
 // Embed addon surfaces this when llama_decode is aborted mid-flight.
@@ -299,45 +296,13 @@ async function streamAndCancelAtN(
   return { ok: true, obs, finalError: finalOutcome.error };
 }
 
-// Validates the shape of a RequestRejectedByPolicyError for completion.
-function checkPolicyError(err: unknown, modelId: string): TestResult | null {
-  if (!(err instanceof RequestRejectedByPolicyError)) {
-    return {
-      passed: false,
-      output: `Second completion rejected with ${describeError(err)}, expected RequestRejectedByPolicyError`,
-    };
-  }
-  if (err.modelId !== modelId) {
-    return {
-      passed: false,
-      output: `RequestRejectedByPolicyError.modelId=${JSON.stringify(err.modelId)}, expected ${JSON.stringify(modelId)}`,
-    };
-  }
-  if (err.kind !== "completion") {
-    return {
-      passed: false,
-      output: `RequestRejectedByPolicyError.kind=${JSON.stringify(err.kind)}, expected "completion"`,
-    };
-  }
-  if (!err.reason) {
-    return { passed: false, output: "RequestRejectedByPolicyError.reason was empty" };
-  }
-  if (err.code !== REQUEST_REJECTED_BY_POLICY_CODE) {
-    return {
-      passed: false,
-      output: `RequestRejectedByPolicyError.code=${err.code}, expected ${REQUEST_REJECTED_BY_POLICY_CODE}`,
-    };
-  }
-  return null;
-}
-
 const sharedTests = [
   cancelMidStreamCompletion,
   cancelBeforeBeginCompletion,
   cancelThenResumeKvCache,
   cancelBroadEmbeddings,
   cancelBroadTranslateLlm,
-  policyRejectConcurrentCompletion,
+  serializeConcurrentCompletion,
   cancelByRequestIdEmbed,
   cancelByRequestIdRagIngest,
 ];
@@ -345,7 +310,7 @@ const sharedTests = [
 export class CancellationExecutor extends AbstractModelExecutor<
   typeof sharedTests
 > {
-  pattern = /^(cancel-|policy-reject-)/;
+  pattern = /^(cancel-|serialize-)/;
 
   // `as never` lets subclasses extend handlers with test ids outside TDefs.
   protected handlers = this.buildSharedHandlers() as never;
@@ -358,7 +323,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
       [cancelBroadEmbeddings.testId]: this.embedBroad.bind(this),
       [cancelByRequestIdEmbed.testId]: this.embedTargeted.bind(this),
       [cancelBroadTranslateLlm.testId]: this.translateLlmBroad.bind(this),
-      [policyRejectConcurrentCompletion.testId]: this.policyReject.bind(this),
+      [serializeConcurrentCompletion.testId]: this.serializeConcurrent.bind(this),
       [cancelByRequestIdRagIngest.testId]: this.ragIngestTargeted.bind(this),
     };
   }
@@ -674,7 +639,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
     };
   }
 
-  async policyReject(
+  async serializeConcurrent(
     params: PolicyParams,
     _expectation: Expectation,
   ): Promise<TestResult> {
@@ -684,60 +649,55 @@ export class CancellationExecutor extends AbstractModelExecutor<
       { role: "user" as const, content: params.prompt },
     ];
 
+    // Fire two completions at the same model in the same tick. The default
+    // completion policy serializes same-model requests FIFO instead of
+    // rejecting the second, so BOTH must succeed — the second simply waits
+    // for the first to release the native llama.cpp context, then runs.
     const run1 = completion({ modelId, history, stream: true });
-    const run1EventsIter = run1.events[Symbol.asyncIterator]();
-    const final1 = markHandled(run1.final);
-    let firstEventConsumed = false;
+    const run2 = completion({ modelId, history, stream: true });
 
-    try {
-      // Wait for run1's first contentDelta so the registry holds the
-      // entry and the policy will reject the concurrent run2.
-      while (!firstEventConsumed) {
-        const next = await run1EventsIter.next();
-        if (next.done) {
-          return {
-            passed: false,
-            output: "run1 stream ended before any contentDelta — cannot establish policy precondition",
-          };
-        }
-        if (next.value.type === "contentDelta") {
-          firstEventConsumed = true;
-        }
-      }
+    const [obs1, obs2] = await Promise.all([
+      observeStream(run1.events),
+      observeStream(run2.events),
+    ]);
+    const [final1, final2] = await Promise.all([
+      captureFinal(run1.final),
+      captureFinal(run2.final),
+    ]);
 
-      const run2 = completion({ modelId, history, stream: true });
-      markHandled(run2.text);
-      markHandled(run2.toolCalls);
-      markHandled(run2.stats);
-
-      const finalOutcome = await captureFinal(run2.final);
-      if (finalOutcome.resolved) {
+    const checks: Array<[string, StreamObservation, FinalOutcome]> = [
+      ["run1", obs1, final1],
+      ["run2", obs2, final2],
+    ];
+    for (const [label, obs, final] of checks) {
+      if (!final.resolved) {
         return {
           passed: false,
-          output: "Second completion resolved — oneAtATimePerModel policy did not reject",
+          output:
+            `${label}.final rejected with ${describeError(final.error)} — both same-model ` +
+            "completions must serialize and succeed, not reject",
         };
       }
-      const policyFail = checkPolicyError(finalOutcome.error, modelId);
-      if (policyFail) return policyFail;
-      const policyErr = finalOutcome.error as RequestRejectedByPolicyError;
-      return {
-        passed: true,
-        output: `Policy reject OK: ${describeError(policyErr)} reason=${JSON.stringify(policyErr.reason.slice(0, 80))}`,
-      };
-    } finally {
-      try {
-        await cancel({ requestId: run1.requestId });
-      } catch {
-        // run1 may have ended already — cleanup is best-effort.
+      if (obs.lastStopReason === "cancelled" || obs.lastStopReason === "error") {
+        return {
+          passed: false,
+          output: `${label} ended with stopReason=${JSON.stringify(obs.lastStopReason)}, expected a successful completion`,
+        };
       }
-      // Drain stream + final so run1 fully settles before we return.
-      try {
-        while (!(await run1EventsIter.next()).done) {}
-      } catch {}
-      try {
-        await final1;
-      } catch {}
+      if (obs.contentEvents === 0) {
+        return {
+          passed: false,
+          output: `${label} produced no content — the serialized completion did not actually run`,
+        };
+      }
     }
+
+    return {
+      passed: true,
+      output:
+        `Serialize-concurrent OK: both same-model completions succeeded ` +
+        `(run1 ${obs1.contentEvents} deltas, run2 ${obs2.contentEvents} deltas)`,
+    };
   }
 
   async ragIngestTargeted(

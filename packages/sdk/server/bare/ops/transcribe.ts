@@ -154,7 +154,7 @@ export async function* transcribe(
   // `cancel({ requestId })` and `cancel({ modelId, kind: "transcribe" })`
   // through this context. Falls back to a server-generated id if the
   // client didn't send one.
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: "transcribe",
     modelId,
@@ -301,7 +301,7 @@ export async function* transcribeStream(
   // doesn't distinguish streaming vs non-streaming variants of the same
   // operation, so `cancel({ modelId, kind: "transcribe" })` cancels
   // either shape.
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: "transcribe",
     modelId,

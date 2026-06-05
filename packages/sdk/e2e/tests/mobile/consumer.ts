@@ -298,7 +298,39 @@ function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
 
+async function ensureMobileE2EConfig() {
+  const env = typeof process !== "undefined" ? process.env : undefined;
+  if (env?.["QVAC_CONFIG_PATH"]) {
+    console.log(`📦 Mobile e2e config: QVAC_CONFIG_PATH already set to ${env["QVAC_CONFIG_PATH"]}, skipping write`);
+    return;
+  }
+
+  // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
+  const assets = await import("../../../assets");
+  const qvacE2EConfig = assets.other?.["qvac.config.e2e.json"];
+  if (!qvacE2EConfig || typeof qvacE2EConfig !== "object") {
+    throw new Error(
+      "qvac.config.e2e.json fixture not found in mobile assets — ensure ./fixtures/**/* is listed in qvac-test.config.js mobile.assets.patterns",
+    );
+  }
+
+  // @ts-ignore - expo-file-system is a peer dependency available in mobile context
+  const { File, Paths } = await import("expo-file-system");
+  const configFile = new File(Paths.document, "qvac.config.json");
+  if (!configFile.exists) {
+    configFile.create();
+  }
+  await configFile.write(`${JSON.stringify(qvacE2EConfig, null, 2)}\n`);
+  const cfg = qvacE2EConfig as Record<string, unknown>;
+  console.log(
+    `📦 Mobile e2e config written to ${configFile.uri} ` +
+    `(registryStreamTimeoutMs=${cfg["registryStreamTimeoutMs"]}, registryDownloadMaxRetries=${cfg["registryDownloadMaxRetries"]})`,
+  );
+}
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
+  await ensureMobileE2EConfig();
+
   // `filteredTests` (when present) is the producer's post-filter test list
   // delivered via register-ack; absence keeps the legacy "warm everything" path.
   const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;

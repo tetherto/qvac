@@ -122,7 +122,7 @@ test(
       } as never);
 
       const requestId = `lifecycle-${kind}`;
-      const ctx = r.begin({
+      const ctx = await r.begin({
         requestId,
         kind,
         modelId: `test-${kind}`,

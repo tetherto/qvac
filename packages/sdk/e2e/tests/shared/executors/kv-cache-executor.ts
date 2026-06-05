@@ -23,6 +23,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       if (test.testId === "kv-cache-different-system-prompts") return [test.testId, this.differentSystemPrompts.bind(this)];
       if (test.testId === "kv-cache-stats-verification") return [test.testId, this.statsVerification.bind(this)];
       if (test.testId === "kv-cache-tools-sequential-save") return [test.testId, this.toolsSequentialSave.bind(this)];
+      if (test.testId === "kv-cache-tools-dynamic-reuse") return [test.testId, this.toolsDynamicReuse.bind(this)];
       if (test.testId === "kv-cache-cancel-then-new-prompt") return [test.testId, this.cancelThenNewPrompt.bind(this)];
       if (test.testId.startsWith("kv-cache-delete-") || test.testId === "kv-cache-hypercore-deletion") {
         return [test.testId, this.deleteCacheOp.bind(this)];
@@ -425,6 +426,140 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Tools sequential save failed: ${errorMsg}` };
+    }
+  }
+
+  /**
+   * Dynamic tools mode (`toolsMode: "dynamic"`) + a custom kvCache key across a
+   * three-round tool chain, with a model evict/reload after the prime turn.
+   *
+   * Covers a combination no other kv-cache test exercises:
+   *
+   *   - Round 1 (prime): a user prompt must yield a PARSEABLE tool call under
+   *     dynamic mode while the kvCache key is being primed.
+   *   - evict + reload: drops the addon's in-memory KV session and the SDK's
+   *     in-memory `savedCount` / anchoring, leaving only the on-disk `.bin`.
+   *   - Round 2 (continuation, history ends in a `tool` message): exercises the
+   *     dynamic "trailing tool messages" fragment branch. Must REUSE the
+   *     on-disk cache (`cacheTokens > 0`) after the reload, and stay coherent.
+   *   - Round 3 (new prompt, history ends `assistant` then `user`): exercises
+   *     the dynamic "[assistant, user]" fragment branch on a warm cache. Must
+   *     again yield a PARSEABLE tool call — proving cache reuse did not corrupt
+   *     tool parsing.
+   */
+  async toolsDynamicReuse(
+    params: {
+      cacheKey: string;
+      tools: unknown[];
+      firstUserMessage: string;
+      secondUserMessage: string;
+      toolResult: string;
+    },
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    const resourceKey = "tools-dynamic";
+    let modelId = await this.resources.ensureLoaded(resourceKey);
+
+    const runTurn = (history: ChatMessage[]) =>
+      callWhenAddonIdle(async () => {
+        const result = completion({
+          modelId,
+          history,
+          stream: false,
+          kvCache: params.cacheKey,
+          tools: params.tools as never,
+        });
+        const text = await result.text;
+        const toolCalls = result.toolCalls
+          ? ((await result.toolCalls) as Array<{ id: string; name: string }>)
+          : [];
+        const stats = (await result.stats) as Record<string, unknown> | undefined;
+        const cacheTokens = (stats?.cacheTokens as number) ?? 0;
+        return { text, toolCalls, cacheTokens };
+      });
+
+    try {
+      try { await deleteCache({ kvCacheKey: params.cacheKey }); } catch { /* ignore ENOENT */ }
+
+      const system: ChatMessage = {
+        role: "system",
+        content: "You are a helpful assistant with access to tools. Be brief.",
+      };
+
+      // ---- Round 1: prime. Expect a parseable tool call under dynamic mode.
+      const r1History: ChatMessage[] = [
+        system,
+        { role: "user", content: params.firstUserMessage },
+      ];
+      const r1 = await runTurn(r1History);
+      if (r1.toolCalls.length === 0) {
+        return {
+          passed: false,
+          output:
+            `Round 1 (prime) under dynamic mode emitted no parseable tool call. ` +
+            `Dynamic tool-call format instruction not surfaced, or kvCache prime corrupted the prompt. ` +
+            `text=${JSON.stringify(r1.text).slice(0, 200)}`,
+        };
+      }
+
+      // Feed back the assistant tool-call turn + a tool result (standard
+      // agentic loop). History now ends in a `tool` message.
+      const r2History: ChatMessage[] = [
+        ...r1History,
+        { role: "assistant", content: r1.text },
+        {
+          role: "tool",
+          content: `[Tool: ${r1.toolCalls[0]!.name} (${r1.toolCalls[0]!.id})]\n${params.toolResult}`,
+        },
+      ];
+
+      // ---- Evict + reload: clear in-memory KV session, savedCount, anchoring.
+      // Only the on-disk `.bin` survives — the reload-desync scenario.
+      await this.resources.evict(resourceKey);
+      modelId = await this.resources.ensureLoaded(resourceKey);
+
+      // ---- Round 2: continuation on the reloaded cache (trailing-tool branch).
+      // Must reuse the on-disk cache.
+      const r2 = await runTurn(r2History);
+      if (r2.cacheTokens <= 0) {
+        return {
+          passed: false,
+          output:
+            `Round 2 (post-reload continuation) did not reuse the on-disk dynamic-tools cache: ` +
+            `cacheTokens=${r2.cacheTokens}. The on-disk cache file was not picked up after reload.`,
+        };
+      }
+
+      // ---- Round 3: new user prompt after the chain ([assistant, user] branch)
+      // on a warm cache. Must still yield a parseable tool call.
+      const r3History: ChatMessage[] = [
+        ...r2History,
+        { role: "assistant", content: r2.text },
+        { role: "user", content: params.secondUserMessage },
+      ];
+      const r3 = await runTurn(r3History);
+      if (r3.toolCalls.length === 0) {
+        return {
+          passed: false,
+          output:
+            `Round 3 (new prompt on warm dynamic-tools cache) emitted no parseable tool call — ` +
+            `cache reuse corrupted tool parsing. r2CacheTokens=${r2.cacheTokens}, ` +
+            `r3CacheTokens=${r3.cacheTokens}, text=${JSON.stringify(r3.text).slice(0, 200)}`,
+        };
+      }
+
+      const summary =
+        `Dynamic tools + kvCache reuse OK [${resourceKey}]: ` +
+        `r1Calls=${r1.toolCalls.length}, ` +
+        `r2CacheTokens=${r2.cacheTokens} (post-reload reuse), ` +
+        `r3Calls=${r3.toolCalls.length} (warm), r3CacheTokens=${r3.cacheTokens}`;
+      // The harness only surfaces `output` on failure, so log the numbers
+      // explicitly — otherwise a passing run hides the reuse magnitude.
+      console.log(`[kv-cache-tools-dynamic-reuse] ${summary}`);
+      return ValidationHelpers.validate(summary, expectation);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Dynamic tools reuse failed: ${errorMsg}` };
     }
   }
 }

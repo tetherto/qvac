@@ -112,14 +112,26 @@ Pipeline::Pipeline(
     std::span<const std::string> langList, OcrConfig config)
     : config_(std::move(config)), backendsHandle_(config_.backendsDir) {
 
+  // `backendsHandle_` (above) has loaded all ggml backends, so it is now safe
+  // to enumerate devices and resolve the requested backend. The resolved
+  // device is handed to every inference step; CPU is selected when VULKAN was
+  // requested but unavailable (see OcrBackendSelection).
+  backendInfo_ = ocr_backend_selection::selectBackendDevice(
+      config_.backendDevice, config_.gpuDevice);
+  ggml_backend_dev_t selectedDevice = backendInfo_.device;
+
   if (config_.mode == PipelineMode::DOCTR) {
     doctrDetector_ =
         std::make_unique<doctr::ggml::pipeline::StepDoctrDetectionGGML>(
-            pathDetector, config_.nThreads);
+            pathDetector, config_.nThreads, selectedDevice);
 
     doctrRecognizer_ =
         std::make_unique<doctr::ggml::pipeline::StepDoctrRecognitionGGML>(
-            pathRecognizer, config_.recognizerBatchSize);
+            pathRecognizer,
+            config_.recognizerBatchSize,
+            doctr::ggml::pipeline::DecodingMethod::CTC,
+            selectedDevice,
+            config_.nThreads);
   } else {
     easyDetector_ =
         std::make_unique<easyocr::ggml::pipeline::StepDetectionInference>(
@@ -127,7 +139,8 @@ Pipeline::Pipeline(
             config_.magRatio,
             config_.nThreads,
             config_.backendsDir,
-            config_.canvasSize);
+            config_.canvasSize,
+            selectedDevice);
 
     easyBoxer_ = std::make_unique<easyocr::ggml::pipeline::StepBoundingBox>();
 
@@ -138,6 +151,7 @@ Pipeline::Pipeline(
         config_.recognizerBatchSize,
         config_.nThreads,
         config_.backendsDir);
+    recogConfig.backendDevice = selectedDevice;
 
     easyRecognizer_ =
         std::make_unique<easyocr::ggml::pipeline::StepRecognizeText>(
@@ -244,6 +258,13 @@ qvac_lib_inference_addon_cpp::RuntimeStats Pipeline::runtimeStats() const {
   const double detectionTimeSec = lastDetectionMs_ / 1000.0;
   const double recognitionTimeSec = lastRecognitionMs_ / 1000.0;
 
+  // `RuntimeStats` values are numeric only (variant<double,int64_t>), so the
+  // human-readable backend name / device type are surfaced via `backendInfo()`
+  // / `getBackendInfo` instead. `backendIsGpu` is a 0/1 flag that lets JS
+  // consumers (and the Vulkan integration test) detect whether inference ran
+  // on a GPU (Vulkan) device or fell back to CPU without a string channel.
+  const int64_t backendIsGpu = backendInfo_.selectedIsCpu() ? 0 : 1;
+
   return {
       std::make_pair("totalTime", std::variant<double, int64_t>(totalTimeSec)),
       std::make_pair(
@@ -252,7 +273,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats Pipeline::runtimeStats() const {
           "recognitionTime", std::variant<double, int64_t>(recognitionTimeSec)),
       std::make_pair(
           "numBoxes",
-          std::variant<double, int64_t>(static_cast<int64_t>(lastNumBoxes_)))};
+          std::variant<double, int64_t>(static_cast<int64_t>(lastNumBoxes_))),
+      std::make_pair(
+          "backendIsGpu", std::variant<double, int64_t>(backendIsGpu))};
 }
 
 } // namespace qvac_lib_infer_ocr_ggml

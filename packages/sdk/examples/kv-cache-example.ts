@@ -10,7 +10,6 @@ try {
   // Load the model
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     modelConfig: {
       device: "gpu",
       ctx_size: 2048,
@@ -45,7 +44,10 @@ try {
   console.log("🔄 Continuing conversation (reusing previous turn cache):");
   const history2 = [
     { role: "user", content: "What is the capital of France?" },
-    { role: "assistant", content: final1.cacheableAssistantContent ?? final1.contentText },
+    {
+      role: "assistant",
+      content: final1.cacheableAssistantContent ?? final1.contentText,
+    },
     { role: "user", content: "What about Germany?" },
   ];
 

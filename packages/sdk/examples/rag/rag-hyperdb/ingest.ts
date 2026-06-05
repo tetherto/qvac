@@ -15,7 +15,6 @@ try {
   console.log(`🔍 Query: "${query}"`);
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    modelType: "embeddings",
     onProgress: (progress) => {
       console.log(`Loading model... ${progress.percentage.toFixed(1)}%`);
     },
