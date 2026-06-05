@@ -1,4 +1,5 @@
 import { getSwarm } from "./hyperswarm";
+import { getSDKConfig } from "@/server/bare/registry/config-registry";
 import RPC from "bare-rpc";
 import type { Connection } from "hyperswarm";
 import type { Duplex } from "bare-stream";
@@ -30,6 +31,46 @@ const activeConnections = new Map<PeerPublicKey, Connection>();
 const inflightConnections = new Map<PeerPublicKey, Promise<RPC>>();
 
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
+
+function getConfiguredRelayCount(): number {
+  return getSDKConfig().swarmRelays?.length ?? 0;
+}
+
+// Turn an opaque DHT connect failure into a message that says *why* the peer
+// was unreachable, so callers stop conflating "provider offline / not on the
+// DHT" with "found but un-holepunchable" with "rejected by firewall". A common
+// misread is expecting `swarmRelays` to rescue a failed lookup: relays only
+// bridge the connection *after* the provider is found on the DHT, so a relay
+// can't help a PEER_NOT_FOUND.
+function describeConnectFailure(
+  error: unknown,
+  publicKey: string,
+  relayCount: number,
+): string {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String(error.code)
+      : undefined;
+  const relayNote =
+    relayCount > 0
+      ? `${relayCount} swarm relay(s) configured`
+      : "no swarm relays configured";
+
+  switch (code) {
+    case "PEER_NOT_FOUND":
+      return `provider ${publicKey} was not found on the DHT — it may be offline, still bootstrapping, or unreachable from this network. Relays bridge a connection only after the provider is located, so they cannot find an unannounced provider (${relayNote}).`;
+    case "PEER_CONNECTION_FAILED":
+    case "CANNOT_HOLEPUNCH":
+    case "REMOTE_NOT_HOLEPUNCHABLE":
+    case "REMOTE_NOT_HOLEPUNCHING":
+    case "HOLEPUNCH_ABORTED":
+    case "HOLEPUNCH_PROBE_TIMEOUT":
+    case "HOLEPUNCH_DOUBLE_RANDOMIZED_NATS":
+      return `provider ${publicKey} was found but a connection could not be established (NAT/holepunch failure: ${code}; ${relayNote}).`;
+    default:
+      return error instanceof Error ? error.message : String(error);
+  }
+}
 
 function isHeartbeatResponse(payload: unknown): payload is { type: "heartbeat" } {
   return (
@@ -178,10 +219,11 @@ async function ensureRPCConnection(
 
   const connectionStart = nowMs();
   let conn: Connection | undefined;
+  const relayCount = getConfiguredRelayCount();
 
   try {
     logger.info(
-      `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""}`,
+      `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""} (${relayCount} swarm relay(s) configured)`,
     );
 
     // We deliberately do NOT `await swarm.dht.fullyBootstrapped()` here. The
@@ -218,7 +260,7 @@ async function ensureRPCConnection(
 
     logger.error("Failed to establish RPC connection:", error);
     throw new DelegateConnectionFailedError(
-      `RPC connection failed: ${error instanceof Error ? error.message : String(error)}`,
+      `RPC connection failed: ${describeConnectFailure(error, publicKey, relayCount)}`,
       error,
     );
   }
