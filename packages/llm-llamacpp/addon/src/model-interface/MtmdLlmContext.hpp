@@ -6,6 +6,7 @@
 #include <llama/mtmd/mtmd.h>
 
 #include "../utils/UTF8TokenBuffer.hpp"
+#include "ContextSlider.hpp"
 #include "LlmContext.hpp"
 #include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -205,11 +206,6 @@ private:
       const std::function<void(const std::string&)>& outputCallback);
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
-
-  struct ContextUsage {
-    llama_pos pos = 0;
-    llama_pos cacheTokens = 0;
-  };
 
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;

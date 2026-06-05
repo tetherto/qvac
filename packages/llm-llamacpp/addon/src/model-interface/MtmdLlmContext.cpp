@@ -309,15 +309,12 @@ bool MtmdLlmContext::evalMessageWithTools(
       current_.cacheTokens + nTokens >= llama_n_ctx(lctx_)) {
     auto outcome = trySlidePrefill(
         lctx_,
-        current_.pos,
-        protectedPrefix_.pos,
-        nPositions,
+        current_,
+        protectedPrefix_,
+        ContextUsage{nPositions, nTokens},
         nDiscarded_,
         tools_,
-        defaultContextSliderOps(),
-        current_.cacheTokens,
-        protectedPrefix_.cacheTokens,
-        nTokens);
+        defaultContextSliderOps());
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
       current_.pos = outcome.newNPast;

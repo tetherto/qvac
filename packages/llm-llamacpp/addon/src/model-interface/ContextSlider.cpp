@@ -38,40 +38,35 @@ const IContextSliderOps& defaultContextSliderOps() {
 }
 
 ContextSlideOutcome trySlidePrefill(
-    llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
-    llama_pos nTokensToAppend, llama_pos nDiscarded,
-    ToolsCompactController& tools, const IContextSliderOps& ops,
-    llama_pos nCacheTokens, llama_pos firstMsgCacheTokens,
-    llama_pos nCacheTokensToAppend) {
+    llama_context* lctx, ContextUsage current, ContextUsage protectedPrefix,
+    ContextUsage append, llama_pos nDiscarded, ToolsCompactController& tools,
+    const IContextSliderOps& ops) {
 
   const auto nCtx = ops.nCtx(lctx);
-  const llama_pos cacheTokens = nCacheTokens >= 0 ? nCacheTokens : nPast;
-  const llama_pos protectedCacheTokens =
-      firstMsgCacheTokens >= 0 ? firstMsgCacheTokens : firstMsgTokens;
-  const llama_pos cacheTokensToAppend =
-      nCacheTokensToAppend >= 0 ? nCacheTokensToAppend : nTokensToAppend;
 
   // Check if sliding is needed
-  if (nPast + nTokensToAppend < nCtx &&
-      cacheTokens + cacheTokensToAppend < nCtx) {
-    return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
+  if (current.pos + append.pos < nCtx &&
+      current.cacheTokens + append.cacheTokens < nCtx) {
+    return {ContextSlideOutcome::Kind::NotNeeded, current.pos, 0};
   }
 
   // Clamp discard so it never eats into tool tokens
-  llama_pos discard = tools.clampDiscard(nDiscarded, firstMsgTokens);
-  llama_pos leftTokens = nPast - firstMsgTokens - discard;
+  llama_pos discard = tools.clampDiscard(nDiscarded, protectedPrefix.pos);
+  llama_pos leftTokens = current.pos - protectedPrefix.pos - discard;
 
   // Try partial slide
   if (leftTokens >= 0 && discard > 0 &&
-      nPast + nTokensToAppend - discard < nCtx &&
-      cacheTokens + cacheTokensToAppend - discard < nCtx) {
+      current.pos + append.pos - discard < nCtx &&
+      current.cacheTokens + append.cacheTokens - discard < nCtx) {
     auto mem = ops.memory(lctx);
-    if (!ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard)) {
-      return {ContextSlideOutcome::Kind::MemoryOperationFailed, nPast, 0};
+    if (!ops.seqRm(
+            mem, 0, protectedPrefix.pos, protectedPrefix.pos + discard)) {
+      return {
+          ContextSlideOutcome::Kind::MemoryOperationFailed, current.pos, 0};
     }
-    ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
-    llama_pos newNPast = nPast - discard;
-    tools.onSlide(discard, firstMsgTokens);
+    ops.seqAdd(mem, 0, protectedPrefix.pos + discard, current.pos, -discard);
+    llama_pos newNPast = current.pos - discard;
+    tools.onSlide(discard, protectedPrefix.pos);
     return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
   }
 
@@ -80,55 +75,59 @@ ContextSlideOutcome trySlidePrefill(
   // that case, preserve the tail token and move it next to the protected prefix
   // so decoding can continue with a best-effort contaminated state.
   if (nDiscarded > 0) {
-    const llama_pos tail = nPast - 1;
-    const llama_pos exactWipe = nPast - firstMsgTokens;
-    const llama_pos tailPreservingWipe = tail - firstMsgTokens;
+    const llama_pos tail = current.pos - 1;
+    const llama_pos exactWipe = current.pos - protectedPrefix.pos;
+    const llama_pos tailPreservingWipe = tail - protectedPrefix.pos;
     const bool exactWipeFits = exactWipe <= nDiscarded &&
-        firstMsgTokens + nTokensToAppend < nCtx &&
-        protectedCacheTokens + cacheTokensToAppend < nCtx;
+        protectedPrefix.pos + append.pos < nCtx &&
+        protectedPrefix.cacheTokens + append.cacheTokens < nCtx;
     const bool tailPreservingWipeFits =
-        tail > firstMsgTokens && tailPreservingWipe <= nDiscarded &&
-        firstMsgTokens + 1 + nTokensToAppend < nCtx &&
-        protectedCacheTokens + 1 + cacheTokensToAppend < nCtx;
+        tail > protectedPrefix.pos && tailPreservingWipe <= nDiscarded &&
+        protectedPrefix.pos + 1 + append.pos < nCtx &&
+        protectedPrefix.cacheTokens + 1 + append.cacheTokens < nCtx;
 
     if (!exactWipeFits && !tailPreservingWipeFits) {
-      return {ContextSlideOutcome::Kind::Overflow, nPast, 0};
+      return {ContextSlideOutcome::Kind::Overflow, current.pos, 0};
     }
 
     auto mem = ops.memory(lctx);
     bool memoryOperationFailed = false;
 
     if (exactWipeFits) {
-      if (ops.seqRm(mem, 0, firstMsgTokens, nPast)) {
-        if (tools.enabled()) {
-          tools.reset();
-        }
-        return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens, exactWipe};
-      }
-      memoryOperationFailed = true;
-    }
-
-    if (tailPreservingWipeFits) {
-      if (ops.seqRm(mem, 0, firstMsgTokens, tail)) {
-        ops.seqAdd(mem, 0, tail, nPast, firstMsgTokens - tail);
+      if (ops.seqRm(mem, 0, protectedPrefix.pos, current.pos)) {
         if (tools.enabled()) {
           tools.reset();
         }
         return {
             ContextSlideOutcome::Kind::FullWipe,
-            firstMsgTokens + 1,
+            protectedPrefix.pos,
+            exactWipe};
+      }
+      memoryOperationFailed = true;
+    }
+
+    if (tailPreservingWipeFits) {
+      if (ops.seqRm(mem, 0, protectedPrefix.pos, tail)) {
+        ops.seqAdd(mem, 0, tail, current.pos, protectedPrefix.pos - tail);
+        if (tools.enabled()) {
+          tools.reset();
+        }
+        return {
+            ContextSlideOutcome::Kind::FullWipe,
+            protectedPrefix.pos + 1,
             tailPreservingWipe};
       }
       memoryOperationFailed = true;
     }
 
     if (memoryOperationFailed) {
-      return {ContextSlideOutcome::Kind::MemoryOperationFailed, nPast, 0};
+      return {
+          ContextSlideOutcome::Kind::MemoryOperationFailed, current.pos, 0};
     }
   }
 
   // Cannot free enough space
-  return {ContextSlideOutcome::Kind::Overflow, nPast, 0};
+  return {ContextSlideOutcome::Kind::Overflow, current.pos, 0};
 }
 
 ContextSlideOutcome trySlideGeneration(

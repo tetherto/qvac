@@ -341,11 +341,12 @@ bool TextLlmContext::evalMessageWithTools(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
+    const auto nTokensToAppend = static_cast<llama_pos>(nTokens);
     auto outcome = trySlidePrefill(
         lctx_,
-        nPast_,
-        firstMsgTokens_,
-        static_cast<llama_pos>(nTokens),
+        ContextUsage{nPast_, nPast_},
+        ContextUsage{firstMsgTokens_, firstMsgTokens_},
+        ContextUsage{nTokensToAppend, nTokensToAppend},
         nDiscarded_,
         tools_);
     switch (outcome.kind) {
