@@ -28,7 +28,7 @@ class OcrGgml {
    * @param {number} [args.params.recognizerBatchSize]
    * @param {number} [args.params.nThreads] - 0=auto (physical cores), >0=explicit, <0=leave default
    * @param {string} [args.params.backendsDir] - override directory for ggml backend shared libs
-   * @param {'cpu'|'vulkan'} [args.params.backendDevice='cpu'] - requested ggml backend device. `'vulkan'` opts in to GPU inference with transparent CPU fallback when no Vulkan device is present.
+   * @param {'cpu'|'vulkan'|'metal'} [args.params.backendDevice='cpu'] - requested ggml backend device. `'vulkan'` (Linux/Windows/Android) and `'metal'` (Apple) opt in to GPU inference with transparent CPU fallback when no matching device is present.
    * @param {Object} [args.opts]
    * @param {boolean} [args.opts.stats] - emit timing stats on finish
    * @param {Object} [args.logger]
