@@ -14,6 +14,7 @@ import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
 import {
+  BareRuntimeBinaryNotFoundError,
   RPCInitTimeoutError,
   WorkerCrashedError,
   WorkerShutdownError,
@@ -202,6 +203,23 @@ interface SpawnResources {
   socketPath: string;
 }
 
+// `bare-runtime` resolves its platform binary with
+// `require('bare-runtime-<platform>-<arch>')` and throws a terse
+// `No binaries found for target '<platform>-<arch>'` whenever that package —
+// or one of its nested deps — is absent. Under pnpm that happens even on a
+// supported platform, so surface an actionable error instead of the raw throw.
+function mapBareSpawnError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/No binar(?:y|ies) found for target/i.test(message)) {
+    return new BareRuntimeBinaryNotFoundError(
+      process.platform,
+      process.arch,
+      error,
+    );
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
 // `spawn` carries this listener's own captured resources. Module-level
 // state may belong to a newer ensureRPC() by the time we fire.
 function handlePostHandshakeExit(
@@ -326,19 +344,44 @@ async function ensureRPC(): Promise<RPC> {
         socketPath,
       };
 
-      bareWorkerProc = spawn("bare", {
-        args: [
-          WORKER_PATH,
-          JSON.stringify({
-            QVAC_IPC_SOCKET_PATH: socketPath,
-            // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
-            HOME_DIR: process.env["SNAP_USER_COMMON"]
-              ? String(process.env["SNAP_USER_COMMON"])
-              : os.homedir(),
-          }),
-        ],
-        stdio: ["inherit", "inherit", "inherit"],
-      });
+      try {
+        bareWorkerProc = spawn("bare", {
+          args: [
+            WORKER_PATH,
+            JSON.stringify({
+              QVAC_IPC_SOCKET_PATH: socketPath,
+              // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
+              HOME_DIR: process.env["SNAP_USER_COMMON"]
+                ? String(process.env["SNAP_USER_COMMON"])
+                : os.homedir(),
+            }),
+          ],
+          stdio: ["inherit", "inherit", "inherit"],
+        });
+      } catch (error) {
+        // `spawn` resolves the bare binary synchronously and can throw before
+        // the worker exists. Without this, the throw escapes the `listen`
+        // callback as an uncaught exception and crashes the host process.
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        rpcPromise = null;
+        rpcInstance = null;
+        bareWorkerProc = null;
+        currentSocketPath = null;
+        workerLifeController = null;
+        try {
+          ipcServer?.close();
+        } catch (closeError) {
+          logger.debug("Failed to close IPC server after spawn failure", {
+            closeError,
+          });
+        }
+        ipcServer = null;
+        bestEffortUnlinkSocket(spawnResources.socketPath);
+        reject(mapBareSpawnError(error));
+        return;
+      }
 
       if (bareWorkerProc) {
         bareWorkerProc.on(

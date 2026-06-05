@@ -38,6 +38,24 @@ Or run directly via npx:
 npx @qvac/cli <command>
 ```
 
+### Troubleshooting: `No binaries found for target '<platform>-<arch>'`
+
+QVAC spawns its worker through `bare-runtime`, which loads a platform-specific
+binary package (e.g. `bare-runtime-win32-x64`). With **pnpm** this package — or
+one of its nested dependencies — is sometimes not installed, even on a supported
+platform, so the runtime throws `No binaries found for target '<platform>-<arch>'`
+(see [#1492](https://github.com/tetherto/qvac/issues/1492)).
+
+Resolve it in one of these ways:
+
+```bash
+# Install the platform package directly (substitute your platform-arch)
+pnpm add bare-runtime-win32-x64
+
+# …or install with npm or bun, which place the nested binary correctly
+npm install
+```
+
 ## Command Reference
 
 ### `doctor`

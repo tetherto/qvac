@@ -63,6 +63,14 @@
     "tsx": "^4.21.0",
     "zod": "^4.0.0"
   },
+  "optionalDependencies": {
+    "bare-runtime-darwin-arm64": "^1.24.2",
+    "bare-runtime-darwin-x64": "^1.24.2",
+    "bare-runtime-linux-arm64": "^1.24.2",
+    "bare-runtime-linux-x64": "^1.24.2",
+    "bare-runtime-win32-arm64": "^1.24.2",
+    "bare-runtime-win32-x64": "^1.24.2"
+  },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.3",
