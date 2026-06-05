@@ -16,6 +16,15 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Validated CPU↔Metal output parity on Apple M3 Ultra for both the EasyOCR and
   DocTR pipelines.
 
+### Changed
+- **Vulkan auto-selection now skips Adreno GPUs** and falls back to CPU — with
+  an explicit `fallbackReason` — instead of silently using Adreno's
+  numerically-broken Vulkan compute path (cos-sim ~0.73 vs reference on Adreno
+  830 / Galaxy S25, vs >0.999 on Mali / Metal / NVIDIA). An explicit
+  `params.gpuDevice` index still selects a specific device — including an Adreno
+  one — for deliberate use (e.g. benchmarking / driver bring-up). Metal
+  selection is unaffected.
+
 ## [0.1.1] - 2026-06-02
 
 ### Changed

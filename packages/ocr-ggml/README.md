@@ -417,6 +417,28 @@ OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
 npm run test:integration
 ```
 
+### Android Vulkan (mobile suite)
+
+Android is the primary mobile Vulkan target, and the `android-arm64` prebuild
+ships the Vulkan backend lib (`libqvac-ggml-vulkan.so`). The mobile suite runs
+on AWS Device Farm (see `test/mobile/test-groups.json`), where the harness
+defaults to **CPU** — so a dedicated test,
+[`test/integration/android-vulkan.test.js`](./test/integration/android-vulkan.test.js)
+(`runAndroidVulkanTest`, in the `android` → `regularB` shard), explicitly
+requests `backendDevice: 'vulkan'`. It asserts the addon either runs on a
+Vulkan device or reports an explicit CPU fallback, **and** — whichever backend
+is resolved — that the OCR output is correct (an accuracy gate, not just an
+"it executed" check). The test runs only on Android and is a clean skip on
+desktop and iOS (iOS has no Vulkan).
+
+> **Adreno caveat.** Adreno Vulkan is numerically broken (cos-sim ~0.73 vs
+> reference on Adreno 830 / Galaxy S25, while Mali / Metal / NVIDIA sit above
+> 0.999 — see `vla-ggml`). `OcrBackendSelection` therefore **auto-skips Adreno
+> GPUs for Vulkan** and falls back to CPU (an explicit `gpuDevice` index still
+> overrides this to force an Adreno device on purpose). The accuracy gate above
+> is the backstop that catches a numerically-broken Vulkan device that slips
+> through.
+
 ## Repository layout
 
 ```

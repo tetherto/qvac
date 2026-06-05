@@ -225,14 +225,7 @@ void SdModel::load() {
           preferredBackendToString(params.preferred_gpu_backend) + " (" +
           std::to_string(static_cast<int>(params.preferred_gpu_backend)) + ")");
 
-#if defined(__APPLE__)
-  // The ggml Metal backend does not fully support GGML_OP_NORM for
-  // non-contiguous tensors (the CLIP text encoder hits this path).
-  // Force CLIP to CPU on Apple to avoid a Metal encoder abort.
-  params.keep_clip_on_cpu = true;
-#else
   params.keep_clip_on_cpu = config_.keepClipOnCpu;
-#endif
   params.keep_vae_on_cpu = config_.keepVaeOnCpu;
 
   // -- Precision -------------------------------------------------------------

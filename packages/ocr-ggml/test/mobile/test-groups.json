@@ -15,6 +15,7 @@
       "runFullOcrSuiteTest"
     ],
     "regularB": [
+      "runAndroidVulkanTest",
       "runBackendDeviceTest",
       "runCanvasSizeTest",
       "runImageFormatsTest",
