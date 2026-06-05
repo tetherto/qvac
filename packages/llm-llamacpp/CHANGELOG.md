@@ -1,15 +1,5 @@
 # Changelog
 
-## [0.24.0] - 2026-06-04
-
-### Changed
-
-- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.0.2#1`.
-
-### Added
-
-- **OpenMP feature for Android**: Added `openmp` default feature that enables OpenMP support on Android ARM64 via the `qvac-fabric` dependency. This improves parallelization on supported Android devices.
-
 ## [0.23.2] - 2026-06-03
 
 ### Fixed
