@@ -134,13 +134,34 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `device`         | `"gpu"` \| `"cpu"`                            | `"gpu"`       | Device to run inference on                                                               |
 | `gpu_layers`     | string of integer                             | `"0"`         | Number of model layers to offload to GPU                                                 |
 | `batch_size`     | string of integer                             | `"2048"`      | Tokens processed per batch (input throughput)                                            |
-| `ctx_size`       | string of integer                             | model default | Maximum context window in tokens (llama.cpp `n_ctx`); capped by the model's trained context |
+| `ctx_size`       | string of integer                             | model's trained context size (`n_ctx_train`) | Runtime context window in tokens (llama.cpp `n_ctx`); oversized values are capped to the model's trained context |
 | `pooling`        | `"none"` \| `"mean"` \| `"cls"` \| `"last"` \| `"rank"` | model default | Pooling strategy used to collapse token embeddings into a single sequence vector        |
 | `attention`      | `"causal"` \| `"non-causal"`                  | model default | Attention type                                                                            |
 | `embd_normalize` | string of integer                             | `"2"`         | Embedding normalization (`-1` = none, `0` = max abs int16, `1` = taxicab, `2` = euclidean, `>2` = p-norm) |
 | `flash_attn`     | `"on"` \| `"off"` \| `"auto"`                 | `"auto"`      | Enable / disable flash attention                                                         |
 | `main-gpu`       | string of integer \| `"integrated"` \| `"dedicated"` | —      | GPU selection for multi-GPU systems                                                      |
-| `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG) | `"0"` | Logging verbosity level                                                                   |
+| `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
+
+#### Native addon logging
+
+`@qvac/embed-llamacpp/addonLogging` exposes the native C++ logger:
+
+```js
+const { setLogger, releaseLogger } = require('@qvac/embed-llamacpp/addonLogging')
+
+setLogger((priority, message) => {
+  console.log(priority, message)
+})
+```
+
+The callback is wired before model load, but it still follows `config.verbosity`.
+With the default `"0"` setting, only native `ERROR` messages are delivered. Set
+`config.verbosity` to `"2"` to receive llama.cpp `INFO` diagnostics, or `"3"` for
+`DEBUG` messages. The verbosity level is process-global and is updated each
+time a model is constructed, so when multiple models are loaded the most
+recently constructed model's `config.verbosity` wins for all subsequent
+native log dispatch. Some startup diagnostics printed directly by llama.cpp
+may still appear on `stderr` before the addon installs its callback.
 
 #### IGPU/GPU  selection logic:
 
@@ -176,7 +197,7 @@ const response = await model.run(query)
 const embeddings = await response.await()
 ```
 
-When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, `context_size`, `trained_context_size`, and `backendDevice` (`"cpu"` or `"gpu"`). `context_size` is the active runtime llama context size, while `trained_context_size` is the model's trained context size. `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
 ### 7. Release Resources
 
