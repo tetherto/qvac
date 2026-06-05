@@ -467,16 +467,16 @@ const videoGenerationBaseSchema = z.object({
     .number()
     .int()
     .positive()
-    .multipleOf(8)
+    .multipleOf(16)
     .optional()
-    .describe("Video width in pixels (must be a multiple of 8)."),
+    .describe("Video width in pixels (must be a multiple of 16)."),
   height: z
     .number()
     .int()
     .positive()
-    .multipleOf(8)
+    .multipleOf(16)
     .optional()
-    .describe("Video height in pixels (must be a multiple of 8)."),
+    .describe("Video height in pixels (must be a multiple of 16)."),
   video_frames: z
     .number()
     .int()
