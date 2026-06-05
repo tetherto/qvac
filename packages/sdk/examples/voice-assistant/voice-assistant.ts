@@ -95,7 +95,6 @@ for (const tool of ["ffmpeg", "ffplay"]) {
 console.log("Loading whisper-tiny + Silero VAD...");
 const asrModelId = await loadModel({
   modelSrc: WHISPER_TINY,
-  modelType: "whisper",
   modelConfig: {
     vadModelSrc: VAD_SILERO_5_1_2,
     audio_format: "f32le",
@@ -113,7 +112,6 @@ const asrModelId = await loadModel({
 console.log("Loading Llama 3.2 1B...");
 const llmModelId = await loadModel({
   modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-  modelType: "llm",
   modelConfig: {
     ctx_size: 4096,
   },
@@ -121,8 +119,7 @@ const llmModelId = await loadModel({
 
 console.log("Loading Supertonic TTS...");
 const ttsModelId = await loadModel({
-  modelSrc: TTS_EN_SUPERTONIC_Q8_0.src,
-  modelType: "tts",
+  modelSrc: TTS_EN_SUPERTONIC_Q8_0,
   modelConfig: {
     ttsEngine: "supertonic",
     language: "en",

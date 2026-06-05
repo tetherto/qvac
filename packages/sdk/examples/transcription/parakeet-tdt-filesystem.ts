@@ -24,7 +24,9 @@ if (!args[0]) {
     "Usage: bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file-path> " +
       "[parakeet-tdt-gguf]",
   );
-  console.error("\nIf the model path is omitted, defaults to the registry model.");
+  console.error(
+    "\nIf the model path is omitted, defaults to the registry model.",
+  );
   process.exit(1);
 }
 
@@ -37,7 +39,7 @@ try {
   console.log("Loading Parakeet model...");
   const modelId = await loadModel({
     modelSrc: parakeetModelSrc,
-    modelType: "parakeet",
+    modelType: "parakeet-transcription",
     onProgress: (progress) => {
       console.log(`Download progress: ${progress.percentage.toFixed(1)}%`);
     },

@@ -30,7 +30,7 @@ let modelId: string | undefined;
 try {
   modelId = await loadModel({
     modelSrc,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: { ctx_size: 4096, tools: true },
     onProgress: (progress) =>
       console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
@@ -85,6 +85,7 @@ try {
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
   console.error("Error:", error);
-  if (modelId) await unloadModel({ modelId, clearStorage: false }).catch(() => {});
+  if (modelId)
+    await unloadModel({ modelId, clearStorage: false }).catch(() => {});
   process.exit(1);
 }

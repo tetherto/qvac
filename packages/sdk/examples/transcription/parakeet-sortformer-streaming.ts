@@ -86,7 +86,9 @@ function readS16leFromWav(wavPath: string): Promise<Uint8Array> {
         return;
       }
       const merged = Buffer.concat(chunks);
-      resolve(new Uint8Array(merged.buffer, merged.byteOffset, merged.byteLength));
+      resolve(
+        new Uint8Array(merged.buffer, merged.byteOffset, merged.byteLength),
+      );
     });
   });
 }
@@ -101,7 +103,9 @@ const loadOptions: LoadModelOptions = {
 };
 
 try {
-  console.log("Loading Sortformer v2.1 with streaming + AOSC (load-time config)...");
+  console.log(
+    "Loading Sortformer v2.1 with streaming + AOSC (load-time config)...",
+  );
   modelId = await loadModel(loadOptions);
   console.log(`Model loaded: ${modelId}\n`);
 

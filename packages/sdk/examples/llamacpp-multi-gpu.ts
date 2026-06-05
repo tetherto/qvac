@@ -1,4 +1,10 @@
-import { completion, loadModel, unloadModel, VERBOSITY, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+import {
+  completion,
+  loadModel,
+  unloadModel,
+  VERBOSITY,
+  LLAMA_3_2_1B_INST_Q4_0,
+} from "@qvac/sdk";
 
 // Multi-GPU inference distributes a model across multiple GPUs using llama.cpp's
 // built-in split modes. Two strategies are available:
@@ -19,7 +25,7 @@ const modelSrc = process.argv[2] ?? LLAMA_3_2_1B_INST_Q4_0;
 try {
   const modelId = await loadModel({
     modelSrc,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: {
       "split-mode": "layer",
       "tensor-split": "1,1",
@@ -44,7 +50,8 @@ try {
   const history = [
     {
       role: "user",
-      content: "Explain the difference between pipeline and tensor parallelism in one paragraph.",
+      content:
+        "Explain the difference between pipeline and tensor parallelism in one paragraph.",
     },
   ];
 

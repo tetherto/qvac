@@ -66,7 +66,6 @@ try {
 
   modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 4096,
       verbosity: VERBOSITY.ERROR,
@@ -125,8 +124,12 @@ try {
   });
 
   console.log("\nSummary:");
-  console.log(`- Reusing "${sharedCacheKey}" keeps conversation context across turns.`);
-  console.log(`- Switching to "${isolatedCacheKey}" starts a separate cache session.`);
+  console.log(
+    `- Reusing "${sharedCacheKey}" keeps conversation context across turns.`,
+  );
+  console.log(
+    `- Switching to "${isolatedCacheKey}" starts a separate cache session.`,
+  );
   console.log(
     '- Use deleteCache({ kvCacheKey: "your-session" }) to clear a saved session.',
   );
