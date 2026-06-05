@@ -132,6 +132,34 @@ function displayUrl (blob) {
   return `registry:${s.source || ''}/${s.path || ''}`
 }
 
+// Where the model comes from, for the report's Source column: a `registry`
+// annotation wins; otherwise the fetch transport (HF / S3 / URL).
+function sourceType (blob) {
+  if (blob.registry) return 'Registry'
+  const t = (blob.source && blob.source.type) || ''
+  return ({ hf: 'HF', s3: 'S3', url: 'URL' })[t] || (t || '—')
+}
+
+// Minimal PNG/JPEG dimension reader (no deps, big-endian) for the image table.
+function dimsFromBytes (bytes) {
+  try {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    if (bytes.length >= 24 && bytes[0] === 0x89 && bytes[1] === 0x50) {
+      return { w: dv.getUint32(16), h: dv.getUint32(20) } // PNG IHDR
+    }
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) { // JPEG: find SOF0..3
+      let o = 2
+      while (o + 9 < bytes.length) {
+        if (bytes[o] !== 0xff) { o++; continue }
+        const m = bytes[o + 1]
+        if (m >= 0xc0 && m <= 0xc3) return { h: dv.getUint16(o + 5), w: dv.getUint16(o + 7) }
+        o += 2 + dv.getUint16(o + 2)
+      }
+    }
+  } catch (_) {}
+  return { w: null, h: null }
+}
+
 // Same patterns benchmarks/vlm-performance/stdout-parser.js uses. Vision-encode is
 // SUMMED across `image slice encoded` lines (dynamic-res VLMs emit one per tile).
 const VISION_RE = /image (?:slice )?encoded in\s+(\d+(?:\.\d+)?)\s*ms/gi
@@ -181,7 +209,7 @@ async function runOne (inference, imgPath, prompt) {
   resp.onUpdate(d => chunks.push(d)).onError(e => { err = e })
   await resp.await()
   if (err) throw new Error(String(err))
-  return { text: chunks.join(''), ms: Date.now() - t0, stats: resp.stats || null }
+  return { text: chunks.join(''), ms: Date.now() - t0, stats: resp.stats || null, dims: dimsFromBytes(bytes) }
 }
 
 function emitRow (obj) {
@@ -203,8 +231,8 @@ function runVlmCell (modelKey, mmprojKey) {
       // model-origin provenance (stderr, parsed host-side into the report)
       console.error('[VLMMETA]' + JSON.stringify({
         cell, model: modelKey, mmproj: mmprojKey,
-        main_origin: cfg.main.origin, main_url: displayUrl(cfg.main),
-        mmproj_origin: cfg.mmproj[mmprojKey].origin, mmproj_url: displayUrl(cfg.mmproj[mmprojKey])
+        main_origin: cfg.main.origin, main_url: displayUrl(cfg.main), main_source: sourceType(cfg.main),
+        mmproj_origin: cfg.mmproj[mmprojKey].origin, mmproj_url: displayUrl(cfg.mmproj[mmprojKey]), mmproj_source: sourceType(cfg.mmproj[mmprojKey])
       }) + '[/VLMMETA]')
       const inference = new LlmLlamacpp({
         files: { model: [path.join(dir, mainName)], projectionModel: path.join(dir, projName) },
@@ -238,6 +266,7 @@ function runVlmCell (modelKey, mmprojKey) {
             cell, model: modelKey, mmproj: mmprojKey, device,
             task: item.task, id: item.id, metric: item.metric, gold: item.gold,
             pred: String(r.text).slice(0, 600),
+            img: item.image, img_w: r.dims.w, img_h: r.dims.h,
             ms: r.ms,
             decode_tps: st.TPS != null ? st.TPS : null,
             ttft_ms: st.TTFT != null ? st.TTFT : null,

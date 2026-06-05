@@ -93,10 +93,15 @@ on:
         type: boolean
         default: false
       matrix_preset:
-        description: "  matrix preset: smoke (1 cell/1 task/1 sample) or full (real set). Overrides config.defaultPreset on Linux."
+        description: "  matrix preset: compare (f16-vs-q8, open tasks), smoke (1 cell/1 task), or full. Overrides config.defaultPreset on Linux."
         required: false
         type: string
-        default: "smoke"
+        default: "compare"
+      matrix_engine:
+        description: "  inference engine (two-models mode): addon | fabric-cli | upstream-cli. CLI engines are desktop-only; addon runs everywhere."
+        required: false
+        type: string
+        default: "addon"
       matrix_linux:
         description: "  Linux matrix legs, comma-sep: linux-cpu,linux-gpu"
         required: false
@@ -772,6 +777,7 @@ jobs:
         env:
           QVAC_VLM_MATRIX: "1"
           QVAC_VLM_PRESET: ${{ inputs.matrix_preset }}
+          QVAC_VLM_ENGINE: ${{ inputs.matrix_engine }}
           QVAC_VLM_DEVICES: ${{ matrix.backend }}
           NO_GPU: ${{ matrix.no_gpu }}
         run: |
@@ -896,9 +902,23 @@ jobs:
           for p in $(find matrix-logs -name 'prov-*.md' 2>/dev/null | sort); do
             PROV="$PROV --provenance $p"
           done
+          # S25 hardware provenance, parsed from the device's own logcat (model /
+          # Android / ABI from the Play-store UA line, RAM from the JS totalMemory
+          # line, GPU from the Adreno-Vulkan driver load).
           S25F=$(find matrix-logs -name '*Galaxy_S25*logcat_full*' 2>/dev/null | head -1)
           if [ -n "$S25F" ]; then
-            printf '%s\n' "**s25** — Samsung Galaxy S25 Ultra (Android, AWS Device Farm); addon \`@qvac/llm-llamacpp\` (published prebuild)." > prov-s25.md
+            MODEL=$(grep -oE 'model=SM-[A-Z0-9]+' "$S25F" | head -1 | cut -d= -f2)
+            ANDROID=$(grep -oE 'platformVersionRelease=[0-9]+' "$S25F" | head -1 | cut -d= -f2)
+            ABI=$(grep -oE 'supportedAbis=[a-z0-9-]+' "$S25F" | head -1 | cut -d= -f2)
+            RAMB=$(grep -oE 'totalMemory: [0-9]+' "$S25F" | head -1 | grep -oE '[0-9]+$')
+            RAMGB=$(awk -v b="${RAMB:-0}" 'BEGIN{ if (b>0) printf "%.1f GB", b/1073741824; else printf "?" }')
+            GPU=$(grep -qiE 'AdrenoVK|vulkan\.adreno' "$S25F" && echo 'Adreno (Vulkan)' || echo '?')
+            {
+              echo "**s25** — Samsung Galaxy S25 Ultra (AWS Device Farm)"
+              echo "- device: ${MODEL:-SM-?} · Android ${ANDROID:-?} · ${ABI:-arm64-v8a}"
+              echo "- ram: ${RAMGB} · gpu: ${GPU}"
+              echo "- engine: \`@qvac/llm-llamacpp\` addon (published prebuild)"
+            } > prov-s25.md
             PROV="$PROV --provenance prov-s25.md"
           fi
           echo "aggregate inputs:$ARGS"
@@ -908,6 +928,7 @@ jobs:
           else
             node packages/llm-llamacpp/benchmarks/vlm-matrix/aggregate.js \
               --title "VLM Matrix — preset=${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
+              --mode two-models --engine "${{ inputs.matrix_engine }}" --base f16 --candidate q8 \
               --out consolidated/vlm-matrix-consolidated.md \
               $PROV $ARGS
           fi

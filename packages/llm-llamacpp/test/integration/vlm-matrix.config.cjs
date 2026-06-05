@@ -8,39 +8,53 @@
 //     active preset on-device is `defaultPreset` here. To change what the S25
 //     leg runs, edit `defaultPreset` (or a preset's cells/tasks/samples).
 //
-// Each GGUF "blob" carries a `source` descriptor so the same cell can be fed
-// from the QVAC registry, a HuggingFace pin, an S3 object, or any URL. See
-// resolveBlob() in _vlm-matrix-common.js for how a descriptor becomes a file.
-//   hf:       { type: 'hf', repo, sha, file }   -> pinned HuggingFace download
-//   url:      { type: 'url', url }               -> arbitrary direct link
-//   s3:       { type: 's3', url }                -> S3 (use a presigned URL)
-//   registry: { type: 'registry', path, source } -> QVAC registry (P2P client)
+// Each GGUF "blob" carries a `source` descriptor (how to fetch the bytes) plus an
+// optional `registry` annotation (whether it's a published QVAC-registry entry).
+// See resolveBlob() in _vlm-matrix-common.js.
+//   source.type 'hf'  : { type:'hf', repo, sha, file } -> pinned HuggingFace
+//   source.type 'url' : { type:'url', url }             -> arbitrary direct link
+//   source.type 's3'  : { type:'s3', url }              -> S3 (presigned URL)
+//   registry: { license, link }                         -> mark as QVAC-registry
+//     entry; report Source = "Registry". (bytes still come via source.* — the
+//     registry's canonical source is the same pinned URL.)
 
-// Pinned commit SHAs (immutable provenance). f16 = the mmproj already in the
-// QVAC registry; q8 = the candidate projector under evaluation.
+// Pinned commit SHAs (immutable provenance). Both Qwen3.5-0.8B mmproj quants
+// below are published in the QVAC registry (models.prod.json) at these exact
+// pinned URLs — the registry's unsloth repo ships F16/BF16, and the mradermacher
+// Q8_0 projector was added as a registry entry. So our pinned fetch is
+// byte-identical to the registry's canonical `source`.
 const SHA = {
-  qwenUnsloth: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0', // registry main + f16 mmproj
-  qwenMrader: '9d48fdbc0d8f133716da87ec1d904e5d2c7175a6', //  candidate q8 mmproj
-  gemmaBart: 'b5e99bd964eaacc27ba484bb2eb3e9f6160b9143', //   registry main + f16 mmproj
+  qwenUnsloth: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0', // registry: main + f16 mmproj
+  qwenMrader: '9d48fdbc0d8f133716da87ec1d904e5d2c7175a6', //  registry: q8 mmproj
+  gemmaBart: 'b5e99bd964eaacc27ba484bb2eb3e9f6160b9143', //   registry: main + f16 mmproj
   gemmaGgml: 'a1dac71d3ab220618f5a7573a52acdc4baf3ae3b' //    candidate q8 mmproj
 }
+
+// A `registry` annotation marks a blob as a published QVAC-registry entry. The
+// bytes are fetched from the registry's canonical `source` URL (HTTPS, works on
+// Linux + S25); the report shows Source = "Registry" for these. The live
+// `@qvac/registry-client` (findModels/downloadModel, P2P) is the backup lookup.
+const QWEN_REG = { license: 'Apache-2.0', link: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF' }
 
 const MODELS = {
   qwen: {
     main: {
       modelName: 'reg-qwen-unsloth-Q8_0.gguf',
-      origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} (registry main)`,
+      origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+      registry: QWEN_REG,
       source: { type: 'hf', repo: 'unsloth/Qwen3.5-0.8B-GGUF', sha: SHA.qwenUnsloth, file: 'Qwen3.5-0.8B-Q8_0.gguf' }
     },
     mmproj: {
       f16: {
         modelName: 'reg-qwen-unsloth-mmproj-F16.gguf',
-        origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} (registry f16)`,
+        origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} · mmproj-F16`,
+        registry: QWEN_REG,
         source: { type: 'hf', repo: 'unsloth/Qwen3.5-0.8B-GGUF', sha: SHA.qwenUnsloth, file: 'mmproj-F16.gguf' }
       },
       q8: {
-        modelName: 'cand-qwen-mradermacher-mmproj-Q8_0.gguf',
-        origin: `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} (CANDIDATE q8)`,
+        modelName: 'reg-qwen-mradermacher-mmproj-Q8_0.gguf',
+        origin: `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
+        registry: { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' },
         source: { type: 'hf', repo: 'mradermacher/Qwen3.5-0.8B-GGUF', sha: SHA.qwenMrader, file: 'Qwen3.5-0.8B.mmproj-Q8_0.gguf' }
       }
     },
@@ -80,12 +94,20 @@ module.exports = {
   models: MODELS,
   allCells: ALL_CELLS,
 
-  // mode: 'blobs'   — vary (model · mmproj) on the @qvac/llm-llamacpp addon.
-  //                   This is the mode that runs on BOTH Linux and S25.
-  //        'sources' — compare several inference engines (addon vs fabric-cli vs
-  //                   upstream-cli) on one model. Desktop-only; lives in
-  //                   benchmarks/vlm-performance (run-vlm-bench.js), not here.
-  mode: 'blobs',
+  // mode: 'two-models'     — vary (model · mmproj); the engine is FIXED (see
+  //                          `engine`). base = f16 mmproj, candidate = q8. Runs on
+  //                          all platforms. (This is the active mode.)
+  //       'several-sources' — vary the engine (addon/fabric-cli/upstream-cli); the
+  //                          model is FIXED. Desktop-only CLI engines.
+  mode: 'two-models',
+
+  // Inference engine for two-models mode (the fixed parameter). Linux can override
+  // with QVAC_VLM_ENGINE; mobile uses this default. 'addon' = @qvac/llm-llamacpp JS
+  // binding (built on the qvac-fabric fork; runs on Linux + S25). 'fabric-cli' /
+  // 'upstream-cli' = native llama-mtmd-cli (desktop-only; not yet wired here).
+  engine: 'addon',
+  base: 'f16',
+  candidate: 'q8',
 
   // Active preset for the device leg (and the Linux default). Override on Linux
   // with QVAC_VLM_PRESET. 'compare' = the current focus (Qwen3.5 f16-vs-q8 mmproj,
@@ -98,12 +120,12 @@ module.exports = {
   presets: {
     full: { cells: ALL_CELLS, tasks: null, samplesPerTask: null, devices: null },
     smoke: { cells: [{ model: 'qwen', mmproj: 'q8' }], tasks: ['vqav2'], samplesPerTask: 1, devices: null },
-    // Qwen3.5: registry f16 mmproj vs candidate q8 mmproj. Two tasks (incl. the
-    // multiple-choice scienceqa, which scores non-zero even for a tiny model) ×
-    // 3 samples so the quality columns carry real numbers without a long run.
+    // Qwen3.5: registry f16 mmproj vs registry q8 mmproj. Tasks restricted to the
+    // cleanly open-licensed datasets (TextVQA = CC-BY-4.0, DocVQA = Apache-2.0);
+    // 3 samples/task so the quality columns carry real numbers without a long run.
     compare: {
       cells: [{ model: 'qwen', mmproj: 'f16' }, { model: 'qwen', mmproj: 'q8' }],
-      tasks: ['vqav2', 'scienceqa'],
+      tasks: ['textvqa', 'docvqa'],
       samplesPerTask: 3,
       devices: null
     }
