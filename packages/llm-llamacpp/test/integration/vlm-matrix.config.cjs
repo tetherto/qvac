@@ -120,12 +120,12 @@ module.exports = {
   presets: {
     full: { cells: ALL_CELLS, tasks: null, samplesPerTask: null, devices: null },
     smoke: { cells: [{ model: 'qwen', mmproj: 'q8' }], tasks: ['vqav2'], samplesPerTask: 1, devices: null },
-    // Qwen3.5: registry f16 mmproj vs registry q8 mmproj. Tasks restricted to the
-    // cleanly open-licensed datasets (TextVQA = CC-BY-4.0, DocVQA = Apache-2.0);
-    // 3 samples/task so the quality columns carry real numbers without a long run.
+    // Qwen3.5: registry f16 mmproj vs registry q8 mmproj. 5 cleanly open-licensed
+    // tasks (TextVQA/VizWiz/GQA = CC-BY-4.0, DocVQA = Apache-2.0, AI2D = CC-BY-SA-4.0)
+    // × 3 samples = 15 images, all ≤1024 px (see scripts/build-vlm-fixture.cjs).
     compare: {
       cells: [{ model: 'qwen', mmproj: 'f16' }, { model: 'qwen', mmproj: 'q8' }],
-      tasks: ['textvqa', 'docvqa'],
+      tasks: ['textvqa', 'vizwiz', 'gqa', 'docvqa', 'ai2d'],
       samplesPerTask: 3,
       devices: null
     }
