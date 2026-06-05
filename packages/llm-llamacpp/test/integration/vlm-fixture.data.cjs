@@ -230,7 +230,7 @@ module.exports = {
       "id": "ai2d_0",
       "task": "ai2d",
       "metric": "mc",
-      "prompt": "What stage comes after egg?\nA. beetle\nB. caterpillar\nC. pupa\nD. mealworm\nAnswer with the letter of the correct option.",
+      "prompt": "What stage comes after egg?\nA. beetle\nB. caterpillar\nC. pupa\nD. mealworm\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
       "gold": [
         "D"
       ],
@@ -243,7 +243,7 @@ module.exports = {
       "id": "ai2d_1",
       "task": "ai2d",
       "metric": "mc",
-      "prompt": "What is energy\nA. sun\nB. C\nC. B\nD. A\nAnswer with the letter of the correct option.",
+      "prompt": "What is energy\nA. sun\nB. C\nC. B\nD. A\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
       "gold": [
         "A"
       ],
@@ -256,7 +256,7 @@ module.exports = {
       "id": "ai2d_2",
       "task": "ai2d",
       "metric": "mc",
-      "prompt": "What does the bird feed on/\nA. zooplankton\nB. grass\nC. predator fish\nD. none of the above\nAnswer with the letter of the correct option.",
+      "prompt": "What does the bird feed on/\nA. zooplankton\nB. grass\nC. predator fish\nD. none of the above\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
       "gold": [
         "C"
       ],

@@ -139,7 +139,7 @@ async function collectAi2d (t) {
     const letters = opts.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join('\n')
     cands.push({
       q: String(row.question),
-      promptOverride: `${row.question}\n${letters}\nAnswer with the letter of the correct option.`,
+      promptOverride: `${row.question}\n${letters}\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.`,
       gold: [String.fromCharCode(65 + idx)],
       src: img.src,
       w: img.width,
