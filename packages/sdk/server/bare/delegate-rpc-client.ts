@@ -32,21 +32,14 @@ const inflightConnections = new Map<PeerPublicKey, Promise<RPC>>();
 
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
 
-// Cap on how long the first (cold) delegated connect waits for the DHT to
-// bootstrap before attempting the lookup. Warm swarms skip the wait entirely.
 const DHT_BOOTSTRAP_WAIT_CAP_MS = 5000;
 
 function getConfiguredRelayCount(): number {
   return getSDKConfig().swarmRelays?.length ?? 0;
 }
 
-// dht.connect() locates the peer via a DHT findPeer query; on a cold routing
-// table that query can come back empty and surface as PEER_NOT_FOUND even
-// though the provider is announced. The provider already awaits
-// fullyBootstrapped() before listen(); mirror that on the consumer, but only
-// when the DHT isn't ready yet so a warm swarm pays nothing. On timeout we fall
-// through: dht.connect() bootstraps on demand and a genuine failure is reported
-// by the categorized error below.
+// A cold routing table makes findPeer return empty -> spurious PEER_NOT_FOUND,
+// so wait for bootstrap, but only when not yet ready to keep warm-path latency.
 async function ensureDhtBootstrapped(
   swarm: ReturnType<typeof getSwarm>,
   timeout: number | undefined,
@@ -66,12 +59,9 @@ async function ensureDhtBootstrapped(
   }
 }
 
-// Turn an opaque DHT connect failure into a message that says *why* the peer
-// was unreachable, so callers stop conflating "provider offline / not on the
-// DHT" with "found but un-holepunchable" with "rejected by firewall". A common
-// misread is expecting `swarmRelays` to rescue a failed lookup: relays only
-// bridge the connection *after* the provider is found on the DHT, so a relay
-// can't help a PEER_NOT_FOUND.
+// Map an opaque DHT connect error onto why the peer was unreachable: not found
+// on the DHT vs found-but-un-holepunchable. Relays only bridge after a peer is
+// found, so they can never resolve a PEER_NOT_FOUND.
 function describeConnectFailure(
   error: unknown,
   publicKey: string,
@@ -256,12 +246,6 @@ async function ensureRPCConnection(
       `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""} (${relayCount} swarm relay(s) configured)`,
     );
 
-    // Wait for the DHT only when it is still cold. A warm swarm (the common
-    // case, since getSwarm() runs early in SDK init) returns immediately and
-    // keeps the fast-connect latency; a cold one (e.g. the first delegated call
-    // right after app launch on mobile) gets a bounded wait so the findPeer
-    // lookup runs against a populated routing table instead of returning
-    // PEER_NOT_FOUND against an empty one.
     await ensureDhtBootstrapped(getSwarm(), getRemainingTimeout());
 
     conn = openDhtConnection(publicKey);
