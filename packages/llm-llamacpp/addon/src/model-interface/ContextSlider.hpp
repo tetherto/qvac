@@ -56,12 +56,18 @@ struct ContextSlideOutcome {
 /// the caller should throw a context overflow error.
 ///
 /// @param lctx           The llama context for KV cache operations
-/// @param current        Current position and physical KV-cache usage
-/// @param protectedPrefix Protected first-message position and cache usage
-/// @param append         Position span and physical KV-cache usage to append
+/// @param nPast          Current token position in the context
+/// @param firstMsgTokens Number of tokens in the first message (protected)
+/// @param nTokensToAppend Number of tokens about to be appended
 /// @param nDiscarded     Maximum tokens the caller allows to discard
 /// @param tools          Controller for tools_compact anchor management
 /// @return ContextSlideOutcome describing what happened and the new state
+ContextSlideOutcome trySlidePrefill(
+    llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
+    llama_pos nTokensToAppend, llama_pos nDiscarded,
+    ToolsCompactController& tools,
+    const IContextSliderOps& ops = defaultContextSliderOps());
+
 ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, ContextUsage current, ContextUsage protectedPrefix,
     ContextUsage append, llama_pos nDiscarded, ToolsCompactController& tools,

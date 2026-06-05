@@ -87,9 +87,9 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_EnoughRoom) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{100, 100},
-      /*protectedPrefix=*/ContextUsage{50, 50},
-      /*append=*/ContextUsage{50, 50},
+      /*nPast=*/100,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/50,
       /*nDiscarded=*/100,
       controller,
       ops);
@@ -108,9 +108,9 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{300, 300},
-      /*protectedPrefix=*/ContextUsage{50, 50},
-      /*append=*/ContextUsage{180, 180},
+      /*nPast=*/300,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/180,
       /*nDiscarded=*/100,
       controller,
       ops);
@@ -139,9 +139,9 @@ TEST_F(ContextSliderTest, PrefillSlideReturnsMemoryFailureWhenSeqRmFails) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{300, 300},
-      /*protectedPrefix=*/ContextUsage{50, 50},
-      /*append=*/ContextUsage{180, 180},
+      /*nPast=*/300,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/180,
       /*nDiscarded=*/100,
       controller,
       ops);
@@ -166,9 +166,9 @@ TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{120, 120},
-      /*protectedPrefix=*/ContextUsage{50, 50},
-      /*append=*/ContextUsage{200, 200},
+      /*nPast=*/120,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/200,
       /*nDiscarded=*/100,
       controller,
       ops);
@@ -196,9 +196,9 @@ TEST_F(ContextSliderTest, PrefillFullWipePreservesTailWhenExactWipeFails) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{120, 120},
-      /*protectedPrefix=*/ContextUsage{50, 50},
-      /*append=*/ContextUsage{200, 200},
+      /*nPast=*/120,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/200,
       /*nDiscarded=*/100,
       controller,
       ops);
@@ -230,9 +230,9 @@ TEST_F(ContextSliderTest, PrefillFullWipeWhenPartialSlideCannotFit) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{474, 474},
-      /*protectedPrefix=*/ContextUsage{25, 25},
-      /*append=*/ContextUsage{308, 308},
+      /*nPast=*/474,
+      /*firstMsgTokens=*/25,
+      /*nTokensToAppend=*/308,
       /*nDiscarded=*/512,
       controller,
       ops);
@@ -263,9 +263,9 @@ TEST_F(ContextSliderTest, PrefillFullWipeRespectsDiscardBudget) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{474, 474},
-      /*protectedPrefix=*/ContextUsage{25, 25},
-      /*append=*/ContextUsage{308, 308},
+      /*nPast=*/474,
+      /*firstMsgTokens=*/25,
+      /*nTokensToAppend=*/308,
       /*nDiscarded=*/256,
       controller,
       ops);
@@ -285,9 +285,9 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_Overflow) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      /*current=*/ContextUsage{75, 75},
-      /*protectedPrefix=*/ContextUsage{50, 50},
-      /*append=*/ContextUsage{200, 200},
+      /*nPast=*/75,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/200,
       /*nDiscarded=*/100,
       controller,
       ops);

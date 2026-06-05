@@ -344,9 +344,9 @@ bool TextLlmContext::evalMessageWithTools(
     const auto nTokensToAppend = static_cast<llama_pos>(nTokens);
     auto outcome = trySlidePrefill(
         lctx_,
-        ContextUsage{nPast_, nPast_},
-        ContextUsage{firstMsgTokens_, firstMsgTokens_},
-        ContextUsage{nTokensToAppend, nTokensToAppend},
+        nPast_,
+        firstMsgTokens_,
+        nTokensToAppend,
         nDiscarded_,
         tools_);
     switch (outcome.kind) {
