@@ -15,38 +15,32 @@ using namespace qvac_errors;
 
 // -- JSON value helpers -------------------------------------------------------
 
-double requireNum(const picojson::value &v, const std::string &key) {
+double requireNum(const picojson::value& v, const std::string& key) {
   if (!v.is<double>())
-    throw StatusError(general_error::InvalidArgument,
-                      key + " must be a number");
+    throw StatusError(
+        general_error::InvalidArgument, key + " must be a number");
   return v.get<double>();
 }
 
-std::string requireStr(const picojson::value &v, const std::string &key) {
+std::string requireStr(const picojson::value& v, const std::string& key) {
   if (!v.is<std::string>())
-    throw StatusError(general_error::InvalidArgument,
-                      key + " must be a string");
+    throw StatusError(
+        general_error::InvalidArgument, key + " must be a string");
   return v.get<std::string>();
 }
 
-bool requireBool(const picojson::value &v, const std::string &key) {
+bool requireBool(const picojson::value& v, const std::string& key) {
   if (!v.is<bool>())
-    throw StatusError(general_error::InvalidArgument,
-                      key + " must be a boolean");
+    throw StatusError(
+        general_error::InvalidArgument, key + " must be a boolean");
   return v.get<bool>();
 }
 
-float requireFiniteFloat(const picojson::value &v, const std::string &key) {
-  const double d = requireNum(v, key);
-  if (!std::isfinite(d)) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be a finite number, got: " + std::to_string(d));
-  }
-  return static_cast<float>(d);
-}
+// Largest integer JSON (IEEE 754 double) can losslessly represent. Used by
+// requireInt64 to reject silent precision loss for large seeds.
+inline constexpr double MAX_SAFE_JSON_INT = 9007199254740992.0; // 2^53
 
-int requireInt(const picojson::value &v, const std::string &key) {
+int requireInt(const picojson::value& v, const std::string& key) {
   const double d = requireNum(v, key);
   if (!std::isfinite(d)) {
     throw StatusError(
@@ -54,17 +48,28 @@ int requireInt(const picojson::value &v, const std::string &key) {
         key + " must be a finite integer, got: " + std::to_string(d));
   }
   if (d != std::floor(d)) {
-    throw StatusError(general_error::InvalidArgument,
-                      key + " must be an integer, got: " + std::to_string(d));
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be an integer, got: " + std::to_string(d));
   }
   if (d < static_cast<double>(INT_MIN) || d > static_cast<double>(INT_MAX)) {
-    throw StatusError(general_error::InvalidArgument,
-                      key + " is out of int range, got: " + std::to_string(d));
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " is out of int range, got: " + std::to_string(d));
   }
   return static_cast<int>(d);
 }
 
-int64_t requireInt64(const picojson::value &v, const std::string &key) {
+int requirePositiveInt(const picojson::value& v, const std::string& key) {
+  const int n = requireInt(v, key);
+  if (n <= 0)
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be > 0, got: " + std::to_string(n));
+  return n;
+}
+
+int64_t requireInt64(const picojson::value& v, const std::string& key) {
   const double d = requireNum(v, key);
   if (!std::isfinite(d)) {
     throw StatusError(
@@ -72,43 +77,41 @@ int64_t requireInt64(const picojson::value &v, const std::string &key) {
         key + " must be a finite integer, got: " + std::to_string(d));
   }
   if (d != std::floor(d)) {
-    throw StatusError(general_error::InvalidArgument,
-                      key + " must be an integer, got: " + std::to_string(d));
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be an integer, got: " + std::to_string(d));
   }
-  // double can represent integers exactly only up to 2^53; the range check
-  // below uses the safe representable bounds so a caller cannot land in the
-  // undefined-behaviour zone between 2^53 and INT64_MAX.
-  constexpr double kInt64Lo = -9223372036854775808.0; // -2^63
-  constexpr double kInt64Hi = 9223372036854775807.0;  //  2^63 - 1
-  if (d < kInt64Lo || d > kInt64Hi) {
-    throw StatusError(general_error::InvalidArgument,
-                      key +
-                          " is out of int64 range, got: " + std::to_string(d));
+  if (d < -MAX_SAFE_JSON_INT || d > MAX_SAFE_JSON_INT) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key +
+            " is outside the safe integer range "
+            "[-2^53, 2^53], got: " +
+            std::to_string(d));
   }
   return static_cast<int64_t>(d);
 }
 
-int requirePositiveInt(const picojson::value &v, const std::string &key) {
-  const int n = requireInt(v, key);
-  if (n <= 0)
-    throw StatusError(general_error::InvalidArgument,
-                      key + " must be > 0, got: " + std::to_string(n));
-  return n;
-}
-
-float requireFiniteFloatInRange(const picojson::value &v,
-                                const std::string &key, float lo, float hi) {
-  const float f = requireFiniteFloat(v, key);
+float requireRange(
+    const picojson::value& v, const std::string& key, float lo, float hi) {
+  const float f = static_cast<float>(requireNum(v, key));
+  // Guard against NaN: both `<` and `>` comparisons are false for NaN, so the
+  // range check below would otherwise let it through to the native layer.
+  if (!std::isfinite(f))
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite number, got: " + std::to_string(f));
   if (f < lo || f > hi)
-    throw StatusError(general_error::InvalidArgument,
-                      key + " must be in [" + std::to_string(lo) + ", " +
-                          std::to_string(hi) + "], got: " + std::to_string(f));
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be in [" + std::to_string(lo) + ", " + std::to_string(hi) +
+            "], got: " + std::to_string(f));
   return f;
 }
 
 // -- Enum parsers -------------------------------------------------------------
 
-sample_method_t parseSampler(const std::string &name) {
+sample_method_t parseSampler(const std::string& name) {
   static const std::unordered_map<std::string, sample_method_t> samplers{
       {"euler", EULER_SAMPLE_METHOD},
       {"euler_a", EULER_A_SAMPLE_METHOD},
@@ -136,7 +139,7 @@ sample_method_t parseSampler(const std::string &name) {
           "res_multistep, res_2s");
 }
 
-scheduler_t parseScheduler(const std::string &name) {
+scheduler_t parseScheduler(const std::string& name) {
   static const std::unordered_map<std::string, scheduler_t> schedulers{
       {"discrete", DISCRETE_SCHEDULER},
       {"karras", KARRAS_SCHEDULER},
@@ -160,11 +163,14 @@ scheduler_t parseScheduler(const std::string &name) {
           "sgm_uniform, simple, lcm, smoothstep, kl_optimal, bong_tangent");
 }
 
-sd_cache_mode_t parseCacheMode(const std::string &name) {
+sd_cache_mode_t parseCacheMode(const std::string& name) {
   static const std::unordered_map<std::string, sd_cache_mode_t> cacheModes{
-      {"", SD_CACHE_DISABLED},           {"disabled", SD_CACHE_DISABLED},
-      {"easycache", SD_CACHE_EASYCACHE}, {"ucache", SD_CACHE_UCACHE},
-      {"dbcache", SD_CACHE_DBCACHE},     {"taylorseer", SD_CACHE_TAYLORSEER},
+      {"", SD_CACHE_DISABLED},
+      {"disabled", SD_CACHE_DISABLED},
+      {"easycache", SD_CACHE_EASYCACHE},
+      {"ucache", SD_CACHE_UCACHE},
+      {"dbcache", SD_CACHE_DBCACHE},
+      {"taylorseer", SD_CACHE_TAYLORSEER},
       {"cache-dit", SD_CACHE_CACHE_DIT},
   };
   if (auto it = cacheModes.find(name); it != cacheModes.end()) {
@@ -177,28 +183,35 @@ sd_cache_mode_t parseCacheMode(const std::string &name) {
           "cache-dit");
 }
 
-std::pair<int, int> parseVaeTileSize(const picojson::value &v) {
+std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
   if (v.is<double>()) {
-    // Route through requireInt so NaN / inf / fractional / out-of-range
-    // values throw at the JSON layer instead of UB-ing through the cast.
-    const int sz = requireInt(v, "vae_tile_size");
+    const double raw = v.get<double>();
+    if (!std::isfinite(raw) || std::floor(raw) != raw ||
+        raw > static_cast<double>(std::numeric_limits<int>::max()) ||
+        raw < static_cast<double>(std::numeric_limits<int>::min()))
+      throw StatusError(
+          general_error::InvalidArgument,
+          "vae_tile_size must be a positive integer");
+    const int sz = static_cast<int>(raw);
     if (sz <= 0)
-      throw StatusError(general_error::InvalidArgument,
-                        "vae_tile_size must be > 0, got: " +
-                            std::to_string(sz));
+      throw StatusError(
+          general_error::InvalidArgument,
+          "vae_tile_size must be a positive integer, got: " +
+              std::to_string(sz));
     return {sz, sz};
   }
   if (!v.is<std::string>()) {
-    throw StatusError(general_error::InvalidArgument,
-                      "vae_tile_size must be a number or 'WxH' string");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size must be a number or 'WxH' string");
   }
 
   const std::string_view s = v.get<std::string>();
   const auto xPos = s.find('x');
   if (xPos == std::string_view::npos) {
-    throw StatusError(general_error::InvalidArgument,
-                      "vae_tile_size string must be 'WxH', got: '" +
-                          std::string(s) + "'");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size string must be 'WxH', got: '" + std::string(s) + "'");
   }
 
   int w{}, h{};
@@ -208,21 +221,20 @@ std::pair<int, int> parseVaeTileSize(const picojson::value &v) {
           std::errc{} ||
       std::from_chars(hSv.data(), hSv.data() + hSv.size(), h).ec !=
           std::errc{}) {
-    throw StatusError(general_error::InvalidArgument,
-                      "vae_tile_size: could not parse dimensions from '" +
-                          std::string(s) + "'");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size: could not parse dimensions from '" + std::string(s) +
+            "'");
   }
-  // from_chars rejects '-' for unsigned but happily parses negative ints, and
-  // a `0x0` string is a degenerate tile size that would later trigger asserts
-  // deep in the VAE tiler.
   if (w <= 0 || h <= 0)
-    throw StatusError(general_error::InvalidArgument,
-                      "vae_tile_size: both dimensions must be > 0, got: " +
-                          std::to_string(w) + "x" + std::to_string(h));
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size dimensions must be positive, got: '" + std::string(s) +
+            "'");
   return {w, h};
 }
 
-std::pair<sd_cache_mode_t, float> parseCachePreset(const std::string &preset) {
+std::pair<sd_cache_mode_t, float> parseCachePreset(const std::string& preset) {
   // Approximate threshold values mirroring the stable-diffusion.cpp CLI
   // presets:  slow ~= 0.60 (~10% speed-up)  medium ~= 0.40 (~25%)
   //           fast ~= 0.25 (~40%)            ultra  ~= 0.15 (fastest)

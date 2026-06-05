@@ -5,6 +5,147 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0]
+
+Explicit per-platform GPU backend selection (QVAC-19234). Vulkan and
+OpenCL GPU acceleration on Android, Vulkan on Linux/Windows, Metal on
+macOS — declared as explicit `whisper-cpp` features instead of relying
+on `ggml-speech`'s platform default-features.
+
+### Changed
+
+- `vcpkg.json`: the bare `whisper-cpp` dependency is replaced with
+  per-platform feature selections mirroring `transcription-whispercpp`:
+  - `whisper-cpp[opencl, vulkan]` on `android`
+  - `whisper-cpp[vulkan]` on `!(osx | ios | android)` (Linux / Windows)
+  - `whisper-cpp[metal]` on `osx`
+  - `whisper-cpp` (no GPU feature) on `ios` — iOS stays CPU-only until
+    the upstream Metal XPC issue is resolved (parity with the
+    `whisper-cpp` port's iOS `GGML_METAL=OFF`).
+
+### Why explicit (vs. relying on defaults)
+
+`0.1.3` already pulled the Android GPU backends transitively because
+`ggml-speech` lists `opencl`/`vulkan` as Android default-features. This
+release makes the selection **explicit and deterministic** so
+`bci-whispercpp` owns its GPU matrix: a future change to `ggml-speech`'s
+default-features can no longer silently add or drop a backend, and the
+desktop (Vulkan) / Apple (Metal) / iOS (CPU) choices are now intentional
+and reviewer-auditable.
+
+### Android prebuild (verified locally via NDK cross-build)
+
+`prebuilds/android-arm64/qvac__bci-whispercpp/` ships the dynamically
+loaded backend modules picked up at runtime by
+`ensureBackendsLoadedAndroid()`:
+
+```
+libqvac-speech-ggml-cpu-android_armv8.0_1.so   (+ 8.2_1, 8.2_2, 8.6_1,
+                                                  9.0_1, 9.2_1, 9.2_2)
+libqvac-speech-ggml-opencl.so
+libqvac-speech-ggml-vulkan.so
+```
+
+The active backend is reported through `RuntimeStats.backendId`
+(OpenCL = 4, Vulkan = 3, CPU = 0) captured by `captureActiveBackendInfo()`,
+which walks the GPU **and IGPU** device list and applies the Adreno
+OpenCL preference (mirrors `transcription-whispercpp` #2343).
+
+## [0.1.3]
+
+vcpkg dependency consistency with `transcription-whispercpp` (QVAC-19009).
+Bumps the whisper-cpp port to `1.8.5#1` (which consumes
+`ggml-speech@2026-06-02`) and aligns the shared C++ dependencies. No
+JS/native source changes; no public API change.
+
+### Changed
+
+- `vcpkg.json`: `whisper-cpp` override `1.8.4.2` → `1.8.5#1`
+  (matches `transcription-whispercpp`'s current pin, which pulls
+  `ggml-speech@2026-06-02`); `qvac-lint-cpp` (unpinned) → `>=1.4.4#3`.
+  `qvac-lib-inference-addon-cpp` is already `>=1.2.1` on `main` (#2355).
+- `vcpkg-configuration.json`: `default-registry.baseline`
+  `acdd94de…` → `a9d7e924…` — the **same baseline
+  `transcription-whispercpp` uses**, not registry HEAD. The newer
+  `whisper-cpp` / `ggml-speech` are pulled from the registry's version
+  history via the `overrides` + transitive `version>=` constraints, not
+  by moving the baseline to HEAD; the baseline only had to advance far
+  enough to contain a `ggml-speech` port entry (bci's previous
+  `acdd94de` predated that port).
+- `vcpkg-configuration.json`: route `vulkan` / `vulkan-headers` /
+  `vulkan-loader` / `spirv-headers` to the Microsoft registry — required
+  for baseline validation because `ggml-speech` (pulled transitively by
+  `whisper-cpp`) declares a `vulkan` default-feature whose
+  `spirv-headers` dependency the qvac registry does not vendor.
+
+### Android: dynamic backend loading activates
+
+`whisper-cpp@1.8.5#1` consumes the `ggml-speech` port, which on Android
+builds ggml with `GGML_BACKEND_DL=ON` + `GGML_CPU_ALL_VARIANTS=ON`. The
+android-arm64 prebuild now ships the per-arch CPU backend modules
+(`libqvac-speech-ggml-cpu-android_armv8.0_1.so` …
+`…_armv9.2_2.so`) loaded at runtime via `dlopen`. The loader added in
+`0.1.2` (`ensureBackendsLoadedAndroid()`) is what makes this safe. No
+GPU backends yet (that is `0.2.0` / QVAC-19234). Verified locally by
+cross-building the android-arm64 prebuild with the NDK.
+
+## [0.1.2]
+
+Android dynamic-backend-loading infrastructure (QVAC-19235). Behaviour
+on every platform is unchanged today because `bci-whispercpp` still
+pins `whisper-cpp@1.8.4.2`, whose port builds ggml with the static-
+backend registry (`GGML_BACKEND_DL=OFF`). This PR is the "safety net"
+that lets the follow-up `whisper-cpp@1.8.5` bump (QVAC-19009) flip
+`GGML_BACKEND_DL=ON` on Android without reproducing the `SIGABRT` on
+model load that hit `transcription-whispercpp` on its PR #2124. See
+`aiDocs/15-android-mobile-test-crash-fix.md` for the post-mortem.
+
+### Added
+
+- Native `BCIConfig::backendsDir` field plus JS-side `configurationParams.backendsDir`
+  pass-through (defaults to `<addon>/prebuilds` resolved via
+  `bare-path`). Surfaces on `BCIWhispercppConfig.backendsDir`.
+- Android-only `ensureBackendsLoadedAndroid()` in `BCIModel::load()`
+  (process-local `std::call_once`); resolves the per-arch backend
+  subdir from `backendsDir / BACKENDS_SUBDIR` and dispatches to
+  `ggml_backend_load_all_from_path()`.
+- `captureActiveBackendInfo(useGpu, gpuDevice)` in `BCIModel::load()`:
+  enumerates `ggml_backend_dev_*` after backend registration and
+  snapshots the active backend identity + device memory. New
+  `RuntimeStats` keys: `backendDevice`, `backendId`, `gpuMemTotalMb`,
+  `gpuMemFreeMb`. The numeric mapping (CPU=0 / Metal=1 / CUDA=2 /
+  Vulkan=3 / OpenCL=4 / other=99) is lock-stepped with
+  `transcription-whispercpp 0.9.0` and `transcription-parakeet` for
+  cross-addon Device Farm comparability. Backend selection is sourced
+  from the exact `whisper_context_params` the context was built with
+  (use_gpu/gpu_device), walks the `whisper_backend_init_gpu()`-filtered
+  GPU **and IGPU** device list (Mali / Adreno-via-Vulkan / Intel iGPU
+  report as IGPU), and applies the Adreno OpenCL preference — mirroring
+  `transcription-whispercpp` PR #2270 + #2343. Inert on
+  `whisper-cpp@1.8.4.2` (no GPU backends registered).
+- `CMakeLists.txt`: `bare_target` + `bare_module_target` discovery,
+  `BACKENDS_SUBDIR` compile define, `BACKEND_DL_LIBS` (IMPORTED
+  `ggml::*` targets) + `BACKEND_DL_LOOSE_SOS` (loose
+  `libqvac-speech-ggml-*.so` staging) plumbing, parity with
+  `transcription-whispercpp` / `transcription-parakeet`. Inactive
+  today (no MODULE backends produced at `whisper-cpp@1.8.4.2`);
+  activates on the QVAC-19009 bump.
+
+### Added (tests)
+
+- `BCIConfig.backendsDirDefaultsEmpty`, `BCIConfig.backendsDirRoundTrip`:
+  guard the new config field's defaults and copy semantics.
+- `BCIModel.runtimeStatsExposesBackendIdentityKeys`,
+  `BCIModel.backendIdentityDefaultsToCPU`: guard the new
+  `RuntimeStats` keys + default-CPU contract without requiring a
+  loaded model (mirrors transcription-whispercpp's `BackendInfo`
+  unit-test pattern).
+## [0.1.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
 ## [0.1.0]
 
 Initial POC release of `@qvac/bci-whispercpp`, a brain-computer-interface neural

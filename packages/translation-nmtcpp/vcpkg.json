@@ -3,7 +3,7 @@
     "bergamot-translator",
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.0"
+      "version>=": "1.2.1"
     },
     {
       "name": "qvac-lint-cpp",
@@ -13,7 +13,7 @@
     "ssplit",
     {
       "name": "qvac-fabric",
-      "version>=": "8828.0.2",
+      "version>=": "8828.0.2#1",
       "default-features": false,
       "features": [
         "gpu-backends"

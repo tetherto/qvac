@@ -1,5 +1,353 @@
 # Changelog
 
+## [0.12.2]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.12.2
+
+This patch release unblocks React Native and BareKit apps that bundle `@qvac/sdk` or `@qvac/bare-sdk`. Metro and Bare static analysis no longer reject the config loader, and clients can import the model registry through a dedicated subpath without pulling the full SDK graph into the bundle.
+
+## New APIs
+
+### `@qvac/sdk/models` and `@qvac/bare-sdk/models` subpaths
+
+React Native apps that only need model constant names previously had to import from the package root, which dragged server-side modules into Metro. v0.12.2 adds a `./models` export on both `@qvac/sdk` and `@qvac/bare-sdk` so you can depend on the registry alone.
+
+```typescript
+import { LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk/models";
+// or on Bare-only clients:
+import { LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/bare-sdk/models";
+```
+
+## Bug Fixes
+
+### Bare config loader works under Metro static analysis
+
+BareKit and Expo consumers could fail at bundle time with errors such as `Invalid call: import(filePath)` when the SDK resolved `qvac.config.js`. The Bare config loader used dynamic `import()` with a runtime path, which Metro and Bare reject because the target is not a string literal.
+
+v0.12.2 loads `.js` and `.json` config files with `require(filePath)` instead, which satisfies static analysis while keeping the same resolution order (`QVAC_CONFIG_PATH`, then project-root `qvac.config.js` / `qvac.config.json`, then defaults). Supported extensions are centralized in `SUPPORTED_CONFIG_FILE_EXTS` so discovery and validation stay aligned. TypeScript config files (`.ts`) are explicitly rejected on the Bare path with a clear error — use `.js` or `.json` in RN/Bare projects.
+
+## [0.12.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.12.1
+
+This is a patch release on top of v0.12.0. It surfaces two new error classes so callers can distinguish a crashed bare worker from an in-flight call cancelled by SDK shutdown, and it fixes a Qwen 3.5/3.6 tool-call regression where capitalised booleans were silently dropping the entire tool call.
+
+## New APIs
+
+### Distinguish bare worker crashes from shutdown cancellations
+
+Calls made through a bare worker (e.g. `sdk.embed`, `sdk.complete`) previously rejected with a generic RPC error if the worker process died mid-request or if `sdk.close()` was called while the request was in flight. Both cases looked identical to callers, so retry/UX logic had to guess.
+
+v0.12.1 introduces two structured RPC errors that propagate from the worker bridge:
+
+- `WorkerCrashedError` — the bare worker died unexpectedly. Exposes `exitCode` and `exitSignal` so you can tell a SIGKILL from a clean non-zero exit and decide whether to respawn.
+- `WorkerShutdownError` — the SDK is shutting down (`sdk.close()` was called) while this request was still in flight. Safe to swallow on intentional teardown; surfaces an actionable label for callers who want to log it.
+
+```typescript
+import { WorkerCrashedError, WorkerShutdownError } from "@qvac/sdk";
+
+try {
+  await sdk.embed({ modelId, text: "hi" });
+} catch (err) {
+  if (err instanceof WorkerCrashedError) {
+    // err.exitCode, err.exitSignal — worker died, decide whether to respawn.
+  } else if (err instanceof WorkerShutdownError) {
+    // SDK is shutting down; this call was cancelled by close().
+  }
+}
+```
+
+Existing `catch (err)` blocks that don't narrow by class continue to work unchanged — the new classes both extend the same RPC error base.
+
+## Bug Fixes
+
+### Qwen 3.5/3.6 tool calls with capitalised booleans no longer drop silently
+
+Qwen 3.5/3.6 (the default tool-calling family) intermittently emits Python-style `True` / `False` for `boolean` parameters instead of the JSON-strict `true` / `false`. The qwen35 parser only accepted the exact lowercase literals, so coercion threw, the parser returned an empty `toolCalls` array, and the raw `<tool_call>…</tool_call>` markup leaked into the assistant's final text answer — there was no `PARSE_ERROR`, the tool call just vanished.
+
+v0.12.1 lowercases the value before comparing in the boolean coercion path, so `True`, `False`, `TRUE`, and `FALSE` all coerce correctly. Genuinely invalid values (`maybe`, `0`, `null`) still throw `PARSE_ERROR` — the relaxation is intentionally scoped to casing. Other tool-call dialects are unaffected.
+
+## [0.12.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.12.0
+
+This release expands the SDK into new modalities and tightens the Bare distribution story. You can now run vision-language-action inference (SmolVLA), image classification, and text-to-video generation from the same SDK surface that already handles LLMs and diffusion. TTS moves from the ONNX stack to `@qvac/tts-ggml`, Parakeet transcription advances to the 0.6.0 GGUF backend, and a new `@qvac/bare-sdk` package lets Bare workers register only the plugins they need. Tooling consumers get `@qvac/sdk/commands` for bundling and verification, the model registry picks up Gemma 4 and Qwen 3.5/3.6 multimodal constants, and several mobile and delegation fixes land alongside the feature work.
+
+## Breaking Changes
+
+### TTS migrates from ONNX to tts-ggml
+
+The SDK TTS plugin now targets `@qvac/tts-ggml` instead of `@qvac/tts-onnx`. The old multi-file ONNX Chatterbox layout — separate speech encoder, embed tokens, conditional decoder, and language model paths — is replaced by single GGUF constants and a simpler load path.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "chatterbox",
+    language: "en",
+    ttsSpeechEncoderSrc: TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX.src,
+    ttsEmbedTokensSrc: TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX.src,
+    ttsConditionalDecoderSrc: TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX.src,
+    ttsLanguageModelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
+  },
+});
+```
+
+**After:**
+
+```typescript
+import { TTS_S3GEN_MULTILINGUAL_CHATTERBOX } from "@qvac/sdk";
+
+await loadModel({
+  modelSrc: TTS_S3GEN_MULTILINGUAL_CHATTERBOX,
+  modelType: "tts",
+});
+```
+
+New registry constants cover Chatterbox and Supertonic variants in GGUF form (`TTS_S3GEN_*`, `TTS_T3_*`, `TTS_*_SUPERTONIC_*`).
+
+### Parakeet advances to 0.6.0 GGML
+
+Building on the 0.11.0 single-file GGUF migration, Parakeet now targets `@qvac/transcription-parakeet` 0.6.0. Per-variant `modelType` discriminators and multi-file encoder/decoder/vocab fields are gone — pass a single GGUF constant and the addon detects TDT, CTC, EOU, or Sortformer from metadata.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelType: "parakeet",
+  modelConfig: {
+    modelType: "tdt",
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR,
+  },
+});
+```
+
+**After:**
+
+```typescript
+import { PARAKEET_TDT_0_6B_V3_Q8_0 } from "@qvac/sdk";
+
+await loadModel({
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelType: "parakeet",
+});
+```
+
+### `@qvac/bare-sdk` requires explicit plugin registration
+
+Bare consumers that previously called `getRPC()` against the full `@qvac/sdk` worker must switch to `@qvac/bare-sdk` and register only the plugins their worker uses. The slim package ships no built-in addon dependencies — unregistered calls raise `WorkerPluginsNotRegisteredError`.
+
+**Before:**
+
+```typescript
+import { getRPC } from "@qvac/sdk";
+
+const rpc = await getRPC();
+await rpc.loadModel({ /* any built-in modelType works */ });
+```
+
+**After:**
+
+```typescript
+import { plugins } from "@qvac/bare-sdk";
+import { nmtPlugin } from "@qvac/bare-sdk/nmtcpp-translation/plugin";
+import { llmPlugin } from "@qvac/bare-sdk/llamacpp-completion/plugin";
+
+const sdk = plugins([nmtPlugin, llmPlugin]);
+
+await sdk.loadModel({
+  modelSrc: BERGAMOT_EN_FR,
+  modelType: "nmt",
+});
+```
+
+Install matching addon packages (`@qvac/translation-nmtcpp`, `@qvac/llm-llamacpp`, etc.) alongside `@qvac/bare-sdk`. `@qvac/sdk` remains the right choice for Node and Expo apps that want the full default worker.
+
+### react-native-bare-kit peer widened to ^0.14.0
+
+Mobile consumers should upgrade `react-native-bare-kit` to `^0.14.0` alongside `@qvac/sdk@0.12.0`. Pinning `0.12.x` will fail peer resolution.
+
+## New APIs
+
+### Vision-language-action with SmolVLA
+
+Load a SmolVLA model from the registry and run robot action inference with image preprocessing helpers:
+
+```typescript
+import {
+  loadModel,
+  vla,
+  vlaHparams,
+  vlaPreprocessImage,
+  vlaPadState,
+  SMOLVLA_LIBERO_VISION_Q8,
+} from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: SMOLVLA_LIBERO_VISION_Q8,
+  modelType: "vla",
+  modelConfig: { backend: "auto" },
+});
+
+const { hparams } = await vlaHparams({ modelId });
+const image = vlaPreprocessImage(pixels, width, height, {
+  size: hparams.visionImageSize,
+});
+const state = vlaPadState(robotState, hparams.maxStateDim);
+
+const { actions, actionDim, chunkSize } = await vla({
+  modelId,
+  images: [image],
+  imgWidth: hparams.visionImageSize,
+  imgHeight: hparams.visionImageSize,
+  state,
+  tokens,
+  mask,
+});
+```
+
+### Image classification
+
+Classify JPEG/PNG buffers or raw RGB bytes with bundled MobileNetV3-Small or a custom GGUF:
+
+```typescript
+import { loadModel, classify } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelType: "classification",
+  modelConfig: { topK: 3 },
+});
+
+const results = await classify({ modelId, image: jpegBytes });
+// → [{ label: "food", confidence: 0.91 }, ...]
+```
+
+### Text-to-video generation
+
+Generate video frames from text prompts using WAN models:
+
+```typescript
+import { video } from "@qvac/sdk";
+
+const run = video({
+  modelId,
+  mode: "txt2vid",
+  prompt: "a cat surfing a wave at sunset",
+  width: 480,
+  height: 832,
+  video_frames: 17,
+  fps: 16,
+  steps: 20,
+});
+
+for await (const tick of run.progressStream) {
+  console.log(`step ${tick.step}/${tick.totalSteps}`);
+}
+
+const frames = await run.outputs;
+```
+
+### `@qvac/sdk/commands` for bundling and verification
+
+Programmatic access to worker bundling and prebuild verification — the same primitives `qvac bundle` and `qvac verify bundle` use:
+
+```typescript
+import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
+
+await bundleSdk({ projectRoot: process.cwd(), configPath: "./qvac.config.json" });
+await verifyBundle({
+  projectRoot: process.cwd(),
+  addonsSource: "./qvac/worker.bundle.js",
+  hosts: ["android-arm64", "ios-arm64"],
+});
+```
+
+### RAG cancellation detection
+
+Detect cancelled RAG operations without importing `@qvac/rag/errors`:
+
+```typescript
+import { RAG_ERROR_CODES } from "@qvac/sdk";
+
+if (err.code === RAG_ERROR_CODES.OPERATION_CANCELLED) {
+  // ingest was cancelled
+}
+```
+
+### Diffusion flash attention toggle
+
+`modelConfig.diffusion_fa` enables per-transformer flash attention on diffusion models (default on as of `@qvac/diffusion-cpp@0.8.0`). The deprecated `flux_flow` prediction mode is removed.
+
+### Standalone ESRGAN device reporting
+
+The standalone upscaler now forwards `device` from load config and exposes `backendDevice` in upscale stats.
+
+### Expo plugin hoisted SDK resolution
+
+Expo config plugins resolve `@qvac/sdk` from ancestor `node_modules` directories, fixing monorepo layouts where the SDK is hoisted above the app root.
+
+### Completion prompt token counts and context overflow
+
+LLM completion now surfaces real input token counts in stats and throws a typed `ContextOverflowError` when the prompt exceeds the model context window — including across the Bare RPC boundary:
+
+```typescript
+import { ContextOverflowError } from "@qvac/sdk";
+
+const run = sdk.completion({ /* ... */ });
+try {
+  const final = await run.final;
+  console.log(final.stats?.promptTokens);
+} catch (err) {
+  if (err instanceof ContextOverflowError) {
+    console.warn(
+      `prompt of ${err.promptTokens} tokens exceeded ${err.ctxSize}`,
+    );
+  }
+}
+```
+
+## Bug Fixes and Reliability
+
+- Bare delegated RPC now routes through the model registry instead of ad-hoc connection state.
+- `@qvac/sdk` builds cleanly under both Bun and npm.
+- Suspend/resume lifecycle ordering is corrected in the runtime.
+- Snap-packaged apps use the common directory for QVAC home.
+- SDK `peerDependencies` on Holepunch libraries are removed; CI enforces the expected peer ranges instead.
+- `@qvac/rag` and `@qvac/registry-client` bump to `^0.6.0`.
+
+## Model Registry
+
+The registry sync adds Gemma 4 and Qwen 3.5/3.6 multimodal LLM/VLM constants, expands Bergamot translation pairs, introduces Parakeet 0.6.0 GGUF constants, and replaces ONNX TTS constants with tts-ggml equivalents.
+
+### Added
+
+```
+GEMMA4_31B_MULTIMODAL_Q4_K_M
+GEMMA4_2B_MULTIMODAL_Q4_K_M
+QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
+QWEN3_6_27B_MULTIMODAL_Q4_K_XL
+TTS_S3GEN_MULTILINGUAL_CHATTERBOX
+TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0
+TTS_EN_SUPERTONIC_Q8_0
+PARAKEET_TDT_0_6B_V3_Q8_0
+(and 60+ more — see models.md)
+```
+
+### Updated
+
+```
+BERGAMOT_EN_BG
+BERGAMOT_EN_HR
+BERGAMOT_EN_NL
+BERGAMOT_METADATA_13
+```
+
 ## [0.11.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.11.0
@@ -1237,7 +1585,7 @@ Hotfix patch release. Single-fix patch — no API, behavioral, or model changes.
 
 ---
 
-## 🐞 Fixes
+## Fixes
 
 ### Fix `TypeError: z.xor is not a function` for consumers on zod < 4.3
 
@@ -1260,7 +1608,7 @@ Patch release with a minor documentation fix to the SDK README quickstart exampl
 
 ---
 
-## 📘 Docs
+## Docs
 
 - Remove trailing comma in quickstart import example.
 
@@ -1272,7 +1620,7 @@ This release significantly expands the SDK's capabilities with finetuning suppor
 
 ---
 
-## 💥 Breaking Changes
+## Breaking Changes
 
 ### `ping()` Replaced by `heartbeat()`
 
@@ -1301,7 +1649,7 @@ await heartbeat({
 
 ---
 
-## 🔌 New APIs
+## New APIs
 
 ### Finetuning
 
@@ -1429,7 +1777,7 @@ console.log(stats?.backendDevice); // "cpu" | "gpu"
 
 ---
 
-## ✨ Features
+## Features
 
 - **CLD2 language detection** is now integrated into the SDK for automatic language identification.
 - **OCR plugin updated** to work with `@qvac/ocr-onnx@0.4.0`.
@@ -1437,7 +1785,7 @@ console.log(stats?.backendDevice); // "cpu" | "gpu"
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 - **KV cache preserved across tool-call round-trips** — multi-turn tool-calling completions no longer lose context between rounds.
 - **KV cache save race condition** fixed in tool-calling completions — concurrent saves no longer corrupt the cache.
@@ -1454,7 +1802,7 @@ console.log(stats?.backendDevice); // "cpu" | "gpu"
 
 ---
 
-## 📦 Model Changes
+## Model Changes
 
 Model registry updated: 312 → 653 (+341). See [model changes](./changelog/0.9.0/models.md) for the full list.
 
@@ -1466,7 +1814,7 @@ Model registry updated: 312 → 653 (+341). See [model changes](./changelog/0.9.
 
 ---
 
-## 🧹 Other Changes
+## Other Changes
 
 - Updated addon dependencies: `@qvac/tts-onnx` to v0.6.7, `@qvac/transcription-whispercpp` to latest, Parakeet to v0.2.7, `@qvac/diffusion-cpp` to ^0.1.3.
 - Replaced FeatureBase support links with Discord channel.
@@ -1482,7 +1830,7 @@ This is a patch release that fixes a race condition in the KV cache save path du
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 ### KV Cache Save Race Condition in Tool-Calling Completions
 
@@ -1498,7 +1846,7 @@ The fix ensures the save command receives the correct session path and the SDK a
 
 ---
 
-## 📘 Documentation
+## Documentation
 
 - Added npm keywords to `package.json` for better discoverability on the npm registry, covering AI/ML, inference engines, supported platforms, and P2P capabilities.
 - Added a link to the consolidated plaintext documentation export (`llms-full.txt`) in the SDK README for AI/LLM tool consumption.
@@ -1511,7 +1859,7 @@ This is a maintenance release that refreshes the SDK README with a streamlined q
 
 ---
 
-## 📘 Documentation
+## Documentation
 
 ### README Rewrite
 
@@ -1526,7 +1874,7 @@ Key changes:
 
 ---
 
-## ⚙️ Infrastructure
+## Infrastructure
 
 - SDK dependency installs in CI publish and pod check workflows are now frozen to prevent unexpected version drift during builds.
 
@@ -1538,7 +1886,7 @@ This release introduces a heartbeat mechanism for proactive provider health moni
 
 ---
 
-## 💥 Breaking Changes
+## Breaking Changes
 
 ### Heartbeat Replaces Ping
 
@@ -1567,7 +1915,7 @@ await heartbeat({
 
 ---
 
-## 🔌 New APIs
+## New APIs
 
 ### RPC Health Probe for Delegation
 
@@ -1604,7 +1952,7 @@ await cancel({
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 - **IndicTrans model type unblocked** — The NMT translation plugin no longer incorrectly blocks IndicTrans models from loading, restoring multi-engine translation support.
 - **Accurate download progress** — Registry downloads now report progress from the network layer instead of disk I/O polling, giving real-time progress that reflects actual bytes received.
@@ -1614,13 +1962,13 @@ await cancel({
 
 ---
 
-## 📘 Documentation
+## Documentation
 
 - All SDK READMEs now reference the `@qvac` npm namespace instead of the legacy `@tetherto` scope.
 
 ---
 
-## 🧪 Testing
+## Testing
 
 - New E2E tests cover parallel download scenarios and cancel isolation to prevent race conditions between concurrent operations.
 - The mobile E2E test executor has been refactored to an asset-based architecture for more reliable cross-platform testing.
@@ -1633,7 +1981,7 @@ This release adds Parakeet as a new transcription engine alongside Whisper, deco
 
 ---
 
-## 💥 Breaking Changes
+## Breaking Changes
 
 ### Embedding Model Config Uses Structured Fields
 
@@ -1747,7 +2095,7 @@ All existing Parakeet model constants now include a variant prefix (`TDT_`) to d
 
 ---
 
-## 🔌 New APIs
+## New APIs
 
 ### Parakeet Transcription Plugin
 
@@ -1837,7 +2185,7 @@ await embed(
 
 ---
 
-## ✨ Features
+## Features
 
 ### CTC and Sortformer Transcription Models
 
@@ -1884,7 +2232,7 @@ The profiler now captures detailed load/download metrics and stream profiling da
 
 ---
 
-## 🐞 Bug Fixes
+## Bug Fixes
 
 - **Addon logging fixed across all plugins** — Logging callbacks were not being properly attached to some addon plugins, resulting in missing addon-level logs. All plugins now correctly route native addon logs through the SDK logging system.
 - **Parakeet addon logger** now uses the correct `params.modelId` for log routing.
@@ -1894,7 +2242,7 @@ The profiler now captures detailed load/download metrics and stream profiling da
 
 ---
 
-## 📦 Model Changes
+## Model Changes
 
 ### Added Models
 
@@ -1925,7 +2273,7 @@ The following unprefixed Parakeet constants were replaced by their `TDT_` equiva
 
 ---
 
-## 🧹 Other Changes
+## Other Changes
 
 - Consolidated transcription schemas and shared ops into a unified structure.
 - Updated `@qvac/tts-onnx` to v0.6.1 and `@qvac/transcription-whispercpp` addon.

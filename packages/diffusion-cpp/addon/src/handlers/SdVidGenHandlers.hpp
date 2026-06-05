@@ -12,7 +12,7 @@ namespace qvac_lib_inference_addon_sd {
 
 /**
  * All per-job generation parameters for a single video generation call
- * (txt2vid / img2vid / flf2vid). Populated by applySdVidGenHandlers() inside
+ * (txt2vid / img2vid). Populated by applySdVidGenHandlers() inside
  * SdModel::process(), then mapped to sd_vid_gen_params_t before
  * generate_video() is called.
  *
@@ -26,11 +26,9 @@ namespace qvac_lib_inference_addon_sd {
 struct SdVidGenConfig {
 
   // -- Mode ------------------------------------------------------------------
-  // "txt2vid" (default)  -- prompt-only, no init or end image
+  // "txt2vid" (default)  -- prompt-only, no init image
   // "img2vid"            -- animate a single init image (strength controls
   //                         how much denoise deviates from init)
-  // "flf2vid"            -- interpolate between first (init) and last (end)
-  //                         frame; both images required
   std::string mode = "txt2vid";
 
   // -- Prompt ----------------------------------------------------------------
@@ -66,6 +64,16 @@ struct SdVidGenConfig {
   sample_method_t sampleMethod = EULER_SAMPLE_METHOD; // Wan recommended
   scheduler_t scheduler = SIMPLE_SCHEDULER;           // Wan recommended
   float cfgScale = 6.0f;                              // guidance.txt_cfg
+  // Image-conditioning guidance for img2vid. Mirrors the image
+  // path's SdGenConfig::imgCfgScale exactly:
+  //   -1.0f (default sentinel): fall through to cfgScale (txt_cfg), so a
+  //     caller that only sets cfg_scale gets the same value applied to
+  //     both txt_cfg and img_cfg without having to repeat themselves.
+  //   >= 0.0f: explicit override of sample_params.guidance.img_cfg.
+  // Ignored by generate_video() for txt2vid but always set in the params
+  // struct -- safe to populate unconditionally because upstream simply
+  // doesn't read it when no image conditioning is in play.
+  float imgCfgScale = -1.0f;
   // Flow-matching noise schedule shift. Convention:
   //   - 0.0f (default sentinel): fall through to SdCtxConfig::flowShift,
   //     which itself defaults to infinity (model-embedded value).
@@ -93,7 +101,7 @@ struct SdVidGenConfig {
   // empty (Wan 2.1).
   float moeBoundary = 0.875f;
 
-  // -- Denoising strength (img2vid / flf2vid) -------------------------------
+  // -- Denoising strength (img2vid) -----------------------------------------
   // 0 = keep init, 1 = ignore it. Ignored for txt2vid.
   float strength = 0.75f;
 
@@ -127,7 +135,7 @@ struct SdVidGenConfig {
  * Throws qvac_errors::StatusError on invalid input.
  */
 using SdVidGenHandlerFn =
-    std::function<void(SdVidGenConfig &, const picojson::value &)>;
+    std::function<void(SdVidGenConfig&, const picojson::value&)>;
 using SdVidGenHandlersMap = std::unordered_map<std::string, SdVidGenHandlerFn>;
 
 /** All supported per-job video generation param keys and their handlers. */
@@ -137,6 +145,6 @@ extern const SdVidGenHandlersMap SD_VID_GEN_HANDLERS;
  * Apply SD_VID_GEN_HANDLERS to a parsed JSON params object, writing into
  * config. Unknown keys are silently ignored (forward compatibility).
  */
-void applySdVidGenHandlers(SdVidGenConfig &config, const picojson::object &obj);
+void applySdVidGenHandlers(SdVidGenConfig& config, const picojson::object& obj);
 
 } // namespace qvac_lib_inference_addon_sd

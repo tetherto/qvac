@@ -11,6 +11,16 @@ require('./integration-runtime.cjs')
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
 
+async function runBackendDeviceTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBackendDeviceTest')) return __FILTERED
+  return runIntegrationModule('../integration/backend-device.test.js', options)
+}
+
+async function runCanvasSizeTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCanvasSizeTest')) return __FILTERED
+  return runIntegrationModule('../integration/canvas-size.test.js', options)
+}
+
 async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrBasicTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-basic.test.js', options)

@@ -27,6 +27,13 @@ struct BCIConfig {
   std::map<std::string, JSValueVariant> whisperContextCfg;
   std::map<std::string, JSValueVariant> bciConfig;
 
+  // Addon prebuilds folder (`configurationParams.backendsDir` from JS).
+  // Combined with the compile-time `BACKENDS_SUBDIR` to locate the
+  // per-arch ggml `.so` modules for `ggml_backend_load_all_from_path()`.
+  // Android-only; empty elsewhere. Mirrors WhisperConfig::backendsDir
+  // in transcription-whispercpp 0.9.0.
+  std::string backendsDir;
+
   // Owned storage for string values that whisper_full_params references by
   // pointer (e.g. p.language = lang_.c_str()). Must outlive the params struct.
   mutable std::string lang_;

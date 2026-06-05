@@ -10,7 +10,13 @@ import {
 import { reconstructError } from "./rpc-error";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getClientLogger, summarizeRequest } from "@/logging";
-import { getRPC, close as closeRPC, createDuplexSession } from "#rpc";
+import {
+  getRPC,
+  close as closeRPC,
+  createDuplexSession,
+  getWorkerLifeSignal,
+} from "#rpc";
+import { WorkerCrashedError } from "@/utils/errors-client";
 import {
   nowMs,
   shouldProfile,
@@ -44,6 +50,98 @@ function getNextCommandId() {
   return commandCounter;
 }
 
+// Race in-flight reply/stream pulls against the worker-life signal —
+// bare-rpc's `_onerror` does not iterate `_outgoingRequests`, so without
+// this they hang on a dead socket.
+
+function lifeSignalAbortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  return new WorkerCrashedError(null, null);
+}
+
+async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
+  // Null on Bare-direct / Expo and pre-spawn.
+  const lifeSignal = getWorkerLifeSignal();
+  if (!lifeSignal) return p;
+  if (lifeSignal.aborted) throw lifeSignalAbortError(lifeSignal);
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      lifeSignal.removeEventListener("abort", onAbort);
+      reject(lifeSignalAbortError(lifeSignal));
+    };
+    lifeSignal.addEventListener("abort", onAbort, { once: true });
+    p.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        lifeSignal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        lifeSignal.removeEventListener("abort", onAbort);
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is
+        reject(err);
+      },
+    );
+  });
+}
+
+async function* iterateWithLifeSignal<T>(
+  source: AsyncGenerator<T>,
+): AsyncGenerator<T> {
+  // Null on Bare-direct / Expo and pre-spawn.
+  const lifeSignal = getWorkerLifeSignal();
+  if (!lifeSignal) {
+    yield* source;
+    return;
+  }
+  if (lifeSignal.aborted) throw lifeSignalAbortError(lifeSignal);
+  try {
+    while (true) {
+      const nextP = source.next();
+      const result = await new Promise<IteratorResult<T>>((resolve, reject) => {
+        let settled = false;
+        const onAbort = () => {
+          if (settled) return;
+          settled = true;
+          lifeSignal.removeEventListener("abort", onAbort);
+          reject(lifeSignalAbortError(lifeSignal));
+        };
+        lifeSignal.addEventListener("abort", onAbort, { once: true });
+        nextP.then(
+          (value) => {
+            if (settled) return;
+            settled = true;
+            lifeSignal.removeEventListener("abort", onAbort);
+            resolve(value);
+          },
+          (err: unknown) => {
+            if (settled) return;
+            settled = true;
+            lifeSignal.removeEventListener("abort", onAbort);
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is
+            reject(err);
+          },
+        );
+      });
+      if (result.done) return;
+      yield result.value;
+    }
+  } finally {
+    // Fire-and-forget cleanup. If the source is suspended on a never-
+    // settling read (worker dead), `.return()` propagates an abrupt
+    // completion through the for-await chain so inner streams get
+    // destroyed. The `.catch` swallows the case where the underlying
+    // stream cannot honour `.return()` cleanly.
+    void source.return?.(undefined).catch(() => {});
+  }
+}
+
 function checkAndThrowError(response: Response): void {
   if (response.type === "error") {
     // Use the typed-error reconstructor map in `rpc-error.ts` so the
@@ -60,12 +158,29 @@ interface RPCResult {
   connectionMs?: number;
 }
 
+function invalidateRPCInstance(): void {
+  rpcInstance = null;
+  firstConnectionPending = true;
+  resetConnectionTracking();
+}
+
 async function getRPCInstance(): Promise<RPCResult> {
   if (rpcInstance) return { rpc: await rpcInstance };
 
   const connectionStart = firstConnectionPending ? nowMs() : null;
   rpcInstance = getRPC();
   const rpc = await rpcInstance;
+
+  // Drop the cache on worker death so the next call respawns and
+  // records connectionMs again as a "first" connection.
+  const lifeSignal = getWorkerLifeSignal();
+  if (lifeSignal?.aborted) {
+    invalidateRPCInstance();
+  } else if (lifeSignal) {
+    lifeSignal.addEventListener("abort", invalidateRPCInstance, {
+      once: true,
+    });
+  }
 
   if (connectionStart !== null && firstConnectionPending) {
     firstConnectionPending = false;
@@ -131,7 +246,9 @@ async function sendBase<T extends Request>(
   const payload = JSON.stringify(payloadObj);
   req.send(payload, "utf-8");
 
-  const response = await withTimeout(req.reply("utf-8"), options?.timeout);
+  const response = await awaitWithLifeSignal(
+    withTimeout(req.reply("utf-8"), options?.timeout),
+  );
 
   const resPayload = responseSchema.parse(
     JSON.parse(response?.toString() || "{}"),
@@ -174,7 +291,9 @@ async function sendProfiled<T extends Request>(
     timings.sendStart = nowMs();
     req.send(payload, "utf-8");
 
-    const response = await withTimeout(req.reply("utf-8"), options?.timeout);
+    const response = await awaitWithLifeSignal(
+    withTimeout(req.reply("utf-8"), options?.timeout),
+  );
     timings.firstResponseAt = nowMs();
 
     const parseStart = nowMs();
@@ -258,7 +377,7 @@ async function* streamBase<T extends Request>(
     options?.timeout,
   );
 
-  for await (const chunk of streamWithTimeout) {
+  for await (const chunk of iterateWithLifeSignal(streamWithTimeout)) {
     buffer += chunk.toString();
 
     // Process complete lines (newline-delimited JSON)
@@ -323,7 +442,7 @@ async function* streamProfiled<T extends Request>(
       options?.timeout,
     );
 
-    for await (const chunk of streamWithTimeout) {
+    for await (const chunk of iterateWithLifeSignal(streamWithTimeout)) {
       const chunkTime = nowMs();
       if (timings.firstChunkAt === undefined) {
         timings.firstChunkAt = chunkTime;
@@ -555,8 +674,6 @@ async function duplexProfiled<T extends Request>(
 
 export async function close() {
   if (!rpcInstance) return;
-  rpcInstance = null;
-  firstConnectionPending = true;
-  resetConnectionTracking();
+  invalidateRPCInstance();
   await closeRPC();
 }

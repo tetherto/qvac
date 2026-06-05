@@ -219,6 +219,7 @@ jobs:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
       QVAC_WRITER_PUBLIC_KEY: ${{ secrets.QVAC_WRITER_PUBLIC_KEY }}
       QVAC_WRITER_SECRET_KEY: ${{ secrets.QVAC_WRITER_SECRET_KEY }}
+      QVAC_INDEXER_KEYS: ${{ secrets.QVAC_INDEXER_KEYS }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
@@ -256,7 +257,7 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: node scripts/sync-models.js --file=./data/models.prod.json
-        timeout-minutes: 30
+        timeout-minutes: 70
 
   smoke-test:
     needs:

@@ -74,6 +74,13 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   // a different value is silently ignored on the tts-cpp side
   // because ggml-opencl only reads the env var once at first init.
   opts.opencl_cache_dir = cfg.openclCacheDir;
+
+  // Multilingual text preprocessing dictionaries.  Only consumed by the
+  // multilingual T3 variant inside tts-cpp (Turbo ignores them); leave
+  // the EngineOptions fields empty when the host didn't resolve a path
+  // so tts-cpp keeps its character-level fallback.
+  if (!cfg.mecabDictPath.empty())  opts.mecab_dict_path  = cfg.mecabDictPath;
+  if (!cfg.cangjieTsvPath.empty()) opts.cangjie_tsv_path = cfg.cangjieTsvPath;
   return opts;
 }
 

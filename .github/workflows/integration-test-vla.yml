@@ -20,6 +20,10 @@ on:
         type: string
         required: true
 
+concurrency:
+  group: integration-test-vla-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
@@ -57,10 +61,10 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
-          - os: mac-mini-m4
+          - os: macos-15-xlarge
             platform: darwin
             arch: arm64
-            runner: mac-mini-m4-gpu
+            runner: macos-15-xlarge
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -78,7 +82,8 @@ jobs:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
-        if: startsWith(matrix.runner, 'qvac-')
+        working-directory: .
+        if: runner.environment != 'github-hosted'
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -289,7 +294,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
       - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
-        name: Install AWS CLI on macOS (user-local, no sudo — covers self-hosted mac-mini-m4)
+        name: Install AWS CLI on macOS (user-local fallback for runners without pre-installed aws)
         shell: bash
         run: |
           # 1. Already on PATH?
@@ -307,9 +312,8 @@ jobs:
               exit 0
             fi
           done
-          # 3. User-local install (self-hosted mac-mini-m4 has no passwordless
-          # sudo, so we extract AWSCLIV2.pkg into $HOME instead of using
-          # `installer -target /`).
+          # 3. User-local install (extract AWSCLIV2.pkg into $HOME instead
+          # of using `installer -target /` which requires sudo).
           echo "Installing AWS CLI v2 user-local..."
           curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
           rm -rf /tmp/awscli-expanded
@@ -333,7 +337,7 @@ jobs:
 
       - name: Cache VLA models
         id: model-cache
-        if: ${{ startsWith(matrix.runner, 'qvac-') && !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        if: ${{ runner.environment != 'github-hosted' && !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         uses: ./.github/actions/cache-models
         with:
           package: vla-ggml
@@ -350,6 +354,35 @@ jobs:
           aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf" model/vla/smolvla-libero-vision-q8.gguf
           echo "SmolVLA model files:"
           ls -la model/vla/
+
+      # π₀.₅ test artefacts (gguf + parity-oracle fixture + activations).
+      # Same Apple-Paravirtual exclusion as smolvla — pi05_base.gguf is
+      # 6.3 GB at F16/Q8 mix and the model needs ~12 GB RAM to run in
+      # float32; the macOS-13 intel runners can't host either.
+      #
+      # No `|| true`. If any of the three artefacts is missing the
+      # download step fails loudly and the integration-tests job goes
+      # red. A skipped pi05 e2e test under a green CI is a false-
+      # positive pass — we'd rather see the workflow fail when the
+      # assets are out of sync.
+      - name: Download π₀.₅ test artefacts from S3
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Downloading π₀.₅ test artefacts from S3..."
+          mkdir -p model/vla/pi05 test/pi05-oracle
+          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/pi05-base/2026-05-21"
+          # Default shipping quant is `q_aggressive` (Q5_0 vision + Q8_0 VLM
+          # + Q8_0 expert + F32 norms/ada; ~3.9 GB; cos=0.9996 vs PT in the
+          # 2026-05-21 sweep, both plan §5 bars clear). See
+          # README-pi05-converter.md for the full quant table + sweep.
+          aws s3 cp "$S3_BASE/pi05-base-q-aggressive.gguf"  model/vla/pi05/pi05-base-q-aggressive.gguf
+          aws s3 cp "$S3_BASE/fixture.safetensors"           test/pi05-oracle/fixture.safetensors
+          aws s3 cp "$S3_BASE/activations.safetensors"       test/pi05-oracle/activations.safetensors
+          echo "π₀.₅ asset state after download:"
+          ls -la model/vla/pi05/ test/pi05-oracle/
 
       # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
       # depends on the Vulkan loader (vulkan-1.dll). The qvac-win25-x64-gpu
@@ -388,7 +421,10 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
-          QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-vision-q8.gguf', github.workspace, env.WORKDIR) }}
+          QVAC_VLA_MODEL: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/smolvla-libero-vision-q8.gguf', github.workspace, env.WORKDIR) || '' }}
+          PI05_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/pi05/pi05-base-q-aggressive.gguf', github.workspace, env.WORKDIR) || '' }}
+          PI05_TEST_FIXTURE: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/fixture.safetensors', github.workspace, env.WORKDIR) || '' }}
+          PI05_TEST_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) || '' }}
         run: |
           set +e
           # Stream test output AND capture it so we can inspect the TAP summary
@@ -415,13 +451,55 @@ jobs:
         shell: powershell
         env:
           QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-vision-q8.gguf
+          PI05_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/pi05/pi05-base-q-aggressive.gguf
+          PI05_TEST_FIXTURE: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/fixture.safetensors
+          PI05_TEST_ACTIVATIONS: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/activations.safetensors
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+
+      # Render the perf-report(s) into the job's Step Summary so reviewers
+      # see the timing + quality tables inline on the Actions page. Mobile
+      # already does this; desktop was artifact-only before. Globs both
+      # smolvla's `performance-report.json` and pi05's
+      # `performance-report-pi05.json`; missing files are tolerated.
+      - name: Render performance Step Summary (Linux/macOS)
+        if: ${{ always() && matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          REPORTS=( test/results/performance-report*.json )
+          if [ ${#REPORTS[@]} -eq 0 ]; then
+            echo "No perf-report*.json found under test/results — skipping Step Summary render"
+            exit 0
+          fi
+          for r in "${REPORTS[@]}"; do
+            echo "Rendering $r → \$GITHUB_STEP_SUMMARY"
+            node "${GITHUB_WORKSPACE}/scripts/perf-report/render-step-summary.js" "$r" "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Render performance Step Summary (Windows)
+        if: ${{ always() && matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          $reports = Get-ChildItem -Path 'test/results' -Filter 'performance-report*.json' -ErrorAction SilentlyContinue
+          if (-not $reports) {
+            Write-Host 'No perf-report*.json found under test/results - skipping Step Summary render'
+            exit 0
+          }
+          foreach ($r in $reports) {
+            Write-Host ('Rendering ' + $r.FullName)
+            & node "$env:GITHUB_WORKSPACE\scripts\perf-report\render-step-summary.js" $r.FullName $env:GITHUB_STEP_SUMMARY
+          }
 
       - name: Upload performance report
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
-          path: ${{ env.WORKDIR }}/test/results/performance-report.json
+          # Glob picks up both addon.test.js's `performance-report.json`
+          # (smolvla) and pi05.test.js's `performance-report-pi05.json`.
+          path: ${{ env.WORKDIR }}/test/results/performance-report*.json
           if-no-files-found: ignore
           retention-days: 14

@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.19.0] - 2026-06-02
+
+### Changed
+
+- `feat[bc]`: `RuntimeStats.context_size` now reports the active runtime llama context size. Use the new `RuntimeStats.trained_context_size` field for the model's trained context size.
+- The embed runtime now defaults `ctx_size` to the model's trained context size and caps oversized `ctx_size` requests to that value before creating the llama context. The cap also applies on streamed loads (single-GGUF and sharded) by parsing GGUF metadata from the first streamed chunk before the weights engine consumes it, mirroring the `ModelMetaData` pattern used by `llm-llamacpp`.
+
+### Fixed
+
+- Context overflow validation now compares tokenized inputs against the active runtime context size (`llama_n_ctx`), which is itself capped to the trained context.
+- `BertModel::setWeightsForFile` now tracks fulfilled GGUF shards in a per-instance `std::atomic<int>` instead of a function-local `static int`, so multiple concurrent `BertInterface` instances no longer share (and miscount) shard-fulfillment state.
+- `BertModel` now resolves sharded model basenames to absolute paths relative to the model directory before metadata inspection and disk-shards loading, so the trained-context cap and `llama_model_load_from_splits` work correctly when the working directory differs from the model directory.
+- `readTrainedContextSize` now logs an `ERROR`-level diagnostic when GGUF metadata cannot be read on either streamed or non-streaming loads (previously failed silently and reverted to llama.cpp's default `ctx_size`).
+
+## [0.18.2] - 2026-06-03
+
+### Fixed
+
+- **Multi-GPU params rejected on Android/iOS**: passing `split-mode` (non-`none`), `main-gpu`, or `tensor-split` on a mobile device now throws `InvalidArgument` immediately in `setupParams`, before any backend selection occurs. Previously these parameters could silently cause undefined behaviour on mobile. Use single-GPU config on mobile.
+
+## Pull Requests
+
+- [#2352](https://github.com/tetherto/qvac/pull/2352) - QVAC-18802: reject multi-GPU config on Android/iOS
+
+## [0.18.1] - 2026-06-02
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
+
 ## [0.18.0] - 2026-05-29
 
 ### Fixed

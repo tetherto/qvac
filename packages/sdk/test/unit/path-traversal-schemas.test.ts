@@ -1,4 +1,3 @@
-// @ts-ignore brittle has no type declarations
 import test from "brittle";
 import { audioInputSchema } from "@/schemas/transcription";
 import { imageInputSchema } from "@/schemas/ocr";
