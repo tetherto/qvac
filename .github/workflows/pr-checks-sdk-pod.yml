@@ -269,6 +269,9 @@ jobs:
             run "test:e2e" npm run --if-present test:e2e
 
             if [ "$PKG" = "sdk" ]; then
+              # bare-sdk's dep-lockstep guard against PR head; an sdk-only dep
+              # bump never triggers a bare-sdk check otherwise.
+              run "bare-sdk deps parity" node "$WS/packages/bare-sdk/scripts/check-deps-vs-sdk.mjs"
               if consumer_install_check; then
                 echo "  ok  [$PKG] consumer install"
               else
