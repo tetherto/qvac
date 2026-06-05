@@ -88,14 +88,24 @@ module.exports = {
   mode: 'blobs',
 
   // Active preset for the device leg (and the Linux default). Override on Linux
-  // with QVAC_VLM_PRESET. Set to 'smoke' for a 1-cell/1-task/1-sample pipeline
-  // check; 'full' for the real test set.
-  defaultPreset: 'smoke',
+  // with QVAC_VLM_PRESET. 'compare' = the current focus (Qwen3.5 f16-vs-q8 mmproj,
+  // a few samples so quality is non-zero); 'smoke' = 1-cell/1-task/1-sample wiring
+  // check; 'full' = the real test set.
+  defaultPreset: 'compare',
 
   // A preset narrows the matrix. `null` fields fall back to the harness defaults
   // (all cells / all fixture tasks / samples=isMobile?2:5 / devices=cpu+gpu).
   presets: {
     full: { cells: ALL_CELLS, tasks: null, samplesPerTask: null, devices: null },
-    smoke: { cells: [{ model: 'qwen', mmproj: 'q8' }], tasks: ['vqav2'], samplesPerTask: 1, devices: null }
+    smoke: { cells: [{ model: 'qwen', mmproj: 'q8' }], tasks: ['vqav2'], samplesPerTask: 1, devices: null },
+    // Qwen3.5: registry f16 mmproj vs candidate q8 mmproj. Two tasks (incl. the
+    // multiple-choice scienceqa, which scores non-zero even for a tiny model) ×
+    // 3 samples so the quality columns carry real numbers without a long run.
+    compare: {
+      cells: [{ model: 'qwen', mmproj: 'f16' }, { model: 'qwen', mmproj: 'q8' }],
+      tasks: ['vqav2', 'scienceqa'],
+      samplesPerTask: 3,
+      devices: null
+    }
   }
 }

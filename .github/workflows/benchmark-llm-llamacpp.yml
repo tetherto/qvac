@@ -749,9 +749,12 @@ jobs:
         run: |
           npm pack @qvac/llm-llamacpp@latest
           tar -xzf *.tgz
+          ADDON_VER=$(node -e "console.log(require('./package/package.json').version)")
+          echo "ADDON_VERSION=$ADDON_VER" >> "$GITHUB_ENV"
           rm -rf prebuilds
           mv package/prebuilds ./prebuilds
           rm -rf package *.tgz
+          echo "addon @qvac/llm-llamacpp@$ADDON_VER"
           ls -la prebuilds/
 
       # GPU runners ship the Vulkan SDK at the well-known path; stamp the
@@ -778,12 +781,36 @@ jobs:
           bare test/integration/all.js --exit 2>&1 | tee "vlm-matrix-linux-${{ matrix.backend }}.log"
           exit ${PIPESTATUS[0]}
 
+      # HW/SW provenance so a reader can reproduce the numbers. Rendered in the
+      # report's Details section (passed to aggregate.js via --provenance).
+      - name: Gather provenance
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          F="prov-linux-${{ matrix.backend }}.md"
+          {
+            echo "**linux · ${{ matrix.backend }}** (runner \`${{ matrix.runner }}\`)"
+            echo "- addon: \`@qvac/llm-llamacpp@${ADDON_VERSION:-?}\` (published prebuild)"
+            echo "- git: \`${{ needs.context.outputs.head_sha }}\` (ref \`${{ needs.context.outputs.ref }}\`)"
+            echo "- node: $(node -v 2>/dev/null) · bare: $(bare --version 2>/dev/null || echo n/a)"
+            echo "- os: $(. /etc/os-release 2>/dev/null; echo "$PRETTY_NAME") $(uname -m)"
+            echo "- cpu: $(lscpu 2>/dev/null | sed -n 's/^Model name:[[:space:]]*//p' | head -1) ($(nproc) cores)"
+            echo "- ram: $(free -h 2>/dev/null | awk '/^Mem:/{print $2}')"
+            if [ "${{ matrix.backend }}" = "gpu" ]; then
+              echo "- gpu: $(vulkaninfo --summary 2>/dev/null | sed -n 's/.*deviceName[[:space:]]*=[[:space:]]*//p' | head -1 || echo '?')"
+            fi
+          } > "$F"
+          cat "$F"
+
       - name: Upload matrix log
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: vlm-matrix-log-linux-${{ matrix.backend }}-${{ github.run_number }}
-          path: ${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
+          path: |
+            ${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
+            ${{ env.WORKDIR }}/prov-linux-${{ matrix.backend }}.md
           retention-days: 14
           if-no-files-found: warn
 
@@ -864,14 +891,25 @@ jobs:
           for f in $(find matrix-logs -name '*Galaxy_S25*logcat_full*' 2>/dev/null | sort); do
             ARGS="$ARGS --in s25 $f"
           done
+          # HW/SW provenance: Linux legs ship prov-linux-*.md; synthesize one for S25.
+          PROV=""
+          for p in $(find matrix-logs -name 'prov-*.md' 2>/dev/null | sort); do
+            PROV="$PROV --provenance $p"
+          done
+          S25F=$(find matrix-logs -name '*Galaxy_S25*logcat_full*' 2>/dev/null | head -1)
+          if [ -n "$S25F" ]; then
+            printf '%s\n' "**s25** — Samsung Galaxy S25 Ultra (Android, AWS Device Farm); addon \`@qvac/llm-llamacpp\` (published prebuild)." > prov-s25.md
+            PROV="$PROV --provenance prov-s25.md"
+          fi
           echo "aggregate inputs:$ARGS"
+          echo "provenance:$PROV"
           if [ -z "$ARGS" ]; then
             echo "> No VLM matrix logs found for run #${{ github.run_number }}." > consolidated/vlm-matrix-consolidated.md
           else
             node packages/llm-llamacpp/benchmarks/vlm-matrix/aggregate.js \
               --title "VLM Matrix — preset=${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
               --out consolidated/vlm-matrix-consolidated.md \
-              $ARGS
+              $PROV $ARGS
           fi
 
       - name: Post step summary
