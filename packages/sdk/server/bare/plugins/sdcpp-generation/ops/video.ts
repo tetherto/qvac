@@ -107,10 +107,10 @@ export async function* video(
     ...(request.vace_strength !== undefined && {
       vace_strength: request.vace_strength,
     }),
-    ...(request.mode === "img2vid" && {
+    ...(request.init_image !== undefined && {
       init_image: Buffer.from(request.init_image, "base64"),
     }),
-    ...(request.mode === "img2vid" && request.strength !== undefined && {
+    ...(request.strength !== undefined && {
       strength: request.strength,
     }),
     ...(request.control_frames !== undefined && {

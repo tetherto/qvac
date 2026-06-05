@@ -94,18 +94,18 @@ export interface VideoResult {
 export function video(params: VideoClientParams): VideoResult {
   const requestId = generateClientRequestId();
 
-  const { control_frames, ...rest } = params;
-  const request = {
+  const { control_frames, init_image, ...rest } = params;
+  const request: VideoStreamRequest = {
     ...rest,
     ...(control_frames !== undefined && {
       control_frames: control_frames.map(encodeBase64),
     }),
-    ...(params.mode === "img2vid" && {
-      init_image: encodeBase64(params.init_image),
+    ...(init_image !== undefined && {
+      init_image: encodeBase64(init_image),
     }),
     type: "videoStream",
     requestId,
-  } as VideoStreamRequest;
+  };
 
   let statsResolver: (value: VideoStats | undefined) => void = () => {};
   let statsRejecter: (error: unknown) => void = () => {};

@@ -577,61 +577,88 @@ const videoGenerationBaseSchema = z.object({
     .describe("Direct cache reuse threshold override."),
 });
 
-export const videoTxt2vidRequestSchema = videoGenerationBaseSchema.extend({
+// Single wire object with mode-dependent rules expressed via a shared refine.
+// Keeping the wire schema a plain object (instead of a discriminated union)
+// lets the client builder construct the request without an `as` cast that
+// would otherwise disable field-level type-checking. The compile-time
+// "img2vid requires init_image" guarantee lives on the client-facing
+// discriminated union types below.
+const videoRequestObjectSchema = videoGenerationBaseSchema.extend({
   mode: z
-    .literal("txt2vid")
-    .describe("Text-to-video generation (no source frame)."),
-  init_image: z.never().optional()
-    .describe("Not valid in txt2vid mode — use mode: 'img2vid' to supply a first frame."),
-  strength: z.never().optional()
-    .describe("Not valid in txt2vid mode — denoise strength only applies to img2vid."),
-});
-
-export const videoImg2vidRequestSchema = videoGenerationBaseSchema.extend({
-  mode: z
-    .literal("img2vid")
-    .describe("Image-to-video generation from a first-frame image."),
+    .enum(["txt2vid", "img2vid"])
+    .describe(
+      "Generation mode: 'txt2vid' (no source frame) or 'img2vid' (first-frame image).",
+    ),
   init_image: base64StringSchema
-    .describe("Base64-encoded first-frame image (PNG/JPEG) for image-to-video."),
+    .optional()
+    .describe(
+      "Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.",
+    ),
   strength: z
     .number()
     .min(0)
     .max(1)
     .optional()
-    .describe("img2vid denoise strength in [0, 1]."),
+    .describe("img2vid denoise strength in [0, 1]; rejected for txt2vid."),
 });
 
-export const videoRequestSchema = z.discriminatedUnion("mode", [
-  videoTxt2vidRequestSchema,
-  videoImg2vidRequestSchema,
-]);
+function refineVideoMode(
+  data: z.infer<typeof videoRequestObjectSchema>,
+  ctx: z.RefinementCtx,
+) {
+  if (data.mode === "img2vid" && data.init_image === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["init_image"],
+      message: "init_image is required when mode is 'img2vid'.",
+    });
+  }
+  if (data.mode === "txt2vid") {
+    if (data.init_image !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["init_image"],
+        message: "init_image is only valid for img2vid.",
+      });
+    }
+    if (data.strength !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["strength"],
+        message: "strength is only valid for img2vid.",
+      });
+    }
+  }
+}
 
-export type VideoTxt2vidRequest = z.input<typeof videoTxt2vidRequestSchema>;
-export type VideoImg2vidRequest = z.input<typeof videoImg2vidRequestSchema>;
+export const videoRequestSchema =
+  videoRequestObjectSchema.superRefine(refineVideoMode);
+
 export type VideoRequest = z.input<typeof videoRequestSchema>;
 
-const videoStreamTypeSchema = z.literal("videoStream");
-
-export const videoStreamRequestSchema = z.discriminatedUnion("mode", [
-  videoTxt2vidRequestSchema.extend({ type: videoStreamTypeSchema }),
-  videoImg2vidRequestSchema.extend({ type: videoStreamTypeSchema }),
-]);
+export const videoStreamRequestSchema = videoRequestObjectSchema
+  .extend({ type: z.literal("videoStream") })
+  .superRefine(refineVideoMode);
 
 export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>;
 
-type VideoTxt2vidClientParams = Omit<
-  VideoTxt2vidRequest,
-  "requestId" | "control_frames"
+type VideoClientParamsCommon = Omit<
+  VideoRequest,
+  "requestId" | "mode" | "init_image" | "strength" | "control_frames"
 > & {
   control_frames?: Uint8Array[];
 };
 
-type VideoImg2vidClientParams = Omit<
-  VideoImg2vidRequest,
-  "requestId" | "init_image" | "control_frames"
-> & {
+export type VideoTxt2vidClientParams = VideoClientParamsCommon & {
+  mode: "txt2vid";
+  init_image?: never;
+  strength?: never;
+};
+
+export type VideoImg2vidClientParams = VideoClientParamsCommon & {
+  mode: "img2vid";
   init_image: Uint8Array;
-  control_frames?: Uint8Array[];
+  strength?: number;
 };
 
 export type VideoClientParams =
