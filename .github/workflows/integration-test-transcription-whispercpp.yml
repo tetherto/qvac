@@ -77,6 +77,7 @@ jobs:
             platform: linux
             arch: x64
             runner: qvac-ubuntu2204-x64
+            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
           - os: ubuntu-24.04
