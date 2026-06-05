@@ -4,6 +4,7 @@ import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
 import { FaGithub, FaDiscord, FaXTwitter } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { KeetIcon } from '@/components/keet-icon';
+import KeetRoomModalMount from '@/components/keet-modal';
 import { customTree } from '@/lib/custom-tree';
 import {
   AskAISearchToggleLarge,
@@ -27,6 +28,13 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       icon: <FaDiscord />,
       text: 'Discord',
       external: true,
+    },
+    {
+      type: 'icon',
+      url: '#keet-room',
+      label: 'Keet',
+      text: 'Keet',
+      icon: <KeetIcon />,
     },
     {
       type: 'icon',
@@ -77,6 +85,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
        */}
       <AskAILegacyShell />
       <AskAIPill />
+      <KeetRoomModalMount />
       {/* AskAITextSelection disabled — re-enable by uncommenting the import above and rendering <AskAITextSelection /> here. */}
     </>
   );

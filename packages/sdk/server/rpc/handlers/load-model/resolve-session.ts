@@ -18,7 +18,7 @@ export interface ResolveSessionOptions {
   profilingEnabled: boolean;
   /**
    * Optional cancel signal — typically `ctx.signal` from the surrounding
-   * `await using ctx = registry.begin(...)` block. When provided,
+   * `await using ctx = await registry.begin(...)` block. When provided,
    * `resolveModelPath` short-circuits with `InferenceCancelledError` if the
    * signal is already aborted on entry; the same signal also propagates
    * to in-progress transfers via the request binding below so cancel

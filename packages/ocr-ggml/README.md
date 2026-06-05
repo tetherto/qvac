@@ -108,6 +108,7 @@ bare examples/quickstart.js \
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
 | `params.backendsDir` | `string` | | `<package>/prebuilds` | directory holding `libggml-*.so` backend shared libs |
 | `params.backendDevice` | `'cpu'` \| `'vulkan'` \| `'metal'` | | `'cpu'` | ggml backend device. `'vulkan'` (Linux/Windows/Android) and `'metal'` (Apple) opt in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan--metal) |
+| `params.gpuDevice` | `number` | | _prefer discrete_ | 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`; out-of-range → CPU fallback — see [Selecting a specific GPU](#selecting-a-specific-gpu-gpudevice) |
 | `opts.stats` | `boolean` | | `false` | emit timing stats on `finish` |
 | `logger` | `Object` | | `null` | optional `{ info, warn, error, debug }` — receives C++ log lines |
 
@@ -118,7 +119,7 @@ bare examples/quickstart.js \
 - `unload(): Promise<void>` — frees the addon (destroys ggml contexts + backends)
 - `destroy(): Promise<void>` — marks the instance as destroyed (no further use)
 - `getState(): InferenceClientState`
-- `getBackendInfo(): BackendInfo | null` — backend device resolved at `load()` (`{ requested, backendDevice, backendName, fallbackReason }`); `null` before `load()` / after `unload()`
+- `getBackendInfo(): BackendInfo | null` — backend device resolved at `load()` (`{ requested, backendDevice, backendName, deviceIndex, backendDescription, fallbackReason }`); `null` before `load()` / after `unload()`. `deviceIndex` is the ggml device index of the selected device (or `-1` on CPU); `backendDescription` is the human-readable model (e.g. `'NVIDIA GeForce RTX 4090'`, `'Apple M3'`)
 - `OcrGgml.getModelKey(): string` — `"ocr-ggml"`, used by the inference manager
 
 ### Backend device (CPU / Vulkan / Metal)
@@ -138,10 +139,10 @@ const ocr = new OcrGgml({
 })
 await ocr.load()
 console.log(ocr.getBackendInfo())
-// Vulkan available → { requested: 'vulkan', backendDevice: 'GPU',  backendName: 'Vulkan0', fallbackReason: '' }
-// no Vulkan device → { requested: 'vulkan', backendDevice: 'CPU',  backendName: 'CPU',     fallbackReason: 'Vulkan backend requested but no Vulkan-capable GPU device was found; falling back to CPU' }
-// Metal available  → { requested: 'metal',  backendDevice: 'GPU',  backendName: 'MTL0',    fallbackReason: '' }  // device name; 'MTL1'… on a multi-GPU host
-// no Metal device  → { requested: 'metal',  backendDevice: 'CPU',  backendName: 'CPU',     fallbackReason: 'Metal backend requested but no Metal-capable GPU device was found; falling back to CPU' }
+// Vulkan available → { requested: 'vulkan', backendDevice: 'GPU', backendName: 'Vulkan0', deviceIndex: 1, backendDescription: 'NVIDIA GeForce RTX 4090', fallbackReason: '' }
+// no Vulkan device → { requested: 'vulkan', backendDevice: 'CPU', backendName: 'CPU', deviceIndex: -1, backendDescription: '…', fallbackReason: 'Vulkan backend requested but no Vulkan-capable GPU device was found; falling back to CPU' }
+// Metal available  → { requested: 'metal',  backendDevice: 'GPU', backendName: 'MTL0', deviceIndex: 1, backendDescription: 'Apple M3 Ultra', fallbackReason: '' }  // device name; 'MTL1'… on a multi-GPU host
+// no Metal device  → { requested: 'metal',  backendDevice: 'CPU', backendName: 'CPU', deviceIndex: -1, backendDescription: '…', fallbackReason: 'Metal backend requested but no Metal-capable GPU device was found; falling back to CPU' }
 ```
 
 Behaviour and expectations:
@@ -173,6 +174,57 @@ Behaviour and expectations:
   output is identical either way. Recommended default: **EasyOCR → `'metal'`,
   DocTR → `'cpu'`** on Apple. Since `backendDevice` is per-instance, you can mix
   both. (Numbers are workload/hardware dependent — measure for your case.)
+
+### Selecting a specific GPU (`gpuDevice`)
+
+On a host with more than one GPU (e.g. a discrete GPU plus an integrated GPU,
+or two discrete GPUs) the backend resolves which device to use as follows:
+
+- **Default (no `gpuDevice`): prefer discrete.** Selection enumerates every
+  GPU/iGPU device that matches the requested backend (Vulkan or Metal) and
+  picks the first **discrete** GPU (`GGML_BACKEND_DEVICE_TYPE_GPU`); if none is
+  discrete it uses the first **integrated** GPU. This avoids accidentally
+  pinning inference to a weaker iGPU on laptops/APUs.
+- **Explicit `gpuDevice: N`.** Pass a 0-based index to pin a specific device.
+  The index counts only the **matching** devices, in ggml enumeration order
+  (so `gpuDevice: 0` is the first matching device, `gpuDevice: 1` the second,
+  …). An **out-of-range** index transparently falls back to CPU and records a
+  `fallbackReason` naming the requested index and how many matching devices
+  were found. The resolved ggml device index is reported as
+  `getBackendInfo().deviceIndex` (and `-1` on CPU).
+
+```js
+const ocr = new OcrGgml({
+  params: {
+    pathDetector: '/abs/path/craft_mlt_25k.gguf',
+    pathRecognizer: '/abs/path/english_g2.gguf',
+    langList: ['en'],
+    backendDevice: 'vulkan',
+    gpuDevice: 1            // pin the 2nd matching Vulkan device
+  }
+})
+await ocr.load()
+console.log(ocr.getBackendInfo())
+// → { requested: 'vulkan', backendDevice: 'GPU', backendName: 'Vulkan1',
+//     deviceIndex: 1, backendDescription: 'NVIDIA GeForce RTX 4090', fallbackReason: '' }
+// out-of-range gpuDevice (e.g. 99) →
+//   { requested: 'vulkan', backendDevice: 'CPU', backendName: 'CPU', deviceIndex: -1,
+//     backendDescription: '…',
+//     fallbackReason: 'Vulkan backend requested with gpuDevice index 99 but only N matching device(s) were found; falling back to CPU' }
+```
+
+`gpuDevice` applies to **both** Vulkan and Metal (the prefer-discrete default
+and the index selection share one code path).
+
+- **Interim env lever (`GGML_VK_VISIBLE_DEVICES`).** For pinning or reordering
+  Vulkan devices *without code*, ggml's Vulkan backend honours the
+  `GGML_VK_VISIBLE_DEVICES` environment variable — a comma-separated list of
+  device indices (e.g. `GGML_VK_VISIBLE_DEVICES=1,0`) that restricts and
+  reorders the Vulkan devices ggml exposes. Because this is applied by ggml
+  *before* the addon enumerates devices, it composes with `gpuDevice`: the
+  addon's index counts the (already filtered/reordered) visible devices. Use it
+  as an interim lever (e.g. in CI or a launcher script) when you cannot pass
+  `gpuDevice` through the API. It does not affect Metal.
 
 ### `run(input)` shape
 

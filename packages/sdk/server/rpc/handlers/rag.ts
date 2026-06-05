@@ -102,16 +102,16 @@ function omitOnProgress<T extends Record<string, unknown>>(
  * "still mine?" guard so an older op's deferred cleanup cannot stomp
  * a newer op's mapping.
  */
-function beginRagContext(
+async function beginRagContext(
   workspace: string,
   requestId: string,
-): ManagedRequestContext {
+): Promise<ManagedRequestContext> {
   const registry = getRequestRegistry();
   const prev = getActiveRagRequest(workspace);
   if (prev !== undefined && prev !== requestId) {
     registry.cancel({ requestId: prev, reason: "rag-workspace-preempt" });
   }
-  const ctx = registry.begin({
+  const ctx = await registry.begin({
     requestId,
     kind: "rag",
   });
@@ -149,7 +149,7 @@ async function handleRagInternal(
     case "ingest": {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE;
       const requestId = request.requestId ?? generateServerRequestId();
-      await using ctx = beginRagContext(workspace, requestId);
+      await using ctx = await beginRagContext(workspace, requestId);
       const log = withRequestContext(getServerLogger(), ctx);
       log.debug("ingest start");
       const handlerOptions = createHandlerOptions(
@@ -172,7 +172,7 @@ async function handleRagInternal(
     case "saveEmbeddings": {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE;
       const requestId = request.requestId ?? generateServerRequestId();
-      await using ctx = beginRagContext(workspace, requestId);
+      await using ctx = await beginRagContext(workspace, requestId);
       const log = withRequestContext(getServerLogger(), ctx);
       log.debug("saveEmbeddings start");
       const handlerOptions = createHandlerOptions(
@@ -213,7 +213,7 @@ async function handleRagInternal(
     case "reindex": {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE;
       const requestId = request.requestId ?? generateServerRequestId();
-      await using ctx = beginRagContext(workspace, requestId);
+      await using ctx = await beginRagContext(workspace, requestId);
       const log = withRequestContext(getServerLogger(), ctx);
       log.debug("reindex start");
       const handlerOptions = createHandlerOptions(
