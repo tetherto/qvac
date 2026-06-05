@@ -241,6 +241,11 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       optThreads) {
     config.nThreads = static_cast<int>(optThreads->as<double>(env));
   }
+  if (auto optGpuDevice =
+          args1.getOptionalProperty<js::Number>(env, "gpuDevice");
+      optGpuDevice) {
+    config.gpuDevice = static_cast<int>(optGpuDevice->as<double>(env));
+  }
   if (auto optBackendsDir =
           args1.getOptionalProperty<js::String>(env, "backendsDir");
       optBackendsDir) {
@@ -343,9 +348,10 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 // Returns the backend device the pipeline resolved for inference as a JS
-// object: `{ requested, backendDevice, backendName, fallbackReason }`. This is
-// the programmatic surface for the selected ggml backend (RuntimeStats can only
-// carry numbers, so backend identity strings are exposed here). Consumed by
+// object: `{ requested, backendDevice, backendName, deviceIndex,
+// backendDescription, fallbackReason }`. This is the programmatic surface for
+// the selected ggml backend (RuntimeStats can only carry numbers, so backend
+// identity strings are exposed here). Consumed by
 // `OcrGgml._getDiagnosticsJSON()` and the Vulkan integration test.
 inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -373,6 +379,12 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
       env, "backendDevice", js::String::create(env, backendInfo.backendDevice));
   result.setProperty(
       env, "backendName", js::String::create(env, backendInfo.backendName));
+  result.setProperty(
+      env, "deviceIndex", js::Number::create(env, backendInfo.deviceIndex));
+  result.setProperty(
+      env,
+      "backendDescription",
+      js::String::create(env, backendInfo.backendDescription));
   result.setProperty(
       env,
       "fallbackReason",
