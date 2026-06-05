@@ -58,13 +58,31 @@ export interface OcrGgmlParams {
   /**
    * Requested ggml backend device. Default: `'cpu'`.
    *   - `'cpu'`: run inference on the CPU backend (always available).
-   *   - `'vulkan'`: opt in to GPU inference on a Vulkan-capable device. When no
-   *     Vulkan device is present the pipeline transparently falls back to CPU
-   *     and records the reason (see {@link BackendInfo.fallbackReason}).
-   * Requires the `libggml-vulkan` backend shared library to be present in
-   * `backendsDir`.
+   *   - `'vulkan'`: opt in to GPU inference on a Vulkan-capable device
+   *     (Linux/Windows/Android). Requires the `libggml-vulkan` backend shared
+   *     library to be present in `backendsDir`.
+   *   - `'metal'`: opt in to GPU inference on a Metal-capable device (Apple).
+   *     The Metal backend is compiled into the addon, so no extra shared
+   *     library is required.
+   * When the requested GPU device is not present the pipeline transparently
+   * falls back to CPU and records the reason (see
+   * {@link BackendInfo.fallbackReason}).
    */
-  backendDevice?: 'cpu' | 'vulkan'
+  backendDevice?: 'cpu' | 'vulkan' | 'metal'
+  /**
+   * Explicit GPU device selection for `'vulkan'` / `'metal'`. 0-based index
+   * into the GPU/iGPU devices that match the requested backend, in ggml
+   * enumeration order (the resolved index is reported as
+   * {@link BackendInfo.deviceIndex}).
+   *   - When omitted (default), selection prefers a discrete GPU and otherwise
+   *     falls back to an integrated GPU.
+   *   - When out of range, the pipeline falls back to CPU and records the
+   *     reason (see {@link BackendInfo.fallbackReason}).
+   * Ignored for `backendDevice: 'cpu'`. For pinning/reordering Vulkan devices
+   * without code you can also set the `GGML_VK_VISIBLE_DEVICES` env var (see
+   * the README).
+   */
+  gpuDevice?: number
 }
 
 /**
@@ -72,12 +90,19 @@ export interface OcrGgmlParams {
  * {@link OcrGgml.getBackendInfo}.
  */
 export interface BackendInfo {
-  /** Requested device (`'cpu'` | `'vulkan'`). */
+  /** Requested device (`'cpu'` | `'vulkan'` | `'metal'`). */
   requested: string
   /** Resolved device type (`'CPU'` | `'GPU'` | `'IGPU'` | `'ACCEL'`). */
   backendDevice: string
   /** ggml backend/device name of the resolved device (e.g. `'Vulkan0'`, `'CPU'`). */
   backendName: string
+  /**
+   * ggml device index of the selected device (the index into the loaded ggml
+   * devices), or `-1` when the CPU backend was selected (including fallback).
+   */
+  deviceIndex: number
+  /** Human-readable device description (e.g. `'NVIDIA GeForce RTX 4090'`, `'Apple M3'`); empty when ggml provides none. */
+  backendDescription: string
   /** Empty when the requested device was used; otherwise why it fell back to CPU. */
   fallbackReason: string
 }

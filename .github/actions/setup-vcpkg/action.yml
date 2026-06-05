@@ -30,7 +30,6 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        cd ..
         # Shallow + blobless + sparse clone; ports/ and versions/ are not
         # needed when consuming the S3 binary cache, so skip them to cut
         # the download to ~a few MB.

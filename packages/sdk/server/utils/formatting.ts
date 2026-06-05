@@ -1,13 +1,14 @@
 import crypto from "bare-crypto";
+import { Buffer } from "bare-buffer";
 
 /**
  * Generate a short hash (16 characters) from any input string
  */
 export function generateShortHash(input: string): string {
   const hash = crypto
-    .createHash("sha256")
+    .createHash("sha-256")
     .update(Buffer.from(input, "utf8"))
-    .digest("hex") as string;
+    .digest("hex");
   return hash.substring(0, 16);
 }
 

@@ -3,7 +3,6 @@ import { loadModel, translate, unloadModel, BERGAMOT_EN_FR } from "@qvac/sdk";
 try {
   const modelId = await loadModel({
     modelSrc: BERGAMOT_EN_FR,
-    modelType: "nmt",
     modelConfig: {
       engine: "Bergamot",
       from: "en",
@@ -35,7 +34,7 @@ try {
   const result = translate({
     modelId,
     text: texts, // Pass array for batch processing
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     stream: false,
   });
 

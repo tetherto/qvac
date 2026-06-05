@@ -8,7 +8,7 @@ schemaType: HowTo
 
 Each QVAC AI capability maps to a **built-in plugin** in the SDK. This lets you enable only what you need for your project and reduce your application's final bundle size.
 
-In addition, you can add **custom plugins** — both your own and community ones — that extend QVAC's capabilities. In both cases, you'll use the QVAC configuration file and the SDK CLI.
+In addition, you can add **custom plugins** — both your own and community ones — that extend QVAC's capabilities. In both cases, you'll use the QVAC configuration file and then bundle either with [QVAC CLI](/cli) or [programmatically via `@qvac/sdk/commands`](#notes).
 
 ## Built-in plugins
 
@@ -67,8 +67,10 @@ npx expo prebuild
 
 Only the selected plugins are included in your bundle, significantly reducing your application size. If `plugins` is omitted or an empty array, it bundles all built-in plugins by default.
 
-<Callout type="info">
-See [QVAC CLI](/cli) to learn how to install and use it.
+<Callout type="success">
+**Tips:**
+- You **do not need** the CLI (`@qvac/cli`) to bundle the SDK. See [Notes](#notes) to learn how to do it programmatically via `@qvac/sdk/commands`.
+- See [QVAC CLI](/cli) to learn how to install and use it.
 </Callout>
 
 ## Custom plugins

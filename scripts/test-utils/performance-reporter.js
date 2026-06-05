@@ -269,6 +269,83 @@ function _detectGpu (platform) {
   return null
 }
 
+// Standalone synchronous command runner (module scope) so the CPU probe below
+// can reuse the same Node/Bare subprocess adaptation as `_detectGpu`'s nested
+// `_safeExec` without coupling to it. Returns trimmed stdout, or null on any
+// failure / missing subprocess driver.
+function _safeExecCmd (cmd) {
+  if (!subprocessMod) return null
+  const nodeExecSync = subprocessMod.execSync || null
+  const bareSpawnSync = !nodeExecSync && subprocessMod.spawnSync
+    ? subprocessMod.spawnSync
+    : null
+  if (!nodeExecSync && !bareSpawnSync) return null
+  if (nodeExecSync) {
+    try {
+      return nodeExecSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000 }).trim()
+    } catch (_) {
+      return null
+    }
+  }
+  try {
+    const parts = cmd.split(/\s+/).filter(Boolean)
+    if (!parts.length) return null
+    const res = bareSpawnSync(parts[0], parts.slice(1), { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 })
+    if (!res || res.status !== 0) return null
+    const out = res.stdout
+    const str = out && typeof out.toString === 'function' ? out.toString('utf-8') : String(out || '')
+    return str.trim()
+  } catch (_) {
+    return null
+  }
+}
+
+// QVAC-19986 (review): label the actual host CPU/SoC for runs that don't use a
+// GPU (e.g. the CPU-only matrix legs), the same way `_detectGpu` labels the GPU.
+// Best-effort; returns null when no probe works. Runs once per reporter.
+function _detectCpu (platform) {
+  if (platform === 'darwin') {
+    const brand = _safeExecCmd('sysctl -n machdep.cpu.brand_string')
+    if (brand) return brand
+    const hw = _safeExecCmd('system_profiler SPHardwareDataType')
+    if (hw) {
+      const chip = hw.match(/^\s*Chip:\s*(.+)$/m)
+      if (chip) return chip[1].trim()
+      const proc = hw.match(/^\s*Processor Name:\s*(.+)$/m)
+      if (proc) return proc[1].trim()
+    }
+    return null
+  }
+
+  if (platform === 'linux') {
+    // `lscpu` exposes a friendly "Model name" on both x86 (AMD EPYC …) and
+    // ARM (Neoverse-N1 …); /proc/cpuinfo "model name" is the x86-only fallback.
+    const lscpu = _safeExecCmd('lscpu')
+    if (lscpu) {
+      const m = lscpu.match(/^Model name:\s*(.+)$/m)
+      if (m && m[1].trim() && m[1].trim() !== '-') return m[1].trim()
+    }
+    try {
+      const fsM = fs || require('fs')
+      const txt = fsM.readFileSync('/proc/cpuinfo', 'utf8')
+      const m = txt.match(/^model name\s*:\s*(.+)$/m)
+      if (m) return m[1].trim()
+    } catch (_) {}
+    return null
+  }
+
+  if (platform === 'win32') {
+    const wmic = _safeExecCmd('wmic cpu get name')
+    if (wmic) {
+      const lines = wmic.split('\n').slice(1).map(l => l.trim()).filter(Boolean)
+      if (lines.length) return lines[0]
+    }
+    return null
+  }
+
+  return null
+}
+
 function detectDevice () {
   const platform = osMod.platform ? osMod.platform() : processMod.platform
   const arch = osMod.arch ? osMod.arch() : processMod.arch
@@ -283,20 +360,36 @@ function detectDevice () {
       os_version: getEnvVar('DEVICE_FARM_DEVICE_OS_VERSION') || '',
       arch,
       gpu: null,
+      cpu: null,
       runner: 'device-farm'
     }
   }
 
   const runnerName = getEnvVar('RUNNER_NAME')
   const runnerOs = getEnvVar('RUNNER_OS')
-  const prettyName = runnerName || `${platform}-${arch}`
+  const cpu = _detectCpu(platform)
+
+  // GitHub-hosted runners report an opaque, per-run RUNNER_NAME like
+  // "GitHub Actions 1000595630" which is meaningless in the report (and changes
+  // every run, so it never grouped). Replace it with a stable, human-readable
+  // platform label from ImageOS (ubuntu24 / macos15 / win25 …) + arch, plus the
+  // probed CPU when available — mirroring how the GPU columns now name the real
+  // accelerator. Self-hosted runners (qvac-*) already carry descriptive names,
+  // so keep those untouched.
+  let name = runnerName || `${platform}-${arch}`
+  if (!runnerName || /^GitHub Actions\b/i.test(runnerName)) {
+    const imageOs = getEnvVar('ImageOS')
+    const base = imageOs ? `${imageOs}-${arch}` : `${platform}-${arch}`
+    name = cpu ? `${base} (${cpu})` : base
+  }
 
   return {
-    name: prettyName,
+    name,
     platform,
     os_version: runnerOs || '',
     arch,
     gpu: _detectGpu(platform),
+    cpu,
     runner: getEnvVar('GITHUB_ACTIONS') ? 'github-actions' : 'local'
   }
 }
@@ -515,6 +608,19 @@ function createPerformanceReporter (opts) {
       }
 
       results.push(entry)
+    },
+
+    /**
+     * Set `device.gpu` after construction — e.g. once an addon has resolved
+     * the actual GPU/backend name it ran on. Only fills a missing value, so a
+     * richer name from the `detectDevice()` probe (nvidia-smi/lspci/vulkaninfo)
+     * still wins; this is purely a fallback for minimal runners where those
+     * probes return null even though inference ran on a GPU.
+     *
+     * @param {string} name - Resolved GPU/backend name (e.g. 'Vulkan0')
+     */
+    setDeviceGpu (name) {
+      if (name && !device.gpu) device.gpu = name
     },
 
     /** Build the full JSON report object. */

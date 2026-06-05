@@ -13,6 +13,7 @@ on:
           - ocr-onnx
           - nmtcpp
           - llamacpp-llm
+          - vlm
           - onnx-tts
           - parakeet
       workflow_name:
@@ -64,10 +65,19 @@ jobs:
           PERF_WORKFLOW: ${{ inputs.workflow_name }}
           PERF_RUNS: ${{ inputs.runs }}
         run: |
+          # QVAC-18298: "vlm" rows live in the shared llamacpp-llm artifacts,
+          # so map to the real addon + apply a --filter; keep the vlm- output prefix.
+          ARTIFACT_ADDON="$PERF_ADDON"
+          FILTER_ARGS=()
+          if [ "$PERF_ADDON" = "vlm" ]; then
+            ARTIFACT_ADDON="llamacpp-llm"
+            FILTER_ARGS=(--filter "gemma4-vl|qwen3.5-vl")
+          fi
           node scripts/perf-report/aggregate.js \
-            --addon "$PERF_ADDON" \
+            --addon "$ARTIFACT_ADDON" \
             --workflow "$PERF_WORKFLOW" \
             --runs "$PERF_RUNS" \
+            "${FILTER_ARGS[@]}" \
             --output "reports/${PERF_ADDON}-performance.md" \
             --output-json "reports/${PERF_ADDON}-performance.json" \
             --output-html "reports/${PERF_ADDON}-performance.html"
@@ -123,6 +133,30 @@ jobs:
             --output reports/llamacpp-llm-mobile-performance.md \
             --output-json reports/llamacpp-llm-mobile-performance.json \
             --output-html reports/llamacpp-llm-mobile-performance.html || true
+
+          # QVAC-18298: VLM perf-regression section — re-aggregate the LLM
+          # runs filtered to the Qwen3.5-VL + Gemma4-VL rows. Platform x
+          # backend matrix is selected at the Device Farm layer; Imagination
+          # DXT / Pixel 10 is deferred and not included.
+          echo "=== VLM (Desktop) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon llamacpp-llm \
+            --workflow "Integration Tests (LLM)" \
+            --runs 6 \
+            --filter "gemma4-vl|qwen3.5-vl" \
+            --output reports/vlm-performance.md \
+            --output-json reports/vlm-performance.json \
+            --output-html reports/vlm-performance.html || true
+
+          echo "=== VLM (Mobile) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon llamacpp-llm \
+            --workflow "Mobile Integration Tests (LLM)" \
+            --runs 6 \
+            --filter "gemma4-vl|qwen3.5-vl" \
+            --output reports/vlm-mobile-performance.md \
+            --output-json reports/vlm-mobile-performance.json \
+            --output-html reports/vlm-mobile-performance.html || true
 
           echo "=== TTS ==="
           node scripts/perf-report/aggregate.js \
