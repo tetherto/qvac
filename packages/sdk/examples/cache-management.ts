@@ -70,7 +70,6 @@ try {
     console.log("   Loading model into memory...");
     modelId = await loadModel({
       modelSrc: WHISPER_TINY,
-      modelType: "whisper",
     });
     console.log(`   ✅ Model loaded! ID: ${modelId}`);
 

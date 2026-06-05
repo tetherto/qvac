@@ -5,6 +5,8 @@ ogImage: /og-sdk-quickstart.png
 schemaType: HowTo
 ---
 
+import { TrackCopy } from '@/components/track-copy'
+
 ## Requirements
 
 - Node.js $\geq$ v22.17
@@ -25,9 +27,11 @@ npm init -y && npm pkg set type=module
 
 <Step>
 Install the SDK:
+<TrackCopy name="npm_install">
 ```bash
 npm i @qvac/sdk
 ```
+</TrackCopy>
 </Step>
 
 <Step>

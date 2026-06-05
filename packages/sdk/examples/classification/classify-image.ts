@@ -1,5 +1,11 @@
 import fs from "fs";
-import { startQVACProvider, stopQVACProvider, loadModel, classify, unloadModel } from "@qvac/sdk";
+import {
+  startQVACProvider,
+  stopQVACProvider,
+  loadModel,
+  classify,
+  unloadModel,
+} from "@qvac/sdk";
 
 /**
  * Classify an image using the bundled MobileNetV3-Small model.

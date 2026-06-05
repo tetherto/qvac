@@ -17,9 +17,7 @@ const esrganArg: string | undefined = process.argv[2];
 const promptArg: string | undefined = process.argv[3];
 const outputDirArg: string | undefined = process.argv[4];
 
-const esrganModelSrc =
-  esrganArg ??
-  REALESRGAN_X4PLUS_ANIME_6B;
+const esrganModelSrc = esrganArg ?? REALESRGAN_X4PLUS_ANIME_6B;
 
 const prompt =
   promptArg ??
@@ -32,7 +30,6 @@ try {
   console.log("Loading SD 2.1 + ESRGAN upscaler...");
   const modelId = await loadModel({
     modelSrc: SD_V2_1_1B_Q8_0,
-    modelType: "diffusion",
     modelConfig: {
       prediction: "v",
       upscaler: {

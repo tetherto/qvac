@@ -15,7 +15,6 @@ try {
   console.log("Loading Whisper model with English config...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
-    modelType: "whisper",
     modelConfig: {
       language: "en",
     },
@@ -34,7 +33,7 @@ try {
   console.log("Hot reloading config (changing language and temperature)...");
   const reloadedId = await loadModel({
     modelId,
-    modelType: "whisper",
+    modelType: "whispercpp-transcription",
     modelConfig: {
       language: "es", // Change to Spanish
     },

@@ -43,7 +43,6 @@ try {
 
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    modelType: "embeddings",
     onProgress: (p) =>
       console.log(`Loading model... ${Math.round(p.percentage)}%`),
   });
