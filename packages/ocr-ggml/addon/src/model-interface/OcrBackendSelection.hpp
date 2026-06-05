@@ -10,6 +10,9 @@
 //   - `BackendDevice::VULKAN` -> the first Vulkan-capable GPU/iGPU device
 //     (backend name contains "vulkan", case-insensitive). When none is present
 //     the result falls back to the CPU device and records a `fallbackReason`.
+//     Adreno GPUs are skipped on the auto path (their Vulkan compute path is
+//     numerically broken); an explicit `gpuDevice` index overrides this and can
+//     still force an Adreno device on purpose.
 //   - `BackendDevice::METAL` -> the first Metal-capable GPU device (backend
 //     name begins with "MTL"/"metal", case-insensitive; Apple only). Same
 //     CPU-fallback behaviour as Vulkan when no Metal device is present.
