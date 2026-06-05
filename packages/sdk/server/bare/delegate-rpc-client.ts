@@ -32,8 +32,38 @@ const inflightConnections = new Map<PeerPublicKey, Promise<RPC>>();
 
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
 
+// Cap on how long the first (cold) delegated connect waits for the DHT to
+// bootstrap before attempting the lookup. Warm swarms skip the wait entirely.
+const DHT_BOOTSTRAP_WAIT_CAP_MS = 5000;
+
 function getConfiguredRelayCount(): number {
   return getSDKConfig().swarmRelays?.length ?? 0;
+}
+
+// dht.connect() locates the peer via a DHT findPeer query; on a cold routing
+// table that query can come back empty and surface as PEER_NOT_FOUND even
+// though the provider is announced. The provider already awaits
+// fullyBootstrapped() before listen(); mirror that on the consumer, but only
+// when the DHT isn't ready yet so a warm swarm pays nothing. On timeout we fall
+// through: dht.connect() bootstraps on demand and a genuine failure is reported
+// by the categorized error below.
+async function ensureDhtBootstrapped(
+  swarm: ReturnType<typeof getSwarm>,
+  timeout: number | undefined,
+): Promise<void> {
+  if (swarm.dht.bootstrapped) return;
+  const cap =
+    timeout === undefined
+      ? DHT_BOOTSTRAP_WAIT_CAP_MS
+      : Math.min(timeout, DHT_BOOTSTRAP_WAIT_CAP_MS);
+  try {
+    await withTimeout(swarm.dht.fullyBootstrapped(), cap);
+  } catch (error) {
+    logger.warn(
+      `DHT not bootstrapped within ${cap}ms before delegated connect; attempting anyway`,
+      { error },
+    );
+  }
 }
 
 // Turn an opaque DHT connect failure into a message that says *why* the peer
@@ -226,16 +256,13 @@ async function ensureRPCConnection(
       `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""} (${relayCount} swarm relay(s) configured)`,
     );
 
-    // We deliberately do NOT `await swarm.dht.fullyBootstrapped()` here. The
-    // earlier guard (added with #1729 to side-step a theoretical PEER_NOT_FOUND
-    // on a fully-cold swarm) added a serial 1-3s wait on every first delegated
-    // call — measurably regressing `loadModel.delegation.connection` vs 0.9.0
-    // (≈3.2× slower in local benches). `getSwarm()` is invoked early during
-    // SDK init (registry/runtime), so by the time the consumer reaches this
-    // path the routing table is already warm enough; `dht.connect()` also
-    // bootstraps on demand if it isn't, so we lose nothing by skipping the
-    // explicit await.
-    getSwarm();
+    // Wait for the DHT only when it is still cold. A warm swarm (the common
+    // case, since getSwarm() runs early in SDK init) returns immediately and
+    // keeps the fast-connect latency; a cold one (e.g. the first delegated call
+    // right after app launch on mobile) gets a bounded wait so the findPeer
+    // lookup runs against a populated routing table instead of returning
+    // PEER_NOT_FOUND against an empty one.
+    await ensureDhtBootstrapped(getSwarm(), getRemainingTimeout());
 
     conn = openDhtConnection(publicKey);
     await waitForOpen(conn, getRemainingTimeout());
