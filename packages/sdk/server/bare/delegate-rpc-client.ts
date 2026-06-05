@@ -1,5 +1,9 @@
 import { getSwarm } from "./hyperswarm";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
+import {
+  ensureDhtBootstrapped,
+  describeConnectFailure,
+} from "./delegate-connect-diagnostics";
 import RPC from "bare-rpc";
 import type { Connection } from "hyperswarm";
 import type { Duplex } from "bare-stream";
@@ -32,64 +36,8 @@ const inflightConnections = new Map<PeerPublicKey, Promise<RPC>>();
 
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
 
-const DHT_BOOTSTRAP_WAIT_CAP_MS = 5000;
-
 function getConfiguredRelayCount(): number {
   return getSDKConfig().swarmRelays?.length ?? 0;
-}
-
-// A cold routing table makes findPeer return empty -> spurious PEER_NOT_FOUND,
-// so wait for bootstrap, but only when not yet ready to keep warm-path latency.
-async function ensureDhtBootstrapped(
-  swarm: ReturnType<typeof getSwarm>,
-  timeout: number | undefined,
-): Promise<void> {
-  if (swarm.dht.bootstrapped) return;
-  const cap =
-    timeout === undefined
-      ? DHT_BOOTSTRAP_WAIT_CAP_MS
-      : Math.min(timeout, DHT_BOOTSTRAP_WAIT_CAP_MS);
-  try {
-    await withTimeout(swarm.dht.fullyBootstrapped(), cap);
-  } catch (error) {
-    logger.warn(
-      `DHT not bootstrapped within ${cap}ms before delegated connect; attempting anyway`,
-      { error },
-    );
-  }
-}
-
-// Map an opaque DHT connect error onto why the peer was unreachable: not found
-// on the DHT vs found-but-un-holepunchable. Relays only bridge after a peer is
-// found, so they can never resolve a PEER_NOT_FOUND.
-function describeConnectFailure(
-  error: unknown,
-  publicKey: string,
-  relayCount: number,
-): string {
-  const code =
-    typeof error === "object" && error !== null && "code" in error
-      ? String(error.code)
-      : undefined;
-  const relayNote =
-    relayCount > 0
-      ? `${relayCount} swarm relay(s) configured`
-      : "no swarm relays configured";
-
-  switch (code) {
-    case "PEER_NOT_FOUND":
-      return `provider ${publicKey} was not found on the DHT — it may be offline, still bootstrapping, or unreachable from this network. Relays bridge a connection only after the provider is located, so they cannot find an unannounced provider (${relayNote}).`;
-    case "PEER_CONNECTION_FAILED":
-    case "CANNOT_HOLEPUNCH":
-    case "REMOTE_NOT_HOLEPUNCHABLE":
-    case "REMOTE_NOT_HOLEPUNCHING":
-    case "HOLEPUNCH_ABORTED":
-    case "HOLEPUNCH_PROBE_TIMEOUT":
-    case "HOLEPUNCH_DOUBLE_RANDOMIZED_NATS":
-      return `provider ${publicKey} was found but a connection could not be established (NAT/holepunch failure: ${code}; ${relayNote}).`;
-    default:
-      return error instanceof Error ? error.message : String(error);
-  }
 }
 
 function isHeartbeatResponse(payload: unknown): payload is { type: "heartbeat" } {
@@ -246,7 +194,7 @@ async function ensureRPCConnection(
       `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""} (${relayCount} swarm relay(s) configured)`,
     );
 
-    await ensureDhtBootstrapped(getSwarm(), getRemainingTimeout());
+    await ensureDhtBootstrapped(getSwarm().dht, getRemainingTimeout());
 
     conn = openDhtConnection(publicKey);
     await waitForOpen(conn, getRemainingTimeout());
