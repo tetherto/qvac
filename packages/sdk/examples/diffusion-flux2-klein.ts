@@ -1,4 +1,11 @@
-import { loadModel, unloadModel, diffusion, FLUX_2_KLEIN_4B_Q4_0, FLUX_2_KLEIN_4B_VAE, QWEN3_4B_Q4_K_M } from "@qvac/sdk";
+import {
+  loadModel,
+  unloadModel,
+  diffusion,
+  FLUX_2_KLEIN_4B_Q4_0,
+  FLUX_2_KLEIN_4B_VAE,
+  QWEN3_4B_Q4_K_M,
+} from "@qvac/sdk";
 import fs from "fs";
 import path from "path";
 
@@ -13,7 +20,7 @@ console.log("Loading FLUX.2 [klein] split-layout model...");
 
 const modelId = await loadModel({
   modelSrc: diffusionModelSrc,
-  modelType: "diffusion",
+  modelType: "sdcpp-generation",
   modelConfig: {
     device: "gpu",
     threads: 4,

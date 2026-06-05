@@ -30,7 +30,7 @@ try {
   console.log("Loading SmolVLA model...");
   const modelId = await loadModel({
     modelSrc,
-    modelType: "vla",
+    modelType: "ggml-vla",
     modelConfig: { backend: "cpu" },
     onProgress: (p) =>
       typeof modelSrc === "string"

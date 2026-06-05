@@ -19,7 +19,7 @@ try {
   // Load model from provided file path
   const modelId = await loadModel({
     modelSrc: ggufPath,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: {
       ctx_size: 4096,
     },
