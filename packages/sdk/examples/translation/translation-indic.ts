@@ -12,7 +12,6 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: MARIAN_EN_HI_INDIC_1B_Q4_0,
-    modelType: "nmt",
     onProgress: (progress) => {
       console.log(progress);
     },
@@ -29,7 +28,7 @@ try {
   const result = translate({
     modelId,
     text,
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     stream: false,
   });
 

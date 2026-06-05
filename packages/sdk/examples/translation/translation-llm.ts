@@ -8,7 +8,6 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: SALAMANDRATA_2B_INST_Q4,
-    modelType: "llm",
     onProgress: (progress) => {
       console.log(progress);
     },
@@ -21,7 +20,7 @@ try {
     text: engText,
     from: "en",
     to: "it",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     stream: false,
   });
 
@@ -33,7 +32,7 @@ try {
     modelId,
     text: espText,
     to: "en",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     stream: false,
   });
 

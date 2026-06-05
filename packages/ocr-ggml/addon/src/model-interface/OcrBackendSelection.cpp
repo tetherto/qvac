@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <ggml-backend.h>
 
@@ -43,14 +46,26 @@ const char* deviceTypeName(enum ggml_backend_dev_type type) {
   }
 }
 
-// First GPU/iGPU device whose backend name satisfies `matches`, or nullptr if
-// none is registered. Used to resolve both Vulkan and Metal requests.
+// A GPU/iGPU device matched against the requested backend, retaining its ggml
+// enumeration index so the resolved `deviceIndex` can be reported to JS.
+struct MatchingDevice {
+  ggml_backend_dev_t dev{nullptr};
+  size_t index{0}; // index passed to ggml_backend_dev_get
+  enum ggml_backend_dev_type type { GGML_BACKEND_DEVICE_TYPE_GPU };
+  std::string name;
+  std::string description;
+};
+
+// All GPU/iGPU devices whose backend name satisfies `matches`, in ggml
+// enumeration order. Used to resolve both Vulkan and Metal requests.
 //
 // Matches against BOTH the device name and its backend-registration name: ggml
 // names Vulkan devices "Vulkan0" (so the device name carries the backend), but
 // Metal devices are named "MTL0"/"MTL1" while the backing registration is named
 // "Metal". Checking the reg name lets the Metal request resolve correctly.
-ggml_backend_dev_t findGpuDeviceByName(bool (*matches)(std::string_view)) {
+std::vector<MatchingDevice>
+enumerateMatchingDevices(bool (*matches)(std::string_view)) {
+  std::vector<MatchingDevice> result;
   const size_t count = ggml_backend_dev_count();
   for (size_t i = 0; i < count; ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
@@ -63,17 +78,68 @@ ggml_backend_dev_t findGpuDeviceByName(bool (*matches)(std::string_view)) {
       continue;
     }
     const char* devNameRaw = ggml_backend_dev_name(dev);
-    if (devNameRaw != nullptr && matches(devNameRaw)) {
-      return dev;
+    bool nameMatches = devNameRaw != nullptr && matches(devNameRaw);
+    if (!nameMatches) {
+      ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+      const char* regNameRaw =
+          (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
+      nameMatches = regNameRaw != nullptr && matches(regNameRaw);
     }
-    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
-    const char* regNameRaw =
-        (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
-    if (regNameRaw != nullptr && matches(regNameRaw)) {
-      return dev;
+    if (!nameMatches) {
+      continue;
+    }
+    const char* descRaw = ggml_backend_dev_description(dev);
+    result.push_back(
+        MatchingDevice{
+            .dev = dev,
+            .index = i,
+            .type = type,
+            .name = (devNameRaw != nullptr) ? std::string(devNameRaw)
+                                            : std::string(),
+            .description =
+                (descRaw != nullptr) ? std::string(descRaw) : std::string()});
+  }
+  return result;
+}
+
+// Pick which matching device to use. With an explicit `gpuDevice` index, the
+// Nth matching device (0-based) is selected, or nullopt when out of range.
+// Without one, prefer the first discrete GPU and otherwise the first matching
+// (integrated) device. Returns nullopt when no device matched.
+std::optional<size_t> chooseMatchingDevice(
+    const std::vector<MatchingDevice>& matching, std::optional<int> gpuDevice) {
+  if (matching.empty()) {
+    return std::nullopt;
+  }
+  if (gpuDevice.has_value()) {
+    const int idx = *gpuDevice;
+    if (idx < 0 || static_cast<size_t>(idx) >= matching.size()) {
+      return std::nullopt;
+    }
+    return static_cast<size_t>(idx);
+  }
+  for (size_t i = 0; i < matching.size(); ++i) {
+    if (matching[i].type == GGML_BACKEND_DEVICE_TYPE_GPU) {
+      return i;
     }
   }
-  return nullptr;
+  return static_cast<size_t>(0);
+}
+
+// Human-readable dump of the enumerated matching devices for logging.
+std::string describeMatchingDevices(
+    std::string_view label, const std::vector<MatchingDevice>& matching) {
+  std::string msg = "ocr-ggml: " + std::string(label) + " matching devices (" +
+                    std::to_string(matching.size()) + "):";
+  for (const auto& md : matching) {
+    msg += " [" + std::to_string(md.index) + " " + deviceTypeName(md.type) +
+           " '" + md.name + "'";
+    if (!md.description.empty()) {
+      msg += " " + md.description;
+    }
+    msg += "]";
+  }
+  return msg;
 }
 
 BackendSelection selectCpu(BackendSelection sel) {
@@ -81,9 +147,12 @@ BackendSelection selectCpu(BackendSelection sel) {
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   sel.device = cpuDev;
   sel.backendDevice = "CPU";
+  sel.deviceIndex = -1;
   if (cpuDev != nullptr) {
     const char* nameRaw = ggml_backend_dev_name(cpuDev);
     sel.backendName = (nameRaw != nullptr) ? nameRaw : "CPU";
+    const char* descRaw = ggml_backend_dev_description(cpuDev);
+    sel.backendDescription = (descRaw != nullptr) ? descRaw : "";
   } else {
     sel.backendName = "CPU";
   }
@@ -112,47 +181,66 @@ bool isMetalBackendName(std::string_view backendName) {
 namespace {
 
 // Resolve a GPU-backed request (Vulkan or Metal). On success fills `sel` with
-// the matched device and returns true; otherwise records a CPU-fallback reason
-// and returns false (the caller then resolves the CPU device).
+// the matched device (including its ggml index and description) and returns
+// true; otherwise records a CPU-fallback reason and returns false (the caller
+// then resolves the CPU device).
+//
+// `gpuDevice` selects the Nth matching device (0-based); when unset, a discrete
+// GPU is preferred over an integrated one.
 bool trySelectGpu(
     BackendSelection& sel, std::string_view label,
-    bool (*matches)(std::string_view)) {
-  ggml_backend_dev_t dev = findGpuDeviceByName(matches);
-  if (dev != nullptr) {
-    sel.device = dev;
-    const char* nameRaw = ggml_backend_dev_name(dev);
-    sel.backendName =
-        (nameRaw != nullptr) ? std::string(nameRaw) : std::string(label);
-    sel.backendDevice = deviceTypeName(ggml_backend_dev_type(dev));
-    const char* descRaw = ggml_backend_dev_description(dev);
-    QLOG(
-        Priority::INFO,
-        std::string("ocr-ggml: selected ") + std::string(label) +
-            " backend '" + sel.backendName + "' (" + sel.backendDevice + ", " +
-            (descRaw != nullptr ? descRaw : "") + ")");
-    return true;
+    bool (*matches)(std::string_view), std::optional<int> gpuDevice) {
+  const std::vector<MatchingDevice> matching =
+      enumerateMatchingDevices(matches);
+  QLOG(Priority::INFO, describeMatchingDevices(label, matching));
+
+  const std::optional<size_t> chosen =
+      chooseMatchingDevice(matching, gpuDevice);
+  if (!chosen.has_value()) {
+    if (gpuDevice.has_value()) {
+      sel.fallbackReason =
+          std::string(label) + " backend requested with gpuDevice index " +
+          std::to_string(*gpuDevice) + " but only " +
+          std::to_string(matching.size()) +
+          " matching device(s) were found; falling back to CPU";
+    } else {
+      sel.fallbackReason = std::string(label) + " backend requested but no " +
+                           std::string(label) +
+                           "-capable GPU device was found; falling back to CPU";
+    }
+    QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
+    return false;
   }
-  sel.fallbackReason = std::string(label) + " backend requested but no " +
-                       std::string(label) +
-                       "-capable GPU device was found; falling back to CPU";
-  QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
-  return false;
+
+  const MatchingDevice& md = matching[*chosen];
+  sel.device = md.dev;
+  sel.backendName = !md.name.empty() ? md.name : std::string(label);
+  sel.backendDevice = deviceTypeName(md.type);
+  sel.deviceIndex = static_cast<int>(md.index);
+  sel.backendDescription = md.description;
+  QLOG(
+      Priority::INFO,
+      std::string("ocr-ggml: selected ") + std::string(label) + " backend '" +
+          sel.backendName + "' (" + sel.backendDevice + ", " + md.description +
+          ") at ggml device index " + std::to_string(md.index));
+  return true;
 }
 
 } // namespace
 
-BackendSelection selectBackendDevice(BackendDevice requested) {
+BackendSelection
+selectBackendDevice(BackendDevice requested, std::optional<int> gpuDevice) {
   BackendSelection sel;
   switch (requested) {
   case BackendDevice::VULKAN:
     sel.requested = "vulkan";
-    if (trySelectGpu(sel, "Vulkan", isVulkanBackendName)) {
+    if (trySelectGpu(sel, "Vulkan", isVulkanBackendName, gpuDevice)) {
       return sel;
     }
     break;
   case BackendDevice::METAL:
     sel.requested = "metal";
-    if (trySelectGpu(sel, "Metal", isMetalBackendName)) {
+    if (trySelectGpu(sel, "Metal", isMetalBackendName, gpuDevice)) {
       return sel;
     }
     break;

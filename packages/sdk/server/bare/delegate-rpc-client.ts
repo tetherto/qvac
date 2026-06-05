@@ -12,6 +12,7 @@ import {
   clearPeerConnectionTracking,
 } from "@/server/rpc/profiling/delegation-profiler";
 import { getNextCommandId } from "@/server/rpc/rpc-utils";
+import { Buffer } from "bare-buffer";
 
 const logger = getServerLogger();
 
