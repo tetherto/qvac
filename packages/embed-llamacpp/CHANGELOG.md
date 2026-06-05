@@ -13,7 +13,6 @@
 - `BertModel::setWeightsForFile` now tracks fulfilled GGUF shards in a per-instance `std::atomic<int>` instead of a function-local `static int`, so multiple concurrent `BertInterface` instances no longer share (and miscount) shard-fulfillment state.
 - `BertModel` now resolves sharded model basenames to absolute paths relative to the model directory before metadata inspection and disk-shards loading, so the trained-context cap and `llama_model_load_from_splits` work correctly when the working directory differs from the model directory.
 - `readTrainedContextSize` now logs an `ERROR`-level diagnostic when GGUF metadata cannot be read on either streamed or non-streaming loads (previously failed silently and reverted to llama.cpp's default `ctx_size`).
-
 ## [0.18.2] - 2026-06-03
 
 ### Fixed
