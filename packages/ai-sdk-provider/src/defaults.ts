@@ -33,7 +33,19 @@ export const SERVE_HEALTH_POLL_INTERVAL_MS = 250
 // CLI's own `close-with-grace` ladder.
 export const SERVE_SHUTDOWN_GRACE_MS = 5_000
 
+// How long a shared managed serve keeps running after its last consumer
+// process has gone away. A short grace window lets a quick restart (or a second
+// session) re-attach to the warm serve instead of paying another cold start.
+export const DEFAULT_SERVE_IDLE_TIMEOUT_MS = 300_000 // 5 minutes
+
+// How often the detached runner re-checks its consumer set / idle deadline.
+export const RUNNER_POLL_INTERVAL_MS = 2_000
+
+// How long a spawn lockfile is considered fresh. Past this it is treated as
+// stale (left by a crashed spawner) and may be stolen.
+export const SPAWN_LOCK_STALE_MS = 30_000
+
 // Bin name used when spawning the resolved `@qvac/cli` entry is not desired
-// (i.e. the caller passes `serveBinPath`). Kept here for documentation; the
-// supervisor spawns the explicit path verbatim.
+// (i.e. the caller passes `serveBinPath`). Kept here for documentation;
+// serve-process spawns the explicit path verbatim.
 export const DEFAULT_SERVE_BIN = 'qvac'

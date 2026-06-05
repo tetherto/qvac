@@ -2,6 +2,8 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { isProcessAlive, readAllRecords, removeRecord } from '../../src/managed/registry.js'
+
 // A stand-in for `qvac serve openai`: parses `--port`/`--host`, then behaves
 // per FAKE_SERVE_BEHAVIOR. Lets the managed-mode tests drive every supervisor
 // path (healthy, timeout, crash, SIGKILL escalation) without @qvac/cli or real
@@ -68,4 +70,32 @@ const BEHAVIOR_KEY = 'FAKE_SERVE_BEHAVIOR'
 export function setBehavior (value: string | undefined): void {
   if (value === undefined) delete process.env[BEHAVIOR_KEY]
   else process.env[BEHAVIOR_KEY] = value
+}
+
+// Managed mode now spawns a *detached* runner that owns the serve and only
+// reaps it on idle. Tests close their providers (which merely detaches), so we
+// must kill the leftover runner + serve and drop their records ourselves to
+// avoid leaking processes across the (isolated, fake-HOME) registry. Safe to
+// call repeatedly; only touches serves recorded under the current $HOME.
+export async function reapAllManaged (): Promise<void> {
+  let records
+  try {
+    records = await readAllRecords()
+  } catch {
+    return
+  }
+  for (const rec of records) {
+    for (const target of [rec.runnerPid, rec.servePid]) {
+      if (isProcessAlive(target)) {
+        try {
+          process.kill(target, 'SIGKILL')
+        } catch {
+          // already gone
+        }
+      }
+    }
+    await removeRecord(rec.fleetKey).catch(() => {})
+  }
+  // Give the OS a beat to reap the killed processes before the test asserts.
+  await new Promise((r) => setTimeout(r, 100))
 }

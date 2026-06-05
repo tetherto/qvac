@@ -17,32 +17,11 @@ import {
   ServeSpawnFailedError,
   ServeStartTimeoutError
 } from './errors.js'
-import { forgetServe, forgetServeSync, recordServe, sweepStaleServes } from './pid-tracker.js'
 
-export interface SupervisorOptions {
-  readonly models: readonly string[]
-  readonly configPath: string
-  readonly port?: number
-  readonly host?: string
-  readonly startTimeoutMs?: number
-  // Grace period between SIGTERM and SIGKILL on shutdown. Internal/testing
-  // knob; not surfaced on the public managed options.
-  readonly shutdownGraceMs?: number
-  readonly serveBinPath?: string
-  // Forwarded to the health-check fetch (defaults to global fetch). Injectable
-  // for tests; the provider's own `fetch` option is intentionally NOT reused
-  // here since a caller's custom fetch may be scoped to the API surface.
-  readonly fetchImpl?: typeof fetch
-  // Cleanup for the ephemeral config, run after the serve is stopped.
-  cleanupConfig?(): Promise<void>
-}
-
-export interface ServeSupervisor {
-  readonly port: number
-  readonly pid: number
-  readonly baseURL: string
-  stop(): Promise<void>
-}
+// Low-level lifecycle of a single `qvac serve openai` child: resolve the
+// command, pick a port, spawn, wait until healthy, and stop. Deliberately
+// free of any registry/process-handler coupling — the detached runner owns
+// those concerns and uses these primitives.
 
 function delay (ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -52,7 +31,7 @@ function delay (ms: number): Promise<void> {
 // There is an inherent TOCTOU race (another process could grab the port before
 // the serve does), but it is vanishingly small on loopback and the serve will
 // surface an EADDRINUSE we propagate as ServeExitedError.
-function allocateFreePort (host: string): Promise<number> {
+export function allocateFreePort (host: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer()
     srv.once('error', (err) => reject(new PortAllocationFailedError(err)))
@@ -78,7 +57,7 @@ interface ServeCommand {
 // run through the current Node/Bun executable (`process.execPath`) so we don't
 // depend on the bin's exec bit or shebang — keeping it portable across Node 20+
 // and Bun, per the task's "no Bun-specific APIs" requirement.
-function resolveServeCommand (serveBinPath?: string): ServeCommand {
+export function resolveServeCommand (serveBinPath?: string): ServeCommand {
   if (serveBinPath !== undefined && serveBinPath.length > 0) {
     return { command: serveBinPath, baseArgs: [] }
   }
@@ -134,9 +113,6 @@ async function waitForHealth (params: {
   const healthUrl = `${baseURL}/models`
   const deadline = Date.now() + timeoutMs
 
-  // Capture the child's exit/error in a holder object so the poll loop can fail
-  // fast on a crash instead of waiting out the full timeout. A plain object
-  // (rather than `let`) sidesteps TS's loop-narrowing of closure-assigned vars.
   const state: { exit: { code: number | null, signal: NodeJS.Signals | null } | null, spawnError: unknown } = {
     exit: null,
     spawnError: null
@@ -172,19 +148,32 @@ async function waitForHealth (params: {
   }
 }
 
-export async function startServeSupervisor (options: SupervisorOptions): Promise<ServeSupervisor> {
+export interface SpawnServeOptions {
+  readonly configPath: string
+  readonly port: number
+  readonly host?: string
+  readonly startTimeoutMs?: number
+  readonly serveBinPath?: string
+  readonly fetchImpl?: typeof fetch
+}
+
+export interface SpawnedServe {
+  readonly child: ChildProcess
+  readonly pid: number
+  readonly port: number
+  readonly host: string
+  readonly baseURL: string
+}
+
+// Spawn `qvac serve openai` on the given port and resolve once it answers a
+// health check. On any failure the child is killed and a structured error is
+// thrown, so the caller never leaks a half-started process.
+export async function spawnServe (options: SpawnServeOptions): Promise<SpawnedServe> {
   const host = options.host ?? DEFAULT_SERVE_HOST
   const startTimeoutMs = options.startTimeoutMs ?? DEFAULT_SERVE_START_TIMEOUT_MS
-  const shutdownGraceMs = options.shutdownGraceMs ?? SERVE_SHUTDOWN_GRACE_MS
   const fetchImpl = options.fetchImpl ?? fetch
-
-  // Reclaim any serves leaked by a previously crashed supervisor before we add
-  // our own. Best-effort: never let a sweep failure block a fresh start.
-  await sweepStaleServes({ killOrphans: true }).catch(() => {})
-
-  const port = options.port ?? (await allocateFreePort(host))
   const { command, baseArgs } = resolveServeCommand(options.serveBinPath)
-  const baseURL = `http://${host}:${port}/v1`
+  const baseURL = `http://${host}:${options.port}/v1`
 
   const args = [
     ...baseArgs,
@@ -193,7 +182,7 @@ export async function startServeSupervisor (options: SupervisorOptions): Promise
     '--config',
     options.configPath,
     '--port',
-    String(port),
+    String(options.port),
     '--host',
     host
   ]
@@ -201,77 +190,40 @@ export async function startServeSupervisor (options: SupervisorOptions): Promise
   const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env: process.env })
   const getTail = attachOutputTail(child)
 
-  // Without a pid the spawn failed synchronously; the 'error' event will carry
-  // the cause, so surface it deterministically here.
   if (child.pid === undefined) {
     await new Promise<void>((resolve) => child.once('error', () => resolve()))
     throw new ServeSpawnFailedError(`Failed to spawn ${command}`)
   }
-  const pid = child.pid
-
-  // ── Teardown wiring ───────────────────────────────────────────────────────
-  let stopped = false
-
-  function onProcessExit (): void {
-    try {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-    } catch {
-      // best-effort
-    }
-    forgetServeSync(pid)
-  }
-  function onSignal (signal: NodeJS.Signals): void {
-    try {
-      child.kill('SIGTERM')
-    } catch {
-      // best-effort
-    }
-    forgetServeSync(pid)
-    // We overrode Node's default signal handling by attaching a listener, so we
-    // must exit explicitly. 128 + signal number is the conventional code.
-    process.exit(signal === 'SIGINT' ? 130 : 143)
-  }
-  const signalHandler = onSignal as (signal: NodeJS.Signals) => void
-
-  function removeTeardownHandlers (): void {
-    process.removeListener('exit', onProcessExit)
-    process.removeListener('SIGINT', signalHandler)
-    process.removeListener('SIGTERM', signalHandler)
-  }
-
-  process.once('exit', onProcessExit)
-  process.once('SIGINT', signalHandler)
-  process.once('SIGTERM', signalHandler)
-
-  async function stop (): Promise<void> {
-    if (stopped) return
-    stopped = true
-    removeTeardownHandlers()
-
-    if (child.exitCode === null && child.signalCode === null) {
-      const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
-      child.kill('SIGTERM')
-      const killedHard = await Promise.race([
-        exited.then(() => false),
-        delay(shutdownGraceMs).then(() => true)
-      ])
-      if (killedHard) {
-        child.kill('SIGKILL')
-        await exited
-      }
-    }
-
-    await forgetServe(pid).catch(() => {})
-    if (options.cleanupConfig) await options.cleanupConfig().catch(() => {})
-  }
 
   try {
-    await recordServe({ pid, port, configPath: options.configPath, startedAt: new Date().toISOString() })
     await waitForHealth({ child, baseURL, timeoutMs: startTimeoutMs, fetchImpl, getTail })
   } catch (err) {
-    await stop()
+    await stopServe(child).catch(() => {})
     throw err
   }
 
-  return { port, pid, baseURL, stop }
+  return { child, pid: child.pid, port: options.port, host, baseURL }
+}
+
+// SIGTERM → grace → SIGKILL, mirroring the CLI's own shutdown ladder.
+export async function stopServe (child: ChildProcess, graceMs = SERVE_SHUTDOWN_GRACE_MS): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+  try {
+    child.kill('SIGTERM')
+  } catch {
+    return
+  }
+  const killedHard = await Promise.race([
+    exited.then(() => false),
+    delay(graceMs).then(() => true)
+  ])
+  if (killedHard) {
+    try {
+      child.kill('SIGKILL')
+    } catch {
+      // already gone
+    }
+    await exited
+  }
 }

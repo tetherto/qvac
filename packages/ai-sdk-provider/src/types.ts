@@ -59,6 +59,15 @@ export interface QvacManagedOptions extends QvacCommonOptions {
   // Override the `qvac` binary. When set it is spawned directly; otherwise the
   // optional `@qvac/cli` peer dependency is resolved and run via Node.
   readonly serveBinPath?: string
+  // Share a serve across processes/sessions. When true (default), managed mode
+  // reuses an already-running serve whose model set + config match (the "fleet
+  // key"), and only spawns a new one if none is found. Set false to force a
+  // private serve for this provider.
+  readonly reuse?: boolean
+  // How long (ms) a shared serve keeps running after its last consumer process
+  // exits, before the runner reaps it. Default: 5 minutes. Ignored when
+  // `reuse` is false (a private serve is reaped as soon as its owner exits).
+  readonly serveIdleTimeout?: number
 }
 
 export type QvacOptions = QvacExternalOptions | QvacManagedOptions
@@ -79,10 +88,13 @@ export interface ManagedQvacProvider extends QvacProvider {
   readonly baseURL: string
   // Port the serve is listening on (resolved even when auto-allocated).
   readonly port: number
-  // PID of the spawned `qvac serve` process.
+  // PID of the `qvac serve` process backing this provider (may be shared with
+  // other sessions when `reuse` is enabled).
   readonly pid: number
-  // Stop the serve (SIGTERM → grace → SIGKILL), remove teardown handlers, and
-  // clean up the ephemeral config + PID file. Idempotent.
+  // Deregister this process as a consumer of the (possibly shared) serve and
+  // remove teardown handlers. The serve itself is reaped by its detached runner
+  // once no consumer remains for `serveIdleTimeout`, so a shared serve survives
+  // until the last user is gone. Idempotent.
   close(): Promise<void>
   [Symbol.asyncDispose](): Promise<void>
 }
