@@ -107,7 +107,7 @@ bool CacheManager::loadCache() {
 
   auto* ctx = llmContext_->getCtx();
   size_t nTokenCount = 0;
-  llama_token sessionTokens[2] = {0, 0};
+  llama_token sessionTokens[4] = {0, 0, 0, 0};
 
   QLOG_IF(
       Priority::DEBUG,
@@ -124,7 +124,7 @@ bool CacheManager::loadCache() {
   }
 
   if (!llama_state_load_file(
-          ctx, sessionPath_.c_str(), sessionTokens, 2, &nTokenCount)) {
+          ctx, sessionPath_.c_str(), sessionTokens, 4, &nTokenCount)) {
     std::string errorMsg = string_format(
         "%s: failed to load session file '%s'\n",
         __func__,
@@ -135,7 +135,18 @@ bool CacheManager::loadCache() {
 
   QLOG_IF(Priority::DEBUG, string_format("%s: loaded a session\n", __func__));
 
-  if (nTokenCount > 1) {
+  if (nTokenCount > 1 && nTokenCount < 4) {
+    std::string errorMsg = string_format(
+        "%s: cache file '%s' uses an unsupported metadata layout with %zu "
+        "fields\n",
+        __func__,
+        sessionPath_.c_str(),
+        nTokenCount);
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
+  }
+
+  if (nTokenCount > 3) {
     if (sessionTokens[0] > llama_n_ctx(ctx)) {
       std::string errorMsg = string_format(
           "%s: cache file '%s' contains %zu tokens, which exceeds the current "
@@ -149,6 +160,8 @@ bool CacheManager::loadCache() {
     }
     llmContext_->setNPast(sessionTokens[0]);
     llmContext_->setFirstMsgTokens(sessionTokens[1]);
+    llmContext_->setCacheTokens(sessionTokens[2]);
+    llmContext_->setFirstMsgCacheTokens(sessionTokens[3]);
 
     if (configuredNDiscarded_ >
         llama_n_ctx(ctx) - llmContext_->getFirstMsgTokens()) {
@@ -182,10 +195,12 @@ void CacheManager::writeCacheFile(const std::string& path) {
   QLOG_IF(
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
-  llama_token sessionTokens[2] = {
+  llama_token sessionTokens[4] = {
       static_cast<llama_token>(llmContext_->getNPast()),
-      static_cast<llama_token>(llmContext_->getFirstMsgTokens())};
-  if (!llama_state_save_file(ctx, tmpPath.c_str(), sessionTokens, 2)) {
+      static_cast<llama_token>(llmContext_->getFirstMsgTokens()),
+      static_cast<llama_token>(llmContext_->getCacheTokens()),
+      static_cast<llama_token>(llmContext_->getFirstMsgCacheTokens())};
+  if (!llama_state_save_file(ctx, tmpPath.c_str(), sessionTokens, 4)) {
     std::error_code ec;
     std::filesystem::remove(tmpPath, ec);
     throw qvac_errors::StatusError(

@@ -189,12 +189,12 @@ void MtmdLlmContext::tokenizeChat(
   bool isLastMessageFromUser = false;
   bool addSpecial = false;
 
-  if (nPast_ == 0 && !isCacheLoaded) {
+  if (current_.pos == 0 && !isCacheLoaded) {
     tools_.reset();
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
-  } else if (nPast_ > 0) {
+  } else if (current_.pos > 0) {
     isLastMessageFromUser =
         chatMsgs.back().role == "user" || chatMsgs.back().role == "tool";
     common_sampler_reset(smpl_.get());
@@ -288,30 +288,40 @@ bool MtmdLlmContext::evalMessageWithTools(
 
   tokenizeChat(chatMsgs, tools, chunks, isCacheLoaded);
 
-  const bool isFirstMsg = (nPast_ == 0);
+  const bool isFirstMsg = (current_.pos == 0);
 
   const mtmd_input_chunks* chunksPtr = chunks.ptr.get();
 
-  size_t nTokens = mtmd_helper_get_n_tokens(chunksPtr);
-  if (nTokens >= llama_n_ctx(lctx_)) {
+  const llama_pos nTokens =
+      static_cast<llama_pos>(mtmd_helper_get_n_tokens(chunksPtr));
+  const llama_pos nPositions = mtmd_helper_get_n_pos(chunksPtr);
+  if (nTokens >= llama_n_ctx(lctx_) || nPositions >= llama_n_ctx(lctx_)) {
     std::string errorMsg = string_format(
-        "[MtmdLlm] context overflow at prefill step (%ld tokens, max %d)\n",
+        "[MtmdLlm] context overflow at prefill step (%d tokens, %d positions, "
+        "max %d)\n",
         nTokens,
+        nPositions,
         llama_n_ctx(lctx_));
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
-  if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
+  if (current_.pos + nPositions >= llama_n_ctx(lctx_) ||
+      current_.cacheTokens + nTokens >= llama_n_ctx(lctx_)) {
     auto outcome = trySlidePrefill(
         lctx_,
-        nPast_,
-        firstMsgTokens_,
-        static_cast<llama_pos>(nTokens),
+        current_.pos,
+        protectedPrefix_.pos,
+        nPositions,
         nDiscarded_,
-        tools_);
+        tools_,
+        defaultContextSliderOps(),
+        current_.cacheTokens,
+        protectedPrefix_.cacheTokens,
+        nTokens);
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
-      nPast_ = outcome.newNPast;
+      current_.pos = outcome.newNPast;
+      current_.cacheTokens -= outcome.discarded;
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
@@ -321,7 +331,11 @@ bool MtmdLlmContext::evalMessageWithTools(
               outcome.discarded));
       break;
     case ContextSlideOutcome::Kind::FullWipe:
-      nPast_ = outcome.newNPast;
+      current_.pos = outcome.newNPast;
+      current_.cacheTokens =
+          current_.pos == protectedPrefix_.pos
+              ? protectedPrefix_.cacheTokens
+              : protectedPrefix_.cacheTokens + 1;
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
@@ -332,9 +346,9 @@ bool MtmdLlmContext::evalMessageWithTools(
       break;
     case ContextSlideOutcome::Kind::Overflow: {
       std::string errorMsg = string_format(
-          "[MtmdLlm] context overflow at prefill step (%ld tokens, max "
+          "[MtmdLlm] context overflow at prefill step (%d tokens, max "
           "%d)\n",
-          nPast_ + nTokens,
+          current_.cacheTokens + nTokens,
           llama_n_ctx(lctx_));
       throw qvac_errors::StatusError(
           ADDON_ID, toString(ContextOverflow), errorMsg);
@@ -342,8 +356,9 @@ bool MtmdLlmContext::evalMessageWithTools(
     case ContextSlideOutcome::Kind::MemoryOperationFailed: {
       std::string errorMsg = string_format(
           "[MtmdLlm] failed to slide context memory at prefill step "
-          "(nPast=%d, append=%ld, max=%d)\n",
-          nPast_,
+          "(nPast=%d, cacheTokens=%d, append=%d, max=%d)\n",
+          current_.pos,
+          current_.cacheTokens,
           nTokens,
           llama_n_ctx(lctx_));
       throw qvac_errors::StatusError(
@@ -360,15 +375,15 @@ bool MtmdLlmContext::evalMessageWithTools(
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
   }
 
-  llama_pos nPastLocal = nPast_;
+  llama_pos nPastLocal = current_.pos;
 
   for (size_t i = 0; i < nChunks; i++) {
     bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
 
     if (stopGeneration_.load()) {
-      llama_pos totalDelta = nPastLocal - nPast_;
-      nPast_ = nPastLocal;
+      llama_pos totalDelta = nPastLocal - current_.pos;
+      current_.pos = nPastLocal;
       removeLastNTokens(totalDelta);
       stopGeneration_.store(false);
       return false;
@@ -389,16 +404,17 @@ bool MtmdLlmContext::evalMessageWithTools(
           ADDON_ID, toString(EncoderFailed), errorMsg);
     }
   }
-  nPast_ = nPastLocal;
+  current_.pos = nPastLocal;
+  current_.cacheTokens += nTokens;
 
   if (isFirstMsg) {
-    firstMsgTokens_ = nPast_;
+    protectedPrefix_ = current_;
     const auto ctxSize = static_cast<llama_pos>(llama_n_ctx(lctx_));
-    if (nDiscarded_ >= ctxSize - firstMsgTokens_) {
-      nDiscarded_ = ctxSize - firstMsgTokens_ - 1;
+    if (nDiscarded_ >= ctxSize - protectedPrefix_.pos) {
+      nDiscarded_ = ctxSize - protectedPrefix_.pos - 1;
     }
   }
-  tools_.onEvalComplete(nPast_, static_cast<llama_pos>(nTokens));
+  tools_.onEvalComplete(current_.pos, nPositions);
   return true;
 }
 
@@ -414,10 +430,17 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 }
 
 void MtmdLlmContext::applyContextDiscard() {
-  auto outcome =
-      trySlideGeneration(lctx_, nPast_, firstMsgTokens_, nDiscarded_, tools_);
+  auto outcome = trySlideGeneration(
+      lctx_,
+      current_.pos,
+      protectedPrefix_.pos,
+      nDiscarded_,
+      tools_,
+      defaultContextSliderOps(),
+      current_.cacheTokens);
   if (outcome.kind == ContextSlideOutcome::Kind::Slid) {
-    nPast_ = outcome.newNPast;
+    current_.pos = outcome.newNPast;
+    current_.cacheTokens -= outcome.discarded;
     ++nSlides_;
     QLOG_IF(
         Priority::DEBUG,
@@ -428,7 +451,7 @@ void MtmdLlmContext::applyContextDiscard() {
     std::string errorMsg = string_format(
         "[MtmdLlm] failed to slide context memory during generation "
         "(nPast=%d, nDiscarded=%d)\n",
-        nPast_,
+        current_.pos,
         nDiscarded_);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextSlideFailed), errorMsg);
@@ -441,7 +464,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
   common_batch_add(
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab_) : eot,
-      nPast_++,
+      current_.pos++,
       {0},
       true);
   if (llama_decode(lctx_, *batch) != 0) {
@@ -449,6 +472,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
   }
+  ++current_.cacheTokens;
 }
 
 bool MtmdLlmContext::generateResponse(
@@ -478,7 +502,9 @@ bool MtmdLlmContext::generateResponse(
       flushPendingUtf8ToCallback(outputCallback);
       return true;
     }
-    if (nPast_ + 1 > static_cast<llama_pos>(llama_n_ctx(lctx_)) &&
+    if ((current_.pos + 1 > static_cast<llama_pos>(llama_n_ctx(lctx_)) ||
+         current_.cacheTokens + 1 >
+             static_cast<llama_pos>(llama_n_ctx(lctx_))) &&
         nDiscarded_ == 0) {
       QLOG_IF(
           Priority::WARNING,
@@ -487,9 +513,9 @@ bool MtmdLlmContext::generateResponse(
               "is "
               "0 (nPast=%d, nCtx=%d, firstMsgTokens=%d, nPastBeforeTools=%d, "
               "toolsCompact=%s)\n",
-              nPast_,
+              current_.pos,
               llama_n_ctx(lctx_),
-              firstMsgTokens_,
+              protectedPrefix_.pos,
               tools_.anchor(),
               tools_.enabled() ? "true" : "false"));
       return false;
@@ -537,7 +563,7 @@ bool MtmdLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, tokenId, nPast_++, {0}, true);
+    common_batch_add(*batch, tokenId, current_.pos++, {0}, true);
 
     // eval the token
     if (llama_decode(lctx_, *batch) != 0) {
@@ -545,6 +571,7 @@ bool MtmdLlmContext::generateResponse(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    ++current_.cacheTokens;
   }
 
   if (nRemain == 0) {
@@ -562,14 +589,32 @@ void MtmdLlmContext::stop() { stopGeneration_.store(true); }
 
 llama_context* MtmdLlmContext::getCtx() { return lctx_; }
 
-llama_pos MtmdLlmContext::getNPast() const { return nPast_; }
+llama_pos MtmdLlmContext::getNPast() const { return current_.pos; }
 
-void MtmdLlmContext::setNPast(llama_pos nPast) { this->nPast_ = nPast; }
+void MtmdLlmContext::setNPast(llama_pos nPast) { current_.pos = nPast; }
 
-llama_pos MtmdLlmContext::getFirstMsgTokens() const { return firstMsgTokens_; }
+llama_pos MtmdLlmContext::getCacheTokens() const {
+  return current_.cacheTokens;
+}
+
+void MtmdLlmContext::setCacheTokens(llama_pos cacheTokens) {
+  current_.cacheTokens = cacheTokens;
+}
+
+llama_pos MtmdLlmContext::getFirstMsgTokens() const {
+  return protectedPrefix_.pos;
+}
 
 void MtmdLlmContext::setFirstMsgTokens(llama_pos firstMsgTokens) {
-  this->firstMsgTokens_ = firstMsgTokens;
+  protectedPrefix_.pos = firstMsgTokens;
+}
+
+llama_pos MtmdLlmContext::getFirstMsgCacheTokens() const {
+  return protectedPrefix_.cacheTokens;
+}
+
+void MtmdLlmContext::setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) {
+  protectedPrefix_.cacheTokens = firstMsgCacheTokens;
 }
 
 void MtmdLlmContext::setNDiscarded(llama_pos nDiscarded) {
@@ -648,11 +693,8 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
 void MtmdLlmContext::resetState(bool resetStats) {
 
   tools_.reset();
-  // Reset the n_past
-  nPast_ = 0;
-
-  // Reset the first msg token length
-  firstMsgTokens_ = 0;
+  current_ = {};
+  protectedPrefix_ = {};
 
   // On partial reset (resetStats=false), preserve nSlides_ so
   // runtimeStats() can read the per-inference value.
@@ -688,7 +730,7 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   }
 
   // Calculate how many tokens we can actually remove
-  llama_pos tokensToRemove = std::min(count, nPast_);
+  llama_pos tokensToRemove = std::min(count, current_.pos);
 
   if (tokensToRemove == 0) {
     return 0;
@@ -702,10 +744,11 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   // seq_id = -1 means all sequences
   // start_pos = n_past - tokensToRemove (the position to start removing from)
   // end_pos = -1 means remove to the end
-  llama_memory_seq_rm(mem, -1, nPast_ - tokensToRemove, -1);
+  llama_memory_seq_rm(mem, -1, current_.pos - tokensToRemove, -1);
 
   // Decrement the token count by the number of tokens removed
-  nPast_ -= tokensToRemove;
+  current_.pos -= tokensToRemove;
+  current_.cacheTokens -= std::min(tokensToRemove, current_.cacheTokens);
 
   // Note: The sampler doesn't have an "undo" function, so we leave it as is.
   // The sampler maintains its own history, but the removed tokens won't affect

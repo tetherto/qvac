@@ -61,7 +61,10 @@ ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nTokensToAppend, llama_pos nDiscarded,
     ToolsCompactController& tools,
-    const IContextSliderOps& ops = defaultContextSliderOps());
+    const IContextSliderOps& ops = defaultContextSliderOps(),
+    llama_pos nCacheTokens = -1,
+    llama_pos firstMsgCacheTokens = -1,
+    llama_pos nCacheTokensToAppend = -1);
 
 /// Attempts to slide the context window during generation phase.
 ///
@@ -78,4 +81,5 @@ ContextSlideOutcome trySlidePrefill(
 ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nDiscarded, ToolsCompactController& tools,
-    const IContextSliderOps& ops = defaultContextSliderOps());
+    const IContextSliderOps& ops = defaultContextSliderOps(),
+    llama_pos nCacheTokens = -1);

@@ -40,12 +40,20 @@ const IContextSliderOps& defaultContextSliderOps() {
 ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nTokensToAppend, llama_pos nDiscarded,
-    ToolsCompactController& tools, const IContextSliderOps& ops) {
+    ToolsCompactController& tools, const IContextSliderOps& ops,
+    llama_pos nCacheTokens, llama_pos firstMsgCacheTokens,
+    llama_pos nCacheTokensToAppend) {
 
   const auto nCtx = ops.nCtx(lctx);
+  const llama_pos cacheTokens = nCacheTokens >= 0 ? nCacheTokens : nPast;
+  const llama_pos protectedCacheTokens =
+      firstMsgCacheTokens >= 0 ? firstMsgCacheTokens : firstMsgTokens;
+  const llama_pos cacheTokensToAppend =
+      nCacheTokensToAppend >= 0 ? nCacheTokensToAppend : nTokensToAppend;
 
   // Check if sliding is needed
-  if (nPast + nTokensToAppend < nCtx) {
+  if (nPast + nTokensToAppend < nCtx &&
+      cacheTokens + cacheTokensToAppend < nCtx) {
     return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
 
@@ -55,7 +63,8 @@ ContextSlideOutcome trySlidePrefill(
 
   // Try partial slide
   if (leftTokens >= 0 && discard > 0 &&
-      nPast + nTokensToAppend - discard < nCtx) {
+      nPast + nTokensToAppend - discard < nCtx &&
+      cacheTokens + cacheTokensToAppend - discard < nCtx) {
     auto mem = ops.memory(lctx);
     if (!ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard)) {
       return {ContextSlideOutcome::Kind::MemoryOperationFailed, nPast, 0};
@@ -75,10 +84,12 @@ ContextSlideOutcome trySlidePrefill(
     const llama_pos exactWipe = nPast - firstMsgTokens;
     const llama_pos tailPreservingWipe = tail - firstMsgTokens;
     const bool exactWipeFits = exactWipe <= nDiscarded &&
-        firstMsgTokens + nTokensToAppend < nCtx;
+        firstMsgTokens + nTokensToAppend < nCtx &&
+        protectedCacheTokens + cacheTokensToAppend < nCtx;
     const bool tailPreservingWipeFits =
         tail > firstMsgTokens && tailPreservingWipe <= nDiscarded &&
-        firstMsgTokens + 1 + nTokensToAppend < nCtx;
+        firstMsgTokens + 1 + nTokensToAppend < nCtx &&
+        protectedCacheTokens + 1 + cacheTokensToAppend < nCtx;
 
     if (!exactWipeFits && !tailPreservingWipeFits) {
       return {ContextSlideOutcome::Kind::Overflow, nPast, 0};
@@ -123,12 +134,13 @@ ContextSlideOutcome trySlidePrefill(
 ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nDiscarded, ToolsCompactController& tools,
-    const IContextSliderOps& ops) {
+    const IContextSliderOps& ops, llama_pos nCacheTokens) {
 
   const auto nCtx = ops.nCtx(lctx);
+  const llama_pos cacheTokens = nCacheTokens >= 0 ? nCacheTokens : nPast;
 
   // Check if sliding is needed (need room for 1 more token)
-  if (nPast + 1 <= nCtx || nDiscarded == 0) {
+  if ((nPast + 1 <= nCtx && cacheTokens + 1 <= nCtx) || nDiscarded == 0) {
     return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
 
