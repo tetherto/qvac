@@ -72,7 +72,6 @@ async function runToContent(
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelType: "llm",
     onProgress: (p) =>
       process.stdout.write(`\rLoading: ${p.percentage.toFixed(1)}%`),
   });

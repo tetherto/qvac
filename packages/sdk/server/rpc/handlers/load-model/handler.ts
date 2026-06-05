@@ -69,7 +69,7 @@ export async function handleLoadModel(
   // is opened with `modelId: undefined` so a cancel-by-modelId fired
   // before the load completes is a clean no-op (rather than matching a
   // half-built entry). Cancel-by-`requestId` works from `begin(...)` on.
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId,
     kind: "loadModel",
   });

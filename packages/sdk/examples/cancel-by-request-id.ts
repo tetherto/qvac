@@ -47,7 +47,6 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelType: "llm",
     modelConfig: { ctx_size: 4096 },
   });
 

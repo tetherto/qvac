@@ -50,6 +50,7 @@ export default {
           "./assets/audio/**/*",
           "./assets/images/**/*",
           "./assets/documents/**/*",
+          "./fixtures/**/*",
         ],
       },
     },

@@ -18,7 +18,6 @@ try {
   console.log("📥 Loading Whisper model...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
-    modelType: "whisper",
     modelConfig: {
       audio_format: "f32le",
       // Sampling strategy

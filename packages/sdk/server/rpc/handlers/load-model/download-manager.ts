@@ -14,7 +14,7 @@ const logger = getServerLogger();
 /**
  * Per-subscriber binding to a registry-tracked request.
  * `startOrJoinDownload` is request-aware: each caller (the
- * `await using ctx = registry.begin(...)` inside `handleLoadModel` /
+ * `await using ctx = await registry.begin(...)` inside `handleLoadModel` /
  * `handleDownloadAsset`) registers a subscriber bound to its
  * `requestId`. A `cancel({ requestId })` against the registry aborts
  * the subscriber's `ctx.signal`, which:

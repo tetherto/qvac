@@ -44,7 +44,7 @@ export async function handleDownloadAsset(
   // `modelId` to register on the registry entry. Cancel by `requestId`
   // is the primary path; `cancel({ modelId })` is intentionally a
   // non-match for this kind.
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId,
     kind: "downloadAsset",
   });

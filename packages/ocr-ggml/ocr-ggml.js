@@ -95,7 +95,7 @@ class OcrGgmlInterface {
 
   /**
    * Returns the backend device the C++ pipeline resolved for inference.
-   * @returns {{ requested: string, backendDevice: string, backendName: string, fallbackReason: string }}
+   * @returns {{ requested: string, backendDevice: string, backendName: string, deviceIndex: number, backendDescription: string, fallbackReason: string }}
    */
   getBackendInfo () {
     if (this._handle === null) {

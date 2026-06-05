@@ -17,10 +17,17 @@ import {
 let registry: RequestRegistry | null = null;
 
 function installDefaultPolicies(r: RequestRegistry): void {
-  // The llama.cpp addon owns one KV-cache + one decode loop per model,
-  // so two concurrent `completionStream` requests on the same model
-  // would interleave their token streams on the same logical session.
-  r.policy({ kind: "completion", oneAtATimePerModel: true });
+  // A loaded model is a single native context (one KV-cache, single-slot
+  // decode), so two same-model completions can't run in parallel. Serialize
+  // rather than reject: the second waits FIFO. maxConcurrentPerModel: 1 is
+  // today's reality — raise it once continuous batching lands. The depth cap
+  // bounds queue memory.
+  r.policy({
+    kind: "completion",
+    maxConcurrentPerModel: 1,
+    onOverflow: "queue",
+    maxQueueDepthPerModel: 64,
+  });
 }
 
 export function getRequestRegistry(): RequestRegistry {
