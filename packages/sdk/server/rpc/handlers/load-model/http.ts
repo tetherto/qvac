@@ -2,7 +2,7 @@ import type { ModelProgressUpdate, ShardUrl } from "@/schemas";
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { Readable, type Writable } from "bare-stream";
-import fetch from "bare-fetch";
+import fetch, { Headers } from "bare-fetch";
 import type { AbortSignal } from "bare-abort-controller";
 import { withTimeout } from "@/utils/withTimeout";
 import {
@@ -161,12 +161,12 @@ async function performHttpDownload(
   }
 
   // Prepare headers for resume if needed
-  const headers: Record<string, string> = {
+  const headers = new Headers({
     "User-Agent": "qvac-sdk",
-  };
+  });
 
   if (startOffset > 0) {
-    headers["Range"] = `bytes=${startOffset}-`;
+    headers.append("Range", `bytes=${startOffset}-`);
   }
 
   const config = getSDKConfig();
@@ -220,9 +220,9 @@ async function performHttpDownload(
       // Retry without Range header
       response = await fetch(url, {
         method: "GET",
-        headers: {
+        headers: new Headers({
           "User-Agent": "qvac-sdk",
-        },
+        }),
         ...(signal && { signal }),
       });
 

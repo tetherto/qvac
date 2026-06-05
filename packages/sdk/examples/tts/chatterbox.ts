@@ -22,8 +22,7 @@ const CHATTERBOX_SAMPLE_RATE = 24000;
 
 try {
   const modelId = await loadModel({
-    modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0.src,
-    modelType: "tts",
+    modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
     modelConfig: {
       ttsEngine: "chatterbox",
       language: "en",

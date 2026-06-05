@@ -36,5 +36,5 @@ export function createIPCClient(
     options?.onDisconnect?.();
   });
 
-  return new RPC(socket as unknown as Duplex<DuplexEvents>, handleRequest);
+  return new RPC(socket, handleRequest);
 }

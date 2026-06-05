@@ -44,3 +44,33 @@ npx --package "@qvac/cli" qvac doctor
 </Callout>
 
 See [CLI → Usage](/cli#usage) for the full setup, including installing `@qvac/sdk` in your project.
+
+## Startup crash: requested module does not provide a default export
+
+### Situation
+
+You ran `qvac bundle sdk`, started your app, and then the worklet crashed with:
+
+<WrapCode>
+
+```
+SyntaxError: The requested module '@qvac/sdk/tts-ggml/plugin' does not provide an export named 'default'
+```
+</WrapCode>
+
+### Cause
+
+This usually means there is version skew between `@qvac/cli` and `@qvac/sdk`.
+
+An older CLI version may generate a bundle using outdated built-in plugin metadata, while a newer SDK version exports the renamed plugin only through its current named export shape. Starting with `@qvac/cli` 0.6.0, `qvac bundle sdk` delegates to `@qvac/sdk/commands`, which keeps the bundling logic aligned with the SDK.
+
+### Solution
+
+Upgrade `@qvac/cli`, then rebuild the SDK bundle:
+
+```bash
+npm install -g @qvac/cli@latest
+qvac bundle sdk
+```
+
+If you do not install the CLI globally, run the latest version with `npx` instead.

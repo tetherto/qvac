@@ -107,7 +107,7 @@ export async function* translate(
   // exits on `signal.aborted`, scope unwinds, and the addon may run
   // to completion in the background — acceptable because the result
   // is dropped either way.
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: "translate",
     modelId,

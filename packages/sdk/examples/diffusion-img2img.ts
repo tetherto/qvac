@@ -11,7 +11,9 @@ const modelSrc = process.argv[5] || SD_V2_1_1B_Q8_0;
 
 if (!inputPath) {
   console.error("❌ Error: input image path is required");
-  console.error("Usage: bun run bare:example dist/examples/diffusion-img2img.js <inputImage> [prompt] [outputDir] [modelSrc]");
+  console.error(
+    "Usage: bun run bare:example dist/examples/diffusion-img2img.js <inputImage> [prompt] [outputDir] [modelSrc]",
+  );
   process.exit(1);
 }
 
@@ -19,7 +21,7 @@ try {
   console.log("Loading diffusion model...");
   const modelId = await loadModel({
     modelSrc,
-    modelType: "diffusion",
+    modelType: "sdcpp-generation",
   });
   console.log(`Model loaded: ${modelId}`);
 

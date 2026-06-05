@@ -68,7 +68,7 @@ test("registry: begin emits a [request-lifecycle] begin line", async (t) => {
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -88,7 +88,7 @@ test("registry: cancel-by-requestId emits a [request-lifecycle] cancel line once
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-1",
     kind: "completion",
     modelId: "m1",
@@ -113,7 +113,7 @@ test("registry: end emits a [request-lifecycle] end line with the terminal state
   const r = createRequestRegistry({ logger: log });
 
   async function happyRun() {
-    await using ctx = r.begin({
+    await using ctx = await r.begin({
       requestId: "r-happy",
       kind: "completion",
       modelId: "m1",
@@ -134,7 +134,7 @@ test("registry: end emits a [request-lifecycle] end line with the terminal state
   );
 
   async function cancelledRun() {
-    await using ctx = r.begin({
+    await using ctx = await r.begin({
       requestId: "r-cancelled",
       kind: "completion",
       modelId: "m1",
@@ -161,7 +161,7 @@ test("registry: failed end emits at warn level, not info", async (t) => {
   const r = createRequestRegistry({ logger: log });
 
   async function failedRun() {
-    await using ctx = r.begin({
+    await using ctx = await r.begin({
       requestId: "r-failed",
       kind: "completion",
       modelId: "m1",
@@ -193,12 +193,12 @@ test("registry: cancelAll emits one cancel line per active request", async (t) =
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
-  await using a = r.begin({
+  await using a = await r.begin({
     requestId: "r-a",
     kind: "completion",
     modelId: "m1",
   });
-  await using b = r.begin({
+  await using b = await r.begin({
     requestId: "r-b",
     kind: "embeddings",
     modelId: "m2",
@@ -229,7 +229,7 @@ test("registry: parentSignal already aborted lands begin with state=cancelling",
   const parent = new AbortController();
   parent.abort("shutdown");
 
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-pre",
     kind: "completion",
     modelId: "m1",
@@ -249,7 +249,7 @@ test("registry: begin without modelId emits state line with modelId=-", async (t
   const log = makeLoggerStub();
   const r = createRequestRegistry({ logger: log });
 
-  await using ctx = r.begin({
+  await using ctx = await r.begin({
     requestId: "r-no-model",
     kind: "completion",
   });
