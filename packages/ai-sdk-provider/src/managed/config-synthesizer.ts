@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { allModels } from '../models/constants.js'
 import type { QvacManagedModel } from '../types.js'
-import { UnknownManagedModelError } from './errors.js'
+import { DuplicateManagedModelError, UnknownManagedModelError } from './errors.js'
 
 // A model as accepted by managed mode: a bare constant name, or an object with
 // per-model serve config.
@@ -52,6 +52,19 @@ export function synthesizeServeConfig (models: readonly ManagedModelInput[]): Sy
   const unknown = specs.filter((s) => !KNOWN_MODEL_NAMES.has(s.name)).map((s) => s.name)
   if (unknown.length > 0) {
     throw new UnknownManagedModelError(unknown)
+  }
+
+  // Each model becomes exactly one serve alias keyed by its name, so a repeat
+  // would silently overwrite the earlier entry (and could drop its `default`).
+  // Reject dupes up front rather than resolve them ambiguously.
+  const seen = new Set<string>()
+  const duplicates = new Set<string>()
+  for (const s of specs) {
+    if (seen.has(s.name)) duplicates.add(s.name)
+    seen.add(s.name)
+  }
+  if (duplicates.size > 0) {
+    throw new DuplicateManagedModelError([...duplicates])
   }
 
   // Default alias: an explicit `default: true` wins; otherwise the first model.

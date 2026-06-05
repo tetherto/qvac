@@ -5,6 +5,7 @@
 
 export type QvacManagedErrorCode =
   | 'UNKNOWN_MODEL'
+  | 'DUPLICATE_MODEL'
   | 'CLI_NOT_FOUND'
   | 'SERVE_SPAWN_FAILED'
   | 'SERVE_START_TIMEOUT'
@@ -32,6 +33,21 @@ export class UnknownManagedModelError extends QvacManagedModeError {
     )
     this.name = 'UnknownManagedModelError'
     this.unknownModels = unknownModels
+  }
+}
+
+export class DuplicateManagedModelError extends QvacManagedModeError {
+  readonly duplicateModels: readonly string[]
+
+  constructor (duplicateModels: readonly string[]) {
+    super(
+      'DUPLICATE_MODEL',
+      `Duplicate model name(s) in managed \`models\`: ${duplicateModels.join(', ')}. ` +
+        'Each model becomes a single serve alias, so list each name at most once ' +
+        '(a repeat would silently overwrite the earlier entry, including its `default`).'
+    )
+    this.name = 'DuplicateManagedModelError'
+    this.duplicateModels = duplicateModels
   }
 }
 

@@ -7,7 +7,7 @@ import {
   synthesizeServeConfig,
   writeEphemeralConfig
 } from '../src/managed/config-synthesizer.js'
-import { UnknownManagedModelError } from '../src/managed/errors.js'
+import { DuplicateManagedModelError, UnknownManagedModelError } from '../src/managed/errors.js'
 
 // A real constant from the generated catalog (see src/models/constants.ts).
 const KNOWN = 'QWEN3_600M_INST_Q4'
@@ -59,6 +59,18 @@ test('synthesizeServeConfig reports every unknown constant, not just the first',
 
 test('synthesizeServeConfig rejects an empty model list', () => {
   assert.throws(() => synthesizeServeConfig([]), UnknownManagedModelError)
+})
+
+test('synthesizeServeConfig rejects duplicate model names (string or spec)', () => {
+  assert.throws(
+    () => synthesizeServeConfig([KNOWN, { name: KNOWN, default: true }]),
+    (err: unknown) => {
+      assert.ok(err instanceof DuplicateManagedModelError)
+      assert.equal(err.code, 'DUPLICATE_MODEL')
+      assert.deepEqual(err.duplicateModels, [KNOWN])
+      return true
+    }
+  )
 })
 
 test('synthesizeServeConfig accepts a spec object and emits its per-model config', () => {
