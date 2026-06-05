@@ -20,10 +20,12 @@ const { platform, getImagePath, ensureModelPath, safeUnload } = require('./utils
 //
 // (2) is the important Adreno guard rail. vla-ggml found Adreno Vulkan
 // numerically broken (cos-sim ~0.73 vs reference on Adreno 830 / Galaxy S25,
-// while Mali/Metal/NVIDIA sit above 0.999). The addon's backend selection is
-// therefore expected to reject Adreno-Vulkan and fall back to CPU; if a
-// numerically-broken Vulkan device were selected instead, the accuracy
-// assertions below would fail — which is exactly the signal we want.
+// while Mali/Metal/NVIDIA sit above 0.999). OcrBackendSelection therefore
+// auto-skips Adreno GPUs for Vulkan and falls back to CPU, so on an Adreno
+// device this test takes the explicit CPU-fallback branch (correct output);
+// on Mali (e.g. Pixel 9 Pro) it runs on Vulkan. If a numerically-broken Vulkan
+// device were ever selected, the accuracy assertions below would fail — which
+// is exactly the signal we want.
 //
 // The resolved backend name/description is logged so Device Farm runs surface
 // the actual GPU on the pool's devices.

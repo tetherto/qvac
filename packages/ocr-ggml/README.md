@@ -433,9 +433,11 @@ desktop and iOS (iOS has no Vulkan).
 
 > **Adreno caveat.** Adreno Vulkan is numerically broken (cos-sim ~0.73 vs
 > reference on Adreno 830 / Galaxy S25, while Mali / Metal / NVIDIA sit above
-> 0.999 — see `vla-ggml`). On such devices the backend selection is expected to
-> reject Adreno-Vulkan and fall back to CPU; the accuracy gate above is what
-> catches a numerically-broken Vulkan device that slips through.
+> 0.999 — see `vla-ggml`). `OcrBackendSelection` therefore **auto-skips Adreno
+> GPUs for Vulkan** and falls back to CPU (an explicit `gpuDevice` index still
+> overrides this to force an Adreno device on purpose). The accuracy gate above
+> is the backstop that catches a numerically-broken Vulkan device that slips
+> through.
 
 ## Repository layout
 
