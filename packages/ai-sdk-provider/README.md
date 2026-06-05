@@ -123,7 +123,9 @@ const { text } = await generateText({ model: qvac('QWEN3_600M_INST_Q4'), prompt:
 ```ts
 interface QvacManagedOptions {
   mode: 'managed'
-  models: string[]               // SDK model constant names (see `models` export)
+  // SDK model constant names, or per-model spec objects (see below). The first
+  // entry is the default alias unless one sets `default: true`.
+  models: (string | QvacManagedModel)[]
   servePort?: number             // default: auto-allocate a free port
   serveHost?: string             // default: '127.0.0.1' (loopback only)
   serveStartTimeout?: number     // ms to wait for health; default: 180000
@@ -132,9 +134,34 @@ interface QvacManagedOptions {
   headers?: Record<string, string>
   fetch?: typeof fetch
 }
+
+interface QvacManagedModel {
+  name: string                       // SDK model constant name
+  config?: Record<string, unknown>   // per-model serve config (ctx_size, reasoning_budget, …)
+  preload?: boolean                  // load at startup; default: true
+  default?: boolean                  // make this the default alias
+}
 ```
 
 The resolved provider also exposes `provider.port`, `provider.pid`, and `provider.baseURL` for diagnostics.
+
+### Per-model configuration
+
+A bare string keeps the serve defaults. To set serve options per model — most importantly `ctx_size` and `reasoning_budget`, which coding agents need (see [Using with coding agents](#using-with-coding-agents)) — pass a spec object instead. The `config` block is written verbatim into the synthesized `qvac.config.json` for that model:
+
+```ts
+const qvac = await createQvac({
+  mode: 'managed',
+  models: [
+    // Agent-capable chat model with a large context window and no reasoning budget.
+    { name: 'GPT_OSS_20B_INST_Q4_K_M', config: { ctx_size: 16384, reasoning_budget: 0 }, default: true },
+    // A smaller utility model, loaded lazily, for titles/summaries.
+    { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 }, preload: false }
+  ]
+})
+```
+
+Without this, every model uses `qvac serve`'s defaults — and the default `ctx_size` of 1024 is too small for an agent's tool-laden prompts.
 
 ### Behaviour notes
 
@@ -182,6 +209,20 @@ Then point your harness at the alias. For OpenCode, `model` and `small_model` ca
 ```
 
 You can still configure a separate, lighter `small_model` if you want title, summary, and compaction calls to avoid waiting behind the main chat decode, but it is no longer required for correctness.
+
+**Managed-mode equivalent.** Instead of hand-authoring `qvac.config.json` and running `qvac serve` yourself, let [managed mode](#per-model-configuration) synthesize the same agent-friendly config and spawn the serve on a free port. Point OpenCode at the resolved `baseURL`:
+
+```ts
+const qvac = await createQvac({
+  mode: 'managed',
+  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 16384, reasoning_budget: 0 } }]
+})
+// Write opencode.json against the managed serve, then run OpenCode:
+//   provider.qvac.options.baseURL = qvac.baseURL  (e.g. http://127.0.0.1:5xxxx/v1)
+//   model = small_model = "qvac/QWEN3_8B_INST_Q4_K_M"
+```
+
+OpenCode fires the main `build` completion and the `title`/summary completion concurrently against the one alias; the per-model queue (section 1) serializes them instead of failing on a job-lock collision.
 
 ### 2. `ctx_size` defaults to 1024 — too small for agents
 

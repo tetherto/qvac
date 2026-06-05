@@ -2,7 +2,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 
 import { DEFAULT_API_KEY, DEFAULT_HEADERS } from '../defaults.js'
 import type { ManagedQvacProvider, QvacManagedOptions } from '../types.js'
-import { writeEphemeralConfig } from './config-synthesizer.js'
+import { modelNames, writeEphemeralConfig } from './config-synthesizer.js'
 import { startServeSupervisor } from './supervisor.js'
 import type { ServeSupervisor } from './supervisor.js'
 
@@ -15,7 +15,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   let supervisor: ServeSupervisor
   try {
     supervisor = await startServeSupervisor({
-      models: options.models,
+      models: modelNames(options.models),
       configPath: ephemeral.configPath,
       cleanupConfig: ephemeral.cleanup,
       ...(options.servePort !== undefined ? { port: options.servePort } : {}),

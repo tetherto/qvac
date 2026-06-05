@@ -2,6 +2,7 @@ export { createQvac, qvac } from './provider.js'
 export type {
   ManagedQvacProvider,
   QvacExternalOptions,
+  QvacManagedModel,
   QvacManagedOptions,
   QvacOptions,
   QvacProvider

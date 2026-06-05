@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 import {
+  modelNames,
   synthesizeServeConfig,
   writeEphemeralConfig
 } from '../src/managed/config-synthesizer.js'
@@ -60,6 +61,74 @@ test('synthesizeServeConfig rejects an empty model list', () => {
   assert.throws(() => synthesizeServeConfig([]), UnknownManagedModelError)
 })
 
+test('synthesizeServeConfig accepts a spec object and emits its per-model config', () => {
+  const config = synthesizeServeConfig([
+    { name: KNOWN, config: { ctx_size: 16384, reasoning_budget: 0 } }
+  ])
+
+  assert.deepEqual(config.serve.models[KNOWN], {
+    model: KNOWN,
+    preload: true,
+    default: true,
+    config: { ctx_size: 16384, reasoning_budget: 0 }
+  })
+})
+
+test('synthesizeServeConfig honors an explicit preload: false', () => {
+  const config = synthesizeServeConfig([{ name: KNOWN, preload: false }])
+  assert.equal(config.serve.models[KNOWN]?.preload, false)
+})
+
+test('synthesizeServeConfig honors an explicit default on a non-first model', () => {
+  const config = synthesizeServeConfig([
+    KNOWN,
+    { name: 'QWEN3_1_7B_INST_Q4', default: true }
+  ])
+  const entries = config.serve.models
+
+  // The explicit default wins; the first model is NOT auto-defaulted.
+  assert.equal(entries['QWEN3_1_7B_INST_Q4']?.default, true)
+  assert.equal(entries[KNOWN]?.default, undefined)
+})
+
+test('synthesizeServeConfig mixes bare-string and spec-object inputs', () => {
+  const config = synthesizeServeConfig([
+    KNOWN,
+    { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 } }
+  ])
+  const entries = config.serve.models
+
+  // Bare string => first => default, no config block.
+  assert.equal(entries[KNOWN]?.default, true)
+  assert.equal(entries[KNOWN]?.config, undefined)
+  // Spec object => carries config, not default.
+  assert.deepEqual(entries['QWEN3_1_7B_INST_Q4']?.config, { ctx_size: 8192 })
+  assert.equal(entries['QWEN3_1_7B_INST_Q4']?.default, undefined)
+})
+
+test('synthesizeServeConfig omits the config key when a spec has no config', () => {
+  const config = synthesizeServeConfig([{ name: KNOWN }])
+  assert.ok(!('config' in config.serve.models[KNOWN]!))
+})
+
+test('synthesizeServeConfig validates names inside spec objects', () => {
+  assert.throws(
+    () => synthesizeServeConfig([{ name: 'NOT_A_REAL_MODEL', config: { ctx_size: 1 } }]),
+    (err: unknown) => {
+      assert.ok(err instanceof UnknownManagedModelError)
+      assert.deepEqual(err.unknownModels, ['NOT_A_REAL_MODEL'])
+      return true
+    }
+  )
+})
+
+test('modelNames extracts alias names from mixed inputs in order', () => {
+  assert.deepEqual(
+    modelNames([KNOWN, { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 } }]),
+    [KNOWN, 'QWEN3_1_7B_INST_Q4']
+  )
+})
+
 test('writeEphemeralConfig writes valid JSON and cleanup removes it', async () => {
   const { configPath, cleanup } = await writeEphemeralConfig([KNOWN])
 
@@ -72,5 +141,19 @@ test('writeEphemeralConfig writes valid JSON and cleanup removes it', async () =
   await assert.rejects(readFile(configPath, 'utf8'), /ENOENT/)
 
   // cleanup is idempotent — a second call must not throw.
+  await cleanup()
+})
+
+test('writeEphemeralConfig persists a per-model config block', async () => {
+  const { configPath, cleanup } = await writeEphemeralConfig([
+    { name: KNOWN, config: { ctx_size: 16384, reasoning_budget: 0 } }
+  ])
+
+  const parsed = JSON.parse(await readFile(configPath, 'utf8'))
+  assert.deepEqual(parsed.serve.models[KNOWN].config, {
+    ctx_size: 16384,
+    reasoning_budget: 0
+  })
+
   await cleanup()
 })

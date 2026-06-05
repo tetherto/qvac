@@ -17,15 +17,37 @@ export interface QvacExternalOptions extends QvacCommonOptions {
   readonly baseURL?: string
 }
 
+// A model to load in managed mode. A bare string is shorthand for `{ name }`.
+// Use the object form to attach per-model serve config — notably `ctx_size`
+// and `reasoning_budget`, which coding-agent harnesses like OpenCode need (the
+// serve default `ctx_size` of 1024 is too small for an agent's system prompt +
+// tool definitions). See the package README's "Using with coding agents".
+export interface QvacManagedModel {
+  // SDK model-constant name, e.g. `'GPT_OSS_20B_INST_Q4_K_M'`. Becomes a serve
+  // alias of the same name, so `provider(name)` maps 1:1 to the entry.
+  readonly name: string
+  // Per-model serve config, merged verbatim into the synthesized
+  // `qvac.config.json` entry under `config` (e.g.
+  // `{ ctx_size: 16384, reasoning_budget: 0 }`).
+  readonly config?: Record<string, unknown>
+  // Preload the model when the serve starts. Defaults to `true`.
+  readonly preload?: boolean
+  // Mark this alias as the serve default. Defaults to the first model when no
+  // model sets it explicitly.
+  readonly default?: boolean
+}
+
 // Managed mode: the provider synthesizes an ephemeral `qvac.config.json` from
-// the requested model alias list, spawns `qvac serve openai` on a free port,
+// the requested model list, spawns `qvac serve openai` on a free port,
 // health-checks it, and tears the process down on host exit. `createQvac`
 // returns a `Promise<ManagedQvacProvider>` in this mode.
 export interface QvacManagedOptions extends QvacCommonOptions {
   readonly mode: 'managed'
-  // SDK model-constant names (e.g. `'QWEN3_600M_INST_Q4'`). Each becomes a
-  // serve alias of the same name, so `provider('QWEN3_600M_INST_Q4')` works.
-  readonly models: readonly string[]
+  // Models to load. A bare string is the SDK model-constant name (e.g.
+  // `'QWEN3_600M_INST_Q4'`); the object form additionally carries per-model
+  // serve `config` (see `QvacManagedModel`). Each becomes a serve alias of the
+  // same name, so `provider('QWEN3_600M_INST_Q4')` works.
+  readonly models: readonly (string | QvacManagedModel)[]
   // Pin the serve port. Omit to auto-allocate a free port.
   readonly servePort?: number
   // Bind host for the spawned serve. Defaults to `127.0.0.1`.
