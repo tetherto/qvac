@@ -128,6 +128,18 @@ module.exports = {
       tasks: ['textvqa', 'vizwiz', 'gqa', 'docvqa', 'ai2d'],
       samplesPerTask: 3,
       devices: null
+    },
+    // Several-sources mode: ONE fixed model (Qwen3.5 + q8 mmproj) compared across
+    // 3 inference engines (addon + fabric-cli + upstream-cli). Linux-only — the CLI
+    // engines are native binaries (Android is out of scope for this mode). The
+    // workflow runs the addon (this harness) + two CLI runners over the same fixture.
+    sources: {
+      mode: 'several-sources',
+      cells: [{ model: 'qwen', mmproj: 'q8' }],
+      engines: ['addon', 'fabric-cli', 'upstream-cli'],
+      tasks: ['textvqa', 'vizwiz', 'gqa', 'docvqa', 'ai2d'],
+      samplesPerTask: 3,
+      devices: null
     }
   }
 }

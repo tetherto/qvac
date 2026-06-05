@@ -39,6 +39,12 @@ function intEnv (k) { const v = parseInt(env(k), 10); return Number.isFinite(v) 
 const PRESET = config.presets[env('QVAC_VLM_PRESET') || config.defaultPreset] ||
   { cells: null, tasks: null, samplesPerTask: null, devices: null }
 
+// Comparison mode + this run's engine. In 'several-sources' the comparison axis is
+// the engine (this addon leg is one of addon/fabric-cli/upstream-cli), so markers
+// are keyed by the source label instead of model·mmproj. Driven by env on Linux.
+const MODE = env('QVAC_VLM_MODE') || PRESET.mode || config.mode || 'two-models'
+const SOURCE = env('QVAC_VLM_ENGINE') || config.engine || 'addon'
+
 // samples/task precedence: explicit env > preset > (mobile 2 / desktop 5). Mobile
 // defaults low to fit the 30-min Device Farm ceiling; qvac_perf_runs lands here.
 const SAMPLES_PER_TASK = intEnv('QVAC_VLM_SAMPLES') || intEnv('QVAC_PERF_RUNS') ||
@@ -218,6 +224,9 @@ function emitRow (obj) {
 
 function runVlmCell (modelKey, mmprojKey) {
   const cell = `${modelKey}-${mmprojKey}`
+  // Marker axis: source label in several-sources mode (engine comparison), else the
+  // model·mmproj cell. The model loaded is always modelKey/mmprojKey.
+  const axis = MODE === 'several-sources' ? SOURCE : cell
   if (!ENABLED) {
     test(`vlm-matrix ${cell} (disabled; set QVAC_VLM_MATRIX=1)`, t => t.pass('disabled'))
     return
@@ -230,7 +239,7 @@ function runVlmCell (modelKey, mmprojKey) {
       const [projName] = await ensureBlob(cfg.mmproj[mmprojKey])
       // model-origin provenance (stderr, parsed host-side into the report)
       console.error('[VLMMETA]' + JSON.stringify({
-        cell, model: modelKey, mmproj: mmprojKey,
+        cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey,
         main_origin: cfg.main.origin, main_url: displayUrl(cfg.main), main_source: sourceType(cfg.main),
         mmproj_origin: cfg.mmproj[mmprojKey].origin, mmproj_url: displayUrl(cfg.mmproj[mmprojKey]), mmproj_source: sourceType(cfg.mmproj[mmprojKey])
       }) + '[/VLMMETA]')
@@ -258,12 +267,12 @@ function runVlmCell (modelKey, mmprojKey) {
         // segment marker on STDERR — same stream as llama.cpp's `image slice encoded`
         // lines, so host-side attribution is alignment-proof (stdout [VLMROW] markers
         // can interleave unpredictably after 2>&1).
-        console.error('[VLMSEG]' + JSON.stringify({ cell, model: modelKey, mmproj: mmprojKey, device, id: item.id }) + '[/VLMSEG]')
+        console.error('[VLMSEG]' + JSON.stringify({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, id: item.id }) + '[/VLMSEG]')
         try {
           const r = await runOne(inference, getMediaPath(item.image), item.prompt)
           const st = r.stats || {}
           emitRow({
-            cell, model: modelKey, mmproj: mmprojKey, device,
+            cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device,
             task: item.task, id: item.id, metric: item.metric, gold: item.gold,
             pred: String(r.text).slice(0, 600),
             img: item.image, img_w: r.dims.w, img_h: r.dims.h,
@@ -275,7 +284,7 @@ function runVlmCell (modelKey, mmprojKey) {
           })
           ok++
         } catch (e) {
-          emitRow({ cell, model: modelKey, mmproj: mmprojKey, device, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) })
+          emitRow({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) })
         }
       }
       t.ok(ok > 0, `${cell} [${dev}] produced ${ok}/${items.length} predictions`)

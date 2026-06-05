@@ -92,8 +92,13 @@ on:
         required: false
         type: boolean
         default: false
+      matrix_mode:
+        description: "  matrix mode: two-models (f16 vs q8, addon) or several-sources (addon+fabric-cli+upstream-cli, Linux-only)"
+        required: false
+        type: string
+        default: "two-models"
       matrix_preset:
-        description: "  matrix preset: compare (f16-vs-q8, open tasks), smoke (1 cell/1 task), or full. Overrides config.defaultPreset on Linux."
+        description: "  matrix preset: compare (two-models), sources (several-sources), smoke, or full. Overrides config.defaultPreset on Linux."
         required: false
         type: string
         default: "compare"
@@ -247,14 +252,19 @@ jobs:
         env:
           RUN_MATRIX: ${{ inputs.run_matrix }}
           MATRIX_LINUX: ${{ inputs.matrix_linux }}
+          MATRIX_MODE: ${{ inputs.matrix_mode }}
         run: |
           cells='[]'
           if [[ "$RUN_MATRIX" == "true" ]]; then
             IFS=',' read -ra tokens <<< "${MATRIX_LINUX:-linux-cpu}"
             for raw in "${tokens[@]}"; do
               sel=$(echo "$raw" | xargs)
+              # several-sources builds native fabric/upstream CLIs, so the CPU leg
+              # needs a runner with cmake+toolchain → GitHub-hosted ubuntu-latest.
+              cpu_runner=qvac-ubuntu2204-x64
+              if [[ "$MATRIX_MODE" == "several-sources" ]]; then cpu_runner=ubuntu-latest; fi
               case "$sel" in
-                linux-cpu) backend=cpu; runner=qvac-ubuntu2204-x64;      no_gpu=true ;;
+                linux-cpu) backend=cpu; runner=$cpu_runner;             no_gpu=true ;;
                 linux-gpu) backend=gpu; runner=qvac-ubuntu2404-x64-gpu;  no_gpu=false ;;
                 "") continue ;;
                 *) echo "::warning::Unknown matrix_linux token '$sel' (known: linux-cpu, linux-gpu)"; continue ;;
@@ -710,7 +720,9 @@ jobs:
     if: needs.context.outputs.linux_count != '0'
     name: vlm-matrix-linux-${{ matrix.backend }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # several-sources builds two CLIs from source (first run, pre-cache) + per-image
+    # CLI model reloads, so allow more wall-clock than the addon-only two-models path.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -776,16 +788,59 @@ jobs:
         shell: bash
         env:
           QVAC_VLM_MATRIX: "1"
+          QVAC_VLM_MODE: ${{ inputs.matrix_mode }}
           QVAC_VLM_PRESET: ${{ inputs.matrix_preset }}
-          QVAC_VLM_ENGINE: ${{ inputs.matrix_engine }}
+          QVAC_VLM_ENGINE: addon # this leg is always the 'addon' source
           QVAC_VLM_DEVICES: ${{ matrix.backend }}
           NO_GPU: ${{ matrix.no_gpu }}
         run: |
           # Regenerate the brittle runner to include ONLY the matrix test,
           # then run it under bare (same pattern as the perf-only path).
+          # In several-sources mode this is the addon leg; fabric/upstream CLIs
+          # are appended to the same log by the next step.
           npx brittle -r test/integration/all.js test/integration/vlm-matrix.test.js
           bare test/integration/all.js --exit 2>&1 | tee "vlm-matrix-linux-${{ matrix.backend }}.log"
           exit ${PIPESTATUS[0]}
+
+      # several-sources only: build native fabric/upstream llama-mtmd-cli and run
+      # them over the SAME fixture, appending [VLMROW]/[VLMSEG] markers to the addon
+      # log so aggregate.js renders a 3-source comparison. Linux-only.
+      - name: Cache CLI builds (several-sources)
+        if: inputs.matrix_mode == 'several-sources'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WORKDIR }}/benchmarks/vlm-performance/cli-builds
+          key: vlm-cli-v3-linux-${{ matrix.backend }}-${{ inputs.fabric_ref }}-${{ inputs.upstream_ref }}
+
+      - name: Build + run fabric/upstream CLIs over the fixture (several-sources)
+        if: inputs.matrix_mode == 'several-sources'
+        working-directory: ${{ env.WORKDIR }}/benchmarks/vlm-performance
+        shell: bash
+        env:
+          LOG: ${{ github.workspace }}/${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
+          MODEL_DIR: ${{ github.workspace }}/${{ env.WORKDIR }}/test/model
+        run: |
+          npm install --no-audit --no-fund
+          node scripts/build-cli-sources.js --sources=fabric,upstream \
+            --fabric-ref=${{ inputs.fabric_ref }} --upstream-ref=${{ inputs.upstream_ref }} \
+            --backend=${{ matrix.backend }}
+          FABRIC_BIN=$(node -e "console.log(require('./cli-sources-resolved.json').fabric.binaryPath)")
+          UPSTREAM_BIN=$(node -e "console.log(require('./cli-sources-resolved.json').upstream.binaryPath)")
+          # Model files were downloaded by the addon leg (names from vlm-matrix.config.cjs).
+          LLM="$MODEL_DIR/reg-qwen-unsloth-Q8_0.gguf"
+          MMPROJ="$MODEL_DIR/reg-qwen-mradermacher-mmproj-Q8_0.gguf"
+          run_src () {
+            echo ">> $1 over fixture ($2)"
+            node ../vlm-matrix/cli-fixture-runner.cjs \
+              --binary "$3" --source "$1" --llm "$LLM" --mmproj "$MMPROJ" \
+              --backend "${{ matrix.backend }}" --samples 3 \
+              --tasks textvqa,vizwiz,gqa,docvqa,ai2d \
+              --main-origin "Qwen3.5-0.8B-Q8_0 (Registry)" \
+              --mmproj-origin "Qwen3.5-0.8B mmproj-Q8_0 (Registry)" >> "$LOG" 2>&1 || echo "::warning::$1 run had errors"
+          }
+          run_src fabric-cli fabric "$FABRIC_BIN"
+          run_src upstream-cli upstream "$UPSTREAM_BIN"
+          echo "appended fabric-cli + upstream-cli to $LOG"
 
       # HW/SW provenance so a reader can reproduce the numbers. Rendered in the
       # report's Details section (passed to aggregate.js via --provenance).
@@ -830,7 +885,8 @@ jobs:
   # uploaded by collect-and-upload-logs as console-logs-llamacpp-llm-Android.
   matrix-s25:
     needs: context
-    if: inputs.run_matrix && inputs.run_matrix_s25
+    # S25 runs the addon only; several-sources (native CLIs) is Linux-only.
+    if: inputs.run_matrix && inputs.run_matrix_s25 && inputs.matrix_mode != 'several-sources'
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     secrets: inherit
     with:
@@ -927,8 +983,8 @@ jobs:
             echo "> No VLM matrix logs found for run #${{ github.run_number }}." > consolidated/vlm-matrix-consolidated.md
           else
             node packages/llm-llamacpp/benchmarks/vlm-matrix/aggregate.js \
-              --title "VLM Matrix — preset=${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
-              --mode two-models --engine "${{ inputs.matrix_engine }}" --base f16 --candidate q8 \
+              --title "VLM Matrix — ${{ inputs.matrix_mode }} / ${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
+              --mode "${{ inputs.matrix_mode }}" --engine "${{ inputs.matrix_engine }}" --base f16 --candidate q8 \
               --out consolidated/vlm-matrix-consolidated.md \
               $PROV $ARGS
           fi
