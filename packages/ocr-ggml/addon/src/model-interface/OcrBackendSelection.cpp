@@ -31,6 +31,17 @@ std::string toLower(std::string_view value) {
   return lower;
 }
 
+// True when a ggml device description identifies a Qualcomm Adreno GPU (the
+// description reads e.g. "Adreno (TM) 830"). Adreno's Vulkan compute path is
+// numerically broken: vla-ggml measured cos-sim ~0.73 vs reference on Adreno
+// 830 (Galaxy S25 Ultra) while every other Vulkan/Metal target sits >0.999.
+// It does not crash — it silently produces wrong results — so auto-selection
+// must avoid it and fall back to CPU. (Adreno's OpenCL path is fine, but
+// ocr-ggml does not wire OpenCL today.)
+bool isAdrenoDescription(std::string_view description) {
+  return toLower(description).find("adreno") != std::string::npos;
+}
+
 const char* deviceTypeName(enum ggml_backend_dev_type type) {
   switch (type) {
   case GGML_BACKEND_DEVICE_TYPE_CPU:
@@ -187,22 +198,55 @@ namespace {
 //
 // `gpuDevice` selects the Nth matching device (0-based); when unset, a discrete
 // GPU is preferred over an integrated one.
+//
+// `rejectAdreno` filters out Adreno GPUs on the AUTO path (no explicit
+// `gpuDevice`): their Vulkan path is numerically broken (see
+// `isAdrenoDescription`), so auto-selection must skip them. An explicit
+// `gpuDevice` index is treated as a deliberate override and is honoured as-is
+// (escape hatch for benchmarking / driver bring-up on Adreno).
 bool trySelectGpu(
     BackendSelection& sel, std::string_view label,
-    bool (*matches)(std::string_view), std::optional<int> gpuDevice) {
+    bool (*matches)(std::string_view), std::optional<int> gpuDevice,
+    bool rejectAdreno) {
   const std::vector<MatchingDevice> matching =
       enumerateMatchingDevices(matches);
   QLOG(Priority::INFO, describeMatchingDevices(label, matching));
 
+  // On the auto path, drop Adreno devices so a numerically-broken Adreno Vulkan
+  // GPU never gets silently selected. The explicit-index path keeps the full
+  // list so a caller can still force an Adreno device on purpose.
+  std::vector<MatchingDevice> candidates;
+  if (rejectAdreno && !gpuDevice.has_value()) {
+    for (const auto& md : matching) {
+      if (isAdrenoDescription(md.description)) {
+        QLOG(
+            Priority::WARN,
+            std::string("ocr-ggml: skipping Adreno ") + std::string(label) +
+                " device '" + md.name + "' (" + md.description +
+                ") — Adreno's Vulkan path is numerically broken; will fall "
+                "back to CPU unless another GPU is available");
+        continue;
+      }
+      candidates.push_back(md);
+    }
+  } else {
+    candidates = matching;
+  }
+
   const std::optional<size_t> chosen =
-      chooseMatchingDevice(matching, gpuDevice);
+      chooseMatchingDevice(candidates, gpuDevice);
   if (!chosen.has_value()) {
     if (gpuDevice.has_value()) {
       sel.fallbackReason =
           std::string(label) + " backend requested with gpuDevice index " +
           std::to_string(*gpuDevice) + " but only " +
-          std::to_string(matching.size()) +
+          std::to_string(candidates.size()) +
           " matching device(s) were found; falling back to CPU";
+    } else if (!matching.empty() && candidates.empty()) {
+      sel.fallbackReason =
+          std::string(label) +
+          " backend requested but the only matching device(s) are Adreno, "
+          "whose Vulkan path is numerically broken; falling back to CPU";
     } else {
       sel.fallbackReason = std::string(label) + " backend requested but no " +
                            std::string(label) +
@@ -212,7 +256,7 @@ bool trySelectGpu(
     return false;
   }
 
-  const MatchingDevice& md = matching[*chosen];
+  const MatchingDevice& md = candidates[*chosen];
   sel.device = md.dev;
   sel.backendName = !md.name.empty() ? md.name : std::string(label);
   sel.backendDevice = deviceTypeName(md.type);
@@ -234,13 +278,15 @@ selectBackendDevice(BackendDevice requested, std::optional<int> gpuDevice) {
   switch (requested) {
   case BackendDevice::VULKAN:
     sel.requested = "vulkan";
-    if (trySelectGpu(sel, "Vulkan", isVulkanBackendName, gpuDevice)) {
+    // rejectAdreno = true: Adreno Vulkan is numerically broken (auto-skip).
+    if (trySelectGpu(sel, "Vulkan", isVulkanBackendName, gpuDevice, true)) {
       return sel;
     }
     break;
   case BackendDevice::METAL:
     sel.requested = "metal";
-    if (trySelectGpu(sel, "Metal", isMetalBackendName, gpuDevice)) {
+    // Metal is Apple-only; no Adreno devices to guard against.
+    if (trySelectGpu(sel, "Metal", isMetalBackendName, gpuDevice, false)) {
       return sel;
     }
     break;
