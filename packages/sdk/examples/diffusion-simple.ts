@@ -8,7 +8,7 @@ const prompt = process.argv[3] || "a photo of a cat sitting on a windowsill";
 
 const modelId = await loadModel({
   modelSrc,
-  modelType: "diffusion",
+  modelType: "sdcpp-generation",
   modelConfig: { prediction: "v" },
 });
 

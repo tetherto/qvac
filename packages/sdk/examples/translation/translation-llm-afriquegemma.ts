@@ -8,7 +8,6 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: AFRICAN_4B_TRANSLATION_Q4_K_M,
-    modelType: "llm",
     onProgress: (progress) => {
       console.log(progress);
     },
@@ -22,8 +21,8 @@ try {
       repeat_penalty: 1,
       seed: 42,
       predict: 256,
-      stop_sequences: ['\n']
-    }
+      stop_sequences: ["\n"],
+    },
   });
 
   // With explicit source language
@@ -33,7 +32,7 @@ try {
     text: engText,
     from: "en",
     to: "swh_Latn",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     stream: false,
   });
 

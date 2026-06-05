@@ -33,8 +33,11 @@ public:
   StepDoctrDetectionGGML(StepDoctrDetectionGGML&&) = delete;
   StepDoctrDetectionGGML& operator=(StepDoctrDetectionGGML&&) = delete;
 
+  // backendDevice: ggml device the DBNet graph runs on (selected by `Pipeline`
+  // via `ocr_backend_selection`). nullptr -> CPU device (historical default).
   explicit StepDoctrDetectionGGML(
-      const std::string& pathDetector, int nThreads = 0);
+      const std::string& pathDetector, int nThreads = 0,
+      ggml_backend_dev_t backendDevice = nullptr);
   ~StepDoctrDetectionGGML();
 
   StepDoctrDetectionGGML(const StepDoctrDetectionGGML&) = delete;

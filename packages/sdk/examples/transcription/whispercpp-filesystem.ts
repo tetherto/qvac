@@ -19,7 +19,6 @@ try {
   console.log("📥 Loading Whisper model...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
-    modelType: "whisper",
     modelConfig: {
       audio_format: "f32le",
       // Sampling strategy
@@ -79,7 +78,10 @@ try {
     );
   }
   console.log(
-    `\nFull transcript: ${segments.map((s) => s.text).join("").trim()}`,
+    `\nFull transcript: ${segments
+      .map((s) => s.text)
+      .join("")
+      .trim()}`,
   );
 
   // Unload the model when done

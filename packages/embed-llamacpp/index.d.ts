@@ -17,6 +17,7 @@ export interface GGMLConfig {
   device: 'gpu' | 'cpu'
   gpu_layers?: NumericLike
   batch_size?: NumericLike
+  ctx_size?: NumericLike
   pooling?: 'none' | 'mean' | 'cls' | 'last' | 'rank'
   attention?: 'causal' | 'non-causal'
   embd_normalize?: NumericLike
@@ -48,6 +49,7 @@ export interface RuntimeStats {
   total_time_ms: number
   tokens_per_second?: number
   batch_size: number
+  trained_context_size: number
   context_size: number
   backendDevice: 'cpu' | 'gpu'
 }
@@ -68,12 +70,6 @@ export default class GGMLBert {
 }
 
 export { GGMLBert }
-
-export interface AddonLogging {
-  setLogger(callback: (priority: number, message: string) => void): void
-  releaseLogger(): void
-}
-export const addonLogging: AddonLogging
 
 export class BertInterface implements Addon {
   constructor(

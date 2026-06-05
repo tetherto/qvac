@@ -72,8 +72,7 @@ function appendPcmSamples(target: number[], chunk: number[]) {
 try {
   console.log(`Loading LLM from registry: ${LLAMA_3_2_1B_INST_Q4_0.name}`);
   const llmModelId = await loadModel({
-    modelSrc: LLAMA_3_2_1B_INST_Q4_0.src,
-    modelType: "llm",
+    modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
       ctx_size: 2048,
     },
@@ -84,8 +83,7 @@ try {
 
   console.log("Loading Supertonic TTS (registry)…");
   const ttsModelId = await loadModel({
-    modelSrc: TTS_EN_SUPERTONIC_Q8_0.src,
-    modelType: "tts",
+    modelSrc: TTS_EN_SUPERTONIC_Q8_0,
     modelConfig: {
       ttsEngine: "supertonic",
       language: "en",
@@ -98,8 +96,7 @@ try {
   });
   console.log(`TTS ready: ${ttsModelId}`);
 
-  const prompt =
-    "What is a constellation?";
+  const prompt = "What is a constellation?";
 
   console.log(`\nUser: ${prompt}\nAssistant (streaming):`);
 

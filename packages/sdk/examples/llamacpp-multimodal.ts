@@ -20,7 +20,6 @@ try {
   // Load the main model with projection in a single step
   const modelId = await loadModel({
     modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 1024,
       projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,

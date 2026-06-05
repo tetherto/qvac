@@ -36,7 +36,6 @@ try {
 console.log("Loading Parakeet model...");
 const modelId = await loadModel({
   modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
-  modelType: "parakeet",
   onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
 });
 console.log("Model loaded.\n");

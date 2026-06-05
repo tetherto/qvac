@@ -11,7 +11,7 @@ try {
   // Load model from HTTP URL
   const modelId = await loadModel({
     modelSrc: httpUrl,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: {
       ctx_size: 4096,
     },

@@ -67,7 +67,13 @@ function normalizeGgmlFiles (files) {
       f.supertonicModelPath,
       f.supertonic
     ),
-    voicesDir: firstNonEmpty(f.voicesDir)
+    voicesDir: firstNonEmpty(f.voicesDir),
+    // Directory of the compiled MeCab/IPAdic dictionary (Japanese) and
+    // the Cangjie TSV (Chinese).  The host resolves/stages these (e.g.
+    // from the QVAC model registry) and passes the local paths; the
+    // addon only forwards them to tts-cpp's EngineOptions.
+    mecabDictDir: firstNonEmpty(f.mecabDictDir, f.mecabDictPath),
+    cangjieTsvPath: firstNonEmpty(f.cangjieTsvPath, f.cangjieTsv)
   }
 }
 
@@ -210,6 +216,9 @@ class TTSGgml {
       noiseNpyPath,
       backendsDir,
       openclCacheDir,
+      mecabDictDir,
+      mecabDictPath,
+      cangjieTsvPath,
       opts,
       exclusiveRun
     } = options
@@ -280,6 +289,20 @@ class TTSGgml {
       }
       this._supertonicModelPath = undefined
     }
+
+    // Multilingual preprocessing dictionaries (Chatterbox MTL only).
+    // Accept either a top-level option or a `files.*` entry; the host
+    // resolves/stages them (e.g. from the QVAC model registry) and the
+    // addon forwards the local paths to tts-cpp.
+    this._mecabDictPath = firstNonEmpty(
+      mecabDictPath,
+      mecabDictDir,
+      normalizedFiles.mecabDictDir
+    )
+    this._cangjieTsvPath = firstNonEmpty(
+      cangjieTsvPath,
+      normalizedFiles.cangjieTsvPath
+    )
 
     this._referenceAudio = referenceAudio
     this._voiceDir = voiceDir
@@ -757,6 +780,8 @@ class TTSGgml {
     }
     if (this._backendsDir) params.backendsDir = this._backendsDir
     if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
+    if (this._mecabDictPath) params.mecabDictPath = this._mecabDictPath
+    if (this._cangjieTsvPath) params.cangjieTsvPath = this._cangjieTsvPath
     return params
   }
 
