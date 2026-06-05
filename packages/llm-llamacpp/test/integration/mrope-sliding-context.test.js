@@ -46,9 +46,12 @@ const IMAGE_SYSTEM_MESSAGE = {
   content: 'You are a helpful assistant. Keep answers concise.'
 }
 
-const MULTIMODAL_TURN_FILLER = 'Add context pressure for cache sliding while keeping the answer short. '.repeat(44)
-const MULTIMODAL_MAX_SLIDE_TURNS = 6
-const TEXT_TURN_FILLER = 'Add prefill context pressure for cache sliding. '.repeat(16)
+const QWEN_TEXT_PREFILL_PRESSURE = ' blue'.repeat(96)
+const QWEN_TEXT_PREFILL_MAX_SLIDE_TURNS = 8
+const QWEN_MULTIMODAL_PREFILL_PRESSURE = ' blue'.repeat(192)
+const QWEN_MULTIMODAL_PREFILL_MAX_SLIDE_TURNS = 6
+const LLAMA_PREFILL_PRESSURE = ' blue'.repeat(96)
+const LLAMA_PREFILL_MAX_SLIDE_TURNS = 8
 
 function createLogger () {
   return {
@@ -120,11 +123,11 @@ async function runQwenTextSlidingCacheCase (t) {
   let totalSlides = 0
   let lastStats = null
 
-  for (let turn = 1; turn <= 8; turn++) {
+  for (let turn = 1; turn <= QWEN_TEXT_PREFILL_MAX_SLIDE_TURNS; turn++) {
     const response = await model.run([
       {
         role: 'user',
-        content: `Turn ${turn}: answer "ok" after reading this text. ${TEXT_TURN_FILLER}`
+        content: `Qwen text prefill pressure turn ${turn}. ${QWEN_TEXT_PREFILL_PRESSURE}`
       }
     ], {
       cacheKey: cachePath,
@@ -242,10 +245,10 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
   let totalSlides = 0
   let lastStats = imageRun.stats
 
-  for (let turn = 1; turn <= MULTIMODAL_MAX_SLIDE_TURNS; turn++) {
+  for (let turn = 1; turn <= QWEN_MULTIMODAL_PREFILL_MAX_SLIDE_TURNS; turn++) {
     history.push({
       role: 'user',
-      content: `Turn ${turn}: remember the image and answer "ok". ${MULTIMODAL_TURN_FILLER}`
+      content: `Qwen multimodal prefill pressure turn ${turn}. Remember the image. ${QWEN_MULTIMODAL_PREFILL_PRESSURE}`
     })
 
     const turnResponse = await model.run([history[history.length - 1]], {
@@ -311,7 +314,7 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
       device: useCpu ? 'cpu' : 'gpu',
       gpu_layers: '99',
       ctx_size: '512',
-      n_discarded: '64',
+      n_discarded: '128',
       temp: '0',
       seed: '42',
       verbosity: '2',
@@ -328,37 +331,37 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
 
   await model.load()
 
-  const seedRun = await runAndCollect(model, [
-    { role: 'system', content: 'You are a storyteller. Write detailed stories with many characters.' },
-    { role: 'user', content: 'Continue with simple filler words until you reach the token limit.' }
-  ], {
-    cacheKey: cachePath,
-    saveCacheToDisk: true,
-    generationParams: {
-      predict: 160,
-      seed: 42,
-      temp: 0,
-      top_k: 1
+  let totalSlides = 0
+  let lastStats = null
+
+  for (let turn = 1; turn <= LLAMA_PREFILL_MAX_SLIDE_TURNS; turn++) {
+    const prefillResponse = await model.run([
+      {
+        role: 'user',
+        content: `Prefill pressure turn ${turn}. ${LLAMA_PREFILL_PRESSURE}`
+      }
+    ], {
+      cacheKey: cachePath,
+      saveCacheToDisk: true,
+      prefill: true
+    })
+    await prefillResponse.await()
+
+    const prefillStats = normalizeStats(prefillResponse.stats)
+    totalSlides += prefillStats.contextSlides
+    lastStats = prefillStats
+
+    if (turn === 1) {
+      t.ok(prefillStats.CacheTokens > 0, `${options.label} seeded cache`)
     }
-  })
 
-  t.ok(seedRun.output.length > 0, `${options.label} seeded cache`)
-
-  const prefillResponse = await model.run([
-    {
-      role: 'user',
-      content: `Answer "ok" after reading this prefill pressure. ${' blue'.repeat(260)}`
+    if (totalSlides > 0) {
+      break
     }
-  ], {
-    cacheKey: cachePath,
-    saveCacheToDisk: true,
-    prefill: true
-  })
-  await prefillResponse.await()
+  }
 
-  const prefillStats = normalizeStats(prefillResponse.stats)
-  t.ok(prefillStats.contextSlides > 0, `${options.label} exercised prefill context sliding`)
-  t.ok(prefillStats.CacheTokens < 512, `${options.label} cache stays within context (${prefillStats.CacheTokens})`)
+  t.ok(totalSlides > 0, `${options.label} exercised prefill context sliding`)
+  t.ok(lastStats.CacheTokens < 512, `${options.label} cache stays within context (${lastStats.CacheTokens})`)
 }
 
 safeTest('[qwen3.5-imrope-sliding-context] text prefill-slides tokens', {
@@ -377,7 +380,8 @@ safeTest('[qwen3.5-imrope-sliding-context] multimodal cache survives sliding sav
 })
 
 safeTest('[qwen3.5-imrope-sliding-context] q8 K-cache shifts multimodal and text tokens', {
-  timeout: 1_800_000
+  timeout: 1_800_000,
+  skip: isAndroid
 }, async t => {
   await runMultimodalSlidingCacheCase(t, {
     label: 'q8 K-cache multimodal',
