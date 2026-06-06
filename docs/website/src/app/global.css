@@ -28,19 +28,18 @@
  * each side between the article and the sidebar/TOC. Any surplus beyond
  * --fd-layout-width goes to the page's outer gutters (left/right margins).
  *
- * Spacing is calibrated to sit between the Claude and InkeepAI docs
- * layouts, with the central text column centered on the page:
- *   main = 1376 − 273 − 273 = 830px
+ * Spacing is calibrated so the central text column is centered on the page:
+ *   main = 1406 − 288 − 288 = 830px
  *   article-to-TOC gap = (830 − 780) / 2 + 32px article padding = ~57px (~2cm)
- *   outer margin = (viewport − 1376) / 2 (≈2.2cm on the reference viewport)
+ *   outer margin = (viewport − 1406) / 2 (≈2.2cm on the reference viewport)
  *
  * The text column's horizontal offset from page center equals
- * (sidebar − toc) / 2: with sidebar == toc (both 273px) it is 0, so the
+ * (sidebar − toc) / 2: with sidebar == toc (both 288px) it is 0, so the
  * article is centered rather than leaning toward the TOC. The article
  * itself stays 780px (~25cm) — only the surrounding columns were retuned.
  */
 @theme {
-  --spacing-page: 1376px;
+  --spacing-page: 1406px;
 }
 
 /* 2) Limits the maximum width of the Fumadocs UI layout */
@@ -49,7 +48,7 @@
 }
 
 /*
- * 2b) Retune the sidebar / TOC column widths to match the InkeepAI layout.
+ * 2b) Retune the sidebar / TOC column widths.
  *
  * Fumadocs sets these via its `layout:` variant, which (through `:has(&)`)
  * lands the custom properties on the grid container `#nd-notebook-layout`
@@ -61,13 +60,13 @@
  */
 @media (min-width: 768px) {
   #nd-notebook-layout {
-    --fd-sidebar-width: 273px !important; /* ~9.5cm; == toc to center the article */
+    --fd-sidebar-width: 288px !important; /* == toc to center the article */
   }
 }
 
 @media (min-width: 1280px) {
   #nd-notebook-layout {
-    --fd-toc-width: 273px !important; /* == sidebar to center the article */
+    --fd-toc-width: 288px !important; /* == sidebar to center the article */
   }
 }
 
