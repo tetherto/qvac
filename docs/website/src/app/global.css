@@ -19,9 +19,20 @@
 /* ===========================================
    VIEWPORT ADJUSTMENTS - START
    =========================================== */
-/* 1) Defines the "page spacing" in @theme */
+/* 1) Defines the "page spacing" in @theme.
+ *
+ * This feeds `--fd-layout-width`, which sizes the notebook grid's main
+ * (article) column: main = --fd-layout-width − sidebar(268px) − toc(268px).
+ * The article is 820px and centered in that column via margin-inline:auto,
+ * so the leftover (main − 820) splits into a gap on each side between the
+ * article and the sidebar/TOC. We size this deliberately:
+ *   gap_per_side = (--spacing-page − 820 − 536) / 2
+ * At 1436px the gap is ~40px per side — enough breathing room without the
+ * oversized empty gutter a larger layout width would open up. Any surplus
+ * beyond --fd-layout-width still goes to the page's outer gutters.
+ */
 @theme {
-  --spacing-page: 1560px;
+  --spacing-page: 1436px;
 }
 
 /* 2) Limits the maximum width of the Fumadocs UI layout */
@@ -64,7 +75,7 @@
  * `overflow-x: auto` container scrolls instead of widening the page.
  */
 #nd-page {
-  max-width: min(900px, 100%);
+  max-width: min(800px, 100%);
   margin-inline: auto;
 }
 
