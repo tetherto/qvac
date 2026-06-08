@@ -46,12 +46,12 @@ export const videosCreateBody = z.object({
     })
     .optional()
     .describe('"WIDTHxHEIGHT" with W,H multiples of 8. Accepts OpenAI\'s 4-value enum plus any sized WxH.'),
-  fps: z.number().positive().max(120).optional().describe('QVAC extension. 0 < fps ≤ 120, default 16.'),
-  steps: z.number().int().positive().optional().describe('QVAC extension. Diffusion sampler step count.'),
-  seed: z.number().int().optional().describe('QVAC extension. Random seed; SDK picks one when omitted.'),
+  fps: z.coerce.number().positive().max(120).optional().describe('QVAC extension. 0 < fps ≤ 120, default 16.'),
+  steps: z.coerce.number().int().positive().optional().describe('QVAC extension. Diffusion sampler step count.'),
+  seed: z.coerce.number().int().optional().describe('QVAC extension. Random seed; SDK picks one when omitted.'),
   negative_prompt: z.string().optional().describe('QVAC extension. Negative prompt for the diffusion sampler.'),
-  cfg_scale: z.number().positive().optional().describe('QVAC extension. Classifier-free guidance scale (Wan range 5-8).'),
-  flow_shift: z.number().optional().describe(
+  cfg_scale: z.coerce.number().positive().optional().describe('QVAC extension. Classifier-free guidance scale (Wan range 5-8).'),
+  flow_shift: z.coerce.number().optional().describe(
     'QVAC extension. Flow-matching shift. Wan 2.1 T2V needs `flow_shift: 3.0` for visible motion.'
   ),
   init_image: z.instanceof(Buffer).optional().describe(
