@@ -4,6 +4,7 @@ import { video, cancel } from '@qvac/sdk'
 import type { VideoClientParams } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
 import { requireModel } from '../plugins/require-model.js'
+import { multipartToBody } from '../lib/multipart.js'
 import {
   videosCreateBody,
   videoResource,
@@ -12,7 +13,8 @@ import {
   videoIdParam,
   videosListQuery,
   videoContentQuery,
-  extractVideoCreateParams
+  extractVideoCreateParams,
+  InvalidVideoStrengthError
 } from '../schemas/videos.js'
 import type { VideoJob } from '../core/video-jobs-store.js'
 import { videoJobResource } from '../core/video-jobs-store.js'
@@ -21,11 +23,17 @@ import type { QvacContext } from '../lib/types.js'
 
 const descriptions = {
   create: `
-Async text-to-video. Returns immediately with \`status: queued\`; poll
+Async video generation. Returns immediately with \`status: queued\`; poll
 \`GET /v1/videos/{id}\` and fetch bytes from \`GET /v1/videos/{id}/content\`
-once \`status: completed\`. JSON body only — multipart isn't accepted because
-the only OpenAI use for it is \`input_reference\`, which this server rejects
-(no image-to-video in the SDK).
+once \`status: completed\`.
+
+**Text-to-video (txt2vid):** send a JSON body with \`prompt\` (and optional
+parameters). No image required.
+
+**Image-to-video (img2vid):** send a \`multipart/form-data\` request with an
+\`init_image\` file field (PNG or JPEG). Mode is inferred from the presence
+of the image — no explicit \`mode\` field needed. Add \`strength\` (0–1) to
+control how much the output diverges from the first frame.
 
 **Job store is in-memory only.** IDs and rendered bytes are lost on restart.
 `.trim(),
@@ -281,13 +289,22 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       tags: ['Videos'],
       summary: 'Create a video generation job',
       description: descriptions.create,
+      consumes: ['application/json', 'multipart/form-data'],
       response: { 200: videoResource }
     },
+    preValidation: multipartToBody,
     preHandler: requireModel('video')
   }, async (req, reply) => {
     const ctx = app.qvac
     const { alias, sdkModelId } = req.qvacModel!
-    const params = extractVideoCreateParams(req.body, sdkModelId)
+    const initImageFile = (req.multipartFiles ?? []).find((f) => f.fieldname === 'init_image')
+    let params: VideoClientParams
+    try {
+      params = extractVideoCreateParams(req.body, initImageFile?.buffer, sdkModelId)
+    } catch (err) {
+      if (err instanceof InvalidVideoStrengthError) throw new HttpError(400, 'invalid_strength', err.message)
+      throw err
+    }
 
     const job = ctx.videoJobsStore.create({
       model: alias,

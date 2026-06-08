@@ -1,6 +1,15 @@
 import { z } from 'zod'
 import type { VideoClientParams } from '@qvac/sdk'
 
+// ─── Errors ──────────────────────────────────────────────────────────
+
+export class InvalidVideoStrengthError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidVideoStrengthError'
+  }
+}
+
 // ─── Constants ───────────────────────────────────────────────────────
 
 const SIZE_PATTERN = /^(\d+)x(\d+)$/
@@ -45,9 +54,13 @@ export const videosCreateBody = z.object({
   flow_shift: z.number().optional().describe(
     'QVAC extension. Flow-matching shift. Wan 2.1 T2V needs `flow_shift: 3.0` for visible motion.'
   ),
-  input_reference: z.never({
-    message: '"input_reference" (image-to-video) is not supported — the SDK exposes only text-to-video (txt2vid).'
-  }).optional()
+  init_image: z.instanceof(Buffer).optional().describe(
+    'QVAC extension. First-frame image for image-to-video (img2vid). Send as a multipart file field (PNG or JPEG). ' +
+    'When present the job runs in img2vid mode; omit for text-to-video.'
+  ),
+  strength: z.union([z.string(), z.number()]).optional().describe(
+    'QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `init_image` is provided.'
+  )
 }).passthrough()
 
 export type VideosCreateBody = z.infer<typeof videosCreateBody>
@@ -138,19 +151,45 @@ function videoFramesFor (seconds: string, fps: number | undefined): number {
 // extractor doesn't repeat itself per field.
 const DIRECT_PARAM_KEYS = ['fps', 'seed', 'steps', 'negative_prompt', 'cfg_scale', 'flow_shift'] as const
 
-export function extractVideoCreateParams (body: VideosCreateBody, modelId: string): VideoClientParams {
+function coerceStrength (raw: string | number | undefined): number | undefined {
+  if (raw === undefined) return undefined
+  const value = typeof raw === 'string' ? parseFloat(raw) : raw
+  if (Number.isNaN(value)) {
+    throw new InvalidVideoStrengthError(`"strength" must be a number in [0, 1] (got ${JSON.stringify(raw)}).`)
+  }
+  if (value < 0 || value > 1) {
+    throw new InvalidVideoStrengthError(`"strength" must be in [0, 1] (got ${value}).`)
+  }
+  return value
+}
+
+export function extractVideoCreateParams (
+  body: VideosCreateBody,
+  initImage: Uint8Array | undefined,
+  modelId: string
+): VideoClientParams {
   const direct: Partial<VideoClientParams> = {}
   for (const key of DIRECT_PARAM_KEYS) {
     if (body[key] !== undefined) (direct as Record<string, unknown>)[key] = body[key]
   }
-  return {
+  const base = {
     modelId,
-    mode: 'txt2vid',
     prompt: body.prompt,
     ...direct,
     ...(body.size !== undefined ? parseSizeFields(body.size) : {}),
     ...(body.seconds !== undefined ? { video_frames: videoFramesFor(body.seconds, body.fps) } : {})
   }
+  if (initImage !== undefined) {
+    const strength = coerceStrength(body.strength as string | number | undefined)
+    // TODO: remove cast once SDK PR #2436 (VideoImg2vidClientParams) lands
+    return {
+      ...base,
+      mode: 'img2vid' as const,
+      init_image: initImage,
+      ...(strength !== undefined ? { strength } : {})
+    } as unknown as VideoClientParams
+  }
+  return { ...base, mode: 'txt2vid' }
 }
 
 export { DEFAULT_FPS }
