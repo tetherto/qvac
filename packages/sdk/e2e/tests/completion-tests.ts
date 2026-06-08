@@ -620,8 +620,6 @@ export const completionStats: TestDefinition = {
     stream: false,
     generationParams: { predict: 32 },
   },
-  // Behavior/API check: text is non-empty (type), executor asserts the stats
-  // object exposes numeric timing fields. No model-content assertion.
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
 };

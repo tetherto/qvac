@@ -25,9 +25,6 @@ const createToolsTest = (
     toolDialect?: ToolDialect;
     resourceKey?: string;
     suites?: string[];
-    // When set, the executor asserts the model emitted a structured tool_call
-    // with this function name (and, optionally, these argument keys) instead of
-    // only checking that some text came back.
     expectedToolCall?: {
       name: string;
       argKeys?: string[];

@@ -225,7 +225,6 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         history.push({ role: "assistant", content: response });
       }
 
-      // Fail if the cache reported no reuse (was only checking a non-empty string).
       const cacheUsed = secondCacheTokens > firstCacheTokens || secondCacheTokens > 0;
       const result = `Cache tokens: first=${firstCacheTokens}, second=${secondCacheTokens}, used: ${cacheUsed}`;
       if (!cacheUsed) {

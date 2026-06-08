@@ -179,7 +179,6 @@ export class CompletionExecutor extends AbstractModelExecutor<
     };
   }
 
-  // Asserts the completion result exposes a stats object with numeric timing fields.
   async statsVerification(
     params: CompletionTestParams,
     expectation: Expectation,
