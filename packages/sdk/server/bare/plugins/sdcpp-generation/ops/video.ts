@@ -107,6 +107,12 @@ export async function* video(
     ...(request.vace_strength !== undefined && {
       vace_strength: request.vace_strength,
     }),
+    ...(request.init_image !== undefined && {
+      init_image: Buffer.from(request.init_image, "base64"),
+    }),
+    ...(request.strength !== undefined && {
+      strength: request.strength,
+    }),
     ...(request.control_frames !== undefined && {
       control_frames: request.control_frames.map((b64) =>
         Buffer.from(b64, "base64"),

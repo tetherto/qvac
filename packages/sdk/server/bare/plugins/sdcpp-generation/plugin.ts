@@ -34,6 +34,7 @@ import { upscale } from "./ops/upscale";
 type DiffusionArtifactKey =
   | "clipLModelPath"
   | "clipGModelPath"
+  | "clipVisionModelPath"
   | "t5XxlModelPath"
   | "llmModelPath"
   | "vaeModelPath"
@@ -101,7 +102,7 @@ export const diffusionPlugin = definePlugin({
     }
 
     const {
-      clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
+      clipLModelSrc, clipGModelSrc, clipVisionModelSrc, t5XxlModelSrc,
       llmModelSrc, vaeModelSrc, highNoiseDiffusionModelSrc, upscaler, ...rest
     } = cfg;
     // Video jobs do not apply ESRGAN so we drop the whole `upscaler` object.
@@ -114,7 +115,7 @@ export const diffusionPlugin = definePlugin({
     } as SdcppConfig;
 
     const sources = {
-      clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
+      clipLModelSrc, clipGModelSrc, clipVisionModelSrc, t5XxlModelSrc,
       llmModelSrc, vaeModelSrc, highNoiseDiffusionModelSrc, esrganModelSrc,
     };
     const hasSources = Object.values(sources).some(Boolean);
@@ -125,11 +126,12 @@ export const diffusionPlugin = definePlugin({
 
     const resolve = ctx.resolveModelPath;
     const [
-      clipLModelPath, clipGModelPath, t5XxlModelPath,
+      clipLModelPath, clipGModelPath, clipVisionModelPath, t5XxlModelPath,
       llmModelPath, vaeModelPath, highNoiseDiffusionModelPath, esrganModelPath,
     ] = await Promise.all([
       clipLModelSrc ? resolve(clipLModelSrc) : undefined,
       clipGModelSrc ? resolve(clipGModelSrc) : undefined,
+      clipVisionModelSrc ? resolve(clipVisionModelSrc) : undefined,
       t5XxlModelSrc ? resolve(t5XxlModelSrc) : undefined,
       llmModelSrc ? resolve(llmModelSrc) : undefined,
       vaeModelSrc ? resolve(vaeModelSrc) : undefined,
@@ -142,6 +144,7 @@ export const diffusionPlugin = definePlugin({
       artifacts: {
         ...(clipLModelPath && { clipLModelPath }),
         ...(clipGModelPath && { clipGModelPath }),
+        ...(clipVisionModelPath && { clipVisionModelPath }),
         ...(t5XxlModelPath && { t5XxlModelPath }),
         ...(llmModelPath && { llmModelPath }),
         ...(vaeModelPath && { vaeModelPath }),
@@ -207,6 +210,9 @@ export const diffusionPlugin = definePlugin({
         ...(artifacts?.["highNoiseDiffusionModelPath"] && {
           highNoiseDiffusionModel: artifacts["highNoiseDiffusionModelPath"],
         }),
+        ...(artifacts?.["clipVisionModelPath"] && {
+          clipVision: artifacts["clipVisionModelPath"],
+        }),
         ...(artifacts?.["esrganModelPath"] && { esrgan: artifacts["esrganModelPath"] }),
       };
 
@@ -214,6 +220,7 @@ export const diffusionPlugin = definePlugin({
       const {
         clipLModelSrc,
         clipGModelSrc,
+        clipVisionModelSrc,
         t5XxlModelSrc,
         llmModelSrc,
         vaeModelSrc,
