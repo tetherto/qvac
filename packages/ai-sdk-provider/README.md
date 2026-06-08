@@ -4,9 +4,9 @@
 
 QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package is a thin, branded wrapper around [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that points at a running `qvac serve openai` HTTP server and re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
-> **Status — v2 (`0.2.0`).** Two modes:
-> - **External** (default, unchanged from v1): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
-> - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
+> **Status — managed mode is unreleased (lands in the next `0.2.0`; package is currently `0.1.0`).** Two modes:
+> - **External** (default, the published `0.1.0` surface): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
+> - **Managed** (`mode: 'managed'`, unreleased): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
 >
 > See the [QVAC-19194 epic](https://app.asana.com/1/45238840754660/task/1214968611313049).
 
@@ -172,7 +172,7 @@ Without this, every model uses `qvac serve`'s defaults — and the default `ctx_
 Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that opening multiple sessions — or several tools at once — doesn't spawn a serve (and reload models into memory) for each one.
 
 - **Fleet key & reuse.** Each managed provider derives a *fleet key* from its exact serve config (model set + per-model `config` + bind host + `serveBinPath`). `createQvac` reuses any healthy serve with a matching key and only spawns a new one when none exists. Two sessions that request the same models share one process; two that request different models (or different `ctx_size`, host, or `qvac` binary) each get their own.
-- **Detached supervisor.** The serve is owned by a small detached runner — not by your process — so it survives your script exiting and can be shared. The runner reaps the serve once **no consumer process has been alive for `serveIdleTimeout`** (default 5 min). Liveness is the signal, not request traffic, so it works for any client regardless of how it talks to the serve (including agents that connect straight to `baseURL`).
+- **Detached supervisor.** The serve is owned by a small detached runner — not by your process — so it survives your script exiting and can be shared. The runner reaps the serve once **no consumer process has been alive for `serveIdleTimeout`** (default 5 min). A *consumer* is a process that called `createQvac` and hasn't `close()`d or exited — liveness is tracked by those processes, **not** by request traffic. This means a tool that connects straight to `baseURL` (OpenCode, Cline, Aider) does **not** by itself keep the serve alive; the process that resolved the `baseURL` must stay alive for the duration (see [Using with coding agents](#using-with-coding-agents)).
 - **`close()` detaches, it doesn't kill.** Calling `provider.close()` (or leaving an `await using` scope) deregisters *your* session. A serve still in use by another session keeps running; an unused one is reaped after the idle timeout. An abrupt exit (Ctrl-C, crash) is handled too — the runner prunes dead consumers automatically.
 - **Crash recovery.** If the underlying serve is gone when a request goes out (connection refused), the provider's `fetch` transparently re-resolves — reattaching to a healthy serve or spawning a fresh one — and retries that request once. Only connection-refused is retried, so a completion that the serve had already begun processing is never blindly replayed.
 - **Private serves.** Pass `reuse: false` (or pin `servePort`) to force a dedicated serve that is **not** shared and is reaped as soon as your process exits.
@@ -227,19 +227,28 @@ You can still configure a separate, lighter `small_model` if you want title, sum
 
 **Managed-mode equivalent.** Instead of hand-authoring `qvac.config.json` and running `qvac serve` yourself, let [managed mode](#per-model-configuration) synthesize the same agent-friendly config and spawn the serve on a free port. Point OpenCode at the resolved `baseURL`:
 
+OpenCode fires the main `build` completion and the `title`/summary completion concurrently against the one alias; the per-model queue (section 1) serializes them instead of failing on a job-lock collision.
+
+> **Keep the resolving process alive while the agent runs.** Liveness is tracked by *consumer processes* — the ones that called `createQvac` — not by HTTP traffic. OpenCode connects straight to `baseURL`, so it is invisible to the idle reaper. If your setup script writes `opencode.json` and then **exits**, it deregisters the only consumer and the serve is reaped after `serveIdleTimeout`, even mid-session. Run the agent as a child of the process that holds the provider open, and let `await using` detach on exit:
+
 ```ts
-const qvac = await createQvac({
+import { spawn } from 'node:child_process'
+
+await using qvac = await createQvac({
   mode: 'managed',
   models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 16384, reasoning_budget: 0 } }]
 })
-// Write opencode.json against the managed serve, then run OpenCode:
+// Write opencode.json against the managed serve once:
 //   provider.qvac.options.baseURL = qvac.baseURL  (e.g. http://127.0.0.1:5xxxx/v1)
 //   model = small_model = "qvac/QWEN3_8B_INST_Q4_K_M"
+
+// Run OpenCode as a child; this process stays alive (= a live consumer) until it exits.
+const agent = spawn('opencode', { stdio: 'inherit' })
+await new Promise<void>((resolve) => agent.on('exit', () => resolve()))
+// Leaving the `await using` scope detaches; the shared serve is idle-reaped a few minutes later.
 ```
 
-OpenCode fires the main `build` completion and the `title`/summary completion concurrently against the one alias; the per-model queue (section 1) serializes them instead of failing on a job-lock collision.
-
-Because the managed serve is [shared and idle-reaped](#shared-serves--lifecycle), the small script that resolves the `baseURL` doesn't have to stay running or kill anything: keep it alive while you use OpenCode and the warm serve is reused across runs; let it exit and the detached supervisor reaps the serve a few minutes later. OpenCode itself never needs to manage the process.
+If you genuinely need the serve to outlive every QVAC-aware process (several independent tools attaching over time), keep a dedicated long-lived holder process open, or pin a `servePort` and run `qvac serve` yourself in [external mode](#external-mode).
 
 ### 2. `ctx_size` defaults to 1024 — too small for agents
 

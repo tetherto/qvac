@@ -159,7 +159,7 @@ test('sweepServes drops dead-serve records and leaves healthy owned serves untou
   })
 })
 
-test('sweepServes kills a confirmed runner-orphaned serve but never a non-serving stranger pid', { skip: fakeServeSkip }, async () => {
+test('sweepServes kills a confirmed runner-orphaned serve but keeps a live-but-unhealthy record', { skip: fakeServeSkip }, async () => {
   await withFakeHome(async () => {
     const fake = await makeFakeServe()
     setBehavior('healthy')
@@ -170,23 +170,25 @@ test('sweepServes kills a confirmed runner-orphaned serve but never a non-servin
       const serve = await spawnServe({ configPath: 'unused.json', port, serveBinPath: fake.binPath, startTimeoutMs: 10_000 })
       await writeRecord(makeRecord({ fleetKey: 'orphan', servePid: serve.pid, runnerPid: DEAD_PID, baseURL: serve.baseURL, configPath: '' }))
 
-      // A live but non-serving pid stands in for a recycled servePid: its
-      // recorded baseURL answers nothing, so sweep must NOT signal it.
+      // A live pid whose recorded baseURL answers nothing: could be our serve
+      // mid-startup/hung, or a recycled pid. Sweep must NOT signal it AND must
+      // NOT drop the record (dropping it would strand a live serve untracked).
       await new Promise((r) => setTimeout(r, 100))
       assert.ok(stranger.pid)
-      await writeRecord(makeRecord({ fleetKey: 'stranger', servePid: stranger.pid!, runnerPid: DEAD_PID, baseURL: 'http://127.0.0.1:1/v1', configPath: '' }))
+      await writeRecord(makeRecord({ fleetKey: 'suspect', servePid: stranger.pid!, runnerPid: DEAD_PID, baseURL: 'http://127.0.0.1:1/v1', configPath: '' }))
 
       const swept = await sweepServes()
       assert.ok(swept.includes('orphan'))
-      assert.ok(swept.includes('stranger')) // record dropped either way
+      assert.ok(!swept.includes('suspect'), 'unhealthy-but-live serve must not be swept')
 
       await new Promise((r) => setTimeout(r, 300))
       assert.equal(isProcessAlive(serve.pid), false, 'serving orphan should be killed')
-      assert.equal(isProcessAlive(stranger.pid!), true, 'non-serving stranger pid must not be signalled')
+      assert.equal(isProcessAlive(stranger.pid!), true, 'live-but-unhealthy pid must not be signalled')
       assert.equal(await readRecord('orphan'), undefined)
-      assert.equal(await readRecord('stranger'), undefined)
+      assert.ok(await readRecord('suspect'), 'record retained for a later sweep')
     } finally {
       if (stranger.pid !== undefined && isProcessAlive(stranger.pid)) stranger.kill('SIGKILL')
+      await removeRecord('suspect').catch(() => {})
       setBehavior(undefined)
       await fake.cleanup()
     }

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdir, open, rm, stat } from 'node:fs/promises'
+import { mkdir, open, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
@@ -22,6 +22,7 @@ import {
   addConsumer,
   findReusableServe,
   healthCheck,
+  isProcessAlive,
   lockPath,
   managedServesDir,
   readRecord,
@@ -48,18 +49,43 @@ function errorPath (fleetKey: string): string {
 
 async function readErrorFile (fleetKey: string): Promise<string | undefined> {
   try {
-    const { readFile } = await import('node:fs/promises')
     return (await readFile(errorPath(fleetKey), 'utf8')).trim()
   } catch {
     return undefined
   }
 }
 
+// The pid recorded inside a lock file, or undefined if it's missing/empty/
+// unreadable (e.g. a crashed writer left a zero-byte file, or we caught it in
+// the tiny window between create and pid-write).
+async function readLockOwner (key: string): Promise<number | undefined> {
+  try {
+    const raw = (await readFile(lockPath(key), 'utf8')).trim()
+    const pid = Number.parseInt(raw, 10)
+    return Number.isInteger(pid) && pid > 0 ? pid : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function lockOlderThan (key: string, ms: number): Promise<boolean> {
+  try {
+    const st = await stat(lockPath(key))
+    return Date.now() - st.mtimeMs > ms
+  } catch {
+    return true // vanished mid-check — treat as stealable
+  }
+}
+
 // Best-effort exclusive spawn lock so two racing clients with the same fleet
 // key don't both bring up a serve. The winner spawns; losers wait for its
-// record. A lock older than SPAWN_LOCK_STALE_MS is assumed to be from a crashed
-// spawner and stolen.
-async function tryLock (key: string): Promise<boolean> {
+// record. We steal a lock only when its owner process is gone: a healthy cold
+// start can legitimately hold the lock for the whole serveStartTimeout (minutes
+// of model download/preload), so a purely time-based steal would let a loser
+// spawn a *duplicate* runner/serve and double-load the model. The mtime check
+// is a fallback only for a lock whose owner pid we can't read.
+// Exported for tests; not part of the package's public surface.
+export async function tryLock (key: string): Promise<boolean> {
   await mkdir(managedServesDir(), { recursive: true })
   try {
     const fh = await open(lockPath(key), 'wx')
@@ -68,20 +94,24 @@ async function tryLock (key: string): Promise<boolean> {
     return true
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-    try {
-      const st = await stat(lockPath(key))
-      if (Date.now() - st.mtimeMs > SPAWN_LOCK_STALE_MS) {
-        await rm(lockPath(key), { force: true }).catch(() => {})
-        return tryLock(key)
-      }
-    } catch {
-      return tryLock(key) // lock vanished mid-check — retry
+    const owner = await readLockOwner(key)
+    if (owner !== undefined) {
+      if (isProcessAlive(owner)) return false // owner still working — wait for its record
+      await rm(lockPath(key), { force: true }).catch(() => {})
+      return tryLock(key)
+    }
+    // Unknown owner: only steal once clearly stale, so we don't snatch a lock in
+    // the window between its creation and the owner writing its pid.
+    if (await lockOlderThan(key, SPAWN_LOCK_STALE_MS)) {
+      await rm(lockPath(key), { force: true }).catch(() => {})
+      return tryLock(key)
     }
     return false
   }
 }
 
-async function releaseLock (key: string): Promise<void> {
+// Exported for tests; not part of the package's public surface.
+export async function releaseLock (key: string): Promise<void> {
   await rm(lockPath(key), { force: true }).catch(() => {})
 }
 
@@ -139,7 +169,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   // Validate models eagerly (throws UnknownManagedModelError) and derive the
   // fleet key from the exact serve config we'd launch.
   const config = synthesizeServeConfig(options.models)
-  const sharedKey = computeFleetKey(config, host, options.serveBinPath)
+  const sharedKey = computeFleetKey(config, host, options.serveBinPath, options.servePort)
 
   // Reuse defaults on, except when a port is pinned (a pin signals "this exact
   // private serve"). A private serve gets a unique key so it never collides
@@ -227,7 +257,14 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     await removeConsumer(fleetKey, consumerId).catch(() => {})
     throw err
   }
-  const live = { baseURL: first.baseURL }
+  // Mutable live coordinates — updated on every respawn so the public getters
+  // (and the fetch retarget) always describe the serve actually in use.
+  const live = { baseURL: first.baseURL, port: first.port, servePid: first.servePid }
+
+  // Set by close(); read by the fetch path so a request that loses the race with
+  // close() never silently re-resolves (re-adding a consumer / spawning a runner
+  // after the caller has detached).
+  let closed = false
 
   // Single-flight re-resolution so a burst of in-flight requests hitting a dead
   // serve triggers exactly one recovery, not one per request.
@@ -241,14 +278,16 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
 
   // Wrap fetch to (a) retarget every request at the currently-live serve origin
   // — so a respawn on a new port is transparent — and (b) recover from a dead
-  // serve by re-resolving and retrying once.
+  // serve by re-resolving and retrying once. After close() we never re-resolve.
   const wrappedFetch: typeof fetch = async (input, init) => {
     try {
       return await baseFetch(retargetUrl(input, live.baseURL), init as RequestInit)
     } catch (err) {
-      if (!isRetryableConnError(err)) throw err
+      if (closed || !isRetryableConnError(err)) throw err
       const re = await reresolve()
       live.baseURL = re.baseURL
+      live.port = re.port
+      live.servePid = re.servePid
       return baseFetch(retargetUrl(input, live.baseURL), init as RequestInit)
     }
   }
@@ -270,7 +309,6 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   }
   process.once('exit', onExit)
 
-  let closed = false
   async function close (): Promise<void> {
     if (closed) return
     closed = true
@@ -279,38 +317,46 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     await removeConsumer(fleetKey, consumerId).catch(() => {})
   }
 
-  const managed = Object.assign(base, {
-    baseURL: first.baseURL,
-    port: first.port,
-    pid: first.servePid,
-    close,
-    [Symbol.asyncDispose]: close
+  // Expose the coordinates as getters over `live` so they keep reflecting the
+  // real serve after a crash-recovery respawn moves it to a new port/pid.
+  Object.defineProperties(base, {
+    baseURL: { get: () => live.baseURL, enumerable: true, configurable: true },
+    port: { get: () => live.port, enumerable: true, configurable: true },
+    pid: { get: () => live.servePid, enumerable: true, configurable: true }
   })
+  const managed = Object.assign(base, { close, [Symbol.asyncDispose]: close })
 
   return managed as unknown as ManagedQvacProvider
 }
 
 // Swap the origin (scheme + host + port) of a request URL to the live serve's,
-// preserving the path/query. Best-effort: non-URL inputs pass through.
+// preserving the path/query, so a respawn on a new port is transparent. Handles
+// the three fetch input shapes (string, URL, Request); anything unparseable
+// passes through. `@ai-sdk/openai-compatible` uses string URLs today, but
+// handling Request keeps self-healing correct if a future version switches.
 function retargetUrl (input: Parameters<typeof fetch>[0], baseURL: string): Parameters<typeof fetch>[0] {
   try {
     const live = new URL(baseURL)
     if (typeof input === 'string') {
-      const u = new URL(input)
-      u.protocol = live.protocol
-      u.host = live.host
-      return u.toString()
+      return retargetOrigin(new URL(input), live).toString()
     }
     if (input instanceof URL) {
-      const u = new URL(input.toString())
-      u.protocol = live.protocol
-      u.host = live.host
-      return u
+      return retargetOrigin(new URL(input.toString()), live)
+    }
+    if (input instanceof Request) {
+      const u = retargetOrigin(new URL(input.url), live)
+      return new Request(u.toString(), input)
     }
   } catch {
-    // not a parseable URL (e.g. a Request) — leave it untouched
+    // unparseable input — leave it untouched
   }
   return input
+}
+
+function retargetOrigin (u: URL, live: URL): URL {
+  u.protocol = live.protocol
+  u.host = live.host
+  return u
 }
 
 // Only ECONNREFUSED is retried: it means the connection was never established

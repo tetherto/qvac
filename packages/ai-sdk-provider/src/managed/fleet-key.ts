@@ -13,12 +13,19 @@ import type { SynthesizedServeConfig } from './config-synthesizer.js'
 // first — surprising during local dev. The resolved-from-@qvac/cli case
 // (undefined) collapses to a single value, as expected.
 //
-// Deliberately NOT part of the key: the port (auto-allocated), apiKey/headers
+// A *pinned* `servePort` is also folded in: pinning signals "this exact serve
+// on this exact port", so callers who pin different ports must not share, and a
+// pinned-port reuse must not silently attach to an auto-allocated serve on some
+// other port. An auto-allocated port (undefined) stays out of the key so the
+// common share-by-config case still collapses.
+//
+// Deliberately NOT part of the key: an auto-allocated port, apiKey/headers
 // (client-side only), and the ephemeral config path (per-spawn temp dir).
 export function computeFleetKey (
   config: SynthesizedServeConfig,
   host: string,
-  serveBinPath?: string
+  serveBinPath?: string,
+  servePort?: number
 ): string {
   // Canonicalize: sort model aliases and their object keys so semantically
   // equal configs hash identically regardless of declaration order.
@@ -27,7 +34,12 @@ export function computeFleetKey (
     .sort()
     .map((alias) => [alias, stableStringify(models[alias])] as const)
 
-  const payload = JSON.stringify({ host, serveBinPath: serveBinPath ?? null, models: canonical })
+  const payload = JSON.stringify({
+    host,
+    serveBinPath: serveBinPath ?? null,
+    servePort: servePort ?? null,
+    models: canonical
+  })
   return createHash('sha256').update(payload).digest('hex').slice(0, 16)
 }
 

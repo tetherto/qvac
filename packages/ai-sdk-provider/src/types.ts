@@ -84,12 +84,15 @@ export type QvacProvider = OpenAICompatibleProvider & {
 // teardown handle. Implements `AsyncDisposable` so callers can use
 // `await using qvac = await createQvac({ mode: 'managed', ... })`.
 export interface ManagedQvacProvider extends QvacProvider {
-  // Base URL of the spawned serve, including the `/v1` suffix.
+  // Base URL of the live serve, including the `/v1` suffix. Read it fresh after
+  // recovery: if the serve crashes and is respawned on a new port, this getter
+  // reflects the new origin (handy for re-pointing an external client).
   readonly baseURL: string
-  // Port the serve is listening on (resolved even when auto-allocated).
+  // Port the live serve is listening on (resolved even when auto-allocated; may
+  // change after a crash-recovery respawn).
   readonly port: number
-  // PID of the `qvac serve` process backing this provider (may be shared with
-  // other sessions when `reuse` is enabled).
+  // PID of the live `qvac serve` process backing this provider (may be shared
+  // with other sessions when `reuse` is enabled, and may change after a respawn).
   readonly pid: number
   // Deregister this process as a consumer of the (possibly shared) serve and
   // remove teardown handlers. The serve itself is reaped by its detached runner

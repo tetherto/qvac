@@ -211,17 +211,20 @@ export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<str
     if (serveAlive && isProcessAlive(rec.runnerPid)) continue // healthy, owned
 
     if (serveAlive) {
-      // Orphan: runner gone, nobody will reap it. Only SIGTERM the pid if it
-      // still answers as *our* serve — this guards against the rare case where
-      // the serve died and the OS recycled its pid to an unrelated process.
-      // If it doesn't respond on the recorded baseURL, just drop the record
-      // rather than risk signalling a stranger.
-      if (await healthCheck(rec.baseURL, fetchImpl)) {
-        try {
-          process.kill(rec.servePid, 'SIGTERM')
-        } catch {
-          // already gone or unsignalable
-        }
+      // Orphan: runner gone, nobody will reap it. Only act if it still answers
+      // as *our* serve on the recorded baseURL. If it doesn't respond we must
+      // NOT drop the record: the pid is alive, so removing its registry trace
+      // would strand a (possibly transiently-unhealthy) live serve that nothing
+      // could later find or reap. Leave it for a future sweep — once it answers
+      // we reap it, once its pid dies we drop it. (A truly dead serve whose pid
+      // the OS recycled to a stranger also lands here; its stale record is
+      // harmless — reuse health-checks and skips it, and the next spawn for the
+      // key overwrites it.)
+      if (!(await healthCheck(rec.baseURL, fetchImpl))) continue
+      try {
+        process.kill(rec.servePid, 'SIGTERM')
+      } catch {
+        // already gone or unsignalable
       }
     }
     await removeRecord(rec.fleetKey)

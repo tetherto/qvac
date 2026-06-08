@@ -37,6 +37,20 @@ test('fleet key changes with serveBinPath so distinct local builds do not share 
   )
 })
 
+test('fleet key folds in a pinned servePort so pins do not share an auto serve', () => {
+  const cfg = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024 } }])
+  const auto = computeFleetKey(cfg, '127.0.0.1')
+  // An auto-allocated port (undefined) stays out of the key.
+  assert.equal(auto, computeFleetKey(cfg, '127.0.0.1', undefined, undefined))
+  // A pinned port changes the key, so a pinned-port caller never reuses an
+  // auto-allocated serve, and two distinct pins don't collide.
+  assert.notEqual(auto, computeFleetKey(cfg, '127.0.0.1', undefined, 22222))
+  assert.notEqual(
+    computeFleetKey(cfg, '127.0.0.1', undefined, 22222),
+    computeFleetKey(cfg, '127.0.0.1', undefined, 22223)
+  )
+})
+
 test('fleet key is insensitive to key order within a per-model config object', () => {
   const a = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024, reasoning_budget: 0 } }])
   const b = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { reasoning_budget: 0, ctx_size: 1024 } }])
