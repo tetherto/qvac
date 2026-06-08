@@ -271,12 +271,6 @@ jobs:
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
-          set +e
-          # Stream test output AND capture it so we can inspect the TAP summary
-          # if the process exits with a non-zero code. Some configurations
-          # (observed on linux-arm64) crash with SIGSEGV (exit code 139) during
-          # static-destructor teardown AFTER all tests have passed. Tolerate
-          # that specific case, but surface any real failure.
           if [ "${{ inputs.qvac_perf_only }}" = "true" ]; then
             echo "qvac_perf_only=true: regenerating test/integration/all.js with perf-emitting tests only"
             npx brittle -r test/integration/all.js \
@@ -286,19 +280,10 @@ jobs:
               test/integration/image-fruit-plate.test.js \
               test/integration/image-high-res-aurora.test.js
             bare test/integration/all.js --exit 2>&1 | tee test-output.log
-            EXIT=${PIPESTATUS[0]}
-          else
-            npm run test:integration 2>&1 | tee test-output.log
-            EXIT=${PIPESTATUS[0]}
+            exit ${PIPESTATUS[0]}
           fi
-          if [ "$EXIT" -eq 0 ]; then
-            exit 0
-          fi
-          if [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' test-output.log && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' test-output.log; then
-            echo "::warning::Tests all passed but process crashed at teardown with SIGSEGV (exit 139) on $(uname -srvmo). Known ggml/Vulkan static-destructor issue; treating as pass."
-            exit 0
-          fi
-          exit "$EXIT"
+          npm run test:integration 2>&1 | tee test-output.log
+          exit ${PIPESTATUS[0]}
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
