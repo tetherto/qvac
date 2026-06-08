@@ -4,8 +4,8 @@
 #include <filesystem>
 #include <system_error>
 
-#include <llama.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 #include "addon/LlmErrors.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -24,11 +24,11 @@ struct SessionMetadata {
   std::array<llama_token, 4> tokens = {};
 
   static SessionMetadata fromContext(const LlmContext& context) {
-    return {{
-        static_cast<llama_token>(context.getNPast()),
-        static_cast<llama_token>(context.getFirstMsgTokens()),
-        static_cast<llama_token>(context.getCacheTokens()),
-        static_cast<llama_token>(context.getFirstMsgCacheTokens())}};
+    return {
+        {static_cast<llama_token>(context.getNPast()),
+         static_cast<llama_token>(context.getFirstMsgTokens()),
+         static_cast<llama_token>(context.getCacheTokens()),
+         static_cast<llama_token>(context.getFirstMsgCacheTokens())}};
   }
 
   llama_token* data() { return tokens.data(); }
