@@ -18,7 +18,7 @@ type LogMethod = "error" | "warn" | "info" | "debug" | "trace";
  * the prefixed message.
  *
  * @example
- *   await using ctx = registry.begin({ requestId, kind: "completion", modelId });
+ *   await using ctx = await registry.begin({ requestId, kind: "completion", modelId });
  *   const log = withRequestContext(getServerLogger(), ctx);
  *   log.info("decoding token 7");
  *   // → "[request-lifecycle completion requestId=<id> modelId=<id>] decoding token 7"

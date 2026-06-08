@@ -1,4 +1,3 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import * as fs from "fs";
 import * as os from "os";
@@ -8,14 +7,6 @@ import {
   SDKNotFoundInNodeModulesError,
   MultipleSDKInstallationsError,
 } from "@/utils/errors-client";
-
-type BrittleAssert = {
-  is: Function;
-  ok: Function;
-  alike: Function;
-  exception: Function;
-  absent: Function;
-};
 
 function installPackage(parentDir: string, name: string) {
   const pkgDir = path.join(parentDir, "node_modules", ...name.split("/"));
@@ -61,7 +52,7 @@ function captureWarnings(fn: () => void) {
   return warnings;
 }
 
-test("resolveSDKPackageDir: resolves @qvac/sdk when installed at projectRoot", (t: BrittleAssert) => {
+test("resolveSDKPackageDir: resolves @qvac/sdk when installed at projectRoot", (t) => {
   withTempProject((projectRoot) => {
     const expected = installPackage(projectRoot, "@qvac/sdk");
     const warnings = captureWarnings(() => {
@@ -73,7 +64,7 @@ test("resolveSDKPackageDir: resolves @qvac/sdk when installed at projectRoot", (
   });
 });
 
-test("resolveSDKPackageDir: resolves @tetherto/sdk-mono when installed at projectRoot", (t: BrittleAssert) => {
+test("resolveSDKPackageDir: resolves @tetherto/sdk-mono when installed at projectRoot", (t) => {
   withTempProject((projectRoot) => {
     const expected = installPackage(projectRoot, "@tetherto/sdk-mono");
     const result = resolveSDKPackageDir(projectRoot);
@@ -82,7 +73,7 @@ test("resolveSDKPackageDir: resolves @tetherto/sdk-mono when installed at projec
   });
 });
 
-test("resolveSDKPackageDir: walks ancestors and resolves a hoisted install", (t: BrittleAssert) => {
+test("resolveSDKPackageDir: walks ancestors and resolves a hoisted install", (t) => {
   withTempProject((projectRoot, workspaceRoot) => {
     const expected = installPackage(workspaceRoot, "@qvac/sdk");
     const warnings = captureWarnings(() => {
@@ -94,7 +85,7 @@ test("resolveSDKPackageDir: walks ancestors and resolves a hoisted install", (t:
   });
 });
 
-test("resolveSDKPackageDir: prefers projectRoot copy over a hoisted ancestor copy and warns", (t: BrittleAssert) => {
+test("resolveSDKPackageDir: prefers projectRoot copy over a hoisted ancestor copy and warns", (t) => {
   withTempProject((projectRoot, workspaceRoot) => {
     const expected = installPackage(projectRoot, "@qvac/sdk");
     const shadowed = installPackage(workspaceRoot, "@qvac/sdk");
@@ -115,7 +106,7 @@ test("resolveSDKPackageDir: prefers projectRoot copy over a hoisted ancestor cop
   });
 });
 
-test("resolveSDKPackageDir: prefers the closest install when two different SDK packages live at different depths", (t: BrittleAssert) => {
+test("resolveSDKPackageDir: prefers the closest install when two different SDK packages live at different depths", (t) => {
   withTempProject((projectRoot, workspaceRoot) => {
     const expected = installPackage(projectRoot, "@qvac/sdk");
     installPackage(workspaceRoot, "@tetherto/sdk-dev");
@@ -132,7 +123,7 @@ test("resolveSDKPackageDir: prefers the closest install when two different SDK p
   });
 });
 
-test("resolveSDKPackageDir: throws MultipleSDKInstallationsError when two different SDK packages share the closest depth", (t: BrittleAssert) => {
+test("resolveSDKPackageDir: throws MultipleSDKInstallationsError when two different SDK packages share the closest depth", (t) => {
   withTempProject((projectRoot) => {
     installPackage(projectRoot, "@qvac/sdk");
     installPackage(projectRoot, "@tetherto/sdk-dev");
@@ -155,7 +146,7 @@ test("resolveSDKPackageDir: throws MultipleSDKInstallationsError when two differ
   });
 });
 
-test("resolveSDKPackageDir: throws SDKNotFoundInNodeModulesError when no SDK is installed anywhere", (t: BrittleAssert) => {
+test("resolveSDKPackageDir: throws SDKNotFoundInNodeModulesError when no SDK is installed anywhere", (t) => {
   withTempProject((projectRoot) => {
     let threw: unknown;
     try {

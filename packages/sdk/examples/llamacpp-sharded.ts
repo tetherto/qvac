@@ -11,7 +11,7 @@ try {
   const modelId = await loadModel({
     modelSrc:
       "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_0-00001-of-00002.gguf",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: {
       device: "gpu",
       ctx_size: 2048,

@@ -9,7 +9,6 @@ try {
   // Load a model into memory
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     onProgress: (progress) => {
       console.log(progress);
     },

@@ -1,28 +1,76 @@
-# Markdown content negotiation — serve the .md sibling of a page when the
-# client asks for it via `Accept: text/markdown`. Home maps to `/index.md`;
-# every other page `/foo/bar/` maps to `/foo/bar.md`. We need both the
-# trailing-slash and no-slash variants so the `:splat` placeholder doesn't
-# produce `/foo/.md`.
-# /                /index.md      301   Header:Accept=text/markdown
-# /*/              /:splat.md     301   Header:Accept=text/markdown
-# /*               /:splat.md     301   Header:Accept=text/markdown
+# Markdown content negotiation — serve the `.md` sibling of a page when
+# the client requests it via `Accept: text/markdown`. Home maps to
+# `/index.md`; every other page `/a/b/.../z/` maps to `/a/b/.../z.md`.
+#
+# Three properties of these rules and why they are required:
+#
+#  1. `!` (force) — the source path has an underlying static file (the
+#     HTML page) that would otherwise be served; the force flag is what
+#     lets the rule fire at all.
+#
+#  2. `303` (See Other) — the rule MUST be a 3xx redirect, not a 2xx
+#     rewrite. With a 2xx rewrite the response body for the `.md` content
+#     gets cached by Cloudflare under the page's URL key (Cloudflare does
+#     not honour `Vary: Accept`), poisoning the cache for subsequent
+#     HTML clients. A redirect is fetched anew by the client, so the
+#     Markdown response is cached under the `.md` URL key and the HTML
+#     response stays cached under the page URL key. Among 3xx codes,
+#     `303` is the semantically correct match for content negotiation
+#     ("the representation you asked for lives at another URI").
+#
+#  3. One rule per nesting depth, no splat. `_redirects` placeholders
+#     (`:name`) match a single path segment — verified empirically
+#     against Sevalla (a single `/:slug/` rule served HTML, not Markdown,
+#     for `/ai-capabilities/text-generation/`). Covering the site
+#     therefore requires one rule per depth. The splat form
+#     (`/* /:splat.md`) would be greedy but empirically crashes the
+#     Sevalla edge worker (HTTP 1101) when combined with `Header:Accept`
+#     — bug in their parser. Current site max depth is 3 segments; one
+#     extra level is included as headroom.
+#
+# Loop safety: the source pattern always ends in `/`, the rewrite target
+# always ends in `.md` (no slash). Those two URL spaces are disjoint, so
+# the client's follow-up `GET /foo.md` does not re-match the rule. This
+# only holds because all incoming page requests carry a trailing slash
+# (Sevalla's Pretty URLs normalizes bare paths first) AND because Pretty
+# URLs skips paths whose final segment contains a dot — so `/foo.md` is
+# never normalized into `/foo.md/`, which would otherwise loop.
+/                       /index.md                  303!   Header:Accept=text/markdown
+/:a/                    /:a.md                     303!   Header:Accept=text/markdown
+/:a/:b/                 /:a/:b.md                  303!   Header:Accept=text/markdown
+/:a/:b/:c/              /:a/:b/:c.md               303!   Header:Accept=text/markdown
+/:a/:b/:c/:d/           /:a/:b/:c/:d.md            303!   Header:Accept=text/markdown
 
 # Sevalla CDN does not resolve directory-to-index.html for path segments
 # containing dots (e.g. `v0.7.x`). The `:version` placeholder matches a
-# single path segment between slashes — so the trailing-slash variant
-# captures the version without the trailing slash, avoiding the double-
-# slash issue that the splat (`*`) has.
+# single path segment between slashes; the `200` rule rewrites each
+# versioned page's trailing-slash form to its `index.html`.
+#
+# Sevalla's Pretty URLs feature normally 301-redirects bare paths to the
+# trailing-slash form, but empirically it SKIPS paths whose final segment
+# contains a dot (treats them as file requests). So we cannot rely on it
+# for `vX.Y.Z` segments — we provide an explicit bare→with-slash 301
+# below.
+#
+# ORDER MATTERS (first-match-wins). The `200` rewrites for the
+# with-slash source MUST come before the `301` redirects for the bare
+# source. Sevalla's placeholder matcher is lenient about trailing slash
+# in the source pattern: a source ending in `:version` (no slash) will
+# match both `/foo/X` AND `/foo/X/`. If the `301` rule appeared first,
+# it would match the with-slash request too and 301 to itself — an
+# infinite redirect loop (verified empirically). Putting the `:version/`
+# rule first, with literal trailing slash, makes the more-specific
+# pattern win for with-slash requests, leaving the `301` rule to handle
+# only the bare form.
 #
 # Syntax mirrors the doc example
 # (https://docs.sevalla.com/static-sites/redirects#placeholders):
 #   /store/:category/:item   /products/:category/:item
-# No explicit status code — defaults to 301 redirect.
 
-/reference/api/:version/   /reference/api/:version/index.html   200
-/reference/api/:version    /reference/api/:version/index.html   200
-
+/reference/api/:version/             /reference/api/:version/index.html             200
 /reference/release-notes/:version/   /reference/release-notes/:version/index.html   200
-/reference/release-notes/:version    /reference/release-notes/:version/index.html   200
+/reference/api/:version              /reference/api/:version/                       301
+/reference/release-notes/:version    /reference/release-notes/:version/             301
 
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
@@ -30,89 +78,59 @@
 # Everything above is pattern-based (wildcards / :placeholders).
 # Everything below is a 1:1 path move kept for backward compatibility
 # with links from qvac.tether.io and older bookmarks (301 → current IA).
+# Sevalla's Pretty URLs 301-normalizes bare-path requests to the
+# trailing-slash form before these rules run, so only the with-slash
+# variants are listed.
 # ======================================================================
 
 # Section rename: /about-qvac/* → /about/* (+ deletions folded into home)
 /about-qvac/welcome/         /                            301
-/about-qvac/welcome          /                            301
 /about-qvac/flagship-apps/   /                            301
-/about-qvac/flagship-apps    /                            301
 /about-qvac/how-it-works/    /about/how-it-works/         301
-/about-qvac/how-it-works     /about/how-it-works/         301
 /about-qvac/public-launch/   /about/public-launch/        301
-/about-qvac/public-launch    /about/public-launch/        301
 /about-qvac/vision/          /about/vision/               301
-/about-qvac/vision           /about/vision/               301
 
 # Section rename: /sdk/getting-started/* → top-level guides
 /sdk/getting-started/                /introduction/    301
-/sdk/getting-started                 /introduction/    301
 /sdk/getting-started/quickstart/     /quickstart/      301
-/sdk/getting-started/quickstart      /quickstart/      301
 /sdk/getting-started/installation/   /installation/    301
-/sdk/getting-started/installation    /installation/    301
 /sdk/getting-started/configuration/  /configuration/   301
-/sdk/getting-started/configuration   /configuration/   301
 
 # Section rename: /sdk/examples/ai-tasks/* → /ai-capabilities/*
 /sdk/examples/ai-tasks/completion/         /ai-capabilities/text-generation/    301
-/sdk/examples/ai-tasks/completion          /ai-capabilities/text-generation/    301
 /sdk/examples/ai-tasks/fine-tuning/        /ai-capabilities/fine-tuning/        301
-/sdk/examples/ai-tasks/fine-tuning         /ai-capabilities/fine-tuning/        301
 /sdk/examples/ai-tasks/image-generation/   /ai-capabilities/image-generation/   301
-/sdk/examples/ai-tasks/image-generation    /ai-capabilities/image-generation/   301
 /sdk/examples/ai-tasks/multimodal/         /ai-capabilities/multimodal/         301
-/sdk/examples/ai-tasks/multimodal          /ai-capabilities/multimodal/         301
 /sdk/examples/ai-tasks/ocr/                /ai-capabilities/ocr/                301
-/sdk/examples/ai-tasks/ocr                 /ai-capabilities/ocr/                301
 /sdk/examples/ai-tasks/rag/                /ai-capabilities/rag/                301
-/sdk/examples/ai-tasks/rag                 /ai-capabilities/rag/                301
 /sdk/examples/ai-tasks/text-embeddings/    /ai-capabilities/text-embeddings/    301
-/sdk/examples/ai-tasks/text-embeddings     /ai-capabilities/text-embeddings/    301
 /sdk/examples/ai-tasks/text-to-speech/     /ai-capabilities/text-to-speech/     301
-/sdk/examples/ai-tasks/text-to-speech      /ai-capabilities/text-to-speech/     301
 /sdk/examples/ai-tasks/transcription/      /ai-capabilities/transcription/      301
-/sdk/examples/ai-tasks/transcription       /ai-capabilities/transcription/      301
 /sdk/examples/ai-tasks/translation/        /ai-capabilities/translation/        301
-/sdk/examples/ai-tasks/translation         /ai-capabilities/translation/        301
 /sdk/examples/ai-tasks/voice-assistant/    /ai-capabilities/voice-assistant/    301
-/sdk/examples/ai-tasks/voice-assistant     /ai-capabilities/voice-assistant/    301
 
 # Section rename: /sdk/examples/p2p/* → /p2p-capabilities/*
 /sdk/examples/p2p/blind-relays/          /p2p-capabilities/blind-relays/          301
-/sdk/examples/p2p/blind-relays           /p2p-capabilities/blind-relays/          301
 /sdk/examples/p2p/delegated-inference/   /p2p-capabilities/delegated-inference/   301
-/sdk/examples/p2p/delegated-inference    /p2p-capabilities/delegated-inference/   301
 
 # Section rename: /sdk/examples/utilities/* → /runtime/*, /models/*, /configuration/plugins/*
-/sdk/examples/utilities/logging/              /runtime/logging/                          301
-/sdk/examples/utilities/logging               /runtime/logging/                          301
-/sdk/examples/utilities/profiler/             /runtime/profiler/                         301
-/sdk/examples/utilities/profiler              /runtime/profiler/                         301
-/sdk/examples/utilities/runtime-lifecycle/    /runtime/lifecycle/                        301
-/sdk/examples/utilities/runtime-lifecycle     /runtime/lifecycle/                        301
-/sdk/examples/utilities/download-lifecycle/   /models/download-lifecycle/                301
-/sdk/examples/utilities/download-lifecycle    /models/download-lifecycle/                301
-/sdk/examples/utilities/sharded-models/       /models/sharded-models/                    301
-/sdk/examples/utilities/sharded-models        /models/sharded-models/                    301
-/sdk/examples/utilities/plugin-system/        /configuration/plugins/                    301
-/sdk/examples/utilities/plugin-system         /configuration/plugins/                    301
+/sdk/examples/utilities/logging/              /runtime/logging/                            301
+/sdk/examples/utilities/profiler/             /runtime/profiler/                           301
+/sdk/examples/utilities/runtime-lifecycle/    /runtime/lifecycle/                          301
+/sdk/examples/utilities/download-lifecycle/   /models/download-lifecycle/                  301
+/sdk/examples/utilities/sharded-models/       /models/sharded-models/                      301
+/sdk/examples/utilities/plugin-system/        /configuration/plugins/                      301
 /sdk/examples/utilities/write-custom-plugin/  /configuration/plugins/write-custom-plugin/  301
-/sdk/examples/utilities/write-custom-plugin   /configuration/plugins/write-custom-plugin/  301
 
 # Section rename: /sdk/api → /reference/api, /sdk/release-notes → /reference/release-notes
 /sdk/api/                       /reference/api/                       301
-/sdk/api                        /reference/api/                       301
 
 # Section rename: /sdk/tutorials/* → /tutorials/*
 /sdk/tutorials/electron/   /tutorials/electron/   301
-/sdk/tutorials/electron    /tutorials/electron/   301
 /sdk/tutorials/expo/       /tutorials/expo/       301
-/sdk/tutorials/expo        /tutorials/expo/       301
 
 # Section rename: /http-server → /cli/http-server
 /http-server/   /cli/http-server/   301
-/http-server    /cli/http-server/   301
 
 # ======================================================================
 # CATCH-ALL 404 — MUST BE THE LAST RULE
@@ -120,8 +138,21 @@
 # Sevalla serves /404.html automatically for unresolved paths, but with
 # HTTP 200, which breaks SEO, link checkers, analytics and HTTP clients.
 # This explicit rule forces a real `404 Not Found` status while still
-# rendering the same /404.html body. Only reached when no static file and
-# no rule above matches.
+# rendering the same /404.html body. Reached in two distinct cases:
+#
+#   1. No static file matches the request AND no earlier rule matches.
+#   2. An earlier `200` rewrite points at a target that doesn't exist
+#      (e.g. `/reference/api/notaversion/` → rewrite to
+#      `/reference/api/notaversion/index.html` which isn't built).
+#      Sevalla's pipeline continues evaluating rules in this case, and
+#      this catch-all gives those orphaned rewrites a clean 404 instead
+#      of falling back to Sevalla's soft-200 default.
+#
+# Known edge case (intentionally not fixed): a direct request to
+# `/404.html` returns 200 because Sevalla's static-file resolution runs
+# before `_redirects` and serves the file as-is, bypassing this rule.
+# `/404.html` is not in the sitemap, not linked from any page, and not
+# referenced in any external surface; practical traffic to it is zero.
 # ======================================================================
 
 /*   /404.html   404

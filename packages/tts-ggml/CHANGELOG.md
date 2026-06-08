@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-06-05
+
+### Added
+
+- **Supertonic now supports GPU execution.** Consumes `tts-cpp`
+  `2026-06-05`, which brings the QVAC-18605 Supertonic Vulkan/Metal
+  optimisations (rounds 1-13, ~34× realtime on Apple M-series Metal)
+  and the QVAC-19254 sched + cpu_backend refactor for Adreno OpenCL.
+  Caller intent (`useGPU` / `nGpuLayers`) is now honoured for Supertonic
+  the same way it is for Chatterbox; backend selection follows
+  tts-cpp's `init_gpu_backend` tier policy (Adreno 700+ → OpenCL,
+  otherwise Vulkan/Metal/CUDA via the registry walk, otherwise CPU).
+
+### Changed
+
+- Removed the validateConfig hard-throw on `useGPU=true` /
+  `nGpuLayers != 0` for Supertonic in both `SupertonicModel.cpp` and
+  `index.js`. The conflicting-pair check (`useGPU=true` + `nGpuLayers=0`
+  or vice versa) is preserved.
+- Removed the Android force-off block in `SupertonicModel::loadLocked`.
+  Android GPU selection is delegated to tts-cpp's `init_gpu_backend`
+  tier policy (Qualcomm Adreno allowlist; Mali / non-Adreno skipped).
+- Flipped the C++ unit tests that previously expected GPU rejection
+  (`test_supertonic_config.cpp::UseGpuTrueRejectedWithExplanation`,
+  `NGpuLayersGreaterThanZeroRejected`) into acceptance tests; added a
+  new test asserting the cross-field conflict check is still enforced.
+- Flipped the Supertonic entry in `test/integration/gpu-smoke.test.js`
+  from "rejected at constructor" to "must engage GPU backend on
+  GPU-capable platforms", mirroring the Chatterbox smoke contract.
+
 ## [0.2.0] - 2026-06-02
 
 ### Changed

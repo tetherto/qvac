@@ -4,19 +4,27 @@
 #include <any>
 #include <cctype>
 #include <cstring>
+#include <map>
+#include <ranges>
 #include <stdexcept>
+#include <utility>
 
 #include <common/common.h>
+#include <inference-addon-cpp/Errors.hpp>
+#include <llama-cpp.h>
 #include <llama.h>
 #include <llama/common/arg.h>
-#include <inference-addon-cpp/Errors.hpp>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 #include "BackendSelection.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
+#include "ModelMetadata.hpp"
 #include "addon/BertErrors.hpp"
-#include "logging.hpp"
 #include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/LlamacppUtils.hpp"
+#include "logging.hpp"
 #include "utils.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
@@ -231,6 +239,82 @@ void logTokenizationIfVerbose(
   }
 }
 
+bool hasContextSizeConfig(
+    const std::unordered_map<std::string, std::string>& configFilemap) {
+  return configFilemap.contains("ctx_size") ||
+         configFilemap.contains("ctx-size");
+}
+
+int getEffectiveContextSize(
+    const llama_model* model, const llama_context* ctx) {
+  return std::min(
+      llama_model_n_ctx_train(model), static_cast<int>(llama_n_ctx(ctx)));
+}
+
+/// @brief Reads the model's trained context size from already-parsed GGUF
+/// metadata. Emits an ERROR-level diagnostic and returns nullopt when the
+/// architecture key or `<arch>.context_length` key is missing.
+std::optional<int> readTrainedContextSize(const ModelMetaData& metadata) {
+  auto logMetaFailure = [](const std::string& detail) {
+    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+        GGML_LOG_LEVEL_ERROR,
+        string_format(
+            "readTrainedContextSize: %s; falling back to llama.cpp default "
+            "ctx_size\n",
+            detail.c_str())
+            .c_str(),
+        nullptr);
+  };
+
+  std::optional<std::string> architecture =
+      metadata.tryGetString("general.architecture");
+  if (!architecture.has_value() || architecture->empty()) {
+    logMetaFailure("missing 'general.architecture' key");
+    return std::nullopt;
+  }
+
+  const std::string contextLengthKey = *architecture + ".context_length";
+  std::optional<uint32_t> trainedCtx =
+      metadata.tryGetU32(contextLengthKey.c_str());
+  if (!trainedCtx.has_value()) {
+    logMetaFailure("missing '" + contextLengthKey + "' key");
+    return std::nullopt;
+  }
+
+  return static_cast<int>(*trainedCtx);
+}
+
+/// @brief Adjusts @p params.n_ctx so the runtime context does not exceed the
+/// model's trained context. When the caller did not configure ctx_size, the
+/// trained context is used as the default (overriding llama.cpp's hard-coded
+/// 4096 fallback). When the caller configured an oversized ctx_size, it is
+/// capped and an ERROR-level message is emitted so users see it without
+/// bumping verbosity.
+void adjustEmbeddingContextSize(
+    common_params& params, int trainedCtx, bool ctxSizeConfigured) {
+  const int requestedCtx = params.n_ctx;
+
+  if (!ctxSizeConfigured) {
+    params.n_ctx = trainedCtx;
+    return;
+  }
+
+  if (requestedCtx > trainedCtx) {
+    params.n_ctx = trainedCtx;
+    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+        GGML_LOG_LEVEL_ERROR,
+        string_format(
+            "%s: requested ctx_size %d exceeds model trained context size %d; "
+            "capping to %d\n",
+            __func__,
+            requestedCtx,
+            trainedCtx,
+            trainedCtx)
+            .c_str(),
+        nullptr);
+  }
+}
+
 } // namespace
 
 BertEmbeddings::BertEmbeddings(
@@ -284,12 +368,12 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
   return splitMode;
 }
 
-common_params setupParams(
+BertModelSetup setupParams(
     const std::string& modelGgufPath,
-    std::unordered_map<std::string, std::string> configFilemap,
-    int64_t& resolvedBackendDevice) {
-  // Default params
-  common_params params;
+    std::unordered_map<std::string, std::string> configFilemap) {
+  BertModelSetup result{};
+  common_params& params = result.params;
+  result.ctxSizeConfigured = hasContextSizeConfig(configFilemap);
 
   // Override default params
   std::vector<std::string> configVector;
@@ -299,6 +383,22 @@ common_params setupParams(
   configVector.emplace_back(modelGgufPath);
 
   llama_split_mode splitMode = parseSplitMode(configFilemap);
+
+#if defined(__ANDROID__) ||                                                    \
+    (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+  if (splitMode != LLAMA_SPLIT_MODE_NONE ||
+      configFilemap.count("main-gpu") > 0 ||
+      configFilemap.count("main_gpu") > 0 ||
+      configFilemap.count("tensor-split") > 0 ||
+      configFilemap.count("tensor_split") > 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "Multi-GPU parameters (split-mode, main-gpu, tensor-split) are not "
+        "supported on mobile (single-GPU device).");
+  }
+#endif
 
   auto deviceIt = configFilemap.find("device");
   if (deviceIt == configFilemap.end()) {
@@ -320,7 +420,7 @@ common_params setupParams(
         chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
 
     if (chosenBackend.first == BackendType::GPU) {
-      resolvedBackendDevice = 1;
+      result.resolvedBackendDevice = 1;
       params.split_mode = splitMode;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
@@ -336,7 +436,7 @@ common_params setupParams(
         }
       }
     } else if (chosenBackend.first == BackendType::CPU) {
-      resolvedBackendDevice = 0;
+      result.resolvedBackendDevice = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = -1;
       if (splitMode != LLAMA_SPLIT_MODE_NONE) {
@@ -369,9 +469,8 @@ common_params setupParams(
     const bool isOpenCl =
         chosenBackend.first == BackendType::GPU &&
         chosenBackend.second.find("opencl") != std::string::npos;
-    const bool userSetFlashAttn =
-        configFilemap.find("flash-attn") != configFilemap.end() ||
-        configFilemap.find("flash_attn") != configFilemap.end();
+    const bool userSetFlashAttn = configFilemap.contains("flash-attn") ||
+                                  configFilemap.contains("flash_attn");
     if (isOpenCl && !userSetFlashAttn) {
       configFilemap["flash-attn"] = "off";
       qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
@@ -408,9 +507,25 @@ common_params setupParams(
         "Invalid configuration parameters.");
   }
 
-  return params;
+  return result;
 }
 } // namespace
+
+void BertModel::resolveShardPaths(
+    GGUFShards& shards, const std::string& modelPath) {
+  if (shards.gguf_files.empty()) {
+    return;
+  }
+  const std::filesystem::path baseDir =
+      std::filesystem::path(modelPath).parent_path();
+  if (baseDir.empty()) {
+    return;
+  }
+  for (std::string& f : shards.gguf_files) {
+    f = (baseDir / f).string();
+  }
+  shards.tensors_file = (baseDir / shards.tensors_file).string();
+}
 
 BertModel::BertModel(
     const std::string& modelGgufPath,
@@ -419,7 +534,8 @@ BertModel::BertModel(
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
       loadingContext_(InitLoader::getLoadingContext("BertModel")),
-      shards_(GGUFShards::expandGGUFIntoShards(modelGgufPath)) {
+      shards_(GGUFShards::expandGGUFIntoShards(modelGgufPath)),
+      asyncWeightsLoader_(shards_, initLoader_, loadingContext_, &metadata_) {
   auto modelInit = [this](
                        const std::string& path,
                        const std::unordered_map<std::string, std::string>& cfg,
@@ -434,16 +550,15 @@ BertModel::BertModel(
       backendsDir);
 }
 
-BertModel::BertModel(common_params& params)
+BertModel::BertModel(BertModelSetup& setup)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
       loadingContext_(InitLoader::getLoadingContext("BertModel")),
-      shards_(GGUFShards::expandGGUFIntoShards(params.model.path)) {
-  auto modelInit = [this](common_params commonParams) {
-    this->init(commonParams);
-  };
+      shards_(GGUFShards::expandGGUFIntoShards(setup.params.model.path)),
+      asyncWeightsLoader_(shards_, initLoader_, loadingContext_, &metadata_) {
+  auto modelInit = [this](BertModelSetup s) { this->init(s); };
 
-  initLoader_.init(InitLoader::LOADER_TYPE::DELAYED, modelInit, params);
+  initLoader_.init(InitLoader::LOADER_TYPE::DELAYED, modelInit, setup);
 }
 
 void BertModel::init(
@@ -467,12 +582,15 @@ void BertModel::init(
   lazyCommonInit();
   initializeBackend(backendsDir, openclCacheDir);
 
-  common_params params =
-      setupParams(modelGgufPath, configCopy, runtimeBackendDevice_);
-  BertModel::init(params);
+  BertModelSetup setup = setupParams(modelGgufPath, configCopy);
+  BertModel::init(setup);
 }
 
-void BertModel::init(common_params& params) {
+void BertModel::init(BertModelSetup& setup) {
+  ctxSizeConfigured_ = setup.ctxSizeConfigured;
+  runtimeBackendDevice_ = setup.resolvedBackendDevice;
+  common_params& params = setup.params;
+
   lazyCommonInit();
   initializeBackend();
 
@@ -499,13 +617,27 @@ void BertModel::init(common_params& params) {
   llama_numa_init(params.numa);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
+
+  if (!asyncWeightsLoader_.isStreaming()) {
+    BertModel::resolveShardPaths(shards_, params.model.path);
+  }
+
+  metadata_.parse(
+      params.model.path, shards_, asyncWeightsLoader_.isStreaming(), ADDON_ID);
+  if (std::optional<int> trainedCtx = readTrainedContextSize(metadata_)) {
+    adjustEmbeddingContextSize(params, *trainedCtx, ctxSizeConfigured_);
+  }
+
+  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
+      streamedFiles = asyncWeightsLoader_.extractIndividualStreamedFiles();
+
   common_init_result_ptr llamaInit = initFromConfig(
       params,
       params.model.path,
-      singleGgufStreamedFiles_,
+      streamedFiles,
       shards_,
       loadingContext_,
-      isStreaming_,
+      asyncWeightsLoader_.isStreaming(),
       ADDON_ID,
       errorWhenFailed);
 
@@ -528,28 +660,12 @@ void BertModel::init(common_params& params) {
       },
       const_cast<BertModel*>(this));
 
-  int nCtxTrain = llama_model_n_ctx_train(model_);
-  int nCtx = static_cast<int>(llama_n_ctx(ctx_));
-
   if (llama_model_has_encoder(model_) && llama_model_has_decoder(model_)) {
     std::string msg = string_format(
         "%s: computing embeddings in encoder-decoder models is not supported",
         __func__);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnsupportedEmbeddings), msg);
-  }
-
-  if (nCtx > nCtxTrain) {
-    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
-        string_format(
-            "%s: warning: model was trained on only %d context tokens (%d "
-            "specified)\n",
-            __func__,
-            nCtxTrain,
-            nCtx)
-            .c_str(),
-        nullptr);
   }
 
   // print system information
@@ -623,29 +739,7 @@ void BertModel::cancel() const { stopCancelled_.store(true); }
 void BertModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
-  isStreaming_ = true;
-
-  if (shards_.gguf_files.empty()) {
-    // Store it and make it available when `init` is called
-    singleGgufStreamedFiles_[filename] = std::move(shard);
-    return;
-  }
-
-  // Asynchronous shard loading - ensure background initialization has started
-  initLoader_.ensureLoadInBackground();
-
-  if (!llama_model_load_fulfill_split_future(
-          filename.c_str(), loadingContext_.c_str(), std::move(shard))) {
-    std::string msg = string_format(
-        "%s: failed to load model from %s", __func__, filename.c_str());
-    throw std::runtime_error(msg);
-  }
-
-  static int fulfilledFiles = 0;
-  fulfilledFiles++;
-  if (fulfilledFiles == static_cast<int>(shards_.gguf_files.size()) + 1) {
-    initLoader_.waitForLoadInitialization();
-  }
+  asyncWeightsLoader_.setWeightsForFile(filename, std::move(shard));
 }
 
 std::vector<std::vector<int32_t>>
@@ -655,17 +749,18 @@ BertModel::tokenizeInput(const std::vector<std::string>& prompts) const {
   // tokenize all prompts first
   std::vector<std::vector<int32_t>> inputs = tokenizePrompts(ctx_, prompts);
 
-  // Check for context overflow: compare against model's training context size
-  int nCtxTrain = llama_model_n_ctx_train(model_);
+  // Check for context overflow against the active runtime context, capped by
+  // the model's trained context size.
+  int effectiveContextSize = getEffectiveContextSize(model_, ctx_);
   for (std::size_t i = 0; i < inputs.size(); ++i) {
-    if (static_cast<int>(inputs[i].size()) > nCtxTrain) {
+    if (std::cmp_greater(inputs[i].size(), effectiveContextSize)) {
       std::string msg = string_format(
           "%s: context overflow: number of tokens in prompt %zu (%zu) exceeds "
-          "model training context size (%d)",
+          "effective context size (%d)",
           __func__,
           i,
           inputs[i].size(),
-          nCtxTrain);
+          effectiveContextSize);
       throw qvac_errors::StatusError(ADDON_ID, toString(ContextOverflow), msg);
     }
   }
@@ -805,7 +900,7 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
   std::vector<std::vector<int32_t>> inputTokens;
   inputTokens.reserve(sequenceArray.size());
 
-  int nCtxTrain = llama_model_n_ctx_train(model_);
+  int effectiveContextSize = getEffectiveContextSize(model_, ctx_);
   for (std::size_t i = 0; i < sequenceArray.size(); ++i) {
     if (stopCancelled_.load()) {
       throw std::runtime_error("Job cancelled");
@@ -814,14 +909,14 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
     std::vector<int32_t> tokens = common_tokenize(ctx_, sequence, true, true);
 
     // Validate context size during tokenization
-    if (static_cast<int>(tokens.size()) > nCtxTrain) {
+    if (std::cmp_greater(tokens.size(), effectiveContextSize)) {
       std::string msg = string_format(
           "%s: context overflow: number of tokens in sequence %zu (%zu) "
-          "exceeds model training context size (%d)",
+          "exceeds effective context size (%d)",
           __func__,
           i,
           tokens.size(),
-          nCtxTrain);
+          effectiveContextSize);
       throw qvac_errors::StatusError(ADDON_ID, toString(ContextOverflow), msg);
     }
 
@@ -859,8 +954,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {
     stats.emplace_back(
         "batch_size", static_cast<long long>(init_.params.n_batch));
     stats.emplace_back(
-        "context_size",
+        "trained_context_size",
         static_cast<long long>(llama_model_n_ctx_train(model_)));
+    stats.emplace_back(
+        "context_size", static_cast<long long>(llama_n_ctx(ctx_)));
     stats.emplace_back("backendDevice", runtimeBackendDevice_);
   }
 

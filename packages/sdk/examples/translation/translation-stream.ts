@@ -1,14 +1,8 @@
-import {
-  loadModel,
-  translate,
-  unloadModel,
-  BERGAMOT_EN_ES,
-} from "@qvac/sdk";
+import { loadModel, translate, unloadModel, BERGAMOT_EN_ES } from "@qvac/sdk";
 
 try {
   const modelId = await loadModel({
     modelSrc: BERGAMOT_EN_ES,
-    modelType: "nmt",
     modelConfig: {
       engine: "Bergamot",
       from: "en",
@@ -25,7 +19,7 @@ try {
   const streamResult = translate({
     modelId,
     text,
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     stream: true,
   });
 

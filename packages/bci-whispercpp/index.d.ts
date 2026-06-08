@@ -60,6 +60,13 @@ declare interface BCIWhispercppConfig {
   miscConfig?: {
     caption_enabled?: boolean
   }
+  /**
+   * Override the default prebuilds folder used to locate dynamically-
+   * loaded ggml backend `.so` modules on Android. When omitted the
+   * native side resolves to `<addon>/prebuilds`. Ignored on non-Android
+   * targets. Mirrors `transcription-whispercpp 0.9.0`.
+   */
+  backendsDir?: string
 }
 
 declare interface TranscriptSegment {

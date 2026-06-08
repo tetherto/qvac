@@ -36,6 +36,21 @@ async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-l
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
 }
 
+async function runGemma4ImageElephantPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4ImageElephantPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/gemma4-image-elephant-perf.test.js', options)
+}
+
+async function runGemma4ImageFruitPlatePerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4ImageFruitPlatePerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/gemma4-image-fruit-plate-perf.test.js', options)
+}
+
+async function runGemma4ImageHighResAuroraPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4ImageHighResAuroraPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/gemma4-image-high-res-aurora-perf.test.js', options)
+}
+
 async function runGemma4Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4Test')) return __FILTERED
   return runIntegrationModule('../integration/gemma4.test.js', options)
@@ -94,6 +109,21 @@ async function runOcrPaddleTest (options = {}) { // eslint-disable-line no-unuse
 async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQuantizedKvcacheTest')) return __FILTERED
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
+}
+
+async function runQwen35ImageElephantPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageElephantPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-elephant-perf.test.js', options)
+}
+
+async function runQwen35ImageFruitPlatePerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageFruitPlatePerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-fruit-plate-perf.test.js', options)
+}
+
+async function runQwen35ImageHighResAuroraPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-perf.test.js', options)
 }
 
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars

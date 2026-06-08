@@ -67,7 +67,13 @@ function normalizeGgmlFiles (files) {
       f.supertonicModelPath,
       f.supertonic
     ),
-    voicesDir: firstNonEmpty(f.voicesDir)
+    voicesDir: firstNonEmpty(f.voicesDir),
+    // Directory of the compiled MeCab/IPAdic dictionary (Japanese) and
+    // the Cangjie TSV (Chinese).  The host resolves/stages these (e.g.
+    // from the QVAC model registry) and passes the local paths; the
+    // addon only forwards them to tts-cpp's EngineOptions.
+    mecabDictDir: firstNonEmpty(f.mecabDictDir, f.mecabDictPath),
+    cangjieTsvPath: firstNonEmpty(f.cangjieTsvPath, f.cangjieTsv)
   }
 }
 
@@ -210,6 +216,9 @@ class TTSGgml {
       noiseNpyPath,
       backendsDir,
       openclCacheDir,
+      mecabDictDir,
+      mecabDictPath,
+      cangjieTsvPath,
       opts,
       exclusiveRun
     } = options
@@ -281,6 +290,20 @@ class TTSGgml {
       this._supertonicModelPath = undefined
     }
 
+    // Multilingual preprocessing dictionaries (Chatterbox MTL only).
+    // Accept either a top-level option or a `files.*` entry; the host
+    // resolves/stages them (e.g. from the QVAC model registry) and the
+    // addon forwards the local paths to tts-cpp.
+    this._mecabDictPath = firstNonEmpty(
+      mecabDictPath,
+      mecabDictDir,
+      normalizedFiles.mecabDictDir
+    )
+    this._cangjieTsvPath = firstNonEmpty(
+      cangjieTsvPath,
+      normalizedFiles.cangjieTsvPath
+    )
+
     this._referenceAudio = referenceAudio
     this._voiceDir = voiceDir
     this._seed = seed
@@ -339,22 +362,11 @@ class TTSGgml {
           'agnostic runStream() / runStreaming() / run({ streamOutput: true }) APIs.'
         )
       }
-      const wantsGpu =
-        this._config.useGPU === true ||
-        (this._nGpuLayers != null && this._nGpuLayers !== 0)
-      if (wantsGpu) {
-        throw new Error(
-          'tts-ggml: GPU execution is not supported by the Supertonic engine yet ' +
-          '(see tts-cpp include/tts-cpp/supertonic/engine.h: "CPU only today"). ' +
-          'GPU output is currently silently wrong (~4x quieter, slightly truncated) ' +
-          'because the Vulkan path of the supertonic vector-estimator + vocoder is ' +
-          'not yet validated.  Pass config: { useGPU: false } (and leave nGpuLayers ' +
-          'unset, or set it to 0) when constructing a Supertonic model. ' +
-          'Chatterbox also defaults to CPU now; opt in with ' +
-          'config: { useGPU: true } on GPU-capable hosts.'
-        )
-      }
-      if (this._config.useGPU === undefined) {
+      // GPU is supported as of tts-cpp@2026-06-05 (QVAC-18605 Supertonic
+      // Vulkan/Metal optimisations + QVAC-19254 sched/cpu_backend for
+      // Adreno OpenCL). Default-off mirrors Chatterbox; callers opt in
+      // with config: { useGPU: true } on GPU-capable hosts.
+      if (this._config.useGPU === undefined && this._nGpuLayers == null) {
         this._config.useGPU = false
       }
     } else if (this._config.useGPU === undefined && this._nGpuLayers == null) {
@@ -757,6 +769,8 @@ class TTSGgml {
     }
     if (this._backendsDir) params.backendsDir = this._backendsDir
     if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
+    if (this._mecabDictPath) params.mecabDictPath = this._mecabDictPath
+    if (this._cangjieTsvPath) params.cangjieTsvPath = this._cangjieTsvPath
     return params
   }
 

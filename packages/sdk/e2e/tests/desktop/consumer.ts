@@ -409,22 +409,27 @@ resources.define("upscaler-cpu", {
   },
 });
 
-export async function bootstrap(filteredTests?: TestDefinition[]) {
-  // Point the SDK at the committed e2e fixture unless the developer
-  // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
-  // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
-  // propagation end-to-end (see tests/config-tests.ts).
+// Exercises registryDownloadMaxRetries + registryStreamTimeoutMs end-to-end (see config-tests.ts).
+function ensureDesktopE2EConfig() {
   if (!process.env["QVAC_CONFIG_PATH"]) {
     process.env["QVAC_CONFIG_PATH"] = path.resolve(
       process.cwd(),
       "fixtures/qvac.config.e2e.json",
     );
+    console.log(`📦 Desktop e2e config set to ${process.env["QVAC_CONFIG_PATH"]}`);
+  } else {
+    console.log(`📦 Desktop e2e config: QVAC_CONFIG_PATH already set to ${process.env["QVAC_CONFIG_PATH"]}, skipping`);
   }
+}
+
+export async function bootstrap(filteredTests?: TestDefinition[]) {
+  ensureDesktopE2EConfig();
+
   // `filteredTests` (when present) is the producer's post-filter test list
   // delivered via register-ack; absence keeps the legacy "warm everything" path.
   const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
   await resources.downloadAllOnce(console.log, { allowedDeps });
-};
+}
 
 export const executor = createExecutor({
   handlers: [

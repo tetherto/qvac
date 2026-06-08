@@ -59,7 +59,8 @@
         "libxcrypt",
         "lz4",
         "zstd",
-        "gtest"
+        "gtest",
+        "spirv-headers"
       ]
     }
   ]
