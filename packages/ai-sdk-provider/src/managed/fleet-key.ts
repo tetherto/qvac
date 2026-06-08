@@ -8,9 +8,18 @@ import type { SynthesizedServeConfig } from './config-synthesizer.js'
 // fleet key is a stable hash of exactly those inputs, used to name the registry
 // record so discovery is a single keyed lookup.
 //
+// `serveBinPath` is folded in so two local builds of `qvac` (different binaries
+// but the same models/config) don't silently share whichever serve started
+// first — surprising during local dev. The resolved-from-@qvac/cli case
+// (undefined) collapses to a single value, as expected.
+//
 // Deliberately NOT part of the key: the port (auto-allocated), apiKey/headers
 // (client-side only), and the ephemeral config path (per-spawn temp dir).
-export function computeFleetKey (config: SynthesizedServeConfig, host: string): string {
+export function computeFleetKey (
+  config: SynthesizedServeConfig,
+  host: string,
+  serveBinPath?: string
+): string {
   // Canonicalize: sort model aliases and their object keys so semantically
   // equal configs hash identically regardless of declaration order.
   const models = config.serve.models
@@ -18,7 +27,7 @@ export function computeFleetKey (config: SynthesizedServeConfig, host: string): 
     .sort()
     .map((alias) => [alias, stableStringify(models[alias])] as const)
 
-  const payload = JSON.stringify({ host, models: canonical })
+  const payload = JSON.stringify({ host, serveBinPath: serveBinPath ?? null, models: canonical })
   return createHash('sha256').update(payload).digest('hex').slice(0, 16)
 }
 

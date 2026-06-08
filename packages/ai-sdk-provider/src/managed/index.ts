@@ -112,7 +112,6 @@ function spawnRunner (params: {
   idleTimeoutMs: number
   startTimeoutMs: number
   serveBinPath?: string
-  firstConsumerPid: number
 }): void {
   const { command, args } = runnerSpawnSpec()
   const child = spawn(command, [...args, JSON.stringify(params)], {
@@ -132,11 +131,15 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   // own — a caller's custom fetch may be scoped to the API surface.
   const fetchImpl = options.fetch ?? fetch
   const pid = process.pid
+  // A per-provider-instance consumer id (pid-prefixed so liveness pruning still
+  // works) so two providers in this process sharing a fleet key each hold their
+  // own marker — closing one must not deregister the other.
+  const consumerId = `${pid}.${randomBytes(4).toString('hex')}`
 
   // Validate models eagerly (throws UnknownManagedModelError) and derive the
   // fleet key from the exact serve config we'd launch.
   const config = synthesizeServeConfig(options.models)
-  const sharedKey = computeFleetKey(config, host)
+  const sharedKey = computeFleetKey(config, host, options.serveBinPath)
 
   // Reuse defaults on, except when a port is pinned (a pin signals "this exact
   // private serve"). A private serve gets a unique key so it never collides
@@ -148,19 +151,19 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
 
   async function resolveServe (): Promise<Resolved> {
     // Clear dead/orphaned records first so discovery and spawn see a clean slate.
-    await sweepServes().catch(() => {})
+    await sweepServes(fetchImpl).catch(() => {})
 
     if (reuse) {
       const existing = await findReusableServe(fleetKey, fetchImpl)
       if (existing !== undefined) {
-        await addConsumer(fleetKey, pid)
+        await addConsumer(fleetKey, consumerId)
         return { baseURL: existing.baseURL, servePid: existing.servePid, port: existing.port }
       }
     }
 
     // Register as a consumer before spawning so the runner never starts its
     // idle clock during the gap between spawn and attach.
-    await addConsumer(fleetKey, pid)
+    await addConsumer(fleetKey, consumerId)
 
     const overallDeadline = Date.now() + startTimeoutMs + 10_000
     while (true) {
@@ -183,8 +186,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
             host,
             idleTimeoutMs,
             startTimeoutMs,
-            ...(options.serveBinPath !== undefined ? { serveBinPath: options.serveBinPath } : {}),
-            firstConsumerPid: pid
+            ...(options.serveBinPath !== undefined ? { serveBinPath: options.serveBinPath } : {})
           })
 
           const rec = await waitForHealthyRecord(fleetKey, fetchImpl, overallDeadline)
@@ -214,7 +216,17 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     }
   }
 
-  const first = await resolveServe()
+  let first: Resolved
+  try {
+    first = await resolveServe()
+  } catch (err) {
+    // Resolution registered us as a consumer before it failed (timeout/spawn
+    // error) — don't leave a stale-but-alive marker keeping a future serve on
+    // this key warm longer than needed.
+    removeConsumerSync(fleetKey, consumerId)
+    await removeConsumer(fleetKey, consumerId).catch(() => {})
+    throw err
+  }
   const live = { baseURL: first.baseURL }
 
   // Single-flight re-resolution so a burst of in-flight requests hitting a dead
@@ -254,7 +266,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   // abrupt termination (signal/crash) is handled by the runner's dead-pid
   // pruning, so we deliberately don't hijack SIGINT/SIGTERM here.
   function onExit (): void {
-    removeConsumerSync(fleetKey, pid)
+    removeConsumerSync(fleetKey, consumerId)
   }
   process.once('exit', onExit)
 
@@ -263,8 +275,8 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     if (closed) return
     closed = true
     process.removeListener('exit', onExit)
-    removeConsumerSync(fleetKey, pid)
-    await removeConsumer(fleetKey, pid).catch(() => {})
+    removeConsumerSync(fleetKey, consumerId)
+    await removeConsumer(fleetKey, consumerId).catch(() => {})
   }
 
   const managed = Object.assign(base, {
@@ -301,12 +313,14 @@ function retargetUrl (input: Parameters<typeof fetch>[0], baseURL: string): Para
   return input
 }
 
+// Only ECONNREFUSED is retried: it means the connection was never established
+// (the serve is down / respawned on a new port), so re-resolving and replaying
+// the request is safe. We deliberately do NOT retry ECONNRESET/EPIPE — those
+// can occur *after* the serve received and began processing a completion, so a
+// blind replay could double-submit. Undici surfaces ECONNREFUSED as a
+// `TypeError: fetch failed` with `cause.code`, which the cause check catches.
 function isRetryableConnError (err: unknown): boolean {
-  const e = err as { name?: string, code?: string, cause?: { code?: string }, message?: string }
+  const e = err as { name?: string, code?: string, cause?: { code?: string } }
   if (e?.name === 'AbortError') return false // caller cancellation, not a dead serve
-  const code = e?.cause?.code ?? e?.code
-  if (code !== undefined && ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'EPIPE'].includes(code)) {
-    return true
-  }
-  return err instanceof TypeError && /fetch failed/i.test(e?.message ?? '')
+  return (e?.cause?.code ?? e?.code) === 'ECONNREFUSED'
 }

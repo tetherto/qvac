@@ -5,7 +5,11 @@ import { join } from 'node:path'
 
 import { allModels } from '../models/constants.js'
 import type { QvacManagedModel } from '../types.js'
-import { DuplicateManagedModelError, UnknownManagedModelError } from './errors.js'
+import {
+  DuplicateManagedModelError,
+  MultipleDefaultManagedModelsError,
+  UnknownManagedModelError
+} from './errors.js'
 
 // A model as accepted by managed mode: a bare constant name, or an object with
 // per-model serve config.
@@ -68,7 +72,13 @@ export function synthesizeServeConfig (models: readonly ManagedModelInput[]): Sy
   }
 
   // Default alias: an explicit `default: true` wins; otherwise the first model.
-  const hasExplicitDefault = specs.some((s) => s.default === true)
+  // A serve has a single default, so reject more than one explicit default
+  // rather than emit an ambiguous config the CLI resolves arbitrarily.
+  const explicitDefaults = specs.filter((s) => s.default === true).map((s) => s.name)
+  if (explicitDefaults.length > 1) {
+    throw new MultipleDefaultManagedModelsError(explicitDefaults)
+  }
+  const hasExplicitDefault = explicitDefaults.length > 0
 
   const entries: Record<string, SynthesizedModelEntry> = {}
   specs.forEach((spec, index) => {

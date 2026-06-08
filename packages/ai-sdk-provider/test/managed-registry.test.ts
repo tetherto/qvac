@@ -21,6 +21,8 @@ import {
   sweepServes,
   writeRecord
 } from '../src/managed/registry.js'
+import { allocateFreePort, spawnServe } from '../src/managed/serve-process.js'
+import { fakeServeSkip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
 
 const DEAD_PID = 2_147_483_646
 
@@ -126,32 +128,68 @@ test('findReusableServe rejects a record whose serve pid is dead', async () => {
   })
 })
 
-test('sweepServes drops dead-serve records and kills runner-orphaned serves', async () => {
+test('per-instance consumer markers: one pid can hold several, removing one leaves the rest', async () => {
   await withFakeHome(async () => {
-    // 1) Dead serve → record dropped, nothing to kill.
+    // Two providers in one process sharing a fleet key each register a distinct
+    // (pid-prefixed) marker. Closing one must not deregister the whole process.
+    await addConsumer('fk', `${process.pid}.aaaa`)
+    await addConsumer('fk', `${process.pid}.bbbb`)
+    assert.deepEqual((await liveConsumers('fk')).sort(), [process.pid, process.pid])
+
+    await removeConsumer('fk', `${process.pid}.aaaa`)
+    assert.deepEqual(await liveConsumers('fk'), [process.pid])
+    assert.deepEqual(await readdir(consumersDir('fk')), [`${process.pid}.bbbb`])
+  })
+})
+
+test('sweepServes drops dead-serve records and leaves healthy owned serves untouched', async () => {
+  await withFakeHome(async () => {
+    // Dead serve → record dropped, nothing to kill.
     await writeRecord(makeRecord({ fleetKey: 'deadserve', servePid: DEAD_PID, runnerPid: DEAD_PID }))
-
-    // 2) Live serve whose runner is dead → orphan: sweep must kill the serve.
-    const orphan = spawn(process.execPath, ['-e', 'setInterval(()=>{},1e9)'], { stdio: 'ignore' })
-    await new Promise((r) => setTimeout(r, 100))
-    assert.ok(orphan.pid)
-    await writeRecord(makeRecord({ fleetKey: 'orphan', servePid: orphan.pid!, runnerPid: DEAD_PID, configPath: '' }))
-
-    // 3) Healthy + owned (runner alive = this process) → left untouched.
+    // Healthy + owned (runner alive = this process) → left untouched.
     await writeRecord(makeRecord({ fleetKey: 'healthy', servePid: process.pid, runnerPid: process.pid }))
 
     const swept = await sweepServes()
     assert.ok(swept.includes('deadserve'))
-    assert.ok(swept.includes('orphan'))
     assert.ok(!swept.includes('healthy'))
-
-    await new Promise((r) => setTimeout(r, 200))
-    assert.equal(isProcessAlive(orphan.pid!), false)
-    assert.equal(await readRecord('orphan'), undefined)
     assert.equal(await readRecord('deadserve'), undefined)
     assert.ok(await readRecord('healthy'))
 
     await removeRecord('healthy')
+  })
+})
+
+test('sweepServes kills a confirmed runner-orphaned serve but never a non-serving stranger pid', { skip: fakeServeSkip }, async () => {
+  await withFakeHome(async () => {
+    const fake = await makeFakeServe()
+    setBehavior('healthy')
+    const stranger = spawn(process.execPath, ['-e', 'setInterval(()=>{},1e9)'], { stdio: 'ignore' })
+    try {
+      // Orphan that actually serves on its recorded baseURL → must be killed.
+      const port = await allocateFreePort('127.0.0.1')
+      const serve = await spawnServe({ configPath: 'unused.json', port, serveBinPath: fake.binPath, startTimeoutMs: 10_000 })
+      await writeRecord(makeRecord({ fleetKey: 'orphan', servePid: serve.pid, runnerPid: DEAD_PID, baseURL: serve.baseURL, configPath: '' }))
+
+      // A live but non-serving pid stands in for a recycled servePid: its
+      // recorded baseURL answers nothing, so sweep must NOT signal it.
+      await new Promise((r) => setTimeout(r, 100))
+      assert.ok(stranger.pid)
+      await writeRecord(makeRecord({ fleetKey: 'stranger', servePid: stranger.pid!, runnerPid: DEAD_PID, baseURL: 'http://127.0.0.1:1/v1', configPath: '' }))
+
+      const swept = await sweepServes()
+      assert.ok(swept.includes('orphan'))
+      assert.ok(swept.includes('stranger')) // record dropped either way
+
+      await new Promise((r) => setTimeout(r, 300))
+      assert.equal(isProcessAlive(serve.pid), false, 'serving orphan should be killed')
+      assert.equal(isProcessAlive(stranger.pid!), true, 'non-serving stranger pid must not be signalled')
+      assert.equal(await readRecord('orphan'), undefined)
+      assert.equal(await readRecord('stranger'), undefined)
+    } finally {
+      if (stranger.pid !== undefined && isProcessAlive(stranger.pid)) stranger.kill('SIGKILL')
+      setBehavior(undefined)
+      await fake.cleanup()
+    }
   })
 })
 

@@ -6,6 +6,7 @@
 export type QvacManagedErrorCode =
   | 'UNKNOWN_MODEL'
   | 'DUPLICATE_MODEL'
+  | 'MULTIPLE_DEFAULTS'
   | 'CLI_NOT_FOUND'
   | 'SERVE_SPAWN_FAILED'
   | 'SERVE_START_TIMEOUT'
@@ -48,6 +49,21 @@ export class DuplicateManagedModelError extends QvacManagedModeError {
     )
     this.name = 'DuplicateManagedModelError'
     this.duplicateModels = duplicateModels
+  }
+}
+
+export class MultipleDefaultManagedModelsError extends QvacManagedModeError {
+  readonly defaultModels: readonly string[]
+
+  constructor (defaultModels: readonly string[]) {
+    super(
+      'MULTIPLE_DEFAULTS',
+      `More than one managed model sets \`default: true\`: ${defaultModels.join(', ')}. ` +
+        'A serve has a single default alias — mark exactly one model as default ' +
+        '(or none, and the first model becomes the default).'
+    )
+    this.name = 'MultipleDefaultManagedModelsError'
+    this.defaultModels = defaultModels
   }
 }
 

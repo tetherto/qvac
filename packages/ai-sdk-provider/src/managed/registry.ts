@@ -1,7 +1,7 @@
 import { mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 // Shared, cross-process registry of managed serves. Each running serve is
 // described by one record keyed by its *fleet key* (model set + config + host),
@@ -117,27 +117,33 @@ export async function removeRecord (fleetKey: string): Promise<void> {
 
 // ── Consumers ────────────────────────────────────────────────────────────────
 
-export async function addConsumer (fleetKey: string, pid: number): Promise<void> {
+// `consumerId` identifies a single provider instance, not just its process —
+// it must start with the pid (e.g. `"<pid>.<rand>"`) so `liveConsumers` can
+// still derive liveness, but be unique per instance so two providers in one
+// process sharing a fleet key don't collide on one marker (closing one would
+// otherwise deregister the whole process while the other is still live).
+export async function addConsumer (fleetKey: string, consumerId: string | number): Promise<void> {
   const dir = consumersDir(fleetKey)
   await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, String(pid)), '', 'utf8')
+  await writeFile(join(dir, String(consumerId)), '', 'utf8')
 }
 
-export async function removeConsumer (fleetKey: string, pid: number): Promise<void> {
-  await rm(join(consumersDir(fleetKey), String(pid)), { force: true }).catch(() => {})
+export async function removeConsumer (fleetKey: string, consumerId: string | number): Promise<void> {
+  await rm(join(consumersDir(fleetKey), String(consumerId)), { force: true }).catch(() => {})
 }
 
 // Synchronous variant for `process.on('exit')`, where async work cannot run.
-export function removeConsumerSync (fleetKey: string, pid: number): void {
+export function removeConsumerSync (fleetKey: string, consumerId: string | number): void {
   try {
-    unlinkSync(join(consumersDir(fleetKey), String(pid)))
+    unlinkSync(join(consumersDir(fleetKey), String(consumerId)))
   } catch {
     // best-effort
   }
 }
 
 // Returns the live consumer pids, pruning marker files for dead processes as a
-// side effect so the set never wedges on a crashed consumer.
+// side effect so the set never wedges on a crashed consumer. Markers are named
+// `<pid>` or `<pid>.<rand>`; `parseInt` yields the leading pid either way.
 export async function liveConsumers (fleetKey: string): Promise<number[]> {
   const dir = consumersDir(fleetKey)
   let files: string[]
@@ -197,7 +203,7 @@ export async function findReusableServe (
 // runner is alive (the runner owns idle reaping). Dead serve → drop record.
 // Live serve with a dead runner → kill the orphan and drop the record. Returns
 // the fleet keys swept.
-export async function sweepServes (): Promise<string[]> {
+export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<string[]> {
   const records = await readAllRecords()
   const swept: string[] = []
   for (const rec of records) {
@@ -205,17 +211,23 @@ export async function sweepServes (): Promise<string[]> {
     if (serveAlive && isProcessAlive(rec.runnerPid)) continue // healthy, owned
 
     if (serveAlive) {
-      // Orphan: runner gone, nobody will reap it. Best-effort terminate.
-      try {
-        process.kill(rec.servePid, 'SIGTERM')
-      } catch {
-        // already gone or unsignalable
+      // Orphan: runner gone, nobody will reap it. Only SIGTERM the pid if it
+      // still answers as *our* serve — this guards against the rare case where
+      // the serve died and the OS recycled its pid to an unrelated process.
+      // If it doesn't respond on the recorded baseURL, just drop the record
+      // rather than risk signalling a stranger.
+      if (await healthCheck(rec.baseURL, fetchImpl)) {
+        try {
+          process.kill(rec.servePid, 'SIGTERM')
+        } catch {
+          // already gone or unsignalable
+        }
       }
     }
     await removeRecord(rec.fleetKey)
     // The orphan's runner also owned the ephemeral config; clean it up.
     if (rec.configPath.length > 0) {
-      await rm(rec.configPath.replace(/\/[^/]+$/, ''), { recursive: true, force: true }).catch(() => {})
+      await rm(dirname(rec.configPath), { recursive: true, force: true }).catch(() => {})
     }
     swept.push(rec.fleetKey)
   }

@@ -29,9 +29,6 @@ export interface RunnerParams {
   readonly idleTimeoutMs: number
   readonly startTimeoutMs: number
   readonly serveBinPath?: string
-  // The pid of the client that spawned us, recorded as the first consumer so
-  // the idle clock doesn't start before that client gets a chance to attach.
-  readonly firstConsumerPid: number
 }
 
 function errorPath (fleetKey: string): string {
@@ -65,7 +62,7 @@ function cleanup (fleetKey: string, configPath: string): void {
 }
 
 export async function runRunner (params: RunnerParams): Promise<void> {
-  const { fleetKey, configPath, port, host, idleTimeoutMs, startTimeoutMs, firstConsumerPid } = params
+  const { fleetKey, configPath, port, host, idleTimeoutMs, startTimeoutMs } = params
 
   ensureDirSync()
 
@@ -127,10 +124,9 @@ export async function runRunner (params: RunnerParams): Promise<void> {
 
   // Idle-reaping loop, driven entirely by consumer-process liveness so it works
   // for any client regardless of how it sends requests (it never inspects the
-  // serve's traffic). Seed `emptySince` from the spawning client so we don't
-  // reap during the brief window before it records itself.
+  // serve's traffic). The spawning client registers itself as a consumer before
+  // launching us, so the set is non-empty by the time this first ticks.
   let emptySince: number | null = null
-  void firstConsumerPid // recorded by the client; referenced for intent clarity
 
   const timer = setInterval(() => {
     void (async () => {

@@ -143,7 +143,7 @@ interface QvacManagedModel {
   name: string                       // SDK model constant name
   config?: Record<string, unknown>   // per-model serve config (ctx_size, reasoning_budget, …)
   preload?: boolean                  // load at startup; default: true
-  default?: boolean                  // make this the default alias
+  default?: boolean                  // make this the default alias (at most one model)
 }
 ```
 
@@ -171,10 +171,10 @@ Without this, every model uses `qvac serve`'s defaults — and the default `ctx_
 
 Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that opening multiple sessions — or several tools at once — doesn't spawn a serve (and reload models into memory) for each one.
 
-- **Fleet key & reuse.** Each managed provider derives a *fleet key* from its exact serve config (model set + per-model `config` + bind host). `createQvac` reuses any healthy serve with a matching key and only spawns a new one when none exists. Two sessions that request the same models share one process; two that request different models (or different `ctx_size`, etc.) each get their own.
+- **Fleet key & reuse.** Each managed provider derives a *fleet key* from its exact serve config (model set + per-model `config` + bind host + `serveBinPath`). `createQvac` reuses any healthy serve with a matching key and only spawns a new one when none exists. Two sessions that request the same models share one process; two that request different models (or different `ctx_size`, host, or `qvac` binary) each get their own.
 - **Detached supervisor.** The serve is owned by a small detached runner — not by your process — so it survives your script exiting and can be shared. The runner reaps the serve once **no consumer process has been alive for `serveIdleTimeout`** (default 5 min). Liveness is the signal, not request traffic, so it works for any client regardless of how it talks to the serve (including agents that connect straight to `baseURL`).
 - **`close()` detaches, it doesn't kill.** Calling `provider.close()` (or leaving an `await using` scope) deregisters *your* session. A serve still in use by another session keeps running; an unused one is reaped after the idle timeout. An abrupt exit (Ctrl-C, crash) is handled too — the runner prunes dead consumers automatically.
-- **Crash recovery.** If the underlying serve dies mid-session, the provider's `fetch` transparently re-resolves (reattaching to a healthy serve or spawning a fresh one) and retries the request once.
+- **Crash recovery.** If the underlying serve is gone when a request goes out (connection refused), the provider's `fetch` transparently re-resolves — reattaching to a healthy serve or spawning a fresh one — and retries that request once. Only connection-refused is retried, so a completion that the serve had already begun processing is never blindly replayed.
 - **Private serves.** Pass `reuse: false` (or pin `servePort`) to force a dedicated serve that is **not** shared and is reaped as soon as your process exits.
 - **Self-healing registry.** Records live under `~/.qvac/managed-serves/`. Every `createQvac` first sweeps the registry, dropping dead records and terminating any serve whose runner has died — so a hard crash can never strand a process or wedge reuse.
 
@@ -183,6 +183,7 @@ Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that ope
 - **Startup is gated on model preload.** `qvac serve` does not open its port until every preloaded model is ready, and a cold P2P download can take minutes — hence the generous default `serveStartTimeout`. Raise it for large models.
 - **External mode pays nothing.** The managed subsystem (and its `node:child_process` / `@qvac/cli` resolution) is dynamically imported only when `mode: 'managed'` is set.
 - **Node 20+ and Bun.** The managed subsystem uses only portable `node:` APIs — no Bun-specific calls.
+- **Typed errors.** Managed setup throws structured errors you can `instanceof`-check: `UnknownManagedModelError`, `DuplicateManagedModelError`, `MultipleDefaultManagedModelsError`, `CliNotFoundError`, `ServeStartTimeoutError`, `ServeSpawnFailedError`, `ServeExitedError`, and `PortAllocationFailedError` (all extending `QvacManagedModeError`, with a `.code` from `QvacManagedErrorCode`). They're exported from the package root.
 
 ---
 
