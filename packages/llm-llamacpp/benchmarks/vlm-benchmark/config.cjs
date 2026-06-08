@@ -122,7 +122,7 @@ module.exports = {
   //   QVAC_VLM_SAMPLES→samplesPerTask · QVAC_VLM_REPEATS→repeats
   //   QVAC_VLM_DEVICES→devices (csv) · QVAC_VLM_TASKS→tasks (csv)
   // `null` = harness default (all cells / all fixture tasks / cpu+gpu).
-  defaultPreset: 'smoke', // TEMP: minimal on-device check for the folder refactor; revert to 'compare'
+  defaultPreset: 'compare',
 
   presets: {
     // ── two-models presets ──────────────────────────────────────────────
