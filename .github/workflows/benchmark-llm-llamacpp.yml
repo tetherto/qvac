@@ -98,10 +98,10 @@ on:
         type: string
         default: "two-models"
       matrix_preset:
-        description: "  matrix preset: compare (two-models), sources (several-sources), smoke, or full. Overrides config.defaultPreset on Linux."
+        description: "  run size (independent of mode): smoke (1 task×1×1), base (5 tasks×3×3), full (5 tasks×5×3). Overrides config.defaultPreset on desktop."
         required: false
         type: string
-        default: "compare"
+        default: "base"
       matrix_engine:
         description: "  inference engine (two-models mode): addon | fabric-cli | upstream-cli. CLI engines are desktop-only; addon runs everywhere."
         required: false
@@ -994,7 +994,7 @@ jobs:
           else
             node packages/llm-llamacpp/benchmarks/vlm-benchmark/aggregate.js \
               --title "VLM Matrix — ${{ inputs.matrix_mode }} / ${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
-              --mode "${{ inputs.matrix_mode }}" --engine "${{ inputs.matrix_engine }}" --base f16 --candidate q8 \
+              --mode "${{ inputs.matrix_mode }}" --engine "${{ inputs.matrix_engine }}" \
               --out consolidated/vlm-matrix-consolidated.md \
               $PROV $ARGS
           fi

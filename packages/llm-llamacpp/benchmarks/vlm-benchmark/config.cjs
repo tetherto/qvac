@@ -1,155 +1,121 @@
 'use strict'
-// QVAC-19178: single source of truth for the VLM benchmark (config + presets).
+// QVAC-19178: single source of truth for the VLM benchmark (models + presets).
 //
-// One config drives every target. A "target" is a (platform × backend) pair:
-//   • desktop platform — Linux by default; CPU and GPU where the runner supports it.
-//   • mobile  platform — Samsung Galaxy S25 (AWS Device Farm) by default; CPU and GPU.
-// Adding a desktop OS or a different phone is a workflow/runner change, not a config
-// change — this file stays platform-agnostic (it only names cpu/gpu via `devices`).
+// ─ What the benchmark compares ─
+//   two-models      MODEL_1 vs MODEL_2 — two complete VLMs, one inference engine.
+//                   They can be two DIFFERENT models (the default: Qwen3.5 vs Gemma)
+//                   or two BLOBS/VARIANTS of the same model (point both at the same
+//                   LLM and change only the mmproj, e.g. F16 vs Q8). Runs on every
+//                   target (desktop + mobile, CPU + GPU).
+//   several-sources SOURCES_MODEL across several inference engines (addon / fabric-cli
+//                   / upstream-cli). Desktop-only — the CLIs are native binaries.
 //
-// How each target reads this config (stage.cjs copies the file to the mobile bundle):
-//   • desktop — the active preset is QVAC_VLM_PRESET, with per-field QVAC_VLM_* overrides.
-//   • mobile  — NO env passthrough (Device Farm forwards none), so the on-device run is
-//     always `defaultPreset` below. To change what mobile runs, edit `defaultPreset`.
+// ─ Targets ─ A "target" is a (platform × backend) pair. Platform-agnostic:
+//   desktop (Linux by default) and mobile (Samsung Galaxy S25 by default), each on
+//   CPU and GPU where applicable. Adding an OS/phone is a workflow/runner change.
+//   • desktop reads the active preset from QVAC_VLM_PRESET (per-field QVAC_VLM_*
+//     overrides); on mobile there is NO env passthrough, so it always uses
+//     `defaultPreset` below.
 //
-// Each GGUF "blob" carries a `source` descriptor (how to fetch the bytes) plus an
-// optional `registry` annotation (whether it's a published QVAC-registry entry).
-// See resolveBlob() in harness.cjs.
-//   source.type 'hf'  : { type:'hf', repo, sha, file } -> pinned HuggingFace
-//   source.type 'url' : { type:'url', url }             -> arbitrary direct link
-//   source.type 's3'  : { type:'s3', url }              -> S3 (presigned URL)
-//   registry: { license, link }                         -> mark as QVAC-registry
-//     entry; report Source = "Registry". (bytes still come via source.* — the
-//     registry's canonical source is the same pinned URL.)
+// ─ A "model" ─ a complete VLM: a main LLM blob + a vision-projector (mmproj) blob.
+//   Each blob carries a `source` descriptor (how to fetch the bytes) and an optional
+//   `registry` annotation (a published QVAC-registry entry; reported as Source =
+//   "Registry"). See resolveBlob() in harness.cjs.
+//     source.type 'hf'  : { type:'hf', repo, sha, file } -> pinned HuggingFace commit
+//     source.type 'url' : { type:'url', url }             -> arbitrary direct link
+//     source.type 's3'  : { type:'s3', url }              -> S3 (presigned URL)
 
-// Pinned commit SHAs (immutable provenance). Both Qwen3.5-0.8B mmproj quants
-// below are published in the QVAC registry (models.prod.json) at these exact
-// pinned URLs — the registry's unsloth repo ships F16/BF16, and the mradermacher
-// Q8_0 projector was added as a registry entry. So our pinned fetch is
-// byte-identical to the registry's canonical `source`.
+// Pinned commit SHAs (immutable provenance).
 const SHA = {
-  qwenUnsloth: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0', // registry: main + f16 mmproj
-  qwenMrader: '9d48fdbc0d8f133716da87ec1d904e5d2c7175a6', //  registry: q8 mmproj
-  gemmaBart: 'b5e99bd964eaacc27ba484bb2eb3e9f6160b9143', //   registry: main + f16 mmproj
-  gemmaGgml: 'a1dac71d3ab220618f5a7573a52acdc4baf3ae3b' //    candidate q8 mmproj
+  qwenUnsloth: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0', // registry: Qwen3.5 main + f16 mmproj
+  qwenMrader: '9d48fdbc0d8f133716da87ec1d904e5d2c7175a6', //  registry: Qwen3.5 q8 mmproj
+  gemmaBart: 'b5e99bd964eaacc27ba484bb2eb3e9f6160b9143' //    Gemma main + f16 mmproj
 }
 
-// A `registry` annotation marks a blob as a published QVAC-registry entry. The
-// bytes are fetched from the registry's canonical `source` URL (HTTPS, works on
-// every target); the report shows Source = "Registry" for these. The live
-// `@qvac/registry-client` (findModels/downloadModel, P2P) is the backup lookup.
+// Apache-2.0 Qwen mmproj blobs are published in the QVAC registry; the pinned HF URL
+// below is byte-identical to the registry's canonical source.
 const QWEN_REG = { license: 'Apache-2.0', link: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF' }
 
-const MODELS = {
-  qwen: {
-    main: {
-      modelName: 'reg-qwen-unsloth-Q8_0.gguf',
-      origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
-      registry: QWEN_REG,
-      source: { type: 'hf', repo: 'unsloth/Qwen3.5-0.8B-GGUF', sha: SHA.qwenUnsloth, file: 'Qwen3.5-0.8B-Q8_0.gguf' }
-    },
-    mmproj: {
-      f16: {
-        modelName: 'reg-qwen-unsloth-mmproj-F16.gguf',
-        origin: `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} · mmproj-F16`,
-        registry: QWEN_REG,
-        source: { type: 'hf', repo: 'unsloth/Qwen3.5-0.8B-GGUF', sha: SHA.qwenUnsloth, file: 'mmproj-F16.gguf' }
-      },
-      q8: {
-        modelName: 'reg-qwen-mradermacher-mmproj-Q8_0.gguf',
-        origin: `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
-        registry: { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' },
-        source: { type: 'hf', repo: 'mradermacher/Qwen3.5-0.8B-GGUF', sha: SHA.qwenMrader, file: 'Qwen3.5-0.8B.mmproj-Q8_0.gguf' }
-      }
-    },
-    ctx_size: '4096'
-  },
-  gemma: {
-    main: {
-      modelName: 'reg-gemma-bartowski-Q4_K_M.gguf',
-      origin: `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} (registry main)`,
-      source: { type: 'hf', repo: 'bartowski/google_gemma-4-E2B-it-GGUF', sha: SHA.gemmaBart, file: 'google_gemma-4-E2B-it-Q4_K_M.gguf' }
-    },
-    mmproj: {
-      f16: {
-        modelName: 'reg-gemma-bartowski-mmproj-f16.gguf',
-        origin: `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} (registry f16)`,
-        source: { type: 'hf', repo: 'bartowski/google_gemma-4-E2B-it-GGUF', sha: SHA.gemmaBart, file: 'mmproj-google_gemma-4-E2B-it-f16.gguf' }
-      },
-      q8: {
-        modelName: 'cand-gemma-ggml-mmproj-Q8_0.gguf',
-        origin: `ggml-org/gemma-4-E2B-it-GGUF@${SHA.gemmaGgml.slice(0, 10)} (CANDIDATE q8)`,
-        source: { type: 'hf', repo: 'ggml-org/gemma-4-E2B-it-GGUF', sha: SHA.gemmaGgml, file: 'mmproj-gemma-4-E2B-it-Q8_0.gguf' }
-      }
-    },
-    ctx_size: '4096'
-  }
+// hf-source blob helper: { modelName (local cache file), origin (human label),
+// source (fetch plan), registry? (mark as a registry entry) }.
+function hf (modelName, origin, repo, sha, file, registry) {
+  return { modelName, origin, registry, source: { type: 'hf', repo, sha, file } }
+}
+
+// ════════════════════ THE TWO MODELS UNDER TEST (two-models mode) ════════════════════
+// Edit these two to change what two-models compares. The defaults are two DIFFERENT
+// models. To instead compare two variants of ONE model, give both the same `llm` and
+// change only `mmproj` (and set distinct `label`s).
+const MODEL_1 = {
+  label: 'qwen3.5-0.8b', //   short id — report column + marker key (keep filesystem-safe)
+  name: 'Qwen3.5-0.8B', //    display name
+  ctx_size: '4096',
+  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+    'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
+  mmproj: hf('reg-qwen-unsloth-mmproj-F16.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} · mmproj-F16`,
+    'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'mmproj-F16.gguf', QWEN_REG)
+}
+
+const MODEL_2 = {
+  label: 'gemma-4-e2b', //    short id
+  name: 'Gemma-4-E2B-it', //  display name
+  ctx_size: '4096',
+  llm: hf('reg-gemma-bartowski-Q4_K_M.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)}`,
+    'bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'google_gemma-4-E2B-it-Q4_K_M.gguf'),
+  mmproj: hf('reg-gemma-bartowski-mmproj-f16.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} · mmproj-F16`,
+    'bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'mmproj-google_gemma-4-E2B-it-f16.gguf')
+}
+
+// ════════════════════ THE MODEL FOR SOURCE COMPARISON (several-sources mode) ════════════════════
+// One fixed VLM, run through every engine. Its blob filenames must match the names the
+// workflow's CLI step feeds to fabric-cli/upstream-cli.
+const SOURCES_MODEL = {
+  label: 'qwen3.5-0.8b-q8',
+  name: 'Qwen3.5-0.8B (mmproj Q8)',
+  ctx_size: '4096',
+  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+    'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
+  mmproj: hf('reg-qwen-mradermacher-mmproj-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
+    'mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf',
+    { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' })
 }
 
 // Open-licensed fixture tasks (regenerate/curate via build-fixture.cjs;
 // per-image attribution in fixture.NOTICE.md).
 const TASKS = ['textvqa', 'vizwiz', 'gqa', 'docvqa', 'ai2d']
 
-// A "cell" is one (model · mmproj) configuration. two-models mode compares any two
-// cells — that can be two mmproj variants of the SAME model (the default: qwen f16
-// vs qwen q8) or two DIFFERENT models (e.g. qwen vs gemma). A preset picks the cells.
-const ALL_CELLS = [
-  { model: 'qwen', mmproj: 'q8' },
-  { model: 'qwen', mmproj: 'f16' },
-  { model: 'gemma', mmproj: 'q8' },
-  { model: 'gemma', mmproj: 'f16' }
-]
-
 module.exports = {
-  // ════════════════════════ MODES ════════════════════════
-  // The benchmark runs in ONE comparison mode. The workflow's `matrix_mode` input
-  // sets it on desktop (env QVAC_VLM_MODE); on mobile (no env passthrough) the active
-  // preset's `mode` decides.
-  //
-  //   two-models       Hold the engine fixed, vary the MODEL. Compares any two cells
-  //                    — two mmproj variants of one model (default) or two different
-  //                    models. Runs on every target (desktop + mobile, CPU + GPU).
-  //   several-sources  Hold the model fixed, vary the ENGINE (addon / fabric-cli /
-  //                    upstream-cli). Desktop-only — fabric/upstream are native
-  //                    llama-mtmd-cli binaries that don't ship in the mobile app.
+  // ════════════════════════ MODE — what is compared ════════════════════════
+  // 'two-models' | 'several-sources'. The workflow's matrix_mode input sets it on
+  // desktop (QVAC_VLM_MODE); on mobile this default is used.
   mode: 'two-models',
 
-  // ── two-models settings ──
-  // `base`/`candidate` name the two columns of the Highlights delta table. With the
-  // default cells they're mmproj labels (f16 vs q8); when comparing two models, set
-  // them to whatever distinguishes the two cells.
-  base: 'f16', //       label for the "base" column
-  candidate: 'q8', //   label for the "candidate" column
-  engine: 'addon', //   the fixed engine (addon | fabric-cli | upstream-cli)
+  // two-models compares these two complete VLMs:
+  models: [MODEL_1, MODEL_2],
+  // several-sources runs this one VLM across the engines below:
+  sourcesModel: SOURCES_MODEL,
+  engines: ['addon', 'fabric-cli', 'upstream-cli'],
+  engine: 'addon', //         the fixed engine for two-models
 
-  // ── several-sources settings ──
-  engines: ['addon', 'fabric-cli', 'upstream-cli'], // engines compared (model fixed below)
+  // Report column labels for two-models (derived from the two models above).
+  base: MODEL_1.label,
+  candidate: MODEL_2.label,
 
-  // ════════════════════════ SHARED ════════════════════════
-  models: MODELS, //    model catalog (each blob has a source descriptor + registry tag)
-  allCells: ALL_CELLS,
-
-  // The default preset: used verbatim on mobile, and the desktop default when
-  // QVAC_VLM_PRESET is unset. A preset bundles the run settings; on desktop each field
-  // is individually overridable by env:
+  // ════════════════════════ PRESET — how much is run ════════════════════════
+  // A preset is purely the run size (tasks × samples × repeats); it is independent of
+  // the mode. Used verbatim on mobile, and the desktop default when QVAC_VLM_PRESET is
+  // unset. Per-field desktop env overrides:
   //   QVAC_VLM_SAMPLES→samplesPerTask · QVAC_VLM_REPEATS→repeats
-  //   QVAC_VLM_DEVICES→devices (csv, e.g. "cpu" or "cpu,gpu") · QVAC_VLM_TASKS→tasks (csv)
-  // `devices: null` = both CPU and GPU where applicable; `tasks: null` = all fixture tasks.
-  defaultPreset: 'compare',
+  //   QVAC_VLM_DEVICES→devices (csv) · QVAC_VLM_TASKS→tasks (csv)
+  // `devices: null` = CPU + GPU where applicable; `tasks: null` = all fixture tasks.
+  defaultPreset: 'base',
 
-  // Presets are the flexibility knob: clone one, change cells/tasks/samples, and point
-  // a run at it. The set below is what we currently evaluate; they are not exhaustive.
   presets: {
-    // ── two-models presets ──────────────────────────────────────────────
-    // DEFAULT eval: f16 vs q8 mmproj on Qwen3.5, the 5 open-licensed tasks (15 images ≤1024px).
-    compare: { mode: 'two-models', cells: [{ model: 'qwen', mmproj: 'f16' }, { model: 'qwen', mmproj: 'q8' }], tasks: TASKS, samplesPerTask: 3, repeats: 3, devices: null },
-    // The full matrix (all model·mmproj cells × all tasks) — also shows qwen-vs-gemma.
-    full: { mode: 'two-models', cells: ALL_CELLS, tasks: null, samplesPerTask: 5, repeats: 3, devices: null },
-    // 1 cell / 1 task / 1 sample — pipeline wiring check (fast, used for CI smoke tests).
-    smoke: { mode: 'two-models', cells: [{ model: 'qwen', mmproj: 'q8' }], tasks: ['textvqa'], samplesPerTask: 1, repeats: 1, devices: null },
-
-    // ── several-sources preset (desktop only) ───────────────────────────
-    // ONE fixed model (Qwen3.5 + q8 mmproj) across addon + fabric-cli + upstream-cli.
-    sources: { mode: 'several-sources', cells: [{ model: 'qwen', mmproj: 'q8' }], engines: ['addon', 'fabric-cli', 'upstream-cli'], tasks: TASKS, samplesPerTask: 3, repeats: 3, devices: null }
+    // smoke — 1 task, 1 image, 1 repeat: a single inference per config (wiring check).
+    smoke: { tasks: ['textvqa'], samplesPerTask: 1, repeats: 1, devices: null },
+    // base — DEFAULT eval: 5 tasks × 3 samples × 3 repeats.
+    base: { tasks: TASKS, samplesPerTask: 3, repeats: 3, devices: null },
+    // full — 5 tasks × 5 samples × 3 repeats (the complete fixture).
+    full: { tasks: TASKS, samplesPerTask: 5, repeats: 3, devices: null }
   }
 }

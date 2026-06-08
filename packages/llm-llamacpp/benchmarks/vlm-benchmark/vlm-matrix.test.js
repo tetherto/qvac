@@ -4,5 +4,5 @@
 // test/mobile/{test-groups,perf-tests}.json). The active mode/preset are decided in
 // config.cjs + harness.cjs. Linux runs this in place; mobile runs a staged copy in
 // test/integration (see stage.cjs).
-const { runAllCells } = require('./harness.cjs')
-runAllCells()
+const { runAll } = require('./harness.cjs')
+runAll()

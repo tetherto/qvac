@@ -45,16 +45,16 @@ const isMobile = os.platform() === 'android' || os.platform() === 'ios'
 const ENABLED = isMobile || env('QVAC_VLM_MATRIX') === '1'
 function intEnv (k) { const v = parseInt(env(k), 10); return Number.isFinite(v) && v > 0 ? v : null }
 
-// Active preset selects which cells/tasks/samples/devices run. QVAC_VLM_PRESET
-// overrides config.defaultPreset on Linux; on S25 there is no env passthrough, so
-// config.defaultPreset is the only knob. Unknown name => an all-defaults preset.
+// Active preset = the run SIZE (tasks × samples × repeats), independent of mode.
+// QVAC_VLM_PRESET overrides config.defaultPreset on desktop; on mobile there is no env
+// passthrough, so config.defaultPreset is the only knob. Unknown name => all-defaults.
 const PRESET = config.presets[env('QVAC_VLM_PRESET') || config.defaultPreset] ||
-  { cells: null, tasks: null, samplesPerTask: null, devices: null }
+  { tasks: null, samplesPerTask: null, devices: null }
 
 // Comparison mode + this run's engine. In 'several-sources' the comparison axis is
-// the engine (this addon leg is one of addon/fabric-cli/upstream-cli), so markers
-// are keyed by the source label instead of model·mmproj. Driven by env on Linux.
-const MODE = env('QVAC_VLM_MODE') || PRESET.mode || config.mode || 'two-models'
+// the engine (this addon leg is one of addon/fabric-cli/upstream-cli), so markers are
+// keyed by the source label instead of the model label. Driven by env on desktop.
+const MODE = env('QVAC_VLM_MODE') || config.mode || 'two-models'
 const SOURCE = env('QVAC_VLM_ENGINE') || config.engine || 'addon'
 
 // samples/task precedence: explicit env > preset > (mobile 2 / desktop 5). Mobile
@@ -83,11 +83,8 @@ function selectedItems () {
   })
 }
 
-// Cells, models and their per-blob source descriptors live in config.cjs
-// (the registry-compatibility story — f16 = registry mmproj, q8 = candidate — is
-// documented there). The harness only resolves descriptors to concrete files.
-const MODELS = config.models
-
+// The models under test (each = main LLM blob + mmproj blob + source descriptors)
+// live in config.cjs. The harness only resolves descriptors to concrete files.
 const HF = (repo, sha, file) => `https://huggingface.co/${repo}/resolve/${sha}/${file}`
 
 // Map a blob's `source` descriptor to a download plan ensureBlob() can act on:
@@ -239,26 +236,24 @@ function emitRow (obj) {
   console.log('[VLMROW]' + JSON.stringify(obj) + '[/VLMROW]')
 }
 
-function runVlmCell (modelKey, mmprojKey) {
-  const cell = `${modelKey}-${mmprojKey}`
+function runModel (spec) {
   // Marker axis: source label in several-sources mode (engine comparison), else the
-  // model·mmproj cell. The model loaded is always modelKey/mmprojKey.
-  const axis = MODE === 'several-sources' ? SOURCE : cell
+  // model label. The VLM loaded is always spec (llm + mmproj).
+  const axis = MODE === 'several-sources' ? SOURCE : spec.label
   if (!ENABLED) {
-    test(`vlm-matrix ${cell} (disabled; set QVAC_VLM_MATRIX=1)`, t => t.pass('disabled'))
+    test(`vlm-matrix ${spec.label} (disabled; set QVAC_VLM_MATRIX=1)`, t => t.pass('disabled'))
     return
   }
-  const cfg = MODELS[modelKey]
   for (const device of devicesToRun()) {
     const dev = device.toUpperCase()
-    test(`vlm-matrix ${cell} [${dev}]`, { timeout: 30 * 60 * 1000 }, async t => {
-      const [mainName, dir] = await ensureBlob(cfg.main)
-      const [projName] = await ensureBlob(cfg.mmproj[mmprojKey])
+    test(`vlm-matrix ${spec.label} [${dev}]`, { timeout: 30 * 60 * 1000 }, async t => {
+      const [mainName, dir] = await ensureBlob(spec.llm)
+      const [projName] = await ensureBlob(spec.mmproj)
       // model-origin provenance (stderr, parsed host-side into the report)
       console.error('[VLMMETA]' + JSON.stringify({
-        cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey,
-        main_origin: cfg.main.origin, main_url: displayUrl(cfg.main), main_source: sourceType(cfg.main),
-        mmproj_origin: cfg.mmproj[mmprojKey].origin, mmproj_url: displayUrl(cfg.mmproj[mmprojKey]), mmproj_source: sourceType(cfg.mmproj[mmprojKey])
+        cell: axis, source: SOURCE, model: spec.label,
+        main_origin: spec.llm.origin, main_url: displayUrl(spec.llm), main_source: sourceType(spec.llm),
+        mmproj_origin: spec.mmproj.origin, mmproj_url: displayUrl(spec.mmproj), mmproj_source: sourceType(spec.mmproj)
       }) + '[/VLMMETA]')
       const inference = new LlmLlamacpp({
         files: { model: [path.join(dir, mainName)], projectionModel: path.join(dir, projName) },
@@ -267,7 +262,7 @@ function runVlmCell (modelKey, mmprojKey) {
           gpu_layers: device === 'cpu' ? '0' : '98',
           temp: '0.0',
           seed: '42',
-          ctx_size: cfg.ctx_size,
+          ctx_size: spec.ctx_size,
           n_predict: '128',
           verbosity: '2', // surfaces `image slice encoded in N ms` on native stderr
           'reasoning-budget': '0' // disable Qwen3.5 thinking -> clean direct answers
@@ -284,12 +279,12 @@ function runVlmCell (modelKey, mmprojKey) {
         for (let rep = 0; rep < REPEATS; rep++) {
           // SEG per repeat so each run's `image slice encoded` lines attribute to its
           // own segment (stderr — same stream as the native timing lines).
-          console.error('[VLMSEG]' + JSON.stringify({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, id: item.id, rep }) + '[/VLMSEG]')
+          console.error('[VLMSEG]' + JSON.stringify({ cell: axis, source: SOURCE, model: spec.label, device, id: item.id, rep }) + '[/VLMSEG]')
           try {
             const r = await runOne(inference, getMediaPath(item.image), item.prompt)
             const st = r.stats || {}
             emitRow({
-              cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, rep,
+              cell: axis, source: SOURCE, model: spec.label, device, rep,
               task: item.task, id: item.id, metric: item.metric, gold: item.gold,
               pred: String(r.text).slice(0, 600),
               img: item.image, img_w: r.dims.w, img_h: r.dims.h,
@@ -301,20 +296,21 @@ function runVlmCell (modelKey, mmprojKey) {
             })
             ok++
           } catch (e) {
-            emitRow({ cell: axis, source: SOURCE, model: modelKey, mmproj: mmprojKey, device, rep, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) })
+            emitRow({ cell: axis, source: SOURCE, model: spec.label, device, rep, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) })
           }
         }
       }
-      t.ok(ok > 0, `${cell} [${dev}] produced ${ok}/${items.length} predictions`)
+      t.ok(ok > 0, `${spec.label} [${dev}] produced ${ok}/${items.length} predictions`)
     })
   }
 }
 
-// Loops the active preset's cells (model · mmproj) in one test file -> one mobile
-// test function -> one Device Farm spec -> single-spec dual-flagship -> Samsung S25.
-function runAllCells () {
-  const cells = PRESET.cells || config.allCells
-  for (const c of cells) runVlmCell(c.model, c.mmproj)
+// One test file -> one mobile test function -> one Device Farm spec -> Samsung S25.
+// two-models loads MODEL_1 then MODEL_2; several-sources loads the one sourcesModel
+// (the other engines run via cli-fixture-runner.cjs and append to the same log).
+function runAll () {
+  const models = MODE === 'several-sources' ? [config.sourcesModel] : config.models
+  for (const spec of models) runModel(spec)
 }
 
-module.exports = { runVlmCell, runAllCells, MODELS }
+module.exports = { runModel, runAll }

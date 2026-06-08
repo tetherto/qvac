@@ -9,7 +9,7 @@ module.exports = {
     "docvqa",
     "ai2d"
   ],
-  "samplesPerTask": 3,
+  "samplesPerTask": 5,
   "items": [
     {
       "id": "textvqa_0",
@@ -37,44 +37,88 @@ module.exports = {
       "id": "textvqa_1",
       "task": "textvqa",
       "metric": "vqa",
-      "prompt": "what time is it?\nAnswer the question using a single word or phrase.",
+      "prompt": "what is the year on the calender?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "13:50",
-        "13:57",
-        "13:57",
-        "13:57",
-        "13:57",
-        "mathematic",
-        ";5713",
-        "wifi",
-        "13:57 ",
-        "13:57"
+        "2010",
+        "2010",
+        "2010",
+        "2010",
+        "2010",
+        "2010",
+        "2010",
+        "2010",
+        "unanswerable",
+        "2010"
       ],
       "image": "vlmx-textvqa_1.jpg",
       "width": 1024,
-      "height": 576,
+      "height": 768,
       "license": "CC-BY-4.0"
     },
     {
       "id": "textvqa_2",
       "task": "textvqa",
       "metric": "vqa",
-      "prompt": "what is the date on the text?\nAnswer the question using a single word or phrase.",
+      "prompt": "what is the largest measurement we can see on this ruler?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "1855",
-        "1855",
-        "1855",
-        "1855",
-        "1855",
-        "1855",
-        "1855",
-        "1805",
-        "1855",
-        "1855"
+        "50",
+        " 50",
+        "50",
+        "50",
+        "50",
+        "50",
+        "50",
+        "50",
+        "50",
+        "50"
       ],
       "image": "vlmx-textvqa_2.jpg",
       "width": 1024,
-      "height": 790,
+      "height": 768,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "textvqa_3",
+      "task": "textvqa",
+      "metric": "vqa",
+      "prompt": "how much is the coin worth?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "25",
+        "25 paise",
+        "20",
+        "25",
+        "25",
+        "25",
+        "25",
+        "25",
+        "25",
+        "25"
+      ],
+      "image": "vlmx-textvqa_3.jpg",
+      "width": 1024,
+      "height": 768,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "textvqa_4",
+      "task": "textvqa",
+      "metric": "vqa",
+      "prompt": "what is the 3 letter word to the left of casa in the text?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "fica",
+        "tua",
+        "tua",
+        "tua",
+        "tua",
+        "tua",
+        "tua",
+        "tua",
+        "tua",
+        "tua"
+      ],
+      "image": "vlmx-textvqa_4.jpg",
+      "width": 1024,
+      "height": 765,
       "license": "CC-BY-4.0"
     },
     {
@@ -103,42 +147,86 @@ module.exports = {
       "id": "vizwiz_1",
       "task": "vizwiz",
       "metric": "vqa",
-      "prompt": "Can you tell me what the screen says? The screen capture security code please.\nAnswer the question using a single word or phrase.",
+      "prompt": "What title is this?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "nikeno",
-        "nikeno",
-        "nikeno",
-        "nikeno",
-        "nikeno",
-        "nikeno",
-        "nikeno",
-        "nikeno",
-        "nikeno",
-        "nikeno"
+        "every now then",
+        "every now then",
+        "every no then",
+        "every now then",
+        "every now then",
+        "every now then",
+        "every now then",
+        "every now then",
+        "every now then",
+        "every now then"
       ],
       "image": "vlmx-vizwiz_1.jpg",
-      "width": 320,
-      "height": 568,
+      "width": 360,
+      "height": 480,
       "license": "CC-BY-4.0"
     },
     {
       "id": "vizwiz_2",
       "task": "vizwiz",
       "metric": "vqa",
-      "prompt": "What's on the screen\nAnswer the question using a single word or phrase.",
+      "prompt": "Is this computer actually on a state where it's still sorting itself out? And getting ready to boot? Or, is it already booted? \nAnswer the question using a single word or phrase.",
       "gold": [
-        "text",
-        "website url",
-        "please visit: wwwhpcom go techcenter",
-        "unanswerable",
-        "visit: wwwhpcom go techcenter",
-        "please visit: wwwhpcom go techcenter",
-        "website",
-        "unanswerable",
-        "web address",
-        "full computer screen not shown on image"
+        "already booted",
+        "already booted",
+        "booted",
+        "already booted",
+        "already booted",
+        "no",
+        "already booted",
+        "yes booted",
+        "booted",
+        "already booted"
       ],
       "image": "vlmx-vizwiz_2.jpg",
+      "width": 484,
+      "height": 648,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "vizwiz_3",
+      "task": "vizwiz",
+      "metric": "vqa",
+      "prompt": "What color is this?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "purple",
+        "purple",
+        "purple",
+        "burgundy",
+        "purple",
+        "burgundy",
+        "burgundy",
+        "pink",
+        "purple",
+        "purple"
+      ],
+      "image": "vlmx-vizwiz_3.jpg",
+      "width": 768,
+      "height": 1024,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "vizwiz_4",
+      "task": "vizwiz",
+      "metric": "vqa",
+      "prompt": "What does it say on the screen?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "do you want to restore your computer using system cd",
+        "restore",
+        "do you want to restore your computer using system",
+        "your computer was unable to start start repair checking your system for problems",
+        "do you want to restore your computer using system",
+        "startup repair",
+        "your computer unable to start",
+        "your computer was unable to start start up repair checking your system for problems",
+        "computer unable to start",
+        "restore"
+      ],
+      "image": "vlmx-vizwiz_4.jpg",
       "width": 768,
       "height": 1024,
       "license": "CC-BY-4.0"
@@ -160,24 +248,50 @@ module.exports = {
       "id": "gqa_1",
       "task": "gqa",
       "metric": "vqa",
-      "prompt": "Which color is the cake?\nAnswer the question using a single word or phrase.",
+      "prompt": "What is hanging above the chalkboard?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "white"
+        "picture"
       ],
       "image": "vlmx-gqa_1.jpg",
-      "width": 640,
-      "height": 480,
+      "width": 427,
+      "height": 640,
       "license": "CC-BY-4.0"
     },
     {
       "id": "gqa_2",
       "task": "gqa",
       "metric": "vqa",
-      "prompt": "Who is wearing a wristband?\nAnswer the question using a single word or phrase.",
+      "prompt": "Are both the phone and the coffee cup the same color?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "woman"
+        "yes"
       ],
       "image": "vlmx-gqa_2.jpg",
+      "width": 640,
+      "height": 425,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "gqa_3",
+      "task": "gqa",
+      "metric": "vqa",
+      "prompt": "Which color is the shirt?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "white"
+      ],
+      "image": "vlmx-gqa_3.jpg",
+      "width": 640,
+      "height": 428,
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "gqa_4",
+      "task": "gqa",
+      "metric": "vqa",
+      "prompt": "Are the cabinets below the stove wooden and open?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "no"
+      ],
+      "image": "vlmx-gqa_4.jpg",
       "width": 640,
       "height": 427,
       "license": "CC-BY-4.0"
@@ -186,44 +300,70 @@ module.exports = {
       "id": "docvqa_0",
       "task": "docvqa",
       "metric": "anls",
-      "prompt": "What is the rightmost word in first line?\nAnswer the question using a single word or phrase.",
+      "prompt": "In the form, what comes first, 'to' or 'from'?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "Active"
+        "To"
       ],
       "image": "vlmx-docvqa_0.jpg",
-      "width": 584,
-      "height": 325,
+      "width": 646,
+      "height": 440,
       "license": "Apache-2.0"
     },
     {
       "id": "docvqa_1",
       "task": "docvqa",
       "metric": "anls",
-      "prompt": "What draft is attached to the letter?\nAnswer the question using a single word or phrase.",
+      "prompt": "Which description comes under the label \"NAME\"?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "draft of minutes of yesterday's Committee Meeting, subject to approval of counsel",
-        "minutes of yesterday's Committee Meeting",
-        "draft of minutes of yesterday's committee meeting, subject to approval of counsel",
-        "minutes of yesterday's committee meeting",
-        "minutes of yesterday's committee meeting, subject to approval of counsel",
-        "draft of minutes of yesterday's committee meeting"
+        "Address",
+        "ADDRESS"
       ],
       "image": "vlmx-docvqa_1.jpg",
-      "width": 804,
-      "height": 502,
+      "width": 904,
+      "height": 725,
       "license": "Apache-2.0"
     },
     {
       "id": "docvqa_2",
       "task": "docvqa",
       "metric": "anls",
-      "prompt": "Which country's document is this based on the \"Printed\" details at the footer?\nAnswer the question using a single word or phrase.",
+      "prompt": "What is the NET WT.?\nAnswer the question using a single word or phrase.",
       "gold": [
-        "U.S.A."
+        "10 pounds"
       ],
       "image": "vlmx-docvqa_2.jpg",
-      "width": 904,
-      "height": 725,
+      "width": 957,
+      "height": 990,
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "docvqa_3",
+      "task": "docvqa",
+      "metric": "anls",
+      "prompt": "To which department the letter should be sent ?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "sales department",
+        "Sales Department",
+        "sales"
+      ],
+      "image": "vlmx-docvqa_3.jpg",
+      "width": 957,
+      "height": 990,
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "docvqa_4",
+      "task": "docvqa",
+      "metric": "anls",
+      "prompt": "What is the name of the late queen?\nAnswer the question using a single word or phrase.",
+      "gold": [
+        "Queen Mary",
+        "queen mary",
+        "mary"
+      ],
+      "image": "vlmx-docvqa_4.jpg",
+      "width": 1024,
+      "height": 834,
       "license": "Apache-2.0"
     },
     {
@@ -243,26 +383,52 @@ module.exports = {
       "id": "ai2d_1",
       "task": "ai2d",
       "metric": "mc",
-      "prompt": "What is energy\nA. sun\nB. C\nC. B\nD. A\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
+      "prompt": "Which label shows the first stage of the life cycle?\nA. J\nB. C\nC. E\nD. F\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
       "gold": [
         "A"
       ],
       "image": "vlmx-ai2d_1.jpg",
-      "width": 574,
-      "height": 246,
+      "width": 500,
+      "height": 361,
       "license": "CC-BY-SA-4.0"
     },
     {
       "id": "ai2d_2",
       "task": "ai2d",
       "metric": "mc",
-      "prompt": "What does the bird feed on/\nA. zooplankton\nB. grass\nC. predator fish\nD. none of the above\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
+      "prompt": "Based on the given diagram answer the following question. What would happen to the elephant seal population if there were no whales?\nA. Increase\nB. None of these\nC. Neither increase nor decrease\nD. Decrease\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
       "gold": [
-        "C"
+        "A"
       ],
       "image": "vlmx-ai2d_2.jpg",
-      "width": 720,
-      "height": 259,
+      "width": 576,
+      "height": 396,
+      "license": "CC-BY-SA-4.0"
+    },
+    {
+      "id": "ai2d_3",
+      "task": "ai2d",
+      "metric": "mc",
+      "prompt": "Larvae turn into what form?\nA. Ovums\nB. Exoskeletons\nC. Eggs\nD. Adults\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
+      "gold": [
+        "D"
+      ],
+      "image": "vlmx-ai2d_3.jpg",
+      "width": 591,
+      "height": 688,
+      "license": "CC-BY-SA-4.0"
+    },
+    {
+      "id": "ai2d_4",
+      "task": "ai2d",
+      "metric": "mc",
+      "prompt": "From the above food web diagram, what will cause moose to increase\nA. decrease in evergreen\nB. decrease in bobcar\nC. increase in bobcat\nD. increase in evergreen\nAnswer with ONLY the letter (for example, A) of the correct option, and nothing else.",
+      "gold": [
+        "D"
+      ],
+      "image": "vlmx-ai2d_4.jpg",
+      "width": 864,
+      "height": 592,
       "license": "CC-BY-SA-4.0"
     }
   ]

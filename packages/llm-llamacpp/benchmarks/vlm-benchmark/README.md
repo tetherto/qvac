@@ -6,7 +6,7 @@ chosen configuration and renders a single consolidated report, so the same numbe
 are produced — and directly comparable — across platforms and backends.
 
 It is built to be **flexible first, with sensible defaults**: out of the box it
-compares Qwen3.5 mmproj-F16 vs mmproj-Q8 across a desktop and a mobile platform, but
+compares two models (Qwen3.5 vs Gemma) across a desktop and a mobile platform, but
 every axis (model, engine, platform, backend, tasks, samples) is configurable.
 
 ---
@@ -66,34 +66,45 @@ and varies another.
 |---|---|---|
 | Varies | the **model** | the **inference engine** |
 | Holds fixed | the engine (default `addon`) | the model |
-| Compares | two mmproj variants of one model **or** two different models | `addon` vs `fabric-cli` vs `upstream-cli` |
-| Default example | Qwen3.5 `mmproj-F16` vs `mmproj-Q8` | Qwen3.5 + q8 mmproj across all three engines |
+| Compares | `MODEL_1` vs `MODEL_2` | `addon` vs `fabric-cli` vs `upstream-cli` |
+| Default example | Qwen3.5 vs Gemma | Qwen3.5 + q8 mmproj across all three engines |
 | Targets | desktop + mobile, CPU + GPU | **desktop only** (CLIs are native binaries) |
-| Headline metric | mmproj vision-encode time (e.g. Q8 vs F16) | per-engine quality + encode/TTFT |
+| Headline metric | per-model quality + vision-encode time | per-engine quality + encode/TTFT |
 
-**two-models** is the general comparison: each "cell" is a `{model, mmproj}` pair, and
-the mode compares any two cells. Two cells of the same model with different mmproj
-quants → a quantization study (the default); two cells with different `model` keys → a
-head-to-head between models. The `base`/`candidate` config fields just label the two
-report columns.
+**two-models** compares the two complete VLMs configured as `MODEL_1` and `MODEL_2`.
+Each is a main LLM blob + an mmproj blob. They can be **two different models** (the
+default — Qwen3.5 vs Gemma) or **two blobs/variants of the same model** (point both at
+the same `llm` and change only the `mmproj`, e.g. F16 vs Q8). The report labels the two
+columns from each model's `label`.
 
 ---
 
 ## Configuration
 
 All behavior lives in **`config.cjs`** — the single source of truth, staged to the
-device so it configures every target. You tune the benchmark by editing presets (or
-adding new ones) and, for desktop, overriding individual fields by env.
+device so it configures every target. Two independent axes:
 
-**Presets** bundle the run settings. The shipped set is what we currently evaluate; it
-is not exhaustive — clone one and adjust:
+- **mode** (what's compared) — `mode` field / `matrix_mode` input.
+- **preset** (how much is run) — `defaultPreset` field / `matrix_preset` input.
 
-| preset | mode | what it runs |
+**The models** are explicit at the top of the config:
+
+| constant | used by | meaning |
 |---|---|---|
-| `compare` | two-models | **default** — Qwen3.5 f16 vs q8 mmproj · 5 tasks × 3 samples |
-| `full` | two-models | all model·mmproj cells × all tasks (incl. qwen-vs-gemma) |
-| `smoke` | two-models | 1 cell / 1 task / 1 sample — wiring check |
-| `sources` | several-sources | Qwen3.5 q8 across addon + fabric-cli + upstream-cli |
+| `MODEL_1`, `MODEL_2` | two-models | the two complete VLMs to compare |
+| `SOURCES_MODEL` | several-sources | the one VLM run through every engine |
+
+Each is a full spec — `label`, `name`, `ctx_size`, an `llm` blob and an `mmproj` blob
+(each blob has a `source` descriptor + optional `registry` annotation). Edit those
+constants to change what runs; nothing else needs to change.
+
+**Presets** are pure run-size bundles (independent of mode):
+
+| preset | tasks × samples × repeats | use |
+|---|---|---|
+| `smoke` | 1 task × 1 × 1 | a single inference per config — wiring check |
+| `base` | 5 tasks × 3 × 3 | **default** evaluation |
+| `full` | 5 tasks × 5 × 3 | the complete fixture |
 
 **Run knobs** (preset fields). On desktop each is overridable by env; mobile always
 uses the preset as written (Device Farm forwards no env):
@@ -125,7 +136,7 @@ true`, then pick the axes via the dispatch inputs below.
 | input | purpose |
 |---|---|
 | `matrix_mode` | `two-models` \| `several-sources` |
-| `matrix_preset` | `compare` \| `full` \| `smoke` \| `sources` (desktop) |
+| `matrix_preset` | run size: `smoke` \| `base` \| `full` (desktop) |
 | `matrix_engine` | fixed engine for two-models: `addon` \| `fabric-cli` \| `upstream-cli` |
 | `matrix_linux` | desktop legs, e.g. `linux-cpu,linux-gpu` |
 | `matrix_samples` | override samples/task (empty = preset default) |
@@ -170,8 +181,9 @@ The benchmark is meant to grow. The three common changes:
   downloading**, keeps only open-licensed datasets (allowlist), writes images to
   `./images/`, regenerates `fixture.data.cjs`, and updates `fixture.NOTICE.md`
   (per-image attribution). Adding a task = one manifest entry.
-- **Add models / variants.** Add a blob to the catalog in `config.cjs` with a `source`
-  descriptor, then reference it from a preset's `cells`.
+- **Change the models.** Edit `MODEL_1` / `MODEL_2` (two-models) or `SOURCES_MODEL`
+  (several-sources) in `config.cjs` — give each blob a `source` descriptor. To compare
+  two variants of one model, point both at the same `llm` and vary only the `mmproj`.
 - **Add platforms.** Desktop: add a case to the `matrix_linux` → runner map in the
   workflow `context` job. Mobile: change the Device Farm pool. No harness changes.
 
