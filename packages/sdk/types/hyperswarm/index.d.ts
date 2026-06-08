@@ -68,6 +68,7 @@ declare module "hyperswarm" {
     connect(remotePublicKey: Buffer, opts?: DhtConnectOptions): Connection;
     destroy(opts?: { force?: boolean }): Promise<void>;
     fullyBootstrapped(): Promise<void>;
+    bootstrapped: boolean;
   }
 
   export default class Hyperswarm extends EventEmitter {
