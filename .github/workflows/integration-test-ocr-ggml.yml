@@ -162,6 +162,41 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
+      # The self-hosted mac-mini-m4-gpu runner does not ship the AWS CLI (hosted
+      # macOS runners do). Install it user-local (no sudo) so the S3 model
+      # download below works. Mirrors integration-test-vla.yml.
+      - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
+        name: Install AWS CLI on macOS (user-local fallback for runners without pre-installed aws)
+        shell: bash
+        run: |
+          # 1. Already on PATH?
+          if command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI already on PATH: $(command -v aws)"
+            aws --version
+            exit 0
+          fi
+          # 2. Any known install location?
+          for p in /opt/homebrew/bin/aws /usr/local/bin/aws "$HOME/.local/aws-cli/aws"; do
+            if [ -x "$p" ]; then
+              echo "AWS CLI at $p; adding $(dirname "$p") to PATH"
+              echo "$(dirname "$p")" >> "$GITHUB_PATH"
+              "$p" --version
+              exit 0
+            fi
+          done
+          # 3. User-local install (extract AWSCLIV2.pkg into $HOME instead
+          # of using `installer -target /` which requires sudo).
+          echo "Installing AWS CLI v2 user-local..."
+          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+          rm -rf /tmp/awscli-expanded
+          pkgutil --expand-full /tmp/AWSCLIV2.pkg /tmp/awscli-expanded
+          mkdir -p "$HOME/.local"
+          rm -rf "$HOME/.local/aws-cli"
+          mv /tmp/awscli-expanded/aws-cli.pkg/Payload/aws-cli "$HOME/.local/aws-cli"
+          rm -rf /tmp/awscli-expanded /tmp/AWSCLIV2.pkg
+          echo "$HOME/.local/aws-cli" >> "$GITHUB_PATH"
+          "$HOME/.local/aws-cli/aws" --version
+
       - name: Download EasyOCR + Doctr GGUF model files
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
