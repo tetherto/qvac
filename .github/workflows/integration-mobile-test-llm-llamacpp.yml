@@ -114,11 +114,6 @@ jobs:
           path: addon
           fetch-depth: 0
 
-      - name: Stage benchmark files (pre-build)
-        if: inputs.pre_build_script != ''
-        working-directory: addon/packages/llm-llamacpp
-        run: node "${{ inputs.pre_build_script }}"
-
       - name: Validate mobile tests are up-to-date
         working-directory: addon/packages/llm-llamacpp
         run: npm run test:mobile:validate || true
@@ -131,6 +126,13 @@ jobs:
           addon-npm-name: '@qvac/llm-llamacpp'
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # Runs after Setup (which provisions Node via setup-node) and before the
+      # build so the bundler/test generator picks up the staged files.
+      - name: Stage benchmark files (pre-build)
+        if: inputs.pre_build_script != ''
+        working-directory: addon/packages/llm-llamacpp
+        run: node "${{ inputs.pre_build_script }}"
 
       - name: Build mobile app
         id: build

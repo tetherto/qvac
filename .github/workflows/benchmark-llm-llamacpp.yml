@@ -86,7 +86,7 @@ on:
       # Orthogonal to the source-engines benchmark above. When on, runs
       # the @qvac/llm-llamacpp addon over the vlm-matrix fixture (lmms-eval
       # quality + vision-encode speed) on Linux (and S25), driven by
-      # packages/llm-llamacpp/test/integration/vlm-matrix.config.cjs.
+      # packages/llm-llamacpp/benchmarks/vlm-benchmark/config.cjs.
       run_matrix:
         description: "── MATRIX ── run the config-driven VLM quality+speed matrix (addon, Linux + S25)"
         required: false
