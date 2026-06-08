@@ -130,22 +130,64 @@ bytes fetched from its canonical pinned URL). See `resolveBlob()` in `harness.cj
 
 ## Running it
 
-The benchmark is driven by the **Benchmark (LLM)** workflow
-(`.github/workflows/benchmark-llm-llamacpp.yml`). *Run workflow* → set `run_matrix =
-true`, then pick the axes via the dispatch inputs below.
+The benchmark is driven by the **Benchmark VLM (LLM)** workflow
+(`.github/workflows/benchmark-llm-llamacpp.yml`). *Run workflow* (or `gh workflow run`)
+→ set `run_matrix = true`, then pick the axes via the dispatch inputs below.
+
+> **Important:** the same workflow also hosts a *separate* source-engines benchmark
+> (the `desktop` job — addon/fabric/upstream legs across many platforms). It is **on by
+> default**. For a clean matrix-only run, turn it off:
+> `run_addon=false run_fabric_cli=false run_upstream_cli=false run_android=false`
+> (that zeroes the `desktop`/`summarize`/`android` jobs so only the matrix runs).
+
+### Launch configuration checklist
+
+Walk this top-to-bottom for your scenario. **Desktop legs honor every input below with
+no commit. The mobile (S25) leg ignores all inputs** — it always runs the committed
+`config.mode` + `defaultPreset`, so to change what the phone does you must edit
+`config.cjs` and push.
+
+- [ ] **Enable the matrix** — `run_matrix=true`.
+- [ ] **Silence the source-engines benchmark** (for a clean run) —
+      `run_addon=false run_fabric_cli=false run_upstream_cli=false run_android=false`.
+- [ ] **Mode** — `matrix_mode=two-models` | `several-sources`.
+- [ ] **Preset (run size)** — `matrix_preset=smoke` | `base` | `full`.
+- [ ] **Desktop platforms × backends** — `matrix_linux=linux-cpu,linux-gpu` (drop one to
+      run a single backend).
+- [ ] **Mobile** — `run_matrix_s25=true` to add Samsung S25 (two-models only; ignored for
+      several-sources). Confirm the committed `config.mode`/`defaultPreset` match what you
+      want on the phone.
+- [ ] **Engine** (two-models) — `matrix_engine=addon` (the fixed engine).
+- [ ] **Sources** (several-sources) — the engine set lives in `config.engines`; not a
+      dispatch input.
+- [ ] **Sample-count override** (optional) — `matrix_samples=N` (empty = preset default).
+- [ ] **Models / tasks / repeats** — not dispatch inputs; edit `config.cjs`
+      (`MODEL_1`/`MODEL_2`/`SOURCES_MODEL`, presets) and push.
 
 | input | purpose |
 |---|---|
+| `run_matrix` | **must be true** to run the matrix at all |
 | `matrix_mode` | `two-models` \| `several-sources` |
 | `matrix_preset` | run size: `smoke` \| `base` \| `full` (desktop) |
 | `matrix_engine` | fixed engine for two-models: `addon` \| `fabric-cli` \| `upstream-cli` |
 | `matrix_linux` | desktop legs, e.g. `linux-cpu,linux-gpu` |
 | `matrix_samples` | override samples/task (empty = preset default) |
-| `run_matrix_s25` | also run the mobile (S25) leg |
+| `run_matrix_s25` | also run the mobile (S25) leg (two-models only) |
+| `run_addon` / `run_fabric_cli` / `run_upstream_cli` / `run_android` | source-engines legs — set **false** for a matrix-only run |
 
-Locally you can run the harness directly under `bare` (desktop) by exporting
-`QVAC_VLM_MATRIX=1` plus any `QVAC_VLM_*` overrides; the several-sources CLIs are built
-and driven by `cli-fixture-runner.cjs`.
+**Example** — clean two-models, desktop CPU+GPU + S25, base preset:
+
+```bash
+gh workflow run benchmark-llm-llamacpp.yml --ref <branch> \
+  -f run_matrix=true -f matrix_mode=two-models -f matrix_preset=base \
+  -f matrix_engine=addon -f matrix_linux=linux-cpu,linux-gpu -f run_matrix_s25=true \
+  -f run_addon=false -f run_fabric_cli=false -f run_upstream_cli=false -f run_android=false
+```
+
+**Locally** you can run the harness directly under `bare` (desktop) by exporting
+`QVAC_VLM_MATRIX=1` plus any `QVAC_VLM_*` overrides (`QVAC_VLM_MODE`, `QVAC_VLM_PRESET`,
+`QVAC_VLM_SAMPLES`, `QVAC_VLM_REPEATS`, `QVAC_VLM_DEVICES`, `QVAC_VLM_TASKS`, `NO_GPU`);
+the several-sources CLIs are built and driven by `cli-fixture-runner.cjs`.
 
 ---
 

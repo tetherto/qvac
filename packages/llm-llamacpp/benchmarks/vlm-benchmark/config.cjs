@@ -3,10 +3,10 @@
 //
 // ─ What the benchmark compares ─
 //   two-models      MODEL_1 vs MODEL_2 — two complete VLMs, one inference engine.
-//                   They can be two DIFFERENT models (the default: Qwen3.5 vs Gemma)
-//                   or two BLOBS/VARIANTS of the same model (point both at the same
-//                   LLM and change only the mmproj, e.g. F16 vs Q8). Runs on every
-//                   target (desktop + mobile, CPU + GPU).
+//                   They can be two BLOBS/VARIANTS of the same model (the default:
+//                   Qwen3.5-0.8B with the mmproj at F16 vs Q8 — same LLM, different
+//                   projector) or two DIFFERENT models (point the two `llm` blobs at
+//                   different models). Runs on every target (desktop + mobile, CPU + GPU).
 //   several-sources SOURCES_MODEL across several inference engines (addon / fabric-cli
 //                   / upstream-cli). Desktop-only — the CLIs are native binaries.
 //
