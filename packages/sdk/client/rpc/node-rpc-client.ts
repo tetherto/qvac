@@ -178,19 +178,49 @@ function bestEffortUnlinkSocket(socketPath: string | null) {
   }
 }
 
-function snapshotAndResetState() {
-  const workerToClose = bareWorkerProc;
-  const serverToClose = ipcServer;
-  const socketPathToClose = currentSocketPath;
-
+function resetModuleState() {
   rpcInstance = null;
   rpcPromise = null;
   bareWorkerProc = null;
   ipcServer = null;
   currentSocketPath = null;
   workerLifeController = null;
+}
+
+function snapshotAndResetState() {
+  const workerToClose = bareWorkerProc;
+  const serverToClose = ipcServer;
+  const socketPathToClose = currentSocketPath;
+
+  resetModuleState();
 
   return { workerToClose, serverToClose, socketPathToClose };
+}
+
+// Shared cleanup for every init reject path: reset module state, stop the
+// worker + IPC server, and remove the socket so a failed start never leaks
+// resources. Mirrors closeSyncForExit without the planned-shutdown abort.
+function teardownFailedInit() {
+  const { workerToClose, serverToClose, socketPathToClose } =
+    snapshotAndResetState();
+
+  if (workerToClose) {
+    try {
+      workerToClose.kill("SIGTERM");
+    } catch (error) {
+      logger.debug("Failed to kill bare worker after init failure", { error });
+    }
+  }
+
+  if (serverToClose) {
+    try {
+      serverToClose.close();
+    } catch (error) {
+      logger.debug("Failed to close IPC server after init failure", { error });
+    }
+  }
+
+  bestEffortUnlinkSocket(socketPathToClose);
 }
 
 export function getWorkerLifeSignal(): AbortSignal | null {
@@ -241,12 +271,7 @@ function handlePostHandshakeExit(
 
   // Only clear module state if we're still the active spawn.
   if (workerLifeController === spawn.controller) {
-    rpcInstance = null;
-    rpcPromise = null;
-    bareWorkerProc = null;
-    ipcServer = null;
-    currentSocketPath = null;
-    workerLifeController = null;
+    resetModuleState();
   }
 
   try {
@@ -304,12 +329,7 @@ async function ensureRPC(): Promise<RPC> {
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      rpcPromise = null;
-      rpcInstance = null;
-      bareWorkerProc = null;
-      ipcServer = null;
-      currentSocketPath = null;
-      workerLifeController = null;
+      teardownFailedInit();
       reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS));
     }, RPC_INIT_TIMEOUT_MS);
 
@@ -328,12 +348,7 @@ async function ensureRPC(): Promise<RPC> {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      rpcPromise = null;
-      rpcInstance = null;
-      bareWorkerProc = null;
-      ipcServer = null;
-      currentSocketPath = null;
-      workerLifeController = null;
+      teardownFailedInit();
       reject(error);
     });
 
@@ -360,25 +375,13 @@ async function ensureRPC(): Promise<RPC> {
         });
       } catch (error) {
         // `spawn` resolves the bare binary synchronously and can throw before
-        // the worker exists. Without this, the throw escapes the `listen`
-        // callback as an uncaught exception and crashes the host process.
+        // the worker exists, so there is no process to emit "exit". Without
+        // this, the throw escapes the `listen` callback as an uncaught
+        // exception and crashes the host process.
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        rpcPromise = null;
-        rpcInstance = null;
-        bareWorkerProc = null;
-        currentSocketPath = null;
-        workerLifeController = null;
-        try {
-          ipcServer?.close();
-        } catch (closeError) {
-          logger.debug("Failed to close IPC server after spawn failure", {
-            closeError,
-          });
-        }
-        ipcServer = null;
-        bestEffortUnlinkSocket(spawnResources.socketPath);
+        teardownFailedInit();
         reject(mapBareSpawnError(error));
         return;
       }
@@ -398,12 +401,7 @@ async function ensureRPC(): Promise<RPC> {
             // Worker died before handshake — reject the init promise.
             settled = true;
             clearTimeout(timer);
-            rpcPromise = null;
-            rpcInstance = null;
-            bareWorkerProc = null;
-            ipcServer = null;
-            currentSocketPath = null;
-            workerLifeController = null;
+            teardownFailedInit();
             reject(
               new RPCInitTimeoutError(
                 RPC_INIT_TIMEOUT_MS,
