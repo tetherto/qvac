@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
 import { initSSE, sendSSE, endSSE } from '../lib/sse.js'
+import { drainCompletion, type OpenAiFinishReason } from '../adapters/openai/completion-result.js'
 import { requireModel } from '../plugins/require-model.js'
 import { logUnsupported } from '../plugins/log-unsupported.js'
 import {
@@ -56,7 +57,7 @@ async function runBlockingMulti (req: FastifyRequest, reply: FastifyReply, p: Sh
   })
 }
 
-async function runOne (req: FastifyRequest, p: SharedParams, prompt: string, index: number): Promise<{ public: { text: string; index: number; logprobs: null; finish_reason: 'stop' }; tokenCount: number; finishReason: 'stop' }> {
+async function runOne (req: FastifyRequest, p: SharedParams, prompt: string, index: number): Promise<{ public: { text: string; index: number; logprobs: null; finish_reason: OpenAiFinishReason }; tokenCount: number; finishReason: OpenAiFinishReason }> {
   const result = completion({
     modelId: p.sdkModelId,
     history: legacyPromptToHistory(prompt),
@@ -64,12 +65,11 @@ async function runOne (req: FastifyRequest, p: SharedParams, prompt: string, ind
     ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {})
   })
   req.bindCancel(result.requestId)
-  const text = await result.text
-  const tokenCount = text ? text.split(/\s+/).filter(Boolean).length : 0
+  const { text, completionTokens, finishReason } = await drainCompletion(result)
   return {
-    public: { text: text ?? '', index, logprobs: null, finish_reason: 'stop' },
-    tokenCount,
-    finishReason: 'stop'
+    public: { text, index, logprobs: null, finish_reason: finishReason },
+    tokenCount: completionTokens,
+    finishReason
   }
 }
 
@@ -94,15 +94,14 @@ async function runStreaming (req: FastifyRequest, reply: FastifyReply, p: Shared
     ...extra
   })
 
-  let tokenCount = 0
-  for await (const token of result.tokenStream) {
-    tokenCount++
-    sendSSE(raw, chunk(token, null))
-  }
+  const { completionTokens, finishReason } = await drainCompletion(
+    result,
+    (token) => sendSSE(raw, chunk(token, null))
+  )
 
-  req.server.qvac.logger.info(`  completions streaming done tokens=${tokenCount}`)
-  sendSSE(raw, chunk('', 'stop', {
-    usage: { prompt_tokens: 0, completion_tokens: tokenCount, total_tokens: tokenCount }
+  req.server.qvac.logger.info(`  completions streaming done tokens=${completionTokens} finish=${finishReason}`)
+  sendSSE(raw, chunk('', finishReason, {
+    usage: { prompt_tokens: 0, completion_tokens: completionTokens, total_tokens: completionTokens }
   }))
   endSSE(raw)
 }
