@@ -439,6 +439,31 @@ desktop and iOS (iOS has no Vulkan).
 > is the backstop that catches a numerically-broken Vulkan device that slips
 > through.
 
+### CPU-vs-Vulkan benchmark
+
+The `Benchmark Performance (OCR-GGML)` workflow reuses the integration suites,
+which already record **both** a Vulkan (`[GPU]`) and a forced-CPU (`[CPU]`) pass
+for each test on a GPU host (`runOcrComparison` / `runDoctrComparison`, tagged
+via the `backendIsGpu` stat). The shared perf-report aggregator
+(`scripts/perf-report/aggregate.js`) pairs those rows per device + test and
+renders a **"CPU → Vulkan Speedup"** section (markdown + HTML) showing
+`speedup = CPU mean / Vulkan mean` for total / detection / recognition time.
+The section only appears when a test ran on both backends, so non-GPU runs are
+unaffected.
+
+On mobile, Android also attempts Vulkan (see below); Mali devices (e.g. Pixel)
+fill the GPU column, while Adreno devices auto-fall-back to CPU. To compare
+**output quality** (not just speed) across backends, the Python quality
+benchmark takes a `--backend` flag:
+
+```bash
+python benchmarks/quality_eval/benchmark_100.py \
+  --pipeline easyocr \
+  --detector models/craft_mlt_25k.gguf \
+  --recognizer models/latin_g2.gguf \
+  --backend vulkan   # cpu (default) | vulkan — falls back to CPU when unavailable
+```
+
 ## Repository layout
 
 ```

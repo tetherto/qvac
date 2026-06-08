@@ -26,6 +26,16 @@ test("sdcppConfigSchema: accepts mode: 'video' and highNoiseDiffusionModelSrc", 
   t.is(result.success, true);
 });
 
+test("sdcppConfigSchema: accepts clipVisionModelSrc for Wan img2vid pipelines", (t: BrittleT) => {
+  const result = sdcppConfigSchema.safeParse({
+    mode: "video",
+    t5XxlModelSrc: "umt5_xxl_fp16.safetensors",
+    vaeModelSrc: "wan_2.1_vae.safetensors",
+    clipVisionModelSrc: "clip_vision_h.safetensors",
+  });
+  t.is(result.success, true);
+});
+
 test("videoStatsSchema: accepts video runtime stats fields", (t: BrittleT) => {
   const result = videoStatsSchema.safeParse({
     modelLoadMs: 500,
@@ -125,14 +135,46 @@ test("videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 
   );
 });
 
-test("videoStreamRequestSchema: rejects unsupported modes", (t: BrittleT) => {
-  const result = videoStreamRequestSchema.safeParse({
-    type: "videoStream",
+test("videoRequestSchema: accepts img2vid with init_image", (t: BrittleT) => {
+  const result = videoRequestSchema.safeParse({
+    modelId: "model-1",
+    mode: "img2vid",
+    prompt: "the subject waves gently",
+    init_image: PNG_B64,
+    strength: 0.85,
+    video_frames: 5,
+  });
+  t.is(result.success, true);
+});
+
+test("videoRequestSchema: rejects img2vid without init_image", (t: BrittleT) => {
+  const result = videoRequestSchema.safeParse({
     modelId: "model-1",
     mode: "img2vid",
     prompt: "animate this frame",
   });
   t.is(result.success, false);
+});
+
+test("videoRequestSchema: rejects txt2vid with init_image", (t: BrittleT) => {
+  const result = videoRequestSchema.safeParse({
+    modelId: "model-1",
+    mode: "txt2vid",
+    prompt: "a fox",
+    init_image: PNG_B64,
+  });
+  t.is(result.success, false);
+});
+
+test("videoStreamRequestSchema: accepts img2vid stream envelope", (t: BrittleT) => {
+  const result = videoStreamRequestSchema.safeParse({
+    type: "videoStream",
+    modelId: "model-1",
+    mode: "img2vid",
+    prompt: "animate this frame",
+    init_image: PNG_B64,
+  });
+  t.is(result.success, true);
 });
 
 test("videoStreamResponseSchema: accepts progress, output, and final stats chunks", (t: BrittleT) => {

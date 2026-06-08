@@ -224,6 +224,11 @@ jobs:
         with:
           artifact-pattern: perf-report-ocr-*-${{ github.run_number }}
           report-title: 'OCR-GGML Performance Report (All Platforms)'
+          # Drop desktop-only EasyOCR rows from the cross-platform table: the
+          # full-suite and canvasSize tests are `skip: isMobile`, so their rows
+          # can never have mobile data and only add empty columns here. They
+          # still run on desktop and remain in the per-device desktop reports.
+          exclude: 'full-suite|canvasSize lab_results'
 
   merge-guard:
     needs: [authorize, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests, label-gate]

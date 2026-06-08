@@ -25,6 +25,8 @@ describe('serve openapi', () => {
         '/v1/audio/transcriptions',
         '/v1/audio/translations',
         '/v1/audio/speech',
+        '/v1/audio/voices',
+        '/v1/audio/models',
         '/v1/images/generations',
         '/v1/images/edits',
         '/v1/files',

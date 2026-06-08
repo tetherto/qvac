@@ -41,6 +41,8 @@ import {
   isAddonContextOverflowError,
   parseContextOverflowMessage,
 } from "@/server/bare/plugins/llamacpp-completion/ops/context-overflow";
+import { isMobile } from "@/server/bare/registry/runtime-context-registry";
+import { stripMultiGpuKeys } from "@/server/utils/multi-gpu-mobile";
 
 
 function createLlmModel(
@@ -52,6 +54,16 @@ function createLlmModel(
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion);
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
+
+  if (isMobile()) {
+    const stripped = stripMultiGpuKeys(llmConfigStrings);
+    if (stripped.length > 0) {
+      getServerLogger().warn(
+        `[${ModelType.llamacppCompletion}:${modelId}] Multi-GPU parameters (${stripped.join(", ")}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`,
+      );
+    }
+  }
+
   const modelFiles = expandGGUFIntoShards(modelPath);
 
   const model = new LlmLlamacpp({

@@ -44,6 +44,7 @@
     "test:unit": "npx tsx --test test/*.test.ts",
     "test:bats": "npm run build && bats test/cli.bats",
     "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats",
+    "test:e2e:local": "npm run build && bats test/e2e-local.bats",
     "dev:link": "npm install ../sdk",
     "dev:unlink": "node scripts/dev-unlink.cjs"
   },
