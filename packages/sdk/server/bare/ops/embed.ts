@@ -104,6 +104,7 @@ export async function embed(
     ...(response.stats?.tokens_per_second !== undefined && { tokensPerSecond: response.stats.tokens_per_second }),
     ...(response.stats?.total_tokens !== undefined && { totalTokens: response.stats.total_tokens }),
     ...(response.stats?.backendDevice !== undefined && { backendDevice: response.stats.backendDevice }),
+    ...(response.stats?.context_size !== undefined && { contextSize: response.stats.context_size }),
   };
 
   const embeddingsArray = rawEmbeddings[0];
