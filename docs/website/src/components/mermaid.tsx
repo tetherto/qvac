@@ -1,7 +1,16 @@
 'use client';
 
-import { use, useEffect, useId, useState } from 'react';
+import { Suspense, use, useEffect, useId, useState } from 'react';
 import { useTheme } from 'next-themes';
+
+// Mermaid renders lazily on the client (dynamic `import('mermaid')` + an async
+// render surfaced through `use()`), so without a reserved box the diagram pops
+// in a frame or two after the rest of the page and shoves everything below it
+// down — a layout shift that reads as the content "flicker" on diagram pages.
+// Keep a stable minimum height across the pre-mount, suspended, and rendered
+// states; taller diagrams simply grow past it (downward growth from a floor is
+// not a shift). Sized to comfortably cover a small flowchart.
+const MERMAID_MIN_HEIGHT = 220;
 
 export function Mermaid({ chart }: { chart: string }) {
   const [mounted, setMounted] = useState(false);
@@ -10,8 +19,19 @@ export function Mermaid({ chart }: { chart: string }) {
     setMounted(true);
   }, []);
 
-  if (!mounted) return;
-  return <MermaidContent chart={chart} />;
+  // The reserved box is rendered identically on the server and client so the
+  // diagram swaps in without reflowing the surrounding content. The inner
+  // `Suspense` keeps the dynamic-import/render suspension local to this box
+  // instead of bubbling up and blanking a larger region of the page.
+  return (
+    <div style={{ minHeight: MERMAID_MIN_HEIGHT }}>
+      {mounted ? (
+        <Suspense fallback={null}>
+          <MermaidContent chart={chart} />
+        </Suspense>
+      ) : null}
+    </div>
+  );
 }
 
 const cache = new Map<string, Promise<unknown>>();
@@ -43,9 +63,10 @@ function MermaidContent({ chart }: { chart: string }) {
     // diagram (raw HTML / event handler / script tag injected via the
     // classDef bypasses fixed in 11.15.0) cannot reach the parent DOM,
     // cookies, localStorage, or run authenticated requests as the docs
-    // origin. The `allow-top-navigation-by-user-activation` permission
-    // keeps `click ...` directives working — see
-    // content/docs/sdk/examples/ai-tasks/voice-assistant.mdx.
+    // origin. Note this also means Mermaid `click ... "url"` directives are
+    // inert here — they rely on a JS handler the sandbox blocks — so diagrams
+    // must surface navigation as plain Markdown links beside the chart rather
+    // than as clickable nodes (see ai-capabilities/voice-assistant.mdx).
     securityLevel: 'sandbox',
     fontFamily: 'inherit',
     themeCSS: 'margin: 1.5rem auto 0;',
