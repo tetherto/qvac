@@ -168,9 +168,9 @@ export function extractVideoCreateParams (
   initImage: Uint8Array | undefined,
   modelId: string
 ): VideoClientParams {
-  const direct: Partial<VideoClientParams> = {}
+  const direct: Record<string, unknown> = {}
   for (const key of DIRECT_PARAM_KEYS) {
-    if (body[key] !== undefined) (direct as Record<string, unknown>)[key] = body[key]
+    if (body[key] !== undefined) direct[key] = body[key]
   }
   const base = {
     modelId,
@@ -181,7 +181,6 @@ export function extractVideoCreateParams (
   }
   if (initImage !== undefined) {
     const strength = coerceStrength(body.strength as string | number | undefined)
-    // TODO: remove cast once SDK PR #2436 (VideoImg2vidClientParams) lands
     return {
       ...base,
       mode: 'img2vid' as const,
@@ -189,7 +188,7 @@ export function extractVideoCreateParams (
       ...(strength !== undefined ? { strength } : {})
     } as unknown as VideoClientParams
   }
-  return { ...base, mode: 'txt2vid' }
+  return { ...base, mode: 'txt2vid' } as unknown as VideoClientParams
 }
 
 export { DEFAULT_FPS }
