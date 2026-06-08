@@ -17,3 +17,9 @@ async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-un
 async function runStreamingBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/streaming-benchmark.test.js', options)
 }
+
+module.exports = {
+  runAddonTest,
+  runRtfBenchmarkTest,
+  runStreamingBenchmarkTest
+}
