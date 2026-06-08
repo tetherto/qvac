@@ -25,6 +25,11 @@ This document describes the supported routes and how to configure `serve.models`
 | `GET` | `/v1/audio/models` | List READY text-to-speech models |
 | `POST` | `/v1/images/generations` | Diffusion txt2img (blocking + SSE) |
 | `POST` | `/v1/images/edits` | Diffusion img2img (multipart; blocking + SSE) |
+| `POST` | `/v1/videos` | Async video generation — txt2vid (JSON) or img2vid (multipart with `init_image`); returns a queued job |
+| `GET` | `/v1/videos` | List video generation jobs |
+| `GET` | `/v1/videos/{id}` | Get video job status and progress |
+| `GET` | `/v1/videos/{id}/content` | Download rendered video (`video/mp4` or `video/avi`) |
+| `DELETE` | `/v1/videos/{id}` | Cancel and remove a video job |
 | `POST` | `/v1/files` | Upload a file into the in-memory store (used by image URL responses + vector stores) |
 | `GET` | `/v1/files` | List in-memory files |
 | `GET` | `/v1/files/{id}` | File metadata |
