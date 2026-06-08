@@ -9,3 +9,11 @@ require('./integration-runtime.cjs')
 async function runAddonTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/addon.test.js', options)
 }
+
+async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/rtf-benchmark.test.js', options)
+}
+
+async function runStreamingBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/streaming-benchmark.test.js', options)
+}
