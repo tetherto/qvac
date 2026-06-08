@@ -339,10 +339,12 @@ function findVulkanBackendLib (dir) {
  *      accepts a known GPU backend ('vulkan' or 'metal', case-insensitive),
  *      else 'cpu'. This preserves a manual override (e.g. workflow_dispatch /
  *      forcing CPU, or forcing a specific GPU backend).
- *   2. Else, on Apple desktop (darwin), select 'metal'. ggml's Metal backend is
- *      compiled into the addon on darwin (no separate loadable lib to probe), so
- *      the suites request Metal directly; the addon falls back to CPU if no
- *      Metal device is present.
+ *   2. Else, on any Apple platform (desktop `darwin` AND iOS), select 'metal'.
+ *      ggml's Metal backend is compiled into the addon on every Apple target
+ *      via the qvac-fabric `gpu-backends` feature (no separate loadable lib to
+ *      probe), so the suites request Metal directly; the addon falls back to CPU
+ *      if no Metal device is present. iOS device-farm devices have real
+ *      (non-virtualized) Metal GPUs, so the iOS leg exercises Metal like desktop.
  *   3. On Android, auto-select 'vulkan': the `android-arm64` prebuild always
  *      ships `libqvac-ggml-vulkan.so`, so the suite (and the CPU↔Vulkan perf
  *      comparison) exercises Vulkan on-device. Mali GPUs (e.g. Pixel) run on
@@ -355,7 +357,7 @@ function findVulkanBackendLib (dir) {
  *      Local dev without merged prebuilds (no lib) stays on CPU. The addon
  *      gracefully falls back to CPU when no Vulkan GPU is present, so requesting
  *      'vulkan' is safe on non-GPU hosts.
- *   5. Else 'cpu' (iOS, and desktop without a GPU backend).
+ *   5. Else 'cpu' (desktop without a GPU backend).
  * @returns {'cpu'|'vulkan'|'metal'}
  */
 function getBackendDevice () {
@@ -366,11 +368,11 @@ function getBackendDevice () {
   if (override !== '') {
     return (override === 'vulkan' || override === 'metal') ? override : 'cpu'
   }
-  // Apple desktop ships the Metal backend compiled into the addon.
-  if (platform === 'darwin') return 'metal'
+  // Apple platforms (desktop + iOS) ship the Metal backend; request it on both.
+  if (platform === 'darwin' || platform === 'ios') return 'metal'
   // Android always ships the Vulkan backend lib; request Vulkan so the perf
   // suite fills the GPU column on Mali devices (Adreno safely falls back to CPU
-  // via the addon's Adreno guard). iOS has no Vulkan → CPU.
+  // via the addon's Adreno guard). (iOS is handled by the Metal branch above.)
   if (isMobile) return platform === 'android' ? 'vulkan' : 'cpu'
   if (findVulkanBackendLib(PREBUILDS_DIR)) return 'vulkan'
   return 'cpu'
