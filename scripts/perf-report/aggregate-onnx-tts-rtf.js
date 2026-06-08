@@ -169,7 +169,23 @@ function expandCanonicalReport (report, sourceFile) {
 
   for (const result of report.results) {
     const parsed = parseCanonicalTestLabel(result.test)
-    if (!parsed || !VALID_ENGINES.includes(parsed.engine)) continue
+    // Warn (don't silently drop) so a drift in the on-device benchmark
+    // test-label format — a variant with a space, a renamed engine, etc. —
+    // is visible in the summarize job log instead of producing silent holes
+    // in the findings table. Only warn for labels that *look* like benchmark
+    // labels (leading `[EP]` bracket); the same merged report legitimately
+    // carries the Supertonic integration perf entries (e.g. "Supertonic
+    // basic synthesis"), which are not benchmark rows and are skipped quietly.
+    if (!parsed) {
+      if (/^\s*\[[^\]]+\]/.test(String(result.test || ''))) {
+        console.warn(`[aggregate-onnx-tts-rtf] skipping benchmark-style result with unparseable label ${JSON.stringify(result.test)} (source: ${sourceFile})`)
+      }
+      continue
+    }
+    if (!VALID_ENGINES.includes(parsed.engine)) {
+      console.warn(`[aggregate-onnx-tts-rtf] skipping result with unknown engine '${parsed.engine}' from label ${JSON.stringify(result.test)} (source: ${sourceFile})`)
+      continue
+    }
 
     const m = result.metrics || {}
     if (parsed.streaming) {
