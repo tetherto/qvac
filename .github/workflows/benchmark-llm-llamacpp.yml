@@ -825,8 +825,13 @@ jobs:
           LOG: ${{ github.workspace }}/${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
           MODEL_DIR: ${{ github.workspace }}/${{ env.WORKDIR }}/test/model
           SAMPLES: ${{ inputs.matrix_samples }}
+          PRESET: ${{ inputs.matrix_preset }}
         run: |
-          SAMPLES="${SAMPLES:-3}"
+          # Match the addon leg's run size: samples + repeats come from the active
+          # preset in config.cjs (matrix_samples still overrides samples).
+          PRESET_SAMPLES=$(node -e "console.log((require('../vlm-benchmark/config.cjs').presets['$PRESET']||{}).samplesPerTask||3)")
+          REPEATS=$(node -e "console.log((require('../vlm-benchmark/config.cjs').presets['$PRESET']||{}).repeats||1)")
+          SAMPLES="${SAMPLES:-$PRESET_SAMPLES}"
           npm install --no-audit --no-fund
           node scripts/build-cli-sources.js --sources=fabric,upstream \
             --fabric-ref=${{ inputs.fabric_ref }} --upstream-ref=${{ inputs.upstream_ref }} \
@@ -840,7 +845,7 @@ jobs:
             echo ">> $1 over fixture ($2)"
             node ../vlm-benchmark/cli-fixture-runner.cjs \
               --binary "$3" --source "$1" --llm "$LLM" --mmproj "$MMPROJ" \
-              --backend "${{ matrix.backend }}" --samples "$SAMPLES" \
+              --backend "${{ matrix.backend }}" --samples "$SAMPLES" --repeats "$REPEATS" \
               --tasks textvqa,vizwiz,gqa,docvqa,ai2d \
               --main-origin "Qwen3.5-0.8B-Q8_0 (Registry)" \
               --mmproj-origin "Qwen3.5-0.8B mmproj-Q8_0 (Registry)" >> "$LOG" 2>&1 || echo "::warning::$1 run had errors"
