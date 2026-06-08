@@ -43,12 +43,13 @@ function hf (modelName, origin, repo, sha, file, registry) {
 }
 
 // ════════════════════ THE TWO MODELS UNDER TEST (two-models mode) ════════════════════
-// Edit these two to change what two-models compares. The defaults are two DIFFERENT
-// models. To instead compare two variants of ONE model, give both the same `llm` and
-// change only `mmproj` (and set distinct `label`s).
+// Edit these two to change what two-models compares. The default compares two BLOBS of
+// the SAME model — Qwen3.5-0.8B with the mmproj projector at F16 vs Q8 (same main LLM,
+// different vision-projector quant). To compare two DIFFERENT models instead, point the
+// two `llm` blobs at different models.
 const MODEL_1 = {
-  label: 'qwen3.5-0.8b', //   short id — report column + marker key (keep filesystem-safe)
-  name: 'Qwen3.5-0.8B', //    display name
+  label: 'qwen3.5-f16', //    short id — report column + marker key (keep filesystem-safe)
+  name: 'Qwen3.5-0.8B · mmproj-F16', // display name
   ctx_size: '4096',
   llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
@@ -57,13 +58,14 @@ const MODEL_1 = {
 }
 
 const MODEL_2 = {
-  label: 'gemma-4-e2b', //    short id
-  name: 'Gemma-4-E2B-it', //  display name
+  label: 'qwen3.5-q8', //     short id
+  name: 'Qwen3.5-0.8B · mmproj-Q8', // display name
   ctx_size: '4096',
-  llm: hf('reg-gemma-bartowski-Q4_K_M.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)}`,
-    'bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'google_gemma-4-E2B-it-Q4_K_M.gguf'),
-  mmproj: hf('reg-gemma-bartowski-mmproj-f16.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)} · mmproj-F16`,
-    'bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'mmproj-google_gemma-4-E2B-it-f16.gguf')
+  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+    'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
+  mmproj: hf('reg-qwen-mradermacher-mmproj-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
+    'mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf',
+    { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' })
 }
 
 // ════════════════════ THE MODEL FOR SOURCE COMPARISON (several-sources mode) ════════════════════
@@ -113,8 +115,8 @@ module.exports = {
   presets: {
     // smoke — 1 task, 1 image, 1 repeat: a single inference per config (wiring check).
     smoke: { tasks: ['textvqa'], samplesPerTask: 1, repeats: 1, devices: null },
-    // base — DEFAULT eval: 5 tasks × 3 samples × 3 repeats.
-    base: { tasks: TASKS, samplesPerTask: 3, repeats: 3, devices: null },
+    // base — DEFAULT eval: 5 tasks × 3 samples × 1 repeat.
+    base: { tasks: TASKS, samplesPerTask: 3, repeats: 1, devices: null },
     // full — 5 tasks × 5 samples × 3 repeats (the complete fixture).
     full: { tasks: TASKS, samplesPerTask: 5, repeats: 3, devices: null }
   }

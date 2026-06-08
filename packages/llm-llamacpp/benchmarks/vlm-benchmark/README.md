@@ -6,8 +6,9 @@ chosen configuration and renders a single consolidated report, so the same numbe
 are produced — and directly comparable — across platforms and backends.
 
 It is built to be **flexible first, with sensible defaults**: out of the box it
-compares two models (Qwen3.5 vs Gemma) across a desktop and a mobile platform, but
-every axis (model, engine, platform, backend, tasks, samples) is configurable.
+compares Qwen3.5-0.8B with its vision projector at F16 vs Q8 across a desktop and a
+mobile platform, but every axis (model, engine, platform, backend, tasks, samples) is
+configurable.
 
 ---
 
@@ -67,15 +68,15 @@ and varies another.
 | Varies | the **model** | the **inference engine** |
 | Holds fixed | the engine (default `addon`) | the model |
 | Compares | `MODEL_1` vs `MODEL_2` | `addon` vs `fabric-cli` vs `upstream-cli` |
-| Default example | Qwen3.5 vs Gemma | Qwen3.5 + q8 mmproj across all three engines |
+| Default example | Qwen3.5 mmproj-F16 vs mmproj-Q8 | Qwen3.5 + q8 mmproj across all three engines |
 | Targets | desktop + mobile, CPU + GPU | **desktop only** (CLIs are native binaries) |
 | Headline metric | per-model quality + vision-encode time | per-engine quality + encode/TTFT |
 
 **two-models** compares the two complete VLMs configured as `MODEL_1` and `MODEL_2`.
-Each is a main LLM blob + an mmproj blob. They can be **two different models** (the
-default — Qwen3.5 vs Gemma) or **two blobs/variants of the same model** (point both at
-the same `llm` and change only the `mmproj`, e.g. F16 vs Q8). The report labels the two
-columns from each model's `label`.
+Each is a main LLM blob + an mmproj blob. They can be **two blobs/variants of the same
+model** (the default — Qwen3.5 with the projector at F16 vs Q8: same `llm`, different
+`mmproj`) or **two different models** (point the two `llm` blobs at different models).
+The report labels the two columns from each model's `label`.
 
 ---
 
@@ -103,7 +104,7 @@ constants to change what runs; nothing else needs to change.
 | preset | tasks × samples × repeats | use |
 |---|---|---|
 | `smoke` | 1 task × 1 × 1 | a single inference per config — wiring check |
-| `base` | 5 tasks × 3 × 3 | **default** evaluation |
+| `base` | 5 tasks × 3 × 1 | **default** evaluation |
 | `full` | 5 tasks × 5 × 3 | the complete fixture |
 
 **Run knobs** (preset fields). On desktop each is overridable by env; mobile always
