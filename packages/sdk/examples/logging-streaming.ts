@@ -32,7 +32,6 @@ try {
   console.log("📥 Loading models (watch SDK logs above)...\n");
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 2048,
       temp: 0.7,
@@ -42,7 +41,6 @@ try {
 
   const embedModelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    modelType: "embeddings",
   });
 
   console.log("📡 Starting model-specific log streams...\n");

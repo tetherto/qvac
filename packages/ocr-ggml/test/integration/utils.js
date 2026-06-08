@@ -338,14 +338,19 @@ function findVulkanBackendLib (dir) {
  *   1. Explicit `OCR_GGML_BACKEND` (via `os.getEnv` then `process.env`) wins —
  *      'vulkan' only when exactly `vulkan` (case-insensitive), else 'cpu'. This
  *      preserves a manual override (e.g. workflow_dispatch / forcing CPU).
- *   2. Else, on desktop, auto-select 'vulkan' when a `ggml-vulkan` backend lib
+ *   2. On Android, auto-select 'vulkan': the `android-arm64` prebuild always
+ *      ships `libqvac-ggml-vulkan.so`, so the suite (and the CPU↔Vulkan perf
+ *      comparison) exercises Vulkan on-device. Mali GPUs (e.g. Pixel) run on
+ *      Vulkan; Adreno GPUs auto-fall-back to CPU via the OcrBackendSelection
+ *      Adreno guard. iOS has no Vulkan (Metal/MoltenVK) so it stays on CPU.
+ *   3. Else, on desktop, auto-select 'vulkan' when a `ggml-vulkan` backend lib
  *      is shipped in prebuilds/. On desktop CI the merged prebuilds/ contains
  *      that lib, so the suites attempt Vulkan; only the GPU runner actually
  *      executes on Vulkan, while other runners report an explicit CPU fallback.
  *      Local dev without merged prebuilds (no lib) stays on CPU. The addon
  *      gracefully falls back to CPU when no Vulkan GPU is present, so requesting
  *      'vulkan' is safe on non-GPU hosts.
- *   3. Else 'cpu'.
+ *   4. Else 'cpu'.
  * @returns {'cpu'|'vulkan'}
  */
 function getBackendDevice () {
@@ -355,7 +360,11 @@ function getBackendDevice () {
   if (String(raw).trim() !== '') {
     return String(raw).trim().toLowerCase() === 'vulkan' ? 'vulkan' : 'cpu'
   }
-  if (!isMobile && findVulkanBackendLib(PREBUILDS_DIR)) return 'vulkan'
+  // Android always ships the Vulkan backend lib; request Vulkan so the perf
+  // suite fills the GPU column on Mali devices (Adreno safely falls back to CPU
+  // via the addon's Adreno guard). iOS has no Vulkan → CPU.
+  if (isMobile) return platform === 'android' ? 'vulkan' : 'cpu'
+  if (findVulkanBackendLib(PREBUILDS_DIR)) return 'vulkan'
   return 'cpu'
 }
 
@@ -386,11 +395,20 @@ function createOcrGgml (params = {}, opts) {
 }
 
 /**
- * Records the resolved GPU/backend name on the shared performance reporter's
- * device block so `performance-report.json` carries a concrete name (e.g.
- * 'Vulkan0') on GPU runs even when the host's GPU probe returns null on a
- * minimal runner container. Only acts when a GPU backend was actually selected
- * and the name is non-empty; CPU runs leave `device.gpu` null.
+ * Records the resolved accelerator on the shared performance reporter's device
+ * block so `performance-report.json` (and the combined report's column header /
+ * per-device subline) names the ACTUAL hardware that ran inference rather than
+ * the bare ggml ordinal.
+ *
+ * The ggml backend name is just an ordinal (`Vulkan0`, `Vulkan1`, …) which is
+ * meaningless on its own — reviewers can't tell which physical GPU `Vulkan1`
+ * is (QVAC-19986 review feedback). `getBackendInfo()` also exposes
+ * `backendDescription` (the ggml device description, i.e. the real GPU model,
+ * e.g. "NVIDIA RTX A4000") and `deviceIndex`, so we surface the description and
+ * keep the ordinal as a suffix for provenance: `"NVIDIA RTX A4000 (Vulkan0)"`.
+ *
+ * Only acts when a GPU backend was actually selected; CPU runs leave
+ * `device.gpu` null. Falls back to the ordinal when no description is reported.
  *
  * @param {Object} ocrGgml - A loaded OcrGgml instance (call after `load()`)
  */
@@ -401,9 +419,18 @@ function setReportedGpuName (ocrGgml) {
     if (!info) return
     const isGpu = info.backendDevice === 'GPU' || info.backendDevice === 'IGPU'
     if (!isGpu) return
-    if (info.backendName && typeof _perfReporter.setDeviceGpu === 'function') {
-      _perfReporter.setDeviceGpu(info.backendName)
+    if (typeof _perfReporter.setDeviceGpu !== 'function') return
+
+    const ordinal = (info.backendName || '').trim()
+    const description = (info.backendDescription || '').trim()
+    // Prefer the real hardware description; append the ggml ordinal so a
+    // multi-GPU host still disambiguates which device served the run. Avoid a
+    // redundant "(Vulkan0)" when the description already equals the ordinal.
+    let label = description || ordinal
+    if (description && ordinal && description !== ordinal) {
+      label = `${description} (${ordinal})`
     }
+    if (label) _perfReporter.setDeviceGpu(label)
   } catch (_) {}
 }
 

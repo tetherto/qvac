@@ -281,6 +281,111 @@ function generateDeviceDetailTables (aggregated, addonType) {
   return lines.join('\n')
 }
 
+// QVAC-19942: CPU-vs-Vulkan comparison. The OCR perf suites tag each row
+// with a [CPU]/[GPU] EP token (see _parseTestEp) and, on a GPU host, record
+// BOTH a Vulkan ([GPU]) and a forced-CPU ([CPU]) pass for the same base test
+// (runOcrComparison / runDoctrComparison). This pairs those rows per
+// (device, base test) and computes the Vulkan speedup = CPU mean / GPU mean,
+// so the benchmark can surface the GPU win that justifies the backend.
+const _COMPARISON_METRICS = ['total_time_ms', 'detection_time_ms', 'recognition_time_ms']
+
+/**
+ * Pairs CPU and Vulkan (GPU) rows per (device, base test) and computes the
+ * Vulkan speedup. Speedup = CPU mean / GPU mean (>1 means Vulkan is faster).
+ *
+ * @param {Object} aggregated - Output of aggregateReports()
+ * @returns {{hasComparison: boolean, devices: Object}} `devices[device][base]`
+ *   = `{ cpu, gpu, speedup }`, each keyed by metric. `hasComparison` is false
+ *   when no base test has both a CPU and a GPU row, so single-backend reports
+ *   render unchanged.
+ */
+function computeBackendComparison (aggregated) {
+  const devices = (aggregated && aggregated.devices) || {}
+  const out = { hasComparison: false, devices: {} }
+
+  for (const [devName, tests] of Object.entries(devices)) {
+    const byBase = {}
+    for (const [fullName, metrics] of Object.entries(tests)) {
+      const { base, ep } = _parseTestEp(fullName)
+      if (ep !== 'CPU' && ep !== 'GPU') continue
+      if (!byBase[base]) byBase[base] = {}
+      byBase[base][ep] = metrics
+    }
+
+    for (const [base, eps] of Object.entries(byBase)) {
+      if (!eps.CPU || !eps.GPU) continue
+      const cpu = {}
+      const gpu = {}
+      const speedup = {}
+      for (const key of _COMPARISON_METRICS) {
+        const cpuMean = eps.CPU[key] && eps.CPU[key].mean
+        const gpuMean = eps.GPU[key] && eps.GPU[key].mean
+        if (cpuMean == null || gpuMean == null) continue
+        cpu[key] = cpuMean
+        gpu[key] = gpuMean
+        speedup[key] = gpuMean > 0 ? round2(cpuMean / gpuMean) : null
+      }
+      // Require a total-time pair — the headline metric of the comparison.
+      if (speedup.total_time_ms == null) continue
+      if (!out.devices[devName]) out.devices[devName] = {}
+      out.devices[devName][base] = { cpu, gpu, speedup }
+      out.hasComparison = true
+    }
+  }
+
+  return out
+}
+
+function _speedupCell (v) {
+  return v == null ? '-' : `${v.toFixed(2)}x`
+}
+
+/**
+ * Renders the "CPU → Vulkan Speedup" markdown section, or '' when there is no
+ * CPU/Vulkan pair to compare (so non-GPU / single-backend reports are
+ * unaffected).
+ *
+ * @param {Object} aggregated - Output of aggregateReports()
+ * @returns {string}
+ */
+function generateBackendComparison (aggregated) {
+  const cmp = computeBackendComparison(aggregated)
+  if (!cmp.hasComparison) return ''
+
+  const lines = []
+  lines.push('### CPU \u2192 Vulkan Speedup')
+  lines.push('')
+  lines.push('> Same-host CPU vs Vulkan for tests that ran on both backends. ' +
+    'Speedup = CPU mean / Vulkan mean (>1 means Vulkan is faster).')
+  lines.push('')
+
+  const deviceNames = Object.keys(cmp.devices)
+  const multiDevice = deviceNames.length > 1
+
+  for (const devName of deviceNames) {
+    if (multiDevice) {
+      lines.push(`#### ${_shortDeviceName(devName)}`)
+      lines.push('')
+    }
+    lines.push('| Test | CPU Total (ms) | Vulkan Total (ms) | Total Speedup | Detection Speedup | Recognition Speedup |')
+    lines.push('| --- | --- | --- | --- | --- | --- |')
+    for (const base of Object.keys(cmp.devices[devName]).sort()) {
+      const { cpu, gpu, speedup } = cmp.devices[devName][base]
+      lines.push('| ' + [
+        base,
+        cpu.total_time_ms == null ? '-' : Math.round(cpu.total_time_ms),
+        gpu.total_time_ms == null ? '-' : Math.round(gpu.total_time_ms),
+        _speedupCell(speedup.total_time_ms),
+        _speedupCell(speedup.detection_time_ms),
+        _speedupCell(speedup.recognition_time_ms)
+      ].join(' | ') + ' |')
+    }
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
 function generateMarkdownReport (aggregated, opts) {
   const options = opts || {}
   const lines = []
@@ -359,6 +464,20 @@ function generateMarkdownReport (aggregated, opts) {
     return (scenarioMap[devName] && scenarioMap[devName][testFull]) || 'default'
   }
 
+  // QVAC-18298: resolve the model id recorded for a test (from the first
+  // device that has it) so the summary tables can show a Model column. Lets
+  // rows whose label omits the model (e.g. the SmolVLM2 `[elephant]` image
+  // rows) still surface which weights produced the numbers, consistent with
+  // the VLM rows whose label already carries the model.
+  const categoricalMap = aggregated.categorical || {}
+  function _modelFor (testFull) {
+    for (const devName of deviceNames) {
+      const c = categoricalMap[devName] && categoricalMap[devName][testFull]
+      if (c && c.model) return c.model
+    }
+    return null
+  }
+
   function _formatMeanStd (summary, unit, round) {
     if (!summary || summary.mean == null) return '-'
     const m = round ? Math.round(summary.mean) : summary.mean.toFixed(2)
@@ -421,7 +540,16 @@ function generateMarkdownReport (aggregated, opts) {
         lines.push('')
       }
 
+      // QVAC-18298: add a Model column when any test in this scenario has a
+      // recorded model, so rows whose label omits the model (e.g. SmolVLM2
+      // `[elephant]`) still show which weights produced the numbers next to
+      // the VLM rows that carry it in the label. Column is dropped entirely
+      // for scenarios/addons with no model data, so existing reports are
+      // unchanged.
+      const scnHasModel = scopedTests.some(t => Boolean(_modelFor(t.full)))
+
       const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
+      if (scnHasModel) perfHeader.push('Model')
       for (const sn of scopedShortNames) perfHeader.push(sn)
       lines.push('| ' + perfHeader.join(' | ') + ' |')
       lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
@@ -429,6 +557,7 @@ function generateMarkdownReport (aggregated, opts) {
       for (const t of scopedTests) {
         const epCell = hasEp ? (t.ep ? `**${t.ep}**` : '-') : null
         const cells = hasEp ? [t.base, epCell] : [t.full]
+        if (scnHasModel) cells.push(_modelFor(t.full) || '-')
         for (const devName of scopedDeviceNames) {
           const metrics = devices[devName] && devices[devName][t.full]
           cells.push(_formatMeanStd(metrics && metrics[metricSpec.key], metricSpec.unit, metricSpec.round))
@@ -437,6 +566,14 @@ function generateMarkdownReport (aggregated, opts) {
       }
       lines.push('')
     }
+  }
+
+  // --- CPU → Vulkan Speedup (combined) ---
+  const backendComparison = generateBackendComparison(aggregated)
+  if (backendComparison) {
+    lines.push('---')
+    lines.push('')
+    lines.push(backendComparison)
   }
 
   // --- Quality Summary (combined) ---
@@ -909,6 +1046,54 @@ ${scenarioBlocks}
 }
 
 /**
+ * Builds the "CPU → Vulkan Speedup" HTML section, or '' when there is no
+ * CPU/Vulkan pair to compare. Mirrors the markdown `generateBackendComparison`.
+ *
+ * @param {Object} aggregated - Output of aggregateReports()
+ * @returns {string}
+ */
+function _buildHtmlBackendComparison (aggregated) {
+  const cmp = computeBackendComparison(aggregated)
+  if (!cmp.hasComparison) return ''
+
+  let html = ''
+  for (const [devName, bases] of Object.entries(cmp.devices)) {
+    let rows = ''
+    for (const base of Object.keys(bases).sort()) {
+      const { cpu, gpu, speedup } = bases[base]
+      const cells = [
+        escapeHtml(base),
+        cpu.total_time_ms == null ? '-' : Math.round(cpu.total_time_ms),
+        gpu.total_time_ms == null ? '-' : Math.round(gpu.total_time_ms),
+        _speedupCell(speedup.total_time_ms),
+        _speedupCell(speedup.detection_time_ms),
+        _speedupCell(speedup.recognition_time_ms)
+      ]
+      rows += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>'
+    }
+    html += `
+    <section class="device-card">
+      <h2 class="device-name">${escapeHtml(devName)}</h2>
+      <div class="test-block">
+        <table>
+          <thead><tr>
+            <th class="metric-col">Test</th>
+            <th>CPU Total (ms)</th>
+            <th>Vulkan Total (ms)</th>
+            <th>Total Speedup</th>
+            <th>Detection Speedup</th>
+            <th>Recognition Speedup</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </section>`
+  }
+
+  return html
+}
+
+/**
  * Generates a self-contained HTML performance report.
  *
  * @param {Object} aggregated - Output of aggregateReports()
@@ -1018,6 +1203,8 @@ function generateHtmlReport (aggregated, opts) {
   const detailSections = options.includeDeviceDetails
     ? _buildHtmlDetailSections(aggregated, options.addonType || 'vision')
     : ''
+
+  const backendComparisonSection = _buildHtmlBackendComparison(aggregated)
 
   let qualitySection = ''
   const qualityDetails = aggregated.quality_details || {}
@@ -1573,6 +1760,8 @@ function generateHtmlReport (aggregated, opts) {
 
 ${detailSections ? `<h2 class="section-divider">Per-Device Summary</h2>` + detailSections : ''}
 
+${backendComparisonSection ? `<h2 class="section-divider">CPU &#8594; Vulkan Speedup</h2>` + backendComparisonSection : ''}
+
 ${deviceCards}
 
 ${qualitySection ? `<h2 class="section-divider">Accuracy &amp; Quality</h2>` + qualitySection : ''}
@@ -1698,5 +1887,7 @@ module.exports = {
   generateMarkdownReport,
   generateDeviceDetailTables,
   generateHtmlReport,
+  computeBackendComparison,
+  generateBackendComparison,
   aggregateReports
 }

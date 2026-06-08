@@ -112,7 +112,6 @@ try {
   console.log("2️⃣  Loading model...");
   const modelId = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 4096,
       tools: true,

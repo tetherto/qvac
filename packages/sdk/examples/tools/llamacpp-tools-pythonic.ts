@@ -1,9 +1,4 @@
-import {
-  completion,
-  loadModel,
-  unloadModel,
-  type ToolCall,
-} from "@qvac/sdk";
+import { completion, loadModel, unloadModel, type ToolCall } from "@qvac/sdk";
 import { tools } from "./shared";
 
 const LFM_TOOL_HF =
@@ -12,7 +7,7 @@ const LFM_TOOL_HF =
 try {
   const modelId = await loadModel({
     modelSrc: LFM_TOOL_HF,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelConfig: { ctx_size: 4096, tools: true },
     onProgress: (progress) =>
       console.log(`Loading: ${progress.percentage.toFixed(1)}%`),

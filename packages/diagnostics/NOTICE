@@ -1,4 +1,19 @@
 @qvac/diagnostics
 Copyright 2026 Tether Data, S.A. de C.V.
 
-This product includes software developed by Tether Data, S.A. de C.V.
+This product includes third-party components under their
+respective licenses. @qvac/diagnostics itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  bare-os@3.9.1
+    https://github.com/holepunchto/bare-os
+  which-runtime@1.4.0
+    https://github.com/holepunchto/which-runtime
+

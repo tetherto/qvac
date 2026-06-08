@@ -51,7 +51,6 @@ try {
   console.log("Loading Parakeet (EOU) streaming model...");
   modelId = await loadModel({
     modelSrc: PARAKEET_EOU_120M_V1_Q8_0,
-    modelType: "parakeet",
     onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
   });
   console.log("Model loaded.\n");
