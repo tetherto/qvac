@@ -90,9 +90,12 @@ jobs:
           # Default optional fields when not specified in config
           ALL_PACKAGES=$(jq -c '[.[] | .pkg_manager //= "npm" | .needs_bare //= false | .tests_bare //= false]' .github/sdk-pod-checks.json)
 
+          # Gates the bare-sdk dep-parity check to dep/version changes only.
+          sdk_pkgjson_changed="false"
           if [ "$EVENT" = "workflow_dispatch" ]; then
             # workflow_dispatch: run all packages
             PACKAGES="$ALL_PACKAGES"
+            sdk_pkgjson_changed="true"
           else
             # Fetch PR head (available on the repo via pull refs)
             git fetch origin "refs/pull/${PR_NUMBER}/head"
@@ -102,9 +105,13 @@ jobs:
             PACKAGES=$(echo "$ALL_PACKAGES" | jq -c --arg files "$CHANGED_FILES" '[
               .[] | select(.path as $p | $files | split("\n") | any(startswith($p + "/")))
             ]')
+            if echo "$CHANGED_FILES" | grep -qx "packages/sdk/package.json"; then
+              sdk_pkgjson_changed="true"
+            fi
           fi
 
           echo "packages=${PACKAGES}" >> "$GITHUB_OUTPUT"
+          echo "sdk_pkgjson_changed=${sdk_pkgjson_changed}" >> "$GITHUB_OUTPUT"
           has_changes=$(echo "$PACKAGES" | jq -r 'if length > 0 then "true" else "false" end')
           echo "has_changes=${has_changes}" >> "$GITHUB_OUTPUT"
 
@@ -142,6 +149,7 @@ jobs:
         shell: bash
         env:
           PACKAGES: ${{ steps.detect.outputs.packages }}
+          SDK_PKGJSON_CHANGED: ${{ steps.detect.outputs.sdk_pkgjson_changed }}
           # Maintainer escape hatch: when this label is present the gate still
           # runs and logs failures, but reports success so an urgent fix can
           # land over a confirmed false-positive check. Audited via the label
@@ -269,6 +277,10 @@ jobs:
             run "test:e2e" npm run --if-present test:e2e
 
             if [ "$PKG" = "sdk" ]; then
+              # Assert bare-sdk stays in dep lockstep with sdk.
+              if [ "$SDK_PKGJSON_CHANGED" = "true" ]; then
+                run "bare-sdk deps parity" node "$WS/packages/bare-sdk/scripts/check-deps-vs-sdk.mjs"
+              fi
               if consumer_install_check; then
                 echo "  ok  [$PKG] consumer install"
               else

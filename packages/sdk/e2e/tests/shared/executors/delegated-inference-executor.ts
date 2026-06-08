@@ -272,17 +272,24 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
       await heartbeat({
         delegate: {
           providerPublicKey: randomHex(32),
-          timeout: (params.timeout ?? 3000) as number,
+          timeout: (params.timeout ?? 12000) as number,
         },
       });
       return { passed: false, output: "Should have thrown for unreachable provider" };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
 
-      if (isDelegationError(msg)) {
-        return { passed: true, output: `Unreachable provider detected: ${msg.substring(0, 120)}` };
+      // An unannounced key should fail discovery (PEER_NOT_FOUND) and surface
+      // the categorized message. A premature timeout (findPeer not exhausted in
+      // the budget) is still a valid delegation failure, just less specific —
+      // accept it so the networked test stays non-flaky.
+      if (msg.includes("not found on the DHT")) {
+        return { passed: true, output: `Unreachable provider categorized as not-found: ${msg.substring(0, 160)}` };
       }
-      return { passed: false, output: `Unexpected error (expected delegation error): ${msg.substring(0, 120)}` };
+      if (isDelegationError(msg)) {
+        return { passed: true, output: `Unreachable provider detected (uncategorized, likely timeout): ${msg.substring(0, 160)}` };
+      }
+      return { passed: false, output: `Unexpected error (expected delegation error): ${msg.substring(0, 160)}` };
     }
   }
 
