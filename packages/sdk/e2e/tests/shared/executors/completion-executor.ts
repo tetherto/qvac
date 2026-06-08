@@ -71,6 +71,9 @@ export class CompletionExecutor extends AbstractModelExecutor<
       if (test.testId === "completion-seed-reproducibility") {
         return [test.testId, this.seedReproducibility.bind(this)];
       }
+      if (test.testId === "completion-stop-reason-length") {
+        return [test.testId, this.stopReasonLength.bind(this)];
+      }
       return [test.testId, this.generic.bind(this)];
     }),
   ) as never;
@@ -215,6 +218,27 @@ export class CompletionExecutor extends AbstractModelExecutor<
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `completion stats failed: ${errorMsg}` };
     }
+  }
+
+  async stopReasonLength(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded("llm");
+    const run = completion({
+      modelId: llmModelId,
+      ...params,
+      stream: false,
+    } as CompletionFnParams);
+
+    const final = await run.final;
+    if (final.stopReason !== "length") {
+      return {
+        passed: false,
+        output: `Expected stopReason "length", got ${JSON.stringify(final.stopReason)}`,
+      };
+    }
+    return {
+      passed: true,
+      output: `stopReason is "length" as expected`,
+    };
   }
 
   async responseFormatJsonObject(
