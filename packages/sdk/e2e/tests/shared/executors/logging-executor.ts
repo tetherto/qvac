@@ -5,7 +5,6 @@ import {
   textToSpeech,
   translate,
   diffusion,
-  unloadModel,
   SDK_LOG_ID,
 } from "@qvac/sdk";
 import { type TestResult } from "@tetherto/qvac-test-suite";
@@ -235,14 +234,7 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
   private async runReload(testId: string): Promise<TestResult> {
     const dep = getRequiredMeta(testId, "dependency");
-
-    const originalModelId = this.resources.getModelId(dep);
-    if (originalModelId) {
-      await unloadModel({ modelId: originalModelId });
-      this.resources.unregister(originalModelId);
-    }
-
-    const reloadedModelId = await this.resources.ensureLoaded(dep);
+    const reloadedModelId = await this.resources.reload(dep);
 
     return collectLogs({
       testId,
