@@ -111,15 +111,22 @@ export function getCurrentVersion(
 
 /**
  * Build the URL to navigate to when the user picks a target series inside
- * a section. The current latest series maps to the bare `basePath`; any
- * other series maps to `basePath/<value>`.
+ * a section. The current latest series maps to `basePath/`; any other
+ * series maps to `basePath/<value>/`.
+ *
+ * Trailing slash is mandatory: these URLs are consumed by the browser-side
+ * version selector, and archived series slugs contain dots (`v0.8.x`).
+ * Sevalla's Pretty URLs treats a bare dotted final segment as a file
+ * request and 404s it before `_redirects` runs, so the bare→with-slash
+ * normalization never fires for them. Emitting the trailing-slash form
+ * directly lands on the `200` rewrite (see `public/_redirects`).
  */
 export function computeSectionVersionUrl(
   section: VersionedSection,
   targetVersion: string,
 ): string {
-  if (targetVersion === section.latestSeries) return section.basePath;
-  return `${section.basePath}/${targetVersion}`;
+  if (targetVersion === section.latestSeries) return `${section.basePath}/`;
+  return `${section.basePath}/${targetVersion}/`;
 }
 
 /**

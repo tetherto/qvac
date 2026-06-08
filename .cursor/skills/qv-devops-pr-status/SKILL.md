@@ -61,7 +61,7 @@ Required layout (in this exact order):
 2. **Headline summary** — one bold line restating the script summary counts (`N PRs need attention · X fully approved · Y need your re-review · Z stale`).
 3. **Roster line** — one-line listing of the roster:
    ```
-   Roster: `Proletter` (lead) + `darkynt`, `GiacomoSorbiWork`, `sidj-thr`, `tamer-hassan-tether`, `yauhenipankratovich-web`.
+   Roster: `Proletter` (lead) + `darkynt`, `GSServita`, `sidj-thr`, `tamer-hassan-tether`, `yauhenipankratovich-web`.
    ```
    Refresh from [.github/teams/devops.json](.github/teams/devops.json) on every run; do not hardcode if the file has drifted.
 4. **Headline analysis** — one short paragraph identifying the highest-leverage cluster in the queue (e.g., "Four `QVAC-18047` PRs all sit on team-lead approval only — fastest path to drain the queue."). Skip when the queue is empty.
