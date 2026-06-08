@@ -4,6 +4,7 @@ import {
   videosCreateBody,
   extractVideoCreateParams,
   nearestVideoFrameCount,
+  InvalidVideoStrengthError,
   DEFAULT_FPS
 } from '../src/serve/schemas/videos.js'
 import { createVideoJobsStore, type VideoJob } from '../src/serve/core/video-jobs-store.js'
@@ -75,9 +76,19 @@ describe('videosCreateBody (Zod validation)', () => {
     })
   })
 
-  it('rejects input_reference (img2vid not supported)', () => {
-    const result = expectIssue({ prompt: 'p', input_reference: { image_url: 'x' } }, 'input_reference')
-    assert.match(result.message, /image-to-video|not supported/i)
+  it('accepts init_image as a Buffer', () => {
+    const buf = Buffer.from('fake-png-bytes')
+    assert.equal(videosCreateBody.safeParse({ prompt: 'p', init_image: buf }).success, true)
+  })
+
+  it('accepts strength as a number', () => {
+    assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: 0.85 }).success, true)
+    assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: 0 }).success, true)
+    assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: 1 }).success, true)
+  })
+
+  it('accepts strength as a numeric string (multipart coercion handled by extractor)', () => {
+    assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: '0.85' }).success, true)
   })
 })
 
@@ -99,8 +110,8 @@ describe('nearestVideoFrameCount', () => {
 })
 
 describe('extractVideoCreateParams', () => {
-  it('returns mode=txt2vid and the modelId', () => {
-    const params = extractVideoCreateParams({ prompt: 'a cat surfing' }, 'sdk-vid-1')
+  it('returns mode=txt2vid when no initImage', () => {
+    const params = extractVideoCreateParams({ prompt: 'a cat surfing' }, undefined, 'sdk-vid-1')
     assert.equal(params.modelId, 'sdk-vid-1')
     assert.equal(params.mode, 'txt2vid')
     assert.equal(params.prompt, 'a cat surfing')
@@ -111,26 +122,70 @@ describe('extractVideoCreateParams', () => {
   })
 
   it('translates size → width/height', () => {
-    const params = extractVideoCreateParams({ prompt: 'p', size: '480x832' }, 'm')
+    const params = extractVideoCreateParams({ prompt: 'p', size: '480x832' }, undefined, 'm')
     assert.equal(params.width, 480)
     assert.equal(params.height, 832)
   })
 
   it('translates seconds → video_frames using default fps', () => {
-    const params = extractVideoCreateParams({ prompt: 'p', seconds: '4' }, 'm')
+    const params = extractVideoCreateParams({ prompt: 'p', seconds: '4' }, undefined, 'm')
     assert.equal(params.video_frames, 4 * DEFAULT_FPS + 1)
   })
 
   it('translates seconds → video_frames using explicit fps', () => {
-    const params = extractVideoCreateParams({ prompt: 'p', seconds: '2', fps: 24 }, 'm')
+    const params = extractVideoCreateParams({ prompt: 'p', seconds: '2', fps: 24 }, undefined, 'm')
     assert.equal(params.fps, 24)
     assert.equal(params.video_frames, 49)
   })
 
   it('passes through seed and steps when present', () => {
-    const params = extractVideoCreateParams({ prompt: 'p', seed: 42, steps: 1 }, 'm')
+    const params = extractVideoCreateParams({ prompt: 'p', seed: 42, steps: 1 }, undefined, 'm')
     assert.equal(params.seed, 42)
     assert.equal(params.steps, 1)
+  })
+
+  describe('img2vid mode', () => {
+    const initImage = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+
+    it('returns mode=img2vid with init_image when initImage is provided', () => {
+      const params = extractVideoCreateParams({ prompt: 'turns and smiles' }, initImage, 'm')
+      assert.equal(params.mode, 'img2vid')
+      assert.equal((params as Record<string, unknown>).init_image, initImage)
+      assert.equal(params.prompt, 'turns and smiles')
+    })
+
+    it('includes coerced strength when provided as number', () => {
+      const params = extractVideoCreateParams({ prompt: 'p', strength: 0.85 }, initImage, 'm')
+      assert.equal((params as Record<string, unknown>).strength, 0.85)
+    })
+
+    it('coerces strength from string to float', () => {
+      const params = extractVideoCreateParams({ prompt: 'p', strength: '0.5' }, initImage, 'm')
+      assert.equal((params as Record<string, unknown>).strength, 0.5)
+    })
+
+    it('omits strength when not provided', () => {
+      const params = extractVideoCreateParams({ prompt: 'p' }, initImage, 'm')
+      assert.equal('strength' in params, false)
+    })
+
+    it('throws InvalidVideoStrengthError for out-of-range strength', () => {
+      assert.throws(
+        () => extractVideoCreateParams({ prompt: 'p', strength: 1.5 }, initImage, 'm'),
+        InvalidVideoStrengthError
+      )
+      assert.throws(
+        () => extractVideoCreateParams({ prompt: 'p', strength: -0.1 }, initImage, 'm'),
+        InvalidVideoStrengthError
+      )
+    })
+
+    it('throws InvalidVideoStrengthError for non-numeric strength string', () => {
+      assert.throws(
+        () => extractVideoCreateParams({ prompt: 'p', strength: 'high' }, initImage, 'm'),
+        InvalidVideoStrengthError
+      )
+    })
   })
 })
 
