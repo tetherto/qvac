@@ -10,7 +10,10 @@ interface VideoExecutionSummary {
   };
 }
 
-function validateTxt2vidSmoke(result: unknown): TestResult {
+function validateVideoSmoke(
+  result: unknown,
+  expected: { frames: number; fps: number; label: string },
+): TestResult {
   if (!result || typeof result !== "object") {
     return { passed: false, output: "Missing video execution summary" };
   }
@@ -39,24 +42,32 @@ function validateTxt2vidSmoke(result: unknown): TestResult {
     return { passed: false, output: "Output buffer is not an AVI RIFF container" };
   }
 
-  if (summary.stats?.videoFrames !== 5) {
+  if (summary.stats?.videoFrames !== expected.frames) {
     return {
       passed: false,
-      output: `Expected stats.videoFrames=5, got ${summary.stats?.videoFrames ?? "missing"}`,
+      output: `Expected stats.videoFrames=${expected.frames}, got ${summary.stats?.videoFrames ?? "missing"}`,
     };
   }
 
-  if (summary.stats?.fps !== 16) {
+  if (summary.stats?.fps !== expected.fps) {
     return {
       passed: false,
-      output: `Expected stats.fps=16, got ${summary.stats?.fps ?? "missing"}`,
+      output: `Expected stats.fps=${expected.fps}, got ${summary.stats?.fps ?? "missing"}`,
     };
   }
 
   return {
     passed: true,
-    output: `Generated AVI (${summary.outputs[0]!.length} bytes) with ${summary.stats.videoFrames} frames @ ${summary.stats.fps} fps`,
+    output: `${expected.label} generated AVI (${summary.outputs[0]!.length} bytes) with ${summary.stats.videoFrames} frames @ ${summary.stats.fps} fps`,
   };
+}
+
+function validateTxt2vidSmoke(result: unknown): TestResult {
+  return validateVideoSmoke(result, { frames: 5, fps: 16, label: "txt2vid" });
+}
+
+function validateImg2vidSmoke(result: unknown): TestResult {
+  return validateVideoSmoke(result, { frames: 5, fps: 16, label: "img2vid" });
 }
 
 export const videoTxt2vidSmoke: TestDefinition = {
@@ -79,4 +90,28 @@ export const videoTxt2vidSmoke: TestDefinition = {
   },
 };
 
-export const videoTests = [videoTxt2vidSmoke];
+export const videoImg2vidSmoke: TestDefinition = {
+  testId: "video-basic-img2vid",
+  params: {
+    mode: "img2vid",
+    prompt: "a scientist walking through a sunlit laboratory",
+    init_image: "diffusion-img2img-source-256.png",
+    video_frames: 5,
+    fps: 16,
+    steps: 2,
+    seed: 42,
+    strength: 0.85,
+    flow_shift: 3.0,
+    cfg_scale: 6.0,
+    vae_tiling: true,
+  },
+  expectation: { validation: "function", fn: validateImg2vidSmoke },
+  suites: ["smoke"],
+  metadata: {
+    category: "video",
+    dependency: "video-img2vid",
+    estimatedDurationMs: 300000,
+  },
+};
+
+export const videoTests = [videoTxt2vidSmoke, videoImg2vidSmoke];

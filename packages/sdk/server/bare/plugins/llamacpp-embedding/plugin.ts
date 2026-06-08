@@ -12,10 +12,12 @@ import {
   type PluginModelResult,
   type EmbedConfig,
 } from "@/schemas";
-import { createStreamLogger, registerAddonLogger } from "@/logging";
+import { createStreamLogger, registerAddonLogger, getServerLogger } from "@/logging";
 import { expandGGUFIntoShards } from "@/server/utils";
 import { embed } from "@/server/bare/ops/embed";
 import { forwardModelExecution } from "@/profiling/model-execution";
+import { isMobile } from "@/server/bare/registry/runtime-context-registry";
+import { stripMultiGpuKeys } from "@/server/utils/multi-gpu-mobile";
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
@@ -75,6 +77,16 @@ function createEmbeddingsModel(
   registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger);
 
   const config = transformEmbedConfig(embedConfig);
+
+  if (isMobile()) {
+    const stripped = stripMultiGpuKeys(config);
+    if (stripped.length > 0) {
+      getServerLogger().warn(
+        `[${ModelType.llamacppEmbedding}:${modelId}] Multi-GPU parameters (${stripped.join(", ")}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`,
+      );
+    }
+  }
+
   const modelFiles = expandGGUFIntoShards(modelPath);
 
   const model = new EmbedLlamacpp({

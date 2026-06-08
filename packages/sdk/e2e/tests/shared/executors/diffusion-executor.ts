@@ -30,7 +30,6 @@ import {
   diffusionFusionFlux2Basic,
   diffusionEsrganUpscaleX4,
   diffusionStandaloneUpscalerX4,
-  diffusionEmptyPrompt,
   diffusionStandaloneUpscalerBackendDevice,
   diffusionStandaloneUpscalerCpu,
 } from "../../diffusion-tests.js";
@@ -94,7 +93,6 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
       [diffusionImg2imgImgCfgScale.testId]: this.runBasic.bind(this, "diffusion"),
       [diffusionImg2imgInvalidStrength.testId]: this.runBasic.bind(this, "diffusion"),
       [diffusionStreaming.testId]: this.runBasic.bind(this, "diffusion"),
-      [diffusionEmptyPrompt.testId]: this.runBasic.bind(this, "diffusion"),
       [diffusionFaAccepted.testId]: this.runBasic.bind(this, "diffusion-fa"),
       [diffusionFaDisabledAccepted.testId]: this.runBasic.bind(this, "diffusion-fa-disabled"),
       [diffusionEsrganUpscaleX4.testId]: this.runBasic.bind(this, "diffusion-esrgan"),

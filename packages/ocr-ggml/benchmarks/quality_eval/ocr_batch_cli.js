@@ -7,6 +7,7 @@
  *   bare ocr_batch_cli.js --input <file> --output <file>
  *                         --detector <path> --recognizer <path>
  *                         [--pipeline easyocr|doctr] [--lang en]
+ *                         [--backend cpu|vulkan]
  *
  * Input file: one image path per line
  * Output file: one JSON result per line (JSONL, same order as input)
@@ -29,6 +30,7 @@ let outputFile = null
 let detectorPath = null
 let recognizerPath = null
 let pipeline = 'easyocr'
+let backendDevice = null
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--lang' && args[i + 1]) {
@@ -48,6 +50,9 @@ for (let i = 0; i < args.length; i++) {
     i++
   } else if (args[i] === '--pipeline' && args[i + 1]) {
     pipeline = args[i + 1]
+    i++
+  } else if (args[i] === '--backend' && args[i + 1]) {
+    backendDevice = args[i + 1]
     i++
   }
 }
@@ -126,6 +131,12 @@ async function main () {
     if (pipeline !== 'easyocr') {
       params.pipelineType = pipeline
     }
+    // QVAC-19942: opt into a specific ggml backend (cpu | vulkan) so the
+    // quality benchmark can confirm Vulkan output matches CPU. Defaults to the
+    // addon default (cpu) when the flag is omitted.
+    if (backendDevice) {
+      params.backendDevice = backendDevice
+    }
 
     const loadStart = Date.now()
     model = new OcrGgml({
@@ -136,6 +147,16 @@ async function main () {
     await model.load()
     const loadTime = Date.now() - loadStart
     console.error('MODEL_READY:' + loadTime)
+
+    // Report the backend the addon actually resolved (it transparently falls
+    // back to CPU when Vulkan is requested but unavailable) so the caller can
+    // label results truthfully.
+    if (typeof model.getBackendInfo === 'function') {
+      const info = model.getBackendInfo()
+      if (info) {
+        console.error('BACKEND:' + (info.backendName || info.backendDevice || 'unknown'))
+      }
+    }
 
     const results = []
     for (let i = 0; i < imagePaths.length; i++) {
