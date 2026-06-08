@@ -1,16 +1,7 @@
 diff --git a/node_modules/fumadocs-ui/dist/components/sidebar/base.js b/node_modules/fumadocs-ui/dist/components/sidebar/base.js
-index 1de0767..0a1e1f1 100644
+index 1de0767..223c00e 100644
 --- a/node_modules/fumadocs-ui/dist/components/sidebar/base.js
 +++ b/node_modules/fumadocs-ui/dist/components/sidebar/base.js
-@@ -1,7 +1,7 @@
- 'use client';
- import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
- import { ChevronDown, ExternalLink } from '@fumadocs/ui/icons';
--import { createContext, use, useEffect, useMemo, useRef, useState, } from 'react';
-+import { createContext, use, useEffect, useLayoutEffect, useMemo, useRef, useState, } from 'react';
- import Link from 'fumadocs-core/link';
- import { useOnChange } from 'fumadocs-core/utils/use-on-change';
- import { cn } from '@fumadocs/ui/cn';
 @@ -104,7 +104,7 @@ export function SidebarDrawerContent({ className, children, ...props }) {
      return (_jsx(Presence, { present: open, children: ({ present }) => (_jsx("aside", { id: "nd-sidebar-mobile", "data-state": state, className: cn(!present && 'invisible', className), ...props, children: children })) }));
  }
@@ -20,22 +11,3 @@ index 1de0767..0a1e1f1 100644
                  maskImage: 'linear-gradient(to bottom, transparent, white 12px, white calc(100% - 12px), transparent)',
              }, children: props.children }) }));
  }
-@@ -173,9 +173,17 @@ export function SidebarCollapseTrigger(props) {
-             setCollapsed((prev) => !prev);
-         }, ...props, children: props.children }));
- }
-+// QVAC patch: reveal the active sidebar entry BEFORE paint instead of after.
-+// The upstream `useEffect` runs post-paint, so the new page first paints with
-+// a deep active entry (e.g. Voice assistant / API / Release notes) off-screen
-+// and then the sidebar's internal scroll viewport snaps to it — the visible
-+// "jump". A layout effect performs the same `scrollMode: 'if-needed'` scroll
-+// before the browser paints, so the entry is already in place on first frame.
-+// Guarded to `useEffect` on the server to avoid the SSR layout-effect warning.
-+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
- function useAutoScroll(active, ref) {
-     const { mode } = useSidebar();
--    useEffect(() => {
-+    useIsomorphicLayoutEffect(() => {
-         if (active && ref.current) {
-             scrollIntoView(ref.current, {
-                 boundary: document.getElementById(mode === 'drawer' ? 'nd-sidebar-mobile' : 'nd-sidebar'),

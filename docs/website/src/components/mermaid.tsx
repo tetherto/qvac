@@ -4,14 +4,14 @@ import { Suspense, use, useEffect, useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 
 // Mermaid renders lazily on the client (dynamic `import('mermaid')` + an async
-// render surfaced through `use()`), so without a reserved box the diagram pops
-// in a frame or two after the rest of the page and shoves everything below it
-// down — a layout shift that reads as the content "flicker" on diagram pages.
-// Keep a stable minimum height across the pre-mount, suspended, and rendered
-// states; taller diagrams simply grow past it (downward growth from a floor is
-// not a shift). Sized to comfortably cover a small flowchart.
-const MERMAID_MIN_HEIGHT = 220;
-
+// render surfaced through `use()`), so the diagram appears a frame or two after
+// the rest of the page. We intentionally do not reserve a height for it: the
+// diagram's rendered height depends on its type, content and the viewport
+// width, so any fixed placeholder either leaves a permanent gap under short
+// diagrams or fails to cover tall ones. Instead we let the content below simply
+// shift down when the diagram renders. The `Suspense` boundary still keeps the
+// dynamic-import/render suspension local to this component instead of bubbling
+// up and blanking a larger region of the page (which would read as flicker).
 export function Mermaid({ chart }: { chart: string }) {
   const [mounted, setMounted] = useState(false);
 
@@ -19,18 +19,12 @@ export function Mermaid({ chart }: { chart: string }) {
     setMounted(true);
   }, []);
 
-  // The reserved box is rendered identically on the server and client so the
-  // diagram swaps in without reflowing the surrounding content. The inner
-  // `Suspense` keeps the dynamic-import/render suspension local to this box
-  // instead of bubbling up and blanking a larger region of the page.
+  if (!mounted) return null;
+
   return (
-    <div style={{ minHeight: MERMAID_MIN_HEIGHT }}>
-      {mounted ? (
-        <Suspense fallback={null}>
-          <MermaidContent chart={chart} />
-        </Suspense>
-      ) : null}
-    </div>
+    <Suspense fallback={null}>
+      <MermaidContent chart={chart} />
+    </Suspense>
   );
 }
 
@@ -57,17 +51,18 @@ function MermaidContent({ chart }: { chart: string }) {
 
   mermaid.initialize({
     startOnLoad: false,
-    // 'sandbox' renders the diagram inside an `<iframe sandbox="allow-top-
-    // navigation-by-user-activation allow-popups">`. Scripts cannot run
-    // inside the iframe at all (no `allow-scripts`), so even a malicious
-    // diagram (raw HTML / event handler / script tag injected via the
-    // classDef bypasses fixed in 11.15.0) cannot reach the parent DOM,
-    // cookies, localStorage, or run authenticated requests as the docs
-    // origin. Note this also means Mermaid `click ... "url"` directives are
-    // inert here — they rely on a JS handler the sandbox blocks — so diagrams
-    // must surface navigation as plain Markdown links beside the chart rather
-    // than as clickable nodes (see ai-capabilities/voice-assistant.mdx).
-    securityLevel: 'sandbox',
+    // 'strict' renders the SVG inline and runs it through DOMPurify, encoding
+    // any HTML in labels and disabling `click` directives. We do NOT use
+    // 'sandbox': that mode wraps the diagram in an `<iframe>` whose height is
+    // pinned to the SVG's unscaled `viewBox` height while its width is 100%
+    // (see mermaid `putIntoIFrame`), so wide diagrams (e.g. sequence diagrams)
+    // scale down to the column width and leave a large empty gap below them.
+    // Inlining the SVG lets it size to its rendered height, so no gap. Diagram
+    // sources are authored in-repo (trusted), so DOMPurify sanitization is
+    // sufficient and the iframe isolation is unnecessary. `click ... "url"`
+    // directives stay inert under 'strict' too, so navigation is surfaced as
+    // plain Markdown links beside the chart (see ai-capabilities/voice-assistant.mdx).
+    securityLevel: 'strict',
     fontFamily: 'inherit',
     themeCSS: 'margin: 1.5rem auto 0;',
     theme: resolvedTheme === 'dark' ? 'dark' : 'default',
