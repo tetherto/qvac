@@ -15,7 +15,7 @@ import {
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  TTS_S3GEN_EN_CHATTERBOX,
+  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
@@ -255,7 +255,7 @@ resources.define("tts-chatterbox", {
   config: {
     ttsEngine: "chatterbox",
     language: "en",
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
     referenceAudioSrc: path.resolve(
       process.cwd(),
       "assets/audio",
