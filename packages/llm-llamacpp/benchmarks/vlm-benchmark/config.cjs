@@ -90,7 +90,7 @@ module.exports = {
   // ════════════════════════ MODE — what is compared ════════════════════════
   // 'two-models' | 'several-sources'. The workflow's matrix_mode input sets it on
   // desktop (QVAC_VLM_MODE); on mobile this default is used.
-  mode: 'two-models',
+  mode: 'several-sources',
 
   // two-models compares these two complete VLMs:
   models: [MODEL_1, MODEL_2],
