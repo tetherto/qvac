@@ -279,22 +279,6 @@ export class ResourceManager {
     return this.models.get(dep)?.modelId ?? null;
   }
 
-  async reload(dep: string): Promise<string> {
-    const entry = this.models.get(dep);
-    if (entry) {
-      try {
-        await cancel({ operation: "inference", modelId: entry.modelId });
-      } catch (error) {
-        console.debug(`Error canceling inference ${dep}: ${error}`);
-      }
-      await unloadModel({ modelId: entry.modelId });
-      this.models.delete(dep);
-      await this.settleAfterUnload();
-    }
-
-    return this.ensureLoaded(dep);
-  }
-
   async evictExcept(keep: string[]): Promise<string[]> {
     const keepSet = new Set(keep);
     const evicted: string[] = [];
@@ -334,7 +318,11 @@ export class ResourceManager {
         // load starts allocating. See `unloadSettleMs` docs above. Only
         // wait when the unload actually succeeded; on failure there's
         // nothing to settle.
-        await this.settleAfterUnload();
+        if (this.unloadSettleMs > 0) {
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, this.unloadSettleMs),
+          );
+        }
       } catch (error) {
         console.warn(`Error unloading model ${dep}: ${error}`);
       }
@@ -348,12 +336,5 @@ export class ResourceManager {
       await this.evict(dep);
     }
     this.models.clear();
-  }
-
-  private async settleAfterUnload(): Promise<void> {
-    if (this.unloadSettleMs <= 0) return;
-    await new Promise<void>((resolve) =>
-      setTimeout(resolve, this.unloadSettleMs),
-    );
   }
 }
