@@ -30,14 +30,15 @@ describe('videosCreateBody (Zod validation)', () => {
   })
 
   describe('size', () => {
-    it('accepts WxH multiples of 8', () => {
+    it('accepts WxH multiples of 16', () => {
       assert.equal(videosCreateBody.safeParse({ prompt: 'p', size: '480x832' }).success, true)
       assert.equal(videosCreateBody.safeParse({ prompt: 'p', size: '720x1280' }).success, true)
     })
 
-    it('rejects non-multiples of 8', () => {
+    it('rejects non-multiples of 16', () => {
       expectIssue({ prompt: 'p', size: '481x832' }, 'size')
       expectIssue({ prompt: 'p', size: '480x833' }, 'size')
+      expectIssue({ prompt: 'p', size: '488x832' }, 'size')
     })
 
     it('rejects malformed', () => {

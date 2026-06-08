@@ -40,12 +40,12 @@ export const videosCreateBody = z.object({
         ctx.addIssue({ code: 'custom', message: `"size" dimensions must be positive (got ${JSON.stringify(raw)}).` })
         return
       }
-      if (width % 8 !== 0 || height % 8 !== 0) {
-        ctx.addIssue({ code: 'custom', message: `"size" dimensions must be multiples of 8 (got ${width}x${height}).` })
+      if (width % 16 !== 0 || height % 16 !== 0) {
+        ctx.addIssue({ code: 'custom', message: `"size" dimensions must be multiples of 16 (got ${width}x${height}).` })
       }
     })
     .optional()
-    .describe('"WIDTHxHEIGHT" with W,H multiples of 8. Accepts OpenAI\'s 4-value enum plus any sized WxH.'),
+    .describe('"WIDTHxHEIGHT" with W,H multiples of 16. Accepts OpenAI\'s 4-value enum plus any sized WxH.'),
   fps: z.coerce.number().positive().max(120).optional().describe('QVAC extension. 0 < fps ≤ 120, default 16.'),
   steps: z.coerce.number().int().positive().optional().describe('QVAC extension. Diffusion sampler step count.'),
   seed: z.coerce.number().int().optional().describe('QVAC extension. Random seed; SDK picks one when omitted.'),
