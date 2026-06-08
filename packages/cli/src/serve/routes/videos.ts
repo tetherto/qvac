@@ -209,7 +209,7 @@ async function serveContent (
     throw new HttpError(410, 'video_expired', `Video bytes for job ${job.id} are no longer available.`)
   }
 
-  const wantMp4 = formatOverride === 'mp4' || (formatOverride === undefined && ctx.videoTranscodeAvailable)
+  const wantMp4 = formatOverride === 'mp4' || (formatOverride === undefined && ctx.ffmpegAvailable)
 
   if (!wantMp4) {
     reply
@@ -219,7 +219,7 @@ async function serveContent (
     return
   }
 
-  if (!ctx.videoTranscodeAvailable) {
+  if (!ctx.ffmpegAvailable) {
     throw new HttpError(503, 'transcode_unavailable', 'ffmpeg is not on PATH on this server; cannot transcode AVI → MP4. Omit ?format or use ?format=avi.')
   }
 

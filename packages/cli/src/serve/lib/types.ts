@@ -17,8 +17,9 @@ export interface QvacContext {
   chunkAttributions: ChunkAttributionStore
   responsesStore: ResponsesStore
   videoJobsStore: VideoJobsStore
-  /** Set at server start: `true` when `ffmpeg` is on PATH (probed once). */
-  videoTranscodeAvailable: boolean
+  /** Set at server start: `true` when `ffmpeg` is on PATH (probed once).
+   * Gates both video MP4 transcoding and audio mp3/opus/aac/flac encoding. */
+  ffmpegAvailable: boolean
   transcribeOverride?: (opts: {
     modelId: string
     audioChunk: Buffer
