@@ -38,6 +38,7 @@ const INVALID_ID_TIMEOUT_MS = 3_000;
 const DURING_INFERENCE_DRAIN_MS = 1_000;
 const CONCURRENT_DRAIN_MS = 3_000;
 const RELOAD_DRAIN_MS = 5_000;
+const RELOAD_TRIGGER_ATTEMPTS = 2;
 // Bounded wait for a trigger to wind down so the next test doesn't inherit an in-flight job.
 const TRIGGER_JOIN_GRACE_MS = 8_000;
 // Cap completion length — logging tests only need log flow, not a full response.
@@ -165,9 +166,10 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
   private async runInvalidModelId(params: InvalidModelIdParams): Promise<TestResult> {
     let receivedLogs = 0;
+    const streamIterator = loggingStream({ id: params.invalidModelId });
     const streamPromise = (async () => {
       try {
-        for await (const _log of loggingStream({ id: params.invalidModelId })) {
+        for await (const _log of streamIterator) {
           receivedLogs++;
           if (receivedLogs >= 3) break;
         }
@@ -175,6 +177,8 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
     })();
 
     await Promise.race([streamPromise, sleep(INVALID_ID_TIMEOUT_MS)]);
+    await closeLogStream(streamIterator);
+    await Promise.race([streamPromise, sleep(STREAM_OPEN_DELAY_MS)]);
 
     return {
       passed: receivedLogs === 0,
@@ -241,6 +245,7 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
       targetId: reloadedModelId,
       target: 1,
       postTriggerWaitMs: RELOAD_DRAIN_MS,
+      triggerAttempts: RELOAD_TRIGGER_ATTEMPTS,
       trigger: () => callWhenAddonIdle(() =>
         runCompletion(reloadedModelId, "Post-reload test", false),
       ),
@@ -302,6 +307,7 @@ interface CollectLogsOptions {
   trigger?: () => Promise<void>;
   postTriggerWaitMs: number;
   preTriggerExtraWaitMs?: number;
+  triggerAttempts?: number;
 }
 
 interface CollectLogsResult extends TestResult {
@@ -309,63 +315,115 @@ interface CollectLogsResult extends TestResult {
 }
 
 async function collectLogs(opts: CollectLogsOptions): Promise<CollectLogsResult> {
-  const { testId, targetId, target, trigger, postTriggerWaitMs, preTriggerExtraWaitMs = 0 } = opts;
+  const {
+    testId,
+    targetId,
+    target,
+    trigger,
+    postTriggerWaitMs,
+    preTriggerExtraWaitMs = 0,
+    triggerAttempts = 1,
+  } = opts;
   const logs: LogEntry[] = [];
 
   // Drop logs emitted before the trigger fires so buffered load logs from a
   // preloaded `metadata.dependency` can't satisfy `target`.
   let triggerStartMs = trigger ? Number.POSITIVE_INFINITY : 0;
+  let collectError: unknown;
 
+  const streamIterator = loggingStream({ id: targetId });
   const collectPromise = (async () => {
-    for await (const log of loggingStream({ id: targetId })) {
-      if (log.timestamp < triggerStartMs) continue;
-      logs.push(log);
-      if (logs.length >= target) break;
+    try {
+      for await (const log of streamIterator) {
+        if (log.timestamp < triggerStartMs) continue;
+        logs.push(log);
+        if (logs.length >= target) break;
+      }
+    } catch (error) {
+      collectError = error;
     }
   })();
 
-  const triggerPromise = (async () => {
-    await sleep(STREAM_OPEN_DELAY_MS + preTriggerExtraWaitMs);
-    if (trigger) {
-      triggerStartMs = Date.now();
-      await trigger();
+  try {
+    const attempts = Math.max(1, triggerAttempts);
+    for (let attempt = 0; attempt < attempts && logs.length < target; attempt++) {
+      const triggerPromise = runLogTrigger(
+        trigger,
+        preTriggerExtraWaitMs,
+        () => {
+          if (triggerStartMs === Number.POSITIVE_INFINITY) {
+            triggerStartMs = Date.now();
+          }
+        },
+      );
+
+      await Promise.race([
+        collectPromise,
+        triggerPromise.then(() => sleep(postTriggerWaitMs)),
+      ]);
+
+      if (collectError) throw collectError;
+
+      // Wait for the trigger to finish; if the grace period expires first the
+      // addon slot is still occupied — fail so dispatch evicts the dependency.
+      let graceFired = false;
+      await Promise.race([
+        triggerPromise.catch(() => undefined),
+        sleep(TRIGGER_JOIN_GRACE_MS).then(() => { graceFired = true; }),
+      ]);
+
+      if (graceFired) {
+        return {
+          logs,
+          passed: false,
+          output: `Trigger still in-flight after ${TRIGGER_JOIN_GRACE_MS}ms grace period; evicting to prevent cascade`,
+        };
+      }
     }
-  })();
 
-  await Promise.race([
-    collectPromise,
-    triggerPromise.then(() => sleep(postTriggerWaitMs)),
-  ]);
+    if (collectError) throw collectError;
 
-  // Wait for the trigger to finish; if the grace period expires first the
-  // addon slot is still occupied — fail so dispatch evicts the dependency.
-  let graceFired = false;
-  await Promise.race([
-    triggerPromise.catch(() => undefined),
-    sleep(TRIGGER_JOIN_GRACE_MS).then(() => { graceFired = true; }),
-  ]);
-
-  if (graceFired) {
     return {
       logs,
-      passed: false,
-      output: `Trigger still in-flight after ${TRIGGER_JOIN_GRACE_MS}ms grace period; evicting to prevent cascade`,
+      passed: logs.length > 0,
+      output: logs.length > 0
+        ? `Received ${logs.length} log(s) for ${testId}`
+        : `No logs received for ${testId} within timeout after ${triggerAttempts} trigger attempt(s)`,
     };
+  } finally {
+    await closeLogStream(streamIterator);
+    await Promise.race([collectPromise, sleep(STREAM_OPEN_DELAY_MS)]);
   }
+}
 
-  return {
-    logs,
-    passed: logs.length > 0,
-    output: logs.length > 0
-      ? `Received ${logs.length} log(s) for ${testId}`
-      : `No logs received for ${testId} within timeout`,
-  };
+async function runLogTrigger(
+  trigger: (() => Promise<void>) | undefined,
+  preTriggerExtraWaitMs: number,
+  markTriggerStart: () => void,
+): Promise<void> {
+  await sleep(STREAM_OPEN_DELAY_MS + preTriggerExtraWaitMs);
+  if (trigger) {
+    markTriggerStart();
+    await trigger();
+  }
+}
+
+async function closeLogStream(streamIterator: AsyncIterator<LogEntry>): Promise<void> {
+  if (typeof streamIterator.return !== "function") return;
+  try {
+    await streamIterator.return(undefined);
+  } catch {
+    // Stream cleanup is best-effort; the assertion result is based on logs.
+  }
 }
 
 function verifyTimestamps(result: CollectLogsResult): TestResult {
   const { logs } = result;
   if (logs.length < 2) {
-    return { passed: false, output: `Need >= 2 logs to verify timestamps, got ${logs.length}` };
+    return {
+      passed: false,
+      output: `Need >= 2 logs to verify timestamps, got ${logs.length}`,
+    };
   }
   const outOfOrder = logs.some((log, i) => i > 0 && log.timestamp < logs[i - 1].timestamp);
   return {
