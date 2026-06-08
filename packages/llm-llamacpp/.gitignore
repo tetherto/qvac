@@ -32,5 +32,12 @@ benchmarks/results
 benchmarks/performance/results/
 benchmarks/performance/models/
 benchmarks/performance/resolved-models.json
+# VLM benchmark — source of truth is benchmarks/vlm-benchmark/; these are staged
+# copies (benchmarks/vlm-benchmark/stage.cjs) for the mobile build only.
+test/integration/vlm-matrix.test.js
+test/integration/harness.cjs
+test/integration/config.cjs
+test/integration/fixture.data.cjs
+test/mobile/testAssets/vlmx-*
 
 /test_cpp/build/

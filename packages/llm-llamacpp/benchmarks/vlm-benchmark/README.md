@@ -5,12 +5,18 @@ A cross-platform **quality + speed** benchmark for vision-language inference wit
 addon (and, on Linux, the native `llama-mtmd-cli` engines) on **Linux CPU/GPU** and
 **Samsung S25 (AWS Device Farm)**, and renders a single consolidated report.
 
-**How it works.** The harness (`test/integration/vlm-matrix.test.js`) loads a model,
+**How it works.** The harness (`vlm-matrix.test.js` → `harness.cjs`) loads a model,
 runs every fixture sample, and prints `[VLMROW]` / `[VLMSEG]` / `[VLMMETA]` markers to
-the log. CI collects the logs from each platform and `benchmarks/vlm-matrix/aggregate.js`
+the log. CI collects the logs from each platform and `aggregate.js`
 parses the markers, scores them, and writes a Markdown report to the workflow **step
 summary**, a **PR comment**, and an artifact. The *same* harness runs on Linux and
 on-device, so platforms are directly comparable.
+
+Everything ships from **this one directory** (`packages/llm-llamacpp/benchmarks/vlm-benchmark/`).
+The Linux legs run the files in place; the mobile build first runs `stage.cjs`, which copies
+the entry + harness + config + fixture into `test/integration/` and the images into
+`test/mobile/testAssets/` (both git-ignored) so the mobile test generator and app bundler
+pick them up. The `../../`-relative requires resolve identically from either location.
 
 Triggered from the **Benchmark (LLM)** workflow (`.github/workflows/benchmark-llm-llamacpp.yml`)
 → *Run workflow* → set `run_matrix = true`.
@@ -31,14 +37,14 @@ Triggered from the **Benchmark (LLM)** workflow (`.github/workflows/benchmark-ll
 
 ## Configure
 
-Everything lives in **`test/integration/vlm-matrix.config.cjs`** (bundled to the device,
-so it configures both legs). It defines the model catalog, the mode settings, and named
+Everything lives in **`config.cjs`** (staged to the device by `stage.cjs`, so it
+configures both legs). It defines the model catalog, the mode settings, and named
 **presets** that bundle the run knobs.
 
 **Dispatch inputs** (workflow): `matrix_mode` (`two-models` | `several-sources`),
 `matrix_preset` (`compare` | `full` | `smoke` | `sources`), `matrix_engine`
 (`addon` | `fabric-cli` | `upstream-cli`), `matrix_linux` (`linux-cpu,linux-gpu`),
-`run_matrix_s25` (true/false).
+`matrix_samples` (override samples/task; empty = preset default), `run_matrix_s25` (true/false).
 
 **Presets** (in the config):
 
@@ -57,13 +63,13 @@ so it configures both legs). It defines the model catalog, the mode settings, an
 **Model sources.** Each model blob carries a `source` descriptor — `hf` (pinned
 HuggingFace), `url`, `s3` (presigned URL), or a `registry` annotation (published QVAC
 registry entry, fetched from its canonical pinned URL). See `resolveBlob()` in
-`_vlm-matrix-common.js`.
+`harness.cjs`.
 
-**Add tasks / refresh images.** `node scripts/build-vlm-fixture.cjs --per-task 3
+**Add tasks / refresh images.** `node build-fixture.cjs --per-task 3
 --max-side 1024` — iterates the HuggingFace datasets-server, **filters on resolution
 without downloading**, keeps only open-licensed datasets (allowlist), writes images to
-`media/` + `test/mobile/testAssets/`, regenerates the fixture, and updates
-`vlm-fixture.NOTICE.md` (per-image attribution). Adding a task = one manifest entry.
+`./images/`, regenerates `fixture.data.cjs`, and updates
+`fixture.NOTICE.md` (per-image attribution). Adding a task = one manifest entry.
 
 **Add platforms.** The Linux legs are token-driven (`matrix_linux` → runner map in the
 `context` job); add a case there. Mobile reuses `integration-mobile-test-llm-llamacpp.yml`.
@@ -112,11 +118,19 @@ origins with Source, HW/SW provenance, full quality/speed matrices), (3) **Test 
 
 ## Files
 
+All in `packages/llm-llamacpp/benchmarks/vlm-benchmark/` unless noted:
+
 | | |
 |---|---|
-| `test/integration/vlm-matrix.config.cjs` | config: modes, presets, model catalog |
-| `test/integration/vlm-matrix.test.js`, `_vlm-matrix-common.js` | harness (addon, emits markers) |
-| `benchmarks/vlm-matrix/aggregate.js` | parses markers → report |
-| `benchmarks/vlm-matrix/cli-fixture-runner.cjs` | runs the fixture through a native CLI (several-sources) |
-| `scripts/build-vlm-fixture.cjs` | open-licensed fixture generator |
+| `config.cjs` | config: modes, presets, model catalog |
+| `vlm-matrix.test.js`, `harness.cjs` | harness (addon, emits markers) |
+| `aggregate.js` | parses markers → report |
+| `cli-fixture-runner.cjs` | runs the fixture through a native CLI (several-sources) |
+| `build-fixture.cjs` | open-licensed fixture generator |
+| `fixture.data.cjs`, `fixture.NOTICE.md`, `images/` | the frozen fixture + attribution |
+| `stage.cjs` | copies the above into `test/integration/` + `testAssets/` for the mobile build |
 | `.github/workflows/benchmark-llm-llamacpp.yml` | `run_matrix` jobs (Linux legs, S25, combine) |
+
+**Reused from elsewhere in the package** (not copied): the addon (`../../index.js`),
+`ensureModel` (`../../test/integration/utils.js`), and the native CLI helpers
+(`../vlm-performance/cli-case-runner.js`, `stdout-parser.js`, `scripts/build-cli-sources.js`).

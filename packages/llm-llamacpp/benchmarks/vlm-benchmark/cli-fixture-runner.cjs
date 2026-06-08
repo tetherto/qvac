@@ -1,7 +1,7 @@
 'use strict'
 // QVAC-19178: run the VLM matrix fixture through a native llama-mtmd-cli binary
 // (fabric-cli / upstream-cli) for several-sources mode. Emits the SAME markers as the
-// addon harness (_vlm-matrix-common.js) so the existing aggregate.js scores quality
+// addon harness (harness.cjs) so the existing aggregate.js scores quality
 // (vqa/anls/relaxed/mc) and reads vision-encode the same way:
 //   [VLMSEG]{cell:<source>,...}  then the CLI's stderr (carries `image ... encoded in N ms`)
 //   [VLMROW]{cell:<source>, source, model, mmproj, device, task, id, metric, gold, pred, ...}
@@ -16,7 +16,7 @@ const fs = require('fs')
 const path = require('path')
 const { runOnceCli } = require('../vlm-performance/cli-case-runner')
 const { parseStdoutMetrics } = require('../vlm-performance/stdout-parser')
-const fixture = require('../../test/integration/vlm-fixture.data.cjs')
+const fixture = require('./fixture.data.cjs')
 
 function arg (name, def) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : def }
 const BINARY = arg('binary')
@@ -42,7 +42,7 @@ function selectedItems () {
   })
 }
 
-const mediaPath = (image) => path.resolve(__dirname, '../../media', image)
+const mediaPath = (image) => path.resolve(__dirname, 'images', image)
 
 function main () {
   // Same provenance shape the addon harness emits, keyed by the source label.

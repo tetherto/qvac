@@ -1,16 +1,15 @@
 'use strict'
-// QVAC-19178: single source of truth for the VLM matrix benchmark.
+// QVAC-19178: single source of truth for the VLM benchmark (config + presets).
 //
-// This file is bundled under test/ so it configures BOTH legs:
-//   • Linux (desktop integration path) — can override the active preset with
-//     QVAC_VLM_PRESET / QVAC_VLM_* env vars.
-//   • Samsung S25 (AWS Device Farm) — has NO generic env passthrough, so the
-//     active preset on-device is `defaultPreset` here. To change what the S25
-//     leg runs, edit `defaultPreset` (or a preset's cells/tasks/samples).
+// Configures BOTH legs (on mobile this file is staged into test/integration by
+// stage.cjs):
+//   • Linux (desktop) — override the active preset with QVAC_VLM_PRESET / QVAC_VLM_*.
+//   • Samsung S25 (AWS Device Farm) — NO env passthrough, so the active preset on-device
+//     is `defaultPreset` here. To change what the S25 leg runs, edit `defaultPreset`.
 //
 // Each GGUF "blob" carries a `source` descriptor (how to fetch the bytes) plus an
 // optional `registry` annotation (whether it's a published QVAC-registry entry).
-// See resolveBlob() in _vlm-matrix-common.js.
+// See resolveBlob() in harness.cjs.
 //   source.type 'hf'  : { type:'hf', repo, sha, file } -> pinned HuggingFace
 //   source.type 'url' : { type:'url', url }             -> arbitrary direct link
 //   source.type 's3'  : { type:'s3', url }              -> S3 (presigned URL)

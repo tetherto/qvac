@@ -36,6 +36,11 @@ on:
         type: boolean
         required: false
         default: false
+      pre_build_script:
+        description: "Optional node script (path under packages/llm-llamacpp) run before the mobile build — e.g. to stage benchmark files into test/integration + testAssets."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -108,6 +113,11 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           path: addon
           fetch-depth: 0
+
+      - name: Stage benchmark files (pre-build)
+        if: inputs.pre_build_script != ''
+        working-directory: addon/packages/llm-llamacpp
+        run: node "${{ inputs.pre_build_script }}"
 
       - name: Validate mobile tests are up-to-date
         working-directory: addon/packages/llm-llamacpp

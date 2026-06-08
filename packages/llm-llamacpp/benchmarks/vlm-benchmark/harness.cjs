@@ -1,26 +1,38 @@
 'use strict'
-// QVAC-19178: unified VLM benchmark harness. Loops the frozen 5x5 fixture
-// (vlm-fixture.data.cjs) over {cpu,gpu} for ONE (model x mmproj) cell and emits one
-// [VLMROW]{json}[/VLMROW] marker per sample. The SAME code runs on the desktop
-// integration path (Linux) and the mobile Device Farm path (S25); host-side
+// QVAC-19178: VLM benchmark harness. Loops the fixture (fixture.data.cjs) for one
+// cell and emits one [VLMROW]{json}[/VLMROW] marker per sample. The SAME code runs
+// from this dir on Linux (the workflow points brittle straight here) and from a
+// staged copy in test/integration on the mobile Device Farm path; host-side
 // aggregate.js parses the markers into quality + speed matrices.
 //
-// HEADLINE METRIC: mmproj/vision-encode time (visionEncodeMs). This is the part the
-// Q8-vs-f16 projector choice actually drives. The addon emits `image slice encoded in
-// N ms` lines through the JS logger at verbosity=2 (NOT via response.stats); we capture
-// them with a log tap and sum across tiles — identical to benchmarks/vlm-performance.
+// Both this dir and test/integration are 2 levels under packages/llm-llamacpp, so the
+// ../../-relative requires below resolve identically from either location.
 //
-// Gated by QVAC_VLM_MATRIX=1 so the 6 GB of model downloads never fire during the
-// normal integration suite — only the dedicated benchmark-vlm-matrix workflow sets it.
+// HEADLINE METRIC: mmproj/vision-encode time. The addon emits `image slice encoded in
+// N ms` on native stderr at verbosity=2; aggregate.js sums them across tiles.
+//
+// Gated by QVAC_VLM_MATRIX=1 so model downloads never fire during the normal
+// integration suite — only the benchmark workflow sets it (mobile is always enabled).
 
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const { ensureModel, getMediaPath } = require('./utils')
+const { ensureModel } = require('../../test/integration/utils')
 const LlmLlamacpp = require('../../index.js')
-const fixture = require('./vlm-fixture.data.cjs')
-const config = require('./vlm-matrix.config.cjs')
+const fixture = require('./fixture.data.cjs')
+const config = require('./config.cjs')
+
+// Resolve a fixture image. Desktop reads from this dir's images/; mobile uses the
+// bundled asset manifest (images are staged into test/mobile/testAssets by stage.cjs).
+function getMediaPath (filename) {
+  if ((os.platform() === 'ios' || os.platform() === 'android') && global.assetPaths) {
+    const key = `../../testAssets/${filename}`
+    if (global.assetPaths[key]) return global.assetPaths[key].replace('file://', '')
+    throw new Error(`Asset not found in testAssets: ${filename} (rebuild the app)`)
+  }
+  return path.join(__dirname, 'images', filename)
+}
 
 function env (key) {
   if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
@@ -71,7 +83,7 @@ function selectedItems () {
   })
 }
 
-// Cells, models and their per-blob source descriptors live in vlm-matrix.config.cjs
+// Cells, models and their per-blob source descriptors live in config.cjs
 // (the registry-compatibility story — f16 = registry mmproj, q8 = candidate — is
 // documented there). The harness only resolves descriptors to concrete files.
 const MODELS = config.models
