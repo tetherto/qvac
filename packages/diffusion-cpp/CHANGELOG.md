@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.11.2] - 2026-06-05
+
+This release restores caller control over where the diffusion text-conditioning path runs on macOS. It removes an Apple-specific override that forced the CLIP/text encoder path onto CPU.
+
+### Bug Fixes
+
+#### Honor `clip_on_cpu` on macOS
+
+macOS builds no longer force `keep_clip_on_cpu` to `true` during `SdModel::load()`. The addon now forwards `config_.keepClipOnCpu` on all platforms, so callers can keep the text-conditioning path on the configured backend unless they explicitly opt into CPU placement with `clip_on_cpu`.
+
 ## [0.11.1] - 2026-06-02
 
 ### Changed
