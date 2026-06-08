@@ -28,12 +28,28 @@ declare interface TTSGgmlFiles {
   supertonic?: string
   /** Optional directory containing baked Chatterbox voice profiles. */
   voicesDir?: string
+  /**
+   * Chatterbox MTL only: directory holding the compiled MeCab/IPAdic
+   * dictionary (char.bin/matrix.bin/sys.dic/unk.dic/dicrc/mecabrc) used
+   * for Japanese ("ja") morphological segmentation.  Forwarded to
+   * tts-cpp's `EngineOptions::mecab_dict_path`.  Other languages ignore
+   * it.  Alias: top-level `mecabDictPath`.
+   */
+  mecabDictDir?: string
+  mecabDictPath?: string
+  /**
+   * Chatterbox MTL only: path to the Cangjie TSV used for Chinese
+   * ("zh") romanisation.  Forwarded to tts-cpp's
+   * `EngineOptions::cangjie_tsv_path`.
+   */
+  cangjieTsvPath?: string
+  cangjieTsv?: string
 }
 
 declare interface TTSGgmlRuntimeConfig {
   /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Supertonic still rejects `useGPU: true` at construction time (engine is CPU-only today). */
+  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available, on either Chatterbox or Supertonic.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts). */
   useGPU?: boolean
   /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
   outputSampleRate?: number
@@ -52,7 +68,7 @@ declare interface TTSGgmlOptions {
   voiceDir?: string
   /** RNG seed for CFM initial noise + SineGen excitation (Chatterbox) / vector-estimator latent (Supertonic). */
   seed?: number
-  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: must be 0 / unset (engine is CPU-only today). */
+  /** Move N layers to the GPU backend.  Chatterbox + Supertonic: pass 99 to move everything. */
   nGpuLayers?: number
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number
@@ -78,6 +94,10 @@ declare interface TTSGgmlOptions {
   backendsDir?: string
   /** Directory where ggml-opencl persists its compiled program-binary */
   openclCacheDir?: string
+  /** Chatterbox MTL only: MeCab/IPAdic dictionary dir for Japanese ("ja"). Alias of `files.mecabDictDir`. */
+  mecabDictPath?: string
+  /** Chatterbox MTL only: Cangjie TSV for Chinese ("zh"). Alias of `files.cangjieTsvPath`. */
+  cangjieTsvPath?: string
   opts?: object
   exclusiveRun?: boolean
 }

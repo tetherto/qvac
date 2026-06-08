@@ -1,10 +1,9 @@
 'use strict'
 
 const test = require('brittle')
-const fs = require('bare-fs')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, getMediaPath } = require('./utils')
+const { ensureModel } = require('./utils')
 const os = require('bare-os')
 
 const platform = os.platform()
@@ -201,90 +200,11 @@ test('Gemma 4 supports multi-turn conversation with KV cache', {
   }
 })
 
-test('Gemma 4 can describe an image', {
-  timeout: 1_800_000
-}, async t => {
-  const [modelName, dirPath] = await ensureModel(GEMMA4_MODEL.llmModel)
-  const [projModelName] = await ensureModel(GEMMA4_MODEL.projModel)
-  const modelPath = path.join(dirPath, modelName)
-  const projectionModelPath = path.join(dirPath, projModelName)
-
-  // ctx_size: a single elephant.jpg encodes to ~260 mtmd image tokens; the
-  // system turn, user message and the answer fit comfortably even at 4096
-  // (~15x headroom over the ~275 tokens actually used). 8192 was originally
-  // chosen to leave room for Gemma 4's CoT preamble, but reasoning-budget=0
-  // below already suppresses CoT, so the extra 4k cells were dead KV cache
-  // weight ridden by jetsam on iPhone 16 -- which has a tighter per-process
-  // memory ceiling than iPhone 17 and was timing out at 20 min on test 3.
-  // Halving the KV cache cuts ~75 MB on the GPU side without affecting any
-  // image-token, prompt or answer fit.
-  // reasoning-budget: 0 -- we ask the model for a one-word answer and don't
-  // need the <|channel>thought ...<channel|> preamble. Without this, Gemma 4
-  // happily generates 8k+ tokens of CoT for a vision question and the
-  // generation loop overflows ctx_size before reaching <eos>.
-  // ubatch-size: 320 -- the LLM's Metal compute buffer is sized by n_ubatch
-  // (default 512), and at default it lands around 830 MiB for Gemma 4.
-  // Together with the ~1 GB base model and ~941 MB bf16 mmproj that pushes
-  // iPhone 17 over its per-process jetsam ceiling and the app hangs. Lowering
-  // ubatch shrinks the compute buffer proportionally. CLIP's vision encoder
-  // uses non-causal attention which asserts n_ubatch >= n_tokens_per_call,
-  // and elephant.jpg encodes to ~260 mtmd image tokens, so 320 is the
-  // smallest 64-aligned value that still fits the image in one call while
-  // saving ~40% of the compute buffer vs the default 512.
-  const config = {
-    device: useCpu ? 'cpu' : 'gpu',
-    gpu_layers: '98',
-    ctx_size: '4096',
-    'ubatch-size': '320',
-    temp: '0',
-    seed: '42',
-    'reasoning-budget': '0',
-    verbosity: '2'
-  }
-
-  const inference = new LlmLlamacpp({
-    files: { model: [modelPath], projectionModel: projectionModelPath },
-    config,
-    logger: createLogger()
-  })
-
-  try {
-    const t0 = Date.now()
-    await inference.load()
-    console.log(`  model.load() took ${Date.now() - t0} ms`)
-
-    const imageFilePath = getMediaPath('elephant.jpg')
-    t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
-
-    const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
-    const messages = [
-      { role: 'user', type: 'media', content: imageBytes },
-      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
-    ]
-
-    const response = await inference.run(messages)
-    const generatedText = []
-    let error = null
-
-    response.onUpdate(data => { generatedText.push(data) })
-      .onError(err => { error = err })
-
-    await response.await()
-
-    if (error) {
-      throw new Error('Inference error: ' + error)
-    }
-
-    const output = generatedText.join('')
-    t.ok(output.length > 0, `image inference produced output (${output.length} chars)`)
-    console.log(`  output: "${output.slice(0, 200)}"`)
-
-    const lowerOutput = output.toLowerCase()
-    t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${output.slice(0, 100)}"`)
-  } finally {
-    await inference.unload().catch(() => {})
-  }
-})
+// QVAC-18298: image (vision) correctness for Gemma 4 is covered by the
+// gemma4-image-*-perf.test.js files (one per image: elephant / fruit plate /
+// high-res aurora), which assert the expected keyword alongside recording
+// perf — so the former single-image "can describe an image" test here was
+// redundant (it only checked elephant) and ran the same inference twice.
 
 test('Gemma 4 supports tool calling', {
   timeout: 600_000

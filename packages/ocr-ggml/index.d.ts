@@ -69,6 +69,20 @@ export interface OcrGgmlParams {
    * {@link BackendInfo.fallbackReason}).
    */
   backendDevice?: 'cpu' | 'vulkan' | 'metal'
+  /**
+   * Explicit GPU device selection for `'vulkan'` / `'metal'`. 0-based index
+   * into the GPU/iGPU devices that match the requested backend, in ggml
+   * enumeration order (the resolved index is reported as
+   * {@link BackendInfo.deviceIndex}).
+   *   - When omitted (default), selection prefers a discrete GPU and otherwise
+   *     falls back to an integrated GPU.
+   *   - When out of range, the pipeline falls back to CPU and records the
+   *     reason (see {@link BackendInfo.fallbackReason}).
+   * Ignored for `backendDevice: 'cpu'`. For pinning/reordering Vulkan devices
+   * without code you can also set the `GGML_VK_VISIBLE_DEVICES` env var (see
+   * the README).
+   */
+  gpuDevice?: number
 }
 
 /**
@@ -82,6 +96,13 @@ export interface BackendInfo {
   backendDevice: string
   /** ggml backend/device name of the resolved device (e.g. `'Vulkan0'`, `'CPU'`). */
   backendName: string
+  /**
+   * ggml device index of the selected device (the index into the loaded ggml
+   * devices), or `-1` when the CPU backend was selected (including fallback).
+   */
+  deviceIndex: number
+  /** Human-readable device description (e.g. `'NVIDIA GeForce RTX 4090'`, `'Apple M3'`); empty when ggml provides none. */
+  backendDescription: string
   /** Empty when the requested device was used; otherwise why it fell back to CPU. */
   fallbackReason: string
 }

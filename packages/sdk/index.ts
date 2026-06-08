@@ -176,13 +176,15 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 // envelope, but consumers reach for it through `instanceof` on
 // `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
 // rejections. `RequestRejectedByPolicyError` is thrown by
-// `RequestRegistry.begin(...)` when a registered concurrency policy
-// (e.g. `oneAtATimePerModel` on `completion`) rejects a new request;
-// it propagates out through the worker so the client can distinguish
-// "the request collided with another one" from "the request failed".
+// `await RequestRegistry.begin(...)` when a registered concurrency policy
+// refuses a new request. With the default queue policy a same-model
+// `completion` no longer rejects — it waits FIFO — so this now surfaces the
+// bounded-queue cases: `onOverflow: "reject"`, the per-model queue-depth cap,
+// or a `queueTimeoutMs` elapsing. It propagates out through the worker so the
+// client can distinguish "the model is saturated" from "the request failed".
 //
 // `RequestIdConflictError` and `RequestNotFoundError` are thrown by
-// `RequestRegistry.begin(...)` / `.end(...)` on UUID collisions and
+// `await RequestRegistry.begin(...)` / `.end(...)` on UUID collisions and
 // missing-target cancels. They're surfaced here so consumers using
 // the decorated-promise `requestId` can pattern-match on rejected
 // cancel paths. All three classes round-trip the RPC boundary via

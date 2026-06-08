@@ -359,6 +359,20 @@ function generateMarkdownReport (aggregated, opts) {
     return (scenarioMap[devName] && scenarioMap[devName][testFull]) || 'default'
   }
 
+  // QVAC-18298: resolve the model id recorded for a test (from the first
+  // device that has it) so the summary tables can show a Model column. Lets
+  // rows whose label omits the model (e.g. the SmolVLM2 `[elephant]` image
+  // rows) still surface which weights produced the numbers, consistent with
+  // the VLM rows whose label already carries the model.
+  const categoricalMap = aggregated.categorical || {}
+  function _modelFor (testFull) {
+    for (const devName of deviceNames) {
+      const c = categoricalMap[devName] && categoricalMap[devName][testFull]
+      if (c && c.model) return c.model
+    }
+    return null
+  }
+
   function _formatMeanStd (summary, unit, round) {
     if (!summary || summary.mean == null) return '-'
     const m = round ? Math.round(summary.mean) : summary.mean.toFixed(2)
@@ -421,7 +435,16 @@ function generateMarkdownReport (aggregated, opts) {
         lines.push('')
       }
 
+      // QVAC-18298: add a Model column when any test in this scenario has a
+      // recorded model, so rows whose label omits the model (e.g. SmolVLM2
+      // `[elephant]`) still show which weights produced the numbers next to
+      // the VLM rows that carry it in the label. Column is dropped entirely
+      // for scenarios/addons with no model data, so existing reports are
+      // unchanged.
+      const scnHasModel = scopedTests.some(t => Boolean(_modelFor(t.full)))
+
       const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
+      if (scnHasModel) perfHeader.push('Model')
       for (const sn of scopedShortNames) perfHeader.push(sn)
       lines.push('| ' + perfHeader.join(' | ') + ' |')
       lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
@@ -429,6 +452,7 @@ function generateMarkdownReport (aggregated, opts) {
       for (const t of scopedTests) {
         const epCell = hasEp ? (t.ep ? `**${t.ep}**` : '-') : null
         const cells = hasEp ? [t.base, epCell] : [t.full]
+        if (scnHasModel) cells.push(_modelFor(t.full) || '-')
         for (const devName of scopedDeviceNames) {
           const metrics = devices[devName] && devices[devName][t.full]
           cells.push(_formatMeanStd(metrics && metrics[metricSpec.key], metricSpec.unit, metricSpec.round))

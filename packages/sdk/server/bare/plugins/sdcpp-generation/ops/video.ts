@@ -45,7 +45,7 @@ function asVideoModel(model: unknown, modelId: string): VideoStableDiffusion {
 export async function* video(
   request: VideoRequest,
 ): AsyncGenerator<VideoStreamResponse> {
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateServerRequestId(),
     kind: "diffusion",
     modelId: request.modelId,

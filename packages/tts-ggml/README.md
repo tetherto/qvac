@@ -250,7 +250,7 @@ backend persist its compiled program cache across launches.
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / OpenCL if available.  Ignored on Android (forced to CPU at the C++ engine boundary); rejected by Supertonic at construction time (engine is CPU-only today) |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / OpenCL if available, on either Chatterbox or Supertonic.  Backend selection follows tts-cpp's `init_gpu_backend` tier policy (Adreno 700+ → OpenCL, otherwise Vulkan/Metal/CUDA via the registry walk, otherwise CPU) |
 | `config.outputSampleRate` | number     | 24000      | Resample native 24 kHz output |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 3=Vulkan, 4=OpenCL, 99=other) etc. |
 | `opts.exclusiveRun`       | boolean    | `false`    | Serialize overlapping streaming runs |

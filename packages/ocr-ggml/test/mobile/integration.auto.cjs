@@ -11,6 +11,11 @@ require('./integration-runtime.cjs')
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
 
+async function runAndroidVulkanTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runAndroidVulkanTest')) return __FILTERED
+  return runIntegrationModule('../integration/android-vulkan.test.js', options)
+}
+
 async function runBackendDeviceTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBackendDeviceTest')) return __FILTERED
   return runIntegrationModule('../integration/backend-device.test.js', options)

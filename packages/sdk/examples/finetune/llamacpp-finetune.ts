@@ -30,7 +30,6 @@ async function readProgress(
 try {
   modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelType: "llm",
     modelConfig: {
       device: "gpu",
       ctx_size: 512,
@@ -51,7 +50,7 @@ try {
       numberOfEpochs: 2,
       learningRate: 1e-4,
       lrMin: 1e-8,
-      loraModules: 'attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down',
+      loraModules: "attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down",
       assistantLossOnly: true,
       checkpointSaveSteps: 2,
       checkpointSaveDir: "./examples/finetune/results/checkpoints",
@@ -67,7 +66,10 @@ try {
     if (pauseResumeEnabled && !pauseRequested && globalSteps >= 10) {
       pauseRequested = true;
       console.log("⏸️ Requesting a pause so the run can be resumed...");
-      pauseResultPromise = finetune({ modelId: loadedModelId, operation: "pause" });
+      pauseResultPromise = finetune({
+        modelId: loadedModelId,
+        operation: "pause",
+      });
     }
   });
 
@@ -87,7 +89,7 @@ try {
       ...finetuneParams,
       operation: "resume",
     });
-    const resumedProgressTask = readProgress(resumedHandle, function () { });
+    const resumedProgressTask = readProgress(resumedHandle, function () {});
 
     const resumedResult = await resumedHandle.result;
     await resumedProgressTask;
