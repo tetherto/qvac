@@ -60,6 +60,7 @@ struct Transcript {
 enum class ModelType : std::uint8_t {
   CTC,        // English-only, fast transcription with punctuation/capitalization
   TDT,        // Multilingual (~25 languages) with auto-detection
+  RNNT,       // Plain RNN-T (Transducer); e.g. the Georgian hybrid transducer head
   EOU,        // Real-time streaming with end-of-utterance detection
   SORTFORMER  // Speaker diarization (up to 4 speakers)
 };

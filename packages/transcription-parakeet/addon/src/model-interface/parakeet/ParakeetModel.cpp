@@ -381,6 +381,7 @@ void ParakeetModel::load() {
     const std::string detected = engine_->model_type();
     if (detected == "ctc")        cfg_.modelType = ModelType::CTC;
     else if (detected == "tdt")   cfg_.modelType = ModelType::TDT;
+    else if (detected == "rnnt")  cfg_.modelType = ModelType::RNNT;
     else if (detected == "eou")   cfg_.modelType = ModelType::EOU;
     else if (detected == "sortformer") cfg_.modelType = ModelType::SORTFORMER;
 

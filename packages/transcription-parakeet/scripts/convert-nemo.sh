@@ -17,8 +17,10 @@
 #   ./scripts/convert-nemo.sh [flags]
 #
 # Flags:
-#   --type, -t <ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all>
-#                                               Which model(s) (default: all)
+#   --type, -t <ctc|tdt|rnnt|eou|sortformer|sortformer-streaming-v2.1|all>
+#                                               Which model(s) (default: all;
+#                                               rnnt = Georgian hybrid transducer,
+#                                               not included in `all`)
 #   --quant, -q <f16|q8_0|q5_0|q4_0|f32>        Quant tier (default: q8_0)
 #   --python <bin>                              Python interpreter (default:
 #                                                $PYTHON, then ./venv/bin/python,
@@ -63,8 +65,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$TYPE" in
-  ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all) ;;
-  *) echo "Error: --type must be ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all" >&2; exit 2;;
+  ctc|tdt|rnnt|eou|sortformer|sortformer-streaming-v2.1|all) ;;
+  *) echo "Error: --type must be ctc|tdt|rnnt|eou|sortformer|sortformer-streaming-v2.1|all" >&2; exit 2;;
 esac
 case "$QUANT" in
   f32|f16|q8_0|q5_0|q4_0) ;;
@@ -127,6 +129,10 @@ nemo_filename() {
   case "$1" in
     ctc)        echo "parakeet-ctc-0.6b.nemo";;
     tdt)        echo "parakeet-tdt-0.6b-v3.nemo";;
+    # Georgian hybrid RNN-T (brief target, WER ~5.73%); converter auto-detects
+    # 'rnnt' and ignores the CTC aux head. Confirm streaming vs non-streaming
+    # variant (target-model task) before wiring downloads.
+    rnnt)       echo "stt_ka_fastconformer_hybrid_large_pc.nemo";;
     eou)        echo "parakeet_realtime_eou_120m-v1.nemo";;
     sortformer) echo "diar_sortformer_4spk-v1.nemo";;
     sortformer-streaming-v2.1) echo "diar_streaming_sortformer_4spk-v2.1.nemo";;
@@ -137,6 +143,7 @@ gguf_filename() {
   case "$t" in
     ctc)        echo "parakeet-ctc-0.6b.${q}.gguf";;
     tdt)        echo "parakeet-tdt-0.6b-v3.${q}.gguf";;
+    rnnt)       echo "stt_ka_fastconformer_hybrid_large_pc.${q}.gguf";;
     eou)        echo "parakeet-eou-120m-v1.${q}.gguf";;
     sortformer) echo "sortformer-4spk-v1.${q}.gguf";;
     sortformer-streaming-v2.1) echo "diar_streaming_sortformer_4spk-v2.1.${q}.gguf";;

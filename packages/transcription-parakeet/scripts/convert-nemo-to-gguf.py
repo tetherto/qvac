@@ -124,6 +124,12 @@ def parse_args() -> argparse.Namespace:
                         "stay at f32. f16 default; use q8_0 for ~2x smaller.")
     p.add_argument("--hf-repo", default="nvidia/parakeet-ctc-0.6b",
                    help="HF model id to download from if --ckpt is missing.")
+    p.add_argument("--head", choices=["auto", "ctc", "tdt", "rnnt", "eou", "sortformer"],
+                   default="auto",
+                   help="Override the auto-detected head. 'auto' (default) infers from "
+                        "cfg['target']. Use 'rnnt' to force the plain RNN-T (Transducer) "
+                        "head of a hybrid EncDecHybridRNNTCTCBPEModel checkpoint; its CTC "
+                        "aux head (ctc_decoder.*) is ignored.")
     return p.parse_args()
 
 
@@ -186,7 +192,9 @@ def load_nemo(ckpt: Path):
     return cfg, sd, tok_bytes
 
 
-def detect_model_type(cfg: dict) -> str:
+def detect_model_type(cfg: dict, head: str = "auto") -> str:
+    if head != "auto":
+        return head
     target = cfg.get("target", "")
     if "Sortformer" in target or "sortformer_modules" in cfg:
         return "sortformer"
@@ -200,7 +208,11 @@ def detect_model_type(cfg: dict) -> str:
         has_eou = any(str(lbl) == "<EOU>" for lbl in labels)
         if has_eou:
             return "eou"
-        return "tdt"
+        # RNN-T with neither TDT durations nor an <EOU> token: a plain
+        # Transducer head (e.g. the RNN-T branch of a hybrid
+        # EncDecHybridRNNTCTCBPEModel). Previously mis-tagged "tdt", which
+        # crashed below on the absent model_defaults.tdt_durations.
+        return "rnnt"
     return "ctc"
 
 
@@ -234,8 +246,9 @@ def detect_sortformer_variant(ckpt: Path) -> str:
     return ""
 
 
-def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, quant: str):
-    model_type = detect_model_type(cfg)
+def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, quant: str,
+               head: str = "auto"):
+    model_type = detect_model_type(cfg, head)
 
     enc = cfg["encoder"]
     pre = cfg["preprocessor"]
@@ -270,6 +283,7 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, qua
     model_name = {
         "ctc":         f"parakeet-ctc-{d_model}-{n_layers}l",
         "tdt":         f"parakeet-tdt-{d_model}-{n_layers}l",
+        "rnnt":        f"parakeet-rnnt-{d_model}-{n_layers}l",
         "eou":         f"parakeet-eou-{d_model}-{n_layers}l",
         "sortformer":  f"sortformer-{d_model}-{n_layers}l",
     }[model_type]
@@ -372,6 +386,29 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, qua
         variant = detect_sortformer_variant(ckpt)
         if variant:
             writer.add_string("parakeet.model_variant", variant)
+    elif model_type == "rnnt":
+        # Plain RNN-T (Transducer) head. Structurally a TDT head minus the
+        # duration outputs: joint.out is (vocab+1, joint_hidden) where the +1
+        # is blank only (no duration logits). Predictor + joint tensor keys are
+        # identical to TDT/EOU; the hybrid's CTC aux head (ctc_decoder.*) is
+        # ignored. Cache-aware streaming params (att_context_size, conv_norm_type)
+        # ride in the shared parakeet.encoder.* metadata already emitted above.
+        pred_hidden       = int(dec["prednet"]["pred_hidden"])
+        pred_rnn_layers   = int(dec["prednet"]["pred_rnn_layers"])
+        joint_hidden      = int(cfg["joint"]["jointnet"]["joint_hidden"])
+        pred_vocab_size   = int(dec["vocab_size"])                  # label vocab (no blank)
+        joint_num_classes = int(cfg["joint"]["num_classes"])        # label vocab + blank
+        blank_id          = joint_num_classes                        # blank_as_pad at vocab_size
+        greedy_cfg        = (cfg.get("decoding") or {}).get("greedy") or {}
+        max_symbols       = int(greedy_cfg.get("max_symbols")
+                                or greedy_cfg.get("max_symbols_per_step") or 10)
+
+        writer.add_uint32("parakeet.rnnt.vocab_size",           pred_vocab_size)
+        writer.add_uint32("parakeet.rnnt.blank_id",             blank_id)
+        writer.add_uint32("parakeet.rnnt.pred_hidden",          pred_hidden)
+        writer.add_uint32("parakeet.rnnt.pred_rnn_layers",      pred_rnn_layers)
+        writer.add_uint32("parakeet.rnnt.joint_hidden",         joint_hidden)
+        writer.add_uint32("parakeet.rnnt.max_symbols_per_step", max_symbols)
     else:
         pred_hidden      = int(dec["prednet"]["pred_hidden"])
         pred_rnn_layers  = int(dec["prednet"]["pred_rnn_layers"])
@@ -601,6 +638,26 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, qua
                 sd["sortformer_modules.single_hidden_to_spks.weight"])
         add_f32("sortformer.head.single_hidden_to_spks.bias",
                 sd["sortformer_modules.single_hidden_to_spks.bias"])
+    elif model_type == "rnnt":
+        add_2d ("rnnt.predict.embed.weight", sd["decoder.prediction.embed.weight"])
+
+        pred_rnn_layers = int(cfg["decoder"]["prednet"]["pred_rnn_layers"])
+        for l in range(pred_rnn_layers):
+            add_2d (f"rnnt.predict.lstm.{l}.w_ih",
+                    sd[f"decoder.prediction.dec_rnn.lstm.weight_ih_l{l}"])
+            add_2d (f"rnnt.predict.lstm.{l}.w_hh",
+                    sd[f"decoder.prediction.dec_rnn.lstm.weight_hh_l{l}"])
+            add_f32(f"rnnt.predict.lstm.{l}.b_ih",
+                    sd[f"decoder.prediction.dec_rnn.lstm.bias_ih_l{l}"])
+            add_f32(f"rnnt.predict.lstm.{l}.b_hh",
+                    sd[f"decoder.prediction.dec_rnn.lstm.bias_hh_l{l}"])
+
+        add_2d ("rnnt.joint.enc.weight",  sd["joint.enc.weight"])
+        add_f32("rnnt.joint.enc.bias",    sd["joint.enc.bias"])
+        add_2d ("rnnt.joint.pred.weight", sd["joint.pred.weight"])
+        add_f32("rnnt.joint.pred.bias",   sd["joint.pred.bias"])
+        add_2d ("rnnt.joint.out.weight",  sd["joint.joint_net.2.weight"])
+        add_f32("rnnt.joint.out.bias",    sd["joint.joint_net.2.bias"])
     else:
         add_2d ("tdt.predict.embed.weight", sd["decoder.prediction.embed.weight"])
 
@@ -641,6 +698,11 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, qua
                       f"blank_id={int(cfg['joint']['num_classes'])} eou_id={eou_pos} "
                       f"att_ctx=[{att_ctx_left},{att_ctx_right}] "
                       f"conv_norm={conv_norm_type}")
+    elif model_type == "rnnt":
+        vocab_note = (f"rnnt_vocab={int(cfg['decoder']['vocab_size'])} "
+                      f"blank_id={int(cfg['joint']['num_classes'])} "
+                      f"att_ctx=[{att_ctx_left},{att_ctx_right}] "
+                      f"conv_norm={conv_norm_type}")
     else:
         vocab_note = f"tdt_vocab={int(cfg['decoder']['vocab_size'])} durations={cfg['model_defaults']['tdt_durations']}"
     print(f"[convert] wrote {out} ({size_mb:.1f} MiB, type={model_type}, quant={quant}, {vocab_note}, layers={n_layers}, use_bias={use_bias})", file=sys.stderr)
@@ -651,7 +713,7 @@ def main():
     ckpt = ensure_ckpt(args.ckpt, args.hf_repo)
     cfg, sd, tok_bytes = load_nemo(ckpt)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    write_gguf(args.out, ckpt, cfg, sd, tok_bytes, args.quant)
+    write_gguf(args.out, ckpt, cfg, sd, tok_bytes, args.quant, args.head)
 
 
 if __name__ == "__main__":

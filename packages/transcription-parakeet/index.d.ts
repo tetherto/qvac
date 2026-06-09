@@ -7,7 +7,7 @@ import { Readable } from 'stream'
  * loaded GGUF's `parakeet.model.type` metadata field; this type is
  * only here for callers that want to surface it in their own UI.
  */
-declare type ModelType = 'tdt' | 'ctc' | 'eou' | 'sortformer'
+declare type ModelType = 'tdt' | 'ctc' | 'rnnt' | 'eou' | 'sortformer'
 
 /**
  * Parakeet-specific configuration options. The model type itself is
