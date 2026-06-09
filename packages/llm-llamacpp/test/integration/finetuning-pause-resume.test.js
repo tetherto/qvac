@@ -9,6 +9,7 @@ const {
   handleEarlyCompletion,
   verifyFinalStatus,
   cleanupCheckpoints,
+  cleanupIntegrationCacheFiles,
   safeTest
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -343,6 +344,7 @@ safeTest('inference with session cache works after finetuning', { timeout: PAUSE
   const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 8 : 16 })
   const checkpointDir = finetuneConfig.checkpointSaveDir
   const sessionFile = path.join(modelDir, 'test-session-finetune.bin')
+  cleanupIntegrationCacheFiles(sessionFile)
 
   const sessionModelPath = path.join(modelDir, modelName)
   const loggerHandle = attachSpecLogger({ forwardToConsole: true })

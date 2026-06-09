@@ -5,8 +5,8 @@
 #include <cmath>
 #include <cstddef>
 
-#include <llama.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 #include "ContextSlider.hpp"
 #include "GenerationParamsApply.hpp"
@@ -188,12 +188,15 @@ bool TextLlmContext::checkAntiprompt() {
     // casing variant the model might emit.
     std::string lastOutputLower = lastOutput;
     std::transform(
-        lastOutputLower.begin(), lastOutputLower.end(), lastOutputLower.begin(),
+        lastOutputLower.begin(),
+        lastOutputLower.end(),
+        lastOutputLower.begin(),
         [](unsigned char c) { return std::tolower(c); });
     for (const std::string& antiprompt : params_.antiprompt) {
       std::string antipromptLower = antiprompt;
       std::transform(
-          antipromptLower.begin(), antipromptLower.end(),
+          antipromptLower.begin(),
+          antipromptLower.end(),
           antipromptLower.begin(),
           [](unsigned char c) { return std::tolower(c); });
       if (lastOutputLower.find(antipromptLower) != std::string::npos) {
@@ -341,13 +344,9 @@ bool TextLlmContext::evalMessageWithTools(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
+    const auto nTokensToAppend = static_cast<llama_pos>(nTokens);
     auto outcome = trySlidePrefill(
-        lctx_,
-        nPast_,
-        firstMsgTokens_,
-        static_cast<llama_pos>(nTokens),
-        nDiscarded_,
-        tools_);
+        lctx_, nPast_, firstMsgTokens_, nTokensToAppend, nDiscarded_, tools_);
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
       nPast_ = outcome.newNPast;
@@ -377,6 +376,16 @@ bool TextLlmContext::evalMessageWithTools(
           llama_n_ctx(lctx_));
       throw qvac_errors::StatusError(
           ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+    case ContextSlideOutcome::Kind::MemoryOperationFailed: {
+      std::string errorMsg = string_format(
+          "[TextLlm] failed to slide context memory at prefill step "
+          "(nPast=%d, append=%ld, max=%d)\n",
+          nPast_,
+          nTokens,
+          llama_n_ctx(lctx_));
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextSlideFailed), errorMsg);
     }
     case ContextSlideOutcome::Kind::NotNeeded:
       break;
@@ -457,6 +466,14 @@ void TextLlmContext::applyContextDiscard() {
         string_format(
             "[TextLlm] discarded %d tokens after the first message\n",
             outcome.discarded));
+  } else if (outcome.kind == ContextSlideOutcome::Kind::MemoryOperationFailed) {
+    std::string errorMsg = string_format(
+        "[TextLlm] failed to slide context memory during generation "
+        "(nPast=%d, nDiscarded=%d)\n",
+        nPast_,
+        nDiscarded_);
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(ContextSlideFailed), errorMsg);
   }
 }
 
