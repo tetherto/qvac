@@ -4,7 +4,11 @@
 const fs = require('fs')
 const path = require('path')
 
-const SUPPORTED_GPU_BACKENDS = ['coreml', 'cuda', 'directml', 'rocm', 'nnapi']
+// GGML (parakeet.cpp) GPU backend cascade: Vulkan (linux/win32/android),
+// Metal (darwin/ios), OpenCL (Adreno android). CUDA is ingestible via an
+// explicit hint / manual drop. Previously this was the ONNX EP set
+// (coreml/directml/nnapi/rocm), which never matched the GGML runtime.
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'cuda']
 
 function parseArgs (argv) {
   const args = {
@@ -83,19 +87,18 @@ function mean (values) {
 
 function normalizeBackend (platformName, useGPU, backendHint) {
   const hint = String(backendHint || '').toLowerCase()
-  if (hint && hint !== 'mobile-accelerated') return hint
+  if (hint && hint !== 'mobile-accelerated' && hint !== 'gpu') return hint
   if (!useGPU) return 'cpu'
 
   switch (String(platformName || '').toLowerCase()) {
     case 'android':
-      return 'nnapi'
+      return 'vulkan'
     case 'ios':
     case 'darwin':
-      return 'coreml'
+      return 'metal'
     case 'linux':
-      return hint || 'cuda'
     case 'win32':
-      return hint || 'directml'
+      return hint || 'vulkan'
     default:
       return hint || 'gpu'
   }

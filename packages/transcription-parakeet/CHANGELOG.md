@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.1] - 2026-06-02
+## [Unreleased]
+
+### Changed
+
+- RTF benchmark now reports GGML backends. `test/benchmark/rtf-benchmark.test.js` resolves the requested GPU backend family to the parakeet.cpp cascade (Metal on darwin/ios, Vulkan on linux/win32, Vulkan/OpenCL on android) instead of the stale ONNX names (coreml/nnapi/auto-gpu), and now captures the *actual* backend the engine ran on via `stats.backendId` / `stats.backendDevice` (`labels.activeBackend`, `summary.backendId`). `scripts/perf-report/aggregate-parakeet-rtf.js` GPU-backend coverage map updated to the GGML set (vulkan/metal/opencl/cuda).
+
+### Fixed
+
+- The desktop RTF benchmark now actually runs. `integration-test-transcription-parakeet.yml` gained the `run_rtf_benchmarks` input + an RTF benchmark step (per-`(modelType, useGPU)` matrix via `scripts/run-rtf-benchmark-matrix.js`, Vulkan on GPU runners) that `benchmark-performance-transcription-parakeet.yml` already expected but which did not exist, so the orchestrator previously passed an undefined input and produced no results. The matrix runner is now resilient (a single model-type/backend failure no longer sinks the whole leg), and the orchestrator's summarize no longer `merge-multiple`-clobbers same-platform runners. CI-only; not shipped with the npm package.
 
 ### Changed
 
