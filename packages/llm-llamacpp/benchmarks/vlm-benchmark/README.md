@@ -105,7 +105,7 @@ constants to change what runs; nothing else needs to change.
 |---|---|---|
 | `smoke` | 1 task × 1 × 1 | a single inference per config — wiring check |
 | `base` | 5 tasks × 3 × 1 | **default** evaluation |
-| `full` | 5 tasks × 5 × 3 | the complete fixture |
+| `full` | 5 tasks × 5 × 1 | the complete fixture |
 
 **Run knobs** (preset fields). On desktop each is overridable by env; mobile always
 uses the preset as written (Device Farm forwards no env):

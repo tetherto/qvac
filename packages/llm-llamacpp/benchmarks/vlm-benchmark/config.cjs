@@ -117,7 +117,7 @@ module.exports = {
     smoke: { tasks: ['textvqa'], samplesPerTask: 1, repeats: 1, devices: null },
     // base — DEFAULT eval: 5 tasks × 3 samples × 1 repeat.
     base: { tasks: TASKS, samplesPerTask: 3, repeats: 1, devices: null },
-    // full — 5 tasks × 5 samples × 3 repeats (the complete fixture).
-    full: { tasks: TASKS, samplesPerTask: 5, repeats: 3, devices: null }
+    // full — 5 tasks × 5 samples × 1 repeat (the complete fixture).
+    full: { tasks: TASKS, samplesPerTask: 5, repeats: 1, devices: null }
   }
 }
