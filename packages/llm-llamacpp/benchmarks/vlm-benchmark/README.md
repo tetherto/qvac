@@ -1,7 +1,7 @@
 # VLM Benchmark
 
 A **universal quality + speed benchmark** for vision-language inference with
-`@qvac/llm-llamacpp`. It runs one frozen, open-licensed image fixture through a
+`@qvac/llm-llamacpp`. It runs one frozen image fixture through a
 chosen configuration and renders a single consolidated report, so the same numbers
 are produced — and directly comparable — across platforms and backends.
 
@@ -131,7 +131,7 @@ bytes fetched from its canonical pinned URL). See `resolveBlob()` in `harness.cj
 ## Running it
 
 The benchmark is driven by the **Benchmark VLM (LLM)** workflow
-(`.github/workflows/benchmark-llm-llamacpp.yml`). *Run workflow* (or `gh workflow run`)
+(`.github/workflows/benchmark-vlm-model-comparison.yml`). *Run workflow* (or `gh workflow run`)
 → set `run_matrix = true`, then pick the axes via the dispatch inputs below.
 
 > **Important:** the same workflow also hosts a *separate* source-engines benchmark
@@ -166,7 +166,7 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
      `@qvac/llm-llamacpp@latest` npm prebuild.
    - **Model version:** bump the pinned commit in `config.cjs` (`SHA.*` / the blob's
      `source.sha`) — config only.
-   - **Fixture images:** stored in S3 (`s3://tether-ai-dev/vlm-benchmark/`), not git.
+   - **Fixture images:** stored in S3 (`s3://tether-ai-dev/vlm-benchmark/`), you may download them seperately for local tests.
      Regenerate with `build-fixture.cjs`, then `aws s3 sync ./images/ s3://…`; CI pulls
      them per run (needs the `release` environment for the OIDC role).
 
@@ -217,7 +217,7 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
 **Example** — clean two-models, desktop CPU+GPU + S25, base preset:
 
 ```bash
-gh workflow run benchmark-llm-llamacpp.yml --ref <branch> \
+gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> \
   -f run_matrix=true -f matrix_mode=two-models -f matrix_preset=base \
   -f matrix_engine=addon -f matrix_linux=linux-cpu,linux-gpu -f run_matrix_s25=true \
   -f run_addon=false -f run_fabric_cli=false -f run_upstream_cli=false -f run_android=false
@@ -278,7 +278,7 @@ The benchmark is meant to grow. The three common changes:
 
 - **several-sources is desktop-only.** `fabric-cli`/`upstream-cli` are native binaries;
   the mobile path runs an addon app, not arbitrary CLIs.
-- **mmproj vision-encode is unavailable on mobile.** It comes from llama.cpp's native
+- **mmproj vision-encode time is unavailable on mobile.** It comes from llama.cpp's native
   stderr, which Android logcat doesn't capture — the report shows `—` there and uses
   **TTFT** (which includes vision-encode) as the mobile proxy.
 - **addon vs CLI prompt parity.** The addon API sends the image as its own `user` turn
@@ -310,7 +310,7 @@ All in `packages/llm-llamacpp/benchmarks/vlm-benchmark/` unless noted:
 | `fixture.data.cjs`, `fixture.NOTICE.md` | the frozen fixture manifest + attribution (images are in S3, synced into `images/` by CI) |
 | `score-check.cjs` | offline metric-tuning harness — re-scores real predictions without re-running inference |
 | `stage.cjs` | copies the above into `test/integration/` + `testAssets/` for the mobile build |
-| `.github/workflows/benchmark-llm-llamacpp.yml` | `run_matrix` jobs (desktop legs, mobile, combine) |
+| `.github/workflows/benchmark-vlm-model-comparison.yml` | `run_matrix` jobs (desktop legs, mobile, combine) |
 
 **Reused from elsewhere in the package** (not copied): the addon (`../../index.js`),
 `ensureModel` (`../../test/integration/utils.js`), and the native CLI helpers
