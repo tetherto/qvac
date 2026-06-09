@@ -37,6 +37,10 @@
 #include <string>
 #include <thread>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #include <opencv2/opencv.hpp>
 
 #include "ggml-alloc.h"
@@ -1204,6 +1208,29 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
       img.ptr<float>(), height, width, crnnGraphSizeForWidth(width));
 }
 
+namespace {
+// QVAC-19796: cap the number of crops fed to a single batched CRNN graph
+// compute. True batching materializes BiLSTM intermediates that scale with
+// (timesteps T) * (batch N); a whole recognizerBatchSize group (up to 32) in
+// one compute can exceed iOS's per-process (jetsam) memory limit and the app
+// is killed. On iOS we therefore bound N*T per compute (wide crops -> smaller
+// batches, falling back to per-crop for very wide ones); desktop and Android
+// have ample headroom and keep the full batch. The full group is still
+// processed — just split into a few memory-safe sub-batch computes.
+int recognizerComputeBatchCap(int batchSize, int width) {
+#if defined(__APPLE__) && TARGET_OS_IOS
+  const int timesteps =
+      std::max(1, (width + kCrnnWidthDownsample - 1) / kCrnnWidthDownsample);
+  constexpr int kIosMaxBatchSeqElems = 256;
+  const int cap = std::max(1, kIosMaxBatchSeqElems / timesteps);
+  return std::min(batchSize, cap);
+#else
+  (void)width;
+  return batchSize;
+#endif
+}
+} // namespace
+
 cv::Mat StepRecognizeText::runBatchInference(
     const std::vector<cv::Mat>& images, int dynamicWidth) {
   auto t0 = std::chrono::high_resolution_clock::now();
@@ -1237,41 +1264,65 @@ cv::Mat StepRecognizeText::runBatchInference(
   }
 
   // True batched compute (QVAC-19796): build/reuse a graph whose input is
-  // [W, H, 1, N] and run the entire batch in ONE ggml_backend_graph_compute,
-  // instead of N single-image computes. The recognizer output is
-  // ne [classes, T, N]; reading it linearly yields N-major, T-mid,
-  // classes-fastest order, which is exactly the [N, T, classes] cv::Mat
-  // layout the decoder expects, so a single contiguous copy suffices.
+  // [W, H, 1, n] and run a sub-batch of crops in ONE ggml_backend_graph_compute
+  // (instead of one compute per crop). The whole group is processed in chunks
+  // of at most `computeBatchCap` crops to bound peak memory (see
+  // recognizerComputeBatchCap — uncapped on desktop/Android, memory-bounded on
+  // iOS). Each compute's output is ne [classes, T, n]; reading it linearly
+  // yields n-major, T-mid, classes-fastest order — exactly the [*, T, classes]
+  // cv::Mat layout the decoder expects — so a single contiguous copy per
+  // sub-batch lands at the right crop offset.
   const size_t graphSize = crnnGraphSizeForWidth(width);
-  ensureRecognizerGraph(height, width, batchSize, graphSize);
-  ggml_backend_tensor_set(
-      recognizerGraphCache_.input,
-      batchBuffer_.data(),
-      0,
-      ggml_nbytes(recognizerGraphCache_.input));
+  const int computeBatchCap = recognizerComputeBatchCap(batchSize, width);
+  const size_t perImageFloats =
+      static_cast<size_t>(numChannels) * height * width;
 
-  if (ggml_backend_graph_compute(backend_, recognizerGraphCache_.graph) !=
-      GGML_STATUS_SUCCESS) {
-    throw std::runtime_error(
-        "StepRecognizeText: ggml_backend_graph_compute failed (batched)");
+  cv::Mat preds;
+  int numTimesteps = 0;
+  int numClasses = 0;
+  size_t perImageLogits = 0;
+
+  for (int start = 0; start < batchSize; start += computeBatchCap) {
+    const int subBatch = std::min(computeBatchCap, batchSize - start);
+    ensureRecognizerGraph(height, width, subBatch, graphSize);
+    ggml_backend_tensor_set(
+        recognizerGraphCache_.input,
+        batchBuffer_.data() + (static_cast<size_t>(start) * perImageFloats),
+        0,
+        ggml_nbytes(recognizerGraphCache_.input));
+
+    if (ggml_backend_graph_compute(backend_, recognizerGraphCache_.graph) !=
+        GGML_STATUS_SUCCESS) {
+      throw std::runtime_error(
+          "StepRecognizeText: ggml_backend_graph_compute failed (batched)");
+    }
+
+    const int outClasses =
+        static_cast<int>(recognizerGraphCache_.output->ne[0]);
+    const int outTimesteps =
+        static_cast<int>(recognizerGraphCache_.output->ne[1]);
+    const int outBatch = static_cast<int>(recognizerGraphCache_.output->ne[2]);
+    if (outBatch != subBatch) {
+      throw std::runtime_error(
+          "StepRecognizeText: batched recognizer output batch mismatch");
+    }
+
+    if (preds.empty()) {
+      numClasses = outClasses;
+      numTimesteps = outTimesteps;
+      perImageLogits = static_cast<size_t>(numTimesteps) * numClasses;
+      std::array<int, 3> dims = {batchSize, numTimesteps, numClasses};
+      preds.create(3, dims.data(), CV_32F);
+    }
+
+    // Copy this sub-batch's [outClasses, T, subBatch] block straight into the
+    // [batchSize, T, classes] preds at the crop offset (layouts match).
+    ggml_backend_tensor_get(
+        recognizerGraphCache_.output,
+        preds.ptr<float>() + (static_cast<size_t>(start) * perImageLogits),
+        0,
+        ggml_nbytes(recognizerGraphCache_.output));
   }
-
-  const int numClasses = static_cast<int>(recognizerGraphCache_.output->ne[0]);
-  const int numTimesteps =
-      static_cast<int>(recognizerGraphCache_.output->ne[1]);
-  const int outBatch = static_cast<int>(recognizerGraphCache_.output->ne[2]);
-  if (outBatch != batchSize) {
-    throw std::runtime_error(
-        "StepRecognizeText: batched recognizer output batch mismatch");
-  }
-
-  std::array<int, 3> dims = {batchSize, numTimesteps, numClasses};
-  cv::Mat preds(3, dims.data(), CV_32F);
-  ggml_backend_tensor_get(
-      recognizerGraphCache_.output,
-      preds.ptr<float>(),
-      0,
-      ggml_nbytes(recognizerGraphCache_.output));
 
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs =
