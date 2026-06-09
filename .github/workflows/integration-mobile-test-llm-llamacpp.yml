@@ -51,6 +51,11 @@ on:
         type: string
         required: false
         default: ""
+      platforms:
+        description: "Optional CSV-ish platform filter: 'Android' or 'iOS' to run a single platform. Default '' = both (unchanged for existing callers)."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -94,13 +99,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: Android
-            os: ubuntu-22.04
-            runner: qvac-ubuntu2204-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+        # Default (platforms='') runs both, preserving behaviour for every existing
+        # caller; a caller may pass platforms='Android' or 'iOS' to run a single one.
+        include: ${{ fromJSON(inputs.platforms == 'Android' && '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]' || inputs.platforms == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]') }}
 
     steps:
       - name: Validate Dispatch Inputs

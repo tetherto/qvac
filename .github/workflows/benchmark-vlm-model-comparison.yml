@@ -386,6 +386,8 @@ jobs:
       # Fixture-image object store (kept only in this workflow). The reusable workflow
       # syncs from this URI without referencing it literally.
       fixture_images_uri: s3://tether-ai-dev/vlm-benchmark/
+      # Samsung S25 (Android) only — the benchmark targets the S25 device pool; skip iOS.
+      platforms: Android
       # Select ONLY our test via the shard override (no edits to the committed
       # test-groups.json / perf-tests.json). qvac_perf_only=false so the override isn't
       # intersected with perf-tests.json (which we don't touch).
