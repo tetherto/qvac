@@ -725,6 +725,9 @@ jobs:
     if: needs.context.outputs.linux_count != '0'
     name: vlm-matrix-linux-${{ matrix.backend }}
     runs-on: ${{ matrix.runner }}
+    # `release` environment exposes AWS_OIDC_ROLE_ARN and satisfies the role's OIDC
+    # trust policy (environment:release claim) for the S3 fixture-image download.
+    environment: release
     # several-sources builds two CLIs from source (first run, pre-cache) + per-image
     # CLI model reloads, so allow more wall-clock than the addon-only two-models path.
     timeout-minutes: 120
