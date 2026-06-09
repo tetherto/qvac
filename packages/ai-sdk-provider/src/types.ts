@@ -71,6 +71,16 @@ export interface QvacManagedOptions extends QvacCommonOptions {
   // exits, before the runner reaps it. Default: 5 minutes. Ignored when
   // `reuse` is false (a private serve is reaped as soon as its owner exits).
   readonly serveIdleTimeout?: number
+  // Treat this process as a child whose lifetime must not exceed its parent's —
+  // for a host whose only job is to keep a managed serve alive for a parent
+  // process (e.g. an editor/agent plugin spawned by the editor). When set, the
+  // provider watches its parent pid and, the moment the parent exits (on POSIX
+  // we are reparented to init, ppid → 1), closes itself — deregistering the
+  // consumer so the runner reaps the serve — and exits this process. Without it,
+  // a reparented host would keep its consumer marker alive forever and the serve
+  // would never be reaped. Default false; only meaningful for such daemon-style
+  // hosts — a normal in-process consumer should leave it off.
+  readonly closeOnParentExit?: boolean
 }
 
 export type QvacOptions = QvacExternalOptions | QvacManagedOptions

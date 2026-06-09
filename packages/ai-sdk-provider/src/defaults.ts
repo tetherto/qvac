@@ -41,6 +41,11 @@ export const DEFAULT_SERVE_IDLE_TIMEOUT_MS = 300_000 // 5 minutes
 // How often the detached runner re-checks its consumer set / idle deadline.
 export const RUNNER_POLL_INTERVAL_MS = 2_000
 
+// How often a `closeOnParentExit` provider polls its parent pid. A dead parent
+// reparents us (ppid → 1 on POSIX) effectively instantly; this only bounds the
+// detection latency, so a couple of seconds is plenty.
+export const PARENT_WATCH_INTERVAL_MS = 2_000
+
 // How long a spawn lockfile is considered fresh. Past this it is treated as
 // stale (left by a crashed spawner) and may be stolen.
 export const SPAWN_LOCK_STALE_MS = 30_000

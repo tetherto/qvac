@@ -11,6 +11,7 @@ import {
   DEFAULT_SERVE_HOST,
   DEFAULT_SERVE_IDLE_TIMEOUT_MS,
   DEFAULT_SERVE_START_TIMEOUT_MS,
+  PARENT_WATCH_INTERVAL_MS,
   SERVE_HEALTH_POLL_INTERVAL_MS,
   SPAWN_LOCK_STALE_MS
 } from '../defaults.js'
@@ -179,6 +180,27 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   const fleetKey = reuse ? sharedKey : `${sharedKey}-priv-${pid}-${randomBytes(4).toString('hex')}`
   const idleTimeoutMs = reuse ? (options.serveIdleTimeout ?? DEFAULT_SERVE_IDLE_TIMEOUT_MS) : 0
 
+  // Optional parent-death pact (see `closeOnParentExit`). Armed *before*
+  // resolveServe so it also covers a parent that dies during a long first-run
+  // model download — at which point the provider isn't built yet, so we fall
+  // back to deregistering the consumer directly. `providerClose` is filled in
+  // once the provider (and its `close`) exist.
+  let providerClose: (() => Promise<void>) | null = null
+  let parentWatch: ReturnType<typeof setInterval> | undefined
+  if (options.closeOnParentExit ?? false) {
+    const parentPid = process.ppid
+    parentWatch = setInterval(() => {
+      if (!parentIsGone(parentPid, process.ppid)) return
+      if (parentWatch !== undefined) clearInterval(parentWatch)
+      void (async () => {
+        if (providerClose !== null) await providerClose().catch(() => {})
+        else removeConsumerSync(fleetKey, consumerId)
+        process.exit(0)
+      })()
+    }, PARENT_WATCH_INTERVAL_MS)
+    parentWatch.unref()
+  }
+
   async function resolveServe (): Promise<Resolved> {
     // Clear dead/orphaned records first so discovery and spawn see a clean slate.
     await sweepServes(fetchImpl).catch(() => {})
@@ -312,10 +334,13 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   async function close (): Promise<void> {
     if (closed) return
     closed = true
+    if (parentWatch !== undefined) clearInterval(parentWatch)
     process.removeListener('exit', onExit)
     removeConsumerSync(fleetKey, consumerId)
     await removeConsumer(fleetKey, consumerId).catch(() => {})
   }
+  // Let the parent-death watch reuse the full close() path now that it exists.
+  providerClose = close
 
   // Expose the coordinates as getters over `live` so they keep reflecting the
   // real serve after a crash-recovery respawn moves it to a new port/pid.
@@ -369,4 +394,12 @@ function isRetryableConnError (err: unknown): boolean {
   const e = err as { name?: string, code?: string, cause?: { code?: string } }
   if (e?.name === 'AbortError') return false // caller cancellation, not a dead serve
   return (e?.cause?.code ?? e?.code) === 'ECONNREFUSED'
+}
+
+// Pure decision for the `closeOnParentExit` watch, factored out for testing. The
+// parent is gone when our parent pid is no longer the one we started under: on
+// POSIX a dead parent reparents us to init (ppid 1), and any change from the
+// original pid is a reliable "parent exited" signal. Exported for tests.
+export function parentIsGone (originalPpid: number, currentPpid: number): boolean {
+  return currentPpid === 1 || currentPpid !== originalPpid
 }

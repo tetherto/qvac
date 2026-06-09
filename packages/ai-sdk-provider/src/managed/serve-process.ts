@@ -187,7 +187,13 @@ export async function spawnServe (options: SpawnServeOptions): Promise<SpawnedSe
     host
   ]
 
-  const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env: process.env })
+  // `detached: true` makes the serve its own process-group leader (pgid == pid).
+  // The serve spawns the `bare` inference worker as an ordinary child, which
+  // inherits that group — so stopServe can signal the whole group and the worker
+  // dies with the serve instead of orphaning (a plain SIGKILL of the serve pid
+  // never cascades to a grandchild). We deliberately do NOT unref(): the runner
+  // still owns the serve and must observe its 'exit'.
+  const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env: process.env, detached: true })
   const getTail = attachOutputTail(child)
 
   if (child.pid === undefined) {
@@ -205,7 +211,41 @@ export async function spawnServe (options: SpawnServeOptions): Promise<SpawnedSe
   return { child, pid: child.pid, port: options.port, host, baseURL }
 }
 
-// SIGTERM → grace → SIGKILL, mirroring the CLI's own shutdown ladder.
+// Signal the serve *and* its descendants (the `bare` inference worker) as one
+// unit. The serve is spawned detached, so it leads its own process group;
+// signalling the negative pid reaches the whole group, guaranteeing the
+// grandchild worker dies with the serve. Falls back to a direct child signal if
+// the group send fails (e.g. the leader already exited) or on Windows, which has
+// no POSIX process groups. Returns false only if nothing could be signalled.
+function signalServeTree (child: ChildProcess, signal: NodeJS.Signals): boolean {
+  const pid = child.pid
+  if (pid === undefined) return false
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-pid, signal)
+      return true
+    } catch {
+      // No such group (leader already gone) or not a group leader — fall through
+      // to a direct signal so we still make a best effort at the serve itself.
+    }
+  }
+  try {
+    child.kill(signal)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// SIGTERM → grace → SIGKILL, mirroring the CLI's own shutdown ladder. The
+// graceful SIGTERM is sent to the serve *process only* (not the group): the
+// serve must be allowed to orchestrate its own shutdown — releasing the bare
+// inference worker and its global worker lock — rather than us killing the
+// worker out from under it (a SIGTERM straight to the worker terminates it
+// before that cleanup, stranding a stale lock that blocks the next start). Only
+// if the serve is wedged past the grace window do we escalate to a SIGKILL of
+// the whole process group, so the worker can't survive as an orphan (a SIGKILL
+// of the serve pid alone never cascades to the grandchild).
 export async function stopServe (child: ChildProcess, graceMs = SERVE_SHUTDOWN_GRACE_MS): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
@@ -219,11 +259,7 @@ export async function stopServe (child: ChildProcess, graceMs = SERVE_SHUTDOWN_G
     delay(graceMs).then(() => true)
   ])
   if (killedHard) {
-    try {
-      child.kill('SIGKILL')
-    } catch {
-      // already gone
-    }
+    signalServeTree(child, 'SIGKILL')
     await exited
   }
 }

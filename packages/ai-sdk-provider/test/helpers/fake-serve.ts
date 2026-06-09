@@ -19,6 +19,17 @@ const behavior = process.env.FAKE_SERVE_BEHAVIOR || 'healthy'
 
 if (behavior === 'exit-immediately') { console.error('fake serve boom'); process.exit(3) }
 
+// Stand-in for the real serve's \`bare\` inference worker: a stubborn grandchild
+// that ignores SIGTERM and would survive a SIGKILL aimed at the serve pid alone.
+// It is reaped only if stopServe signals the serve's whole process group. We
+// write its pid to FAKE_WORKER_PIDFILE so the test can assert it died.
+if (behavior === 'spawn-stubborn-worker') {
+  const cp = require('node:child_process')
+  const fs = require('node:fs')
+  const worker = cp.spawn(process.execPath, ['-e', 'process.on(\\'SIGTERM\\', () => {}); setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' })
+  if (process.env.FAKE_WORKER_PIDFILE) fs.writeFileSync(process.env.FAKE_WORKER_PIDFILE, String(worker.pid))
+}
+
 const server = http.createServer((req, res) => {
   if (req.url && req.url.indexOf('/v1/models') === 0) {
     if (behavior === 'unhealthy') { res.statusCode = 503; res.end('not ready'); return }
@@ -33,7 +44,7 @@ const server = http.createServer((req, res) => {
 
 if (behavior !== 'never-listen') server.listen(port, host)
 
-if (behavior === 'ignore-sigterm') {
+if (behavior === 'ignore-sigterm' || behavior === 'spawn-stubborn-worker') {
   process.on('SIGTERM', () => {})
 } else {
   process.on('SIGTERM', () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 50) })
