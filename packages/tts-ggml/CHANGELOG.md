@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Internal RTF + streaming benchmark suite for the Chatterbox and Supertonic GGML engines (`test/benchmark/rtf-benchmark.test.js`, `test/benchmark/streaming-benchmark.test.js`, matrix runner, `scripts/perf-report/aggregate-tts-ggml-rtf.js`), runnable via the `Benchmark RTF (TTS GGML)` GitHub Actions workflow on the `qvac-*-gpu` self-hosted runners (CPU + Vulkan). CI-only; not shipped with the npm package.
+- Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
+
 ## [0.2.2] - 2026-06-09
 
 ### Fixed
