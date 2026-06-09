@@ -191,6 +191,8 @@ export function fetchOpenPRs(repoConfig) {
   return { allPRs, pageNum };
 }
 
+const ORG_REPO_LIST_LIMIT = 1000;
+
 function listOrgRepos(owner) {
   const raw = gh([
     "repo",
@@ -198,12 +200,16 @@ function listOrgRepos(owner) {
     owner,
     "--no-archived",
     "--limit",
-    "1000",
+    String(ORG_REPO_LIST_LIMIT),
     "--json",
     "name",
   ]);
   const parsed = raw ? JSON.parse(raw) : [];
-  return parsed.map((entry) => entry.name);
+  const names = parsed.map((entry) => entry.name);
+  // gh caps the response at --limit with no cursor we can follow here, so a
+  // full page means the org has at least that many repos and a glob may have
+  // silently missed some. Surface it instead of resolving an incomplete set.
+  return { names, truncated: names.length >= ORG_REPO_LIST_LIMIT };
 }
 
 // Resolve an `extraRepos` spec list into concrete `owner/name` strings.
@@ -217,22 +223,27 @@ export function resolveExtraRepos(specs) {
   const warnings = [];
   const orgCache = new Map();
   for (const spec of specs) {
-    if (typeof spec !== "string" || !spec.includes("/")) {
+    // Require exactly two non-empty segments. Splitting with a limit of 2 would
+    // silently truncate "owner/group/name" to "owner/group"; reject it instead.
+    const parts = typeof spec === "string" ? spec.split("/") : [];
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
       warnings.push(`Ignoring extraRepos entry "${spec}" (must be owner/name).`);
       continue;
     }
-    const [owner, name] = spec.split("/", 2);
-    if (!owner || !name) {
-      warnings.push(`Ignoring extraRepos entry "${spec}" (must be owner/name).`);
-      continue;
-    }
+    const [owner, name] = parts;
     if (!name.includes("*")) {
       resolved.add(`${owner}/${name}`);
       continue;
     }
     if (!orgCache.has(owner)) {
       try {
-        orgCache.set(owner, listOrgRepos(owner));
+        const { names, truncated } = listOrgRepos(owner);
+        orgCache.set(owner, names);
+        if (truncated) {
+          warnings.push(
+            `Repo list for "${owner}" hit the ${ORG_REPO_LIST_LIMIT}-repo cap; some glob matches may be missing.`,
+          );
+        }
       } catch (e) {
         warnings.push(`Could not list repos for "${owner}": ${ghErrorReason(e)}`);
         orgCache.set(owner, []);

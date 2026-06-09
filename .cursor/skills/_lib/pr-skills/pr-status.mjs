@@ -138,6 +138,35 @@ function renderExcludedLine(pr) {
   return `  ${ref} — ${pr.title}\n    ${pr.url}\n    by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`;
 }
 
+// Per-repo render cap for the Excluded section. With sole-owner extraRepos,
+// every non-roster (incl. bot) PR is excluded, so a busy extra repo could
+// otherwise bury the rest. The cap is display-only — --json always carries
+// the complete list.
+const EXCLUDED_RENDER_CAP_PER_REPO = 10;
+
+function printExcludedSection(excludedPRs, primaryRepo) {
+  console.log("⏭️  EXCLUDED (author outside roster)");
+  console.log("─".repeat(60));
+  const byRepo = new Map();
+  for (const pr of excludedPRs) {
+    const key = pr.repo ?? primaryRepo;
+    if (!byRepo.has(key)) byRepo.set(key, []);
+    byRepo.get(key).push(pr);
+  }
+  for (const [repo, prs] of byRepo) {
+    for (const pr of prs.slice(0, EXCLUDED_RENDER_CAP_PER_REPO)) {
+      console.log("");
+      console.log(renderExcludedLine(pr));
+    }
+    const hidden = prs.length - EXCLUDED_RENDER_CAP_PER_REPO;
+    if (hidden > 0) {
+      console.log("");
+      console.log(`  … +${hidden} more in ${repo} — use --json for the full list`);
+    }
+  }
+  console.log("");
+}
+
 function modeTeam() {
   const groups = classifyTeamPRs(state);
   const excludedPRs = state.excludedPRs ?? [];
@@ -185,11 +214,7 @@ function modeTeam() {
   printSection(`🔴 STALE (>${state.staleDays}d)`, groups.stalePRs, renderPRLine);
   printSection("🟡 NEEDS REVIEW", groups.activePRs, renderPRLine);
   if (state.authorScope === "pod" && excludedPRs.length > 0) {
-    printSection(
-      "⏭️  EXCLUDED (touches pod paths · author outside roster)",
-      excludedPRs,
-      renderExcludedLine,
-    );
+    printExcludedSection(excludedPRs, state.repo);
   }
   if (groups.needsAction.length === 0) {
     console.log("All clear — every PR has team + lead approval.");

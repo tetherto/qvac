@@ -54,7 +54,7 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --json
 `--authors` accepts:
 
 - `any` (default) — original behavior, all PRs touching pod paths are listed regardless of author.
-- `pod` — only PRs authored by `leads ∪ members` from the pod's team JSON. PRs touching pod paths but authored outside the roster are surfaced as a separate "Excluded" section so the pod can still see them for context. Only honored with `--mode team`; ignored (with a warning on stderr) for other modes.
+- `pod` — only PRs authored by `leads ∪ members` from the pod's team JSON. PRs touching pod paths (or, for `extraRepos`, any open PR) but authored outside the roster are surfaced as a separate "Excluded" section so the pod can still see them for context. The Excluded section is capped at 10 rendered PRs per repo (a `… +N more in <repo>` line summarizes the rest) so a busy `extraRepos` entry can't bury the dashboard; `--json` always carries the complete list. Only honored with `--mode team`; ignored (with a warning on stderr) for other modes.
 
 `pr-status.mjs` reads `~/.config/qvac-pr-skills/config.json` when present for
 GitHub repo and stale-day settings. If config is missing, the repo is inferred
