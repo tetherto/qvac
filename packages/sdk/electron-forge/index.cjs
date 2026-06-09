@@ -489,6 +489,22 @@ function defaultHosts() {
 }
 
 /**
+ * Single source of truth for the hosts list used by both bundleSdk and
+ * verifyBundle. Keeping these in sync matters: bundleSdk's `hosts` drives
+ * the bare-pack content (which prebuilds end up in the bundle), and
+ * verifyBundle checks the same set. Passing different lists silently
+ * produces inconsistent builds — bundle for one set, verify for another.
+ *
+ * @param {string[]|null|undefined} explicitHosts
+ * @returns {string[]}
+ */
+function resolveHosts(explicitHosts) {
+  return Array.isArray(explicitHosts) && explicitHosts.length > 0
+    ? explicitHosts
+    : defaultHosts();
+}
+
+/**
  * Detects target packaging hosts from Forge config + CLI argv. Returns null
  * when nothing's specified so callers can fall back to defaultHosts().
  *
@@ -538,21 +554,27 @@ function detectTargetHosts(forgeConfig, argv = process.argv.slice(2)) {
 }
 
 /**
- * Runs `bundleSdk` then `verifyBundle`. Throws QvacForgePluginError on
- * bundle failure or verify errors.
+ * Runs `bundleSdk` then `verifyBundle` with the same resolved `hosts` list.
+ * Throws QvacForgePluginError on bundle failure or verify errors.
  *
+ * Commands are injected (rather than dynamically imported here) so tests
+ * can assert the host-list wiring without touching the SDK runtime.
+ *
+ * @param {{ bundleSdk: Function, verifyBundle: Function, hasErrors: Function, formatVerifyBundleResult: Function }} commands
  * @param {string} projectDir
  * @param {{ configPath?: string|null, hosts?: string[]|null }} options
  * @returns {Promise<{ addons: string[], bundlePath: string, manifestPath: string }>}
  */
-async function runBundleAndVerify(projectDir, options) {
+async function runBundleAndVerify(commands, projectDir, options) {
   const { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } =
-    await loadSdkCommands();
+    commands;
 
-  logger.info("Running bundleSdk...");
+  const hosts = resolveHosts(options.hosts);
+
+  logger.info(`Running bundleSdk (hosts: ${hosts.join(", ")})...`);
   let bundleResult;
   try {
-    const bundleOpts = { projectRoot: projectDir };
+    const bundleOpts = { projectRoot: projectDir, hosts };
     if (options.configPath) bundleOpts.configPath = options.configPath;
     bundleResult = await bundleSdk(bundleOpts);
   } catch (err) {
@@ -565,11 +587,6 @@ async function runBundleAndVerify(projectDir, options) {
   logger.info(
     `bundleSdk: ${addonCount} native addon${addonCount === 1 ? "" : "s"} in bundle`,
   );
-
-  const hosts =
-    Array.isArray(options.hosts) && options.hosts.length > 0
-      ? options.hosts
-      : defaultHosts();
 
   logger.info(`Running verifyBundle (hosts: ${hosts.join(", ")})...`);
   let verifyResult;
@@ -663,16 +680,24 @@ class QvacForgePlugin extends PluginBase {
 
     // 3. Bundle + verify (cached across resolveForgeConfig invocations).
     //    `hosts` resolution: explicit config wins, then CLI/config-derived
-    //    target, then host fallback inside runBundleAndVerify.
+    //    target, then host fallback inside runBundleAndVerify. Hosts are
+    //    threaded into BOTH bundleSdk (drives bare-pack content) and
+    //    verifyBundle (asserts prebuild availability) — passing different
+    //    sets silently produces inconsistent builds.
     if (this._cache === null) {
       const detected = this.hosts ? null : detectTargetHosts(forgeConfig);
       if (detected && !this.hosts) {
         logger.info(`Detected target hosts from CLI/config: ${detected.join(", ")}`);
       }
-      const bundleResult = await runBundleAndVerify(this.projectDir, {
-        configPath: this.configPath,
-        hosts: this.hosts || detected,
-      });
+      const commands = await loadSdkCommands();
+      const bundleResult = await runBundleAndVerify(
+        commands,
+        this.projectDir,
+        {
+          configPath: this.configPath,
+          hosts: this.hosts || detected,
+        },
+      );
       const exclusions = computeExclusions(
         bundleResult.addons,
         this.projectDir,
@@ -791,3 +816,5 @@ module.exports.QvacForgePluginError = QvacForgePluginError;
 module.exports.createIgnore = createIgnore;
 module.exports.diffAddons = diffAddons;
 module.exports.detectTargetHosts = detectTargetHosts;
+module.exports.resolveHosts = resolveHosts;
+module.exports.runBundleAndVerify = runBundleAndVerify;
