@@ -110,9 +110,19 @@ export async function readAllRecords (): Promise<ServeRecord[]> {
   return records
 }
 
-export async function removeRecord (fleetKey: string): Promise<void> {
+// Drops a serve record. By default it also clears the consumers dir (the serve
+// is gone, so its markers are meaningless). Pass `preserveConsumers` when a new
+// runner will respawn this exact fleet key — the live markers must survive the
+// crash+respawn so the new runner inherits every still-alive consumer on its
+// first poll instead of reaping the serve out from under idle sessions.
+export async function removeRecord (
+  fleetKey: string,
+  opts?: { preserveConsumers?: boolean }
+): Promise<void> {
   await rm(recordPath(fleetKey), { force: true }).catch(() => {})
-  await rm(consumersDir(fleetKey), { recursive: true, force: true }).catch(() => {})
+  if (opts?.preserveConsumers !== true) {
+    await rm(consumersDir(fleetKey), { recursive: true, force: true }).catch(() => {})
+  }
 }
 
 // ── Consumers ────────────────────────────────────────────────────────────────
@@ -227,7 +237,10 @@ export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<str
         // already gone or unsignalable
       }
     }
-    await removeRecord(rec.fleetKey)
+    // Keep live consumer markers: a session re-resolving for this key will
+    // respawn the serve, and the new runner must see the other still-alive
+    // sessions instead of idle-reaping the fresh serve out from under them.
+    await removeRecord(rec.fleetKey, { preserveConsumers: true })
     // The orphan's runner also owned the ephemeral config; clean it up.
     if (rec.configPath.length > 0) {
       await rm(dirname(rec.configPath), { recursive: true, force: true }).catch(() => {})

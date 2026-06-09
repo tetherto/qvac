@@ -307,6 +307,15 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     } catch (err) {
       if (closed || !isRetryableConnError(err)) throw err
       const re = await reresolve()
+      // close() may have won the race while we awaited: resolveServe re-added
+      // our consumer marker after close() removed it (and dropped the exit
+      // hook), so it would linger until process exit and keep the serve warm.
+      // Undo the re-registration and surface the original error.
+      if (closed) {
+        removeConsumerSync(fleetKey, consumerId)
+        void removeConsumer(fleetKey, consumerId).catch(() => {})
+        throw err
+      }
       live.baseURL = re.baseURL
       live.port = re.port
       live.servePid = re.servePid

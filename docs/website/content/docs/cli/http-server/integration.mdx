@@ -67,7 +67,7 @@ import { streamText } from 'ai'
 // Spawns (or reuses) a shared `qvac serve` on a free port, then resolves.
 await using qvac = await createQvac({
   mode: 'managed',
-  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 16384, reasoning_budget: 0 } }]
+  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 32768, reasoning_budget: 0 } }]
 })
 
 const { textStream } = streamText({ model: qvac('QWEN3_8B_INST_Q4_K_M'), prompt: 'Hello!' })

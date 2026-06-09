@@ -30,7 +30,7 @@ export interface QvacManagedModel {
   readonly name: string
   // Per-model serve config, merged verbatim into the synthesized
   // `qvac.config.json` entry under `config` (e.g.
-  // `{ ctx_size: 16384, reasoning_budget: 0 }`).
+  // `{ ctx_size: 32768, reasoning_budget: 0 }`).
   readonly config?: Record<string, unknown>
   // Preload the model when the serve starts. Defaults to `true`.
   readonly preload?: boolean

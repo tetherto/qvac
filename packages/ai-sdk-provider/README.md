@@ -158,7 +158,7 @@ const qvac = await createQvac({
   mode: 'managed',
   models: [
     // Agent-capable chat model with a large context window and no reasoning budget.
-    { name: 'GPT_OSS_20B_INST_Q4_K_M', config: { ctx_size: 16384, reasoning_budget: 0 }, default: true },
+    { name: 'GPT_OSS_20B_INST_Q4_K_M', config: { ctx_size: 32768, reasoning_budget: 0 }, default: true },
     // A smaller utility model, loaded lazily, for titles/summaries.
     { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 }, preload: false }
   ]
@@ -236,7 +236,7 @@ import { spawn } from 'node:child_process'
 
 await using qvac = await createQvac({
   mode: 'managed',
-  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 16384, reasoning_budget: 0 } }]
+  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 32768, reasoning_budget: 0 } }]
 })
 // Write opencode.json against the managed serve once:
 //   provider.qvac.options.baseURL = qvac.baseURL  (e.g. http://127.0.0.1:5xxxx/v1)

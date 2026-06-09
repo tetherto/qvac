@@ -159,6 +159,39 @@ test('sweepServes drops dead-serve records and leaves healthy owned serves untou
   })
 })
 
+test('removeRecord preserves the consumers dir only when asked', async () => {
+  await withFakeHome(async () => {
+    await writeRecord(makeRecord({ fleetKey: 'keepc' }))
+    await addConsumer('keepc', process.pid)
+    await removeRecord('keepc', { preserveConsumers: true })
+    assert.equal(await readRecord('keepc'), undefined)
+    assert.deepEqual(await readdir(consumersDir('keepc')), [String(process.pid)])
+
+    // Default still clears the markers.
+    await writeRecord(makeRecord({ fleetKey: 'dropc' }))
+    await addConsumer('dropc', process.pid)
+    await removeRecord('dropc')
+    assert.deepEqual(await liveConsumers('dropc'), [])
+  })
+})
+
+test('sweepServes keeps live consumer markers when reaping a dead serve', async () => {
+  await withFakeHome(async () => {
+    // A dead serve whose record is swept, but other live sessions still hold
+    // consumer markers — they must survive so a respawned runner inherits them
+    // instead of idle-reaping the fresh serve out from under those sessions.
+    await writeRecord(makeRecord({ fleetKey: 'crashed', servePid: DEAD_PID, runnerPid: DEAD_PID }))
+    await addConsumer('crashed', process.pid)
+    await addConsumer('crashed', DEAD_PID)
+
+    const swept = await sweepServes()
+    assert.ok(swept.includes('crashed'))
+    assert.equal(await readRecord('crashed'), undefined)
+    // The live marker survives; the dead one is pruned on the next liveness read.
+    assert.deepEqual(await liveConsumers('crashed'), [process.pid])
+  })
+})
+
 test('sweepServes kills a confirmed runner-orphaned serve but keeps a live-but-unhealthy record', { skip: fakeServeSkip }, async () => {
   await withFakeHome(async () => {
     const fake = await makeFakeServe()
