@@ -1,4 +1,5 @@
 import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
+import { HttpError } from '../../lib/http-error.js'
 
 export type OpenAiFinishReason = 'stop' | 'length' | 'tool_calls'
 
@@ -9,8 +10,8 @@ export interface DrainedCompletion {
   /**
    * Terminal reason from the SDK `completionDone` event (`eos` / `length` /
    * `stopSequence` / `cancelled`), or undefined if the stream ended without
-   * one. `error` is never surfaced here — an error completionDone makes
-   * `result.events` throw, which propagates out of `drainCompletion`.
+   * one. `error` and `cancelled` are never present here — `drainCompletion`
+   * throws on both (502 for error, `InferenceCancelledError` for cancelled).
    */
   stopReason: string | undefined
   /** `stats.generatedTokens` when the SDK reports it, else a whitespace word count. */
@@ -47,10 +48,17 @@ export async function drainCompletion (
     } else if (event.type === 'completionStats') {
       stats = event.stats
     } else if (event.type === 'completionDone') {
-      if (event.stopReason !== undefined && event.stopReason !== 'error') {
+      if (event.stopReason === 'error') {
+        throw new HttpError(502, 'inference_failed', 'Inference failed mid-stream.')
+      }
+      if (event.stopReason !== undefined) {
         stopReason = event.stopReason
       }
     }
+  }
+
+  if (stopReason === 'cancelled') {
+    await result.final
   }
 
   const completionTokens = completionTokensFromStats(text, stats)

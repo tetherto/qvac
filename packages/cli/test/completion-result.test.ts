@@ -1,13 +1,16 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
+import { InferenceCancelledError } from '@qvac/sdk'
 import { drainCompletion, completionTokensFromStats } from '../src/serve/adapters/openai/completion-result.js'
+import { HttpError } from '../src/serve/lib/http-error.js'
 
 function fakeRun (opts: {
   tokens?: string[]
   toolCalls?: ToolCall[]
   stats?: CompletionStats
   stopReason?: string
+  final?: Promise<unknown>
 }): CompletionRun {
   async function * events (): AsyncGenerator<unknown> {
     let seq = 0
@@ -17,9 +20,9 @@ function fakeRun (opts: {
     yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
   }
   return {
-    requestId: 'test',
+    requestId: 'test-request-id',
     events: events() as unknown as CompletionRun['events'],
-    final: Promise.resolve(undefined) as unknown as CompletionRun['final'],
+    final: (opts.final ?? Promise.resolve(undefined)) as unknown as CompletionRun['final'],
     text: Promise.resolve(''),
     toolCalls: Promise.resolve([]) as unknown as CompletionRun['toolCalls'],
     stats: Promise.resolve(opts.stats),
@@ -77,5 +80,24 @@ describe('drainCompletion', () => {
   it('completion tokens fall back to whitespace word count without stats', async () => {
     const r = await drainCompletion(fakeRun({ tokens: ['one two ', 'three'] }))
     assert.equal(r.completionTokens, 3)
+  })
+
+  it('throws HttpError(502) on errorDone', async () => {
+    await assert.rejects(
+      () => drainCompletion(fakeRun({ tokens: ['partial'], stopReason: 'error' })),
+      (err) => err instanceof HttpError && err.status === 502 && err.code === 'inference_failed'
+    )
+  })
+
+  it('throws InferenceCancelledError on cancelledDone', async () => {
+    const cancelErr = new InferenceCancelledError('test-request-id')
+    await assert.rejects(
+      () => drainCompletion(fakeRun({
+        tokens: ['partial'],
+        stopReason: 'cancelled',
+        final: Promise.reject(cancelErr)
+      })),
+      (err) => err instanceof InferenceCancelledError
+    )
   })
 })
