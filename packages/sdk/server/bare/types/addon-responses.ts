@@ -41,6 +41,7 @@ export interface EmbedStats {
   tokens_per_second?: number;
   total_tokens?: number;
   backendDevice?: "cpu" | "gpu";
+  context_size?: number;
 }
 
 export interface EmbedResponse {

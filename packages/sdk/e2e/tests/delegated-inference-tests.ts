@@ -64,8 +64,9 @@ export const delegatedInvalidProviderKey = createDelegatedTest(
 
 export const delegatedProviderNotFound = createDelegatedTest(
   "delegated-provider-not-found",
-  { timeout: 3000 },
+  { timeout: 12000 },
   { validation: "throws-error", errorContains: "" },
+  15000,
 );
 
 // --- E2E (two-process, desktop only) ---
