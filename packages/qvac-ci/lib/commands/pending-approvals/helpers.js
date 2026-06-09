@@ -8,6 +8,26 @@
 // logged by a caller.
 
 const { Octokit } = require('@octokit/rest')
+const { Sanitizer } = require('../../sanitizer')
+
+// Patterns specific to GitHub tokens and PEM keys.
+// Kept here so future subcommands don't inherit a GitHub-specific allowlist.
+const SECRET_PATTERNS = [
+  /ghp_[A-Za-z0-9_]{36,}/g,
+  /ghs_[A-Za-z0-9_]{36,}/g,
+  /-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g
+]
+
+class GitHubSanitizer extends Sanitizer {
+  redact (str) {
+    if (typeof str !== 'string') return str
+    let result = str
+    for (const pattern of SECRET_PATTERNS) {
+      result = result.replace(pattern, '[REDACTED]')
+    }
+    return result
+  }
+}
 
 // --- Error helpers ---
 function throwApiError (err, context) {
@@ -83,6 +103,7 @@ function checkApproved (counts, minTotal) {
 }
 
 function getPendingMessage (counts, minTotal) {
+  if (checkApproved(counts, minTotal)) return ''
   const maintainer = counts.maintainer || 0
   const teamLead = counts.teamLead || 0
   const other = counts.other || 0
@@ -129,6 +150,23 @@ async function fetchReviews (octokit, owner, repo, prNumber) {
   }
 }
 
+// Returns true only for collaborators with write or admin access.
+// Prevents external contributors on public repos from counting toward approvals.
+async function hasWriteAccess (octokit, owner, repo, username) {
+  try {
+    const { data } = await octokit.rest.repos.getCollaboratorPermissionLevel({
+      owner,
+      repo,
+      username
+    })
+    const perm = data.permission
+    return perm === 'admin' || perm === 'write'
+  } catch (err) {
+    if (err.status === 404) return false // not a collaborator
+    throwApiError(err, `Could not check repository permission for '${username}'`)
+  }
+}
+
 async function buildApprovalCounts (appOctokit, owner, repo, reviews, teams) {
   const latestApprovals = getLatestApprovals(reviews)
   const approvers = latestApprovals
@@ -139,13 +177,23 @@ async function buildApprovalCounts (appOctokit, owner, repo, reviews, teams) {
     return { maintainer: 0, teamLead: 0, other: 0 }
   }
 
+  // Drop approvers without write access (read-only collaborators or external contributors).
+  const accessFlags = await Promise.all(
+    approvers.map(login => hasWriteAccess(appOctokit, owner, repo, login))
+  )
+  const writeApprovers = approvers.filter((_, i) => accessFlags[i])
+
+  if (writeApprovers.length === 0) {
+    return { maintainer: 0, teamLead: 0, other: 0 }
+  }
+
   const [maintainerMembers, teamLeadMembers] = await Promise.all([
     getTeamMembers(appOctokit, owner, teams.maintainer),
     getTeamMembers(appOctokit, owner, teams.teamLead)
   ])
 
   const counts = { maintainer: 0, teamLead: 0, other: 0 }
-  for (const login of approvers) {
+  for (const login of writeApprovers) {
     if (maintainerMembers.has(login)) {
       counts.maintainer++
     } else if (teamLeadMembers.has(login)) {
@@ -210,6 +258,8 @@ async function upsertPrComment (octokit, owner, repo, prNumber, body) {
 }
 
 module.exports = {
+  SECRET_PATTERNS,
+  GitHubSanitizer,
   throwApiError,
   buildOctokit,
   buildAppOctokit,
@@ -218,6 +268,7 @@ module.exports = {
   getPendingMessage,
   buildApprovalComment,
   fetchReviews,
+  hasWriteAccess,
   buildApprovalCounts,
   getTeamMembers,
   upsertPrComment,

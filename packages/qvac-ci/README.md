@@ -8,6 +8,8 @@ CI utilities — a modular, extensible CLI for GitHub automation. Replaces inlin
 npm install @qvac/ci
 ```
 
+> **Note:** Development and feature builds are published to GitHub Packages (GPR) under the name `@qvac/ci-mono`. The unscoped `@qvac/ci` name is only available after a release-branch npm publish.
+
 Or run directly in a GitHub Actions step:
 
 ```yaml
@@ -210,14 +212,12 @@ npm run audit
 
 This package has no build step — it is plain Node.js CJS with no compilation or bundling required.
 
-`npm publish` automatically runs `npm test` first via the `prepublishOnly` hook, so a failing test suite will abort the publish before anything reaches the registry.
+Publishing is handled by CI. The `lint-and-test` job must pass before any publish job runs, so a failing test suite will block the publish in the pipeline.
 
 ```sh
-# Publish to npm (runs tests automatically first via prepublishOnly)
-npm publish
+# Manual publish (ensure tests pass locally first)
+npm test && npm publish
 ```
-
-In CI, tests should also run in a dedicated job before the publish job, so failures are caught at PR time rather than at publish time.
 
 ## Requirements
 

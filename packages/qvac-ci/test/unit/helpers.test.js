@@ -2,67 +2,90 @@
 
 const test = require('brittle')
 const {
-  redact,
-  sanitizeError,
   validateRequiredEnv,
   validatePrNumber,
   validateRepo,
   validateTeamSlug
 } = require('../../lib/helpers')
+const { Sanitizer } = require('../../lib/sanitizer')
+const { GitHubSanitizer } = require('../../lib/commands/pending-approvals/helpers')
+
+const ghSanitizer = new GitHubSanitizer()
 
 // ---------------------------------------------------------------------------
-// redact
+// Sanitizer (base — passthrough)
 // ---------------------------------------------------------------------------
 
-test('redact — leaves plain strings unchanged', t => {
-  t.is(redact('hello world'), 'hello world')
+test('Sanitizer — redact returns the value unchanged', t => {
+  const s = new Sanitizer()
+  t.is(s.redact('hello world'), 'hello world')
+  t.is(s.redact(null), null)
+  t.is(s.redact(42), 42)
 })
 
-test('redact — masks GitHub PAT (ghp_)', t => {
+test('Sanitizer — sanitizeError returns error message unchanged', t => {
+  const s = new Sanitizer()
+  t.is(s.sanitizeError(new Error('oops')), 'oops')
+})
+
+test('Sanitizer — sanitizeError coerces non-Error to string', t => {
+  const s = new Sanitizer()
+  t.is(typeof s.sanitizeError(42), 'string')
+})
+
+// ---------------------------------------------------------------------------
+// GitHubSanitizer — redact
+// ---------------------------------------------------------------------------
+
+test('GitHubSanitizer.redact — leaves plain strings unchanged', t => {
+  t.is(ghSanitizer.redact('hello world'), 'hello world')
+})
+
+test('GitHubSanitizer.redact — masks GitHub PAT (ghp_)', t => {
   const input = 'Authorization: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
-  t.ok(redact(input).includes('[REDACTED]'))
-  t.absent(redact(input).includes('ghp_'))
+  t.ok(ghSanitizer.redact(input).includes('[REDACTED]'))
+  t.absent(ghSanitizer.redact(input).includes('ghp_'))
 })
 
-test('redact — masks GitHub app token (ghs_)', t => {
+test('GitHubSanitizer.redact — masks GitHub app token (ghs_)', t => {
   const input = 'token: ghs_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
-  t.ok(redact(input).includes('[REDACTED]'))
-  t.absent(redact(input).includes('ghs_'))
+  t.ok(ghSanitizer.redact(input).includes('[REDACTED]'))
+  t.absent(ghSanitizer.redact(input).includes('ghs_'))
 })
 
-test('redact — masks PEM private key block', t => {
+test('GitHubSanitizer.redact — masks PEM private key block', t => {
   const pem = '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----'
-  const result = redact('key: ' + pem)
+  const result = ghSanitizer.redact('key: ' + pem)
   t.ok(result.includes('[REDACTED]'))
   t.absent(result.includes('BEGIN RSA PRIVATE KEY'))
 })
 
-test('redact — handles non-string input safely', t => {
-  t.is(redact(null), null)
-  t.is(redact(42), 42)
+test('GitHubSanitizer.redact — handles non-string input safely', t => {
+  t.is(ghSanitizer.redact(null), null)
+  t.is(ghSanitizer.redact(42), 42)
 })
 
 // ---------------------------------------------------------------------------
-// sanitizeError
+// GitHubSanitizer — sanitizeError (inherited template method)
 // ---------------------------------------------------------------------------
 
-test('sanitizeError — returns message only, not stack', t => {
+test('GitHubSanitizer.sanitizeError — returns message only, not stack', t => {
   const err = new Error('something went wrong')
-  const result = sanitizeError(err)
+  const result = ghSanitizer.sanitizeError(err)
   t.is(result, 'something went wrong')
   t.absent(result.includes('at '))
 })
 
-test('sanitizeError — redacts secrets in error message', t => {
+test('GitHubSanitizer.sanitizeError — redacts secrets in error message', t => {
   const err = new Error('failed with token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890')
-  const result = sanitizeError(err)
+  const result = ghSanitizer.sanitizeError(err)
   t.ok(result.includes('[REDACTED]'))
   t.absent(result.includes('ghp_'))
 })
 
-test('sanitizeError — handles non-Error values', t => {
-  t.is(typeof sanitizeError('plain string'), 'string')
-  t.is(typeof sanitizeError(42), 'string')
+test('GitHubSanitizer.sanitizeError — handles non-Error values', t => {
+  t.is(typeof ghSanitizer.sanitizeError('plain string'), 'string')
+  t.is(typeof ghSanitizer.sanitizeError(42), 'string')
 })
 
 // ---------------------------------------------------------------------------

@@ -7,15 +7,15 @@ const {
   getPendingMessage,
   buildApprovalComment,
   buildApprovalCounts,
+  hasWriteAccess,
+  buildAppOctokit,
   fetchReviews,
   upsertPrComment,
   MIN_CODEOWNER_APPROVALS
 } = require('../../../lib/commands/pending-approvals/helpers')
 
-// ---------------------------------------------------------------------------
-// getLatestApprovals
-// ---------------------------------------------------------------------------
 
+// getLatestApprovals
 test('getLatestApprovals — deduplicates: keeps only most recent review per user', t => {
   const reviews = [
     { user: { login: 'alice' }, state: 'CHANGES_REQUESTED', submitted_at: '2024-01-01T10:00:00Z' },
@@ -40,10 +40,7 @@ test('getLatestApprovals — returns empty array for empty input', t => {
   t.alike(getLatestApprovals([]), [])
 })
 
-// ---------------------------------------------------------------------------
 // checkApproved
-// ---------------------------------------------------------------------------
-
 test('checkApproved — approved when codeowner + total threshold met', t => {
   t.ok(checkApproved({ maintainer: 1, teamLead: 0, other: 1 }, 2))
 })
@@ -68,10 +65,7 @@ test('checkApproved — MIN_CODEOWNER_APPROVALS constant is 1', t => {
   t.is(MIN_CODEOWNER_APPROVALS, 1)
 })
 
-// ---------------------------------------------------------------------------
 // getPendingMessage
-// ---------------------------------------------------------------------------
-
 test('getPendingMessage — describes missing codeowner when none present', t => {
   const msg = getPendingMessage({ maintainer: 0, teamLead: 0, other: 0 }, 2)
   t.ok(msg.includes('Management or Team Lead'))
@@ -90,10 +84,7 @@ test('getPendingMessage — returns empty string when already approved (caller g
   t.is(msg, '')
 })
 
-// ---------------------------------------------------------------------------
 // buildApprovalComment
-// ---------------------------------------------------------------------------
-
 test('buildApprovalComment — approved comment contains ✅', t => {
   const body = buildApprovalComment(true, { maintainer: 1, teamLead: 0, other: 1 }, '')
   t.ok(body.includes('✅'))
@@ -121,13 +112,19 @@ test('buildApprovalComment — includes ## Review Status marker', t => {
   t.ok(body.includes('## Review Status'))
 })
 
-// ---------------------------------------------------------------------------
 // buildApprovalCounts — with mocked octokit
-// ---------------------------------------------------------------------------
-
-function makeMockOctokit (listMembersInOrg) {
+// writePermissions: map of login → 'admin'|'write'|'read'|'none' (default 'write' for all)
+function makeMockOctokit (listMembersInOrg, writePermissions = {}) {
   const rest = {
-    teams: { listMembersInOrg }
+    teams: { listMembersInOrg },
+    repos: {
+      getCollaboratorPermissionLevel: async ({ username }) => {
+        const perm = Object.prototype.hasOwnProperty.call(writePermissions, username)
+          ? writePermissions[username]
+          : 'write'
+        return { data: { permission: perm } }
+      }
+    }
   }
   return {
     rest,
@@ -185,10 +182,133 @@ test('buildApprovalCounts — returns zeros when no approvals', async t => {
   t.is(counts.other, 0)
 })
 
-// ---------------------------------------------------------------------------
-// fetchReviews — with mocked octokit
-// ---------------------------------------------------------------------------
+test('buildApprovalCounts — excludes approvers without write access', async t => {
+  const reviews = [
+    { user: { login: 'external' }, state: 'APPROVED', submitted_at: '2024-01-01T00:00:00Z' },
+    { user: { login: 'internal' }, state: 'APPROVED', submitted_at: '2024-01-01T00:00:00Z' }
+  ]
 
+  // external has read-only access; internal has write
+  const mockOctokit = makeMockOctokit(
+    async () => ({ data: [] }),
+    { external: 'read', internal: 'write' }
+  )
+
+  const counts = await buildApprovalCounts(mockOctokit, 'org', 'repo', reviews, { maintainer: 'a', teamLead: 'b' })
+  // external is dropped; internal counts as other
+  t.is(counts.other, 1)
+  t.is(counts.maintainer, 0)
+})
+
+test('buildApprovalCounts — returns zeros when all approvers have read-only access', async t => {
+  const reviews = [
+    { user: { login: 'outsider' }, state: 'APPROVED', submitted_at: '2024-01-01T00:00:00Z' }
+  ]
+
+  const mockOctokit = makeMockOctokit(
+    async () => ({ data: [] }),
+    { outsider: 'none' }
+  )
+
+  const counts = await buildApprovalCounts(mockOctokit, 'org', 'repo', reviews, { maintainer: 'a', teamLead: 'b' })
+  t.is(counts.maintainer, 0)
+  t.is(counts.teamLead, 0)
+  t.is(counts.other, 0)
+})
+
+// hasWriteAccess — with mocked octokit
+test('hasWriteAccess — returns true for write permission', async t => {
+  const mockOctokit = {
+    rest: {
+      repos: {
+        getCollaboratorPermissionLevel: async () => ({ data: { permission: 'write' } })
+      }
+    }
+  }
+  t.ok(await hasWriteAccess(mockOctokit, 'org', 'repo', 'alice'))
+})
+
+test('hasWriteAccess — returns true for admin permission', async t => {
+  const mockOctokit = {
+    rest: {
+      repos: {
+        getCollaboratorPermissionLevel: async () => ({ data: { permission: 'admin' } })
+      }
+    }
+  }
+  t.ok(await hasWriteAccess(mockOctokit, 'org', 'repo', 'alice'))
+})
+
+test('hasWriteAccess — returns false for read permission', async t => {
+  const mockOctokit = {
+    rest: {
+      repos: {
+        getCollaboratorPermissionLevel: async () => ({ data: { permission: 'read' } })
+      }
+    }
+  }
+  t.absent(await hasWriteAccess(mockOctokit, 'org', 'repo', 'external'))
+})
+
+test('hasWriteAccess — returns false for none permission', async t => {
+  const mockOctokit = {
+    rest: {
+      repos: {
+        getCollaboratorPermissionLevel: async () => ({ data: { permission: 'none' } })
+      }
+    }
+  }
+  t.absent(await hasWriteAccess(mockOctokit, 'org', 'repo', 'stranger'))
+})
+
+test('hasWriteAccess — returns false on 404 (not a collaborator)', async t => {
+  const mockOctokit = {
+    rest: {
+      repos: {
+        getCollaboratorPermissionLevel: async () => {
+          const err = new Error('Not Found')
+          err.status = 404
+          throw err
+        }
+      }
+    }
+  }
+  t.absent(await hasWriteAccess(mockOctokit, 'org', 'repo', 'outsider'))
+})
+
+// buildAppOctokit — "app not installed" error mapping via throwApiError
+test('buildAppOctokit — maps 404 getRepoInstallation to a descriptive error', async t => {
+  const { throwApiError } = require('../../../lib/commands/pending-approvals/helpers')
+  const context = 'GitHub App (ID: 99) does not appear to be installed on org/repo'
+
+  // throwApiError is what buildAppOctokit calls internally when getRepoInstallation returns 404
+  t.exception(
+    () => throwApiError({ status: 404, message: 'Not Found' }, context),
+    /not found.*check the value/i,
+    '404 produces a "not found" message with remediation hint'
+  )
+})
+
+test('buildAppOctokit — maps 401 to authentication error', async t => {
+  const { throwApiError } = require('../../../lib/commands/pending-approvals/helpers')
+  t.exception(
+    () => throwApiError({ status: 401, message: 'Bad credentials' }, 'any context'),
+    /authentication failed/i,
+    '401 produces an authentication-failed message'
+  )
+})
+
+test('buildAppOctokit — maps 403 to forbidden error with context', async t => {
+  const { throwApiError } = require('../../../lib/commands/pending-approvals/helpers')
+  const context = 'GitHub App (ID: 99) does not appear to be installed on org/repo'
+  t.exception(
+    () => throwApiError({ status: 403, message: 'Forbidden' }, context),
+    /forbidden/i,
+    '403 produces a forbidden message containing the context string'
+  )
+})
+
+// fetchReviews — with mocked octokit
 test('fetchReviews — calls listReviews with correct params', async t => {
   let called = null
   const mockOctokit = {
@@ -212,10 +332,7 @@ test('fetchReviews — calls listReviews with correct params', async t => {
   t.is(called.pull_number, 42)
 })
 
-// ---------------------------------------------------------------------------
 // upsertPrComment — with mocked octokit
-// ---------------------------------------------------------------------------
-
 function makeCommentOctokit (listComments, createComment, updateComment) {
   const rest = {
     issues: { listComments, createComment, updateComment }

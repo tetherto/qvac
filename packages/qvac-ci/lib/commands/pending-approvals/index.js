@@ -2,17 +2,9 @@
 
 const { command, flag, summary, footer } = require('paparam')
 const { Command } = require('../../command')
-const { validatePrNumber, validateRepo, validateTeamSlug, sanitizeError, exitWithError } = require('../../helpers')
-const {
-  buildOctokit,
-  buildAppOctokit,
-  fetchReviews,
-  buildApprovalCounts,
-  checkApproved,
-  getPendingMessage,
-  buildApprovalComment,
-  upsertPrComment
-} = require('./helpers')
+const { validatePrNumber, validateRepo, validateTeamSlug, exitWithError } = require('../../helpers')
+// Imported as a namespace so tests can inject mocks via the shared module cache.
+const helpers = require('./helpers')
 
 // @octokit/auth-app >=5 is ESM-only and must be loaded via dynamic import().
 // Lazy-loaded so tests can inject mocks before the live module is needed.
@@ -30,7 +22,8 @@ class PendingApprovals extends Command {
         { envVar: 'GITHUB_TOKEN', description: 'GitHub token for comment posting' },
         { envVar: 'GITHUB_APP_ID', description: 'App ID for team membership resolution' },
         { envVar: 'GITHUB_PRIVATE_KEY', description: 'App private key for team membership resolution' }
-      ]
+      ],
+      sanitizer: new helpers.GitHubSanitizer()
     })
   }
 
@@ -48,7 +41,7 @@ class PendingApprovals extends Command {
         try {
           await this.run(cmd.flags)
         } catch (err) {
-          exitWithError(sanitizeError(err))
+          exitWithError(this.sanitizer.sanitizeError(err))
         }
       }
     )
@@ -78,20 +71,21 @@ class PendingApprovals extends Command {
     }
 
     const createAppAuth = await getCreateAppAuth()
-    const commentOctokit = buildOctokit()
-    const appOctokit = await buildAppOctokit(createAppAuth, owner, repo)
+    const commentOctokit = helpers.buildOctokit()
+    const appOctokit = await helpers.buildAppOctokit(createAppAuth, owner, repo)
 
-    const reviews = await fetchReviews(commentOctokit, owner, repo, prNumber)
-    const counts = await buildApprovalCounts(appOctokit, owner, repo, reviews, teams)
+    const reviews = await helpers.fetchReviews(commentOctokit, owner, repo, prNumber)
+    const counts = await helpers.buildApprovalCounts(appOctokit, owner, repo, reviews, teams)
 
-    const approved = checkApproved(counts, minApprovals)
-    const pendingMessage = approved ? '' : getPendingMessage(counts, minApprovals)
-    const commentBody = buildApprovalComment(approved, counts, pendingMessage)
+    const approved = helpers.checkApproved(counts, minApprovals)
+    const pendingMessage = approved ? '' : helpers.getPendingMessage(counts, minApprovals)
+    const commentBody = helpers.buildApprovalComment(approved, counts, pendingMessage)
 
-    await upsertPrComment(commentOctokit, owner, repo, prNumber, commentBody)
+    await helpers.upsertPrComment(commentOctokit, owner, repo, prNumber, commentBody)
 
     if (!approved) {
       process.stdout.write('PR #' + prNumber + ' is pending approval: ' + pendingMessage + '\n')
+      process.exit(1)
     }
   }
 }

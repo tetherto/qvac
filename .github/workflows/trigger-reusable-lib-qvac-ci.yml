@@ -147,7 +147,6 @@ jobs:
         uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: ${{ env.WORKDIR }}
           name-suffix: "-mono"
@@ -203,7 +202,6 @@ jobs:
         uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: ${{ env.WORKDIR }}
           name-suffix: "-mono"
@@ -228,7 +226,6 @@ jobs:
         uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: ${{ env.WORKDIR }}
           name-suffix: "-mono"

@@ -1,35 +1,12 @@
 'use strict'
 
 // Generic, domain-agnostic utilities.
-// No GitHub, no CI-domain logic.
+// No GitHub, no CI-domain logic — no secret patterns either.
+// Each subcommand defines its own secret patterns and sanitizeError in its own helpers.js.
 // Any subcommand or future JS action can use these.
 
-// Patterns for secrets that must never appear in output.
-// Matches GitHub PATs (ghp_), app tokens (ghs_), and PEM private key blocks.
-const SECRET_PATTERNS = [
-  /ghp_[A-Za-z0-9_]{36,}/g,
-  /ghs_[A-Za-z0-9_]{36,}/g,
-  /-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g
-]
-
-function redact (str) {
-  if (typeof str !== 'string') return str
-  let result = str
-  for (const pattern of SECRET_PATTERNS) {
-    result = result.replace(pattern, '[REDACTED]')
-  }
-  return result
-}
-
-function sanitizeError (err) {
-  if (err && typeof err.message === 'string') {
-    return redact(err.message)
-  }
-  return redact(String(err))
-}
-
 function exitWithError (message, code) {
-  process.stderr.write(redact(message) + '\n')
+  process.stderr.write(String(message) + '\n')
   process.exit(code === undefined ? 1 : code)
 }
 
@@ -84,8 +61,6 @@ function validateTeamSlug (raw, flagName) {
 }
 
 module.exports = {
-  redact,
-  sanitizeError,
   exitWithError,
   validateRequiredEnv,
   validatePrNumber,
