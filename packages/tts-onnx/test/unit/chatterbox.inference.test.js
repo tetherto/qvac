@@ -213,6 +213,25 @@ test('Chatterbox: invalid engine throws', async (t) => {
   )
 })
 
+test('Chatterbox: load fails when language is ja without mecabDictPath', async (t) => {
+  const model = new ONNXTTS({
+    files: {
+      tokenizer: '/tmp/tokenizer.json',
+      speechEncoder: '/tmp/speech_encoder.onnx',
+      embedTokens: '/tmp/embed_tokens.onnx',
+      conditionalDecoder: '/tmp/conditional_decoder.onnx',
+      languageModel: '/tmp/language_model.onnx'
+    },
+    config: { language: 'ja' },
+    referenceAudio: [0.1, 0.2, 0.3]
+  })
+
+  await t.exception(
+    async () => model.load(),
+    /mecabDictPath/
+  )
+})
+
 test('Chatterbox: cancel propagates as job failure', async (t) => {
   const model = createMockedChatterboxModel()
   await model.load()

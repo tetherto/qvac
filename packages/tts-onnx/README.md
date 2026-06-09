@@ -557,22 +557,32 @@ The Chatterbox multilingual model supports the following 22 languages:
 
 Some languages require text preprocessing before tokenization. This is handled automatically by the addon when `language` is set:
 
-- **Japanese (`ja`)**: kanji are converted to hiragana using **MeCab** with the IPA dictionary. The dictionary is **not bundled** with this package; the compiled IPAdic dictionary is published in the QVAC model registry (S3) under `qvac_models_compiled/chatterbox/mecab-ipadic/`. Stage those files into a `mecab-ipadic/` folder and pass its parent directory through `files.mecabDictPath`. The native layer expects a `mecab-ipadic/` subfolder with a valid `mecabrc` under that path.
+- **Japanese (`ja`)**: kanji are converted to hiragana using **MeCab** with the IPA dictionary. The dictionary is **not bundled** with this package. Stage the six IPAdic files from the QVAC model registry into a single directory and pass that path through `files.mecabDictPath` (alias: `files.mecabDictDir`). The directory must contain `mecabrc`, `char.bin`, `dicrc`, `matrix.bin`, `sys.dic`, and `unk.dic`.
 - **Korean (`ko`)**: Hangul syllables are decomposed into Jamo (initial / medial / final) using `utf8proc` NFKD.
 - **Chinese (`zh`)**: not supported in this release.
 
-To select a language at load time, pass `language` to the loader. When using `ja`, also pass `files.mecabDictPath`:
+To select a language at load time, pass `language` in `config`. When using `ja`, also pass `files.mecabDictPath`:
 
 ```javascript
-const model = await loadChatterboxTTS({
-  tokenizerPath: '...',
-  speechEncoderPath: '...',
-  embedTokensPath: '...',
-  conditionalDecoderPath: '...',
-  languageModelPath: '...',
-  language: 'ja',
-  mecabDictPath: '/path/to/mecab-dict-parent' // required for Japanese
+const ONNXTTS = require('@qvac/tts-onnx')
+
+const model = new ONNXTTS({
+  files: {
+    tokenizer: '/path/to/tokenizer.json',
+    speechEncoder: '/path/to/speech_encoder.onnx',
+    embedTokens: '/path/to/embed_tokens.onnx',
+    conditionalDecoder: '/path/to/conditional_decoder.onnx',
+    languageModel: '/path/to/language_model.onnx',
+    mecabDictPath: '/path/to/mecab-ipadic'
+  },
+  config: {
+    language: 'ja',
+    useGPU: false
+  },
+  referenceAudio: referenceSamples
 })
+
+await model.load()
 ```
 
 ## Output Format

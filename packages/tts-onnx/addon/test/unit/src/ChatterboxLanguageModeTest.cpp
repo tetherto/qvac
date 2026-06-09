@@ -39,6 +39,14 @@ TEST(ChatterboxLanguageModeTest, detectsMultilingualEmbedInputs) {
 
 namespace qvac::ttslib::chatterbox::testing {
 
+namespace {
+
+std::string asUtf8String(const char8_t *text) {
+  return std::string(reinterpret_cast<const char *>(text));
+}
+
+} // namespace
+
 TEST(ChatterboxLanguageModeTest,
      SupportsMultilingualWhenExpectedInputNamesPresent) {
   const std::vector<std::string> inputNames = {"input_ids", "position_ids",
@@ -94,8 +102,9 @@ TEST(ChatterboxLanguageModeTest,
 
 TEST(ChatterboxLanguageModeTest,
      TokenizationAppliesLowercaseNfkdAndSpaceTokenForJapanese) {
-  EXPECT_EQ(lang_mode::prepareTextForTokenization("Hola Mundo", "ja", false),
-            "[ja]hola[SPACE]mundo");
+  EXPECT_EQ(lang_mode::prepareTextForTokenization(
+                asUtf8String(u8"こんにちは 世界"), "ja", false),
+            "[ja]こんにちは[SPACE]世界");
 }
 
 TEST(ChatterboxLanguageModeTest,

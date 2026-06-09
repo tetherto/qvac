@@ -925,11 +925,8 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
-  QLOG_DEBUG("tokenize raw input='" + text + "' lang=" + language_ +
-             " isEnglish=" + (isEnglish_ ? "true" : "false"));
   const std::string preprocessed =
       textPreprocessor_.preprocess(text, language_);
-  QLOG_DEBUG("tokenize preprocessed='" + preprocessed + "'");
   const std::string preparedText = lang_mode::prepareTextForTokenization(
       preprocessed, language_, isEnglish_);
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
@@ -940,7 +937,6 @@ std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
 
   const std::vector<int64_t> tokens(result.token_ids,
                                     result.token_ids + result.len);
-  QLOG_DEBUG("tokenize token count=" + std::to_string(tokens.size()));
   tokenizers_free_encode_results(&result, 1);
 
   return tokens;
@@ -964,10 +960,9 @@ void ChatterboxEngine::loadTextPreprocessor(
   }
 
   if (language_ == "ja") {
-    std::filesystem::path mecabDicPath = mecabDictPath / "mecab-ipadic";
     QLOG(Priority::INFO,
-         "Loading MeCab dictionary from: " + mecabDicPath.string());
-    textPreprocessor_.loadMeCab(mecabDicPath);
+         "Loading MeCab dictionary from: " + mecabDictPath.string());
+    textPreprocessor_.loadMeCab(mecabDictPath);
     QLOG(Priority::INFO, "MeCab dictionary loaded");
   }
 }

@@ -111,7 +111,7 @@ function normalizeOnnxTtsFiles (files) {
     ttsConfig: firstNonEmpty(f.ttsConfig, f.ttsConfigPath),
     voiceStyle: firstNonEmpty(f.voiceStyle, f.voiceStyleJsonPath),
     voicesDir: firstNonEmpty(f.voicesDir),
-    mecabDictPath: firstNonEmpty(f.mecabDictPath)
+    mecabDictPath: firstNonEmpty(f.mecabDictPath, f.mecabDictDir)
   }
 }
 
@@ -688,7 +688,7 @@ class ONNXTTS {
     if (language === 'ja' && !this._mecabDictPath) {
       throw new QvacErrorAddonTTS({
         code: ERR_CODES.FAILED_TO_LOAD,
-        adds: 'Chatterbox Japanese requires files.mecabDictPath pointing to a directory containing mecab-ipadic/. No dictionary is bundled with @qvac/tts-onnx.'
+        adds: 'Chatterbox Japanese requires files.mecabDictPath (alias files.mecabDictDir) pointing to the IPAdic dictionary directory. No dictionary is bundled with @qvac/tts-onnx.'
       })
     }
     const params = {

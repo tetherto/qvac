@@ -7,18 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-06-09
+
 ### Added
 
 - **Japanese (ja) support via MeCab**: word-level morphological preprocessing for Chatterbox multilingual. The addon now extracts phonetic readings from MeCab and converts katakana to hiragana before tokenization, fixing prior hallucinations caused by kanji being mapped to `[UNK]`.
 - `mecab` dependency added to `vcpkg.json` / `vcpkg-configuration.json` and linked from desktop, mobile and unit-test CMake targets.
 - New `mecabDictPath` field on the native `ChatterboxConfig`, propagated end-to-end (JS `ONNXTTS` -> `AddonJs` -> `TTSModel` -> `ChatterboxEngine`). The Cangjie table for `zh` keeps being resolved next to the tokenizer.
 - Public `files.mecabDictPath?: string` option on `ONNXTTS` (declared in `index.d.ts`); **required** when `config.language === 'ja'`. The npm package no longer ships a dictionary.
-- The compiled MeCab IPAdic dictionary is consumed from the QVAC model registry (S3) under `qvac_models_compiled/chatterbox/mecab-ipadic/`. The integration test stages it via `ensureMecabDict` in `test/utils/downloadModel.js` (lazy `@qvac/registry-client` devDependency) and passes the parent directory through `files.mecabDictPath`.
+- The compiled MeCab IPAdic dictionary is consumed from the QVAC model registry (S3) under `qvac_models_compiled/chatterbox/mecab-ipadic/`. The integration test stages it via `ensureMecabDict` in `test/utils/downloadModel.js` (lazy `@qvac/registry-client` devDependency) and passes the dictionary directory through `files.mecabDictPath`.
 - Japanese (kanji + MeCab) integration test added to `test/integration/addon.test.js` (`Chatterbox Multilingual TTS: Japanese ...`), validating end-to-end synthesis; it skips-as-pass when the multilingual models or the MeCab dictionary are unavailable (offline / no registry access).
 - Internal RTF + streaming benchmark suite for Chatterbox and Supertonic, runnable via the `Benchmark RTF (ONNX TTS)` GitHub Actions workflow. CI-only; not shipped with the npm package.
 
 ### Changed
 
+- `files.mecabDictPath` now points directly to the IPAdic dictionary directory (same semantics as `@qvac/tts-ggml`). `files.mecabDictDir` is accepted as an alias.
 - Refactor: text preprocessing moved from free functions in the `text_preprocess` namespace into a new `class ChatterboxTextPreprocessor` with RAII (`std::unique_ptr<mecab_t, MeCabDeleter>` for the MeCab tagger).
 - `ChatterboxEngine` now owns a single `ChatterboxTextPreprocessor` instead of separate Cangjie/MeCab members; `loadTextPreprocessor(tokenizerPath, mecabDictPath)` replaces the previous loader.
 - `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).

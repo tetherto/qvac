@@ -515,7 +515,7 @@ test('Chatterbox Multilingual TTS: Japanese (kanji + MeCab) synthesis', { timeou
     conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
     languageModelPath: chatterboxLmPath(modelDir),
     language: 'ja',
-    mecabDictPath: path.dirname(mecab.dir)
+    mecabDictPath: mecab.dir
   })
   t.ok(model, 'Japanese TTS model should be loaded')
 

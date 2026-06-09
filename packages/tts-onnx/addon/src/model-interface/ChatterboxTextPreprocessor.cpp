@@ -284,8 +284,6 @@ void ChatterboxTextPreprocessor::loadCangjieTable(
 void ChatterboxTextPreprocessor::loadMeCab(
     const std::filesystem::path &dicPath) {
   std::filesystem::path rcPath = dicPath / "mecabrc";
-  QLOG_DEBUG("loadMeCab dicPath='" + dicPath.string() + "' rcPath='" +
-             rcPath.string() + "'");
   std::vector<std::string> argsStorage = {"mecab", "-r", rcPath.string(), "-d",
                                           dicPath.string()};
   std::vector<char *> argv;
@@ -363,7 +361,6 @@ std::string ChatterboxTextPreprocessor::buildHiraganaFromNodes(
 
 std::string ChatterboxTextPreprocessor::convertJapaneseWithMeCab(
     const std::string &text) const {
-  QLOG_DEBUG("convertJapaneseWithMeCab input='" + text + "'");
   if (!mecabTagger_) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          "MeCab tagger not initialized; falling back to katakana->hiragana");
@@ -379,9 +376,7 @@ std::string ChatterboxTextPreprocessor::convertJapaneseWithMeCab(
     return convertKatakanaToHiragana(text);
   }
 
-  std::string result = buildHiraganaFromNodes(node);
-  QLOG_DEBUG("convertJapaneseWithMeCab output='" + result + "'");
-  return result;
+  return buildHiraganaFromNodes(node);
 }
 
 std::string

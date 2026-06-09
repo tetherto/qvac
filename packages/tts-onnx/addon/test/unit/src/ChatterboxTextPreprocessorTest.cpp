@@ -1,5 +1,8 @@
 #include "src/model-interface/ChatterboxTextPreprocessor.hpp"
 
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 
 namespace qvac::ttslib::chatterbox::text_preprocess::testing {
@@ -130,21 +133,38 @@ TEST_F(KatakanaHiraganaTest, handlesEmptyString) {
 class ChineseCangjieTest : public ::testing::Test {
 protected:
   Preprocessor preprocessor_;
+
+  void SetUp() override {
+    const std::filesystem::path tsvPath =
+        std::filesystem::temp_directory_path() / "cangjie-test.tsv";
+    std::ofstream out(tsvPath);
+    out << "日\ta\n";
+    out << "月\tb\n";
+    out.close();
+    preprocessor_.loadCangjieTable(tsvPath);
+    std::filesystem::remove(tsvPath);
+  }
 };
 
 TEST_F(ChineseCangjieTest, convertsCjkCharacter) {
-  Preprocessor p;
-  std::string result = p.convertChineseToCangjie("hello");
-  EXPECT_EQ(result, "hello");
+  const std::string input = "\xE6\x97\xA5";
+  const std::string result = preprocessor_.convertChineseToCangjie(input);
+  EXPECT_EQ(result, "a");
 }
 
 TEST_F(ChineseCangjieTest, preservesNonCjk) {
   EXPECT_EQ(preprocessor_.convertChineseToCangjie("hello"), "hello");
 }
 
+TEST_F(ChineseCangjieTest, handlesMixedText) {
+  const std::string input = "X\xE6\x97\xA5Y\xE6\x9C\x88Z";
+  const std::string result = preprocessor_.convertChineseToCangjie(input);
+  EXPECT_EQ(result, "XaYbZ");
+}
+
 TEST_F(ChineseCangjieTest, passesUnknownCjkThrough) {
-  std::string input = "\xE4\xB8\xAD";
-  std::string result = preprocessor_.convertChineseToCangjie(input);
+  const std::string input = "\xE4\xB8\xAD";
+  const std::string result = preprocessor_.convertChineseToCangjie(input);
   EXPECT_EQ(result, input);
 }
 
@@ -191,6 +211,23 @@ TEST_F(PreprocessDispatchTest, passesPortugueseDiacriticsThrough) {
                    u8"para voz usando Chatterbox");
   const std::string result = preprocessor_.preprocess(portuguese, "pt");
   EXPECT_EQ(result, portuguese);
+}
+
+TEST_F(PreprocessDispatchTest,
+       convertsJapaneseKanjiWithMeCabWhenDictAvailable) {
+  const char *dictPathEnv = std::getenv("MECAB_IPADIC_PATH");
+  if (dictPathEnv == nullptr) {
+    GTEST_SKIP() << "MECAB_IPADIC_PATH not set";
+  }
+
+  Preprocessor preprocessor;
+  preprocessor.loadMeCab(std::filesystem::path(dictPathEnv));
+
+  const std::string input = asUtf8String(u8"日本語");
+  const std::string result = preprocessor.preprocess(input, "ja");
+
+  EXPECT_FALSE(result.empty());
+  EXPECT_NE(result, input);
 }
 
 } // namespace qvac::ttslib::chatterbox::text_preprocess::testing
