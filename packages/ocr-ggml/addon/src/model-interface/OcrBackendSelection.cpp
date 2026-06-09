@@ -67,6 +67,34 @@ struct MatchingDevice {
   std::string description;
 };
 
+// True for GPU devices whose ggml backend path is known to be numerically
+// broken, so selection must skip them and fall back to CPU rather than emit
+// wrong results. Currently: Qualcomm Adreno via Vulkan — `vla-ggml` measured
+// cos-sim ~0.73 vs PyTorch on Adreno 830 Vulkan, while every other accepted
+// Vulkan/Metal target (Apple Metal, NVIDIA, Intel Iris, Mali) sits >0.999.
+//
+// The defect is specific to Adreno's *Vulkan* path, so the check is scoped to
+// the Vulkan backend rather than the GPU name alone: Adreno's OpenCL backend is
+// numerically sound, and OpenCL support for Adreno is planned, so an
+// Adreno-via-OpenCL device must NOT be rejected here. Apple Metal devices are
+// never Adreno, so the Metal path is unaffected.
+bool isBrokenGpuDevice(ggml_backend_dev_t dev) {
+  const char* descRaw = ggml_backend_dev_description(dev);
+  if (descRaw == nullptr ||
+      toLower(descRaw).find("adreno") == std::string::npos) {
+    return false;
+  }
+  // Adreno is only broken under Vulkan; let OpenCL (and any future backend)
+  // through. Check both the device name ("Vulkan0") and the reg name
+  // ("Vulkan"), mirroring enumerateMatchingDevices's matching.
+  const char* devNameRaw = ggml_backend_dev_name(dev);
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* regNameRaw =
+      (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
+  return (devNameRaw != nullptr && isVulkanBackendName(devNameRaw)) ||
+         (regNameRaw != nullptr && isVulkanBackendName(regNameRaw));
+}
+
 // All GPU/iGPU devices whose backend name satisfies `matches`, in ggml
 // enumeration order. Used to resolve both Vulkan and Metal requests.
 //
@@ -74,6 +102,9 @@ struct MatchingDevice {
 // names Vulkan devices "Vulkan0" (so the device name carries the backend), but
 // Metal devices are named "MTL0"/"MTL1" while the backing registration is named
 // "Metal". Checking the reg name lets the Metal request resolve correctly.
+//
+// A name-matched device that `isBrokenGpuDevice()` rejects is skipped (the loop
+// keeps looking; if no usable GPU remains, the caller falls back to CPU).
 std::vector<MatchingDevice>
 enumerateMatchingDevices(bool (*matches)(std::string_view)) {
   std::vector<MatchingDevice> result;
@@ -97,6 +128,15 @@ enumerateMatchingDevices(bool (*matches)(std::string_view)) {
       nameMatches = regNameRaw != nullptr && matches(regNameRaw);
     }
     if (!nameMatches) {
+      continue;
+    }
+    if (isBrokenGpuDevice(dev)) {
+      const char* descRaw = ggml_backend_dev_description(dev);
+      QLOG(
+          Priority::WARN,
+          std::string("ocr-ggml: skipping known-broken GPU '") +
+              (descRaw != nullptr ? descRaw : "?") +
+              "' (numerically unreliable backend); falling back to CPU");
       continue;
     }
     const char* descRaw = ggml_backend_dev_description(dev);
