@@ -23,6 +23,7 @@ import {
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLA_LIBERO_VISION_Q8,
+  PI05_BASE_Q_AGGRESSIVE,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
@@ -156,6 +157,12 @@ resources.define("ocr", {
 
 resources.define("vla", {
   constant: SMOLVLA_LIBERO_VISION_Q8,
+  type: "vla",
+  config: { backend: "cpu" },
+});
+
+resources.define("vla-pi05", {
+  constant: PI05_BASE_Q_AGGRESSIVE,
   type: "vla",
   config: { backend: "cpu" },
 });
