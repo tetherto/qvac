@@ -18,10 +18,10 @@ public:
     return llama_get_memory(lctx);
   }
 
-  void seqRm(
+  bool seqRm(
       ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const override {
-    llama_memory_seq_rm(mem, seqId, startPos, endPos);
+    return llama_memory_seq_rm(mem, seqId, startPos, endPos);
   }
 
   void seqAdd(
@@ -30,6 +30,91 @@ public:
     llama_memory_seq_add(mem, seqId, startPos, endPos, delta);
   }
 };
+
+ContextSlideOutcome trySlidePrefillImpl(
+    llama_context* lctx, ContextUsage current, ContextUsage protectedPrefix,
+    ContextUsage append, llama_pos nDiscarded, ToolsCompactController& tools,
+    const IContextSliderOps& ops) {
+
+  const auto nCtx = ops.nCtx(lctx);
+  const llama_pos currentPos = current.pos;
+  const llama_pos protectedPrefixPos = protectedPrefix.pos;
+  const llama_pos appendPos = append.pos;
+  const llama_pos currentCacheTokens = current.cacheTokens;
+  const llama_pos protectedCacheTokens = protectedPrefix.cacheTokens;
+  const llama_pos appendCacheTokens = append.cacheTokens;
+
+  // Check if sliding is needed
+  if (currentPos + appendPos < nCtx &&
+      currentCacheTokens + appendCacheTokens < nCtx) {
+    return {ContextSlideOutcome::Kind::NotNeeded, currentPos, 0};
+  }
+
+  // Clamp discard so it never eats into tool tokens
+  llama_pos discard = tools.clampDiscard(nDiscarded, protectedPrefixPos);
+  llama_pos leftTokens = currentPos - protectedPrefixPos - discard;
+
+  // Try partial slide
+  if (leftTokens >= 0 && discard > 0 &&
+      currentPos + appendPos - discard < nCtx &&
+      currentCacheTokens + appendCacheTokens - discard < nCtx) {
+    auto mem = ops.memory(lctx);
+    if (!ops.seqRm(mem, 0, protectedPrefixPos, protectedPrefixPos + discard)) {
+      return {ContextSlideOutcome::Kind::MemoryOperationFailed, currentPos, 0};
+    }
+    ops.seqAdd(mem, 0, protectedPrefixPos + discard, currentPos, -discard);
+    llama_pos newNPast = currentPos - discard;
+    tools.onSlide(discard, protectedPrefixPos);
+    return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
+  }
+
+  // Fallback: wipe everything after the first message.
+  // Some hybrid recurrent memories cannot roll their tail state backwards. In
+  // that case, preserve the tail token and move it next to the protected prefix
+  // so decoding can continue with a best-effort contaminated state.
+  if (nDiscarded > 0) {
+    const llama_pos tail = currentPos - 1;
+    const llama_pos exactWipe = currentPos - protectedPrefixPos;
+    const llama_pos tailPreservingWipe = tail - protectedPrefixPos;
+    const bool exactWipeFits = exactWipe <= nDiscarded &&
+                               protectedPrefixPos + appendPos < nCtx &&
+                               protectedCacheTokens + appendCacheTokens < nCtx;
+    const bool tailPreservingWipeFits =
+        tail > protectedPrefixPos && tailPreservingWipe <= nDiscarded &&
+        protectedPrefixPos + 1 + appendPos < nCtx &&
+        protectedCacheTokens + 1 + appendCacheTokens < nCtx;
+
+    if (!exactWipeFits && !tailPreservingWipeFits) {
+      return {ContextSlideOutcome::Kind::Overflow, currentPos, 0};
+    }
+
+    auto mem = ops.memory(lctx);
+
+    if (exactWipeFits && ops.seqRm(mem, 0, protectedPrefixPos, currentPos)) {
+      if (tools.enabled()) {
+        tools.reset();
+      }
+      return {
+          ContextSlideOutcome::Kind::FullWipe, protectedPrefixPos, exactWipe};
+    }
+
+    if (tailPreservingWipeFits && ops.seqRm(mem, 0, protectedPrefixPos, tail)) {
+      ops.seqAdd(mem, 0, tail, currentPos, protectedPrefixPos - tail);
+      if (tools.enabled()) {
+        tools.reset();
+      }
+      return {
+          ContextSlideOutcome::Kind::FullWipe,
+          protectedPrefixPos + 1,
+          tailPreservingWipe};
+    }
+
+    return {ContextSlideOutcome::Kind::MemoryOperationFailed, currentPos, 0};
+  }
+
+  // Cannot free enough space
+  return {ContextSlideOutcome::Kind::Overflow, currentPos, 0};
+}
 } // namespace
 
 const IContextSliderOps& defaultContextSliderOps() {
@@ -41,54 +126,34 @@ ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nTokensToAppend, llama_pos nDiscarded,
     ToolsCompactController& tools, const IContextSliderOps& ops) {
+  return trySlidePrefillImpl(
+      lctx,
+      ContextUsage{nPast, nPast},
+      ContextUsage{firstMsgTokens, firstMsgTokens},
+      ContextUsage{nTokensToAppend, nTokensToAppend},
+      nDiscarded,
+      tools,
+      ops);
+}
 
-  const auto nCtx = ops.nCtx(lctx);
-
-  // Check if sliding is needed
-  if (nPast + nTokensToAppend < nCtx) {
-    return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
-  }
-
-  // Clamp discard so it never eats into tool tokens
-  llama_pos discard = tools.clampDiscard(nDiscarded, firstMsgTokens);
-  llama_pos leftTokens = nPast - firstMsgTokens - discard;
-
-  // Try partial slide
-  if (leftTokens >= 0 && discard > 0 &&
-      nPast + nTokensToAppend - discard < nCtx) {
-    auto mem = ops.memory(lctx);
-    ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
-    ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
-    llama_pos newNPast = nPast - discard;
-    tools.onSlide(discard, firstMsgTokens);
-    return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
-  }
-
-  // Fallback: wipe everything after the first message
-  if (leftTokens < 0 && firstMsgTokens + nTokensToAppend < nCtx &&
-      nDiscarded > 0) {
-    auto mem = ops.memory(lctx);
-    ops.seqRm(mem, 0, firstMsgTokens, nPast);
-    llama_pos wiped = nPast - firstMsgTokens;
-    if (tools.enabled()) {
-      tools.reset();
-    }
-    return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens, wiped};
-  }
-
-  // Cannot free enough space
-  return {ContextSlideOutcome::Kind::Overflow, nPast, 0};
+ContextSlideOutcome trySlidePrefill(
+    llama_context* lctx, ContextUsage current, ContextUsage protectedPrefix,
+    ContextUsage append, llama_pos nDiscarded, ToolsCompactController& tools,
+    const IContextSliderOps& ops) {
+  return trySlidePrefillImpl(
+      lctx, current, protectedPrefix, append, nDiscarded, tools, ops);
 }
 
 ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nDiscarded, ToolsCompactController& tools,
-    const IContextSliderOps& ops) {
+    const IContextSliderOps& ops, llama_pos nCacheTokens) {
 
   const auto nCtx = ops.nCtx(lctx);
+  const llama_pos cacheTokens = nCacheTokens >= 0 ? nCacheTokens : nPast;
 
   // Check if sliding is needed (need room for 1 more token)
-  if (nPast + 1 <= nCtx || nDiscarded == 0) {
+  if ((nPast + 1 <= nCtx && cacheTokens + 1 <= nCtx) || nDiscarded == 0) {
     return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
 
@@ -129,7 +194,9 @@ ContextSlideOutcome trySlideGeneration(
 
   // Perform the slide
   auto mem = ops.memory(lctx);
-  ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
+  if (!ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard)) {
+    return {ContextSlideOutcome::Kind::MemoryOperationFailed, nPast, 0};
+  }
   ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
   llama_pos newNPast = nPast - discard;
   tools.onSlide(discard, firstMsgTokens);
