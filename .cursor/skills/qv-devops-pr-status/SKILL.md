@@ -10,7 +10,7 @@ Thin wrapper over the shared pr-skills library, pinned to the DevOps pod and sco
 
 The dashboard spans the qvac monorepo (filtered by the pod's `ownedPaths`) **plus** every repo declared under `extraRepos` in [.github/teams/devops.json](.github/teams/devops.json). For extra repos the pod is treated as the sole owner — every open PR there is in-scope regardless of touched paths. The monorepo (`tetherto/qvac`) is the primary repo and stays path-filtered; it is intentionally NOT listed under `extraRepos`. Today's `extraRepos` are an explicit curated list:
 
-- Ops: `tetherto/github-ops`
+- Ops: `tetherto/github-ops`, `tetherto/oss-actions`
 - Dev: `tetherto/qvac-workbench`, `tetherto/qvac-internal`, `tetherto/qvac-test-suite`, `tetherto/qvac-registry-vcpkg`, `tetherto/qvac-ext-lib-whisper.cpp`, `tetherto/qvac-ext-stable-diffusion.cpp`, `tetherto/qvac-fabric-llm.cpp`, `tetherto/qvac-ext-ggml`, `tetherto/qvac-ext-bergamot-translator`, `tetherto/qvac-ext-marian-dev`
 - Research: `tetherto/qvac-research-tool-call`, `tetherto/qvac-research-medpsy`, `tetherto/qvac-research-translations-nmt`, `tetherto/qvac-research-evaluate`, `tetherto/qvac-research-synthetic-data-creation`, `tetherto/qvac-research-model-training`, `tetherto/qvac-model-tools`, `tetherto/qvac-rnd-fabric-llm-bitnet`, `tetherto/qvac-rnd-fabric-llm-finetune`
 

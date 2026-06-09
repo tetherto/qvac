@@ -16,6 +16,7 @@
   ],
   "extraRepos": [
     "tetherto/github-ops",
+    "tetherto/oss-actions",
     "tetherto/qvac-workbench",
     "tetherto/qvac-internal",
     "tetherto/qvac-test-suite",
