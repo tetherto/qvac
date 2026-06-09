@@ -428,7 +428,7 @@ class LlmLlamacpp {
    */
   async pause () {
     if (this.addon?.cancel) {
-      await this.addon.cancel()
+      await this.addon.cancel(1)
     }
   }
 
@@ -439,7 +439,7 @@ class LlmLlamacpp {
    */
   async cancel () {
     if (this.addon?.cancel) {
-      await this.addon.cancel()
+      await this.addon.cancel(0)
     }
     this._clearPauseCheckpoints()
   }

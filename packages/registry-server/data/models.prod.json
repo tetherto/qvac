@@ -12608,6 +12608,21 @@
     "link": "https://huggingface.co/HuggingFaceVLA/smolvla_libero"
   },
   {
+    "source": "s3:///qvac_models_compiled/vla/pi05-base/2026-05-21/pi05-base-q-aggressive.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "π₀.₅ (pi05) vision-language-action model from Physical Intelligence (LeRobot pi05_base). Single GGUF bundling a SigLIP vision tower, PaliGemma-style VLM, Gemma action expert, and flow-matching projections. Uses 3 camera views and discrete (tokenised) robot state (~3.7 GB).",
+    "quantization": "q_aggressive",
+    "params": "pi05-base",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "vla",
+      "pi05",
+      "robotics"
+    ],
+    "notes": "q_aggressive profile: Q5_0 vision tower + Q8_0 VLM + Q8_0 expert linears + F32 norms/ada; cos > 0.999 vs the PyTorch reference end-to-end. Converted from lerobot/pi05_base via convert_pi05_to_gguf.py.",
+    "link": "https://huggingface.co/lerobot/pi05_base"
+  },
+  {
     "source": "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/593b5a2e04c8f3e4ee880263f93e0bd2901ad47f/smollm2-360m-instruct-q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "SmolLM2 360M instruction-tuned GGUF model from Hugging Face, useful as a small text-generation canary.",

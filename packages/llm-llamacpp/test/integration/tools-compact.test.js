@@ -3,7 +3,7 @@
 const path = require('bare-path')
 const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest } = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -97,6 +97,12 @@ function normalizeStats (rawStats = {}) {
   }
 }
 
+function cleanupRunOptionsCache (runOptions) {
+  if (typeof runOptions?.cacheKey === 'string') {
+    cleanupIntegrationCacheFiles(runOptions.cacheKey)
+  }
+}
+
 async function setupModel (t, overrides = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: QWEN3_MODEL.name,
@@ -172,6 +178,7 @@ async function ensureToolsSupportOrSkip (t, model, logs) {
 }
 
 async function runAndCollect (model, prompt, runOptions) {
+  cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
   const chunks = []
   let chain = response.onUpdate(data => { chunks.push(data) })
@@ -191,6 +198,7 @@ async function runAndCollect (model, prompt, runOptions) {
 }
 
 async function runExpectingInvalidPrompt (t, model, prompt, expectedReason, runOptions) {
+  cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
 
   let capturedError = null
@@ -219,6 +227,7 @@ async function runExpectingInvalidPrompt (t, model, prompt, expectedReason, runO
 }
 
 async function runExpectingNoPromptValidationError (t, model, prompt, runOptions, invalidReason) {
+  cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
 
   let capturedError = null
