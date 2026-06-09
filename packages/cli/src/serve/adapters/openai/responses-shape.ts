@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import type { ToolCall, CompletionStats } from '@qvac/sdk'
 import { sdkToolCallsToOpenai } from './tool-calls.js'
+import { completionTokensFromStats } from './completion-result.js'
 
 export function responseId (): string {
   return `resp_${randomId()}`
@@ -37,10 +38,13 @@ export interface BuildResponseObjectParams {
   functionCallItemIds?: string[]
   /** From SDK completion stats; `generatedTokens` maps to `usage.output_tokens`. */
   stats?: CompletionStats
-}
-
-function wordCountFallback (text: string): number {
-  return text ? text.split(/\s+/).filter(Boolean).length : 0
+  /**
+   * Terminal `stopReason` from the SDK. `length` maps to OpenAI's
+   * `status: 'incomplete'` + `incomplete_details.reason: 'max_output_tokens'`
+   * (the Responses-API analogue of chat's `finish_reason: 'length'`), unless
+   * tool calls take precedence with `requires_action`.
+   */
+  stopReason?: string
 }
 
 export function buildResponseObject (params: BuildResponseObjectParams): Record<string, unknown> {
@@ -74,10 +78,7 @@ export function buildResponseObject (params: BuildResponseObjectParams): Record<
     }
   }
 
-  const outputTokens =
-    typeof params.stats?.generatedTokens === 'number' && Number.isFinite(params.stats.generatedTokens)
-      ? params.stats.generatedTokens
-      : wordCountFallback(params.text || '')
+  const outputTokens = completionTokensFromStats(params.text || '', params.stats)
   // SDK does not expose prompt token count today; `cacheTokens` is KV-cache hit count, not full prompt size.
   const inputTokens = 0
   const usage = {
@@ -86,17 +87,24 @@ export function buildResponseObject (params: BuildResponseObjectParams): Record<
     total_tokens: inputTokens + outputTokens
   }
 
+  const truncated = !hasToolCalls && params.stopReason === 'length'
+  const status = hasToolCalls ? 'requires_action' : truncated ? 'incomplete' : 'completed'
+
   const base: Record<string, unknown> = {
     id: params.id,
     object: 'response',
     created_at: params.createdAtSec,
-    status: hasToolCalls ? 'requires_action' : 'completed',
+    status,
     model: params.modelAlias,
     output,
     output_text: params.text || '',
     usage,
     parallel_tool_calls: params.parallelToolCalls,
     store: params.store
+  }
+
+  if (truncated) {
+    base['incomplete_details'] = { reason: 'max_output_tokens' }
   }
 
   if (hasToolCalls) {

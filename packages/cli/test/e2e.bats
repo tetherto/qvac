@@ -191,7 +191,7 @@ json_post_capture() {
 @test "chat: blocking completion returns valid response" {
   local body
   body=$(json_post "/v1/chat/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello and nothing else.\"}],\"max_tokens\":16}")
+    "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello and nothing else.\"}],\"max_tokens\":512}")
 
   echo "${body}" | jq -e '.id | startswith("chatcmpl-")' >/dev/null
   echo "${body}" | jq -e '.object == "chat.completion"' >/dev/null
@@ -212,13 +212,34 @@ json_post_capture() {
   echo "${body}" | jq -e '.choices[0].message.content | length > 0' >/dev/null
 }
 
+@test "chat: finish_reason=length when max_tokens exceeded (blocking)" {
+  local body
+  body=$(json_post "/v1/chat/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Count from 1 to 100.\"}],\"max_tokens\":1}")
+
+  echo "${body}" | jq -e '.choices[0].finish_reason == "length"' >/dev/null
+  echo "${body}" | jq -e '.usage.completion_tokens == 1' >/dev/null
+}
+
+@test "chat: finish_reason=length when max_tokens exceeded (streaming)" {
+  local raw
+  raw=$(curl -sN "${BASE}/v1/chat/completions" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Count from 1 to 100.\"}],\"stream\":true,\"max_tokens\":1}")
+
+  local last_chunk
+  last_chunk=$(echo "${raw}" | grep "^data: {" | tail -1 | sed 's/^data: //')
+  echo "${last_chunk}" | jq -e '.choices[0].finish_reason == "length"' >/dev/null
+  echo "${last_chunk}" | jq -e '.usage.completion_tokens == 1' >/dev/null
+}
+
 # ── Chat completions (streaming / SSE) ───────────────────────────────
 
 @test "chat: SSE stream returns valid chunks" {
   local raw
   raw=$(curl -sN "${BASE}/v1/chat/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hi.\"}],\"stream\":true,\"max_tokens\":16}")
+    -d "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hi.\"}],\"stream\":true,\"max_tokens\":512}")
 
   echo "${raw}" | grep -q "data: \[DONE\]"
 
@@ -485,7 +506,7 @@ TXT
 @test "responses: streaming returns response.completed and stub header" {
   curl -sN -D "${FILE_TMPDIR}/resp.hdr" -o "${FILE_TMPDIR}/resp.body" "${BASE}/v1/responses" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Say hi.\",\"stream\":true,\"max_output_tokens\":24}"
+    -d "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Say hi.\",\"stream\":true,\"max_output_tokens\":512}"
   grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/resp.hdr"
   grep -q 'response.created' "${FILE_TMPDIR}/resp.body"
   grep -q 'response.completed' "${FILE_TMPDIR}/resp.body"
@@ -584,7 +605,7 @@ TXT
 @test "legacy completions: blocking returns text_completion shape" {
   local body
   body=$(json_post "/v1/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":16}")
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":512}")
 
   echo "${body}" | jq -e '.id | startswith("cmpl-")' >/dev/null
   echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
@@ -611,7 +632,7 @@ TXT
 @test "legacy completions: multi-prompt blocking returns N choices with matching indices" {
   local body
   body=$(json_post "/v1/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"Reply with the word \\\"alpha\\\".\",\"Reply with the word \\\"beta\\\".\"],\"max_tokens\":8}")
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"Reply with the word \\\"alpha\\\".\",\"Reply with the word \\\"beta\\\".\"],\"max_tokens\":512}")
 
   echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
   echo "${body}" | jq -e '.choices | length == 2' >/dev/null
@@ -650,7 +671,7 @@ TXT
   local raw
   raw=$(curl -sN "${BASE}/v1/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hi.\",\"stream\":true,\"max_tokens\":16}")
+    -d "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hi.\",\"stream\":true,\"max_tokens\":512}")
 
   echo "${raw}" | grep -q "data: \[DONE\]"
 
