@@ -84,7 +84,7 @@ function formatTarget(target) {
 function renderPRLine(pr, podRoles = state.roles, extras = []) {
   const extraList = Array.isArray(extras) ? extras : extras ? [extras] : [];
   const lines = [
-    `#${pr.number} ${pr.title}`,
+    `${pr.prRef ?? `#${pr.number}`} ${pr.title}`,
     pr.url,
     `by ${pr.author.name || pr.author.login} · ${formatAge(pr.ready)} old`,
   ];
@@ -134,7 +134,8 @@ function jsonPRs(prs) {
 
 function renderExcludedLine(pr) {
   const author = pr.author.name || pr.author.login;
-  return `  #${pr.number} — ${pr.title}\n    ${pr.url}\n    by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`;
+  const ref = pr.prRef ?? `#${pr.number}`;
+  return `  ${ref} — ${pr.title}\n    ${pr.url}\n    by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`;
 }
 
 function modeTeam() {
@@ -144,6 +145,7 @@ function modeTeam() {
     console.log(JSON.stringify({
       mode,
       repo: state.repo,
+      repos: state.repos,
       currentUser: state.currentUser,
       staleDays: state.staleDays,
       authorScope: state.authorScope,
@@ -163,6 +165,12 @@ function modeTeam() {
       },
     }, null, 2));
     return;
+  }
+  const extraRepos = (state.repos ?? []).filter((r) => r !== state.repo);
+  if (extraRepos.length > 0) {
+    console.log(
+      `Repos: ${state.repo} (primary) + ${extraRepos.length} extra: ${extraRepos.join(", ")}\n`,
+    );
   }
   const conflictNote = groups.conflictCount > 0
     ? ` · ${groups.conflictCount} ⚠️ merge conflicts`

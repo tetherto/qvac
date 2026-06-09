@@ -11,11 +11,23 @@ export const STATE_ICONS = {
 };
 
 function gh(args) {
+  // stderr is piped (not inherited) so it does not leak to the user's terminal
+  // on success, but is captured on the thrown error so callers can surface a
+  // meaningful reason (e.g. "Could not resolve to a Repository").
   return execFileSync("gh", args, {
     encoding: "utf-8",
     maxBuffer: 10 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "ignore"],
+    stdio: ["ignore", "pipe", "pipe"],
   }).trim();
+}
+
+function ghErrorReason(error) {
+  const stderr = error?.stderr ? error.stderr.toString().trim() : "";
+  const firstLine = (stderr || error?.message || "unknown error")
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return firstLine || "unknown error";
 }
 
 function ghGraphQL(query, jq, vars = {}) {
@@ -179,6 +191,64 @@ export function fetchOpenPRs(repoConfig) {
   return { allPRs, pageNum };
 }
 
+function listOrgRepos(owner) {
+  const raw = gh([
+    "repo",
+    "list",
+    owner,
+    "--no-archived",
+    "--limit",
+    "1000",
+    "--json",
+    "name",
+  ]);
+  const parsed = raw ? JSON.parse(raw) : [];
+  return parsed.map((entry) => entry.name);
+}
+
+// Resolve an `extraRepos` spec list into concrete `owner/name` strings.
+// Plain `owner/name` entries pass through unchanged. Entries whose name
+// segment contains `*` are treated as globs and resolved against the org's
+// non-archived repos via `gh repo list` (each org listed at most once).
+// Returns { repos, warnings } — warnings are emitted for malformed entries
+// or orgs that cannot be listed, so the caller can surface them on stderr.
+export function resolveExtraRepos(specs) {
+  const resolved = new Set();
+  const warnings = [];
+  const orgCache = new Map();
+  for (const spec of specs) {
+    if (typeof spec !== "string" || !spec.includes("/")) {
+      warnings.push(`Ignoring extraRepos entry "${spec}" (must be owner/name).`);
+      continue;
+    }
+    const [owner, name] = spec.split("/", 2);
+    if (!owner || !name) {
+      warnings.push(`Ignoring extraRepos entry "${spec}" (must be owner/name).`);
+      continue;
+    }
+    if (!name.includes("*")) {
+      resolved.add(`${owner}/${name}`);
+      continue;
+    }
+    if (!orgCache.has(owner)) {
+      try {
+        orgCache.set(owner, listOrgRepos(owner));
+      } catch (e) {
+        warnings.push(`Could not list repos for "${owner}": ${ghErrorReason(e)}`);
+        orgCache.set(owner, []);
+      }
+    }
+    const pattern = name
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*");
+    const re = new RegExp(`^${pattern}$`);
+    for (const repoName of orgCache.get(owner)) {
+      if (re.test(repoName)) resolved.add(`${owner}/${repoName}`);
+    }
+  }
+  return { repos: [...resolved], warnings };
+}
+
 function loadPods(mode, pod) {
   return mode === "my"
     ? (pod ? [loadTeam(pod)] : discoverPods())
@@ -220,7 +290,43 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   const rosterLogins = enforceAuthorScope
     ? new Set(pods.flatMap((p) => [...p.leads, ...p.members]))
     : null;
-  const { allPRs, pageNum } = fetchOpenPRs(repoConfig);
+
+  // extraRepos are honored only in team mode. There the pod is treated as the
+  // sole owner of each extra repo, so every open PR is in scope regardless of
+  // touched paths. review/my modes stay on the primary repo only.
+  const extraRepoSpecs =
+    mode === "team"
+      ? [...new Set(pods.flatMap((p) => p.extraRepos || []))]
+      : [];
+  const { repos: extraRepoList, warnings: repoWarnings } = resolveExtraRepos(extraRepoSpecs);
+  for (const warning of repoWarnings) console.error(warning);
+
+  const repoTargets = [{ ...repoConfig, soleOwner: false, isPrimary: true }];
+  for (const full of extraRepoList) {
+    if (full === repoConfig.repo) continue;
+    const { owner, name, repo } = splitRepo(full);
+    repoTargets.push({ owner, name, repo, soleOwner: true, isPrimary: false });
+  }
+
+  const allPRs = [];
+  const scannedRepos = [];
+  let pageNum = 0;
+  for (const target of repoTargets) {
+    try {
+      const { allPRs: prs, pageNum: pages } = fetchOpenPRs(target);
+      pageNum += pages;
+      for (const pr of prs) {
+        pr.repo = target.repo;
+        pr.isPrimaryRepo = target.isPrimary;
+        pr.soleOwner = target.soleOwner;
+      }
+      allPRs.push(...prs);
+      scannedRepos.push(target.repo);
+    } catch (e) {
+      console.error(`Skipping ${target.repo}: ${ghErrorReason(e)}`);
+    }
+  }
+
   const isCrossPodMy = mode === "my" && pod === null;
   const relevantPRs = [];
   const excludedPRs = [];
@@ -230,16 +336,19 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
     if (!pr.author?.login) continue;
     if (mode === "my" && pr.author.login !== currentUser) continue;
     const files = pr.files?.nodes || [];
-    if (!isCrossPodMy && !touchesOwnedPaths(files, ownedPaths)) continue;
+    if (!isCrossPodMy && !pr.soleOwner && !touchesOwnedPaths(files, ownedPaths)) continue;
     const reviews = pr.reviews?.nodes || [];
     const reviewState = getReviewState(reviews);
     const ready = readySince(pr);
+    const prRef = pr.isPrimaryRepo === false ? `${pr.repo}#${pr.number}` : `#${pr.number}`;
     const enriched = {
       ...pr,
       files,
       reviewState,
       ready,
       stale: now - new Date(ready).getTime() > staleMs,
+      repo: pr.repo,
+      prRef,
     };
     if (enforceAuthorScope && !rosterLogins.has(pr.author.login)) {
       excludedPRs.push(enriched);
@@ -253,6 +362,7 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   return {
     config,
     repo: repoConfig.repo,
+    repos: scannedRepos,
     staleDays,
     currentUser,
     pods,
@@ -365,6 +475,8 @@ export function classifyMyPRs(state) {
 export function toJsonablePR(pr) {
   return {
     number: pr.number,
+    repo: pr.repo,
+    prRef: pr.prRef,
     title: pr.title,
     url: pr.url,
     author: pr.author,
