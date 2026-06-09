@@ -445,9 +445,9 @@ export const completionCodeGeneration = createCompletionTest(
 export const completionConversationContext = createCompletionTest(
   "completion-conversation-context",
   {
-    history: [{ role: "user", content: "Tell me about AI." }],
+    history: [{ role: "user", content: "Tell me about AI in one short sentence." }],
     stream: false,
-    generationParams: DETERMINISTIC,
+    generationParams: { ...DETERMINISTIC, predict: 32 },
   },
   { validation: "type", expectedType: "string" },
 );

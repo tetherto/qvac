@@ -8,6 +8,7 @@ import {
   validateAndJoinPath,
 } from "@/server/utils";
 import { getServerLogger } from "@/logging";
+import { Buffer } from "bare-buffer";
 
 const logger = getServerLogger();
 
@@ -39,18 +40,18 @@ export function generateConfigHash(
   systemPrompt: string | null,
   tools?: unknown,
 ): string {
-  const hash = crypto.createHash("sha256");
+  const hash = crypto.createHash("sha-256");
   const toolNames = getToolNamesForHash(tools);
   hash.update(Buffer.from(JSON.stringify({ systemPrompt, toolNames }), "utf8"));
-  return (hash.digest("hex") as string).substring(0, 16);
+  return (hash.digest("hex")).substring(0, 16);
 }
 
 export function generateCacheKey(messages: CacheMessage[]): string {
-  const hash = crypto.createHash("sha256");
+  const hash = crypto.createHash("sha-256");
   const historyString = JSON.stringify(messages);
   const historyBuffer = Buffer.from(historyString, "utf8");
   hash.update(historyBuffer);
-  const hashString = hash.digest("hex") as string;
+  const hashString = hash.digest("hex");
   return hashString.substring(0, 16);
 }
 

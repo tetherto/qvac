@@ -13,6 +13,16 @@ inputs:
   report-title:
     description: 'Heading for the GitHub Step Summary (e.g. "OCR Performance Report (All Platforms)")'
     required: true
+  exclude:
+    description: >
+      Optional pipe-separated, case-insensitive test-name denylist passed to
+      aggregate.js --exclude for the COMBINED (cross-platform) report only.
+      Matching rows are dropped from the combined table — use it to omit
+      desktop-only rows that can never have mobile data (e.g.
+      "full-suite|canvasSize lab_results"). The per-device reports are
+      generated without it, so they keep every row.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -49,17 +59,28 @@ runs:
 
     - name: Generate combined report
       shell: bash
+      env:
+        EXCLUDE: ${{ inputs.exclude }}
       run: |
         if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
           echo "No performance reports found."
           exit 0
         fi
         mkdir -p combined-output
+        # Pass --exclude only to the combined (cross-platform) report so
+        # desktop-only rows are dropped here while per-device reports keep
+        # them. Use an array so a pattern containing spaces (e.g.
+        # "canvasSize lab_results") is passed as a single argument.
+        EXCLUDE_ARG=()
+        if [ -n "$EXCLUDE" ]; then
+          EXCLUDE_ARG=(--exclude "$EXCLUDE")
+        fi
         node scripts/perf-report/aggregate.js \
           --dir combined-reports \
           --output-html combined-output/performance-report-combined.html \
           --output-json combined-output/performance-summary-combined.json \
-          --output combined-output/performance-report-combined.md
+          --output combined-output/performance-report-combined.md \
+          "${EXCLUDE_ARG[@]}"
 
     - name: Generate per-device HTML reports
       if: always()

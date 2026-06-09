@@ -99,9 +99,8 @@ export class CompletionExecutor extends AbstractModelExecutor<
   }
 
   // Issues several completions against the same model in the same tick and
-  // asserts the registry's single-flight concurrency policy: exactly the
-  // in-flight request runs to completion while the rest are rejected with the
-  // policy error (never a crash), and the model stays usable afterwards.
+  // asserts the registry's FIFO concurrency policy: same-model requests wait
+  // for the native context and all resolve without policy rejections.
   async concurrentRequests(
     params: CompletionTestParams,
     expectation: Expectation,
@@ -126,43 +125,31 @@ export class CompletionExecutor extends AbstractModelExecutor<
       (s): s is PromiseRejectedResult => s.status === "rejected",
     );
 
-    if (fulfilled.length !== 1 || rejected.length !== CONCURRENCY - 1) {
+    if (fulfilled.length !== CONCURRENCY || rejected.length !== 0) {
       return {
         passed: false,
         output:
-          `Expected single-flight shape: 1 fulfilled and ${CONCURRENCY - 1} rejected by policy; ` +
+          `Expected FIFO shape: ${CONCURRENCY} fulfilled and 0 rejected; ` +
           `got ${fulfilled.length} fulfilled and ${rejected.length} rejected`,
       };
     }
 
-    // Any rejection must be the expected concurrency policy, not a crash/other error.
-    const unexpected = rejected.find(
-      (r) => !/concurrency policy|already running/i.test(String(r.reason)),
-    );
-    if (unexpected) {
+    // Every queued request must still produce a valid response once admitted.
+    const failedResult = fulfilled
+      .map((result) => ValidationHelpers.validate(result.value, expectation))
+      .find((result) => !result.passed);
+    if (failedResult) {
       return {
         passed: false,
-        output: `Concurrent request rejected for an unexpected reason: ${String(unexpected.reason)}`,
-      };
-    }
-
-    // The request that did run must still produce a valid response.
-    const runResult = ValidationHelpers.validate(
-      fulfilled[0]!.value,
-      expectation,
-    );
-    if (!runResult.passed) {
-      return {
-        passed: false,
-        output: `In-flight completion failed expectation: ${runResult.output}`,
+        output: `Queued completion failed expectation: ${failedResult.output}`,
       };
     }
 
     return {
       passed: true,
       output:
-        `Single-flight concurrency policy enforced: ${fulfilled.length} ran, ` +
-        `${rejected.length} rejected by policy (of ${CONCURRENCY} issued)`,
+        `FIFO concurrency policy enforced: ${fulfilled.length} completed, ` +
+        `${rejected.length} rejected (of ${CONCURRENCY} issued)`,
     };
   }
 

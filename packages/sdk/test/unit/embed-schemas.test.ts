@@ -24,6 +24,36 @@ test("embedStatsSchema: backendDevice is optional", (t) => {
   t.is(result.success, true);
 });
 
+test("embedStatsSchema: accepts contextSize", (t) => {
+  const result = embedStatsSchema.safeParse({ contextSize: 512 });
+  t.is(result.success, true);
+  if (result.success) t.is(result.data.contextSize, 512);
+});
+
+test("embedStatsSchema: contextSize is optional", (t) => {
+  const result = embedStatsSchema.safeParse({ backendDevice: "gpu" });
+  t.is(result.success, true);
+  if (result.success) t.is(result.data.contextSize, undefined);
+});
+
+test("embedResponseSchema: round-trips contextSize through stats", (t) => {
+  const result = embedResponseSchema.safeParse({
+    type: "embed",
+    success: true,
+    embedding: [0.1, 0.2, 0.3],
+    stats: {
+      totalTime: 5,
+      tokensPerSecond: 200,
+      totalTokens: 1000,
+      contextSize: 512,
+    },
+  });
+  t.is(result.success, true);
+  if (result.success) {
+    t.is(result.data.stats?.contextSize, 512);
+  }
+});
+
 test("embedResponseSchema: round-trips backendDevice through stats", (t) => {
   const result = embedResponseSchema.safeParse({
     type: "embed",

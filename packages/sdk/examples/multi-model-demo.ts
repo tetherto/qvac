@@ -9,14 +9,12 @@ import {
 try {
   const alice = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 4096,
     },
   });
   const bob = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 4096,
     },

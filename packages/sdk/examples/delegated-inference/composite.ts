@@ -76,7 +76,6 @@ async function runDelegatedCompletion(
   console.log("→ Loading model via delegation...");
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     delegate: {
       providerPublicKey,
       timeout: 30_000,

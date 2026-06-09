@@ -19,14 +19,55 @@
 /* ===========================================
    VIEWPORT ADJUSTMENTS - START
    =========================================== */
-/* 1) Defines the "page spacing" in @theme */
+/* 1) Defines the "page spacing" in @theme.
+ *
+ * This feeds `--fd-layout-width`, which sizes the notebook grid's main
+ * (article) column: main = --fd-layout-width − sidebar − toc.
+ * The article (#nd-page, 780px) is centered in that column via
+ * margin-inline:auto, so the leftover (main − 780) splits into a gap on
+ * each side between the article and the sidebar/TOC. Any surplus beyond
+ * --fd-layout-width goes to the page's outer gutters (left/right margins).
+ *
+ * Spacing is calibrated so the central text column is centered on the page:
+ *   main = 1406 − 288 − 288 = 830px
+ *   article-to-TOC gap = (830 − 780) / 2 + 32px article padding = ~57px (~2cm)
+ *   outer margin = (viewport − 1406) / 2 (≈2.2cm on the reference viewport)
+ *
+ * The text column's horizontal offset from page center equals
+ * (sidebar − toc) / 2: with sidebar == toc (both 288px) it is 0, so the
+ * article is centered rather than leaning toward the TOC. The article
+ * itself stays 780px (~25cm) — only the surrounding columns were retuned.
+ */
 @theme {
-  --spacing-page: 1560px;
+  --spacing-page: 1406px;
 }
 
 /* 2) Limits the maximum width of the Fumadocs UI layout */
 :root {
   --fd-layout-width: var(--spacing-page);
+}
+
+/*
+ * 2b) Retune the sidebar / TOC column widths.
+ *
+ * Fumadocs sets these via its `layout:` variant, which (through `:has(&)`)
+ * lands the custom properties on the grid container `#nd-notebook-layout`
+ * itself — NOT on the sidebar/TOC elements — at the `md` (sidebar) and `xl`
+ * (toc) breakpoints. We override on the same container, at the same
+ * breakpoints, with `!important` to outrank Fumadocs' `#nd-...:has(&)`
+ * selector (specificity 0,2,0 vs our 0,1,0). Mirroring the breakpoints keeps
+ * the mobile/collapsed behavior (sidebar/toc width = 0) untouched.
+ */
+@media (min-width: 768px) {
+  #nd-notebook-layout {
+    --fd-sidebar-width: 288px !important; /* == toc to center the article */
+  }
+}
+
+@media (min-width: 1280px) {
+  #nd-notebook-layout {
+    --fd-toc-width: 288px !important; /* == sidebar to center the article */
+  }
 }
 
 /*
@@ -47,13 +88,29 @@
  * Padding is intentionally NOT overridden here: the default
  * `xl:px-8` (32px) already matches what the `docs` layout shipped.
  */
+/*
+ * `margin-inline: auto` centers the article in the (wide) desktop grid
+ * track. But on a CSS grid item, auto inline margins also make it
+ * shrink-to-fit its *max-content* instead of stretching to the track.
+ * An unwrapped Shiki code block renders `<pre class="w-max">`
+ * (`width: max-content`); `overflow: auto` zeroes its min-content but
+ * NOT its max-content, so a long code line inflates the article's
+ * max-content past narrow viewports and the `overflow-x-clip` notebook
+ * layout clips it (page wider than viewport on mobile, only on pages
+ * that contain a long-line code block).
+ *
+ * Capping `max-width` to `min(<desktop-cap>, 100%)` keeps the desktop
+ * width identical (track is wider than the cap) while clamping the
+ * article to the track on mobile, so the code block's own
+ * `overflow-x: auto` container scrolls instead of widening the page.
+ */
 #nd-page {
-  max-width: 900px;
+  max-width: min(780px, 100%);
   margin-inline: auto;
 }
 
 #nd-page[data-full='true'] {
-  max-width: 1200px;
+  max-width: min(1200px, 100%);
 }
 
 /*

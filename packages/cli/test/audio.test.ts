@@ -12,6 +12,7 @@ import {
   speechAliasKey
 } from '../src/serve/audio.js'
 import { parseServeConfig } from '../src/serve/config.js'
+import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '../src/serve/lib/audio-transcode.js'
 
 describe('mapResponseFormat', () => {
   it('returns the documented default for missing input', () => {
@@ -50,15 +51,27 @@ describe('mapResponseFormat', () => {
     if (result.kind === 'native') assert.equal(result.format, 'wav')
   })
 
-  it('flags mp3/opus/aac/flac as unsupported (not invalid)', () => {
-    for (const format of ['mp3', 'opus', 'aac', 'flac']) {
+  it('flags mp3/opus/aac/flac as transcoded with a Content-Type', () => {
+    const expected: Record<string, string> = {
+      mp3: 'audio/mpeg',
+      opus: 'audio/ogg',
+      aac: 'audio/aac',
+      flac: 'audio/flac'
+    }
+    for (const format of Object.keys(expected)) {
       const result = mapResponseFormat(format)
-      assert.equal(result.kind, 'unsupported', `expected ${format} to be unsupported`)
-      if (result.kind === 'unsupported') {
+      assert.equal(result.kind, 'transcoded', `expected ${format} to be transcoded`)
+      if (result.kind === 'transcoded') {
         assert.equal(result.format, format)
-        assert.ok(result.message.includes(format))
+        assert.equal(result.contentType, expected[format])
       }
     }
+  })
+
+  it('is case-insensitive for encoded formats', () => {
+    const result = mapResponseFormat('MP3')
+    assert.equal(result.kind, 'transcoded')
+    if (result.kind === 'transcoded') assert.equal(result.format, 'mp3')
   })
 
   it('rejects unknown formats as invalid', () => {
@@ -202,6 +215,32 @@ describe('pcmContentType', () => {
     assert.equal(pcmContentType(44100), 'audio/L16; rate=44100; channels=1')
   })
 })
+
+describe('speechEncodeArgs', () => {
+  it('reads WAV from stdin and writes the container to stdout for every format', () => {
+    for (const format of ENCODED_SPEECH_FORMATS) {
+      const args = speechEncodeArgs(format)
+      assert.equal(args[0], '-hide_banner')
+      assert.ok(args.includes('-nostdin'))
+      // input on pipe:0, output on pipe:1
+      assert.equal(args[args.indexOf('-i') + 1], 'pipe:0')
+      assert.equal(args[args.length - 1], 'pipe:1')
+      // an explicit audio codec is selected
+      assert.ok(args.includes('-c:a'), `${format} should set -c:a`)
+    }
+  })
+
+  it('selects the expected codec/container per format', () => {
+    assert.deepEqual(tail(speechEncodeArgs('mp3')), ['-c:a', 'libmp3lame', '-f', 'mp3', 'pipe:1'])
+    assert.deepEqual(tail(speechEncodeArgs('opus')), ['-c:a', 'libopus', '-f', 'ogg', 'pipe:1'])
+    assert.deepEqual(tail(speechEncodeArgs('aac')), ['-c:a', 'aac', '-f', 'adts', 'pipe:1'])
+    assert.deepEqual(tail(speechEncodeArgs('flac')), ['-c:a', 'flac', '-f', 'flac', 'pipe:1'])
+  })
+})
+
+function tail (args: string[]): string[] {
+  return args.slice(args.indexOf('-c:a'))
+}
 
 describe('parseServeConfig — openai.audio.speech.voices', () => {
   it('normalizes voice keys to lowercase', async () => {
