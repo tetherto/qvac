@@ -1,6 +1,6 @@
 # @qvac/ai-sdk-provider
 
-[Vercel AI SDK](https://ai-sdk.dev) provider for the [QVAC](https://qvac.com) local AI runtime.
+[Vercel AI SDK](https://ai-sdk.dev) provider for the [QVAC](https://qvac.tether.io) local AI runtime.
 
 QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package is a thin, branded wrapper around [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that points at a running `qvac serve openai` HTTP server and re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
