@@ -86,6 +86,11 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/model-loading.test.js', options)
 }
 
+async function runMropeSlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMropeSlidingContextTest')) return __FILTERED
+  return runIntegrationModule('../integration/mrope-sliding-context.test.js', options)
+}
+
 async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiGpuTest')) return __FILTERED
   return runIntegrationModule('../integration/multi-gpu.test.js', options)
