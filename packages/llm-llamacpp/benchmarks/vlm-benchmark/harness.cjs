@@ -182,7 +182,7 @@ function dimsFromBytes (bytes) {
   return { w: null, h: null }
 }
 
-// Same patterns benchmarks/vlm-performance/stdout-parser.js uses. Vision-encode is
+// Same patterns the vendored stdout-parser.js uses. Vision-encode is
 // SUMMED across `image slice encoded` lines (dynamic-res VLMs emit one per tile).
 const VISION_RE = /image (?:slice )?encoded in\s+(\d+(?:\.\d+)?)\s*ms/gi
 const PROMPT_RE = /prompt eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+tokens\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i

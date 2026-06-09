@@ -131,7 +131,7 @@ bytes fetched from its canonical pinned URL). See `resolveBlob()` in `harness.cj
 ## Running it
 
 The benchmark is driven by the **Benchmark VLM (LLM)** workflow
-(`.github/workflows/benchmark-vlm-model-comparison.yml`). *Run workflow* (or `gh workflow run`)
+(`.github/workflows/benchmark-llm-llamacpp.yml`). *Run workflow* (or `gh workflow run`)
 → set `run_matrix = true`, then pick the axes via the dispatch inputs below.
 
 > **Important:** the same workflow also hosts a *separate* source-engines benchmark
@@ -217,7 +217,7 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
 **Example** — clean two-models, desktop CPU+GPU + S25, base preset:
 
 ```bash
-gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> \
+gh workflow run benchmark-llm-llamacpp.yml --ref <branch> \
   -f run_matrix=true -f matrix_mode=two-models -f matrix_preset=base \
   -f matrix_engine=addon -f matrix_linux=linux-cpu,linux-gpu -f run_matrix_s25=true \
   -f run_addon=false -f run_fabric_cli=false -f run_upstream_cli=false -f run_android=false
@@ -306,12 +306,13 @@ All in `packages/llm-llamacpp/benchmarks/vlm-benchmark/` unless noted:
 | `vlm-matrix.test.js`, `harness.cjs` | harness (loads models, emits markers) |
 | `aggregate.js` | parses markers → report |
 | `cli-fixture-runner.cjs` | runs the fixture through a native CLI (several-sources) |
+| `cli-case-runner.js`, `stdout-parser.js`, `accuracy.js`, `utils.js`, `cli-source-config.js`, `build-cli-sources.js` | **vendored** native-CLI helpers — build + run fabric/upstream `llama-mtmd-cli` (several-sources). Self-contained; not imported from `vlm-performance` |
 | `build-fixture.cjs` | open-licensed fixture generator |
 | `fixture.data.cjs`, `fixture.NOTICE.md` | the frozen fixture manifest + attribution (images are in S3, synced into `images/` by CI) |
 | `score-check.cjs` | offline metric-tuning harness — re-scores real predictions without re-running inference |
 | `stage.cjs` | copies the above into `test/integration/` + `testAssets/` for the mobile build |
-| `.github/workflows/benchmark-vlm-model-comparison.yml` | `run_matrix` jobs (desktop legs, mobile, combine) |
+| `.github/workflows/benchmark-llm-llamacpp.yml` | `run_matrix` jobs (desktop legs, mobile, combine) |
 
-**Reused from elsewhere in the package** (not copied): the addon (`../../index.js`),
-`ensureModel` (`../../test/integration/utils.js`), and the native CLI helpers
-(`../vlm-performance/cli-case-runner.js`, `stdout-parser.js`, `scripts/build-cli-sources.js`).
+**Reused from the package** (on `main`, not copied): the addon (`../../index.js`) and
+`ensureModel` (`../../test/integration/utils.js`). The several-sources native-CLI helpers
+are **vendored** into this folder (above) so the benchmark is self-contained.

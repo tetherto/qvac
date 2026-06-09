@@ -831,12 +831,12 @@ jobs:
         if: inputs.matrix_mode == 'several-sources'
         uses: actions/cache@v4
         with:
-          path: ${{ env.WORKDIR }}/benchmarks/vlm-performance/cli-builds
+          path: ${{ env.WORKDIR }}/benchmarks/vlm-benchmark/cli-builds
           key: vlm-cli-v3-linux-${{ matrix.backend }}-${{ inputs.fabric_ref }}-${{ inputs.upstream_ref }}
 
       - name: Build + run fabric/upstream CLIs over the fixture (several-sources)
         if: inputs.matrix_mode == 'several-sources'
-        working-directory: ${{ env.WORKDIR }}/benchmarks/vlm-performance
+        working-directory: ${{ env.WORKDIR }}/benchmarks/vlm-benchmark
         shell: bash
         env:
           LOG: ${{ github.workspace }}/${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
@@ -845,12 +845,12 @@ jobs:
           PRESET: ${{ inputs.matrix_preset }}
         run: |
           # Match the addon leg's run size: samples + repeats come from the active
-          # preset in config.cjs (matrix_samples still overrides samples).
-          PRESET_SAMPLES=$(node -e "console.log((require('../vlm-benchmark/config.cjs').presets['$PRESET']||{}).samplesPerTask||3)")
-          REPEATS=$(node -e "console.log((require('../vlm-benchmark/config.cjs').presets['$PRESET']||{}).repeats||1)")
+          # preset in config.cjs (matrix_samples still overrides samples). CLI build +
+          # runner are vendored into this folder (no vlm-performance dependency).
+          PRESET_SAMPLES=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).samplesPerTask||3)")
+          REPEATS=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).repeats||1)")
           SAMPLES="${SAMPLES:-$PRESET_SAMPLES}"
-          npm install --no-audit --no-fund
-          node scripts/build-cli-sources.js --sources=fabric,upstream \
+          node build-cli-sources.js --sources=fabric,upstream \
             --fabric-ref=${{ inputs.fabric_ref }} --upstream-ref=${{ inputs.upstream_ref }} \
             --backend=${{ matrix.backend }}
           FABRIC_BIN=$(node -e "console.log(require('./cli-sources-resolved.json').fabric.binaryPath)")
@@ -860,7 +860,7 @@ jobs:
           MMPROJ="$MODEL_DIR/reg-qwen-mradermacher-mmproj-Q8_0.gguf"
           run_src () {
             echo ">> $1 over fixture ($2)"
-            node ../vlm-benchmark/cli-fixture-runner.cjs \
+            node cli-fixture-runner.cjs \
               --binary "$3" --source "$1" --llm "$LLM" --mmproj "$MMPROJ" \
               --backend "${{ matrix.backend }}" --samples "$SAMPLES" --repeats "$REPEATS" \
               --tasks textvqa,vizwiz,gqa,docvqa,ai2d \

@@ -6,7 +6,7 @@
 //   [VLMSEG]{cell:<source>,...}  then the CLI's stderr (carries `image ... encoded in N ms`)
 //   [VLMROW]{cell:<source>, source, model, mmproj, device, task, id, metric, gold, pred, ...}
 //
-// Reuses the exact CLI invocation/template logic from vlm-performance/cli-case-runner.js.
+// Reuses the exact CLI invocation/template logic from the vendored cli-case-runner.js.
 // Linux/desktop only (native binary). Usage:
 //   node cli-fixture-runner.cjs --binary <llama-mtmd-cli> --source fabric-cli \
 //     --llm <gguf> --mmproj <gguf> --backend cpu|gpu [--tasks t1,t2] [--samples 3] \
@@ -14,8 +14,8 @@
 
 const fs = require('fs')
 const path = require('path')
-const { runOnceCli } = require('../vlm-performance/cli-case-runner')
-const { parseStdoutMetrics } = require('../vlm-performance/stdout-parser')
+const { runOnceCli } = require('./cli-case-runner')
+const { parseStdoutMetrics } = require('./stdout-parser')
 const fixture = require('./fixture.data.cjs')
 
 function arg (name, def) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : def }

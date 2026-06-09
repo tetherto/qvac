@@ -39,8 +39,5 @@ test/integration/harness.cjs
 test/integration/config.cjs
 test/integration/fixture.data.cjs
 test/mobile/testAssets/vlmx-*
-# Fixture images live in S3 (s3://tether-ai-dev/vlm-benchmark/), not git. CI syncs
-# them into images/ at run time; build-fixture.cjs writes them here locally.
-benchmarks/vlm-benchmark/images/
 
 /test_cpp/build/
