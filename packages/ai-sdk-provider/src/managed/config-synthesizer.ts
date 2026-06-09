@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { allModels } from '../models/constants.js'
+import { isCatalogId, resolveModelConstant } from '../models/catalog.js'
 import type { QvacManagedModel } from '../types.js'
 import {
   DuplicateManagedModelError,
@@ -15,8 +16,13 @@ import {
 // per-model serve config.
 export type ManagedModelInput = string | QvacManagedModel
 
-// Each requested model constant becomes a serve alias of the same name, so a
-// caller's `provider('QWEN3_600M_INST_Q4')` maps 1:1 to the synthesized entry.
+// Each requested model becomes a serve alias keyed by the name the caller gave:
+//   - a bare SDK constant (`'QWEN3_600M_INST_Q4'`) → alias == constant, so
+//     `provider('QWEN3_600M_INST_Q4')` maps 1:1 to the entry;
+//   - a public catalog id (`'qwen3.5-9b'`) → alias == the friendly id, while
+//     `model` resolves to the underlying SDK constant. This lets the serve
+//     answer requests for `qwen3.5-9b` directly (matching models.dev), with no
+//     id translation needed in front of it.
 // `config` carries per-model serve settings (ctx_size, reasoning_budget, …).
 interface SynthesizedModelEntry {
   readonly model: string
@@ -32,6 +38,12 @@ export interface SynthesizedServeConfig {
 }
 
 const KNOWN_MODEL_NAMES: ReadonlySet<string> = new Set(allModels.map((m) => m.name))
+
+// A model name is valid if it is a generated SDK constant or a public catalog
+// id (which resolves to a constant). Anything else is rejected up front.
+function isKnownModelName (name: string): boolean {
+  return KNOWN_MODEL_NAMES.has(name) || isCatalogId(name)
+}
 
 function normalizeModel (input: ManagedModelInput): QvacManagedModel {
   return typeof input === 'string' ? { name: input } : input
@@ -53,7 +65,7 @@ export function synthesizeServeConfig (models: readonly ManagedModelInput[]): Sy
 
   const specs = models.map(normalizeModel)
 
-  const unknown = specs.filter((s) => !KNOWN_MODEL_NAMES.has(s.name)).map((s) => s.name)
+  const unknown = specs.filter((s) => !isKnownModelName(s.name)).map((s) => s.name)
   if (unknown.length > 0) {
     throw new UnknownManagedModelError(unknown)
   }
@@ -83,8 +95,11 @@ export function synthesizeServeConfig (models: readonly ManagedModelInput[]): Sy
   const entries: Record<string, SynthesizedModelEntry> = {}
   specs.forEach((spec, index) => {
     const isDefault = spec.default ?? (!hasExplicitDefault && index === 0)
+    // Alias is the name the caller gave (a catalog id stays friendly); `model`
+    // resolves to the SDK constant a catalog id points at (or the constant
+    // itself for a bare-constant input).
     entries[spec.name] = {
-      model: spec.name,
+      model: resolveModelConstant(spec.name),
       preload: spec.preload ?? true,
       ...(isDefault ? { default: true as const } : {}),
       ...(spec.config !== undefined ? { config: spec.config } : {})

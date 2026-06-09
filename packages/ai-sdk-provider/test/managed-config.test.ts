@@ -28,6 +28,33 @@ test('synthesizeServeConfig builds a serve.models map keyed by constant name', (
   })
 })
 
+test('synthesizeServeConfig keys a catalog id by its friendly alias, model = constant', () => {
+  // A public models.dev id stays the serve alias, so the serve answers
+  // `qwen3.5-9b` directly; `model` resolves to the underlying SDK constant.
+  const config = synthesizeServeConfig(['qwen3.5-9b'])
+
+  assert.deepEqual(config, {
+    serve: {
+      models: {
+        'qwen3.5-9b': { model: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M', preload: true, default: true }
+      }
+    }
+  })
+})
+
+test('synthesizeServeConfig carries per-model config under a catalog-id alias', () => {
+  const config = synthesizeServeConfig([
+    { name: 'qwen3.5-9b', config: { ctx_size: 32768, reasoning_budget: -1 } }
+  ])
+
+  assert.deepEqual(config.serve.models['qwen3.5-9b'], {
+    model: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M',
+    preload: true,
+    default: true,
+    config: { ctx_size: 32768, reasoning_budget: -1 }
+  })
+})
+
 test('synthesizeServeConfig marks only the first model as default', () => {
   // Two known constants; the second one is any other chat/embedding constant.
   const config = synthesizeServeConfig([KNOWN, 'QWEN3_1_7B_INST_Q4'])

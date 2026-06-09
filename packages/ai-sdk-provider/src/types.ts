@@ -23,8 +23,10 @@ export interface QvacExternalOptions extends QvacCommonOptions {
 // serve default `ctx_size` of 1024 is too small for an agent's system prompt +
 // tool definitions). See the package README's "Using with coding agents".
 export interface QvacManagedModel {
-  // SDK model-constant name, e.g. `'GPT_OSS_20B_INST_Q4_K_M'`. Becomes a serve
-  // alias of the same name, so `provider(name)` maps 1:1 to the entry.
+  // SDK model-constant name (`'GPT_OSS_20B_INST_Q4_K_M'`) or a public catalog id
+  // (`'qwen3.5-9b'`, see `models.qvacCatalog`). Becomes a serve alias of the
+  // same name — so `provider(name)` maps 1:1 to the entry — while a catalog id
+  // resolves to its underlying SDK constant for loading.
   readonly name: string
   // Per-model serve config, merged verbatim into the synthesized
   // `qvac.config.json` entry under `config` (e.g.
@@ -43,10 +45,11 @@ export interface QvacManagedModel {
 // returns a `Promise<ManagedQvacProvider>` in this mode.
 export interface QvacManagedOptions extends QvacCommonOptions {
   readonly mode: 'managed'
-  // Models to load. A bare string is the SDK model-constant name (e.g.
-  // `'QWEN3_600M_INST_Q4'`); the object form additionally carries per-model
-  // serve `config` (see `QvacManagedModel`). Each becomes a serve alias of the
-  // same name, so `provider('QWEN3_600M_INST_Q4')` works.
+  // Models to load. A bare string is an SDK model-constant name (e.g.
+  // `'QWEN3_600M_INST_Q4'`) or a public catalog id (e.g. `'qwen3.5-9b'`, see
+  // `models.qvacCatalog`); the object form additionally carries per-model serve
+  // `config` (see `QvacManagedModel`). Each becomes a serve alias of the same
+  // name, so `provider('QWEN3_600M_INST_Q4')` and `provider('qwen3.5-9b')` work.
   readonly models: readonly (string | QvacManagedModel)[]
   // Pin the serve port. Omit to auto-allocate a free port.
   readonly servePort?: number
