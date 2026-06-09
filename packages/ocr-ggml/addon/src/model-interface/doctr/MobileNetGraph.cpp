@@ -378,19 +378,14 @@ struct GraphBuilder {
 
   /// Squeeze-and-excite block: global avg pool → 1x1 conv (reduce) → ReLU →
   /// 1x1 conv (expand) → HardSigmoid → element-wise multiply with input.
-  struct ggml_tensor* seBlock(
-      struct ggml_tensor* x, const std::string& sePrefix, int spatialHw) const {
-    // Global avg pool: kernel = full spatial extent, stride = same.
+  struct ggml_tensor*
+  seBlock(struct ggml_tensor* x, const std::string& sePrefix) const {
+    // Global avg pool over the full (possibly non-square) spatial extent, read
+    // from the tensor dims so the graph works at any input size.
+    const int poolW = static_cast<int>(x->ne[0]);
+    const int poolH = static_cast<int>(x->ne[1]);
     struct ggml_tensor* pooled = ggml_pool_2d(
-        ctx,
-        x,
-        GGML_OP_POOL_AVG,
-        spatialHw,
-        spatialHw,
-        spatialHw,
-        spatialHw,
-        0,
-        0);
+        ctx, x, GGML_OP_POOL_AVG, poolW, poolH, poolW, poolH, 0, 0);
 
     struct ggml_tensor* fc1 = ggml_conv_2d(
         ctx, t(sePrefix + ".fc1.weight"), pooled, 1, 1, 0, 0, 1, 1);
@@ -408,13 +403,10 @@ struct GraphBuilder {
 
   /// One torchvision InvertedResidual block.
   struct ggml_tensor* invertedResidual(
-      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-      struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex,
-      int inputSpatialHw) const {
+      struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex) const {
     const std::string base = "features." + std::to_string(featuresIndex);
     const bool hasExpand = cfg.expansionSize != cfg.inputChannels;
 
-    int spatial = inputSpatialHw;
     struct ggml_tensor* y = x;
 
     int dwBlockIdx = 0;
@@ -456,15 +448,12 @@ struct GraphBuilder {
         cfg.stride,
         cfg.depthwiseKernel,
         cfg.useHardswish);
-    if (cfg.stride == 2) {
-      spatial = (spatial + 1) / 2;
-    }
 
     // Squeeze-and-excite.
     if (cfg.useSe) {
       const std::string sePrefix =
           base + ".block." + std::to_string(seBlockIdx);
-      y = seBlock(y, sePrefix, spatial);
+      y = seBlock(y, sePrefix);
     }
 
     // Project (no activation on the tail conv).
@@ -1011,7 +1000,8 @@ WeightsBundle loadWeights(
 }
 
 ComputeGraph buildGraph(
-    const WeightsBundle& weights, std::vector<ggml_backend_t>& backends) {
+    const WeightsBundle& weights, std::vector<ggml_backend_t>& backends,
+    int inputW, int inputH) {
   ComputeGraph cg;
   const size_t ctxSize =
       (ggml_tensor_overhead() * kCtxTensorOverhead) + ggml_graph_overhead();
@@ -1023,8 +1013,10 @@ ComputeGraph buildGraph(
   }
   struct ggml_context* ctx = cg.ctx.get();
 
-  // WHCN order: W, H, C, N.
-  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kInputHw, kInputHw, 3, 1);
+  // WHCN order: W, H, C, N. The canvas is the resized image padded to a
+  // multiple of 32 per axis (not necessarily square — see preprocessImage),
+  // so the backbone only convolves real content plus minimal padding.
+  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, inputW, inputH, 3, 1);
   ggml_set_name(cg.input, "input");
 
   GraphBuilder gb{.ctx = ctx, .w = weights.tensors};
@@ -1039,15 +1031,11 @@ ComputeGraph buildGraph(
       /*activate=*/true,
       /*useHardswish=*/true);
 
-  int spatial = kInputHw / 2; // 112 after stem
-
-  // 15 inverted residual blocks.
+  // 15 inverted residual blocks. Spatial dims flow from the input tensor
+  // (SE pools and FPN upsamples read them directly), so no size tracking here.
   int graphFeatureIndex = 1;
   for (const BlockConfig& cfg : kBlocks) {
-    x = gb.invertedResidual(x, cfg, graphFeatureIndex, spatial);
-    if (cfg.stride == 2) {
-      spatial = (spatial + 1) / 2;
-    }
+    x = gb.invertedResidual(x, cfg, graphFeatureIndex);
     switch (graphFeatureIndex) {
     case kFpnFeatureTap1:
       cg.output_1 = x;
