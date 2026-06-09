@@ -277,10 +277,18 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         continue
       }
 
+      // The GGML addon (parakeet.cpp) does not populate realTimeFactor in its
+      // runtimeStats — it reports `0` (and only raw, cumulative counters for
+      // audioDurationMs / totalTokens / totalTimeSec). So derive RTF from the
+      // measured per-call wall time and the known audio duration instead, and
+      // only prefer the addon value when a future build reports a positive one.
+      const statsRtf = jobStats.realTimeFactor || 0
+      const derivedRtf = audioDurationSec > 0 ? (wallMs / 1000) / audioDurationSec : 0
       const run = {
         iteration: i + 1,
         wallMs,
-        rtf: jobStats.realTimeFactor || 0,
+        rtf: statsRtf > 0 ? statsRtf : derivedRtf,
+        rtfSource: statsRtf > 0 ? 'addon' : 'wall',
         requestedModelType: benchmarkSettings.modelType,
         requestedUseGPU: benchmarkSettings.useGPU,
         totalTimeSec: jobStats.totalTime || 0,
