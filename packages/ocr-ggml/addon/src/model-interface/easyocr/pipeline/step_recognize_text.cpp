@@ -1091,15 +1091,17 @@ void StepRecognizeText::destroyRecognizerGraph() {
   recognizerGraphCache_.output = nullptr;
   recognizerGraphCache_.height = 0;
   recognizerGraphCache_.width = 0;
+  recognizerGraphCache_.batchN = 0;
   recognizerGraphCache_.graphSize = 0;
   recognizerGraphCache_.ctxBuf.clear();
 }
 
 void StepRecognizeText::ensureRecognizerGraph(
-    int height, int width, size_t graphSize) {
+    int height, int width, int batchN, size_t graphSize) {
   if (recognizerGraphCache_.gctx != nullptr &&
       recognizerGraphCache_.height == height &&
       recognizerGraphCache_.width == width &&
+      recognizerGraphCache_.batchN == batchN &&
       recognizerGraphCache_.graphSize == graphSize) {
     return;
   }
@@ -1129,8 +1131,10 @@ void StepRecognizeText::ensureRecognizerGraph(
   };
 
   recognizerGraphCache_.gctx = ggml_init(init);
+  // Input is [W, H, 1, N] (PyTorch NCHW [N, 1, H, W]); the whole batch is
+  // computed in a single graph execution (QVAC-19796).
   recognizerGraphCache_.input = ggml_new_tensor_4d(
-      recognizerGraphCache_.gctx, GGML_TYPE_F32, width, height, 1, 1);
+      recognizerGraphCache_.gctx, GGML_TYPE_F32, width, height, 1, batchN);
   recognizerGraphCache_.output = easyocr::ggml::build_crnn_gen2(
       recognizerGraphCache_.gctx,
       *gen2_weights_,
@@ -1156,13 +1160,14 @@ void StepRecognizeText::ensureRecognizerGraph(
 
   recognizerGraphCache_.height = height;
   recognizerGraphCache_.width = width;
+  recognizerGraphCache_.batchN = batchN;
   recognizerGraphCache_.graphSize = graphSize;
 }
 
 cv::Mat StepRecognizeText::runRecognizerOneCached(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     const float* inputData, int height, int width, size_t graphSize) {
-  ensureRecognizerGraph(height, width, graphSize);
+  ensureRecognizerGraph(height, width, /*batchN=*/1, graphSize);
   ggml_backend_tensor_set(
       recognizerGraphCache_.input,
       inputData,
@@ -1231,30 +1236,42 @@ cv::Mat StepRecognizeText::runBatchInference(
     std::memcpy(destPtr, imgPtr, sizeof(float) * height * width);
   }
 
+  // True batched compute (QVAC-19796): build/reuse a graph whose input is
+  // [W, H, 1, N] and run the entire batch in ONE ggml_backend_graph_compute,
+  // instead of N single-image computes. The recognizer output is
+  // ne [classes, T, N]; reading it linearly yields N-major, T-mid,
+  // classes-fastest order, which is exactly the [N, T, classes] cv::Mat
+  // layout the decoder expects, so a single contiguous copy suffices.
   const size_t graphSize = crnnGraphSizeForWidth(width);
-  cv::Mat first =
-      runRecognizerOneCached(batchBuffer_.data(), height, width, graphSize);
-  const int numTimesteps = first.rows;
-  const int numClasses = first.cols;
-  const size_t perImageFloats =
-      static_cast<size_t>(numChannels) * height * width;
-  const size_t perImageLogits = static_cast<size_t>(numTimesteps) * numClasses;
+  ensureRecognizerGraph(height, width, batchSize, graphSize);
+  ggml_backend_tensor_set(
+      recognizerGraphCache_.input,
+      batchBuffer_.data(),
+      0,
+      ggml_nbytes(recognizerGraphCache_.input));
+
+  if (ggml_backend_graph_compute(backend_, recognizerGraphCache_.graph) !=
+      GGML_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        "StepRecognizeText: ggml_backend_graph_compute failed (batched)");
+  }
+
+  const int numClasses = static_cast<int>(recognizerGraphCache_.output->ne[0]);
+  const int numTimesteps =
+      static_cast<int>(recognizerGraphCache_.output->ne[1]);
+  const int outBatch = static_cast<int>(recognizerGraphCache_.output->ne[2]);
+  if (outBatch != batchSize) {
+    throw std::runtime_error(
+        "StepRecognizeText: batched recognizer output batch mismatch");
+  }
 
   std::array<int, 3> dims = {batchSize, numTimesteps, numClasses};
   cv::Mat preds(3, dims.data(), CV_32F);
-  std::memcpy(
-      preds.ptr<float>(), first.ptr<float>(), perImageLogits * sizeof(float));
-  for (int b = 1; b < batchSize; ++b) {
-    cv::Mat one = runRecognizerOneCached(
-        batchBuffer_.data() + (static_cast<size_t>(b) * perImageFloats),
-        height,
-        width,
-        graphSize);
-    std::memcpy(
-        preds.ptr<float>() + (static_cast<size_t>(b) * perImageLogits),
-        one.ptr<float>(),
-        perImageLogits * sizeof(float));
-  }
+  ggml_backend_tensor_get(
+      recognizerGraphCache_.output,
+      preds.ptr<float>(),
+      0,
+      ggml_nbytes(recognizerGraphCache_.output));
 
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs =

@@ -21,6 +21,11 @@ async function runBackendDeviceTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/backend-device.test.js', options)
 }
 
+async function runBatchedRecognizerTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBatchedRecognizerTest')) return __FILTERED
+  return runIntegrationModule('../integration/batched-recognizer.test.js', options)
+}
+
 async function runCanvasSizeTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCanvasSizeTest')) return __FILTERED
   return runIntegrationModule('../integration/canvas-size.test.js', options)
