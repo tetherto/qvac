@@ -340,6 +340,7 @@ test('pause() calls addon.cancel to trigger checkpoint save', async (t) => {
   model.addon.cancel.callsFake(() => Promise.resolve())
   await model.pause()
   t.ok(model.addon.cancel.called)
+  t.is(model.addon.cancel.lastArgs[0], 1, 'pause must save a resume checkpoint')
 })
 
 test('cancel() calls addon.cancel and clears pause checkpoints', async (t) => {
@@ -352,6 +353,7 @@ test('cancel() calls addon.cancel and clears pause checkpoints', async (t) => {
 
   await model.cancel()
   t.ok(model.addon.cancel.called, 'addon.cancel must be called')
+  t.is(model.addon.cancel.lastArgs[0], 0, 'cancel must stop without saving a pause checkpoint')
   t.ok(clearCalled, '_clearPauseCheckpoints must be called after addon.cancel')
 })
 

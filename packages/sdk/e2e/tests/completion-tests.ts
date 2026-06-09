@@ -613,6 +613,17 @@ export const completionResponseFormatWithToolsRejected = createCompletionTest(
   { estimatedDurationMs: 5000, dependency: "none" },
 );
 
+export const completionStats: TestDefinition = {
+  testId: "completion-stats",
+  params: {
+    history: [{ role: "user", content: "Say hello in one short sentence." }],
+    stream: false,
+    generationParams: { predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
 export const completionTests = [
   completionStreaming,
   completionTemperature01,
@@ -654,4 +665,5 @@ export const completionTests = [
   completionResponseFormatWithToolsRejected,
   completionReasoningBudgetDisabled,
   completionReasoningBudgetUnrestricted,
+  completionStats,
 ];
