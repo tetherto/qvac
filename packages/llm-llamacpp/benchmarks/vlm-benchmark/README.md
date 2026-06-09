@@ -142,38 +142,77 @@ The benchmark is driven by the **Benchmark VLM (LLM)** workflow
 
 ### Launch configuration checklist
 
-Walk this top-to-bottom for your scenario. **Desktop legs honor every input below with
-no commit. The mobile (S25) leg ignores all inputs** — it always runs the committed
-`config.mode` + `defaultPreset`, so to change what the phone does you must edit
-`config.cjs` and push.
+There are **two ways to configure a launch**, and each item below shows both:
 
-- [ ] **Enable the matrix** — `run_matrix=true`.
-- [ ] **Silence the source-engines benchmark** (for a clean run) —
-      `run_addon=false run_fabric_cli=false run_upstream_cli=false run_android=false`.
-- [ ] **Mode** — `matrix_mode=two-models` | `several-sources`.
-- [ ] **Preset (run size)** — `matrix_preset=smoke` | `base` | `full`.
-- [ ] **Desktop platforms × backends** — `matrix_linux=linux-cpu,linux-gpu` (drop one to
-      run a single backend).
-- [ ] **Mobile** — `run_matrix_s25=true` to add Samsung S25 (two-models only; ignored for
-      several-sources). Confirm the committed `config.mode`/`defaultPreset` match what you
-      want on the phone.
-- [ ] **Engine** (two-models) — `matrix_engine=addon` (the fixed engine).
-- [ ] **Sources** (several-sources) — the engine set lives in `config.engines`; not a
-      dispatch input.
-- [ ] **Sample-count override** (optional) — `matrix_samples=N` (empty = preset default).
-- [ ] **Models / tasks / repeats** — not dispatch inputs; edit `config.cjs`
-      (`MODEL_1`/`MODEL_2`/`SOURCES_MODEL`, presets) and push.
+- **Config (committed):** edit `config.cjs` and push. Required for the model choice and
+  for anything the **mobile (S25) leg** does — Device Farm forwards **no env**, so the
+  phone always runs the committed `config.mode` / `defaultPreset` / models.
+- **Dispatch (`-f`):** pass to `gh workflow run` (or the *Run workflow* UI). Overrides the
+  config on the **desktop legs only**, no commit needed.
 
-| input | purpose |
-|---|---|
-| `run_matrix` | **must be true** to run the matrix at all |
-| `matrix_mode` | `two-models` \| `several-sources` |
-| `matrix_preset` | run size: `smoke` \| `base` \| `full` (desktop) |
-| `matrix_engine` | fixed engine for two-models: `addon` \| `fabric-cli` \| `upstream-cli` |
-| `matrix_linux` | desktop legs, e.g. `linux-cpu,linux-gpu` |
-| `matrix_samples` | override samples/task (empty = preset default) |
-| `run_matrix_s25` | also run the mobile (S25) leg (two-models only) |
-| `run_addon` / `run_fabric_cli` / `run_upstream_cli` / `run_android` | source-engines legs — set **false** for a matrix-only run |
+Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is measured;
+3–9 decide *how* it runs.
+
+**1. Set the model(s).** *(config only — no dispatch input)*
+   - two-models: edit `MODEL_1` and `MODEL_2`. Two blobs of one model → keep the same
+     `llm`, change the `mmproj` (default: Qwen3.5 F16 vs Q8). Two different models →
+     point the two `llm` blobs at different repos. Give each a distinct `label`.
+   - several-sources: edit `SOURCES_MODEL` (the one VLM run through every engine).
+   - Each blob's bytes come from its `source` (pinned `hf` commit / `url` / `s3`).
+
+**2. Update the source versions.**
+   - **Inference engines** (several-sources): `-f fabric_ref=v8189.0.2`,
+     `-f upstream_ref=b8189` (the native CLI tags); the addon source is the published
+     `@qvac/llm-llamacpp@latest` npm prebuild.
+   - **Model version:** bump the pinned commit in `config.cjs` (`SHA.*` / the blob's
+     `source.sha`) — config only.
+   - **Fixture images:** stored in S3 (`s3://tether-ai-dev/vlm-benchmark/`), not git.
+     Regenerate with `build-fixture.cjs`, then `aws s3 sync ./images/ s3://…`; CI pulls
+     them per run (needs the `release` environment for the OIDC role).
+
+**3. Mode** — what's compared.
+   - Config: `mode: 'two-models' | 'several-sources'`.
+   - Dispatch: `-f matrix_mode=…` (desktop). *Mobile uses `config.mode`.*
+
+**4. Preset** — run size (`smoke` 1×1×1 · `base` 5×3×1 · `full` 5×5×1).
+   - Config: `defaultPreset: '…'` (and the `presets` definitions: tasks/samples/repeats).
+   - Dispatch: `-f matrix_preset=…` (desktop). *Mobile uses `defaultPreset`.*
+
+**5. Desktop platforms × backends.**
+   - Dispatch: `-f matrix_linux=linux-cpu,linux-gpu` (drop one for a single backend).
+   - Config: backends per preset via `devices` (`null` = both); env `NO_GPU=true`.
+
+**6. Mobile (Samsung S25).**
+   - Dispatch: `-f run_matrix_s25=true` (two-models only; ignored for several-sources).
+   - Config: the phone's run is `config.mode` + `defaultPreset` — set them before pushing.
+     Keep it light (`base`); `full` overruns the Device Farm session window.
+
+**7. Engine / sources.**
+   - two-models engine — Config: `engine: 'addon'`; Dispatch: `-f matrix_engine=addon`.
+   - several-sources set — Config only: `engines: ['addon','fabric-cli','upstream-cli']`.
+
+**8. Samples / repeats / tasks.**
+   - Samples — Config: preset `samplesPerTask`; Dispatch: `-f matrix_samples=N`.
+   - Repeats / tasks — Config: preset `repeats` / `tasks`; (local env
+     `QVAC_VLM_REPEATS` / `QVAC_VLM_TASKS` — no dispatch input).
+
+**9. Silence the source-engines benchmark** (for a clean matrix-only run).
+   - Dispatch: `-f run_addon=false -f run_fabric_cli=false -f run_upstream_cli=false -f run_android=false`
+     (zeroes the `desktop`/`summarize`/`android` jobs). Always set `-f run_matrix=true`.
+
+**Dispatch inputs reference**
+
+| input | overrides | purpose |
+|---|---|---|
+| `run_matrix` | — | **must be true** to run the matrix at all |
+| `matrix_mode` | `config.mode` | `two-models` \| `several-sources` (desktop) |
+| `matrix_preset` | `config.defaultPreset` | `smoke` \| `base` \| `full` (desktop) |
+| `matrix_engine` | `config.engine` | two-models fixed engine |
+| `matrix_linux` | — | desktop legs, e.g. `linux-cpu,linux-gpu` |
+| `matrix_samples` | preset `samplesPerTask` | override samples/task (empty = default) |
+| `run_matrix_s25` | — | also run the mobile (S25) leg (two-models only) |
+| `fabric_ref` / `upstream_ref` | — | native CLI versions (several-sources) |
+| `run_addon` / `run_fabric_cli` / `run_upstream_cli` / `run_android` | — | source-engines legs — **false** for matrix-only |
 
 **Example** — clean two-models, desktop CPU+GPU + S25, base preset:
 
