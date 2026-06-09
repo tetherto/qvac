@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Added a package-local `qvac-fabric` vcpkg overlay pinned to the Fabric revision used by the M-RoPE/iM-RoPE sliding-context work. This keeps translation builds on the same Fabric port revision as the related addons while the shared registry update is in progress.
+- Pinned to the Fabric revision used by the M-RoPE/iM-RoPE sliding-context work.
 
 ## Pull Requests
 

@@ -2,7 +2,7 @@
 
 ## [0.3.2] - 2026-06-06
 
-- Added a package-local `qvac-fabric` vcpkg overlay pinned to the Fabric revision used by the M-RoPE/iM-RoPE sliding-context work. This keeps VLA builds on the same Fabric port revision as the related addons while the shared registry update is in progress.
+- Pinned to the Fabric revision used by the M-RoPE/iM-RoPE sliding-context work.
 
 ## Pull Requests
 
