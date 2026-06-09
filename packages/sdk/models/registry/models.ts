@@ -111,6 +111,43 @@ export const models = [
     engine: "bci-whispercpp-transcription",
     quantization: "",
     params: "",
+    companionSet: {
+      setKey: "abc845adefe27931",
+      primaryKey: "modelPath",
+      files: [
+        {
+          key: "modelPath",
+          registryPath:
+            "qvac_models_compiled/bci-whispercpp/2026-05-07/ggml-bci-windowed.bin",
+          registrySource: "s3",
+          targetName: "ggml-bci-windowed.bin",
+          expectedSize: 87756577,
+          sha256Checksum:
+            "2871d1b11349d7434801d0029d8bb372bf24dab4342ee5d23d65e3d9092554e7",
+          blobCoreKey:
+            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+          blobBlockOffset: 2264369,
+          blobBlockLength: 1340,
+          blobByteOffset: 148386554345,
+          primary: true,
+        },
+        {
+          key: "embedderPath",
+          registryPath:
+            "qvac_models_compiled/bci-whispercpp/2026-05-07/bci-embedder.bin",
+          registrySource: "s3",
+          targetName: "bci-embedder.bin",
+          expectedSize: 25028476,
+          sha256Checksum:
+            "cca7eeee5b421675edece9f4bb88b34e53e26b2c30fe65f3b70ae98d294274ff",
+          blobCoreKey:
+            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+          blobBlockOffset: 2263987,
+          blobBlockLength: 382,
+          blobByteOffset: 148361525869,
+        },
+      ],
+    },
   },
   {
     name: "FLUX_2_KLEIN_4B_VAE",
@@ -22979,24 +23016,6 @@ export const models = [
 
 // Individual model constants for direct import/use with loadModel
 // These contain all metadata and can be used directly: loadModel({ modelSrc: WHISPER_TINY, ... })
-export const BCI_EMBEDDER = {
-  name: "BCI_EMBEDDER",
-  src: `registry://${models[0].registrySource}/${models[0].registryPath}`,
-  registryPath: models[0].registryPath,
-  registrySource: models[0].registrySource,
-  blobCoreKey: models[0].blobCoreKey,
-  blobBlockOffset: models[0].blobBlockOffset,
-  blobBlockLength: models[0].blobBlockLength,
-  blobByteOffset: models[0].blobByteOffset,
-  modelId: models[0].modelId,
-  expectedSize: models[0].expectedSize,
-  sha256Checksum: models[0].sha256Checksum,
-  addon: models[0].addon,
-  engine: models[0].engine,
-  quantization: models[0].quantization,
-  params: models[0].params,
-} as const;
-
 export const BCI_WINDOWED = {
   name: "BCI_WINDOWED",
   src: `registry://${models[1].registrySource}/${models[1].registryPath}`,

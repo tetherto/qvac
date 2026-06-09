@@ -20,6 +20,13 @@ import { BERGAMOT_MODEL_RE } from "@/schemas";
  *   Bergamot NMT sets (directory-based):
  *     Primary: `model.<langPair>.intgemm.alphas.bin`
  *     Companions in same directory: lex, vocab/srcvocab+trgvocab, metadata
+ *
+ *   BCI whisper.cpp sets (directory-based):
+ *     Primary: `ggml-bci-windowed.bin`
+ *     Companion in same directory: `bci-embedder.bin`
+ *     The addon resolves the embedder by exact filename next to the model
+ *     (`dirname(model)/bci-embedder.bin`), so the two files must be
+ *     physically co-located — which the companion-set cache layout guarantees.
  */
 export function groupCompanionSets(
   models: ProcessedModel[],
@@ -33,6 +40,7 @@ export function groupCompanionSets(
 
   groupOnnxCompanions(models, bySourcePath, companionKeys);
   groupBergamotCompanions(models, bySourcePath, companionKeys);
+  groupBciCompanions(models, bySourcePath, companionKeys);
 
   return models.map((model) => {
     const key = sourceKey(model.registrySource, model.registryPath);
@@ -165,6 +173,65 @@ function groupBergamotCompanions(
       primaryKey: "modelPath",
       files: [primaryEntry, ...companionEntries],
     };
+  }
+}
+
+const BCI_PRIMARY_FILENAME = "ggml-bci-windowed.bin";
+const BCI_EMBEDDER_FILENAME = "bci-embedder.bin";
+
+function groupBciCompanions(
+  models: ProcessedModel[],
+  bySourcePath: Map<string, ProcessedModel>,
+  companionKeys: Set<string>,
+): void {
+  for (const model of models) {
+    const filename = model.registryPath.split("/").pop();
+    if (filename !== BCI_PRIMARY_FILENAME) continue;
+
+    const lastSep = model.registryPath.lastIndexOf("/");
+    const dirPrefix =
+      lastSep >= 0 ? model.registryPath.slice(0, lastSep + 1) : "";
+    const source = model.registrySource;
+
+    const embedderPath = `${dirPrefix}${BCI_EMBEDDER_FILENAME}`;
+    const embedder = bySourcePath.get(sourceKey(source, embedderPath));
+    if (!embedder) continue;
+
+    const setKey = shortHash(`${source}:${model.registryPath}`);
+
+    const primaryEntry: CompanionSetMetadataEntry = {
+      key: "modelPath",
+      registryPath: model.registryPath,
+      registrySource: source,
+      targetName: BCI_PRIMARY_FILENAME,
+      expectedSize: model.expectedSize,
+      sha256Checksum: model.sha256Checksum,
+      blobCoreKey: model.blobCoreKey,
+      blobBlockOffset: model.blobBlockOffset,
+      blobBlockLength: model.blobBlockLength,
+      blobByteOffset: model.blobByteOffset,
+      primary: true,
+    };
+
+    const embedderEntry: CompanionSetMetadataEntry = {
+      key: "embedderPath",
+      registryPath: embedder.registryPath,
+      registrySource: embedder.registrySource,
+      targetName: BCI_EMBEDDER_FILENAME,
+      expectedSize: embedder.expectedSize,
+      sha256Checksum: embedder.sha256Checksum,
+      blobCoreKey: embedder.blobCoreKey,
+      blobBlockOffset: embedder.blobBlockOffset,
+      blobBlockLength: embedder.blobBlockLength,
+      blobByteOffset: embedder.blobByteOffset,
+    };
+
+    model.companionSet = {
+      setKey,
+      primaryKey: "modelPath",
+      files: [primaryEntry, embedderEntry],
+    };
+    companionKeys.add(sourceKey(embedder.registrySource, embedder.registryPath));
   }
 }
 
