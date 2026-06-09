@@ -59,10 +59,8 @@ ContextSlideOutcome trySlidePrefillImpl(
       currentPos + appendPos - discard < nCtx &&
       currentCacheTokens + appendCacheTokens - discard < nCtx) {
     auto mem = ops.memory(lctx);
-    if (!ops.seqRm(
-            mem, 0, protectedPrefixPos, protectedPrefixPos + discard)) {
-      return {
-          ContextSlideOutcome::Kind::MemoryOperationFailed, currentPos, 0};
+    if (!ops.seqRm(mem, 0, protectedPrefixPos, protectedPrefixPos + discard)) {
+      return {ContextSlideOutcome::Kind::MemoryOperationFailed, currentPos, 0};
     }
     ops.seqAdd(mem, 0, protectedPrefixPos + discard, currentPos, -discard);
     llama_pos newNPast = currentPos - discard;
@@ -79,8 +77,8 @@ ContextSlideOutcome trySlidePrefillImpl(
     const llama_pos exactWipe = currentPos - protectedPrefixPos;
     const llama_pos tailPreservingWipe = tail - protectedPrefixPos;
     const bool exactWipeFits = exactWipe <= nDiscarded &&
-        protectedPrefixPos + appendPos < nCtx &&
-        protectedCacheTokens + appendCacheTokens < nCtx;
+                               protectedPrefixPos + appendPos < nCtx &&
+                               protectedCacheTokens + appendCacheTokens < nCtx;
     const bool tailPreservingWipeFits =
         tail > protectedPrefixPos && tailPreservingWipe <= nDiscarded &&
         protectedPrefixPos + 1 + appendPos < nCtx &&
@@ -92,19 +90,15 @@ ContextSlideOutcome trySlidePrefillImpl(
 
     auto mem = ops.memory(lctx);
 
-    if (exactWipeFits &&
-        ops.seqRm(mem, 0, protectedPrefixPos, currentPos)) {
+    if (exactWipeFits && ops.seqRm(mem, 0, protectedPrefixPos, currentPos)) {
       if (tools.enabled()) {
         tools.reset();
       }
       return {
-          ContextSlideOutcome::Kind::FullWipe,
-          protectedPrefixPos,
-          exactWipe};
+          ContextSlideOutcome::Kind::FullWipe, protectedPrefixPos, exactWipe};
     }
 
-    if (tailPreservingWipeFits &&
-        ops.seqRm(mem, 0, protectedPrefixPos, tail)) {
+    if (tailPreservingWipeFits && ops.seqRm(mem, 0, protectedPrefixPos, tail)) {
       ops.seqAdd(mem, 0, tail, currentPos, protectedPrefixPos - tail);
       if (tools.enabled()) {
         tools.reset();
@@ -147,13 +141,7 @@ ContextSlideOutcome trySlidePrefill(
     ContextUsage append, llama_pos nDiscarded, ToolsCompactController& tools,
     const IContextSliderOps& ops) {
   return trySlidePrefillImpl(
-      lctx,
-      current,
-      protectedPrefix,
-      append,
-      nDiscarded,
-      tools,
-      ops);
+      lctx, current, protectedPrefix, append, nDiscarded, tools, ops);
 }
 
 ContextSlideOutcome trySlideGeneration(

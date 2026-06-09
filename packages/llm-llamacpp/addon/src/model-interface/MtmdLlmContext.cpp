@@ -4,9 +4,9 @@
 #include <cassert>
 
 #include <common/log.h>
+#include <inference-addon-cpp/Errors.hpp>
 #include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
-#include <inference-addon-cpp/Errors.hpp>
 
 #include "ContextSlider.hpp"
 #include "GenerationParamsApply.hpp"
@@ -149,12 +149,15 @@ bool MtmdLlmContext::checkAntiprompt() {
     // casing variant the model might emit.
     std::string lastOutputLower = lastOutput;
     std::transform(
-        lastOutputLower.begin(), lastOutputLower.end(), lastOutputLower.begin(),
+        lastOutputLower.begin(),
+        lastOutputLower.end(),
+        lastOutputLower.begin(),
         [](unsigned char c) { return std::tolower(c); });
     for (const std::string& antiprompt : params_.antiprompt) {
       std::string antipromptLower = antiprompt;
       std::transform(
-          antipromptLower.begin(), antipromptLower.end(),
+          antipromptLower.begin(),
+          antipromptLower.end(),
           antipromptLower.begin(),
           [](unsigned char c) { return std::tolower(c); });
       if (lastOutputLower.find(antipromptLower) != std::string::npos) {
@@ -329,10 +332,9 @@ bool MtmdLlmContext::evalMessageWithTools(
       break;
     case ContextSlideOutcome::Kind::FullWipe:
       current_.pos = outcome.newNPast;
-      current_.cacheTokens =
-          current_.pos == protectedPrefix_.pos
-              ? protectedPrefix_.cacheTokens
-              : protectedPrefix_.cacheTokens + 1;
+      current_.cacheTokens = current_.pos == protectedPrefix_.pos
+                                 ? protectedPrefix_.cacheTokens
+                                 : protectedPrefix_.cacheTokens + 1;
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
