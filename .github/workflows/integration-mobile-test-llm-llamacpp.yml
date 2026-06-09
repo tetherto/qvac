@@ -127,6 +127,22 @@ jobs:
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
+      # Benchmark fixture images live in S3 (not git). Pull them into the benchmark's
+      # images/ dir before staging so stage.cjs can copy them into testAssets/ for the
+      # app bundle. Only when a pre_build_script is set (i.e. the VLM benchmark leg).
+      - name: Configure AWS credentials (fixture images)
+        if: inputs.pre_build_script != ''
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Download fixture images from S3
+        if: inputs.pre_build_script != ''
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          aws s3 sync s3://tether-ai-dev/vlm-benchmark/ benchmarks/vlm-benchmark/images/
+          echo "fixture images:"; ls benchmarks/vlm-benchmark/images/
+
       # Runs after Setup (which provisions Node via setup-node) and before the
       # build so the bundler/test generator picks up the staged files.
       - name: Stage benchmark files (pre-build)

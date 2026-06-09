@@ -788,6 +788,20 @@ jobs:
           echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
           echo "/opt/vulkansdk/x86_64/bin" >> "$GITHUB_PATH"
 
+      # Fixture images live in S3 (not committed to git). Pull them into the benchmark's
+      # images/ dir so the harness and the several-sources CLI runner read them locally.
+      - name: Configure AWS credentials (fixture images)
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Download fixture images from S3
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          aws s3 sync s3://tether-ai-dev/vlm-benchmark/ benchmarks/vlm-benchmark/images/
+          echo "fixture images:"; ls benchmarks/vlm-benchmark/images/
+
       - name: Run VLM matrix
         working-directory: ${{ env.WORKDIR }}
         shell: bash

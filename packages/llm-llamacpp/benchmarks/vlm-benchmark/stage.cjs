@@ -28,6 +28,9 @@ for (const f of CODE) {
   fs.copyFileSync(path.join(HERE, f), path.join(INTEG, f))
   console.log(`staged -> test/integration/${f}`)
 }
-const imgs = fs.readdirSync(IMAGES).filter(f => /\.(png|jpe?g|webp|gif)$/i.test(f))
+// Images aren't in git — CI syncs them from S3 (s3://tether-ai-dev/vlm-benchmark/)
+// into images/ before this runs. Fail loudly if that step was skipped.
+const imgs = fs.existsSync(IMAGES) ? fs.readdirSync(IMAGES).filter(f => /\.(png|jpe?g|webp|gif)$/i.test(f)) : []
+if (!imgs.length) throw new Error(`No images in ${IMAGES} — sync them from S3 (s3://tether-ai-dev/vlm-benchmark/) first`)
 for (const f of imgs) fs.copyFileSync(path.join(IMAGES, f), path.join(ASSETS, f))
 console.log(`staged ${imgs.length} images -> test/mobile/testAssets`)

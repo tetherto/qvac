@@ -23,8 +23,10 @@ const LlmLlamacpp = require('../../index.js')
 const fixture = require('./fixture.data.cjs')
 const config = require('./config.cjs')
 
-// Resolve a fixture image. Desktop reads from this dir's images/; mobile uses the
-// bundled asset manifest (images are staged into test/mobile/testAssets by stage.cjs).
+// Resolve a fixture image. Images live in S3 (s3://tether-ai-dev/vlm-benchmark/), not
+// git: CI syncs them into this dir's images/ before the run. Desktop reads images/
+// directly; mobile uses the bundled asset manifest (stage.cjs copies images/ ->
+// test/mobile/testAssets after the S3 sync).
 function getMediaPath (filename) {
   if ((os.platform() === 'ios' || os.platform() === 'android') && global.assetPaths) {
     const key = `../../testAssets/${filename}`

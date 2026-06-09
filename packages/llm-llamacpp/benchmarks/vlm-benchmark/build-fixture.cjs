@@ -10,14 +10,18 @@
 // No manual resizing — only natural samples that already match the resolution policy.
 // Only datasets on the open-licence allowlist are accepted (public repo).
 //
+// Images are NOT committed to git. After regenerating, upload images/ to S3 (the
+// fixture's source of truth) so CI can fetch them:
+//   aws s3 sync ./images/ s3://tether-ai-dev/vlm-benchmark/
+//
 // Usage: node benchmarks/vlm-benchmark/build-fixture.cjs [--per-task 3] [--max-side 1024] [--scan 2000]
 
 const fs = require('fs')
 const path = require('path')
 const https = require('https')
 
-// Source of truth lives in this benchmark dir; stage.cjs copies images into
-// test/mobile/testAssets for the mobile build.
+// images/ is git-ignored and S3-backed; this writes the chosen images here locally for
+// upload to S3. CI syncs S3 -> images/, then stage.cjs copies them into testAssets.
 const IMAGES_DIR = path.join(__dirname, 'images')
 const FIXTURE = path.join(__dirname, 'fixture.data.cjs')
 const NOTICE = path.join(__dirname, 'fixture.NOTICE.md')

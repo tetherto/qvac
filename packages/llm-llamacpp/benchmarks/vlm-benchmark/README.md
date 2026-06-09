@@ -223,7 +223,10 @@ The benchmark is meant to grow. The three common changes:
   iterates the HuggingFace datasets-server, **filters on resolution without
   downloading**, keeps only open-licensed datasets (allowlist), writes images to
   `./images/`, regenerates `fixture.data.cjs`, and updates `fixture.NOTICE.md`
-  (per-image attribution). Adding a task = one manifest entry.
+  (per-image attribution). Adding a task = one manifest entry. **The images are not
+  committed — they live in S3** (`s3://tether-ai-dev/vlm-benchmark/`); after
+  regenerating, upload them (`aws s3 sync ./images/ s3://tether-ai-dev/vlm-benchmark/`).
+  CI syncs S3 → `images/` before each run (desktop and, before `stage.cjs`, mobile).
 - **Change the models.** Edit `MODEL_1` / `MODEL_2` (two-models) or `SOURCES_MODEL`
   (several-sources) in `config.cjs` — give each blob a `source` descriptor. To compare
   two variants of one model, point both at the same `llm` and vary only the `mmproj`.
@@ -265,7 +268,8 @@ All in `packages/llm-llamacpp/benchmarks/vlm-benchmark/` unless noted:
 | `aggregate.js` | parses markers → report |
 | `cli-fixture-runner.cjs` | runs the fixture through a native CLI (several-sources) |
 | `build-fixture.cjs` | open-licensed fixture generator |
-| `fixture.data.cjs`, `fixture.NOTICE.md`, `images/` | the frozen fixture + attribution |
+| `fixture.data.cjs`, `fixture.NOTICE.md` | the frozen fixture manifest + attribution (images are in S3, synced into `images/` by CI) |
+| `score-check.cjs` | offline metric-tuning harness — re-scores real predictions without re-running inference |
 | `stage.cjs` | copies the above into `test/integration/` + `testAssets/` for the mobile build |
 | `.github/workflows/benchmark-llm-llamacpp.yml` | `run_matrix` jobs (desktop legs, mobile, combine) |
 
