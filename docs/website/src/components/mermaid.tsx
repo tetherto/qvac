@@ -1,8 +1,17 @@
 'use client';
 
-import { use, useEffect, useId, useState } from 'react';
+import { Suspense, use, useEffect, useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 
+// Mermaid renders lazily on the client (dynamic `import('mermaid')` + an async
+// render surfaced through `use()`), so the diagram appears a frame or two after
+// the rest of the page. We intentionally do not reserve a height for it: the
+// diagram's rendered height depends on its type, content and the viewport
+// width, so any fixed placeholder either leaves a permanent gap under short
+// diagrams or fails to cover tall ones. Instead we let the content below simply
+// shift down when the diagram renders. The `Suspense` boundary still keeps the
+// dynamic-import/render suspension local to this component instead of bubbling
+// up and blanking a larger region of the page (which would read as flicker).
 export function Mermaid({ chart }: { chart: string }) {
   const [mounted, setMounted] = useState(false);
 
@@ -10,8 +19,13 @@ export function Mermaid({ chart }: { chart: string }) {
     setMounted(true);
   }, []);
 
-  if (!mounted) return;
-  return <MermaidContent chart={chart} />;
+  if (!mounted) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <MermaidContent chart={chart} />
+    </Suspense>
+  );
 }
 
 const cache = new Map<string, Promise<unknown>>();
@@ -37,16 +51,18 @@ function MermaidContent({ chart }: { chart: string }) {
 
   mermaid.initialize({
     startOnLoad: false,
-    // 'sandbox' renders the diagram inside an `<iframe sandbox="allow-top-
-    // navigation-by-user-activation allow-popups">`. Scripts cannot run
-    // inside the iframe at all (no `allow-scripts`), so even a malicious
-    // diagram (raw HTML / event handler / script tag injected via the
-    // classDef bypasses fixed in 11.15.0) cannot reach the parent DOM,
-    // cookies, localStorage, or run authenticated requests as the docs
-    // origin. The `allow-top-navigation-by-user-activation` permission
-    // keeps `click ...` directives working — see
-    // content/docs/sdk/examples/ai-tasks/voice-assistant.mdx.
-    securityLevel: 'sandbox',
+    // 'strict' renders the SVG inline and runs it through DOMPurify, encoding
+    // any HTML in labels and disabling `click` directives. We do NOT use
+    // 'sandbox': that mode wraps the diagram in an `<iframe>` whose height is
+    // pinned to the SVG's unscaled `viewBox` height while its width is 100%
+    // (see mermaid `putIntoIFrame`), so wide diagrams (e.g. sequence diagrams)
+    // scale down to the column width and leave a large empty gap below them.
+    // Inlining the SVG lets it size to its rendered height, so no gap. Diagram
+    // sources are authored in-repo (trusted), so DOMPurify sanitization is
+    // sufficient and the iframe isolation is unnecessary. `click ... "url"`
+    // directives stay inert under 'strict' too, so navigation is surfaced as
+    // plain Markdown links beside the chart (see ai-capabilities/voice-assistant.mdx).
+    securityLevel: 'strict',
     fontFamily: 'inherit',
     themeCSS: 'margin: 1.5rem auto 0;',
     theme: resolvedTheme === 'dark' ? 'dark' : 'default',

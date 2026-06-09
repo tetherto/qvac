@@ -336,26 +336,45 @@ function findVulkanBackendLib (dir) {
  *
  * Precedence:
  *   1. Explicit `OCR_GGML_BACKEND` (via `os.getEnv` then `process.env`) wins —
- *      'vulkan' only when exactly `vulkan` (case-insensitive), else 'cpu'. This
- *      preserves a manual override (e.g. workflow_dispatch / forcing CPU).
- *   2. Else, on desktop, auto-select 'vulkan' when a `ggml-vulkan` backend lib
+ *      accepts a known GPU backend ('vulkan' or 'metal', case-insensitive),
+ *      else 'cpu'. This preserves a manual override (e.g. workflow_dispatch /
+ *      forcing CPU, or forcing a specific GPU backend).
+ *   2. Else, on any Apple platform (desktop `darwin` AND iOS), select 'metal'.
+ *      ggml's Metal backend is compiled into the addon on every Apple target
+ *      via the qvac-fabric `gpu-backends` feature (no separate loadable lib to
+ *      probe), so the suites request Metal directly; the addon falls back to CPU
+ *      if no Metal device is present. iOS device-farm devices have real
+ *      (non-virtualized) Metal GPUs, so the iOS leg exercises Metal like desktop.
+ *   3. On Android, auto-select 'vulkan': the `android-arm64` prebuild always
+ *      ships `libqvac-ggml-vulkan.so`, so the suite (and the CPU↔Vulkan perf
+ *      comparison) exercises Vulkan on-device. Mali GPUs (e.g. Pixel) run on
+ *      Vulkan; Adreno GPUs auto-fall-back to CPU via the OcrBackendSelection
+ *      Adreno guard.
+ *   4. Else, on desktop, auto-select 'vulkan' when a `ggml-vulkan` backend lib
  *      is shipped in prebuilds/. On desktop CI the merged prebuilds/ contains
  *      that lib, so the suites attempt Vulkan; only the GPU runner actually
  *      executes on Vulkan, while other runners report an explicit CPU fallback.
  *      Local dev without merged prebuilds (no lib) stays on CPU. The addon
  *      gracefully falls back to CPU when no Vulkan GPU is present, so requesting
  *      'vulkan' is safe on non-GPU hosts.
- *   3. Else 'cpu'.
- * @returns {'cpu'|'vulkan'}
+ *   5. Else 'cpu' (desktop without a GPU backend).
+ * @returns {'cpu'|'vulkan'|'metal'}
  */
 function getBackendDevice () {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
   if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
-  if (String(raw).trim() !== '') {
-    return String(raw).trim().toLowerCase() === 'vulkan' ? 'vulkan' : 'cpu'
+  const override = String(raw).trim().toLowerCase()
+  if (override !== '') {
+    return (override === 'vulkan' || override === 'metal') ? override : 'cpu'
   }
-  if (!isMobile && findVulkanBackendLib(PREBUILDS_DIR)) return 'vulkan'
+  // Apple platforms (desktop + iOS) ship the Metal backend; request it on both.
+  if (platform === 'darwin' || platform === 'ios') return 'metal'
+  // Android always ships the Vulkan backend lib; request Vulkan so the perf
+  // suite fills the GPU column on Mali devices (Adreno safely falls back to CPU
+  // via the addon's Adreno guard). (iOS is handled by the Metal branch above.)
+  if (isMobile) return platform === 'android' ? 'vulkan' : 'cpu'
+  if (findVulkanBackendLib(PREBUILDS_DIR)) return 'vulkan'
   return 'cpu'
 }
 
