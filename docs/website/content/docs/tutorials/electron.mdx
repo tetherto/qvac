@@ -574,7 +574,7 @@ On the first run, the model may download from peers (watch the terminal for prog
 
 ## Step 4: package for distribution
 
-Now that the app works in dev env, let's build a distributable using the `@qvac/sdk/electron-forge` plugin, which:
+Now that the app works in dev env, let's build a distributable using `@qvac/sdk/electron-forge`, which:
 
 - Bundles the QVAC worker for the target platform/arch.
 - Tree-shakes unused `@qvac/*` addons.
@@ -584,13 +584,13 @@ Now that the app works in dev env, let's build a distributable using the `@qvac/
 <Steps>
 
 <Step>
-Install `electron-forge` and the QVAC plugin's peer dependency:
+Install Electron Forge and `@qvac/sdk/electron-forge` peer dependency:
 
 ```bash
 npm i -D @electron-forge/cli @electron-forge/plugin-base @electron-forge/maker-zip
 ```
 
-`@electron-forge/plugin-base` is the QVAC plugin's only peer dependency. `@electron-forge/maker-zip` produces a zip distributable; add other makers (`@electron-forge/maker-dmg`, `@electron-forge/maker-squirrel`, etc.) as needed.
+`@electron-forge/plugin-base` is `@qvac/sdk/electron-forge` only peer dependency. `@electron-forge/maker-zip` produces a zip distributable; add other makers (`@electron-forge/maker-dmg`, `@electron-forge/maker-squirrel`, etc.) as needed.
 </Step>
 
 <Step>
@@ -656,7 +656,7 @@ module.exports = {
 </Step>
 
 <Step>
-_Optionally_ Add a `qvac.config.json` to declare which QVAC plugins your app uses:
+_(Optional)_ Add a `qvac.config.json` to declare which QVAC plugins your app uses:
 
 ```json title="qvac.config.json"
 {
@@ -664,7 +664,7 @@ _Optionally_ Add a `qvac.config.json` to declare which QVAC plugins your app use
 }
 ```
 
-With no `qvac.config.json` the plugin auto-discovers and bundles all built-in QVAC plugins. Listing only what you use produces a smaller worker bundle.
+With no `qvac.config.json`, `QvacForgePlugin` auto-discovers, and bundles all built-in QVAC plugins. Listing only what you use produces a smaller worker bundle.
 
 </Step>
 
@@ -704,16 +704,16 @@ npm run make
 
 ## Packaging caveats
 
-- **`asar: false` is forced.** The Bare worker can't load addons from inside an ASAR archive — paths inside `app.asar` aren't real files on disk. The plugin overrides any `packagerConfig.asar` setting and warns if you've set it to anything else.
+- **`asar: false` is forced.** The Bare worker can't load addons from inside an ASAR archive — paths inside `app.asar` aren't real files on disk. `QvacForgePlugin` overrides any `packagerConfig.asar` setting and warns if you've set it to anything else.
 
-- **macOS universal builds are blocked.** Native addon prebuilds are arch-specific (`darwin-arm64.bare` vs `darwin-x64.bare`); a universal Electron app would need to ship both prebuild sets, which conflicts with the plugin's single-arch pruning. Build the two architectures separately:
+- **macOS universal builds are blocked.** Native addon prebuilds are arch-specific (`darwin-arm64.bare` vs `darwin-x64.bare`); a universal Electron app would need to ship both prebuild sets, which conflicts with `QvacForgePlugin` single-arch pruning. Build the two architectures separately:
 
   ```bash
   npx electron-forge package --platform=darwin --arch=arm64
   npx electron-forge package --platform=darwin --arch=x64
   ```
 
-- **Cross-platform packaging is supported.** The plugin reads `--platform` and `--arch` from CLI args (and from `packagerConfig` in the config file) to drive both `bundleSdk` and `verifyBundle`. From a darwin-arm64 host you can package for darwin-x64 as long as each addon ships a `darwin-x64.bare` prebuild:
+- **Cross-platform packaging is supported.** `QvacForgePlugin` reads `--platform` and `--arch` from CLI args (and from `packagerConfig` in the config file) to drive both `bundleSdk` and `verifyBundle`. From a darwin-arm64 host you can package for darwin-x64 as long as each addon ships a `darwin-x64.bare` prebuild:
 
   ```bash
   npx electron-forge package --platform=darwin --arch=x64
