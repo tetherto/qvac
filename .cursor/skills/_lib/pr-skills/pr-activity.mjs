@@ -382,12 +382,16 @@ export function classifyTeamPRs(state) {
     (pr) => !isFullyApprovedInPod(pr, state.roles),
   );
   const reReviewPRs = needsAction.filter((pr) => needsMyReReview(pr, me));
-  const reReviewSet = new Set(reReviewPRs.map((pr) => pr.number));
+  // Key on the repo-qualified prRef, not the bare number: PR numbers are not
+  // unique once the dashboard spans multiple repos (extraRepos), so a bare
+  // number would let a re-review PR mask a same-numbered stale/active PR in a
+  // different repo and silently drop it from every section.
+  const reReviewSet = new Set(reReviewPRs.map((pr) => pr.prRef ?? `#${pr.number}`));
   const stalePRs = needsAction.filter(
-    (pr) => pr.stale && !reReviewSet.has(pr.number),
+    (pr) => pr.stale && !reReviewSet.has(pr.prRef ?? `#${pr.number}`),
   );
   const activePRs = needsAction.filter(
-    (pr) => !pr.stale && !reReviewSet.has(pr.number),
+    (pr) => !pr.stale && !reReviewSet.has(pr.prRef ?? `#${pr.number}`),
   );
   const conflictCount = needsAction.filter(
     (pr) => pr.mergeable === "CONFLICTING",
