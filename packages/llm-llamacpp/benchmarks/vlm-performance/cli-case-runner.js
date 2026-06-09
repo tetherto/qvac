@@ -281,7 +281,7 @@ function main () {
   console.log(`[cli-case-runner] wrote ${resultPath}`)
 }
 
-// Reused by benchmarks/vlm-matrix/cli-fixture-runner.cjs (several-sources mode).
+// Reused by benchmarks/vlm-benchmark/cli-fixture-runner.cjs (several-sources mode).
 module.exports = { buildCliArgs, getPatchedTemplate, extractGeneratedText, runOnceCli }
 
 if (require.main === module) main()

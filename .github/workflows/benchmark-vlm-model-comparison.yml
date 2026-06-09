@@ -719,7 +719,7 @@ jobs:
   # is CPU + Vulkan-GPU capable) over the vlm-matrix fixture. Branch JS
   # (harness/config/fixture) + published native prebuild. One leg per
   # backend; each emits [VLMROW]/[VLMSEG]/[VLMMETA] markers to a log that
-  # matrix-combine aggregates with vlm-matrix/aggregate.js.
+  # matrix-combine aggregates with vlm-benchmark/aggregate.js.
   matrix-linux:
     needs: context
     if: needs.context.outputs.linux_count != '0'
@@ -909,7 +909,7 @@ jobs:
   # on-device. qvac_perf_only restricts the run to perf-tests.json
   # (runVlmMatrixTest) → only the vlmMatrix group is scheduled. The active
   # preset on-device is config.defaultPreset (Device Farm forwards no custom
-  # env), so vlm-matrix.config.cjs defaultPreset governs the S25 set. The
+  # env), so config.cjs defaultPreset governs the S25 set. The
   # raw on-device log (bare_console.log) carries the [VLMROW] markers and is
   # uploaded by collect-and-upload-logs as console-logs-llamacpp-llm-Android.
   matrix-s25:
@@ -929,7 +929,7 @@ jobs:
   # ── Matrix mode: combine ───────────────────────────────────────────
   # Aggregates [VLMROW]/[VLMSEG]/[VLMMETA] markers from every matrix log
   # (Linux .log + S25 bare_console.log) into one quality+speed report via
-  # vlm-matrix/aggregate.js, surfaced to the step summary + PR comment.
+  # vlm-benchmark/aggregate.js, surfaced to the step summary + PR comment.
   # This is the mechanism that makes mobile (Device Farm) results visible.
   matrix-combine:
     needs:
