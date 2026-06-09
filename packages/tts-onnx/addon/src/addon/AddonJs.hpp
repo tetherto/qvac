@@ -53,6 +53,7 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   addString("embedTokensPath");
   addString("conditionalDecoderPath");
   addString("languageModelPath");
+  addString("mecabDictPath");
 
   addString("modelDir");
   addString("textEncoderPath");

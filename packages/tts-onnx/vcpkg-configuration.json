@@ -14,6 +14,7 @@
         "gtest",
         "vcpkg-tool-meson",
         "nlohmann-json",
+        "mecab",
         "zlib"
       ]
     }

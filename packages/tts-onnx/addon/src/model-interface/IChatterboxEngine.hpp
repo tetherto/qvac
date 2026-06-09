@@ -16,6 +16,7 @@ struct ChatterboxConfig {
   std::string embedTokensPath;
   std::string conditionalDecoderPath;
   std::string languageModelPath;
+  std::string mecabDictPath;
   bool lazySessionLoading = false;
   bool useGPU = false;
   int numThreads = 0;
