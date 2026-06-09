@@ -41,6 +41,11 @@ on:
         type: string
         required: false
         default: ""
+      pre_build_script:
+        description: "Optional node script (path under packages/llm-llamacpp) run before the mobile build to bootstrap a benchmark into the framework (stage files + regenerate the test list). Default '' = no-op."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -129,6 +134,28 @@ jobs:
           addon-npm-name: '@qvac/llm-llamacpp'
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # ── Benchmark bootstrap (additive, opt-in via pre_build_script) ──────────
+      # When a caller passes pre_build_script (only the VLM benchmark does), pull the
+      # benchmark's S3 fixture images, run the bootstrap (copies the test/harness/config/
+      # fixture into test/integration + images into testAssets), then regenerate the
+      # mobile test list so the new test is bundled. All in the ephemeral checkout —
+      # nothing committed. Other callers leave pre_build_script='' → these steps no-op.
+      - name: Configure AWS credentials (benchmark images)
+        if: inputs.pre_build_script != ''
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Bootstrap benchmark into the mobile framework (pre-build)
+        if: inputs.pre_build_script != ''
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          aws s3 sync s3://tether-ai-dev/vlm-benchmark/ benchmarks/vlm-benchmark/images/
+          node "${{ inputs.pre_build_script }}"
+          npm install -g bare-runtime bare 2>/dev/null || true
+          npm run test:mobile:generate
+          echo "bootstrapped: staged files + regenerated mobile test list"
 
       - name: Build mobile app
         id: build
