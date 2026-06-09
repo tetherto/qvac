@@ -575,7 +575,7 @@ On the first run, the model may download from peers (watch the terminal for prog
 
 ## Step 4: package for distribution
 
-Now that the app works in development, let's build a distributable. We'll switch from the scaffold's default electron-builder to **electron-forge** so we can use the [`@qvac/sdk/electron-forge`](https://www.npmjs.com/package/@qvac/sdk) plugin, which:
+Now that the app works in development, let's build a distributable using the [`@qvac/sdk/electron-forge`](https://www.npmjs.com/package/@qvac/sdk) plugin, which:
 
 - Bundles the QVAC worker for the target platform/arch.
 - Tree-shakes unused `@qvac/*` addons.
@@ -585,16 +585,9 @@ Now that the app works in development, let's build a distributable. We'll switch
 <Steps>
 
 <Step>
-Replace electron-builder with electron-forge:
+Install electron-forge and the QVAC plugin's peer dependency:
 
 ```bash
-npm uninstall electron-builder
-rm electron-builder.yml
-npm pkg delete scripts.postinstall
-npm pkg delete scripts.build:unpack
-npm pkg delete scripts.build:win
-npm pkg delete scripts.build:mac
-npm pkg delete scripts.build:linux
 npm i -D @electron-forge/cli @electron-forge/plugin-base @electron-forge/maker-zip
 ```
 
