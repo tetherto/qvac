@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -65,6 +66,35 @@ TEST_F(TextLlmContextTest, Constructor) {
   }
 
   EXPECT_TRUE(model->isLoaded());
+}
+
+// Make sure nDiscarded config is not dropped
+TEST_F(TextLlmContextTest, LoadCacheKeepsConfiguredNDiscardedWithoutCache) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlmModelContext shared{
+      .model = model->getModel(),
+      .lctx = model->getContext(),
+      .vocab = llama_model_get_vocab(model->getModel()),
+  };
+  ToolsCompactController tools(std::nullopt);
+  common_params params;
+  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+
+  constexpr llama_pos kConfiguredNDiscarded = 64;
+  const bool loaded = driver.loadCache(/*cacheKey=*/"", kConfiguredNDiscarded);
+
+  EXPECT_FALSE(loaded) << "an empty cache key must not load a cache";
+  EXPECT_EQ(driver.getNDiscarded(), kConfiguredNDiscarded)
+      << "no-cache batch slot dropped the configured nDiscarded budget; "
+         "context shifting is disabled (nDiscarded stuck at 0)";
 }
 
 TEST_F(TextLlmContextTest, ProcessWithStringInput) {
