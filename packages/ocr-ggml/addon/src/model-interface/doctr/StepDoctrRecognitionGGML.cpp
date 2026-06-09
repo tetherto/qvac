@@ -651,7 +651,8 @@ struct StepDoctrRecognitionGGML::Impl {
     constexpr int gates = kLstmGateCount * kLstmHiddenSize; // 4H
 
     auto mk2d = [&](const std::string& name, int64_t ne0, int64_t ne1) {
-      struct ggml_tensor* tns = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, ne0, ne1);
+      struct ggml_tensor* tns =
+          ggml_new_tensor_2d(ctx, GGML_TYPE_F32, ne0, ne1);
       ggml_set_name(tns, name.c_str());
       graph.lstmWeights.emplace(name, tns);
       return tns;
@@ -664,9 +665,8 @@ struct StepDoctrRecognitionGGML::Impl {
     };
 
     for (int layer = 0; layer < kLstmLayerCount; ++layer) {
-      const int inSize = (layer == 0)
-                             ? kFeatureChannels
-                             : kLstmHiddenSize * kLstmDirectionCount;
+      const int inSize = (layer == 0) ? kFeatureChannels
+                                      : kLstmHiddenSize * kLstmDirectionCount;
       for (int dir = 0; dir < kLstmDirectionCount; ++dir) {
         const std::string sfx =
             "_l" + std::to_string(layer) + "_" + std::to_string(dir);
@@ -678,8 +678,7 @@ struct StepDoctrRecognitionGGML::Impl {
     mk2d("wlin", kLstmHiddenSize * kLstmDirectionCount, kVocabSize);
     mk1d("blin", kVocabSize);
 
-    graph.lstmBuffer =
-        ggml_backend_alloc_ctx_tensors(ctx, graph.backend);
+    graph.lstmBuffer = ggml_backend_alloc_ctx_tensors(ctx, graph.backend);
     if (graph.lstmBuffer == nullptr) {
       raise("failed to allocate LSTM weights buffer");
     }
@@ -726,10 +725,11 @@ struct StepDoctrRecognitionGGML::Impl {
     constexpr int gates = kLstmGateCount * H;
     constexpr int seq = kSequenceLength;
 
-    const size_t graphMem =
-        (ggml_tensor_overhead() * 6144) + ggml_graph_overhead_custom(8192, false);
+    const size_t graphMem = (ggml_tensor_overhead() * 6144) +
+                            ggml_graph_overhead_custom(8192, false);
     std::unique_ptr<struct ggml_context, decltype(&ggml_free)> gctx(
-        ggml_init({.mem_size = graphMem, .mem_buffer = nullptr, .no_alloc = true}),
+        ggml_init(
+            {.mem_size = graphMem, .mem_buffer = nullptr, .no_alloc = true}),
         ggml_free);
     if (!gctx) {
       raise("failed to allocate LSTM graph context");
@@ -745,14 +745,8 @@ struct StepDoctrRecognitionGGML::Impl {
         ggml_new_tensor_3d(ctx, GGML_TYPE_F32, seq, kFeatureChannels, n);
     ggml_set_name(feat, "lstm_feat_in");
     ggml_set_input(feat);
-    struct ggml_tensor* x =
-        ggml_cont(ctx, ggml_permute(ctx, feat, 1, 0, 2, 3)); // [channels, seq, n]
-
-    const auto zerosLike = [&](int64_t ne0) {
-      struct ggml_tensor* z =
-          ggml_new_tensor_2d(ctx, GGML_TYPE_F32, ne0, n);
-      return ggml_scale(ctx, z, 0.0F);
-    };
+    struct ggml_tensor* x = ggml_cont(
+        ctx, ggml_permute(ctx, feat, 1, 0, 2, 3)); // [channels, seq, n]
 
     for (int layer = 0; layer < kLstmLayerCount; ++layer) {
       struct ggml_tensor* dirOut[kLstmDirectionCount] = {nullptr, nullptr};
@@ -763,8 +757,12 @@ struct StepDoctrRecognitionGGML::Impl {
         struct ggml_tensor* z = ggml_mul_mat(ctx, W("wih" + sfx), x);
         z = ggml_add(ctx, z, W("bias" + sfx));
 
-        struct ggml_tensor* hPrev = zerosLike(H);
-        struct ggml_tensor* cPrev = zerosLike(H);
+        // Initial hidden/cell state is zero. Rather than allocate a zero
+        // tensor (ggml_scale of uninitialised gallocr memory is 0*NaN==NaN on
+        // some hosts), the first timestep is special-cased: the W_hh . h_prev
+        // term vanishes and C = i .* g_cell.
+        struct ggml_tensor* hPrev = nullptr;
+        struct ggml_tensor* cPrev = nullptr;
         std::vector<struct ggml_tensor*> hSteps(static_cast<size_t>(seq));
 
         for (int step = 0; step < seq; ++step) {
@@ -772,16 +770,26 @@ struct StepDoctrRecognitionGGML::Impl {
           struct ggml_tensor* zt = ggml_cont(
               ctx,
               ggml_view_2d(
-                  ctx, z, gates, n, z->nb[2],
+                  ctx,
+                  z,
+                  gates,
+                  n,
+                  z->nb[2],
                   static_cast<size_t>(t) * z->nb[1])); // [4H, n]
           struct ggml_tensor* g =
-              ggml_add(ctx, zt, ggml_mul_mat(ctx, W("whh" + sfx), hPrev));
+              (hPrev == nullptr)
+                  ? zt
+                  : ggml_add(ctx, zt, ggml_mul_mat(ctx, W("whh" + sfx), hPrev));
 
           const auto gate = [&](int k) {
             return ggml_cont(
                 ctx,
                 ggml_view_2d(
-                    ctx, g, H, n, g->nb[1],
+                    ctx,
+                    g,
+                    H,
+                    n,
+                    g->nb[1],
                     static_cast<size_t>(k) * H * sizeof(float)));
           };
           struct ggml_tensor* ig = ggml_sigmoid(ctx, gate(0));
@@ -789,10 +797,12 @@ struct StepDoctrRecognitionGGML::Impl {
           struct ggml_tensor* cg = ggml_tanh(ctx, gate(2));
           struct ggml_tensor* og = ggml_sigmoid(ctx, gate(3));
 
-          struct ggml_tensor* cCur = ggml_add(
-              ctx, ggml_mul(ctx, fg, cPrev), ggml_mul(ctx, ig, cg));
-          struct ggml_tensor* hCur =
-              ggml_mul(ctx, og, ggml_tanh(ctx, cCur));
+          struct ggml_tensor* cCur =
+              (cPrev == nullptr)
+                  ? ggml_mul(ctx, ig, cg)
+                  : ggml_add(
+                        ctx, ggml_mul(ctx, fg, cPrev), ggml_mul(ctx, ig, cg));
+          struct ggml_tensor* hCur = ggml_mul(ctx, og, ggml_tanh(ctx, cCur));
           hSteps[static_cast<size_t>(t)] = hCur;
           hPrev = hCur;
           cPrev = cCur;
@@ -844,7 +854,9 @@ struct StepDoctrRecognitionGGML::Impl {
     }
 
     ggml_backend_tensor_set(
-        feat, allFeatures.data(), 0,
+        feat,
+        allFeatures.data(),
+        0,
         static_cast<size_t>(n) * seq * kFeatureChannels * sizeof(float));
 
     const ggml_status status = ggml_backend_graph_compute(graph.backend, cg);
@@ -1289,9 +1301,10 @@ StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[DoctrRecognitionGGML] GGML recognizer loaded, batchSize=" +
           std::to_string(batchSize) + ", decoding=" + decodingStr);
-  ALOG_INFO(std::string(
-      "[DoctrRecognitionGGML] GGML recognizer loaded, decoding=" +
-      decodingStr));
+  ALOG_INFO(
+      std::string(
+          "[DoctrRecognitionGGML] GGML recognizer loaded, decoding=" +
+          decodingStr));
 }
 
 StepDoctrRecognitionGGML::~StepDoctrRecognitionGGML() = default;

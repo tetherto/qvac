@@ -77,9 +77,10 @@ StepDoctrDetectionGGML::StepDoctrDetectionGGML(
                        : static_cast<int>(std::thread::hardware_concurrency());
     ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(dev);
     auto* fn_set_n_threads =
-        cpuReg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
-                     cpuReg, "ggml_backend_set_n_threads")
-               : nullptr;
+        cpuReg
+            ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
+                  cpuReg, "ggml_backend_set_n_threads")
+            : nullptr;
     if (fn_set_n_threads) {
       fn_set_n_threads(backend, effective);
     }
@@ -258,9 +259,9 @@ StepDoctrDetectionGGML::extractPolygons(
     // parameter.
     //
     // Algebraically equivalent to undoing padLeft/padTop directly:
-    //   for origH > origW: padLeftFraction = (1 - origW/origH)/2 = (1 - 1/ratio)/2
-    //   so (nx - padLeftFraction) / (1 - 2*padLeftFraction) reduces to
-    //   (nx - 0.5)*ratio + 0.5. This is why padLeft/padTop are unused.
+    //   for origH > origW: padLeftFraction = (1 - origW/origH)/2 = (1 -
+    //   1/ratio)/2 so (nx - padLeftFraction) / (1 - 2*padLeftFraction) reduces
+    //   to (nx - 0.5)*ratio + 0.5. This is why padLeft/padTop are unused.
     // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     if (origH > origW) {
       const float ratio = static_cast<float>(origH) / static_cast<float>(origW);

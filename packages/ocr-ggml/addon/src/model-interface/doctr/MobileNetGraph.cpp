@@ -192,8 +192,9 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
-    // NOTE: ggml_conv_2d_direct (fused GGML_OP_CONV_2D) measured ~2x SLOWER than
-    // im2col + mul_mat on Metal — the matmul path rides the tuned GEMM kernel.
+    // NOTE: ggml_conv_2d_direct (fused GGML_OP_CONV_2D) measured ~2x SLOWER
+    // than im2col + mul_mat on Metal — the matmul path rides the tuned GEMM
+    // kernel.
     struct ggml_tensor* conv =
         ggml_conv_2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
@@ -322,7 +323,8 @@ struct GraphBuilder {
     y = ggml_cont(ctx, ggml_permute(ctx, y, 2, 0, 1, 3)); // [H, 2, W, rest]
     y = ggml_reshape_3d(ctx, y, ch, 2 * cw, 2 * oc);      // [H, 2W, rest]
     y = ggml_cont(ctx, ggml_permute(ctx, y, 1, 0, 2, 3)); // [2W, H, rest]
-    // Height pass: split rest -> (kh=2, oc), interleave kh into y; ne0 stays 2W.
+    // Height pass: split rest -> (kh=2, oc), interleave kh into y; ne0 stays
+    // 2W.
     y = ggml_reshape_4d(ctx, y, 2 * cw, ch, 2, oc);
     y = ggml_cont(ctx, ggml_permute(ctx, y, 0, 2, 1, 3)); // [2W, 2, H, OC]
     y = ggml_reshape_3d(ctx, y, 2 * cw, 2 * ch, oc);      // [2W, 2H, OC]
@@ -351,8 +353,7 @@ struct GraphBuilder {
         /*useHardswish=*/false);
     output =
         convTransposeBnAct(output, "dbnet.prob_head.3", "dbnet.prob_head.4");
-    output =
-        subPixelConvTranspose2x2(output, t("dbnet.prob_head.6.weight"));
+    output = subPixelConvTranspose2x2(output, t("dbnet.prob_head.6.weight"));
     return ggml_add(ctx, output, t("dbnet.prob_head.6.bias_br"));
   }
 
@@ -364,9 +365,9 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
-    // NOTE: Metal does not implement GGML_OP_CONV_2D_DW, so the direct depthwise
-    // variant aborts there. Keep the im2col + mul_mat path (decomposes into
-    // Metal-supported ops).
+    // NOTE: Metal does not implement GGML_OP_CONV_2D_DW, so the direct
+    // depthwise variant aborts there. Keep the im2col + mul_mat path
+    // (decomposes into Metal-supported ops).
     struct ggml_tensor* conv =
         ggml_conv_2d_dw(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
