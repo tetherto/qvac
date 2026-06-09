@@ -179,8 +179,8 @@ cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
         std::to_string(static_cast<int>(status)));
   }
 
-  // The graph outputs raw logits (sigmoid is commented-out in buildGraph).
-  // Apply sigmoid here: prob = 1 / (1 + exp(-logit)).
+  // The graph applies sigmoid on-device, so output_4 is already the probability
+  // map; read it back directly.
   const auto nElems =
       static_cast<size_t>(ggml_nelements(computeGraph_.output_4));
   logitBuffer_.resize(nElems);
@@ -189,10 +189,7 @@ cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
 
   // GGML WHCN [W=1024, H=1024, C=1, N=1] lays out as [W*y + x] in memory
   // which matches OpenCV row-major [H, W] — direct wrap is safe.
-  cv::Mat logitMap(H, W, CV_32F, logitBuffer_.data());
-  cv::Mat expNeg;
-  cv::exp(-logitMap, expNeg);
-  cv::Mat probMap = 1.0F / (1.0F + expNeg);
+  cv::Mat probMap(H, W, CV_32F, logitBuffer_.data());
   // Clone before logitBuffer_ may be resized by the next call.
   return probMap.clone();
 }
