@@ -34,3 +34,15 @@ const imgs = fs.existsSync(IMAGES) ? fs.readdirSync(IMAGES).filter(f => /\.(png|
 if (!imgs.length) throw new Error(`No images in ${IMAGES} — sync the fixture image store into it first`)
 for (const f of imgs) fs.copyFileSync(path.join(IMAGES, f), path.join(ASSETS, f))
 console.log(`staged ${imgs.length} images -> test/mobile/testAssets`)
+
+// Register the test in test-groups.json so the mobile generator's per-platform grouping
+// validation passes (it requires EVERY test to be in a group, on every platform). This
+// edit is ephemeral (the file is pristine on a fresh checkout); the workflow's
+// `test_groups` override still narrows the actual Device Farm run to just this group.
+const GROUPS = path.resolve(HERE, '..', '..', 'test', 'mobile', 'test-groups.json')
+if (fs.existsSync(GROUPS)) {
+  const groups = JSON.parse(fs.readFileSync(GROUPS, 'utf8'))
+  for (const platform of Object.keys(groups)) groups[platform].vlmMatrix = ['runVlmMatrixTest']
+  fs.writeFileSync(GROUPS, JSON.stringify(groups, null, 2) + '\n')
+  console.log(`registered runVlmMatrixTest in test-groups.json (${Object.keys(groups).join(', ')})`)
+}

@@ -163,7 +163,10 @@ jobs:
             aws s3 sync "$FIXTURE_IMAGES_URI" benchmarks/vlm-benchmark/images/
           fi
           node "${{ inputs.pre_build_script }}"
-          npm install -g bare-runtime bare 2>/dev/null || true
+          # the test-list generator runs under `bare` and imports bare-fs/bare-path,
+          # so the addon's JS deps must be present (skip native build via --ignore-scripts).
+          npm install --no-audit --no-fund --ignore-scripts
+          npm install -g bare 2>/dev/null || true
           npm run test:mobile:generate
           echo "bootstrapped: staged files + regenerated mobile test list"
 
