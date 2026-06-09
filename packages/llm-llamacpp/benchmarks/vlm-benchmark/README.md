@@ -166,8 +166,9 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
      `@qvac/llm-llamacpp@latest` npm prebuild.
    - **Model version:** bump the pinned commit in `config.cjs` (`SHA.*` / the blob's
      `source.sha`) — config only.
-   - **Fixture images:** stored in S3 (`s3://tether-ai-dev/vlm-benchmark/`), you may download them seperately for local tests.
-     Regenerate with `build-fixture.cjs`, then `aws s3 sync ./images/ s3://…`; CI pulls
+   - **Fixture images:** stored in a fixture object store (URI configured in the
+     benchmark workflow), not git; you may download them separately for local tests.
+     Regenerate with `build-fixture.cjs`, then upload `./images/` to that store; CI pulls
      them per run (needs the `release` environment for the OIDC role).
 
 **3. Mode** — what's compared.
@@ -263,9 +264,9 @@ The benchmark is meant to grow. The three common changes:
   downloading**, keeps only open-licensed datasets (allowlist), writes images to
   `./images/`, regenerates `fixture.data.cjs`, and updates `fixture.NOTICE.md`
   (per-image attribution). Adding a task = one manifest entry. **The images are not
-  committed — they live in S3** (`s3://tether-ai-dev/vlm-benchmark/`); after
-  regenerating, upload them (`aws s3 sync ./images/ s3://tether-ai-dev/vlm-benchmark/`).
-  CI syncs S3 → `images/` before each run (desktop and, before `stage.cjs`, mobile).
+  committed — they live in a fixture object store** (URI configured in the benchmark
+  workflow); after regenerating, upload `./images/` to that store. CI syncs it →
+  `images/` before each run (desktop and, before `stage.cjs`, mobile).
 - **Change the models.** Edit `MODEL_1` / `MODEL_2` (two-models) or `SOURCES_MODEL`
   (several-sources) in `config.cjs` — give each blob a `source` descriptor. To compare
   two variants of one model, point both at the same `llm` and vary only the `mmproj`.

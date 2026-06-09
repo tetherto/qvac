@@ -1,4 +1,4 @@
-# Fixture images live in S3 (s3://tether-ai-dev/vlm-benchmark/); CI syncs them here.
+# Fixture images live in a fixture object store (not git); CI syncs them here.
 images/
 # several-sources CLI build artifacts (built at CI time by build-cli-sources.js).
 cli-builds/

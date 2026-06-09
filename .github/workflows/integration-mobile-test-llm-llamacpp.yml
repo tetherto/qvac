@@ -46,6 +46,11 @@ on:
         type: string
         required: false
         default: ""
+      fixture_images_uri:
+        description: "Optional object-store URI (e.g. s3://…) the bootstrap syncs fixture assets from before staging. Caller supplies the URI; default '' = skip."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -136,13 +141,14 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       # ── Benchmark bootstrap (additive, opt-in via pre_build_script) ──────────
-      # When a caller passes pre_build_script (only the VLM benchmark does), pull the
-      # benchmark's S3 fixture images, run the bootstrap (copies the test/harness/config/
-      # fixture into test/integration + images into testAssets), then regenerate the
-      # mobile test list so the new test is bundled. All in the ephemeral checkout —
-      # nothing committed. Other callers leave pre_build_script='' → these steps no-op.
-      - name: Configure AWS credentials (benchmark images)
-        if: inputs.pre_build_script != ''
+      # When a caller passes pre_build_script (only the VLM benchmark does), run the
+      # bootstrap: optionally pull fixture assets from the caller-supplied object-store
+      # URI (fixture_images_uri — the literal URI lives in the caller, not here), copy
+      # the test/harness/config/fixture into test/integration + assets into testAssets,
+      # then regenerate the mobile test list so the new test is bundled. All in the
+      # ephemeral checkout — nothing committed. Other callers leave these inputs '' → no-op.
+      - name: Configure AWS credentials (benchmark assets)
+        if: inputs.fixture_images_uri != ''
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -150,8 +156,12 @@ jobs:
       - name: Bootstrap benchmark into the mobile framework (pre-build)
         if: inputs.pre_build_script != ''
         working-directory: addon/packages/llm-llamacpp
+        env:
+          FIXTURE_IMAGES_URI: ${{ inputs.fixture_images_uri }}
         run: |
-          aws s3 sync s3://tether-ai-dev/vlm-benchmark/ benchmarks/vlm-benchmark/images/
+          if [ -n "$FIXTURE_IMAGES_URI" ]; then
+            aws s3 sync "$FIXTURE_IMAGES_URI" benchmarks/vlm-benchmark/images/
+          fi
           node "${{ inputs.pre_build_script }}"
           npm install -g bare-runtime bare 2>/dev/null || true
           npm run test:mobile:generate

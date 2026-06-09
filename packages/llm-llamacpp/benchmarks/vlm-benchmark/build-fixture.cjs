@@ -10,9 +10,9 @@
 // No manual resizing — only natural samples that already match the resolution policy.
 // Only datasets on the open-licence allowlist are accepted (public repo).
 //
-// Images are NOT committed to git. After regenerating, upload images/ to S3 (the
-// fixture's source of truth) so CI can fetch them:
-//   aws s3 sync ./images/ s3://tether-ai-dev/vlm-benchmark/
+// Images are NOT committed to git. After regenerating, upload images/ to the fixture
+// object store (the fixture's source of truth; URI configured in the benchmark
+// workflow) so CI can fetch them, e.g. `aws s3 sync ./images/ <fixture-store-uri>`.
 //
 // Usage: node benchmarks/vlm-benchmark/build-fixture.cjs [--per-task 3] [--max-side 1024] [--scan 2000]
 
