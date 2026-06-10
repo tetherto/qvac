@@ -4,6 +4,7 @@
   "description": "CI utilities for the QVAC monorepo",
   "author": "Tether",
   "license": "Apache-2.0",
+  "type": "module",
   "main": "./main.js",
   "bin": {
     "qvac-ci": "./main.js"

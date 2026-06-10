@@ -1,7 +1,7 @@
-'use strict'
+// Command registry — add new commands here.
+// Each entry calls .toCommand() so main.js can spread the array directly.
+import pendingApprovals from './pending-approvals/index.js'
 
-const pendingApprovals = require('./pending-approvals/index')
-
-module.exports = {
-  pendingApprovals
-}
+export const commands = [
+  pendingApprovals.toCommand()
+]

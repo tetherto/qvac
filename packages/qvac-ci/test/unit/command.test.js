@@ -1,7 +1,5 @@
-'use strict'
-
-const test = require('brittle')
-const { Command } = require('../../lib/command')
+import test from 'brittle'
+import { Command } from '../../lib/command.js'
 
 // Command base class contracts
 

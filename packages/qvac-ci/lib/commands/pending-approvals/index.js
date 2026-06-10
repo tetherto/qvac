@@ -1,17 +1,8 @@
-'use strict'
-
-const { command, flag, summary, footer } = require('paparam')
-const { Command } = require('../../command')
-const { validatePrNumber, validateRepo, validateTeamSlug, exitWithError } = require('../../helpers')
-// Imported as a namespace so tests can inject mocks via the shared module cache.
-const helpers = require('./helpers')
-
-// @octokit/auth-app >=5 is ESM-only and must be loaded via dynamic import().
-// Lazy-loaded so tests can inject mocks before the live module is needed.
-async function getCreateAppAuth () {
-  const { createAppAuth } = await import('@octokit/auth-app')
-  return createAppAuth
-}
+import { command, flag, summary, footer } from 'paparam'
+import { Command } from '../../command.js'
+import { validatePrNumber, validateRepo, validateTeamSlug, exitWithError } from '../../helpers.js'
+// Imported as a namespace so tests can inject mocks via the shared module object.
+import { helpers } from './helpers.js'
 
 class PendingApprovals extends Command {
   constructor () {
@@ -70,9 +61,8 @@ class PendingApprovals extends Command {
       teamLead: teamLeadsTeam
     }
 
-    const createAppAuth = await getCreateAppAuth()
     const commentOctokit = await helpers.buildOctokit()
-    const appOctokit = await helpers.buildAppOctokit(createAppAuth, owner, repo)
+    const appOctokit = await helpers.buildAppOctokit(owner, repo)
 
     const reviews = await helpers.fetchReviews(commentOctokit, owner, repo, prNumber)
     const counts = await helpers.buildApprovalCounts(appOctokit, owner, repo, reviews, teams)
@@ -89,4 +79,4 @@ class PendingApprovals extends Command {
   }
 }
 
-module.exports = new PendingApprovals()
+export default new PendingApprovals()

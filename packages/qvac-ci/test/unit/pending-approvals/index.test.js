@@ -1,26 +1,23 @@
-'use strict'
-
-const test = require('brittle')
-const { Command } = require('../../../lib/command')
-// Must be required before the index module so both share the same cached object.
-const helpers = require('../../../lib/commands/pending-approvals/helpers')
+import test from 'brittle'
+import { Command } from '../../../lib/command.js'
+// Import helpers before the index module — both share the same ESM module instance,
+// so property mutations on the helpers object are visible inside _run().
+import { helpers } from '../../../lib/commands/pending-approvals/helpers.js'
+import pa from '../../../lib/commands/pending-approvals/index.js'
 
 // pending-approvals/index exports a singleton Command instance.
 // We test that it has the correct interface without actually running
 // GitHub API calls — those are covered in pending-approvals-helpers.test.js.
 
 test('pending-approvals — exports a Command instance', t => {
-  const pa = require('../../../lib/commands/pending-approvals/index')
   t.ok(pa instanceof Command)
 })
 
 test('pending-approvals — has correct name', t => {
-  const pa = require('../../../lib/commands/pending-approvals/index')
   t.is(pa.name, 'pending-approvals')
 })
 
 test('pending-approvals — declares required secrets', t => {
-  const pa = require('../../../lib/commands/pending-approvals/index')
   const envVars = pa.secrets.map(s => s.envVar)
   t.ok(envVars.includes('GITHUB_TOKEN'))
   t.ok(envVars.includes('GITHUB_APP_ID'))
@@ -28,15 +25,11 @@ test('pending-approvals — declares required secrets', t => {
 })
 
 test('pending-approvals — toCommand() returns a paparam command object', t => {
-  const pa = require('../../../lib/commands/pending-approvals/index')
   const cmd = pa.toCommand()
   t.ok(cmd !== null && typeof cmd === 'object', 'toCommand returns an object')
 })
 
 test('pending-approvals — _run() writes pending message to stdout when PR is not approved', async t => {
-  const pa = require('../../../lib/commands/pending-approvals/index')
-
-  // Stub all helpers so no real API calls happen
   const orig = {
     buildOctokit: helpers.buildOctokit,
     buildAppOctokit: helpers.buildAppOctokit,
@@ -82,8 +75,6 @@ test('pending-approvals — _run() writes pending message to stdout when PR is n
 })
 
 test('pending-approvals — _run() does not call process.exit when PR is approved', async t => {
-  const pa = require('../../../lib/commands/pending-approvals/index')
-
   const orig = {
     buildOctokit: helpers.buildOctokit,
     buildAppOctokit: helpers.buildAppOctokit,
@@ -123,8 +114,6 @@ test('pending-approvals — _run() does not call process.exit when PR is approve
 })
 
 test('pending-approvals — _run() throws when required flags are missing', async t => {
-  const pa = require('../../../lib/commands/pending-approvals/index')
-  // Simulate: secrets are set, but --pr-number is not provided
   const savedToken = process.env.GITHUB_TOKEN
   const savedAppId = process.env.GITHUB_APP_ID
   const savedKey = process.env.GITHUB_PRIVATE_KEY

@@ -1,14 +1,12 @@
-'use strict'
-
-const test = require('brittle')
-const {
+import test from 'brittle'
+import {
   validateRequiredEnv,
   validatePrNumber,
   validateRepo,
   validateTeamSlug
-} = require('../../lib/helpers')
-const { Sanitizer } = require('../../lib/sanitizer')
-const { GitHubSanitizer } = require('../../lib/commands/pending-approvals/helpers')
+} from '../../lib/helpers.js'
+import { Sanitizer } from '../../lib/sanitizer.js'
+import { GitHubSanitizer } from '../../lib/commands/pending-approvals/helpers.js'
 
 const ghSanitizer = new GitHubSanitizer()
 

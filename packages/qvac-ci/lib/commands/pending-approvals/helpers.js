@@ -1,5 +1,3 @@
-'use strict'
-
 // All pending-approvals domain logic.
 //
 // Secrets (GITHUB_TOKEN, GITHUB_APP_ID, GITHUB_PRIVATE_KEY) are read from
@@ -7,23 +5,19 @@
 // This prevents secrets from appearing in call stacks or being accidentally
 // logged by a caller.
 
-const { Sanitizer } = require('../../sanitizer')
-
-// @octokit/rest >=20 is ESM-only and must be loaded via dynamic import().
-async function getOctokit () {
-  const { Octokit } = await import('@octokit/rest')
-  return Octokit
-}
+import { Octokit } from '@octokit/rest'
+import { createAppAuth } from '@octokit/auth-app'
+import { Sanitizer } from '../../sanitizer.js'
 
 // Patterns specific to GitHub tokens and PEM keys.
 // Kept here so future subcommands don't inherit a GitHub-specific allowlist.
-const SECRET_PATTERNS = [
+export const SECRET_PATTERNS = [
   /ghp_[A-Za-z0-9_]{36,}/g,
   /ghs_[A-Za-z0-9_]{36,}/g,
   /-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g
 ]
 
-class GitHubSanitizer extends Sanitizer {
+export class GitHubSanitizer extends Sanitizer {
   redact (str) {
     if (typeof str !== 'string') return str
     let result = str
@@ -34,7 +28,7 @@ class GitHubSanitizer extends Sanitizer {
   }
 }
 
-function throwApiError (err, context) {
+export function throwApiError (err, context) {
   let message
   if (err.status === 401) {
     message = 'Authentication failed — check GITHUB_TOKEN / GITHUB_APP_ID / GITHUB_PRIVATE_KEY'
@@ -50,22 +44,20 @@ function throwApiError (err, context) {
   throw out
 }
 
-const ROLE_DISPLAY = {
+export const ROLE_DISPLAY = {
   maintainer: 'Management',
   teamLead: 'Team Lead',
   other: 'Member'
 }
 
-const MIN_CODEOWNER_APPROVALS = 1
+export const MIN_CODEOWNER_APPROVALS = 1
 
-async function buildOctokit () {
-  const Octokit = await getOctokit()
+export async function buildOctokit () {
   const token = process.env.GITHUB_TOKEN
   return new Octokit({ auth: token })
 }
 
-async function buildAppOctokit (createAppAuth, owner, repo) {
-  const Octokit = await getOctokit()
+export async function buildAppOctokit (owner, repo) {
   const appId = parseInt(process.env.GITHUB_APP_ID, 10)
   const privateKey = process.env.GITHUB_PRIVATE_KEY
 
@@ -87,7 +79,7 @@ async function buildAppOctokit (createAppAuth, owner, repo) {
   return new Octokit({ auth: installToken })
 }
 
-function getLatestApprovals (reviews) {
+export function getLatestApprovals (reviews) {
   const byUser = Object.create(null)
   for (const review of reviews) {
     const username = review.user && review.user.login
@@ -99,7 +91,7 @@ function getLatestApprovals (reviews) {
   return Object.values(byUser)
 }
 
-function checkApproved (counts, minTotal) {
+export function checkApproved (counts, minTotal) {
   const maintainer = counts.maintainer || 0
   const teamLead = counts.teamLead || 0
   const other = counts.other || 0
@@ -108,7 +100,7 @@ function checkApproved (counts, minTotal) {
   return codeowner >= MIN_CODEOWNER_APPROVALS && total >= minTotal
 }
 
-function getPendingMessage (counts, minTotal) {
+export function getPendingMessage (counts, minTotal) {
   if (checkApproved(counts, minTotal)) return ''
   const maintainer = counts.maintainer || 0
   const teamLead = counts.teamLead || 0
@@ -126,7 +118,7 @@ function getPendingMessage (counts, minTotal) {
   return parts.join(', and ')
 }
 
-function buildApprovalComment (approved, counts, pendingMessage) {
+export function buildApprovalComment (approved, counts, pendingMessage) {
   const approvalSummary = Object.entries(counts)
     .filter(([, count]) => count > 0)
     .map(([role, count]) => (ROLE_DISPLAY[role] || role) + ': ' + count)
@@ -143,7 +135,7 @@ function buildApprovalComment (approved, counts, pendingMessage) {
   return lines.join('\n')
 }
 
-async function fetchReviews (octokit, owner, repo, prNumber) {
+export async function fetchReviews (octokit, owner, repo, prNumber) {
   try {
     const { data } = await octokit.rest.pulls.listReviews({
       owner,
@@ -158,7 +150,7 @@ async function fetchReviews (octokit, owner, repo, prNumber) {
 
 // Returns true only for collaborators with write or admin access.
 // Prevents external contributors on public repos from counting toward approvals.
-async function hasWriteAccess (octokit, owner, repo, username) {
+export async function hasWriteAccess (octokit, owner, repo, username) {
   try {
     const { data } = await octokit.rest.repos.getCollaboratorPermissionLevel({
       owner,
@@ -173,7 +165,7 @@ async function hasWriteAccess (octokit, owner, repo, username) {
   }
 }
 
-async function buildApprovalCounts (appOctokit, owner, repo, reviews, teams) {
+export async function buildApprovalCounts (appOctokit, owner, repo, reviews, teams) {
   const latestApprovals = getLatestApprovals(reviews)
   const approvers = latestApprovals
     .filter(r => r.state === 'APPROVED')
@@ -212,7 +204,7 @@ async function buildApprovalCounts (appOctokit, owner, repo, reviews, teams) {
   return counts
 }
 
-async function getTeamMembers (octokit, org, teamSlug) {
+export async function getTeamMembers (octokit, org, teamSlug) {
   try {
     const members = await octokit.paginate(octokit.rest.teams.listMembersInOrg, {
       org,
@@ -225,7 +217,7 @@ async function getTeamMembers (octokit, org, teamSlug) {
   }
 }
 
-async function upsertPrComment (octokit, owner, repo, prNumber, body) {
+export async function upsertPrComment (octokit, owner, repo, prNumber, body) {
   const MARKER = '## Review Status'
 
   let comments
@@ -263,7 +255,9 @@ async function upsertPrComment (octokit, owner, repo, prNumber, body) {
   }
 }
 
-module.exports = {
+// Mutable namespace object — index.js imports and calls through this object,
+// allowing tests to stub individual methods without a mock framework.
+export const helpers = {
   SECRET_PATTERNS,
   GitHubSanitizer,
   throwApiError,

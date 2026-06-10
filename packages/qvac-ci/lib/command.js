@@ -1,7 +1,5 @@
-'use strict'
-
-const { validateRequiredEnv } = require('./helpers')
-const { Sanitizer } = require('./sanitizer')
+import { validateRequiredEnv } from './helpers.js'
+import { Sanitizer } from './sanitizer.js'
 
 /**
  * Base class for all actions-ci subcommands.
@@ -20,7 +18,7 @@ const { Sanitizer } = require('./sanitizer')
  *   3. Call newCmd.toCommand() as a positional arg in main.js command()
  *   4. Write flat test files: test/unit/<name>-index.test.js, test/unit/<name>-helpers.test.js
  */
-class Command {
+export class Command {
   constructor ({ name, description, secrets = [], sanitizer = new Sanitizer() }) {
     this.name = name
     this.description = description
@@ -51,5 +49,3 @@ class Command {
     return 'Environment (required):\n' + lines.join('\n')
   }
 }
-
-module.exports = { Command }

@@ -1,7 +1,5 @@
-'use strict'
-
-const test = require('brittle')
-const {
+import test from 'brittle'
+import {
   getLatestApprovals,
   checkApproved,
   getPendingMessage,
@@ -10,8 +8,9 @@ const {
   hasWriteAccess,
   fetchReviews,
   upsertPrComment,
+  throwApiError,
   MIN_CODEOWNER_APPROVALS
-} = require('../../../lib/commands/pending-approvals/helpers')
+} from '../../../lib/commands/pending-approvals/helpers.js'
 
 // getLatestApprovals
 test('getLatestApprovals — deduplicates: keeps only most recent review per user', t => {
@@ -276,7 +275,6 @@ test('hasWriteAccess — returns false on 404 (not a collaborator)', async t => 
 
 // buildAppOctokit — "app not installed" error mapping via throwApiError
 test('buildAppOctokit — maps 404 getRepoInstallation to a descriptive error', async t => {
-  const { throwApiError } = require('../../../lib/commands/pending-approvals/helpers')
   const context = 'GitHub App (ID: 99) does not appear to be installed on org/repo'
 
   // throwApiError is what buildAppOctokit calls internally when getRepoInstallation returns 404
@@ -288,7 +286,6 @@ test('buildAppOctokit — maps 404 getRepoInstallation to a descriptive error', 
 })
 
 test('buildAppOctokit — maps 401 to authentication error', async t => {
-  const { throwApiError } = require('../../../lib/commands/pending-approvals/helpers')
   t.exception(
     () => throwApiError({ status: 401, message: 'Bad credentials' }, 'any context'),
     /authentication failed/i,
@@ -297,7 +294,6 @@ test('buildAppOctokit — maps 401 to authentication error', async t => {
 })
 
 test('buildAppOctokit — maps 403 to forbidden error with context', async t => {
-  const { throwApiError } = require('../../../lib/commands/pending-approvals/helpers')
   const context = 'GitHub App (ID: 99) does not appear to be installed on org/repo'
   t.exception(
     () => throwApiError({ status: 403, message: 'Forbidden' }, context),

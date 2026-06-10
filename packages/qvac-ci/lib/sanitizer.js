@@ -1,5 +1,3 @@
-'use strict'
-
 /**
  * Base sanitizer interface — passthrough by default.
  *
@@ -13,7 +11,7 @@
  *     redact (str) { ... }
  *   }
  */
-class Sanitizer {
+export class Sanitizer {
   redact (str) {
     return str
   }
@@ -25,5 +23,3 @@ class Sanitizer {
     return this.redact(String(err))
   }
 }
-
-module.exports = { Sanitizer }

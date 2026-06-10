@@ -1,16 +1,14 @@
-'use strict'
-
 // Generic, domain-agnostic utilities.
 // No GitHub, no CI-domain logic — no secret patterns either.
 // Each subcommand defines its own secret patterns and sanitizeError in its own helpers.js.
 // Any subcommand or future JS action can use these.
 
-function exitWithError (message, code) {
+export function exitWithError (message, code) {
   process.stderr.write(String(message) + '\n')
   process.exit(code === undefined ? 1 : code)
 }
 
-function validateRequiredEnv (vars) {
+export function validateRequiredEnv (vars) {
   const missing = vars.filter(v => !process.env[v])
   if (missing.length > 0) {
     throw new Error(
@@ -20,7 +18,7 @@ function validateRequiredEnv (vars) {
   }
 }
 
-function validatePrNumber (raw) {
+export function validatePrNumber (raw) {
   if (raw === undefined || raw === null || raw === '') {
     throw new RangeError('--pr-number is required')
   }
@@ -31,7 +29,7 @@ function validatePrNumber (raw) {
   return n
 }
 
-function validateRepo (raw) {
+export function validateRepo (raw) {
   if (!raw || typeof raw !== 'string') {
     throw new Error(
       '--repo is required (or set $GITHUB_REPOSITORY). ' +
@@ -47,7 +45,7 @@ function validateRepo (raw) {
   return { owner, repo }
 }
 
-function validateTeamSlug (raw, flagName) {
+export function validateTeamSlug (raw, flagName) {
   if (!raw || typeof raw !== 'string') {
     throw new Error(flagName + ' is required')
   }
@@ -58,12 +56,4 @@ function validateTeamSlug (raw, flagName) {
     )
   }
   return raw
-}
-
-module.exports = {
-  exitWithError,
-  validateRequiredEnv,
-  validatePrNumber,
-  validateRepo,
-  validateTeamSlug
 }
