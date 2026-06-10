@@ -8,6 +8,14 @@ disable-model-invocation: true
 
 Thin wrapper over the shared pr-skills library, pinned to the DevOps pod and scoped to PRs authored by DevOps roster members (`leads ∪ members` in [.github/teams/devops.json](.github/teams/devops.json)).
 
+The dashboard spans the qvac monorepo (filtered by the pod's `ownedPaths`) **plus** every repo declared under `extraRepos` in [.github/teams/devops.json](.github/teams/devops.json). For extra repos the pod is treated as the sole owner — every open PR there is in-scope regardless of touched paths. The monorepo (`tetherto/qvac`) is the primary repo and stays path-filtered; it is intentionally NOT listed under `extraRepos`. Today's `extraRepos` are an explicit curated list:
+
+- Ops: `tetherto/github-ops`, `tetherto/oss-actions`, `tetherto/qvac-actions`, `tetherto/qvac-devops`, `tetherto/qvac-testops`, `tetherto/release-ops`, `tetherto/data-github-ops`
+- Dev: `tetherto/qvac-workbench`, `tetherto/qvac-internal`, `tetherto/qvac-test-suite`, `tetherto/qvac-registry-vcpkg`, `tetherto/qvac-ext-lib-whisper.cpp`, `tetherto/qvac-ext-stable-diffusion.cpp`, `tetherto/qvac-fabric-llm.cpp`, `tetherto/qvac-ext-ggml`, `tetherto/qvac-ext-bergamot-translator`, `tetherto/qvac-ext-marian-dev`
+- Research: `tetherto/qvac-research-tool-call`, `tetherto/qvac-research-medpsy`, `tetherto/qvac-research-translations-nmt`, `tetherto/qvac-research-evaluate`, `tetherto/qvac-research-synthetic-data-creation`, `tetherto/qvac-research-model-training`, `tetherto/qvac-model-tools`, `tetherto/qvac-rnd-fabric-llm-bitnet`, `tetherto/qvac-rnd-fabric-llm-finetune`
+
+`extraRepos` entries are plain `owner/name` strings used as-is. Glob entries (an `owner/name` whose name segment contains `*`, e.g. `tetherto/qvac-*`) are also supported and resolved dynamically per run via `gh repo list <owner> --no-archived` — add one to the list if you'd rather track every matching repo automatically instead of curating. Any repo the script cannot read is skipped with a one-line warning on stderr.
+
 ## When to use this skill
 
 **Use when:**
@@ -20,8 +28,8 @@ Thin wrapper over the shared pr-skills library, pinned to the DevOps pod and sco
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth status`)
-- User must have access to `tetherto/qvac` repository
-- Team roster maintained at [.github/teams/devops.json](.github/teams/devops.json)
+- User must have read access to `tetherto/qvac` AND every repo declared under `extraRepos` (any repo the script cannot read is skipped with a one-line warning on stderr)
+- Team roster + `extraRepos` maintained at [.github/teams/devops.json](.github/teams/devops.json)
 
 ## Usage
 
@@ -32,13 +40,17 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod devops --mode team --auth
   | tee "/tmp/devops-pr-status-${DATE}.txt"
 ```
 
-`--authors pod` restricts the main dashboard to PRs authored by DevOps roster members. PRs that touch DevOps-owned paths but are authored outside the roster are surfaced in a separate "Excluded" section at the bottom of the same dashboard, so the pod still has visibility into cross-pod work hitting its paths without those PRs polluting the queue. See [.cursor/skills/_lib/pr-skills/README.md](.cursor/skills/_lib/pr-skills/README.md) for the flag's full behavior.
+`--authors pod` restricts the main dashboard to PRs authored by DevOps roster members. PRs that touch DevOps-owned paths (in the monorepo) or live in any extra repo but are authored outside the roster are surfaced in a separate "Excluded" section at the bottom of the same dashboard, so the pod still has visibility into cross-pod work hitting its surfaces without those PRs polluting the queue. See [.cursor/skills/_lib/pr-skills/README.md](.cursor/skills/_lib/pr-skills/README.md) for the flag's full behavior.
 
-For the personal review queue scoped to DevOps PRs, use `--mode review` (without `--authors pod` — review queue intentionally includes cross-pod authors whose review the user owes).
+`extraRepos` is honored only by `--mode team`. `--mode review` and `--mode my` continue to operate against the configured primary repo only (the monorepo); cross-repo personal review/my-PR dashboards are not in scope of this skill.
+
+The first line of the dashboard is a `Repos:` summary listing the primary repo plus every extra repo that contributed to the run, so the user can see the full scope at a glance. PRs from extra repos render as `owner/repo#<num>` (e.g. `tetherto/qvac-workbench#42`); PRs from the primary monorepo render as bare `#<num>` exactly as before. The same prefix shows in the Excluded section.
+
+For the personal review queue scoped to DevOps PRs, use `--mode review` (without `--authors pod` — review queue intentionally includes cross-pod authors whose review the user owes). That mode stays on the primary repo.
 
 ## Workflow
 
-1. Run the script with `--pod devops --mode team --authors pod`, **teeing stdout to `/tmp/devops-pr-status-<YYYY-MM-DD>.txt`** so the dashboard is available for paste afterwards. Redirect stderr to a sibling `.stderr` file (it contains progress / `SLACK_VALIDATION_REQUIRED` notices, not dashboard content).
+1. Run the script with `--pod devops --mode team --authors pod`, **teeing stdout to `/tmp/devops-pr-status-<YYYY-MM-DD>.txt`** so the dashboard is available for paste afterwards. Redirect stderr to a sibling `.stderr` file (it contains progress / `SLACK_VALIDATION_REQUIRED` notices and any skipped-repo warnings, not dashboard content).
 2. Present the dashboard to the user in the **chat presentation format** (see below) — not as a raw paste of the script output.
 3. Surface the summary header counts (need your re-review / stale / merge conflicts / excluded) prominently.
 4. **Print the paste-ready copy commands.** The dashboard at `/tmp/devops-pr-status-<DATE>.txt` is plain text with two-space indent — when pasted into a Slack thread, Slack auto-renders the indented lines as nested bullets and turns `#<num>` into PR auto-links. No re-formatting is needed.
@@ -58,10 +70,10 @@ The in-chat rendering uses Markdown with hyperlinked PR numbers. This is distinc
 Required layout (in this exact order):
 
 1. **Title line** — `## DevOps Pod — PR Status (authors scoped to roster)`.
-2. **Headline summary** — one bold line restating the script summary counts (`N PRs need attention · X fully approved · Y need your re-review · Z stale`).
+2. **Headline summary** — one bold line restating the script summary counts (`N PRs need attention · X fully approved · Y need your re-review · Z stale`). Append `· <K> repos scanned` when the script's `Repos:` line lists more than just the primary repo (i.e., `extraRepos` resolved to at least one repo), so the user can see the scope at a glance.
 3. **Roster line** — one-line listing of the roster:
    ```
-   Roster: `Proletter` (lead) + `darkynt`, `GiacomoSorbiWork`, `sidj-thr`, `tamer-hassan-tether`, `yauhenipankratovich-web`.
+   Roster: `Proletter` (lead) + `darkynt`, `GSServita`, `sidj-thr`, `tamer-hassan-tether`, `yauhenipankratovich-web`.
    ```
    Refresh from [.github/teams/devops.json](.github/teams/devops.json) on every run; do not hardcode if the file has drifted.
 4. **Headline analysis** — one short paragraph identifying the highest-leverage cluster in the queue (e.g., "Four `QVAC-18047` PRs all sit on team-lead approval only — fastest path to drain the queue."). Skip when the queue is empty.
@@ -74,10 +86,11 @@ Required layout (in this exact order):
 Bullet format for the active sections (Stale / Needs Review / Re-review):
 
 ```
-- [#<num>](<url>) — <title> · `<author-login>` · <age> · <approvals/notes> · **<blockers/labels>**
+- [<ref>](<url>) — <title> · `<author-login>` · <age> · <approvals/notes> · **<blockers/labels>**
 ```
 
-- `[#<num>](<url>)` — Markdown link, never bare `#<num>`.
+- `<ref>` is `#<num>` for PRs in the primary monorepo and `owner/repo#<num>` (e.g. `tetherto/qvac-workbench#42`) for PRs from any `extraRepos` entry. Mirror the script's `prRef` form 1:1 — the rendered link text must match what appears in the dashboard at `/tmp/devops-pr-status-<DATE>.txt`.
+- `[<ref>](<url>)` — Markdown link, never bare `<ref>`.
 - `<title>` is the PR title verbatim, no truncation.
 - `<author-login>` is wrapped in backticks.
 - `<age>` is the script's age string (e.g., `4d 13h`).
@@ -87,7 +100,7 @@ Bullet format for the active sections (Stale / Needs Review / Re-review):
 Bullet format for the Excluded section (compact — these are not the pod's review queue):
 
 ```
-- [#<num>](<url>) `<author-login>`
+- [<ref>](<url>) `<author-login>`
 ```
 
 ## References

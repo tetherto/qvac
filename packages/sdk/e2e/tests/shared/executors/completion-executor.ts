@@ -62,11 +62,17 @@ export class CompletionExecutor extends AbstractModelExecutor<
       if (test.testId === "completion-response-format-with-tools-rejected") {
         return [test.testId, this.responseFormatWithToolsRejected.bind(this)];
       }
+      if (test.testId === "completion-stats") {
+        return [test.testId, this.statsVerification.bind(this)];
+      }
       if (test.testId === "completion-concurrent-requests") {
         return [test.testId, this.concurrentRequests.bind(this)];
       }
       if (test.testId === "completion-seed-reproducibility") {
         return [test.testId, this.seedReproducibility.bind(this)];
+      }
+      if (test.testId === "completion-stop-reason-length") {
+        return [test.testId, this.stopReasonLength.bind(this)];
       }
       return [test.testId, this.generic.bind(this)];
     }),
@@ -99,9 +105,8 @@ export class CompletionExecutor extends AbstractModelExecutor<
   }
 
   // Issues several completions against the same model in the same tick and
-  // asserts the registry's single-flight concurrency policy: exactly the
-  // in-flight request runs to completion while the rest are rejected with the
-  // policy error (never a crash), and the model stays usable afterwards.
+  // asserts the registry's FIFO concurrency policy: same-model requests wait
+  // for the native context and all resolve without policy rejections.
   async concurrentRequests(
     params: CompletionTestParams,
     expectation: Expectation,
@@ -126,43 +131,31 @@ export class CompletionExecutor extends AbstractModelExecutor<
       (s): s is PromiseRejectedResult => s.status === "rejected",
     );
 
-    if (fulfilled.length !== 1 || rejected.length !== CONCURRENCY - 1) {
+    if (fulfilled.length !== CONCURRENCY || rejected.length !== 0) {
       return {
         passed: false,
         output:
-          `Expected single-flight shape: 1 fulfilled and ${CONCURRENCY - 1} rejected by policy; ` +
+          `Expected FIFO shape: ${CONCURRENCY} fulfilled and 0 rejected; ` +
           `got ${fulfilled.length} fulfilled and ${rejected.length} rejected`,
       };
     }
 
-    // Any rejection must be the expected concurrency policy, not a crash/other error.
-    const unexpected = rejected.find(
-      (r) => !/concurrency policy|already running/i.test(String(r.reason)),
-    );
-    if (unexpected) {
+    // Every queued request must still produce a valid response once admitted.
+    const failedResult = fulfilled
+      .map((result) => ValidationHelpers.validate(result.value, expectation))
+      .find((result) => !result.passed);
+    if (failedResult) {
       return {
         passed: false,
-        output: `Concurrent request rejected for an unexpected reason: ${String(unexpected.reason)}`,
-      };
-    }
-
-    // The request that did run must still produce a valid response.
-    const runResult = ValidationHelpers.validate(
-      fulfilled[0]!.value,
-      expectation,
-    );
-    if (!runResult.passed) {
-      return {
-        passed: false,
-        output: `In-flight completion failed expectation: ${runResult.output}`,
+        output: `Queued completion failed expectation: ${failedResult.output}`,
       };
     }
 
     return {
       passed: true,
       output:
-        `Single-flight concurrency policy enforced: ${fulfilled.length} ran, ` +
-        `${rejected.length} rejected by policy (of ${CONCURRENCY} issued)`,
+        `FIFO concurrency policy enforced: ${fulfilled.length} completed, ` +
+        `${rejected.length} rejected (of ${CONCURRENCY} issued)`,
     };
   }
 
@@ -186,6 +179,65 @@ export class CompletionExecutor extends AbstractModelExecutor<
     return {
       passed: true,
       output: `Seeded output reproducible (${first.length} chars identical across 2 runs)`,
+    };
+  }
+
+  async statsVerification(
+    params: CompletionTestParams,
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    try {
+      const llmModelId = await this.resources.ensureLoaded("llm");
+      const result = completion({
+        modelId: llmModelId,
+        ...params,
+        stream: params.stream ?? false,
+      } as CompletionFnParams);
+
+      const text = await result.text;
+      const textValidation = ValidationHelpers.validate(text, expectation);
+      if (!textValidation.passed) return textValidation;
+
+      const stats = (await result.stats) as Record<string, unknown> | undefined;
+      if (!stats) {
+        return { passed: false, output: `Completion OK but stats were undefined. Text: "${text.slice(0, 120)}"` };
+      }
+      const ttft = stats.timeToFirstToken;
+      const tps = stats.tokensPerSecond;
+      if (typeof ttft !== "number" || typeof tps !== "number") {
+        return {
+          passed: false,
+          output: `Completion stats missing numeric timing fields. Got: ${JSON.stringify(stats)}`,
+        };
+      }
+      return {
+        passed: true,
+        output: `completion stats OK — timeToFirstToken=${ttft}, tokensPerSecond=${tps}`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `completion stats failed: ${errorMsg}` };
+    }
+  }
+
+  async stopReasonLength(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded("llm");
+    const run = completion({
+      modelId: llmModelId,
+      ...params,
+      stream: false,
+    } as CompletionFnParams);
+
+    const final = await run.final;
+    if (final.stopReason !== "length") {
+      return {
+        passed: false,
+        output: `Expected stopReason "length", got ${JSON.stringify(final.stopReason)}`,
+      };
+    }
+    return {
+      passed: true,
+      output: `stopReason is "length" as expected`,
     };
   }
 

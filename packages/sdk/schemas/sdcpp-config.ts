@@ -101,6 +101,11 @@ export const sdcppConfigSchema = z
       .describe("VAE decoder model — required for FLUX.2 [klein], optional for SDXL"),
     highNoiseDiffusionModelSrc: modelSrcInputSchema.optional()
       .describe("High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models"),
+    clipVisionModelSrc: modelSrcInputSchema.optional()
+      .describe(
+        "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for " +
+        "Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines.",
+      ),
     upscaler: z.object({
       type: z.literal("esrgan").optional()
         .describe("Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale })."),
@@ -437,7 +442,7 @@ export type DiffusionClientParams = DiffusionClientParamsBase &
     | { init_image?: never; init_images?: Uint8Array[] }
   );
 
-export const videoRequestSchema = z.object({
+const videoGenerationBaseSchema = z.object({
   modelId: z
     .string()
     .describe(
@@ -453,9 +458,6 @@ export const videoRequestSchema = z.object({
     .describe(
       "Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     ),
-  mode: z
-    .enum(["txt2vid"])
-    .describe("Video generation mode. Only `txt2vid` is supported today."),
   prompt: z.string().describe("Positive prompt describing the video to generate."),
   negative_prompt: z
     .string()
@@ -465,16 +467,16 @@ export const videoRequestSchema = z.object({
     .number()
     .int()
     .positive()
-    .multipleOf(8)
+    .multipleOf(16)
     .optional()
-    .describe("Video width in pixels (must be a multiple of 8)."),
+    .describe("Video width in pixels (must be a multiple of 16)."),
   height: z
     .number()
     .int()
     .positive()
-    .multipleOf(8)
+    .multipleOf(16)
     .optional()
-    .describe("Video height in pixels (must be a multiple of 8)."),
+    .describe("Video height in pixels (must be a multiple of 16)."),
   video_frames: z
     .number()
     .int()
@@ -575,22 +577,93 @@ export const videoRequestSchema = z.object({
     .describe("Direct cache reuse threshold override."),
 });
 
+// Single wire object with mode-dependent rules expressed via a shared refine.
+// Keeping the wire schema a plain object (instead of a discriminated union)
+// lets the client builder construct the request without an `as` cast that
+// would otherwise disable field-level type-checking. The compile-time
+// "img2vid requires init_image" guarantee lives on the client-facing
+// discriminated union types below.
+const videoRequestObjectSchema = videoGenerationBaseSchema.extend({
+  mode: z
+    .enum(["txt2vid", "img2vid"])
+    .describe(
+      "Generation mode: 'txt2vid' (no source frame) or 'img2vid' (first-frame image).",
+    ),
+  init_image: base64StringSchema
+    .optional()
+    .describe(
+      "Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.",
+    ),
+  strength: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("img2vid denoise strength in [0, 1]; rejected for txt2vid."),
+});
+
+function refineVideoMode(
+  data: z.infer<typeof videoRequestObjectSchema>,
+  ctx: z.RefinementCtx,
+) {
+  if (data.mode === "img2vid" && data.init_image === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["init_image"],
+      message: "init_image is required when mode is 'img2vid'.",
+    });
+  }
+  if (data.mode === "txt2vid") {
+    if (data.init_image !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["init_image"],
+        message: "init_image is only valid for img2vid.",
+      });
+    }
+    if (data.strength !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["strength"],
+        message: "strength is only valid for img2vid.",
+      });
+    }
+  }
+}
+
+export const videoRequestSchema =
+  videoRequestObjectSchema.superRefine(refineVideoMode);
+
 export type VideoRequest = z.input<typeof videoRequestSchema>;
 
-export const videoStreamRequestSchema = videoRequestSchema.extend({
-  type: z.literal("videoStream"),
-});
+export const videoStreamRequestSchema = videoRequestObjectSchema
+  .extend({ type: z.literal("videoStream") })
+  .superRefine(refineVideoMode);
 
 export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>;
 
-type VideoClientParamsBase = Omit<
+type VideoClientParamsCommon = Omit<
   VideoRequest,
-  "requestId" | "control_frames"
->;
-
-export type VideoClientParams = VideoClientParamsBase & {
+  "requestId" | "mode" | "init_image" | "strength" | "control_frames"
+> & {
   control_frames?: Uint8Array[];
 };
+
+export type VideoTxt2vidClientParams = VideoClientParamsCommon & {
+  mode: "txt2vid";
+  init_image?: never;
+  strength?: never;
+};
+
+export type VideoImg2vidClientParams = VideoClientParamsCommon & {
+  mode: "img2vid";
+  init_image: Uint8Array;
+  strength?: number;
+};
+
+export type VideoClientParams =
+  | VideoTxt2vidClientParams
+  | VideoImg2vidClientParams;
 
 // ============================================
 // Standalone ESRGAN upscale (mode: "upscale")

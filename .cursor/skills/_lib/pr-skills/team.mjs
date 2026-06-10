@@ -50,6 +50,9 @@ export function loadTeam(pod) {
   assertStringArray(parsed.leads, "leads", teamFile);
   assertStringArray(parsed.members, "members", teamFile);
   assertStringArray(parsed.ownedPaths, "ownedPaths", teamFile);
+  if (parsed.extraRepos !== undefined) {
+    assertStringArray(parsed.extraRepos, "extraRepos", teamFile);
+  }
   if (parsed.leads.length === 0 && parsed.members.length === 0) {
     console.error(`Warning: ${teamFile} has no leads or members`);
   }
@@ -59,6 +62,7 @@ export function loadTeam(pod) {
     leads: parsed.leads,
     members: parsed.members,
     ownedPaths: parsed.ownedPaths,
+    extraRepos: Array.isArray(parsed.extraRepos) ? parsed.extraRepos : [],
     teamFile,
   };
 }

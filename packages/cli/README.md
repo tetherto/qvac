@@ -306,7 +306,7 @@ Run an **OpenAI-compatible HTTP server** backed by locally configured QVAC model
 qvac serve openai [options]
 ```
 
-See **[docs/serve-openai.md](./docs/serve-openai.md)** for supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS, `wav` + `pcm` only, with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias).
+See **[docs/serve-openai.md](./docs/serve-openai.md)** for supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
 
 ## Configuration
 

@@ -458,7 +458,10 @@ bool tryHandlePauseRequest(
     llama_opt_request_stop(state->ctx);
   }
   const bool pausedDuringValidation = !train;
-  savePauseCheckpoint(optCtx, *state, pausedDuringValidation, ibatch);
+  const bool shouldSavePauseCheckpoint = state->savePauseCheckpoint.load();
+  if (shouldSavePauseCheckpoint) {
+    savePauseCheckpoint(optCtx, *state, pausedDuringValidation, ibatch);
+  }
   state->pauseCheckpointSaved.store(true);
   state->shouldExit.store(true);
   state->isFinetuning.store(false);
@@ -469,8 +472,13 @@ bool tryHandlePauseRequest(
     pauseMsg << " during validation";
   }
   pauseMsg << " at batch " << ibatch << "/" << ibatchMax << " | epoch "
-           << (state->currentEpoch + 1)
-           << " | Checkpoint saved at: " << state->pauseCheckpointPath.string();
+           << (state->currentEpoch + 1);
+  if (shouldSavePauseCheckpoint) {
+    pauseMsg << " | Checkpoint saved at: "
+             << state->pauseCheckpointPath.string();
+  } else {
+    pauseMsg << " | No checkpoint requested";
+  }
   QLOG_IF(Priority::DEBUG, pauseMsg.str());
   return true;
 }

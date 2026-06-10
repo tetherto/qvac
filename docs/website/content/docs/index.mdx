@@ -66,12 +66,36 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
 
 ## System overview
 
+{/*
+  Two theme-specific copies of the same diagram, swapped by the site's
+  `.dark` class. The diagram is a draw.io SVG that colors strokes/text via
+  `light-dark()`, which resolves against the SVG document's own
+  `color-scheme`. Because the SVG is embedded in an isolated `<object>`
+  document, the site's class-based theme does NOT reach into it — and Safari
+  (unlike Chromium) won't propagate the embedding context's color-scheme,
+  so dark theme rendered black-on-black. Each copy hard-codes its root
+  `color-scheme` (light vs dark) so `light-dark()` resolves deterministically
+  in every browser; we then show the matching copy via `dark:`/`hidden`.
+  NOTE: temporary fix — the two SVGs differ only by that one `color-scheme`
+  token (regenerate the dark one from the light one). A single-source inline
+  solution is the planned follow-up.
+*/}
 <object
   type="image/svg+xml"
-  data="/diagrams/system-overview.svg"
+  data="/diagrams/system-overview-light.svg"
   width={721}
   height={575}
-  className="mx-auto my-8 block max-w-full h-auto"
+  className="mx-auto my-8 max-w-full h-auto block dark:hidden"
+  aria-label="System overview diagram"
+>
+  System overview diagram
+</object>
+<object
+  type="image/svg+xml"
+  data="/diagrams/system-overview-dark.svg"
+  width={721}
+  height={575}
+  className="mx-auto my-8 max-w-full h-auto hidden dark:block"
   aria-label="System overview diagram"
 >
   System overview diagram
