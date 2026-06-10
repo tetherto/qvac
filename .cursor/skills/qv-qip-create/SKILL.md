@@ -146,7 +146,7 @@ Advice is direction plus reasoning, not a vote.
 
 ## Drafting rules
 
-- For non-trivial QIPs or expected iteration, save the draft as a markdown file before presenting it. Prefer `arch/qips/<short-slug>.md` when working in this repo.
+- For non-trivial QIPs or expected iteration, save the draft as a markdown file before presenting it. Use a user-provided path when available; otherwise ask where to save it. `arch/qips/<short-slug>.md` is only an example local path, not a required repo path.
 - Keep the saved file Canvas-ready with only the consultation note, template sections, and author checklist
 - Keep wording concrete and short
 - Do a cleanup pass before finalizing: remove non-important details, obvious statements, duplicate or near-duplicate points, and stale context

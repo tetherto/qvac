@@ -32,10 +32,11 @@ Accept any of:
 ## Review workflow
 
 1. Read [../qv-qip-create/references/qip-template.md](../qv-qip-create/references/qip-template.md)
-2. Apply the review criteria below
-3. Check system fit against `docs/architecture/ARCHITECTURE.md` when the proposal touches runtime, package, plugin, registry, or deployment boundaries
-4. Separate blockers from clarifying questions and nice-to-have improvements
-5. Never claim approval on behalf of named approvers
+2. Read `docs/architecture/PRINCIPLES.md` before checking for principle conflicts
+3. Apply the review criteria below
+4. Check system fit against `docs/architecture/ARCHITECTURE.md` when the proposal touches runtime, package, plugin, registry, or deployment boundaries
+5. Separate blockers from clarifying questions and nice-to-have improvements
+6. Never claim approval on behalf of named approvers
 
 ## Review criteria
 
