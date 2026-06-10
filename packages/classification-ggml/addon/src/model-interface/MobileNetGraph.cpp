@@ -62,9 +62,10 @@ struct ggml_tensor* cloneRaw(
 
 /// Like cloneRaw but forces the destination dtype to F32.
 struct ggml_tensor* cloneAsFp32(
-    struct ggml_context* bundleCtx, const char* name, int n_dims,
+    struct ggml_context* bundleCtx, const char* name, int nDims,
     const int64_t* ne) {
-  struct ggml_tensor* dst = ggml_new_tensor(bundleCtx, GGML_TYPE_F32, n_dims, ne);
+  struct ggml_tensor* dst =
+      ggml_new_tensor(bundleCtx, GGML_TYPE_F32, nDims, ne);
   ggml_set_name(dst, name);
   return dst;
 }
@@ -317,7 +318,7 @@ WeightsBundle loadWeights(
 
   // Default to the architecture-standard 0.001 (PyTorch's BN default).
   // Never silently fall back to torchvision's 1e-5 reference value.
-  float bnEps = kBatchNormEpsilon;
+  float bnEps = BATCH_NORM_EPSILON;
   {
     const int64_t epsIdx = gguf_find_key(gguf, "mobilenet.bn_eps");
     if (epsIdx >= 0) {
@@ -326,19 +327,19 @@ WeightsBundle loadWeights(
   }
 
   {
-    uint32_t numClasses = kNumClasses;
+    uint32_t numClasses = NUM_CLASSES;
     const int64_t idxN = gguf_find_key(gguf, "mobilenet.num_classes");
     if (idxN >= 0) {
       numClasses = gguf_get_val_u32(gguf, static_cast<int>(idxN));
     }
     // Mismatch silently corrupts the classifier upload and the per-call
     // tensor_get; reject up front.
-    if (numClasses != kNumClasses) {
+    if (numClasses != NUM_CLASSES) {
       raiseInvalid(
           "GGUF metadata 'mobilenet.num_classes' (" +
           std::to_string(numClasses) +
           ") does not match the addon's compiled-in class count (" +
-          std::to_string(kNumClasses) +
+          std::to_string(NUM_CLASSES) +
           "); rebuild @qvac/classification-ggml against this model or use "
           "a GGUF with the expected number of classes");
     }
@@ -408,9 +409,9 @@ WeightsBundle loadWeights(
   };
 
   addConvWeight("features.0.0.weight");
-  addFoldedBn("features.0.1", kStemOutChannels);
+  addFoldedBn("features.0.1", STEM_OUT_CHANNELS);
 
-  for (const BlockConfig& cfg : kBlocks) {
+  for (const BlockConfig& cfg : BLOCKS) {
     const std::string base = "features." + std::to_string(cfg.featuresIndex);
     const bool hasExpand = cfg.expandedChannels != cfg.inputChannels;
     int dwIdx = 0;
@@ -452,12 +453,12 @@ WeightsBundle loadWeights(
   }
 
   addConvWeight("features.12.0.weight");
-  addFoldedBn("features.12.1", kTailOutChannels);
+  addFoldedBn("features.12.1", TAIL_OUT_CHANNELS);
 
-  addFcWeightFp32("classifier.0.weight", kTailOutChannels, kClassifierHidden);
-  addFcBiasFp32("classifier.0.bias", kClassifierHidden);
-  addFcWeightFp32("classifier.3.weight", kClassifierHidden, kNumClasses);
-  addFcBiasFp32("classifier.3.bias", kNumClasses);
+  addFcWeightFp32("classifier.0.weight", TAIL_OUT_CHANNELS, CLASSIFIER_HIDDEN);
+  addFcBiasFp32("classifier.0.bias", CLASSIFIER_HIDDEN);
+  addFcWeightFp32("classifier.3.weight", CLASSIFIER_HIDDEN, NUM_CLASSES);
+  addFcBiasFp32("classifier.3.bias", NUM_CLASSES);
 
   bundle.backendBuffer =
       ggml_backend_alloc_ctx_tensors(bundle.ctx.get(), backend);
@@ -524,7 +525,7 @@ WeightsBundle loadWeights(
   };
 
   foldBn("features.0.1");
-  for (const BlockConfig& cfg : kBlocks) {
+  for (const BlockConfig& cfg : BLOCKS) {
     const std::string base = "features." + std::to_string(cfg.featuresIndex);
     const bool hasExpand = cfg.expandedChannels != cfg.inputChannels;
     int dwIdx = 0;
@@ -580,8 +581,7 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
   struct ggml_context* ctx = cg.ctx.get();
 
   // WHCN: width, height, channels, batch.
-  cg.input =
-      ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kInputHw, kInputHw, 3, 1);
+  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, INPUT_HW, INPUT_HW, 3, 1);
   ggml_set_name(cg.input, "input");
 
   GraphBuilder gb{ctx, weights.tensors};
@@ -590,9 +590,9 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
       cg.input, "features.0.0", "features.0.1", /*stride=*/2, /*kernel=*/3,
       /*activate=*/true, /*useHardswish=*/true);
 
-  int spatial = kInputHw / 2;
+  int spatial = INPUT_HW / 2;
 
-  for (const BlockConfig& cfg : kBlocks) {
+  for (const BlockConfig& cfg : BLOCKS) {
     x = gb.invertedResidual(x, cfg, spatial);
     if (cfg.stride == 2) {
       spatial = (spatial + 1) / 2;
@@ -605,7 +605,7 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
 
   struct ggml_tensor* pooled = ggml_pool_2d(
       ctx, x, GGML_OP_POOL_AVG, spatial, spatial, spatial, spatial, 0, 0);
-  struct ggml_tensor* flat = ggml_reshape_1d(ctx, pooled, kTailOutChannels);
+  struct ggml_tensor* flat = ggml_reshape_1d(ctx, pooled, TAIL_OUT_CHANNELS);
 
   struct ggml_tensor* fc0 = ggml_mul_mat(
       ctx, gb.t("classifier.0.weight"), flat);
@@ -619,15 +619,15 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
   cg.output = fc3;
   ggml_set_name(cg.output, "logits");
 
-  // The warmup and process() paths both read sizeof(float)*kNumClasses
+  // The warmup and process() paths both read sizeof(float)*NUM_CLASSES
   // bytes from cg.output; mismatch silently truncates or reads OOB.
-  if (ggml_nelements(cg.output) != static_cast<int64_t>(kNumClasses)) {
+  if (ggml_nelements(cg.output) != static_cast<int64_t>(NUM_CLASSES)) {
     raise(
         "Compute graph output has " +
-        std::to_string(ggml_nelements(cg.output)) +
-        " elements, expected " + std::to_string(kNumClasses) +
+        std::to_string(ggml_nelements(cg.output)) + " elements, expected " +
+        std::to_string(NUM_CLASSES) +
         "; classifier wiring or GGUF weight shapes are inconsistent with "
-        "graph::kNumClasses");
+        "graph::NUM_CLASSES");
   }
 
   cg.graph = ggml_new_graph_custom(ctx, 8192, /*grads=*/false);

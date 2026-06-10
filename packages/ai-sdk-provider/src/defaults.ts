@@ -14,3 +14,38 @@ export const DEFAULT_BASE_URL = 'http://127.0.0.1:11435/v1'
 export const DEFAULT_API_KEY = 'qvac'
 
 export const DEFAULT_HEADERS: Readonly<Record<string, string>> = Object.freeze({})
+
+// ── Managed mode ────────────────────────────────────────────────────────────
+
+// Host the spawned `qvac serve` binds to. Loopback only — managed mode is for
+// the single-machine "run it for me" case, never a public listener.
+export const DEFAULT_SERVE_HOST = '127.0.0.1'
+
+// Max time to wait for the serve to answer `GET /v1/models`. The port stays
+// closed until preload finishes and a cold P2P download can take minutes, so
+// this is deliberately generous.
+export const DEFAULT_SERVE_START_TIMEOUT_MS = 180_000
+
+// Interval between health-check polls while waiting for startup.
+export const SERVE_HEALTH_POLL_INTERVAL_MS = 250
+
+// Grace period between SIGTERM and SIGKILL during shutdown, mirroring the
+// CLI's own `close-with-grace` ladder.
+export const SERVE_SHUTDOWN_GRACE_MS = 5_000
+
+// How long a shared managed serve keeps running after its last consumer
+// process has gone away. A short grace window lets a quick restart (or a second
+// session) re-attach to the warm serve instead of paying another cold start.
+export const DEFAULT_SERVE_IDLE_TIMEOUT_MS = 300_000 // 5 minutes
+
+// How often the detached runner re-checks its consumer set / idle deadline.
+export const RUNNER_POLL_INTERVAL_MS = 2_000
+
+// How often a `closeOnParentExit` provider polls its parent pid. A dead parent
+// reparents us (ppid → 1 on POSIX) effectively instantly; this only bounds the
+// detection latency, so a couple of seconds is plenty.
+export const PARENT_WATCH_INTERVAL_MS = 2_000
+
+// How long a spawn lockfile is considered fresh. Past this it is treated as
+// stale (left by a crashed spawner) and may be stolen.
+export const SPAWN_LOCK_STALE_MS = 30_000
