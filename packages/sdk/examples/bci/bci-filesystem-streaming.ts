@@ -47,7 +47,7 @@ try {
       // Session day index selects the day-specific projection matrices.
       // Set this to match the recording session your neural file came from.
       bciConfig: {
-        day_idx: 0,
+        day_idx: 1,
       },
     },
   });
