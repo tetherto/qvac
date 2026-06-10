@@ -228,6 +228,27 @@ jobs:
           fi
           node scripts/run-rtf-benchmark-matrix.js
 
+      # The matrix runner deliberately process.exit(0)s on PARTIAL failure (one
+      # model-type/backend shouldn't sink the whole leg). But a run that produced
+      # ZERO artifacts means every entry failed and must still fail loudly —
+      # mirrors the "Verify benchmark output exists" gate in
+      # benchmark-rtf-tts-ggml.yml.
+      - name: Verify RTF benchmark output exists
+        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: |
+          set -euo pipefail
+          results_dir="benchmarks/results"
+          mkdir -p "$results_dir"
+          rtf_count=$(find "$results_dir" -maxdepth 1 -type f -name 'rtf-benchmark-*.json' | wc -l)
+          echo "rtf-benchmark-*.json produced: $rtf_count"
+          ls -la "$results_dir" || true
+          if [ "$rtf_count" -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::scripts/run-rtf-benchmark-matrix.js produced zero rtf-benchmark-*.json files on ${{ matrix.runner || matrix.os }}. Every benchmark entry failed — check the matrix runner log above for model-fetch failures, prebuild path issues, or per-entry crashes."
+            exit 1
+          fi
+
       - name: Upload RTF benchmark results
         if: ${{ always() && inputs.run_rtf_benchmarks }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
