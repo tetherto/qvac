@@ -145,8 +145,9 @@ workflow_dispatch / cron schedule
                └── writes combined markdown + JSON to $GITHUB_STEP_SUMMARY + artifact
 ```
 
-The orchestrator runs on `workflow_dispatch` and on `cron: '0 6 * * 1'`
-(Monday 06:00 UTC). Desktop is on by default; the mobile leg is opt-in via the
+The orchestrator runs on `workflow_dispatch` and on `cron: '30 6 * * 1'`
+(Monday 06:30 UTC — offset from the ONNX benchmark's 06:00 so the two weekly
+runs don't contend at the same minute). Desktop is on by default; the mobile leg is opt-in via the
 `include_mobile=true` dispatch input so the weekly cron never burns AWS Device
 Farm capacity. On-PR workflows do NOT run the benchmarks.
 

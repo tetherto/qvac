@@ -70,6 +70,7 @@ function buildCanonicalStreamingReport (settings, summary, backend) {
   const ttfa = summary.ttfaMs || {}
   const totalWall = summary.totalWallMs || {}
   const interChunk = summary.interChunkMs || {}
+  const chunkCount = summary.chunkCount || {}
 
   return {
     schema_version: '1.0',
@@ -89,7 +90,10 @@ function buildCanonicalStreamingReport (settings, summary, backend) {
       metrics: {
         ttfa_ms: typeof ttfa.mean === 'number' ? Math.round(ttfa.mean) : null,
         inter_chunk_p95_ms: typeof interChunk.p95 === 'number' ? Math.round(interChunk.p95) : null,
-        wall_time_ms: typeof totalWall.mean === 'number' ? Math.round(totalWall.mean) : null
+        wall_time_ms: typeof totalWall.mean === 'number' ? Math.round(totalWall.mean) : null,
+        // Consumed by aggregate-tts-ggml-rtf.js expandCanonicalReport ->
+        // chunkCount.mean (the "Chunks/run" column for mobile streaming rows).
+        chunks_per_run_mean: typeof chunkCount.mean === 'number' ? Number(chunkCount.mean.toFixed(2)) : null
       }
     }]
   }
