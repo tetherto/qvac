@@ -215,7 +215,7 @@ For this MobileNetV3-Small the GGML CPU backend is, in most configurations, slow
 
 ## Converting a new model
 
-If you fine-tune or swap the underlying MobileNetV3 model, follow `[docs/onnx-to-gguf-conversion.md](docs/onnx-to-gguf-conversion.md)`. The graph construction is parameterised by `kBlocks` in `MobileNetGraph.hpp` — only classes and weights change between fine-tunes.
+If you fine-tune or swap the underlying MobileNetV3 model, follow `[docs/onnx-to-gguf-conversion.md](docs/onnx-to-gguf-conversion.md)`. The graph construction is parameterised by `BLOCKS` in `MobileNetGraph.hpp` — only classes and weights change between fine-tunes.
 
 ## Troubleshooting
 
