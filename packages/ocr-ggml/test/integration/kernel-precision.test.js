@@ -54,7 +54,8 @@ test('EasyOCR F32-kernel fallback (CRAFT + CRNN)', { timeout: DESKTOP_TIMEOUT },
       }
       if (typeof os.unsetEnv === 'function') os.unsetEnv(key)
       else if (hasSetEnv) os.setEnv(key, '')
-      delete process.env[key]
+      // bare-process's env proxy rejects `delete` (TypeError under strict mode); '' is sufficient since the addon reads via std::getenv.
+      process.env[key] = ''
     }
   }
 
