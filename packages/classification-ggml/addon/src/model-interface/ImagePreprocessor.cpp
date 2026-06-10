@@ -20,7 +20,7 @@ namespace {
 using qvac_errors::general_error::InvalidArgument;
 using qvac_errors::StatusError;
 
-constexpr size_t kDecodedChannels = 3;
+constexpr size_t DECODED_CHANNELS = 3;
 
 [[noreturn]] void raise(const std::string& message) {
   throw StatusError(InvalidArgument, message);
@@ -76,13 +76,14 @@ std::vector<uint8_t> decodeToRgb(
       if (infoWidth <= 0 || infoHeight <= 0) {
         raise("Decoded image has invalid dimensions");
       }
-      if (static_cast<uint32_t>(infoWidth) > kMaxImageDimension ||
-          static_cast<uint32_t>(infoHeight) > kMaxImageDimension) {
+      if (static_cast<uint32_t>(infoWidth) > MAX_IMAGE_DIMENSION ||
+          static_cast<uint32_t>(infoHeight) > MAX_IMAGE_DIMENSION) {
         raise(
             "Image exceeds maximum allowed dimension (" +
-            std::to_string(kMaxImageDimension) + " px per axis); header "
-            "reported " + std::to_string(infoWidth) + "x" +
-            std::to_string(infoHeight));
+            std::to_string(MAX_IMAGE_DIMENSION) +
+            " px per axis); header "
+            "reported " +
+            std::to_string(infoWidth) + "x" + std::to_string(infoHeight));
       }
     }
   }
@@ -92,8 +93,12 @@ std::vector<uint8_t> decodeToRgb(
   int channelsIgnored = 0;
   // Force 3 output channels — downstream never deals with alpha/grayscale.
   uint8_t* pixels = stbi_load_from_memory(
-      encodedBuffer.data(), static_cast<int>(encodedBuffer.size()), &width,
-      &height, &channelsIgnored, static_cast<int>(kDecodedChannels));
+      encodedBuffer.data(),
+      static_cast<int>(encodedBuffer.size()),
+      &width,
+      &height,
+      &channelsIgnored,
+      static_cast<int>(DECODED_CHANNELS));
 
   if (pixels == nullptr) {
     const char* reason = stbi_failure_reason();
@@ -109,16 +114,16 @@ std::vector<uint8_t> decodeToRgb(
     stbi_image_free(pixels);
     raise("Decoded image has invalid dimensions");
   }
-  if (static_cast<uint32_t>(width) > kMaxImageDimension ||
-      static_cast<uint32_t>(height) > kMaxImageDimension) {
+  if (static_cast<uint32_t>(width) > MAX_IMAGE_DIMENSION ||
+      static_cast<uint32_t>(height) > MAX_IMAGE_DIMENSION) {
     stbi_image_free(pixels);
     raise(
         "Image exceeds maximum allowed dimension (" +
-        std::to_string(kMaxImageDimension) + " px per axis)");
+        std::to_string(MAX_IMAGE_DIMENSION) + " px per axis)");
   }
 
   const size_t byteCount = static_cast<size_t>(width) *
-                           static_cast<size_t>(height) * kDecodedChannels;
+                           static_cast<size_t>(height) * DECODED_CHANNELS;
   std::vector<uint8_t> out(pixels, pixels + byteCount);
   stbi_image_free(pixels);
 
@@ -133,7 +138,7 @@ void validateRawRgb(
   if (rawBuffer.empty()) {
     raise("Raw image buffer is empty");
   }
-  if (channels != kChannels) {
+  if (channels != CHANNELS) {
     raise(
         "Raw image must have exactly 3 channels (RGB); got " +
         std::to_string(channels));
@@ -141,10 +146,10 @@ void validateRawRgb(
   if (width == 0 || height == 0) {
     raise("Raw image width and height must be greater than zero");
   }
-  if (width > kMaxImageDimension || height > kMaxImageDimension) {
+  if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
     raise(
         "Raw image exceeds maximum allowed dimension (" +
-        std::to_string(kMaxImageDimension) + " px per axis)");
+        std::to_string(MAX_IMAGE_DIMENSION) + " px per axis)");
   }
   const size_t expected = static_cast<size_t>(width) *
                           static_cast<size_t>(height) *
@@ -160,12 +165,17 @@ void validateRawRgb(
 
 std::vector<uint8_t> resizeToInput(
     std::span<const uint8_t> srcRgb, uint32_t srcWidth, uint32_t srcHeight) {
-  std::vector<uint8_t> out(kInputSize * kInputSize * kChannels);
+  std::vector<uint8_t> out(INPUT_SIZE * INPUT_SIZE * CHANNELS);
   unsigned char* ok = stbir_resize_uint8_linear(
-      srcRgb.data(), static_cast<int>(srcWidth), static_cast<int>(srcHeight),
-      static_cast<int>(srcWidth * kChannels), out.data(),
-      static_cast<int>(kInputSize), static_cast<int>(kInputSize),
-      static_cast<int>(kInputSize * kChannels), STBIR_RGB);
+      srcRgb.data(),
+      static_cast<int>(srcWidth),
+      static_cast<int>(srcHeight),
+      static_cast<int>(srcWidth * CHANNELS),
+      out.data(),
+      static_cast<int>(INPUT_SIZE),
+      static_cast<int>(INPUT_SIZE),
+      static_cast<int>(INPUT_SIZE * CHANNELS),
+      STBIR_RGB);
   if (ok == nullptr) {
     raise("Failed to resize image to 224x224");
   }
@@ -174,25 +184,25 @@ std::vector<uint8_t> resizeToInput(
 
 std::vector<float> normalizeToWhcn(std::span<const uint8_t> rgb224) {
   if (rgb224.size() !=
-      static_cast<size_t>(kInputSize) * kInputSize * kChannels) {
+      static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE * CHANNELS) {
     raise("Internal error: resized buffer does not have expected size");
   }
   constexpr float kUnit = 1.0F / 255.0F;
 
   // ggml WHCN: contiguous, fastest-varying axis = width.
   // offset(w, h, c) = c*H*W + h*W + w
-  std::vector<float> out(static_cast<size_t>(kInputSize) * kInputSize * kChannels);
-  const size_t plane = static_cast<size_t>(kInputSize) * kInputSize;
+  std::vector<float> out(
+      static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE * CHANNELS);
+  const size_t plane = static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE;
 
-  for (uint32_t y = 0; y < kInputSize; ++y) {
-    for (uint32_t x = 0; x < kInputSize; ++x) {
+  for (uint32_t y = 0; y < INPUT_SIZE; ++y) {
+    for (uint32_t x = 0; x < INPUT_SIZE; ++x) {
       const size_t srcIdx =
-          (static_cast<size_t>(y) * kInputSize + x) * kChannels;
-      const size_t dstBase = static_cast<size_t>(y) * kInputSize + x;
-      for (uint32_t c = 0; c < kChannels; ++c) {
+          (static_cast<size_t>(y) * INPUT_SIZE + x) * CHANNELS;
+      const size_t dstBase = static_cast<size_t>(y) * INPUT_SIZE + x;
+      for (uint32_t c = 0; c < CHANNELS; ++c) {
         const float pixel = static_cast<float>(rgb224[srcIdx + c]) * kUnit;
-        out[c * plane + dstBase] =
-            (pixel - kImageNetMean[c]) / kImageNetStd[c];
+        out[c * plane + dstBase] = (pixel - IMAGENET_MEAN[c]) / IMAGENET_STD[c];
       }
     }
   }
