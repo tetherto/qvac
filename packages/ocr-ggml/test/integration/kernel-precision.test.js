@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const os = require('bare-os')
+const process = require('bare-process')
 const { isMobile, platform, getImagePath, ensureModelPath, runOcrComparison } = require('./utils')
 
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
