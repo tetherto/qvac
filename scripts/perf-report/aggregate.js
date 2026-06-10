@@ -50,6 +50,11 @@ function parseArgs (argv) {
     // QVAC-18298: case-insensitive, pipe-separated test-name filter (same
     // convention as extract-from-log.js's --filter).
     filter: null,
+    // QVAC-19942: case-insensitive, pipe-separated test-name denylist. Rows
+    // whose test name contains any keyword are dropped. Lets the combined
+    // (cross-platform) report omit desktop-only rows that can never have
+    // mobile data, without touching the per-device reports.
+    exclude: null,
     help: false
   }
 
@@ -66,6 +71,7 @@ function parseArgs (argv) {
       case '--output-html': args.outputHtml = argv[++i]; break
       case '--repo': args.repo = argv[++i]; break
       case '--filter': args.filter = argv[++i]; break
+      case '--exclude': args.exclude = argv[++i]; break
       case '--device-details':
         args.mdDeviceDetails = true
         args.htmlDeviceDetails = true
@@ -105,6 +111,12 @@ OPTIONS:
                         against each result's test name. Only matching rows are
                         aggregated (e.g. "gemma4-vl|qwen3.5-vl"). Use to carve a
                         focused section out of a shared addon's artifacts.
+  --exclude <pattern>   Pipe-separated, case-insensitive substrings matched
+                        against each result's test name. Matching rows are
+                        DROPPED (denylist; inverse of --filter). Use to omit
+                        desktop-only rows from the combined cross-platform
+                        report (e.g. "full-suite|canvasSize lab_results").
+                        Applied after --filter.
   -h, --help            Show this help
 
 EXAMPLES:
@@ -189,6 +201,39 @@ function filterReports (reports, pattern) {
   return out
 }
 
+/**
+ * Inverse of {@link filterReports}: drops each report's `results` rows whose
+ * `test` name contains one of the pipe-separated, case-insensitive substrings
+ * in `pattern`. Reports left with no rows are removed. Returns input unchanged
+ * when `pattern` is falsy. Lets the combined cross-platform report omit
+ * desktop-only rows (e.g. `full-suite` / `canvasSize` tests gated behind
+ * `skip: isMobile`) that can never have mobile data, without affecting the
+ * per-device reports (which are generated without --exclude).
+ */
+function excludeReports (reports, pattern) {
+  if (!pattern) return reports
+  const keywords = pattern
+    .split('|')
+    .map(k => k.trim().toLowerCase())
+    .filter(Boolean)
+  if (!keywords.length) return reports
+
+  let kept = 0
+  let dropped = 0
+  const out = []
+  for (const report of reports) {
+    const results = (report.results || []).filter(r => {
+      const name = (r.test || '').toLowerCase()
+      return !keywords.some(k => name.includes(k))
+    })
+    dropped += (report.results || []).length - results.length
+    kept += results.length
+    if (results.length) out.push(Object.assign({}, report, { results }))
+  }
+  console.log(`Exclude "${pattern}": kept ${kept} row(s), dropped ${dropped}, ${out.length}/${reports.length} report(s) retained`)
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -223,6 +268,14 @@ function main () {
     reports = filterReports(reports, args.filter)
     if (!reports.length) {
       console.error(`No performance reports left after applying --filter "${args.filter}".`)
+      process.exit(1)
+    }
+  }
+
+  if (args.exclude) {
+    reports = excludeReports(reports, args.exclude)
+    if (!reports.length) {
+      console.error(`No performance reports left after applying --exclude "${args.exclude}".`)
       process.exit(1)
     }
   }
@@ -276,4 +329,8 @@ function main () {
   console.log(`\nDone. ${deviceCount} device(s), ${testCount} test group(s), ${reports.length} run(s).`)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = { filterReports, excludeReports }

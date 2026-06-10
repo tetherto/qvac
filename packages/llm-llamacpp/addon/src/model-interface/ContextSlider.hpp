@@ -14,7 +14,7 @@ struct IContextSliderOps {
   virtual ~IContextSliderOps() = default;
   virtual llama_pos nCtx(llama_context* lctx) const = 0;
   virtual ContextSliderMemoryHandle memory(llama_context* lctx) const = 0;
-  virtual void seqRm(
+  virtual bool seqRm(
       ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const = 0;
   virtual void seqAdd(
@@ -25,6 +25,11 @@ struct IContextSliderOps {
 /// Returns the default llama-backed ops implementation.
 const IContextSliderOps& defaultContextSliderOps();
 
+struct ContextUsage {
+  llama_pos pos = 0;
+  llama_pos cacheTokens = 0;
+};
+
 /// Outcome of a sliding-window operation on the KV cache.
 struct ContextSlideOutcome {
   enum class Kind {
@@ -32,6 +37,7 @@ struct ContextSlideOutcome {
     Slid,      // Successfully discarded tokens via partial slide
     FullWipe,  // Fallback: wiped everything after firstMsgTokens (prefill only)
     Overflow,  // Could not free enough space; caller should throw
+    MemoryOperationFailed, // llama memory rejected the requested slide
   };
 
   Kind kind = Kind::NotNeeded;
@@ -62,6 +68,11 @@ ContextSlideOutcome trySlidePrefill(
     ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps());
 
+ContextSlideOutcome trySlidePrefill(
+    llama_context* lctx, ContextUsage current, ContextUsage protectedPrefix,
+    ContextUsage append, llama_pos nDiscarded, ToolsCompactController& tools,
+    const IContextSliderOps& ops = defaultContextSliderOps());
+
 /// Attempts to slide the context window during generation phase.
 ///
 /// This handles the case where generating one more token would overflow the
@@ -77,4 +88,5 @@ ContextSlideOutcome trySlidePrefill(
 ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nDiscarded, ToolsCompactController& tools,
-    const IContextSliderOps& ops = defaultContextSliderOps());
+    const IContextSliderOps& ops = defaultContextSliderOps(),
+    llama_pos nCacheTokens = -1);

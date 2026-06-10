@@ -77,10 +77,10 @@ def run_reference_benchmark(images, name, init_fn, infer_fn):
     }
 
 
-def run_ggml_benchmark(images, name, detector, recognizer, pipeline):
-    """Run a QVAC GGML batch benchmark."""
+def run_ggml_benchmark(images, name, detector, recognizer, pipeline, backend='cpu'):
+    """Run a QVAC GGML batch benchmark on the given backend (cpu | vulkan)."""
     print(f"\n{'='*60}")
-    print(f"Running QVAC {name} GGML benchmark...")
+    print(f"Running QVAC {name} GGML benchmark [{backend}]...")
     print(f"{'='*60}")
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
@@ -100,18 +100,23 @@ def run_ggml_benchmark(images, name, detector, recognizer, pipeline):
              '--output', output_file,
              '--detector', detector,
              '--recognizer', recognizer,
-             '--pipeline', pipeline],
+             '--pipeline', pipeline,
+             '--backend', backend],
             cwd=str(QVAC_DIR),
             capture_output=True,
             text=True
         )
         total_time = time.time() - start_total
 
-        # Parse stderr for progress
+        # Parse stderr for progress + the backend the addon actually resolved
+        # (it falls back to CPU when Vulkan is unavailable).
         init_time = 0
+        resolved_backend = backend
         for line in result.stderr.split('\n'):
             if line.startswith('MODEL_READY:'):
                 init_time = float(line.split(':')[1]) / 1000
+            elif line.startswith('BACKEND:'):
+                resolved_backend = line.split(':', 1)[1].strip()
 
         # Parse results
         total_regions = 0
@@ -129,7 +134,7 @@ def run_ggml_benchmark(images, name, detector, recognizer, pipeline):
                         # Skip malformed JSON lines from batch output, but keep benchmark running.
                         print("  Warning: Skipping malformed JSON line in benchmark output")
 
-        label = f"QVAC {name}"
+        label = f"QVAC {name} [{resolved_backend}]"
         print(f"\n{label} Results:")
         print(f"  Total images: {len(images)}")
         print(f"  Total regions detected: {total_regions}")
@@ -190,8 +195,10 @@ def print_comparison(results_list):
 @click.option('--doctr-detector', default=None, help='DocTR detector GGUF path')
 @click.option('--doctr-recognizer', default=None, help='DocTR recognizer GGUF path')
 @click.option('--dataset-path', default=None, help='Use OCRBench_v2 images instead of image-dir')
+@click.option('--backend', default='cpu', type=click.Choice(['cpu', 'vulkan']),
+              help='GGML backend device to benchmark (vulkan falls back to CPU when unavailable)')
 def main(image_dir, limit, pipeline, detector, recognizer, doctr_detector,
-         doctr_recognizer, dataset_path):
+         doctr_recognizer, dataset_path, backend):
     """Quick benchmark comparing GGML pipelines against Python references."""
     # Find images
     if dataset_path:
@@ -232,7 +239,7 @@ def main(image_dir, limit, pipeline, detector, recognizer, doctr_detector,
             print("EasyOCR not installed, skipping reference benchmark")
 
         # GGML
-        r = run_ggml_benchmark(images, 'easyocr', detector, recognizer, 'easyocr')
+        r = run_ggml_benchmark(images, 'easyocr', detector, recognizer, 'easyocr', backend)
         results_list.append(r)
 
     # DocTR pipeline
@@ -262,7 +269,7 @@ def main(image_dir, limit, pipeline, detector, recognizer, doctr_detector,
             print("python-doctr not installed, skipping reference benchmark")
 
         # GGML
-        r = run_ggml_benchmark(images, 'doctr', doctr_detector, doctr_recognizer, 'doctr')
+        r = run_ggml_benchmark(images, 'doctr', doctr_detector, doctr_recognizer, 'doctr', backend)
         results_list.append(r)
 
     if results_list:

@@ -20,13 +20,27 @@ This document describes the supported routes and how to configure `serve.models`
 | `POST` | `/v1/embeddings` | Embeddings |
 | `POST` | `/v1/audio/transcriptions` | Speech-to-text (source language) |
 | `POST` | `/v1/audio/translations` | Speech-to-text **into English** (Whisper translate task) |
-| `POST` | `/v1/audio/speech` | Text-to-speech (Chatterbox / Supertonic, `wav` + `pcm` only) |
+| `POST` | `/v1/audio/speech` | Text-to-speech (Chatterbox / Supertonic; `wav` + `pcm`, plus `mp3` / `opus` / `aac` / `flac` with `ffmpeg`) |
+| `GET` | `/v1/audio/voices` | List configured TTS voices |
+| `GET` | `/v1/audio/models` | List READY text-to-speech models |
 | `POST` | `/v1/images/generations` | Diffusion txt2img (blocking + SSE) |
 | `POST` | `/v1/images/edits` | Diffusion img2img (multipart; blocking + SSE) |
 | `POST` | `/v1/files` | Upload a file into the in-memory store (used by image URL responses + vector stores) |
 | `GET` | `/v1/files` | List in-memory files |
 | `GET` | `/v1/files/{id}` | File metadata |
 | `GET` | `/v1/files/{id}/content` | Stream the bytes (used by image `response_format=url`) |
+| `GET` | `/v1/vector_stores` | List vector stores |
+| `POST` | `/v1/vector_stores` | Create a vector store |
+| `GET` | `/v1/vector_stores/{id}` | Retrieve a vector store |
+| `POST` | `/v1/vector_stores/{id}` | Update a vector store |
+| `DELETE` | `/v1/vector_stores/{id}` | Delete a vector store |
+| `POST` | `/v1/vector_stores/{id}/search` | Semantic search over a store (needs a loaded `embedding` model) |
+| `POST` | `/v1/vector_stores/{id}/files` | Attach + embed a previously-uploaded file |
+| `POST` | `/v1/videos` | Create a text-to-video job (async; backed by the SDK's `video({ mode: "txt2vid" })`) |
+| `GET` | `/v1/videos` | List video jobs (in-memory only) |
+| `GET` | `/v1/videos/{id}` | Poll job status |
+| `GET` | `/v1/videos/{id}/content` | Download bytes (`video/mp4` via ffmpeg transcode; `?format=avi` for native MJPG-AVI) |
+| `DELETE` | `/v1/videos/{id}` | Abort the job and drop its assets |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
@@ -477,20 +491,20 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
   - `model` (required) — alias, resolved as described above
   - `input` (required) — non-empty string, capped at **`serve.openai.audio.speech.maxInputChars`** (default **4096**, OpenAI's documented limit; set to `null` to disable)
   - `voice` (optional, defaults to `defaultVoice`)
-  - `response_format` (optional) — `wav` (default) or `pcm` (raw 16-bit signed little-endian PCM, mono). `mp3`, `opus`, `aac`, `flac` return `400 unsupported_response_format` (no audio encoder bundled).
+  - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
 - **Accepted but ignored:** `speed`, `instructions`, `stream_format` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 
 ### Response
 
-Binary audio body. Headers always include:
+Binary audio body. Headers include:
 
 | Header | Description |
 |--------|-------------|
-| `Content-Type` | `audio/wav` for `wav`; **`audio/L16; rate=<sr>; channels=1`** (RFC 2586) for `pcm`. |
+| `Content-Type` | `audio/wav` (`wav`); **`audio/L16; rate=<sr>; channels=1`** (RFC 2586, `pcm`); `audio/mpeg` (`mp3`); `audio/ogg` (`opus`); `audio/aac` (`aac`); `audio/flac` (`flac`). |
 | `Content-Length` | Total bytes. |
-| `X-Audio-Sample-Rate` | Native sample rate of the model output. **24000** Hz for Chatterbox, **44100** Hz for Supertonic. Override by setting `sampleRate` on the alias's `config`. |
-| `X-Audio-Channels` | Always `1` (mono). |
-| `X-Audio-Bits-Per-Sample` | Always `16`. |
+| `X-Audio-Sample-Rate` | Native sample rate of the model output. **24000** Hz for Chatterbox, **44100** Hz for Supertonic. Override by setting `sampleRate` on the alias's `config`. **Only sent for `wav`/`pcm`** — encoded containers carry their own rate metadata. |
+| `X-Audio-Channels` | Always `1` (mono). Only sent for `wav`/`pcm`. |
+| `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`. |
 | `X-QVAC-Ignored-Params` | Comma-separated list of accepted-but-dropped OpenAI fields (only present when at least one was sent). |
 
 The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
@@ -525,10 +539,85 @@ ffplay -f s16le -ar 24000 -ac 1 speech.pcm  # rate/channels come from the respon
 | 400 | `missing_input` | `input` is missing or empty/whitespace |
 | 400 | `input_too_long` | `input.length` exceeds `maxInputChars` (default 4096) |
 | 400 | `missing_voice` | `voice` not sent and `defaultVoice` is `null` |
-| 400 | `unsupported_response_format` | `mp3` / `opus` / `aac` / `flac` (no encoder bundled) |
-| 400 | `invalid_response_format` | Anything other than `wav` / `pcm` / the unsupported set above |
+| 400 | `invalid_response_format` | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac` |
 | 400 | `invalid_model_type` | Alias is not a `speech` model |
 | 404 | `model_not_found` | No `voices` mapping, no hyphen alias, no bare alias matches |
 | 502 | `speech_empty` | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
+| 502 | `transcode_failed` | ffmpeg failed (or timed out) encoding `mp3` / `opus` / `aac` / `flac` — retry with `wav`/`pcm` |
+| 503 | `transcode_unavailable` | `mp3` / `opus` / `aac` / `flac` requested but `ffmpeg` is not on the server's `PATH` |
 | 503 | `model_not_ready` | Model not loaded yet |
 | 500 | `speech_error` | SDK / engine failure (message goes to server logs only) |
+
+## `GET /v1/audio/voices`
+
+Lists the configured TTS voices — the OpenAI `voice` names mapped under **`serve.openai.audio.speech.voices`** plus the configured **`defaultVoice`**. Used by clients such as Open WebUI's voice selector. QVAC enforces no fixed voice catalog, so callers may also send any `voice` string that resolves via a `{model}-{voice}` alias.
+
+The response carries both a flat `voices` array (consumed by Open WebUI) and an OpenAI-style `data` array. When no `voices` map is configured, the catalog is just the default voice (`"alloy"`).
+
+```json
+{
+  "object": "list",
+  "voices": ["alloy", "echo"],
+  "data": [
+    { "id": "alloy", "object": "audio.voice", "model": "tts-chatter-alloy" },
+    { "id": "echo", "object": "audio.voice", "model": "tts-chatter-echo" }
+  ]
+}
+```
+
+## `GET /v1/audio/models`
+
+Lists loaded (READY) text-to-speech models — the speech-capable subset of `/v1/models`, filtered to models whose endpoint category is `speech`. Same `{ object: "list", data: [...] }` shape as `/v1/models`, with each entry shaped like a `/v1/models` entry. Used by Open WebUI's TTS model selector.
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "tts-chatter-alloy", "object": "model", "created": 1717200000, "owned_by": "qvac" }
+  ]
+}
+```
+
+## `POST /v1/videos` (and job lifecycle)
+
+OpenAI-compatible **async** video surface, backed by the SDK's
+`video({ mode: "txt2vid" })`. `POST` creates a job and returns immediately with
+`status: "queued"`; the generation runs in the background. Poll `GET
+/v1/videos/{id}` until `status` is `completed` (or `failed`), then fetch the
+bytes from `GET /v1/videos/{id}/content`.
+
+Requires an alias whose **endpoint category** is `video` (SDK addon
+`sdcpp-video`). Register it in `serve.models` and add a
+`serve.openai.videos.models` aliasing block so OpenAI SDK clients can use a
+hard-coded model name.
+
+**Scope: text-to-video only.** `input_reference` is rejected with `400
+unsupported_param` (no img2vid in the SDK); `/edits`, `/remix`, `/extensions`,
+and `/characters` are not implemented.
+
+### Endpoints
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `POST` | `/v1/videos` | Create job → `{ status: "queued" }` |
+| `GET` | `/v1/videos/{id}` | Poll status |
+| `GET` | `/v1/videos/{id}/content` | Download; defaults to `video/mp4` (lazy ffmpeg transcode + cache). `?format=avi` returns the native MJPG-AVI. `?variant` other than `video` → `501 unsupported_variant` |
+| `GET` | `/v1/videos` | Paginated list (`limit` / `order` / `after`) |
+| `DELETE` | `/v1/videos/{id}` | Abort the running job and drop its assets |
+
+### Deviations from the OpenAI spec
+
+- `input_reference` → `400 unsupported_param`.
+- `size` accepts any `WxH` (multiples of 8) in addition to OpenAI's 4-value enum.
+- `Content-Type: video/mp4` is produced by a server-side ffmpeg transcode; `?format=avi` returns the native container.
+- The list endpoint is **in-memory only** — a restart clears it.
+
+### Errors
+
+| HTTP | `error.code` | When |
+|------|--------------|------|
+| 400 | `unsupported_param` | `input_reference` sent (no img2vid) |
+| 400 | `invalid_model_type` | Alias is not a `video` model |
+| 404 | `video_not_found` | Unknown job id |
+| 501 | `unsupported_variant` | `GET …/content?variant=` other than `video` |
+| 503 | `model_not_ready` | Model not loaded yet |

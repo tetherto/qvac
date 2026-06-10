@@ -1,4 +1,9 @@
 import { getSwarm } from "./hyperswarm";
+import { getSDKConfig } from "@/server/bare/registry/config-registry";
+import {
+  ensureDhtBootstrapped,
+  describeConnectFailure,
+} from "./delegate-connect-diagnostics";
 import RPC from "bare-rpc";
 import type { Connection } from "hyperswarm";
 import type { Duplex } from "bare-stream";
@@ -30,6 +35,10 @@ const activeConnections = new Map<PeerPublicKey, Connection>();
 const inflightConnections = new Map<PeerPublicKey, Promise<RPC>>();
 
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
+
+function getConfiguredRelayCount(): number {
+  return getSDKConfig().swarmRelays?.length ?? 0;
+}
 
 function isHeartbeatResponse(payload: unknown): payload is { type: "heartbeat" } {
   return (
@@ -178,22 +187,14 @@ async function ensureRPCConnection(
 
   const connectionStart = nowMs();
   let conn: Connection | undefined;
+  const relayCount = getConfiguredRelayCount();
 
   try {
     logger.info(
-      `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""}`,
+      `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""} (${relayCount} swarm relay(s) configured)`,
     );
 
-    // We deliberately do NOT `await swarm.dht.fullyBootstrapped()` here. The
-    // earlier guard (added with #1729 to side-step a theoretical PEER_NOT_FOUND
-    // on a fully-cold swarm) added a serial 1-3s wait on every first delegated
-    // call — measurably regressing `loadModel.delegation.connection` vs 0.9.0
-    // (≈3.2× slower in local benches). `getSwarm()` is invoked early during
-    // SDK init (registry/runtime), so by the time the consumer reaches this
-    // path the routing table is already warm enough; `dht.connect()` also
-    // bootstraps on demand if it isn't, so we lose nothing by skipping the
-    // explicit await.
-    getSwarm();
+    await ensureDhtBootstrapped(getSwarm().dht, getRemainingTimeout());
 
     conn = openDhtConnection(publicKey);
     await waitForOpen(conn, getRemainingTimeout());
@@ -218,7 +219,7 @@ async function ensureRPCConnection(
 
     logger.error("Failed to establish RPC connection:", error);
     throw new DelegateConnectionFailedError(
-      `RPC connection failed: ${error instanceof Error ? error.message : String(error)}`,
+      `RPC connection failed: ${describeConnectFailure(error, publicKey, relayCount)}`,
       error,
     );
   }

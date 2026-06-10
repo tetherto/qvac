@@ -70,9 +70,9 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     }
   })
   const chunkAttributions = createChunkAttributionStore()
-  const videoTranscodeAvailable = await probeFfmpegAvailable()
-  if (!videoTranscodeAvailable) {
-    logger.warn('ffmpeg not on PATH — /v1/videos/{id}/content will default to video/avi. Install ffmpeg to serve video/mp4. See: qvac doctor')
+  const ffmpegAvailable = await probeFfmpegAvailable()
+  if (!ffmpegAvailable) {
+    logger.warn('ffmpeg not on PATH — /v1/videos/{id}/content defaults to video/avi and /v1/audio/speech rejects mp3/opus/aac/flac. Install ffmpeg to serve those. See: qvac doctor')
   }
   // `onEvict` captures `qvacContext` by reference; the closure runs lazily
   // (only when the store actually evicts), long after `qvacContext` is wired
@@ -93,7 +93,7 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     chunkAttributions,
     responsesStore,
     videoJobsStore,
-    videoTranscodeAvailable,
+    ffmpegAvailable,
     ...(options.transcribeOverride !== undefined ? { transcribeOverride: options.transcribeOverride } : {})
   }
 

@@ -227,6 +227,9 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
 
       const cacheUsed = secondCacheTokens > firstCacheTokens || secondCacheTokens > 0;
       const result = `Cache tokens: first=${firstCacheTokens}, second=${secondCacheTokens}, used: ${cacheUsed}`;
+      if (!cacheUsed) {
+        return { passed: false, output: `KV cache not used across turns. ${result}` };
+      }
       return ValidationHelpers.validate(result, expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

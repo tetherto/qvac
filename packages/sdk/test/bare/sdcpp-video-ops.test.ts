@@ -101,6 +101,45 @@ test(
 );
 
 test(
+  "video op: forwards img2vid init_image and strength to model.run",
+  async function (t) {
+    const { video: videoOp } =
+      await import("@/server/bare/plugins/sdcpp-generation/ops/video");
+    let observed: Record<string, unknown> | undefined;
+
+    await withRegisteredVideoModel(
+      async function (params: unknown) {
+        observed = params as Record<string, unknown>;
+        return {
+          stats: { generationMs: 1, totalVideos: 1 },
+          iterate: async function* () {
+            yield new Uint8Array([82, 73, 70, 70]);
+          },
+        };
+      },
+      async (modelId) => {
+        for await (const _chunk of videoOp({
+          modelId,
+          mode: "img2vid",
+          prompt: "gentle head turn",
+          init_image: PNG_B64,
+          strength: 0.9,
+          video_frames: 5,
+        })) {
+          // drain
+        }
+
+        t.ok(observed, "model.run was called");
+        t.is(observed?.["mode"], "img2vid");
+        t.is(observed?.["strength"], 0.9);
+        t.ok(observed?.["init_image"] instanceof Uint8Array);
+        t.is((observed?.["init_image"] as Uint8Array).length > 0, true);
+      },
+    );
+  },
+);
+
+test(
   "video op: broad cancel routes through registry and calls model.cancel",
   async function (t) {
     const [{ getRequestRegistry }, { video: videoOp }] = await Promise.all([

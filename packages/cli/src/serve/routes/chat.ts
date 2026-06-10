@@ -1,9 +1,9 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
-import type { CompletionStats } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
 import { initSSE, sendSSE, endSSE } from '../lib/sse.js'
+import { drainCompletion } from '../adapters/openai/completion-result.js'
 import { requireModel } from '../plugins/require-model.js'
 import { logUnsupported } from '../plugins/log-unsupported.js'
 import {
@@ -44,13 +44,6 @@ function prepare (req: FastifyRequest, body: Parameters<typeof toSdkChatArgs>[0]
     sdkModelId: req.qvacModel!.sdkModelId,
     modelAlias: req.qvacModel!.alias
   }
-}
-
-function completionTokensFromStats (text: string, stats: CompletionStats | undefined): number {
-  if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
-    return stats.generatedTokens
-  }
-  return text ? text.split(/\s+/).filter(Boolean).length : 0
 }
 
 function randomId (): string {
@@ -116,13 +109,9 @@ async function runBlocking (req: FastifyRequest, reply: FastifyReply, p: Prepare
   })
   req.bindCancel(result.requestId)
 
-  const text = await result.text
-  const toolCalls = await result.toolCalls
-  const stats = await result.stats
+  const { text, toolCalls, completionTokens, finishReason } = await drainCompletion(result)
 
   const hasToolCalls = toolCalls.length > 0
-  const finishReason = hasToolCalls ? 'tool_calls' : 'stop'
-
   const message: Record<string, unknown> = {
     role: 'assistant',
     content: hasToolCalls ? null : (text || null)
@@ -131,7 +120,6 @@ async function runBlocking (req: FastifyRequest, reply: FastifyReply, p: Prepare
     message['tool_calls'] = sdkToolCallsToOpenai(toolCalls)
   }
 
-  const completionTokens = completionTokensFromStats(text || '', stats)
   req.server.qvac.logger.info(`  completion done tokens=${completionTokens} finish=${finishReason}`)
 
   reply.send({
@@ -176,24 +164,20 @@ async function runStreaming (req: FastifyRequest, reply: FastifyReply, p: Prepar
 
   sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
-  for await (const token of result.tokenStream) {
-    sendSSE(raw, chunk({ content: token }, null))
-  }
-
-  const toolCalls = await result.toolCalls
+  const { toolCalls, completionTokens, finishReason } = await drainCompletion(
+    result,
+    (token) => sendSSE(raw, chunk({ content: token }, null))
+  )
   const hasToolCalls = toolCalls.length > 0
-  const stats = await result.stats
-  const fullText = await result.text
-  const completionTokens = completionTokensFromStats(fullText || '', stats)
 
-  req.server.qvac.logger.info(`  streaming done tokens=${completionTokens}`)
+  req.server.qvac.logger.info(`  streaming done tokens=${completionTokens} finish=${finishReason}`)
 
   if (hasToolCalls) {
     const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls)
     sendSSE(raw, chunk({ tool_calls: openaiToolCalls }, null))
     sendSSE(raw, chunk({}, 'tool_calls'))
   } else {
-    sendSSE(raw, chunk({}, 'stop', {
+    sendSSE(raw, chunk({}, finishReason, {
       usage: { prompt_tokens: 0, completion_tokens: completionTokens, total_tokens: completionTokens }
     }))
   }
