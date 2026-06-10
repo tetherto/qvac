@@ -124,6 +124,7 @@ export type CompletionFinal = {
   thinkingText?: string;
   toolCalls: ToolCallWithCall[];
   stats?: CompletionStats;
+  stopReason?: StopReason;
   raw: {
     fullText: string;
   };

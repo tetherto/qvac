@@ -117,6 +117,11 @@
       "import": "./dist/schemas/plugin.js"
     },
     "./expo-plugin": "./dist/expo/plugins/index.js",
+    "./electron-forge": {
+      "require": "./electron-forge/index.cjs",
+      "import": "./electron-forge/index.cjs",
+      "default": "./electron-forge/index.cjs"
+    },
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-core": {
       "import": "./dist/server/worker-core.js"
@@ -159,6 +164,7 @@
   "files": [
     "bare-imports.json",
     "dist/**/*",
+    "electron-forge/**/*",
     "expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
@@ -196,22 +202,22 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/classification-ggml": "^0.3.0",
+    "@qvac/classification-ggml": "^0.3.1",
     "@qvac/decoder-audio": "^0.3.7",
     "@qvac/diffusion-cpp": "^0.11.2",
-    "@qvac/embed-llamacpp": "^0.19.0",
+    "@qvac/embed-llamacpp": "^0.19.1",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.23.2",
+    "@qvac/llm-llamacpp": "^0.24.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-onnx": "^0.6.0",
     "@qvac/rag": "^0.6.2",
     "@qvac/registry-client": "^0.6.0",
     "@qvac/transcription-parakeet": "^0.7.1",
     "@qvac/transcription-whispercpp": "^0.8.0",
-    "@qvac/translation-nmtcpp": "^5.0.0",
+    "@qvac/translation-nmtcpp": "^5.0.1",
     "@qvac/tts-ggml": "^0.2.0",
-    "@qvac/vla-ggml": "^0.3.1",
+    "@qvac/vla-ggml": "^0.3.2",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.15.0",
     "bare-events": "^2.8.0",
@@ -238,6 +244,7 @@
     "zod": "^4.3.0"
   },
   "devDependencies": {
+    "@electron-forge/plugin-base": "^7.11.1",
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.4",
     "@lancedb/lancedb": "^0.21.3",
@@ -275,6 +282,7 @@
     "typescript-eslint": "^8.39.0"
   },
   "peerDependencies": {
+    "@electron-forge/plugin-base": "^7.11.1",
     "bare-link": ">=3.0.0",
     "expo-build-properties": ">=0.12.0",
     "expo-device": ">=8.0.0",
@@ -284,6 +292,9 @@
     "tsx": "*"
   },
   "peerDependenciesMeta": {
+    "@electron-forge/plugin-base": {
+      "optional": true
+    },
     "bare-link": {
       "optional": true
     },
