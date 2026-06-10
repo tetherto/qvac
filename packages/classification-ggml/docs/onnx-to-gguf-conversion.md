@@ -36,7 +36,7 @@ This guide describes how to convert a retrained (or freshly exported)
 MobileNetV3-Small PyTorch model into the GGUF container consumed by
 `@qvac/classification-ggml`. It is intentionally minimal — the graph
 construction in `MobileNetGraph.cpp` is parameterised only by the block
-table `kBlocks` and the label metadata inside the GGUF, so swapping in
+table `BLOCKS` and the label metadata inside the GGUF, so swapping in
 new classes (or a different fine-tune) does not require any C++ changes
 as long as the architecture stays MobileNetV3-Small.
 
@@ -150,10 +150,10 @@ any private validation data into the public package.
 ## 5. Supporting a new block table (advanced)
 
 If you switch to a different MobileNet variant (V3-Large, V4, etc.),
-update `kBlocks` in `MobileNetGraph.hpp` to reflect the new
+update `BLOCKS` in `MobileNetGraph.hpp` to reflect the new
 expand/project channels, kernel sizes, strides, SE reducer sizes,
 and HardSwish/ReLU flags. The graph construction loop iterates over
-`kBlocks`; no other change is required as long as the GGUF tensor
+`BLOCKS`; no other change is required as long as the GGUF tensor
 naming follows `features.<N>.block.<idx>.*` conventions.
 
 ## Known pitfalls
