@@ -52,13 +52,18 @@ private:
   std::vector<float> inputBuffer_;
   std::vector<float> logitBuffer_;
 
-  // Resize + symmetric-pad to DBNET_INPUT_SIZE × DBNET_INPUT_SIZE, normalise.
+  // Resize by aspect ratio (long side -> DBNET_INPUT_SIZE) and symmetric-pad to
+  // the next multiple of 32 per axis (NOT a fixed square), then normalise.
   // Returns {processedMat, scale, newW, newH, padLeft, padTop}.
   static std::tuple<cv::Mat, float, int, int, int, int>
   preprocessImage(const cv::Mat& img);
 
-  // Run the GGML DBNet graph on a preprocessed 1024×1024 float mat.
-  // Returns the sigmoid probability map (single-channel CV_32F, same size).
+  // (Re)build computeGraph_ for the given canvas size if it differs from the
+  // current one. The canvas varies per image (aspect-ratio padded to /32).
+  void ensureGraph(int inputW, int inputH);
+
+  // Run the GGML DBNet graph on a preprocessed (W x H, both multiples of 32)
+  // float mat. Returns the sigmoid probability map (CV_32F, same size).
   cv::Mat runInference(const cv::Mat& preprocessed);
 
   // Post-process the probability map to axis-aligned quad polygons.

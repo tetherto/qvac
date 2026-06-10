@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The compiled MeCab IPAdic dictionary is consumed from the QVAC model registry (S3) under `qvac_models_compiled/chatterbox/mecab-ipadic/`. The integration test stages it via `ensureMecabDict` in `test/utils/downloadModel.js` (lazy `@qvac/registry-client` devDependency) and passes the dictionary directory through `files.mecabDictPath`.
 - Japanese (kanji + MeCab) integration test added to `test/integration/addon.test.js` (`Chatterbox Multilingual TTS: Japanese ...`), validating end-to-end synthesis; it skips-as-pass when the multilingual models or the MeCab dictionary are unavailable (offline / no registry access).
 - Internal RTF + streaming benchmark suite for Chatterbox and Supertonic, runnable via the `Benchmark RTF (ONNX TTS)` GitHub Actions workflow. CI-only; not shipped with the npm package.
+- Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (ONNX TTS)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
 
 ### Changed
 

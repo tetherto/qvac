@@ -49,7 +49,7 @@ rationale for the key implementation choices.
 |   - buildGraph(): static forward compute     |
 |     graph wired to pre-allocated buffers     |
 |     (asserts ggml_nelements(output) ==       |
-|     kNumClasses before allocation)           |
+|     NUM_CLASSES before allocation)           |
 +----------------------------------------------+
 |  libggml (CPU backend only, via qvac-fabric) |
 |   - desktop/iOS: CPU statically linked into  |
