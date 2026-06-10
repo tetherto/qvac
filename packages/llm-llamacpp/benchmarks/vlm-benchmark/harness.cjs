@@ -182,33 +182,6 @@ function dimsFromBytes (bytes) {
   return { w: null, h: null }
 }
 
-// Same patterns the vendored stdout-parser.js uses. Vision-encode is
-// SUMMED across `image slice encoded` lines (dynamic-res VLMs emit one per tile).
-const VISION_RE = /image (?:slice )?encoded in\s+(\d+(?:\.\d+)?)\s*ms/gi
-const PROMPT_RE = /prompt eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+tokens\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i
-const EVAL_RE = /(?<!prompt )eval time\s*=\s*(\d+(?:\.\d+)?)\s*ms\s*\/\s*(\d+)\s+(?:tokens|runs)\s*\([^)]*?(\d+(?:\.\d+)?)\s+tokens per second\)/i
-
-function parseAddonLog (text) {
-  const out = {}
-  const vis = [...String(text).matchAll(VISION_RE)]
-  if (vis.length) {
-    out.visionEncodeMs = vis.reduce((s, m) => s + Number(m[1]), 0)
-    out.visionSlices = vis.length
-  }
-  const p = String(text).match(PROMPT_RE)
-  if (p) { out.promptEvalMs = Number(p[1]); out.promptTokens = Number(p[2]); out.promptTps = Number(p[3]) }
-  const e = String(text).match(EVAL_RE)
-  if (e) { out.decodeMs = Number(e[1]); out.decodeTokens = Number(e[2]); out.decodeTps = Number(e[3]) }
-  return out
-}
-
-function createLogTap () {
-  const lines = []
-  const push = (...a) => { lines.push(a.map(String).join(' ')) }
-  const logger = { error: push, warn: push, info: push, debug: push, log: push }
-  return { logger, text: () => lines.join('\n'), clear: () => { lines.length = 0 } }
-}
-
 function devicesToRun () {
   const raw = env('QVAC_VLM_DEVICES')
   if (raw) return raw.split(',').map(s => s.trim()).filter(Boolean)
@@ -253,9 +226,15 @@ function runModel (spec) {
       const [projName] = await ensureBlob(spec.mmproj)
       // model-origin provenance (stderr, parsed host-side into the report)
       console.error('[VLMMETA]' + JSON.stringify({
-        cell: axis, source: SOURCE, model: spec.label,
-        main_origin: spec.llm.origin, main_url: displayUrl(spec.llm), main_source: sourceType(spec.llm),
-        mmproj_origin: spec.mmproj.origin, mmproj_url: displayUrl(spec.mmproj), mmproj_source: sourceType(spec.mmproj)
+        cell: axis,
+        source: SOURCE,
+        model: spec.label,
+        main_origin: spec.llm.origin,
+        main_url: displayUrl(spec.llm),
+        main_source: sourceType(spec.llm),
+        mmproj_origin: spec.mmproj.origin,
+        mmproj_url: displayUrl(spec.mmproj),
+        mmproj_source: sourceType(spec.mmproj)
       }) + '[/VLMMETA]')
       const inference = new LlmLlamacpp({
         files: { model: [path.join(dir, mainName)], projectionModel: path.join(dir, projName) },
@@ -286,10 +265,19 @@ function runModel (spec) {
             const r = await runOne(inference, getMediaPath(item.image), item.prompt)
             const st = r.stats || {}
             emitRow({
-              cell: axis, source: SOURCE, model: spec.label, device, rep,
-              task: item.task, id: item.id, metric: item.metric, gold: item.gold,
+              cell: axis,
+              source: SOURCE,
+              model: spec.label,
+              device,
+              rep,
+              task: item.task,
+              id: item.id,
+              metric: item.metric,
+              gold: item.gold,
               pred: String(r.text).slice(0, 600),
-              img: item.image, img_w: r.dims.w, img_h: r.dims.h,
+              img: item.image,
+              img_w: r.dims.w,
+              img_h: r.dims.h,
               ms: r.ms,
               decode_tps: st.TPS != null ? st.TPS : null,
               ttft_ms: st.TTFT != null ? st.TTFT : null,

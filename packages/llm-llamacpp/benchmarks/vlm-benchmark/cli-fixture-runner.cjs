@@ -47,9 +47,14 @@ const mediaPath = (image) => path.resolve(__dirname, 'images', image)
 function main () {
   // Same provenance shape the addon harness emits, keyed by the source label.
   console.error('[VLMMETA]' + JSON.stringify({
-    cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8',
-    main_origin: MAIN_ORIGIN, main_source: 'Registry',
-    mmproj_origin: MMPROJ_ORIGIN, mmproj_source: 'Registry'
+    cell: SOURCE,
+    source: SOURCE,
+    model: 'qwen',
+    mmproj: 'q8',
+    main_origin: MAIN_ORIGIN,
+    main_source: 'Registry',
+    mmproj_origin: MMPROJ_ORIGIN,
+    mmproj_source: 'Registry'
   }) + '[/VLMMETA]')
 
   const items = selectedItems()
@@ -80,10 +85,20 @@ function main () {
           ? (m.visionEncodeMs || 0) + (m.promptEvalMs || 0)
           : null
         console.log('[VLMROW]' + JSON.stringify({
-          cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, rep,
-          task: item.task, id: item.id, metric: item.metric, gold: item.gold,
+          cell: SOURCE,
+          source: SOURCE,
+          model: 'qwen',
+          mmproj: 'q8',
+          device: BACKEND,
+          rep,
+          task: item.task,
+          id: item.id,
+          metric: item.metric,
+          gold: item.gold,
           pred: String(r.text).slice(0, 600),
-          img: item.image, img_w: item.width || null, img_h: item.height || null,
+          img: item.image,
+          img_w: item.width || null,
+          img_h: item.height || null,
           ms: r.wallMs,
           decode_tps: m.decodeTps != null ? m.decodeTps : null,
           ttft_ms: ttft,
@@ -93,8 +108,16 @@ function main () {
         ok++
       } catch (e) {
         console.log('[VLMROW]' + JSON.stringify({
-          cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, rep,
-          task: item.task, id: item.id, metric: item.metric, gold: item.gold,
+          cell: SOURCE,
+          source: SOURCE,
+          model: 'qwen',
+          mmproj: 'q8',
+          device: BACKEND,
+          rep,
+          task: item.task,
+          id: item.id,
+          metric: item.metric,
+          gold: item.gold,
           error: String((e && e.message) || e)
         }) + '[/VLMROW]')
       }
