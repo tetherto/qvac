@@ -91,6 +91,10 @@ describe('videosCreateBody (Zod validation)', () => {
   it('accepts strength as a numeric string (multipart coercion handled by extractor)', () => {
     assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: '0.85' }).success, true)
   })
+
+  it('rejects input_reference — unsupported OpenAI img2vid field', () => {
+    expectIssue({ prompt: 'p', input_reference: { image_url: { url: 'x' } } }, 'input_reference')
+  })
 })
 
 describe('nearestVideoFrameCount', () => {

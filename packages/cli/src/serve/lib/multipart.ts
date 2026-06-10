@@ -10,9 +10,7 @@ export interface ParsedFile {
 
 export const multipartToBody: preValidationAsyncHookHandler = async function multipartToBody (req) {
   const contentType = req.headers['content-type'] ?? ''
-  if (!contentType.includes('multipart/form-data')) {
-    throw new HttpError(400, 'invalid_content_type', 'Content-Type must be multipart/form-data.')
-  }
+  if (!contentType.includes('multipart/form-data')) return
 
   const fields: Record<string, string | Buffer> = {}
   const files: ParsedFile[] = []

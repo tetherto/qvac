@@ -63,6 +63,11 @@ setup_file() {
         "model": "WHISPER_EN_TINY_Q8_0",
         "type": "whispercpp-audio-translation",
         "preload": true
+      },
+      "test-video": {
+        "src": "placeholder",
+        "type": "sdcpp-video",
+        "preload": false
       }
     }
   }
@@ -730,6 +735,44 @@ TXT
   local body
   body=$(json_post "/v1/responses" "{\"model\":\"${EMBED_ALIAS}\",\"input\":\"hello\"}")
   assert_error "${body}" "invalid_model_type"
+}
+
+# ── Videos (HTTP-layer only; model not loaded) ───────────────────────
+# test-video has preload:false so all requests that pass schema validation
+# reach requireModel and get 503 model_not_ready without GPU inference.
+
+VIDEO_ALIAS="test-video"
+
+@test "videos: JSON txt2vid reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"a bird flies\"}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: multipart without init_image reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(curl -s "${BASE}/v1/videos" \
+    -F "model=${VIDEO_ALIAS}" \
+    -F "prompt=a bird flies")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: multipart with init_image reaches model check (returns 503 model_not_ready)" {
+  local img_path="${BATS_TEST_TMPDIR}/fake.png"
+  printf '\x89PNG\r\n\x1a\n' > "${img_path}"
+  local body
+  body=$(curl -s "${BASE}/v1/videos" \
+    -F "model=${VIDEO_ALIAS}" \
+    -F "prompt=subject turns" \
+    -F "init_image=@${img_path};type=image/png")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: input_reference field rejected with 400 unsupported_param" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"p\",\"input_reference\":{\"image_url\":{\"url\":\"x\"}}}")
+  assert_error "${body}" "unsupported_param"
 }
 
 # ── Model lifecycle ───────────────────────────────────────────────────

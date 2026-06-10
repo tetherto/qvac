@@ -60,7 +60,10 @@ export const videosCreateBody = z.object({
   ),
   strength: z.union([z.string(), z.number()]).optional().describe(
     'QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `init_image` is provided.'
-  )
+  ),
+  input_reference: z.never({
+    message: '"input_reference" is not supported — send `init_image` as a multipart file field for image-to-video.'
+  }).optional()
 }).passthrough()
 
 export type VideosCreateBody = z.infer<typeof videosCreateBody>
