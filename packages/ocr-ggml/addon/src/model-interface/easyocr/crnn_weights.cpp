@@ -13,6 +13,7 @@
 #include "ggml-backend.h"
 #include "ggml.h"
 #include "gguf_loader.hpp"
+#include "kernel_precision.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // BatchNorm fold loops iterate over raw tensor byte buffers with pointer
@@ -57,16 +58,24 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
   return out;
 }
 
-// Whether to store the CRNN feature-extractor conv kernels as F16 (the
-// default). F16 kernels let ggml_conv_2d take the faster F16 im2col -> GEMM
-// path (and unlock GPU backends) at a negligible accuracy cost. Set the env
-// var OCR_GGML_CRNN_KERNEL_F32=1 to force F32 storage for A/B benchmarking or
-// accuracy bisection. Read once at model-load time; only the exact value "1"
-// forces F32. BN-folding math, biases, and the LSTM/linear/Prediction weights
-// always stay F32 — only the conv kernel storage type changes.
-bool crnn_kernels_use_f16() {
-  const char* v = std::getenv("OCR_GGML_CRNN_KERNEL_F32");
-  return !(v != nullptr && std::strcmp(v, "1") == 0);
+// Whether to store the CRNN feature-extractor conv kernels as F16. The default
+// is backend-aware (see ocr_kernels_default_f16): F16 on GPUs with a fast F16
+// GEMM and on Apple-Silicon CPUs, F32 on Mali Vulkan and other CPUs where F16
+// is slower. Env overrides (read once at model-load time; only the exact value
+// "1" applies) take precedence: OCR_GGML_CRNN_KERNEL_F32=1 forces F32,
+// OCR_GGML_CRNN_KERNEL_F16=1 forces F16 (e.g. for A/B benchmarking). BN-folding
+// math, biases, and the LSTM/linear/Prediction weights always stay F32 — only
+// the conv kernel storage type changes.
+bool crnn_kernels_use_f16(ggml_backend_t backend) {
+  const char* force_f32 = std::getenv("OCR_GGML_CRNN_KERNEL_F32");
+  if (force_f32 != nullptr && std::strcmp(force_f32, "1") == 0) {
+    return false;
+  }
+  const char* force_f16 = std::getenv("OCR_GGML_CRNN_KERNEL_F16");
+  if (force_f16 != nullptr && std::strcmp(force_f16, "1") == 0) {
+    return true;
+  }
+  return ocr_kernels_default_f16(backend);
 }
 
 // Verbatim-load list for gen-2: everything after the
@@ -230,17 +239,15 @@ std::string upload_weights(
 // matching the on-disk shape.  Populates the maps so `upload_weights` can
 // then fill them.
 std::string declare_weights(
-    const GgufLoader& loader, ::ggml_context* ctx,
+    const GgufLoader& loader, ::ggml_context* ctx, ggml_type kernel_type,
     const std::vector<ConvSpec>& convs,
     const std::vector<std::string>& verbatim_paths,
     std::unordered_map<std::string, ::ggml_tensor*>& w_,
     std::unordered_map<std::string, ::ggml_tensor*>& b_,
     std::unordered_map<std::string, ::ggml_tensor*>& t_) {
 
-  // Conv kernels default to F16 storage (fast conv path); bias stays F32.
-  const ggml_type kernel_type =
-      crnn_kernels_use_f16() ? GGML_TYPE_F16 : GGML_TYPE_F32;
-
+  // `kernel_type` (F16 on fast-F16 backends, else F32) is chosen by the caller;
+  // bias stays F32.
   for (const auto& d : convs) {
     auto* w_src = loader.get_tensor(d.conv_path + ".weight");
     if (w_src == nullptr) {
@@ -370,7 +377,12 @@ void build_crnn_weights_impl(
     return;
   }
 
-  if (auto e = declare_weights(loader, ctx_, convs, verbatim, w_, b_, t_);
+  // Conv kernel storage type (F16 on fast-F16 backends, else F32); bias F32.
+  const ggml_type kernel_type =
+      crnn_kernels_use_f16(backend) ? GGML_TYPE_F16 : GGML_TYPE_F32;
+
+  if (auto e = declare_weights(
+          loader, ctx_, kernel_type, convs, verbatim, w_, b_, t_);
       !e.empty()) {
     err_ = e;
     return;

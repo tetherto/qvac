@@ -18,9 +18,9 @@ const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
 // addon and restore them afterwards. Desktop POSIX only: mobile device-farm
 // runs don't propagate these process env vars, and on Windows uv_os_setenv
 // (SetEnvironmentVariableW) does not update the CRT table that the addon's
-// std::getenv reads — so the toggle wouldn't take effect and the test would
-// silently fall back to F16, giving false coverage. The F32 lever is therefore
-// CI-verified on Linux/macOS only.
+// std::getenv reads — so the toggle wouldn't take effect and the addon would
+// instead use its backend-aware default, giving no coverage of the explicit
+// F32 lever. The F32 override is therefore CI-verified on Linux/macOS only.
 const ENV_KEYS = ['OCR_GGML_CRAFT_KERNEL_F32', 'OCR_GGML_CRNN_KERNEL_F32']
 
 test('EasyOCR F32-kernel fallback (CRAFT + CRNN)', { timeout: DESKTOP_TIMEOUT }, async function (t) {
