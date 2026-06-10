@@ -39,9 +39,11 @@ export const toolDef = z.object({
   }).optional()
 }).passthrough()
 
+const contentPart = z.object({ type: z.string() }).passthrough()
+
 export const chatMessage = z.object({
   role: z.string(),
-  content: z.union([z.string(), z.null()]).optional(),
+  content: z.union([z.string(), z.null(), z.array(contentPart)]).optional(),
   tool_calls: z.array(z.object({
     id: z.string(),
     type: z.string(),
