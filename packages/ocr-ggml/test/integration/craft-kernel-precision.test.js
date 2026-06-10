@@ -6,48 +6,56 @@ const { isMobile, platform, getImagePath, ensureModelPath, runOcrComparison } = 
 
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
 
-// Guards the F32 conv-kernel fallback added in QVAC-20531. The default suite
+// Guards the F32 conv-kernel fallbacks added in QVAC-20531. The default suite
 // (ocr-basic) only exercises the F16 fast path; this test forces F32 storage
-// via OCR_GGML_CRAFT_KERNEL_F32=1 and asserts the CRAFT detector still produces
-// correct OCR output.
+// for both the CRAFT detector (OCR_GGML_CRAFT_KERNEL_F32=1) and the CRNN gen-2
+// recognizer (OCR_GGML_CRNN_KERNEL_F32=1), then asserts the full EasyOCR
+// pipeline still produces correct output.
 //
-// The toggle is read by the native addon via getenv at model-load time, so we
-// set it through bare-os (which maps to setenv) before constructing the addon
-// and restore it afterwards. Desktop-only: mobile device-farm runs don't
-// propagate this process env var.
-test('CRAFT F32-kernel fallback (OCR_GGML_CRAFT_KERNEL_F32=1)', { timeout: DESKTOP_TIMEOUT }, async function (t) {
+// The toggles are read by the native addon via getenv at model-load time, so
+// we set them through bare-os (which maps to setenv) before constructing the
+// addon and restore them afterwards. Desktop-only: mobile device-farm runs
+// don't propagate these process env vars.
+const ENV_KEYS = ['OCR_GGML_CRAFT_KERNEL_F32', 'OCR_GGML_CRNN_KERNEL_F32']
+
+test('EasyOCR F32-kernel fallback (CRAFT + CRNN)', { timeout: DESKTOP_TIMEOUT }, async function (t) {
   if (isMobile) {
-    t.pass('skipped on mobile (env toggle is a desktop-only A/B lever)')
+    t.pass('skipped on mobile (env toggles are a desktop-only A/B lever)')
     return
   }
 
-  const ENV_KEY = 'OCR_GGML_CRAFT_KERNEL_F32'
   const hasGetEnv = typeof os.getEnv === 'function'
   const hasSetEnv = typeof os.setEnv === 'function'
-  const prev = (hasGetEnv ? os.getEnv(ENV_KEY) : process.env[ENV_KEY]) || ''
+  const prev = new Map()
+  for (const key of ENV_KEYS) {
+    prev.set(key, (hasGetEnv ? os.getEnv(key) : process.env[key]) || '')
+  }
 
-  function setEnv (val) {
-    if (hasSetEnv) os.setEnv(ENV_KEY, val)
-    process.env[ENV_KEY] = val
+  function setEnv (key, val) {
+    if (hasSetEnv) os.setEnv(key, val)
+    process.env[key] = val
   }
 
   function restoreEnv () {
-    if (prev) {
-      setEnv(prev)
-      return
+    for (const key of ENV_KEYS) {
+      const original = prev.get(key)
+      if (original) {
+        setEnv(key, original)
+        continue
+      }
+      if (typeof os.unsetEnv === 'function') os.unsetEnv(key)
+      else if (hasSetEnv) os.setEnv(key, '')
+      delete process.env[key]
     }
-    if (typeof os.unsetEnv === 'function') os.unsetEnv(ENV_KEY)
-    else if (hasSetEnv) os.setEnv(ENV_KEY, '')
-    delete process.env[ENV_KEY]
   }
 
-  setEnv('1')
+  for (const key of ENV_KEYS) setEnv(key, '1')
   try {
     const detectorPath = await ensureModelPath('detector_craft')
     const recognizerPath = await ensureModelPath('recognizer_latin')
     const imagePath = getImagePath('/test/images/basic_test.bmp')
 
-    t.comment('Forcing F32 CRAFT kernels; image: ' + imagePath + ', platform: ' + platform)
+    t.comment('Forcing F32 CRAFT + CRNN kernels; image: ' + imagePath + ', platform: ' + platform)
 
     await runOcrComparison(t, {
       params: {
@@ -69,7 +77,7 @@ test('CRAFT F32-kernel fallback (OCR_GGML_CRAFT_KERNEL_F32=1)', { timeout: DESKT
       }
     })
 
-    t.pass('F32-kernel CRAFT path produced correct OCR output')
+    t.pass('F32-kernel CRAFT + CRNN path produced correct OCR output')
   } finally {
     restoreEnv()
   }

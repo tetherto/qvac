@@ -1,6 +1,7 @@
 #include "crnn_weights.hpp"
 
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -54,6 +55,18 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
     }
   }
   return out;
+}
+
+// Whether to store the CRNN feature-extractor conv kernels as F16 (the
+// default). F16 kernels let ggml_conv_2d take the faster F16 im2col -> GEMM
+// path (and unlock GPU backends) at a negligible accuracy cost. Set the env
+// var OCR_GGML_CRNN_KERNEL_F32=1 to force F32 storage for A/B benchmarking or
+// accuracy bisection. Read once at model-load time; only the exact value "1"
+// forces F32. BN-folding math, biases, and the LSTM/linear/Prediction weights
+// always stay F32 — only the conv kernel storage type changes.
+bool crnn_kernels_use_f16() {
+  const char* v = std::getenv("OCR_GGML_CRNN_KERNEL_F32");
+  return !(v != nullptr && std::strcmp(v, "1") == 0);
 }
 
 // Verbatim-load list for gen-2: everything after the
@@ -170,8 +183,20 @@ std::string upload_weights(
       }
     }
 
-    ggml_backend_tensor_set(
-        w_[d.conv_path], w_folded.data(), 0, ggml_nbytes(w_[d.conv_path]));
+    ::ggml_tensor* w_dst = w_[d.conv_path];
+    if (w_dst->type == GGML_TYPE_F16) {
+      // Convert the folded F32 kernel to F16 before upload so ggml_conv_2d
+      // takes the F16 fast path (mirrors the doctr StepDoctrRecognitionGGML
+      // F16 weight upload).
+      const size_t count = static_cast<size_t>(total_w);
+      std::vector<ggml_fp16_t> w_f16(count);
+      ggml_fp32_to_fp16_row(
+          w_folded.data(), w_f16.data(), static_cast<int64_t>(count));
+      ggml_backend_tensor_set(
+          w_dst, w_f16.data(), 0, w_f16.size() * sizeof(ggml_fp16_t));
+    } else {
+      ggml_backend_tensor_set(w_dst, w_folded.data(), 0, ggml_nbytes(w_dst));
+    }
     ggml_backend_tensor_set(
         b_[d.conv_path], b_folded.data(), 0, ggml_nbytes(b_[d.conv_path]));
   }
@@ -212,6 +237,10 @@ std::string declare_weights(
     std::unordered_map<std::string, ::ggml_tensor*>& b_,
     std::unordered_map<std::string, ::ggml_tensor*>& t_) {
 
+  // Conv kernels default to F16 storage (fast conv path); bias stays F32.
+  const ggml_type kernel_type =
+      crnn_kernels_use_f16() ? GGML_TYPE_F16 : GGML_TYPE_F32;
+
   for (const auto& d : convs) {
     auto* w_src = loader.get_tensor(d.conv_path + ".weight");
     if (w_src == nullptr) {
@@ -221,7 +250,7 @@ std::string declare_weights(
     const int64_t kh = w_src->ne[1];
     const int64_t ic = w_src->ne[2];
     const int64_t oc = w_src->ne[3];
-    auto* w_dst = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kw, kh, ic, oc);
+    auto* w_dst = ggml_new_tensor_4d(ctx, kernel_type, kw, kh, ic, oc);
     ggml_set_name(w_dst, (d.conv_path + ".W").c_str());
     w_[d.conv_path] = w_dst;
     auto* b_dst = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, oc);
