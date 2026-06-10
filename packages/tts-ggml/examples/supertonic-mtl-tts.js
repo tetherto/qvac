@@ -37,9 +37,8 @@
  * supertonic-mtl-sweep-tts.js; for the simpler English-pinned entry
  * point see supertonic-tts.js.
  *
- * NOTE: Supertonic gained GPU support in tts-cpp@2026-06-05.  This
- * example keeps useGPU=false so it runs identically everywhere; flip
- * to true on GPU-capable hosts to engage Metal / Vulkan / Adreno-OpenCL.
+ * NOTE: Supertonic is CPU-only in tts-cpp today.  This example sets
+ * useGPU=false explicitly to match.
  */
 
 const fs = require('bare-fs')
