@@ -211,3 +211,64 @@ test("buildFinalFromEvents: returns error for error-done events", (t) => {
   t.is(error!.message, "provider timeout");
   t.is(final.contentText, "");
 });
+
+// --- stopReason propagation ---
+
+test("aggregateEvents: stopReason is undefined when completionDone has no stopReason", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "contentDelta", seq: 0, text: "hi" },
+    { type: "completionDone", seq: 1 },
+  ];
+  const result = aggregateEvents(events);
+  t.is(result.stopReason, undefined);
+  t.is(result.cancelled, false);
+});
+
+test("aggregateEvents: captures stopReason 'length' from completionDone", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "contentDelta", seq: 0, text: "1 2 3" },
+    { type: "completionStats", seq: 1, stats: { generatedTokens: 3 } },
+    { type: "completionDone", seq: 2, stopReason: "length" },
+  ];
+  const result = aggregateEvents(events);
+  t.is(result.stopReason, "length");
+  t.is(result.cancelled, false);
+});
+
+test("aggregateEvents: captures stopReason 'cancelled' and sets cancelled flag", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "contentDelta", seq: 0, text: "partial" },
+    { type: "completionDone", seq: 1, stopReason: "cancelled" },
+  ];
+  const result = aggregateEvents(events);
+  t.is(result.stopReason, "cancelled");
+  t.is(result.cancelled, true);
+});
+
+test("aggregateEvents: stopReason 'error' does not set stopReason field", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "completionDone", seq: 0, stopReason: "error", error: { message: "boom" } },
+  ];
+  const result = aggregateEvents(events);
+  t.is(result.stopReason, undefined, "error path does not populate stopReason");
+  t.ok(result.error, "error is set instead");
+});
+
+test("buildFinalFromEvents: propagates stopReason 'length' to final", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "contentDelta", seq: 0, text: "1 2 3" },
+    { type: "completionStats", seq: 1, stats: { generatedTokens: 3 } },
+    { type: "completionDone", seq: 2, stopReason: "length" },
+  ];
+  const { final } = buildFinalFromEvents(events, new Map());
+  t.is(final.stopReason, "length");
+});
+
+test("buildFinalFromEvents: stopReason absent when not emitted", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "contentDelta", seq: 0, text: "hi" },
+    { type: "completionDone", seq: 1 },
+  ];
+  const { final } = buildFinalFromEvents(events, new Map());
+  t.is(final.stopReason, undefined);
+});

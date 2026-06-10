@@ -119,6 +119,125 @@ function isDesktopArtifact (report) {
   return Boolean(report && report.engine && VALID_ENGINES.includes(report.engine) && report.summary && report.model)
 }
 
+// Canonical wrapper shape emitted by `[PERF_REPORT_START]<json>[PERF_REPORT_END]`
+// markers in the mobile RTF / streaming benchmark and reassembled by
+// `scripts/perf-report/extract-from-log.js` into
+// `perf-results/<platform>-<variant>/<DeviceName>/performance-report.json`.
+// Wraps an array of per-test results that this aggregator's normalizers do
+// not understand directly (they were written for the flat `{engine,summary}`
+// shape produced by the desktop benchmark's per-leg JSON artefact).
+// `expandCanonicalReport` below converts each `results[]` entry into the
+// shape that `normalizeMobileRecord` / `normalizeStreamingRecord` consume.
+function isCanonicalReport (report) {
+  return Boolean(
+    report &&
+    report.schema_version === '1.0' &&
+    (report.addon === 'onnx-tts' || report.addon_type === 'onnx-tts') &&
+    Array.isArray(report.results) &&
+    report.device
+  )
+}
+
+function parseCanonicalTestLabel (testLabel) {
+  // The benchmark file builds `testLabel` as
+  // `[${ep.toUpperCase()}] ${engine} ${variant} ${backend}` for RTF runs
+  // (test/benchmark/rtf-benchmark.test.js) and the streaming-benchmark
+  // mirrors that with a `streaming ` prefix between the bracket and the
+  // engine. Example labels observed in mobile CI logs:
+  //   `[CPU] chatterbox-en q4 cpu`
+  //   `[CPU] streaming chatterbox-en q4 cpu`
+  //   `[GPU] chatterbox-en q4f16 nnapi`
+  const m = String(testLabel || '').match(/^\[(CPU|GPU)\]\s*(streaming\s+)?(\S+)\s+(\S+)\s+(\S+)$/)
+  if (!m) return null
+  return {
+    useGPU: m[1] === 'GPU',
+    streaming: Boolean(m[2]),
+    engine: m[3],
+    variant: m[4],
+    backendHint: m[5]
+  }
+}
+
+function expandCanonicalReport (report, sourceFile) {
+  const records = []
+  const streaming = []
+  if (!isCanonicalReport(report)) return { records, streaming }
+
+  const device = report.device || {}
+  const platformFamily = String(device.platform || '').toLowerCase()
+  const platform = device.arch ? `${platformFamily}-${device.arch}` : platformFamily
+
+  for (const result of report.results) {
+    const parsed = parseCanonicalTestLabel(result.test)
+    // Warn (don't silently drop) so a drift in the on-device benchmark
+    // test-label format — a variant with a space, a renamed engine, etc. —
+    // is visible in the summarize job log instead of producing silent holes
+    // in the findings table. Only warn for labels that *look* like benchmark
+    // labels (leading `[EP]` bracket); the same merged report legitimately
+    // carries the Supertonic integration perf entries (e.g. "Supertonic
+    // basic synthesis"), which are not benchmark rows and are skipped quietly.
+    if (!parsed) {
+      if (/^\s*\[[^\]]+\]/.test(String(result.test || ''))) {
+        console.warn(`[aggregate-onnx-tts-rtf] skipping benchmark-style result with unparseable label ${JSON.stringify(result.test)} (source: ${sourceFile})`)
+      }
+      continue
+    }
+    if (!VALID_ENGINES.includes(parsed.engine)) {
+      console.warn(`[aggregate-onnx-tts-rtf] skipping result with unknown engine '${parsed.engine}' from label ${JSON.stringify(result.test)} (source: ${sourceFile})`)
+      continue
+    }
+
+    const m = result.metrics || {}
+    if (parsed.streaming) {
+      streaming.push(normalizeStreamingRecord({
+        engine: parsed.engine,
+        modelType: parsed.engine,
+        variant: parsed.variant,
+        platform,
+        platformName: platformFamily,
+        deviceLabel: device.name,
+        useGPU: parsed.useGPU,
+        backendHint: parsed.backendHint,
+        labels: { device: device.name, runner: device.runner, label: `${platformFamily}-streaming-${parsed.variant}` },
+        summary: {
+          ttfaMs: { mean: toNumberOrNull(m.ttfa_ms) },
+          interChunkMs: { p95: toNumberOrNull(m.inter_chunk_p95_ms) },
+          totalWallMs: { mean: toNumberOrNull(m.wall_time_ms) },
+          chunkCount: { mean: toNumberOrNull(m.chunks_per_run_mean) }
+        },
+        correlation: { githubRunId: report.run_number }
+      }, sourceFile, 'mobile-ci'))
+    } else {
+      records.push(normalizeMobileRecord({
+        engine: parsed.engine,
+        modelType: parsed.engine,
+        variant: parsed.variant,
+        platform,
+        platformName: platformFamily,
+        deviceLabel: device.name,
+        runnerLabel: device.runner,
+        useGPU: parsed.useGPU,
+        backendHint: parsed.backendHint,
+        label: `${platformFamily}-${parsed.variant}`,
+        summary: {
+          rtf: {
+            mean: toNumberOrNull(m.real_time_factor),
+            p50: toNumberOrNull(m.rtf_p50),
+            p95: toNumberOrNull(m.rtf_p95)
+          },
+          wallMs: { mean: toNumberOrNull(m.wall_time_ms) },
+          coldRtf: toNumberOrNull(m.cold_rtf),
+          modelLoadMs: toNumberOrNull(m.model_load_ms),
+          tokensPerSecond: { mean: toNumberOrNull(m.tps) }
+        },
+        correlation: { githubRunId: report.run_number }
+      }, sourceFile))
+    }
+  }
+
+  return { records, streaming }
+}
+
 function toNumberOrNull (value) {
   if (value === null || value === undefined) return null
   const num = Number(value)
@@ -287,7 +406,15 @@ function loadArtifactRecords (inputDir) {
   const streaming = []
   const files = walkFiles(inputDir).filter(file => {
     const base = path.basename(file)
-    return /^rtf-benchmark-.*\.json$/.test(base) || /^streaming-benchmark-.*\.json$/.test(base)
+    return (
+      /^rtf-benchmark-.*\.json$/.test(base) ||
+      /^streaming-benchmark-.*\.json$/.test(base) ||
+      // Canonical wrapper shape from mobile pipeline: extract-from-log.js
+      // writes either `performance-report.json` at the platform root
+      // (single-device matrix) or `<DeviceName>/performance-report.json`
+      // (multi-device).
+      base === 'performance-report.json'
+    )
   })
 
   for (const file of files) {
@@ -296,6 +423,15 @@ function loadArtifactRecords (inputDir) {
       report = JSON.parse(fs.readFileSync(file, 'utf8'))
     } catch (err) {
       console.error(`Failed to parse ${file}: ${err.message}`)
+      continue
+    }
+
+    // Canonical wrapper shape (mobile pipeline) — expand `results[]` into
+    // per-row mobile / streaming normalizers via the same path desktop uses.
+    if (isCanonicalReport(report)) {
+      const expanded = expandCanonicalReport(report, file)
+      records.push(...expanded.records)
+      streaming.push(...expanded.streaming)
       continue
     }
 

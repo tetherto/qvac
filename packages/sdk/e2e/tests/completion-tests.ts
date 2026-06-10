@@ -589,6 +589,20 @@ export const completionReasoningBudgetUnrestricted = createCompletionTest(
   { validation: "type", expectedType: "string" },
 );
 
+// Validates that stopReason "length" is emitted when the token budget is
+// exhausted before EOS. Uses a tiny predict budget against a prompt that
+// would produce far more tokens if unconstrained.
+export const completionStopReasonLength = createCompletionTest(
+  "completion-stop-reason-length",
+  {
+    history: [{ role: "user", content: "Count from 1 to 100." }],
+    stream: false,
+    generationParams: { ...DETERMINISTIC, predict: 3 },
+  },
+  { validation: "type", expectedType: "string" },
+  { estimatedDurationMs: 8000 },
+);
+
 export const completionResponseFormatWithToolsRejected = createCompletionTest(
   "completion-response-format-with-tools-rejected",
   {
@@ -612,6 +626,17 @@ export const completionResponseFormatWithToolsRejected = createCompletionTest(
   { validation: "throws-error", errorContains: "responseFormat" },
   { estimatedDurationMs: 5000, dependency: "none" },
 );
+
+export const completionStats: TestDefinition = {
+  testId: "completion-stats",
+  params: {
+    history: [{ role: "user", content: "Say hello in one short sentence." }],
+    stream: false,
+    generationParams: { predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
 
 export const completionTests = [
   completionStreaming,
@@ -654,4 +679,6 @@ export const completionTests = [
   completionResponseFormatWithToolsRejected,
   completionReasoningBudgetDisabled,
   completionReasoningBudgetUnrestricted,
+  completionStats,
+  completionStopReasonLength,
 ];

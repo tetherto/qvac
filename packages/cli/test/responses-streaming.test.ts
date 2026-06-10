@@ -43,13 +43,23 @@ function fakeStreamCompletion (opts: {
   toolCalls: ToolCall[]
   text: string
   stats?: CompletionStats
+  stopReason?: string
 }): CompletionRun {
+  // Writers consume `result.events`; drive content deltas, tool calls, stats
+  // and the terminal `stopReason` the way the SDK does.
+  async function * events (): AsyncGenerator<unknown> {
+    let seq = 0
+    for (const t of opts.tokens) yield { type: 'contentDelta', seq: seq++, text: t }
+    for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
+    if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
+    yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
+  }
   async function * gen (): AsyncGenerator<string> {
     for (const t of opts.tokens) yield t
   }
   return {
     requestId: 'test',
-    events: (async function * empty (): AsyncGenerator<never> {})(),
+    events: events() as unknown as CompletionRun['events'],
     final: Promise.resolve(undefined) as unknown as CompletionRun['final'],
     text: Promise.resolve(opts.text),
     toolCalls: Promise.resolve(opts.toolCalls) as unknown as CompletionRun['toolCalls'],
@@ -169,5 +179,30 @@ describe('writeStreamingResponse', () => {
       response: { usage: { output_tokens: number } }
     }
     assert.equal(completedEvent.response.usage.output_tokens, 3)
+  })
+
+  it('emits response.incomplete with max_output_tokens reason when truncated by length', async () => {
+    const holder = createStreamResponse()
+    const p = baseHandlerParams('resp_stream_len')
+    const result = fakeStreamCompletion({
+      tokens: ['a', 'b'],
+      toolCalls: [],
+      text: 'ab',
+      stats: { generatedTokens: 2 },
+      stopReason: 'length'
+    })
+
+    const completed = await writeStreamingResponse(holder.res, p, result)
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+
+    assert.equal(completed['status'], 'incomplete')
+    assert.deepEqual(completed['incomplete_details'], { reason: 'max_output_tokens' })
+    assert.ok(!events.some((e) => e['type'] === 'response.completed'))
+    const terminal = events.find((e) => e['type'] === 'response.incomplete') as {
+      response: { status: string; incomplete_details: { reason: string } }
+    }
+    assert.ok(terminal)
+    assert.equal(terminal.response.status, 'incomplete')
+    assert.equal(terminal.response.incomplete_details.reason, 'max_output_tokens')
   })
 })
