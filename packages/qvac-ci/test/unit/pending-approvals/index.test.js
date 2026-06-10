@@ -33,7 +33,7 @@ test('pending-approvals — toCommand() returns a paparam command object', t => 
   t.ok(cmd !== null && typeof cmd === 'object', 'toCommand returns an object')
 })
 
-test('pending-approvals — _run() calls process.exit(1) when PR is not approved', async t => {
+test('pending-approvals — _run() writes pending message to stdout when PR is not approved', async t => {
   const pa = require('../../../lib/commands/pending-approvals/index')
 
   // Stub all helpers so no real API calls happen
@@ -44,15 +44,19 @@ test('pending-approvals — _run() calls process.exit(1) when PR is not approved
     buildApprovalCounts: helpers.buildApprovalCounts,
     upsertPrComment: helpers.upsertPrComment
   }
-  helpers.buildOctokit = () => ({})
+  helpers.buildOctokit = async () => ({})
   helpers.buildAppOctokit = async () => ({})
   helpers.fetchReviews = async () => []
   helpers.buildApprovalCounts = async () => ({ maintainer: 0, teamLead: 0, other: 0 })
   helpers.upsertPrComment = async () => {}
 
+  let output = ''
+  const savedWrite = process.stdout.write.bind(process.stdout)
+  process.stdout.write = (chunk) => { output += chunk; return true }
+
   const savedExit = process.exit
-  let exitCode = null
-  process.exit = (code) => { exitCode = code }
+  let exitCalled = false
+  process.exit = () => { exitCalled = true }
 
   const savedToken = process.env.GITHUB_TOKEN
   const savedAppId = process.env.GITHUB_APP_ID
@@ -63,8 +67,10 @@ test('pending-approvals — _run() calls process.exit(1) when PR is not approved
 
   await pa._run({ 'pr-number': '1', repo: 'org/repo', 'maintainers-team': 'mgmt', 'team-leads-team': 'tl', 'min-approvals': '2' })
 
-  t.is(exitCode, 1, 'should exit with code 1 when PR is not approved')
+  t.ok(output.includes('pending approval'), 'should write pending message to stdout')
+  t.absent(exitCalled, 'should not call process.exit')
 
+  process.stdout.write = savedWrite
   process.exit = savedExit
   Object.assign(helpers, orig)
   process.env.GITHUB_TOKEN = savedToken || ''
@@ -85,7 +91,7 @@ test('pending-approvals — _run() does not call process.exit when PR is approve
     buildApprovalCounts: helpers.buildApprovalCounts,
     upsertPrComment: helpers.upsertPrComment
   }
-  helpers.buildOctokit = () => ({})
+  helpers.buildOctokit = async () => ({})
   helpers.buildAppOctokit = async () => ({})
   helpers.fetchReviews = async () => []
   helpers.buildApprovalCounts = async () => ({ maintainer: 1, teamLead: 0, other: 1 })

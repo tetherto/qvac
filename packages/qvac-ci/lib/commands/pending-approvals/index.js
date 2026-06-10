@@ -71,7 +71,7 @@ class PendingApprovals extends Command {
     }
 
     const createAppAuth = await getCreateAppAuth()
-    const commentOctokit = helpers.buildOctokit()
+    const commentOctokit = await helpers.buildOctokit()
     const appOctokit = await helpers.buildAppOctokit(createAppAuth, owner, repo)
 
     const reviews = await helpers.fetchReviews(commentOctokit, owner, repo, prNumber)
@@ -85,7 +85,6 @@ class PendingApprovals extends Command {
 
     if (!approved) {
       process.stdout.write('PR #' + prNumber + ' is pending approval: ' + pendingMessage + '\n')
-      process.exit(1)
     }
   }
 }

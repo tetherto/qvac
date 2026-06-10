@@ -8,12 +8,10 @@ const {
   buildApprovalComment,
   buildApprovalCounts,
   hasWriteAccess,
-  buildAppOctokit,
   fetchReviews,
   upsertPrComment,
   MIN_CODEOWNER_APPROVALS
 } = require('../../../lib/commands/pending-approvals/helpers')
-
 
 // getLatestApprovals
 test('getLatestApprovals — deduplicates: keeps only most recent review per user', t => {

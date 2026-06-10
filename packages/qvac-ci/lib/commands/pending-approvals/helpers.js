@@ -7,8 +7,13 @@
 // This prevents secrets from appearing in call stacks or being accidentally
 // logged by a caller.
 
-const { Octokit } = require('@octokit/rest')
 const { Sanitizer } = require('../../sanitizer')
+
+// @octokit/rest >=20 is ESM-only and must be loaded via dynamic import().
+async function getOctokit () {
+  const { Octokit } = await import('@octokit/rest')
+  return Octokit
+}
 
 // Patterns specific to GitHub tokens and PEM keys.
 // Kept here so future subcommands don't inherit a GitHub-specific allowlist.
@@ -54,12 +59,14 @@ const ROLE_DISPLAY = {
 
 const MIN_CODEOWNER_APPROVALS = 1
 
-function buildOctokit () {
+async function buildOctokit () {
+  const Octokit = await getOctokit()
   const token = process.env.GITHUB_TOKEN
   return new Octokit({ auth: token })
 }
 
 async function buildAppOctokit (createAppAuth, owner, repo) {
+  const Octokit = await getOctokit()
   const appId = parseInt(process.env.GITHUB_APP_ID, 10)
   const privateKey = process.env.GITHUB_PRIVATE_KEY
 
