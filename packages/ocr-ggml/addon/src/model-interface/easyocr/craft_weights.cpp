@@ -92,15 +92,14 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
   return out;
 }
 
-// Whether to store conv kernels as F16 (the default). F16 kernels let
-// ggml_conv_2d take the faster F16 im2col -> GEMM path (and unlock GPU
-// backends) at a negligible accuracy cost for CRAFT. Set the env var
+// Whether to store the CRAFT detector conv kernels as F16 (the default). F16
+// kernels let ggml_conv_2d take the faster F16 im2col -> GEMM path (and unlock
+// GPU backends) at a negligible accuracy cost. Set the env var
 // OCR_GGML_CRAFT_KERNEL_F32=1 to force F32 storage for A/B benchmarking or
-// accuracy bisection. BN-folding math and bias always stay F32; only the
-// final on-device kernel storage type changes.
+// accuracy bisection. Read once at model-load time; only the exact value "1"
+// forces F32. BN-folding math and bias always stay F32 — only the conv kernel
+// storage type changes.
 bool craft_kernels_use_f16() {
-  // Read once at model-load time (CraftWeights construction); not a per-request
-  // switch. Only the exact value "1" forces F32.
   const char* v = std::getenv("OCR_GGML_CRAFT_KERNEL_F32");
   return !(v != nullptr && std::strcmp(v, "1") == 0);
 }

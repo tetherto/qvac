@@ -14,13 +14,21 @@ const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
 //
 // The toggles are read by the native addon via getenv at model-load time, so
 // we set them through bare-os (which maps to setenv) before constructing the
-// addon and restore them afterwards. Desktop-only: mobile device-farm runs
-// don't propagate these process env vars.
+// addon and restore them afterwards. Desktop POSIX only: mobile device-farm
+// runs don't propagate these process env vars, and on Windows uv_os_setenv
+// (SetEnvironmentVariableW) does not update the CRT table that the addon's
+// std::getenv reads — so the toggle wouldn't take effect and the test would
+// silently fall back to F16, giving false coverage. The F32 lever is therefore
+// CI-verified on Linux/macOS only.
 const ENV_KEYS = ['OCR_GGML_CRAFT_KERNEL_F32', 'OCR_GGML_CRNN_KERNEL_F32']
 
 test('EasyOCR F32-kernel fallback (CRAFT + CRNN)', { timeout: DESKTOP_TIMEOUT }, async function (t) {
   if (isMobile) {
     t.pass('skipped on mobile (env toggles are a desktop-only A/B lever)')
+    return
+  }
+  if (platform === 'win32') {
+    t.pass('skipped on win32 (SetEnvironmentVariableW does not reach the addon CRT getenv)')
     return
   }
 

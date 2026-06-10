@@ -229,7 +229,7 @@ and the index selection share one code path).
 ### Kernel precision (`OCR_GGML_CRAFT_KERNEL_F32` / `OCR_GGML_CRNN_KERNEL_F32`)
 
 By default the EasyOCR pipeline stores its convolution kernels as **F16** in
-the compute buffer, which lets ggml take the faster F16 im2col→GEMM conv path
+the weights buffer, which lets ggml take the faster F16 im2col→GEMM conv path
 (and run on GPU backends). Kernels are cast F32→F16 at model-load time from the
 F32 GGUF — no separate F16 model file is needed, and biases plus the
 BatchNorm-fold math stay F32 (the recognizer's LSTM / linear / Prediction
