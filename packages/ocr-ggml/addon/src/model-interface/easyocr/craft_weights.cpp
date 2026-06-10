@@ -99,8 +99,10 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
 // accuracy bisection. BN-folding math and bias always stay F32; only the
 // final on-device kernel storage type changes.
 bool craft_kernels_use_f16() {
+  // Read once at model-load time (CraftWeights construction); not a per-request
+  // switch. Only the exact value "1" forces F32.
   const char* v = std::getenv("OCR_GGML_CRAFT_KERNEL_F32");
-  return !(v != nullptr && std::string(v) == "1");
+  return !(v != nullptr && std::strcmp(v, "1") == 0);
 }
 
 } // namespace
@@ -160,7 +162,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
   }
 
   // Conv kernels default to F16 storage (fast conv path); bias stays F32.
-  const ggml_type kernelType =
+  const ggml_type kernel_type =
       craft_kernels_use_f16() ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
   for (const auto& d : kConvInventory) {
@@ -178,7 +180,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     const int64_t ic = w_src->ne[2];
     const int64_t oc = w_src->ne[3];
 
-    auto* w_dst = ggml_new_tensor_4d(ctx_, kernelType, kw, kh, ic, oc);
+    auto* w_dst = ggml_new_tensor_4d(ctx_, kernel_type, kw, kh, ic, oc);
     ggml_set_name(w_dst, (std::string(d.conv) + ".W").c_str());
     w_[d.conv] = w_dst;
 
@@ -289,7 +291,8 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     ::ggml_tensor* w_dst = w_[conv_path];
     if (w_dst->type == GGML_TYPE_F16) {
       // Convert the folded F32 kernel to F16 before upload so ggml_conv_2d
-      // takes the F16 fast path. (Mirrors the doctr MobileNet/CRNN uploads.)
+      // takes the F16 fast path (mirrors the doctr StepDoctrRecognitionGGML
+      // F16 weight upload).
       const size_t count = static_cast<size_t>(total_w);
       std::vector<ggml_fp16_t> w_f16(count);
       ggml_fp32_to_fp16_row(

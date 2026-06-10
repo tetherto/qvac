@@ -226,6 +226,21 @@ and the index selection share one code path).
   as an interim lever (e.g. in CI or a launcher script) when you cannot pass
   `gpuDevice` through the API. It does not affect Metal.
 
+### Detector kernel precision (`OCR_GGML_CRAFT_KERNEL_F32`)
+
+By default the EasyOCR **CRAFT** detector's convolution kernels are stored as
+**F16** in the compute buffer, which lets ggml take the faster F16
+im2col→GEMM conv path (and run on GPU backends). Kernels are cast F32→F16 at
+model-load time from the F32 GGUF — no separate F16 model file is needed, and
+biases plus the BatchNorm-fold math stay F32.
+
+Set the environment variable `OCR_GGML_CRAFT_KERNEL_F32=1` (read once when the
+detector is loaded) to force **F32** kernel storage instead. This is a
+development lever for A/B-benchmarking the F16 fast path or bisecting an
+accuracy regression; the default (unset, or any value other than `1`) keeps
+F16. It affects only the EasyOCR CRAFT detector — not the CRNN recognizer or
+the DocTR pipeline.
+
 ### `run(input)` shape
 
 ```ts
