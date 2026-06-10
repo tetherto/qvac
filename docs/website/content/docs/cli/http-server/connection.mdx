@@ -82,8 +82,16 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
       "name": "QVAC (local)",
       "options": { "baseURL": "http://localhost:11434/v1" },
       "models": {
-        "qwen3-8b-chat":  { "name": "Qwen3 8B (chat)",  "limit": { "context": 16384 } },
-        "qwen3-8b-title": { "name": "Qwen3 8B (title)", "limit": { "context": 16384 } }
+        "qwen3-8b-chat": {
+          "name": "Qwen3 8B (chat)",
+          "limit": { "context": 16384 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        },
+        "qwen3-8b-title": {
+          "name": "Qwen3 8B (title)",
+          "limit": { "context": 16384 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        }
       }
     }
   },
@@ -92,7 +100,7 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
 }
 ```
 
-For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker. Each key under `models` must match an alias declared in `serve.models`, and `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly.
+For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker. Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly; and `modalities` declares the input/output types the model accepts. Use `["text"]` for text-only LLMs — add `"image"` to `input` for a vision model, otherwise OpenCode disables image input for that model regardless of what the underlying model supports.
 
 ## Caveats
 
