@@ -5,7 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - 2026-06-05
+## [0.2.2] - 2026-06-09
+
+### Fixed
+
+- **Android: revert the `tts-cpp` `2026-06-05` bump (introduced in 0.2.1)
+  that crashed the addon at `dlopen` during bootstrap, taking down every
+  Android e2e run.** `tts-cpp` `2026-06-05` pins upstream
+  `qvac-ext-lib-whisper.cpp@128dae42` (the QVAC-19254 "sched + cpu_backend
+  refactor"), which added direct `ggml_backend_is_cpu` /
+  `ggml_get_type_traits_cpu` calls inside the statically-linked `tts-cpp`
+  library. On Android the shared `ggml-speech` port builds the CPU backend
+  as runtime-`dlopen`'d per-microarch MODULE `.so` variants
+  (`GGML_CPU_ALL_VARIANTS=ON` + `GGML_BACKEND_DL=ON`; no static CPU
+  archive), so those two symbols are left `UND` in
+  `libqvac__tts-ggml.*.so`'s dynamic symbol table with no `DT_NEEDED` able
+  to resolve them — the CPU variant libraries are only `dlopen`'d lazily
+  inside Engine construction, long after Bare loads the addon. Bare's
+  resolver therefore fails to register the addon
+  (`ADDON_NOT_FOUND: linked:libqvac__tts-ggml.*.so` / `dlopen failed`) and
+  the unhandled rejection aborts the process (SIGABRT) ~1 s into
+  bootstrap. iOS and desktop (Linux/macOS/Windows) statically link the CPU
+  backend and were never affected. Pin `tts-cpp` back to `2026-06-03#1`
+  (the last-known-good revision, the one 0.2.0 shipped) so the Android
+  addon loads cleanly again.
+
+### Reverted
+
+- Reverts the 0.2.1 Supertonic GPU enablement (QVAC-19255, #2473) in full:
+  the `tts-cpp` pin, the `SupertonicModel.cpp` / `index.js` `useGPU` /
+  `nGpuLayers` gate removals, the flipped C++ unit tests and
+  `gpu-smoke.test.js` integration test, and the README / `index.d.ts` /
+  examples docs. With `tts-cpp` back at `2026-06-03#1` Supertonic is
+  CPU-only again, so the rejection gates and the CPU-only contract are
+  restored to keep the package internally consistent. The Supertonic GPU
+  work should re-land once the Android CPU-backend linkage is fixed
+  upstream (QVAC-19254 follow-up against `tts-cpp` / `ggml-speech`, e.g.
+  by statically linking `ggml-cpu` into the addon on Android the way
+  desktop/iOS already do).
+
+## [0.2.1] - 2026-06-05 — superseded by 0.2.2
+
+> **Broken on Android.** The `tts-cpp` `2026-06-05` dependency this release
+> introduced crashes the addon at load time (`dlopen` failure → SIGABRT)
+> on Android ARM64; iOS and desktop are unaffected. Reverted in 0.2.2 (see
+> above). The entry below describes what 0.2.1 attempted and is retained
+> for history.
 
 ### Added
 

@@ -362,11 +362,22 @@ class TTSGgml {
           'agnostic runStream() / runStreaming() / run({ streamOutput: true }) APIs.'
         )
       }
-      // GPU is supported as of tts-cpp@2026-06-05 (QVAC-18605 Supertonic
-      // Vulkan/Metal optimisations + QVAC-19254 sched/cpu_backend for
-      // Adreno OpenCL). Default-off mirrors Chatterbox; callers opt in
-      // with config: { useGPU: true } on GPU-capable hosts.
-      if (this._config.useGPU === undefined && this._nGpuLayers == null) {
+      const wantsGpu =
+        this._config.useGPU === true ||
+        (this._nGpuLayers != null && this._nGpuLayers !== 0)
+      if (wantsGpu) {
+        throw new Error(
+          'tts-ggml: GPU execution is not supported by the Supertonic engine yet ' +
+          '(see tts-cpp include/tts-cpp/supertonic/engine.h: "CPU only today"). ' +
+          'GPU output is currently silently wrong (~4x quieter, slightly truncated) ' +
+          'because the Vulkan path of the supertonic vector-estimator + vocoder is ' +
+          'not yet validated.  Pass config: { useGPU: false } (and leave nGpuLayers ' +
+          'unset, or set it to 0) when constructing a Supertonic model. ' +
+          'Chatterbox also defaults to CPU now; opt in with ' +
+          'config: { useGPU: true } on GPU-capable hosts.'
+        )
+      }
+      if (this._config.useGPU === undefined) {
         this._config.useGPU = false
       }
     } else if (this._config.useGPU === undefined && this._nGpuLayers == null) {

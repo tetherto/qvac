@@ -43,7 +43,7 @@ function wrapVlaModel(
 
 export const vlaPlugin = definePlugin({
   modelType: ModelType.ggmlVla,
-  displayName: "VLA (SmolVLA ggml)",
+  displayName: "VLA (SmolVLA / π₀.₅ ggml)",
   addonPackage: ADDON_VLA,
   loadConfigSchema: vlaConfigSchema,
 
