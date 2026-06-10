@@ -202,6 +202,7 @@ function expandCanonicalReport (report, sourceFile) {
         useGPU: parsed.useGPU,
         backendHint: parsed.backendHint,
         label: `${platformFamily}-${parsed.variant}`,
+        gpuModel: device.gpu || null,
         summary: {
           rtf: {
             mean: toNumberOrNull(m.real_time_factor),
@@ -262,6 +263,7 @@ function normalizeDesktopRecord (report, sourceFile) {
     variant: (report.model && report.model.variant) || (report.requested && report.requested.variant) || 'q4',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
+    gpuModel: (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null,
     label: buildLabel(report),
     numThreads,
     meanRtf: toNumberOrNull(rtf.mean),
@@ -299,6 +301,7 @@ function normalizeMobileRecord (record, sourceFile) {
     variant: record.variant || 'q4',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
+    gpuModel: record.gpuModel || null,
     label: String((record.label || '')),
     numThreads: record.numThreads !== undefined ? record.numThreads : null,
     meanRtf: toNumberOrNull(rtf.mean),
@@ -331,6 +334,7 @@ function normalizeManualRecord (record, sourceFile) {
     variant: record.variant || 'q4',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    gpuModel: record.gpuModel || record.gpu_model || null,
     label: String(record.label || ''),
     numThreads: record.numThreads !== undefined ? record.numThreads : null,
     meanRtf: toNumberOrNull(record.meanRtf),
@@ -531,8 +535,8 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('')
   lines.push('`Cold RTF` is the first warmup run after load (captures cold-path latency). `Noisy` flags rows where stddev / mean > 15%.')
   lines.push('')
-  lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Model (MB) | Tokens/s | Noisy | Run |')
-  lines.push('|--------|--------|----------|--------|---------|-----|---------|-------|----------|-----|-----|----------|----------------|-----------|---------------|------------|----------|-------|-----|')
+  lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Model (MB) | Tokens/s | Noisy | Run |')
+  lines.push('|--------|--------|----------|--------|---------|-----|---------|-----------|-------|----------|-----|-----|----------|----------------|-----------|---------------|------------|----------|-------|-----|')
 
   for (const r of records) {
     lines.push('| ' + [
@@ -543,6 +547,7 @@ function renderMarkdown (records, streamingRecords) {
       r.variant,
       r.gpu,
       r.backend,
+      r.gpuModel || '-',
       formatLabel(r.label, r.numThreads),
       formatNumber(r.meanRtf),
       formatNumber(r.p50),

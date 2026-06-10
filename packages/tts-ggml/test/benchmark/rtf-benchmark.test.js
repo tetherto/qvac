@@ -72,6 +72,31 @@ const arch = os.arch()
 const platformArch = `${platform}-${arch}`
 const isMobile = platform === 'ios' || platform === 'android'
 
+// QVAC-20499: detect the desktop GPU/CPU hardware name (e.g. "NVIDIA RTX 4000
+// SFF Ada") via the shared perf reporter's detectDevice(), which shells out to
+// nvidia-smi / vulkaninfo / system_profiler through bare-subprocess. The
+// reporter lives outside the addon bundle, so require it dynamically (path.join
+// keeps bare-pack from statically resolving it during mobile bundling) and
+// guard with try/catch — on mobile it's absent and the GPU stays null (the
+// Device Farm device name is the proxy there). Probed once at module load.
+let _hwDevice = null
+try {
+  let _subprocess = null
+  try { _subprocess = require('bare-subprocess') } catch (_) {}
+  const _perfBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+  const _perfMod = require(path.join(_perfBase, 'performance-reporter'))
+  _perfMod.configure({ fs, path, process, os, subprocess: _subprocess })
+  _hwDevice = _perfMod.detectDevice()
+} catch (_) {}
+
+function _hwGpu () {
+  return _hwDevice && _hwDevice.gpu ? _hwDevice.gpu : null
+}
+
+function _hwCpu () {
+  return _hwDevice && _hwDevice.cpu ? _hwDevice.cpu : null
+}
+
 // Build a canonical performance-report record that the shared
 // scripts/perf-report/extract-from-log.js + aggregate.js pipeline understands.
 // Mobile Device Farm logs are scraped for
@@ -99,6 +124,8 @@ function buildCanonicalReport (settings, summary, backend) {
       platform,
       os_version: '',
       arch,
+      gpu: _hwGpu(),
+      cpu: _hwCpu(),
       runner: settings.runnerLabel || (isMobile ? 'device-farm' : 'github-actions')
     },
     results: [{
@@ -583,6 +610,8 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         device: settings.deviceLabel,
         backend,
         activeBackend,
+        gpuModel: _hwGpu(),
+        cpuModel: _hwCpu(),
         requestedBackend: settings.useGPU ? 'gpu' : 'cpu',
         label: settings.label
       },
