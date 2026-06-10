@@ -65,7 +65,10 @@ struct OcrConfig {
   std::vector<int> defaultRotationAngles{90, 270};
   bool contrastRetry{false};
   float lowConfidenceThreshold{0.4F};
-  int recognizerBatchSize{32};
+  // DocTR recognizer feature-extractor batch (crops per backend compute). On
+  // Metal a small batch is markedly faster than a large one (per-op cost grows
+  // super-linearly with batch); measured optimum ~4 on Apple GPUs. Overridable.
+  int recognizerBatchSize{4};
   // <0 leave GGML default, 0 auto-detect physical cores, >0 explicit override.
   int nThreads{0};
   // Directory that holds dynamic ggml backend shared libraries (libggml-*.so).

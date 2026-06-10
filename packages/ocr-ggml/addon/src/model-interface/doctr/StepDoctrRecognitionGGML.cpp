@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <functional>
@@ -386,6 +387,13 @@ struct GraphResources {
   struct ggml_tensor* input = nullptr;
   struct ggml_tensor* features = nullptr;
 
+  // LSTM + linear classifier weights uploaded to the backend so the recurrent
+  // tail can run on the GPU (batched ggml matmuls) instead of scalar CPU.
+  std::unique_ptr<struct ggml_context, decltype(&ggml_free)> lstmCtx{
+      nullptr, ggml_free};
+  ggml_backend_buffer_t lstmBuffer = nullptr;
+  std::unordered_map<std::string, struct ggml_tensor*> lstmWeights;
+
   GraphResources() = default;
   ~GraphResources() { reset(); }
   GraphResources(const GraphResources&) = delete;
@@ -407,6 +415,12 @@ struct GraphResources {
     if (weightsBuffer != nullptr) {
       ggml_backend_buffer_free(weightsBuffer);
       weightsBuffer = nullptr;
+    }
+    lstmWeights.clear();
+    lstmCtx.reset();
+    if (lstmBuffer != nullptr) {
+      ggml_backend_buffer_free(lstmBuffer);
+      lstmBuffer = nullptr;
     }
     if (backend != nullptr) {
       ggml_backend_free(backend);
@@ -592,11 +606,10 @@ struct StepDoctrRecognitionGGML::Impl {
         (backendDevice != nullptr)
             ? backendDevice
             : ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-    // Only the MobileNetV3 feature-extractor graph runs on this ggml backend.
-    // The downstream bidirectional LSTM and the final linear classifier are
-    // implemented as plain CPU C++ (no ggml graph), so they always execute on
-    // the CPU even when VULKAN is the selected device — that fallback for the
-    // recurrent/linear tail is by design.
+    // The MobileNetV3 feature-extractor graph and the bidirectional LSTM +
+    // linear classifier (see runLstmLinearGpu) both run on this ggml backend.
+    // A scalar CPU implementation of the recurrent tail is retained as a
+    // fallback (selectable via OCR_DOCTR_LSTM_CPU=1).
     graph.backend = dev ? ggml_backend_dev_init(dev, nullptr) : nullptr;
     if (graph.backend == nullptr) {
       raise("failed to initialize ggml backend");
@@ -615,7 +628,249 @@ struct StepDoctrRecognitionGGML::Impl {
 
     loadGraphWeights(srcCtx.get());
     loadRecurrentWeights(srcCtx.get());
+    uploadLstmWeightsToBackend();
     buildGraph();
+  }
+
+  // Upload the LSTM gate weights and the final linear classifier to the ggml
+  // backend so the recurrent tail runs on the GPU. Layout note: a PyTorch
+  // weight stored row-major as [rows, cols] maps to a ggml tensor ne=[cols,
+  // rows] with identical memory, which is exactly the `a` operand ggml_mul_mat
+  // wants (result[m] = sum_k a[k,m] b[k]). So each vector uploads verbatim.
+  void uploadLstmWeightsToBackend() {
+    graph.lstmCtx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
+        ggml_init(
+            {.mem_size = ggml_tensor_overhead() * 128,
+             .mem_buffer = nullptr,
+             .no_alloc = true}),
+        ggml_free);
+    if (!graph.lstmCtx) {
+      raise("failed to allocate LSTM weights context");
+    }
+    struct ggml_context* ctx = graph.lstmCtx.get();
+    constexpr int gates = kLstmGateCount * kLstmHiddenSize; // 4H
+
+    auto mk2d = [&](const std::string& name, int64_t ne0, int64_t ne1) {
+      struct ggml_tensor* tns =
+          ggml_new_tensor_2d(ctx, GGML_TYPE_F32, ne0, ne1);
+      ggml_set_name(tns, name.c_str());
+      graph.lstmWeights.emplace(name, tns);
+      return tns;
+    };
+    auto mk1d = [&](const std::string& name, int64_t ne0) {
+      struct ggml_tensor* tns = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, ne0);
+      ggml_set_name(tns, name.c_str());
+      graph.lstmWeights.emplace(name, tns);
+      return tns;
+    };
+
+    for (int layer = 0; layer < kLstmLayerCount; ++layer) {
+      const int inSize = (layer == 0) ? kFeatureChannels
+                                      : kLstmHiddenSize * kLstmDirectionCount;
+      for (int dir = 0; dir < kLstmDirectionCount; ++dir) {
+        const std::string sfx =
+            "_l" + std::to_string(layer) + "_" + std::to_string(dir);
+        mk2d("wih" + sfx, inSize, gates);
+        mk2d("whh" + sfx, kLstmHiddenSize, gates);
+        mk1d("bias" + sfx, gates);
+      }
+    }
+    mk2d("wlin", kLstmHiddenSize * kLstmDirectionCount, kVocabSize);
+    mk1d("blin", kVocabSize);
+
+    graph.lstmBuffer = ggml_backend_alloc_ctx_tensors(ctx, graph.backend);
+    if (graph.lstmBuffer == nullptr) {
+      raise("failed to allocate LSTM weights buffer");
+    }
+    ggml_backend_buffer_set_usage(
+        graph.lstmBuffer, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+
+    auto set = [&](const std::string& name, const std::vector<float>& v) {
+      struct ggml_tensor* tns = graph.lstmWeights.at(name);
+      if (static_cast<size_t>(ggml_nelements(tns)) != v.size()) {
+        raise("LSTM weight size mismatch for " + name);
+      }
+      ggml_backend_tensor_set(tns, v.data(), 0, v.size() * sizeof(float));
+    };
+
+    for (int layer = 0; layer < kLstmLayerCount; ++layer) {
+      for (int dir = 0; dir < kLstmDirectionCount; ++dir) {
+        const std::string sfx =
+            "_l" + std::to_string(layer) + "_" + std::to_string(dir);
+        const LstmWeights& w =
+            lstm[static_cast<size_t>(layer)][static_cast<size_t>(dir)];
+        set("wih" + sfx, w.weightIh);
+        set("whh" + sfx, w.weightHh);
+        // ggml needs a single combined gate bias; PyTorch keeps ih + hh apart.
+        std::vector<float> bias(static_cast<size_t>(gates));
+        for (int g = 0; g < gates; ++g) {
+          bias[static_cast<size_t>(g)] = w.biasIh[static_cast<size_t>(g)] +
+                                         w.biasHh[static_cast<size_t>(g)];
+        }
+        set("bias" + sfx, bias);
+      }
+    }
+    set("wlin", linearWeight);
+    set("blin", linearBias);
+  }
+
+  // Builds and runs a batched bidirectional 2-layer LSTM + linear classifier on
+  // the backend for all `n` crops at once, returning logits laid out
+  // [vocab, seq, n] (per crop: [seq, vocab] vocab-fastest, matching decodeCTC).
+  // `allFeatures` is the concatenated feature-extractor output, per crop
+  // [seq, channels] seq-fastest (featStride = seq * kFeatureChannels).
+  [[nodiscard]] std::vector<float>
+  runLstmLinearGpu(const std::vector<float>& allFeatures, int n) const {
+    constexpr int H = kLstmHiddenSize;
+    constexpr int gates = kLstmGateCount * H;
+    constexpr int seq = kSequenceLength;
+
+    const size_t graphMem = (ggml_tensor_overhead() * 6144) +
+                            ggml_graph_overhead_custom(8192, false);
+    std::unique_ptr<struct ggml_context, decltype(&ggml_free)> gctx(
+        ggml_init(
+            {.mem_size = graphMem, .mem_buffer = nullptr, .no_alloc = true}),
+        ggml_free);
+    if (!gctx) {
+      raise("failed to allocate LSTM graph context");
+    }
+    struct ggml_context* ctx = gctx.get();
+    const auto W = [&](const std::string& name) {
+      return graph.lstmWeights.at(name);
+    };
+
+    // Feature input: [seq, channels, n] (matches allFeatures memory), then
+    // transpose to X = [channels, seq, n] for the gate matmul.
+    struct ggml_tensor* feat =
+        ggml_new_tensor_3d(ctx, GGML_TYPE_F32, seq, kFeatureChannels, n);
+    ggml_set_name(feat, "lstm_feat_in");
+    ggml_set_input(feat);
+    struct ggml_tensor* x = ggml_cont(
+        ctx, ggml_permute(ctx, feat, 1, 0, 2, 3)); // [channels, seq, n]
+
+    for (int layer = 0; layer < kLstmLayerCount; ++layer) {
+      struct ggml_tensor* dirOut[kLstmDirectionCount] = {nullptr, nullptr};
+      for (int dir = 0; dir < kLstmDirectionCount; ++dir) {
+        const std::string sfx =
+            "_l" + std::to_string(layer) + "_" + std::to_string(dir);
+        // Z = Wih . X for every timestep at once: [4H, seq, n].
+        struct ggml_tensor* z = ggml_mul_mat(ctx, W("wih" + sfx), x);
+        z = ggml_add(ctx, z, W("bias" + sfx));
+
+        // Initial hidden/cell state is zero. Rather than allocate a zero
+        // tensor (ggml_scale of uninitialised gallocr memory is 0*NaN==NaN on
+        // some hosts), the first timestep is special-cased: the W_hh . h_prev
+        // term vanishes and C = i .* g_cell.
+        struct ggml_tensor* hPrev = nullptr;
+        struct ggml_tensor* cPrev = nullptr;
+        std::vector<struct ggml_tensor*> hSteps(static_cast<size_t>(seq));
+
+        for (int step = 0; step < seq; ++step) {
+          const int t = (dir == 0) ? step : (seq - 1 - step);
+          struct ggml_tensor* zt = ggml_cont(
+              ctx,
+              ggml_view_2d(
+                  ctx,
+                  z,
+                  gates,
+                  n,
+                  z->nb[2],
+                  static_cast<size_t>(t) * z->nb[1])); // [4H, n]
+          struct ggml_tensor* g =
+              (hPrev == nullptr)
+                  ? zt
+                  : ggml_add(ctx, zt, ggml_mul_mat(ctx, W("whh" + sfx), hPrev));
+
+          const auto gate = [&](int k) {
+            return ggml_cont(
+                ctx,
+                ggml_view_2d(
+                    ctx,
+                    g,
+                    H,
+                    n,
+                    g->nb[1],
+                    static_cast<size_t>(k) * H * sizeof(float)));
+          };
+          struct ggml_tensor* ig = ggml_sigmoid(ctx, gate(0));
+          struct ggml_tensor* fg = ggml_sigmoid(ctx, gate(1));
+          struct ggml_tensor* cg = ggml_tanh(ctx, gate(2));
+          struct ggml_tensor* og = ggml_sigmoid(ctx, gate(3));
+
+          struct ggml_tensor* cCur =
+              (cPrev == nullptr)
+                  ? ggml_mul(ctx, ig, cg)
+                  : ggml_add(
+                        ctx, ggml_mul(ctx, fg, cPrev), ggml_mul(ctx, ig, cg));
+          struct ggml_tensor* hCur = ggml_mul(ctx, og, ggml_tanh(ctx, cCur));
+          hSteps[static_cast<size_t>(t)] = hCur;
+          hPrev = hCur;
+          cPrev = cCur;
+        }
+
+        // Assemble [H, seq, n] from the per-step hidden states. A sequential
+        // concat copies the growing tensor each step (O(seq^2) data); a
+        // balanced pairwise tree copies the full data once per level
+        // (O(seq log seq)) — ggml_concat is a relatively costly Metal copy.
+        std::vector<struct ggml_tensor*> level(static_cast<size_t>(seq));
+        for (int t = 0; t < seq; ++t) {
+          level[static_cast<size_t>(t)] =
+              ggml_reshape_3d(ctx, hSteps[static_cast<size_t>(t)], H, 1, n);
+        }
+        while (level.size() > 1) {
+          std::vector<struct ggml_tensor*> next;
+          next.reserve((level.size() + 1) / 2);
+          for (size_t i = 0; i < level.size(); i += 2) {
+            if (i + 1 < level.size()) {
+              next.push_back(ggml_concat(ctx, level[i], level[i + 1], 1));
+            } else {
+              next.push_back(level[i]);
+            }
+          }
+          level.swap(next);
+        }
+        dirOut[dir] = level[0]; // [H, seq, n]
+      }
+      // Concat directions along the feature axis -> [2H, seq, n].
+      x = ggml_concat(ctx, dirOut[0], dirOut[1], 0);
+    }
+
+    // Linear classifier: [vocab, seq, n].
+    struct ggml_tensor* logits = ggml_mul_mat(ctx, W("wlin"), x);
+    logits = ggml_add(ctx, logits, W("blin"));
+    ggml_set_output(logits);
+
+    struct ggml_cgraph* cg = ggml_new_graph_custom(ctx, 8192, false);
+    ggml_build_forward_expand(cg, logits);
+
+    ggml_gallocr_t alloc =
+        ggml_gallocr_new(ggml_backend_get_default_buffer_type(graph.backend));
+    if (alloc == nullptr) {
+      raise("failed to allocate LSTM gallocr");
+    }
+    if (!ggml_gallocr_alloc_graph(alloc, cg)) {
+      ggml_gallocr_free(alloc);
+      raise("failed to allocate LSTM graph");
+    }
+
+    ggml_backend_tensor_set(
+        feat,
+        allFeatures.data(),
+        0,
+        static_cast<size_t>(n) * seq * kFeatureChannels * sizeof(float));
+
+    const ggml_status status = ggml_backend_graph_compute(graph.backend, cg);
+    if (status != GGML_STATUS_SUCCESS) {
+      ggml_gallocr_free(alloc);
+      raise(
+          "LSTM graph compute failed: " +
+          std::to_string(static_cast<int>(status)));
+    }
+
+    std::vector<float> out(static_cast<size_t>(ggml_nelements(logits)));
+    ggml_backend_tensor_get(logits, out.data(), 0, out.size() * sizeof(float));
+    ggml_gallocr_free(alloc);
+    return out;
   }
 
   [[nodiscard]] std::vector<float>
@@ -1044,11 +1299,12 @@ StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
       (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-      "[DoctrRecognitionGGML] GGML CPU recognizer loaded, batchSize=" +
+      "[DoctrRecognitionGGML] GGML recognizer loaded, batchSize=" +
           std::to_string(batchSize) + ", decoding=" + decodingStr);
-  ALOG_INFO(std::string(
-      "[DoctrRecognitionGGML] GGML CPU recognizer loaded, decoding=" +
-      decodingStr));
+  ALOG_INFO(
+      std::string(
+          "[DoctrRecognitionGGML] GGML recognizer loaded, decoding=" +
+          decodingStr));
 }
 
 StepDoctrRecognitionGGML::~StepDoctrRecognitionGGML() = default;
@@ -1274,17 +1530,32 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
         static_cast<size_t>(count) * featStride * sizeof(float));
   }
 
-  // LSTM + linear + CTC/attention decode for every crop, parallel across the
-  // whole set (each thread reads a distinct feature span, writes a distinct
-  // result slot).
   std::vector<std::pair<std::string, float>> decoded(
       static_cast<size_t>(decodeCount));
-  parallelFor(decodeCount, workers, [&](int j) {
-    const float* featSpan =
-        allFeatures.data() + (static_cast<size_t>(j) * featStride);
-    std::vector<float> logits = impl_->runLstmLinear(featSpan);
-    decoded[static_cast<size_t>(j)] = decodeLogits(logits);
-  });
+
+  // Default: batched LSTM + linear on the backend (GPU), then a cheap parallel
+  // CTC decode. Set OCR_DOCTR_LSTM_CPU=1 to fall back to the scalar CPU path
+  // (kept for numeric comparison / hosts without a usable GPU LSTM).
+  if (decodeCount > 0 && std::getenv("OCR_DOCTR_LSTM_CPU") == nullptr) {
+    const std::vector<float> allLogits =
+        impl_->runLstmLinearGpu(allFeatures, decodeCount);
+    const size_t logitStride =
+        static_cast<size_t>(kSequenceLength) * kVocabSize;
+    parallelFor(decodeCount, workers, [&](int j) {
+      const float* span =
+          allLogits.data() + (static_cast<size_t>(j) * logitStride);
+      std::vector<float> logits(span, span + logitStride);
+      decoded[static_cast<size_t>(j)] = decodeLogits(logits);
+    });
+  } else {
+    // LSTM + linear + CTC decode per crop, parallel across the whole set.
+    parallelFor(decodeCount, workers, [&](int j) {
+      const float* featSpan =
+          allFeatures.data() + (static_cast<size_t>(j) * featStride);
+      std::vector<float> logits = impl_->runLstmLinear(featSpan);
+      decoded[static_cast<size_t>(j)] = decodeLogits(logits);
+    });
+  }
 
   // Assemble results in order (cheap, serial).
   for (int j = 0; j < decodeCount; ++j) {

@@ -21,11 +21,12 @@ public:
 
   static constexpr int RECOG_HEIGHT = StepDoctrRecognition::RECOG_HEIGHT;
   static constexpr int RECOG_WIDTH = StepDoctrRecognition::RECOG_WIDTH;
-  static constexpr int DEFAULT_BATCH_SIZE = 32;
+  static constexpr int DEFAULT_BATCH_SIZE = 4;
 
-  // backendDevice: ggml device the MobileNetV3 feature-extractor graph runs on
-  // (selected by `Pipeline` via `ocr_backend_selection`). nullptr -> CPU
-  // device. The downstream LSTM + linear classifier always run on CPU.
+  // backendDevice: ggml device the MobileNetV3 feature-extractor graph AND the
+  // bidirectional LSTM + linear classifier run on (selected by `Pipeline` via
+  // `ocr_backend_selection`). nullptr -> CPU device. The recurrent tail is a
+  // batched ggml graph; set OCR_DOCTR_LSTM_CPU=1 to force the scalar CPU path.
   explicit StepDoctrRecognitionGGML(
       const std::string& pathRecognizer, int batchSize = DEFAULT_BATCH_SIZE,
       DecodingMethod decoding = DecodingMethod::CTC,

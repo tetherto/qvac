@@ -980,11 +980,12 @@ bool LlamaFinetuner::isFinetuneRunning() const {
          state->isFinetuning.load(std::memory_order_acquire);
 }
 
-bool LlamaFinetuner::requestPause() {
+bool LlamaFinetuner::requestPause(bool savePauseCheckpoint) {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
     return false;
   }
+  state->savePauseCheckpoint.store(savePauseCheckpoint);
   state->pauseRequested.store(true);
   return true;
 }

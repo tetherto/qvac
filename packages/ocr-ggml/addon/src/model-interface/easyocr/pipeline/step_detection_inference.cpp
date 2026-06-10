@@ -250,7 +250,20 @@ void StepDetectionInference::ensureGraph(int H, int W) {
     return;
   }
 
-  destroyGraph();
+  // Free only the size-specific graph context; deliberately KEEP
+  // graphCache_.gallocr (and its backing backend buffer) so it is reused — and
+  // resized in place by ggml_gallocr_alloc_graph below — across input sizes.
+  // Freeing and reallocating a differently-sized GPU buffer on every size
+  // change churns the backend heap and can trigger out-of-memory command-buffer
+  // failures on memory-constrained devices (phones, small CI runners), even
+  // when steady-state footprint stays flat.
+  if (graphCache_.gctx != nullptr) {
+    ggml_free(graphCache_.gctx);
+    graphCache_.gctx = nullptr;
+  }
+  graphCache_.gf = nullptr;
+  graphCache_.x = nullptr;
+  graphCache_.out = nullptr;
 
   const size_t graph_ctx_size =
       (ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE) +
@@ -275,8 +288,10 @@ void StepDetectionInference::ensureGraph(int H, int W) {
       ggml_new_graph_custom(graphCache_.gctx, GGML_DEFAULT_GRAPH_SIZE, false);
   ggml_build_forward_expand(graphCache_.gf, graphCache_.out);
 
-  graphCache_.gallocr =
-      ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend_));
+  if (graphCache_.gallocr == nullptr) {
+    graphCache_.gallocr =
+        ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend_));
+  }
   if (!ggml_gallocr_alloc_graph(graphCache_.gallocr, graphCache_.gf)) {
     destroyGraph();
     throw std::runtime_error(

@@ -158,10 +158,12 @@ test('backendDevice vulkan: out-of-range gpuDevice falls back to CPU with a reas
 // Unlike Vulkan (a separate libggml-vulkan shared library), the Metal backend
 // is compiled into the addon when ggml is built with the qvac-fabric
 // `gpu-backends` feature (default on Apple). There is therefore no backend lib
-// file to probe; we gate on the host platform instead. On an Apple host whose
-// ggml was built CPU-only, the selection falls back to CPU and we assert the
-// fallback is reported explicitly.
-const shouldSkipMetal = isMobile || platform !== 'darwin'
+// file to probe; we gate on the host platform instead. This runs on every
+// Apple platform — desktop `darwin` AND iOS (whose device-farm devices have
+// real Metal GPUs) — and skips elsewhere. On an Apple target whose ggml was
+// built CPU-only, or with no Metal device present, the selection falls back to
+// CPU and we assert the fallback is reported explicitly.
+const shouldSkipMetal = platform !== 'darwin' && platform !== 'ios'
 
 test('backendDevice metal: selects Metal or reports an explicit CPU fallback', { timeout: TEST_TIMEOUT, skip: shouldSkipMetal }, async function (t) {
   const detectorPath = await ensureModelPath('detector_craft')

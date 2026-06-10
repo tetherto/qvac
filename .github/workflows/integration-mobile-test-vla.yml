@@ -285,6 +285,13 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
 
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
       - name: Collect and upload Device Farm logs
         if: always()
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs

@@ -62,11 +62,17 @@ export class CompletionExecutor extends AbstractModelExecutor<
       if (test.testId === "completion-response-format-with-tools-rejected") {
         return [test.testId, this.responseFormatWithToolsRejected.bind(this)];
       }
+      if (test.testId === "completion-stats") {
+        return [test.testId, this.statsVerification.bind(this)];
+      }
       if (test.testId === "completion-concurrent-requests") {
         return [test.testId, this.concurrentRequests.bind(this)];
       }
       if (test.testId === "completion-seed-reproducibility") {
         return [test.testId, this.seedReproducibility.bind(this)];
+      }
+      if (test.testId === "completion-stop-reason-length") {
+        return [test.testId, this.stopReasonLength.bind(this)];
       }
       return [test.testId, this.generic.bind(this)];
     }),
@@ -173,6 +179,65 @@ export class CompletionExecutor extends AbstractModelExecutor<
     return {
       passed: true,
       output: `Seeded output reproducible (${first.length} chars identical across 2 runs)`,
+    };
+  }
+
+  async statsVerification(
+    params: CompletionTestParams,
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    try {
+      const llmModelId = await this.resources.ensureLoaded("llm");
+      const result = completion({
+        modelId: llmModelId,
+        ...params,
+        stream: params.stream ?? false,
+      } as CompletionFnParams);
+
+      const text = await result.text;
+      const textValidation = ValidationHelpers.validate(text, expectation);
+      if (!textValidation.passed) return textValidation;
+
+      const stats = (await result.stats) as Record<string, unknown> | undefined;
+      if (!stats) {
+        return { passed: false, output: `Completion OK but stats were undefined. Text: "${text.slice(0, 120)}"` };
+      }
+      const ttft = stats.timeToFirstToken;
+      const tps = stats.tokensPerSecond;
+      if (typeof ttft !== "number" || typeof tps !== "number") {
+        return {
+          passed: false,
+          output: `Completion stats missing numeric timing fields. Got: ${JSON.stringify(stats)}`,
+        };
+      }
+      return {
+        passed: true,
+        output: `completion stats OK — timeToFirstToken=${ttft}, tokensPerSecond=${tps}`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `completion stats failed: ${errorMsg}` };
+    }
+  }
+
+  async stopReasonLength(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded("llm");
+    const run = completion({
+      modelId: llmModelId,
+      ...params,
+      stream: false,
+    } as CompletionFnParams);
+
+    const final = await run.final;
+    if (final.stopReason !== "length") {
+      return {
+        passed: false,
+        output: `Expected stopReason "length", got ${JSON.stringify(final.stopReason)}`,
+      };
+    }
+    return {
+      passed: true,
+      output: `stopReason is "length" as expected`,
     };
   }
 

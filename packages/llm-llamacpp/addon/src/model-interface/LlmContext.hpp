@@ -214,6 +214,18 @@ public:
   virtual void setNPast(llama_pos nPast) = 0;
 
   /**
+   * Get the physical KV-cache token usage. This differs from nPast for
+   * multimodal M-RoPE prompts where image embeddings can occupy more KV cells
+   * than their positional span.
+   */
+  [[nodiscard]] virtual llama_pos getCacheTokens() const { return getNPast(); }
+
+  /**
+   * Set the physical KV-cache token usage.
+   */
+  virtual void setCacheTokens(llama_pos cacheTokens) { setNPast(cacheTokens); }
+
+  /**
    * Get the number of tokens belonging to the first user message.
    */
   [[nodiscard]] virtual llama_pos getFirstMsgTokens() const = 0;
@@ -222,6 +234,20 @@ public:
    * Set the number of tokens belonging to the first user message.
    */
   virtual void setFirstMsgTokens(llama_pos firstMsgTokens) = 0;
+
+  /**
+   * Get physical KV-cache token usage for the protected first message.
+   */
+  [[nodiscard]] virtual llama_pos getFirstMsgCacheTokens() const {
+    return getFirstMsgTokens();
+  }
+
+  /**
+   * Set physical KV-cache token usage for the protected first message.
+   */
+  virtual void setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) {
+    setFirstMsgTokens(firstMsgCacheTokens);
+  }
 
   /**
    * Set the number of tokens to discard when overflowing context.

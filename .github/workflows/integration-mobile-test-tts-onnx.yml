@@ -28,6 +28,11 @@ on:
         type: string
         required: false
         default: "packages/tts-onnx"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF + streaming benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -45,6 +50,11 @@ on:
         type: string
         required: false
         default: "packages/tts-onnx"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF + streaming benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   build-and-test:
@@ -107,18 +117,38 @@ jobs:
       # Must run AFTER setup (which checks out the addon) and BEFORE
       # build-mobile-app (which `npm run build`s the test app and bakes
       # the runtime into the bundle).
+      #
+      # When run_rtf_benchmarks is true, additionally inject the benchmark
+      # env-var contract (QVAC_ONNX_TTS_RUN_BENCHMARK_ON_MOBILE +
+      # QVAC_ONNX_TTS_BENCHMARK_*) so the test/integration/{rtf,streaming}-
+      # benchmark.test.js shims delegate to the canonical test/benchmark/*
+      # suites instead of soft-skipping. The shims emit [PERF_REPORT_START]
+      # blocks that the extract-addon-perf step scrapes from Device Farm logs.
       - name: Inject CHATTERBOX_VARIANT into mobile runtime
         working-directory: addon/${{ inputs.workdir || 'packages/tts-onnx' }}
         env:
           VARIANT: ${{ matrix.variant }}
+          PLATFORM: ${{ matrix.platform }}
+          RUN_BENCH: ${{ inputs.run_rtf_benchmarks }}
         run: |
+          if [ "$RUN_BENCH" = "true" ]; then
+            BENCH_FLAG=1
+          else
+            BENCH_FLAG=
+          fi
           echo "Injecting CHATTERBOX_VARIANT=$VARIANT into mobile runtime"
+          echo "Injecting QVAC_ONNX_TTS_RUN_BENCHMARK_ON_MOBILE=${BENCH_FLAG:-<unset>} into mobile runtime"
           cat > test/mobile/inject-env.cjs <<NODE
           const os = require('bare-os')
           const originalGetEnv = os.getEnv
           os.getEnv = function (key) {
             if (key === 'CHATTERBOX_VARIANT') return '$VARIANT'
             if (key === 'TTS_INTEGRATION_PROFILE') return 'short'
+            if (key === 'QVAC_ONNX_TTS_RUN_BENCHMARK_ON_MOBILE') return '$BENCH_FLAG'
+            if (key === 'QVAC_ONNX_TTS_BENCHMARK_VARIANT') return '$VARIANT'
+            if (key === 'QVAC_ONNX_TTS_BENCHMARK_DEVICE') return '$PLATFORM-device-farm'
+            if (key === 'QVAC_ONNX_TTS_BENCHMARK_RUNNER') return 'aws-device-farm-$PLATFORM'
+            if (key === 'QVAC_ONNX_TTS_BENCHMARK_LABEL') return '$PLATFORM-$VARIANT'
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined
           }
           NODE
@@ -170,6 +200,13 @@ jobs:
           run-count: ${{ steps.schedule.outputs.run-count }}
           max-wait-time-seconds: '10800'
 
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
       - name: Collect and upload Device Farm logs
         if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
@@ -180,12 +217,28 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
 
+      # Benchmark runs (run_rtf_benchmarks=true) emit one [PERF_REPORT_START]
+      # block per suite (RTF + streaming) for the chatterbox engine, so we
+      # drop the 'supertonic' integration filter and pass --merge to union
+      # every block instead of last-write-wins. Normal PR runs keep the
+      # 'supertonic' filter that captures the integration-test perf reporter.
+      #
+      # unzip-customer-artifacts is required on benchmark runs because the
+      # benchmark's [PERF_REPORT_START] markers print to bare_console.log,
+      # which on iOS Device Farm is wrapped inside Customer_Artifacts.zip;
+      # without unzipping, extract-from-log.js never scans it and the iOS
+      # benchmark rows are silently dropped (the Supertonic rows survive only
+      # because they're also pulled from an on-device JSON). Same combo as the
+      # tts-ggml / vla / llm-llamacpp mobile benchmark legs. Kept off for
+      # normal PR runs so existing 'supertonic' extraction is byte-unchanged.
       - name: Extract and report TTS-ONNX performance
         if: always() && !cancelled() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
         uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
           platform: ${{ matrix.platform }}
-          filter: 'supertonic'
+          filter: ${{ inputs.run_rtf_benchmarks == false && 'supertonic' || '' }}
+          merge: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
+          unzip-customer-artifacts: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           step-summary-title: 'Mobile Performance: tts-onnx (${{ matrix.platform }} / ${{ matrix.variant }})'
           artifact-name: perf-report-onnx-tts-${{ matrix.platform }}-${{ matrix.variant }}-${{ github.run_number }}
 

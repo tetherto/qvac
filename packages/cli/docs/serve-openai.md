@@ -29,6 +29,18 @@ This document describes the supported routes and how to configure `serve.models`
 | `GET` | `/v1/files` | List in-memory files |
 | `GET` | `/v1/files/{id}` | File metadata |
 | `GET` | `/v1/files/{id}/content` | Stream the bytes (used by image `response_format=url`) |
+| `GET` | `/v1/vector_stores` | List vector stores |
+| `POST` | `/v1/vector_stores` | Create a vector store |
+| `GET` | `/v1/vector_stores/{id}` | Retrieve a vector store |
+| `POST` | `/v1/vector_stores/{id}` | Update a vector store |
+| `DELETE` | `/v1/vector_stores/{id}` | Delete a vector store |
+| `POST` | `/v1/vector_stores/{id}/search` | Semantic search over a store (needs a loaded `embedding` model) |
+| `POST` | `/v1/vector_stores/{id}/files` | Attach + embed a previously-uploaded file |
+| `POST` | `/v1/videos` | Create a text-to-video job (async; backed by the SDK's `video({ mode: "txt2vid" })`) |
+| `GET` | `/v1/videos` | List video jobs (in-memory only) |
+| `GET` | `/v1/videos/{id}` | Poll job status |
+| `GET` | `/v1/videos/{id}/content` | Download bytes (`video/mp4` via ffmpeg transcode; `?format=avi` for native MJPG-AVI) |
+| `DELETE` | `/v1/videos/{id}` | Abort the job and drop its assets |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
@@ -565,3 +577,47 @@ Lists loaded (READY) text-to-speech models — the speech-capable subset of `/v1
   ]
 }
 ```
+
+## `POST /v1/videos` (and job lifecycle)
+
+OpenAI-compatible **async** video surface, backed by the SDK's
+`video({ mode: "txt2vid" })`. `POST` creates a job and returns immediately with
+`status: "queued"`; the generation runs in the background. Poll `GET
+/v1/videos/{id}` until `status` is `completed` (or `failed`), then fetch the
+bytes from `GET /v1/videos/{id}/content`.
+
+Requires an alias whose **endpoint category** is `video` (SDK addon
+`sdcpp-video`). Register it in `serve.models` and add a
+`serve.openai.videos.models` aliasing block so OpenAI SDK clients can use a
+hard-coded model name.
+
+**Scope: text-to-video only.** `input_reference` is rejected with `400
+unsupported_param` (no img2vid in the SDK); `/edits`, `/remix`, `/extensions`,
+and `/characters` are not implemented.
+
+### Endpoints
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `POST` | `/v1/videos` | Create job → `{ status: "queued" }` |
+| `GET` | `/v1/videos/{id}` | Poll status |
+| `GET` | `/v1/videos/{id}/content` | Download; defaults to `video/mp4` (lazy ffmpeg transcode + cache). `?format=avi` returns the native MJPG-AVI. `?variant` other than `video` → `501 unsupported_variant` |
+| `GET` | `/v1/videos` | Paginated list (`limit` / `order` / `after`) |
+| `DELETE` | `/v1/videos/{id}` | Abort the running job and drop its assets |
+
+### Deviations from the OpenAI spec
+
+- `input_reference` → `400 unsupported_param`.
+- `size` accepts any `WxH` (multiples of 8) in addition to OpenAI's 4-value enum.
+- `Content-Type: video/mp4` is produced by a server-side ffmpeg transcode; `?format=avi` returns the native container.
+- The list endpoint is **in-memory only** — a restart clears it.
+
+### Errors
+
+| HTTP | `error.code` | When |
+|------|--------------|------|
+| 400 | `unsupported_param` | `input_reference` sent (no img2vid) |
+| 400 | `invalid_model_type` | Alias is not a `video` model |
+| 404 | `video_not_found` | Unknown job id |
+| 501 | `unsupported_variant` | `GET …/content?variant=` other than `video` |
+| 503 | `model_not_ready` | Model not loaded yet |
