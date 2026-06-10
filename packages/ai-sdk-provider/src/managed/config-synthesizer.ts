@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -131,9 +130,4 @@ export async function writeEphemeralConfig (models: readonly ManagedModelInput[]
   }
 
   return { configPath, cleanup }
-}
-
-// Exposed for tests/diagnostics: a fresh, unguessable temp filename helper.
-export function ephemeralConfigName (): string {
-  return `qvac.config.${randomBytes(6).toString('hex')}.json`
 }

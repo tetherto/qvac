@@ -49,8 +49,3 @@ export const PARENT_WATCH_INTERVAL_MS = 2_000
 // How long a spawn lockfile is considered fresh. Past this it is treated as
 // stale (left by a crashed spawner) and may be stolen.
 export const SPAWN_LOCK_STALE_MS = 30_000
-
-// Bin name used when spawning the resolved `@qvac/cli` entry is not desired
-// (i.e. the caller passes `serveBinPath`). Kept here for documentation;
-// serve-process spawns the explicit path verbatim.
-export const DEFAULT_SERVE_BIN = 'qvac'
