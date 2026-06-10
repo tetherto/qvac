@@ -1,0 +1,102 @@
+---
+title: BCI
+description: Brain–computer interface (BCI) transcription — decode multi-channel neural signals into text.
+schemaType: HowTo
+---
+
+## Overview
+
+Brain–computer interface (BCI) transcription uses a **GGML** engine ([`@qvac/bci-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp), built on the [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) fork) to decode multi-channel neural signals (e.g., 512-channel microelectrode-array recordings) into text. Load a model using `modelType: "bci"`.
+
+BCI consumes a **neural-signal buffer**. Provide the signal as `neuralData`, either as a file path (string, to a `.bin` file) or an in-memory `Uint8Array` buffer.
+
+`bciTranscribe()` returns the full transcription as a single `string`. If you need partial results as they become available, use `bciTranscribeStream()` to open a duplex session that decodes a sliding window over the signal as data arrives.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`bciTranscribe()`](/reference/api#bcitranscribe) or [`bciTranscribeStream()`](/reference/api#bcitranscribestream)
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+<Callout type="info">
+**Neural signal format:** the `neuralData` input is a binary `.bin` file (or equivalent `Uint8Array`) with an 8-byte header — `[timesteps: uint32 LE, channels: uint32 LE]` — followed by row-major `float32` feature data (`features[t * channels + c]`). Each timestep represents a 20 ms bin of neural activity; channels correspond to individual electrodes in a microelectrode array (typically 512 channels).
+</Callout>
+
+<Callout type="info">
+**On the day index:** sessions recorded on different days use different day-specific projections. The day index used at inference time must match the recording session of the input signal — otherwise the decoded text will be misleading.
+</Callout>
+
+## Models
+
+BCI transcription loads a **companion set** of two files, both required for inference:
+- `ggml-bci-windowed.bin` — the GGML model: Whisper encoder/decoder (LoRA-merged), tokenizer, positional embedding, and windowed-attention header. Available constant: `BCI_WINDOWED`.
+- `bci-embedder.bin` — day-projection weights: per-recording-day low-rank matrices, month projections, and session-to-day mapping. Available constant: `BCI_EMBEDDER`.
+
+For model artifacts available as constants, see [SDK — Models](/introduction#models).
+
+## Streaming with `bciTranscribeStream()`
+
+`bciTranscribeStream()` opens a duplex session that decodes a sliding window over the neural signal as chunks arrive. Write `Uint8Array` chunks with `session.write(...)`, signal the end of input with `session.end()`, and iterate the transcript with `for await (const text of session) { ... }`. The first 8 bytes written must be the standard `[timesteps, channels]` header (`timesteps` is ignored in stream mode; `channels` must be non-zero).
+
+Tune the sliding window with these options:
+
+- `windowTimesteps` (default `1500`) — decode-window size in 20 ms timesteps (must be ≤ `2900`).
+- `hopTimesteps` (default `500`) — how far the window advances between decodes (must be `< windowTimesteps`; ~33% overlap by default).
+- `emit` (default `"delta"`) — `"delta"` emits the newly-discovered tail text per window; `"full"` emits the running transcript.
+
+Only one stream may be active per model at a time.
+
+## Examples
+
+### Batch
+
+The following script transcribes a full neural signal up-front and prints the decoded text:
+
+```ts
+import { loadModel, bciTranscribe, unloadModel, BCI_WINDOWED } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: BCI_WINDOWED,
+  modelType: "bci",
+});
+
+// neuralData is a .bin path or an in-memory Uint8Array buffer
+const text = await bciTranscribe({ modelId, neuralData: "./signal.bin" });
+console.log(text);
+
+await unloadModel({ modelId });
+```
+
+### Streaming
+
+The following script feeds neural-signal chunks into a duplex session and prints transcript text as it is decoded:
+
+```ts
+import { loadModel, bciTranscribeStream, unloadModel, BCI_WINDOWED } from "@qvac/sdk";
+import fs from "node:fs";
+
+const modelId = await loadModel({
+  modelSrc: BCI_WINDOWED,
+  modelType: "bci",
+});
+
+const session = await bciTranscribeStream({ modelId, emit: "delta" });
+
+// Feed the signal (header + body) in chunks, then close the input side.
+const bytes = new Uint8Array(fs.readFileSync("./signal.bin"));
+for (let i = 0; i < bytes.byteLength; i += 4096) {
+  session.write(bytes.subarray(i, Math.min(i + 4096, bytes.byteLength)));
+}
+session.end();
+
+for await (const text of session) process.stdout.write(text);
+
+await unloadModel({ modelId });
+```
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>
