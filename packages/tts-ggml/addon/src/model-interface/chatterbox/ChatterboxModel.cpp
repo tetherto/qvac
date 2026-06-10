@@ -27,6 +27,17 @@ using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 namespace logger = qvac_lib_inference_addon_cpp::logger;
 
+// Default T3 context cap (EngineOptions::n_ctx) when the host doesn't pass
+// `nCtx`.  tts-cpp's library default (0 = uncapped) takes the GGUF's own
+// n_ctx, and the Turbo GGUF ships n_ctx=8196 — the F32 KV cache allocated
+// up-front at that length is n_embd(1024) x n_layer(24) x n_ctx x 4 B x 2
+// (K+V) ~= 1.6 GB, which is what pushed the iOS QVAC SDK test process to a
+// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  2048 tokens keep
+// ~80 s of generated audio per synthesize() call (T3 speech tokens run at
+// 25 Hz) for ~400 MB of KV.  Hosts that need longer single-call synthesis
+// can raise the cap, or pass nCtx=0 to restore the uncapped behaviour.
+constexpr int kDefaultNCtx = 2048;
+
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;
   opts.t3_gguf_path    = cfg.t3ModelPath;
@@ -36,6 +47,7 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.seed.has_value())    opts.seed         = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
+  opts.n_ctx = cfg.nCtx.value_or(kDefaultNCtx);
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
   } else if (cfg.useGpu.has_value()) {
@@ -134,6 +146,13 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
               ". Either drop one of the two, or make them agree "
               "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
     }
+  }
+  if (cfg.nCtx.has_value() && *cfg.nCtx < 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ChatterboxModel: nCtx must be >= 0 (0 = use the GGUF's full "
+        "context, > 0 = cap the T3 context / KV-cache length), got " +
+            std::to_string(*cfg.nCtx));
   }
   if (cfg.t3ModelPath.empty()) {
     throw StatusError(general_error::InvalidArgument, "t3ModelPath is required");
@@ -350,6 +369,11 @@ std::any ChatterboxModel::process(const std::any& input) {
   // reload()).
   if (result.wasStreaming) return {};
   return std::any(std::move(result.pcm));
+}
+
+tts_cpp::chatterbox::EngineOptions engineOptionsForTests(
+    const ChatterboxConfig& cfg) {
+  return toEngineOptions(cfg);
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const {

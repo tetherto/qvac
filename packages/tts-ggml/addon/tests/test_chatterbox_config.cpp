@@ -20,6 +20,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <tts-cpp/chatterbox/engine.h>
+
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "inference-addon-cpp/Errors.hpp"
@@ -147,6 +149,40 @@ TEST(ChatterboxValidate, ConfigUseGpuDefaultIsFalse) {
   EXPECT_FALSE(cfg.threads.has_value());
   EXPECT_FALSE(cfg.nGpuLayers.has_value());
   EXPECT_FALSE(cfg.streamChunkTokens.has_value());
+  EXPECT_FALSE(cfg.nCtx.has_value());
+}
+
+TEST(ChatterboxValidate, NegativeNCtxRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.nCtx = -1;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  ChatterboxConfig -> tts_cpp EngineOptions mapping.
+// ─────────────────────────────────────────────────────────────────────
+
+// The T3 KV cache is allocated up-front at n_ctx in F32 (Turbo GGUF ships
+// n_ctx=8196 ~= 1.6 GB of KV), so the addon must cap it by default rather
+// than inherit tts-cpp's uncapped library default (QVAC-19557 iOS OOM).
+TEST(ChatterboxEngineOptions, NCtxDefaultsTo2048) {
+  ChatterboxConfig cfg;
+  const auto opts = qvac::ttsggml::chatterbox::engineOptionsForTests(cfg);
+  EXPECT_EQ(opts.n_ctx, 2048);
+}
+
+TEST(ChatterboxEngineOptions, ExplicitNCtxForwarded) {
+  ChatterboxConfig cfg;
+  cfg.nCtx = 1024;
+  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).n_ctx, 1024);
+}
+
+TEST(ChatterboxEngineOptions, NCtxZeroMeansUncapped) {
+  // 0 is the documented escape hatch: tts-cpp treats n_ctx <= 0 as "use
+  // the GGUF's full context".
+  ChatterboxConfig cfg;
+  cfg.nCtx = 0;
+  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).n_ctx, 0);
 }
 
 // ─────────────────────────────────────────────────────────────────────
