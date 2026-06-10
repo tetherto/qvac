@@ -57,7 +57,7 @@ import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
-import { VlaExecutor } from "./executors/vla-executor.js";
+import { VlaExecutor } from "../shared/executors/vla-executor.js";
 import { ClassificationExecutor } from "./executors/classification-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
