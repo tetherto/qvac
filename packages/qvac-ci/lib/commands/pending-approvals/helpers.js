@@ -34,7 +34,6 @@ class GitHubSanitizer extends Sanitizer {
   }
 }
 
-// --- Error helpers ---
 function throwApiError (err, context) {
   let message
   if (err.status === 401) {

@@ -12,9 +12,7 @@ const { GitHubSanitizer } = require('../../lib/commands/pending-approvals/helper
 
 const ghSanitizer = new GitHubSanitizer()
 
-// ---------------------------------------------------------------------------
 // Sanitizer (base — passthrough)
-// ---------------------------------------------------------------------------
 
 test('Sanitizer — redact returns the value unchanged', t => {
   const s = new Sanitizer()
@@ -33,9 +31,7 @@ test('Sanitizer — sanitizeError coerces non-Error to string', t => {
   t.is(typeof s.sanitizeError(42), 'string')
 })
 
-// ---------------------------------------------------------------------------
 // GitHubSanitizer — redact
-// ---------------------------------------------------------------------------
 
 test('GitHubSanitizer.redact — leaves plain strings unchanged', t => {
   t.is(ghSanitizer.redact('hello world'), 'hello world')
@@ -65,9 +61,7 @@ test('GitHubSanitizer.redact — handles non-string input safely', t => {
   t.is(ghSanitizer.redact(42), 42)
 })
 
-// ---------------------------------------------------------------------------
 // GitHubSanitizer — sanitizeError (inherited template method)
-// ---------------------------------------------------------------------------
 
 test('GitHubSanitizer.sanitizeError — returns message only, not stack', t => {
   const err = new Error('something went wrong')
@@ -88,9 +82,7 @@ test('GitHubSanitizer.sanitizeError — handles non-Error values', t => {
   t.is(typeof ghSanitizer.sanitizeError(42), 'string')
 })
 
-// ---------------------------------------------------------------------------
 // validateRequiredEnv
-// ---------------------------------------------------------------------------
 
 test('validateRequiredEnv — passes when all vars are set', t => {
   process.env.TEST_VAR_A = 'value-a'
@@ -134,9 +126,7 @@ test('validateRequiredEnv — does not include env var values in error', t => {
   delete process.env.PARTIAL_VAR
 })
 
-// ---------------------------------------------------------------------------
 // validatePrNumber
-// ---------------------------------------------------------------------------
 
 test('validatePrNumber — returns a number for a valid string', t => {
   const result = validatePrNumber('42')
@@ -168,9 +158,7 @@ test('validatePrNumber — throws for undefined', async t => {
   await t.exception.all(async () => validatePrNumber(undefined))
 })
 
-// ---------------------------------------------------------------------------
 // validateRepo
-// ---------------------------------------------------------------------------
 
 test('validateRepo — returns owner and repo for valid input', t => {
   const result = validateRepo('owner/my-repo')
@@ -204,9 +192,7 @@ test('validateRepo — throws for double slash', async t => {
   await t.exception.all(async () => validateRepo('owner//repo'))
 })
 
-// ---------------------------------------------------------------------------
 // validateTeamSlug
-// ---------------------------------------------------------------------------
 
 test('validateTeamSlug — returns slug for valid input', t => {
   t.is(validateTeamSlug('my-team', '--maintainers-team'), 'my-team')

@@ -3,9 +3,7 @@
 const test = require('brittle')
 const { Command } = require('../../lib/command')
 
-// ---------------------------------------------------------------------------
 // Command base class contracts
-// ---------------------------------------------------------------------------
 
 test('Command — constructor stores name, description, and secrets', t => {
   const cmd = new Command({
@@ -58,9 +56,7 @@ test('Command — run() calls _run() when secrets are present', async t => {
   delete process.env[envVar]
 })
 
-// ---------------------------------------------------------------------------
 // _secretsFooter
-// ---------------------------------------------------------------------------
 
 test('_secretsFooter — returns empty string for no secrets', t => {
   const cmd = new Command({ name: 'x', description: 'y' })
