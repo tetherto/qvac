@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **QVAC-19557: Chatterbox iOS peak-memory OOM — cap the T3 context
+  (KV-cache length) at 2048 by default.** tts-cpp allocates the T3 KV
+  cache up-front, in F32, at the GGUF's full `n_ctx`; the Turbo GGUF
+  ships `n_ctx=8196`, which costs ~1.6 GB of KV
+  (`n_embd(1024) × n_layer(24) × 8196 × 4 B × 2`) and pushed the iOS
+  QVAC SDK test process to a ~3.1 GB peak footprint (jetsam kill — the
+  `tts-chatterbox-*` e2e variants are currently skipped on iOS Device
+  Farm for exactly this).  The addon now passes
+  `EngineOptions::n_ctx = 2048` (~400 MB of KV, ≈80 s of generated
+  audio per `synthesize()` call) unless the host overrides it via the
+  new `nCtx` constructor option.  `nCtx: 0` restores the old uncapped
+  behaviour; negative values are rejected at construction.
+
 ## [0.3.1] - 2026-06-18
 
 ### Fixed

@@ -70,6 +70,8 @@ declare interface TTSGgmlOptions {
   seed?: number
   /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: pass 99 to offload on GPU-capable hosts (forced to CPU on Android). */
   nGpuLayers?: number
+  /** Chatterbox-only: cap on the T3 context length (prompt + generated speech tokens, 25 tokens ~= 1 s of audio).  The F32 KV cache is allocated up-front at this length, so the cap directly bounds memory: the Turbo GGUF's native n_ctx=8196 costs ~1.6 GB of KV, the default cap of 2048 (~80 s of audio per synthesis call) ~400 MB.  Pass 0 to use the GGUF's full context; negative values are rejected. */
+  nCtx?: number
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number
   /** Chatterbox-only: speech tokens per native streaming chunk (25 ~= 1 s of audio).  0 disables. */

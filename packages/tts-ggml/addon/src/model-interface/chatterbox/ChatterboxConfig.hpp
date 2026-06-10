@@ -31,6 +31,23 @@ struct ChatterboxConfig {
   std::optional<int> threads;
   /** Layers to move to the GPU backend.  99 (or any large number) = all. */
   std::optional<int> nGpuLayers;
+  /**
+   * T3 context-length cap, forwarded to
+   * `tts_cpp::chatterbox::EngineOptions::n_ctx` (the engine clamps the
+   * GGUF's own n_ctx to this; it never raises it).
+   *
+   * The T3 KV cache is allocated UP-FRONT at n_ctx, in F32: the Turbo
+   * GGUF ships n_ctx=8196 which costs ~1.6 GB of KV for synthesis that
+   * rarely needs more than a few hundred tokens (QVAC-19557 iOS OOM).
+   * When unset, {@link ChatterboxModel} applies kDefaultNCtx (2048,
+   * ~400 MB KV on Turbo, ≈80 s of audio per synthesize() call).
+   *
+   *   - unset:  kDefaultNCtx (2048)
+   *   - > 0:    explicit cap (prompt + generated speech tokens)
+   *   - 0:      escape hatch — no cap, use the GGUF's full n_ctx
+   *   - < 0:    rejected by validateConfig
+   */
+  std::optional<int> nCtx;
   /** Post-processing output sample rate.  Currently unused (engine always emits 24 kHz). */
   std::optional<int> outputSampleRate;
   /**

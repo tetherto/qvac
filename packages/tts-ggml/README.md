@@ -243,6 +243,7 @@ backend persist its compiled program cache across launches.
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
 | `nGpuLayers`              | number     | 0          | Layers offloaded to GPU (mirrors `useGPU`; pass `99` to offload all) |
+| `nCtx`                    | number     | 2048       | Cap on the T3 context (prompt + generated speech tokens; 25 tokens ≈ 1 s of audio).  The F32 KV cache is allocated up-front at this length, so it directly bounds memory: the Turbo GGUF's native `n_ctx=8196` would cost ~1.6 GB of KV vs ~400 MB at the default 2048.  Pass `0` to use the GGUF's full context |
 | `threads`                 | number     | hw.concurrency capped at 4 | |
 | `streamChunkTokens`       | number     | 0          | **>0 enables native chunk streaming** |
 | `streamFirstChunkTokens`  | number     | = streamChunkTokens | Smaller first chunk for low first-audio-out |
