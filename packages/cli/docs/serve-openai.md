@@ -41,11 +41,6 @@ This document describes the supported routes and how to configure `serve.models`
 | `DELETE` | `/v1/vector_stores/{id}` | Delete a vector store |
 | `POST` | `/v1/vector_stores/{id}/search` | Semantic search over a store (needs a loaded `embedding` model) |
 | `POST` | `/v1/vector_stores/{id}/files` | Attach + embed a previously-uploaded file |
-| `POST` | `/v1/videos` | Create a text-to-video job (async; backed by the SDK's `video({ mode: "txt2vid" })`) |
-| `GET` | `/v1/videos` | List video jobs (in-memory only) |
-| `GET` | `/v1/videos/{id}` | Poll job status |
-| `GET` | `/v1/videos/{id}/content` | Download bytes (`video/mp4` via ffmpeg transcode; `?format=avi` for native MJPG-AVI) |
-| `DELETE` | `/v1/videos/{id}` | Abort the job and drop its assets |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
@@ -585,20 +580,22 @@ Lists loaded (READY) text-to-speech models — the speech-capable subset of `/v1
 
 ## `POST /v1/videos` (and job lifecycle)
 
-OpenAI-compatible **async** video surface, backed by the SDK's
-`video({ mode: "txt2vid" })`. `POST` creates a job and returns immediately with
-`status: "queued"`; the generation runs in the background. Poll `GET
-/v1/videos/{id}` until `status` is `completed` (or `failed`), then fetch the
-bytes from `GET /v1/videos/{id}/content`.
+OpenAI-compatible **async** video surface backed by the SDK's `video()`. `POST`
+creates a job and returns immediately with `status: "queued"`; generation runs
+in the background. Poll `GET /v1/videos/{id}` until `status` is `completed` (or
+`failed`), then fetch bytes from `GET /v1/videos/{id}/content`.
 
 Requires an alias whose **endpoint category** is `video` (SDK addon
-`sdcpp-video`). Register it in `serve.models` and add a
-`serve.openai.videos.models` aliasing block so OpenAI SDK clients can use a
-hard-coded model name.
+`sdcpp-video`). Register it in `serve.models`.
 
-**Scope: text-to-video only.** `input_reference` is rejected with `400
-unsupported_param` (no img2vid in the SDK); `/edits`, `/remix`, `/extensions`,
-and `/characters` are not implemented.
+Two generation modes:
+
+- **txt2vid** — JSON body with `prompt`. No image required.
+- **img2vid** — `multipart/form-data` with `init_image` (PNG or JPEG file
+  field). Mode is inferred from the presence of `init_image`; no explicit
+  `mode` field needed. `strength` (0–1) controls denoise intensity.
+
+`/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
 
 ### Endpoints
 
@@ -612,8 +609,7 @@ and `/characters` are not implemented.
 
 ### Deviations from the OpenAI spec
 
-- `input_reference` → `400 unsupported_param`.
-- `size` accepts any `WxH` (multiples of 8) in addition to OpenAI's 4-value enum.
+- `size` accepts any `WxH` (multiples of 16) in addition to OpenAI's 4-value enum.
 - `Content-Type: video/mp4` is produced by a server-side ffmpeg transcode; `?format=avi` returns the native container.
 - The list endpoint is **in-memory only** — a restart clears it.
 
@@ -621,7 +617,7 @@ and `/characters` are not implemented.
 
 | HTTP | `error.code` | When |
 |------|--------------|------|
-| 400 | `unsupported_param` | `input_reference` sent (no img2vid) |
+| 400 | `invalid_strength` | `strength` outside `[0, 1]` or non-numeric |
 | 400 | `invalid_model_type` | Alias is not a `video` model |
 | 404 | `video_not_found` | Unknown job id |
 | 501 | `unsupported_variant` | `GET …/content?variant=` other than `video` |
