@@ -1,0 +1,530 @@
+name: Benchmark VLM (model comparison)
+
+# Manually-triggered cross-platform VLM quality + speed benchmark for
+# @qvac/llm-llamacpp. Runs the config-driven matrix in
+# packages/llm-llamacpp/benchmarks/vlm-benchmark/ — either two-models (compare two
+# model blobs) or several-sources (one model across addon / fabric-cli / upstream-cli)
+# — on Linux CPU/GPU and Samsung S25 (AWS Device Farm), and renders one report.
+# Self-contained: the benchmark folder + this workflow are the only additions; the
+# mobile leg bootstraps the test into the framework at launch (nothing committed
+# outside the folder). See benchmarks/vlm-benchmark/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "  addon ref — qvac branch / tag / SHA (default: current branch)"
+        required: false
+        type: string
+      fabric_ref:
+        description: "  fabric (qvac fork) llama-mtmd-cli ref for several-sources (default: v8189.0.2)"
+        required: false
+        type: string
+        default: "v8189.0.2"
+      upstream_ref:
+        description: "  upstream llama.cpp CLI ref for several-sources (default: b8189)"
+        required: false
+        type: string
+        default: "b8189"
+      # ── Matrix (config-driven quality+speed) ──────
+      # Runs the @qvac/llm-llamacpp addon over the frozen fixture (lmms-eval quality +
+      # vision-encode speed) on Linux (and S25), driven by
+      # packages/llm-llamacpp/benchmarks/vlm-benchmark/config.cjs.
+      run_matrix:
+        description: "run the VLM quality+speed matrix (must be true)"
+        required: false
+        type: boolean
+        default: true
+      matrix_mode:
+        description: "  matrix mode: two-models (f16 vs q8, addon) or several-sources (addon+fabric-cli+upstream-cli, Linux-only)"
+        required: false
+        type: string
+        default: "two-models"
+      matrix_preset:
+        description: "  run size (independent of mode): smoke (1 task×1×1), base (5 tasks×3×1), full (5 tasks×5×1). Overrides config.defaultPreset on desktop."
+        required: false
+        type: string
+        default: "base"
+      matrix_engine:
+        description: "  inference engine (two-models mode): addon | fabric-cli | upstream-cli. CLI engines are desktop-only; addon runs everywhere."
+        required: false
+        type: string
+        default: "addon"
+      matrix_linux:
+        description: "  Linux matrix legs, comma-sep: linux-cpu,linux-gpu"
+        required: false
+        type: string
+        default: "linux-cpu,linux-gpu"
+      matrix_samples:
+        description: "  override samples/task (empty = preset default; e.g. 1 for a quick check)"
+        required: false
+        type: string
+        default: ""
+      run_matrix_s25:
+        description: "  also run the matrix on Samsung S25 (AWS Device Farm)"
+        required: false
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  # ── Context ────────────────────────────────────────────────────────
+  # Resolves the repo + ref so downstream jobs check out the right
+  # commit even when the workflow_dispatch is invoked without `ref`,
+  # and builds the desktop matrix from the per-platform input toggles.
+  # Matrix is computed here (instead of via job-level `if:`) because
+  # GitHub Actions doesn't allow `matrix.*` references in job-level
+  # conditions — they're evaluated before the matrix is expanded.
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+      linux_matrix: ${{ steps.lmatrix.outputs.value }}
+      linux_count: ${{ steps.lmatrix.outputs.count }}
+      merge_base: ${{ steps.commits.outputs.merge_base }}
+      head_sha: ${{ steps.commits.outputs.head_sha }}
+      head_title: ${{ steps.commits.outputs.head_title }}
+      head_date: ${{ steps.commits.outputs.head_date }}
+      base_title: ${{ steps.commits.outputs.base_title }}
+      base_date: ${{ steps.commits.outputs.base_date }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="$REPO"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - id: lmatrix
+        shell: bash
+        env:
+          RUN_MATRIX: ${{ inputs.run_matrix }}
+          MATRIX_LINUX: ${{ inputs.matrix_linux }}
+          MATRIX_MODE: ${{ inputs.matrix_mode }}
+        run: |
+          cells='[]'
+          if [[ "$RUN_MATRIX" == "true" ]]; then
+            IFS=',' read -ra tokens <<< "${MATRIX_LINUX:-linux-cpu}"
+            for raw in "${tokens[@]}"; do
+              sel=$(echo "$raw" | xargs)
+              # several-sources builds native fabric/upstream CLIs, so the CPU leg
+              # needs a runner with cmake+toolchain → GitHub-hosted ubuntu-latest.
+              cpu_runner=qvac-ubuntu2204-x64
+              if [[ "$MATRIX_MODE" == "several-sources" ]]; then cpu_runner=ubuntu-latest; fi
+              case "$sel" in
+                linux-cpu) backend=cpu; runner=$cpu_runner;             no_gpu=true ;;
+                linux-gpu) backend=gpu; runner=qvac-ubuntu2404-x64-gpu;  no_gpu=false ;;
+                "") continue ;;
+                *) echo "::warning::Unknown matrix_linux token '$sel' (known: linux-cpu, linux-gpu)"; continue ;;
+              esac
+              cells=$(echo "$cells" | jq -c \
+                --arg b "$backend" --arg r "$runner" --arg n "$no_gpu" \
+                '. + [{"backend":$b,"runner":$r,"no_gpu":$n}]')
+            done
+          fi
+          count=$(echo "$cells" | jq 'length')
+          echo "value=$cells" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Linux matrix ($count entries): $cells"
+      # Resolve commit metadata so the consolidated report can show what
+      # the candidate ref + merge-base actually point at (hash, title,
+      # date). Needs a real clone — sparse checkout doesn't give us git
+      # history.
+      - name: Checkout for commit lookup
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ steps.ctx.outputs.repository }}
+          ref: ${{ steps.ctx.outputs.ref }}
+          fetch-depth: 0
+      - id: commits
+        shell: bash
+        run: |
+          git fetch origin main --quiet
+          HEAD_SHA=$(git rev-parse HEAD)
+          MERGE_BASE=$(git merge-base HEAD origin/main || echo "")
+          HEAD_TITLE=$(git log -1 --pretty=%s "$HEAD_SHA")
+          HEAD_DATE=$(git log -1 --pretty=%cI "$HEAD_SHA")
+          if [[ -n "$MERGE_BASE" ]]; then
+            BASE_TITLE=$(git log -1 --pretty=%s "$MERGE_BASE")
+            BASE_DATE=$(git log -1 --pretty=%cI "$MERGE_BASE")
+          else
+            BASE_TITLE=""
+            BASE_DATE=""
+          fi
+          {
+            echo "head_sha=$HEAD_SHA"
+            echo "merge_base=$MERGE_BASE"
+            echo "head_title=$HEAD_TITLE"
+            echo "head_date=$HEAD_DATE"
+            echo "base_title=$BASE_TITLE"
+            echo "base_date=$BASE_DATE"
+          } >> "$GITHUB_OUTPUT"
+          echo "HEAD:       $HEAD_SHA - $HEAD_TITLE ($HEAD_DATE)"
+          echo "merge-base: $MERGE_BASE - $BASE_TITLE ($BASE_DATE)"
+
+  # ── Desktop benchmark matrix ───────────────────────────────────────
+  # Each leg is the same shape — pick the runner via matrix.runner.
+  # GPU rows (linux-x64 / windows-x64) target self-hosted Vulkan
+  # runners pre-provisioned with the Vulkan SDK; macOS arm64 uses
+  # Metal on the GitHub-hosted macos-15-xlarge runner. The matrix
+  # itself is built dynamically by the context job above from the
+  # `platforms` input.
+  matrix-linux:
+    needs: context
+    if: needs.context.outputs.linux_count != '0'
+    name: vlm-matrix-linux-${{ matrix.backend }}
+    runs-on: ${{ matrix.runner }}
+    # `release` environment exposes AWS_OIDC_ROLE_ARN and satisfies the role's OIDC
+    # trust policy (environment:release claim) for the S3 fixture-image download.
+    environment: release
+    # several-sources builds two CLIs from source (first run, pre-cache) + per-image
+    # CLI model reloads, so allow more wall-clock than the addon-only two-models path.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.context.outputs.linux_matrix) }}
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      WORKDIR: packages/llm-llamacpp
+    steps:
+      - name: Manual Workspace Cleanup
+        if: startsWith(matrix.runner, 'qvac-')
+        shell: bash
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Install addon deps
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: npm install --no-audit --no-fund
+
+      - name: Install bare tooling
+        shell: bash
+        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
+
+      # Branch JS + published native prebuild: pull the linux-x64 prebuild
+      # from the public npm package into the workspace so the harness's
+      # require('../../index.js') loads. The published prebuild handles both
+      # cpu and (Vulkan) gpu via runtime device selection.
+      - name: Fetch published prebuilds
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          npm pack @qvac/llm-llamacpp@latest
+          tar -xzf *.tgz
+          ADDON_VER=$(node -e "console.log(require('./package/package.json').version)")
+          echo "ADDON_VERSION=$ADDON_VER" >> "$GITHUB_ENV"
+          rm -rf prebuilds
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+          echo "addon @qvac/llm-llamacpp@$ADDON_VER"
+          ls -la prebuilds/
+
+      # GPU runners ship the Vulkan SDK at the well-known path; stamp the
+      # env so the addon's loader finds it. No-op on the cpu leg.
+      - name: Configure Vulkan SDK env (Linux GPU)
+        if: matrix.backend == 'gpu'
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
+          echo "/opt/vulkansdk/x86_64/bin" >> "$GITHUB_PATH"
+
+      # Fixture images live in S3 (not committed to git). Pull them into the benchmark's
+      # images/ dir so the harness and the several-sources CLI runner read them locally.
+      - name: Configure AWS credentials (fixture images)
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Download fixture images from S3
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          aws s3 sync s3://tether-ai-dev/vlm-benchmark/ benchmarks/vlm-benchmark/images/
+          echo "fixture images:"; ls benchmarks/vlm-benchmark/images/
+
+      - name: Run VLM matrix
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          QVAC_VLM_MATRIX: "1"
+          QVAC_VLM_MODE: ${{ inputs.matrix_mode }}
+          QVAC_VLM_PRESET: ${{ inputs.matrix_preset }}
+          QVAC_VLM_ENGINE: addon # this leg is always the 'addon' source
+          QVAC_VLM_SAMPLES: ${{ inputs.matrix_samples }} # '' → use the preset's value
+          QVAC_VLM_DEVICES: ${{ matrix.backend }}
+          NO_GPU: ${{ matrix.no_gpu }}
+        run: |
+          # Point brittle straight at the benchmark dir (no staging needed on desktop),
+          # then run it under bare. In several-sources mode this is the addon leg;
+          # fabric/upstream CLIs are appended to the same log by the next step.
+          npx brittle -r test/integration/all.js benchmarks/vlm-benchmark/vlm-matrix.test.js
+          bare test/integration/all.js --exit 2>&1 | tee "vlm-matrix-linux-${{ matrix.backend }}.log"
+          exit ${PIPESTATUS[0]}
+
+      # several-sources only: build native fabric/upstream llama-mtmd-cli and run
+      # them over the SAME fixture, appending [VLMROW]/[VLMSEG] markers to the addon
+      # log so aggregate.js renders a 3-source comparison. Linux-only.
+      - name: Cache CLI builds (several-sources)
+        if: inputs.matrix_mode == 'several-sources'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WORKDIR }}/benchmarks/vlm-benchmark/cli-builds
+          key: vlm-cli-v3-linux-${{ matrix.backend }}-${{ inputs.fabric_ref }}-${{ inputs.upstream_ref }}
+
+      - name: Build + run fabric/upstream CLIs over the fixture (several-sources)
+        if: inputs.matrix_mode == 'several-sources'
+        working-directory: ${{ env.WORKDIR }}/benchmarks/vlm-benchmark
+        shell: bash
+        env:
+          LOG: ${{ github.workspace }}/${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
+          MODEL_DIR: ${{ github.workspace }}/${{ env.WORKDIR }}/test/model
+          SAMPLES: ${{ inputs.matrix_samples }}
+          PRESET: ${{ inputs.matrix_preset }}
+        run: |
+          # Match the addon leg's run size: samples + repeats come from the active
+          # preset in config.cjs (matrix_samples still overrides samples). CLI build +
+          # runner are vendored into this folder (no vlm-performance dependency).
+          PRESET_SAMPLES=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).samplesPerTask||3)")
+          REPEATS=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).repeats||1)")
+          SAMPLES="${SAMPLES:-$PRESET_SAMPLES}"
+          node build-cli-sources.js --sources=fabric,upstream \
+            --fabric-ref=${{ inputs.fabric_ref }} --upstream-ref=${{ inputs.upstream_ref }} \
+            --backend=${{ matrix.backend }}
+          FABRIC_BIN=$(node -e "console.log(require('./cli-sources-resolved.json').fabric.binaryPath)")
+          UPSTREAM_BIN=$(node -e "console.log(require('./cli-sources-resolved.json').upstream.binaryPath)")
+          # Model files were downloaded by the addon leg (names from config.cjs).
+          LLM="$MODEL_DIR/reg-qwen-unsloth-Q8_0.gguf"
+          MMPROJ="$MODEL_DIR/reg-qwen-mradermacher-mmproj-Q8_0.gguf"
+          run_src () {
+            echo ">> $1 over fixture ($2)"
+            node cli-fixture-runner.cjs \
+              --binary "$3" --source "$1" --llm "$LLM" --mmproj "$MMPROJ" \
+              --backend "${{ matrix.backend }}" --samples "$SAMPLES" --repeats "$REPEATS" \
+              --tasks textvqa,vizwiz,gqa,docvqa,ai2d \
+              --main-origin "Qwen3.5-0.8B-Q8_0 (Registry)" \
+              --mmproj-origin "Qwen3.5-0.8B mmproj-Q8_0 (Registry)" >> "$LOG" 2>&1 || echo "::warning::$1 run had errors"
+          }
+          run_src fabric-cli fabric "$FABRIC_BIN"
+          run_src upstream-cli upstream "$UPSTREAM_BIN"
+          echo "appended fabric-cli + upstream-cli to $LOG"
+
+      # HW/SW provenance so a reader can reproduce the numbers. Rendered in the
+      # report's Details section (passed to aggregate.js via --provenance).
+      - name: Gather provenance
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          F="prov-linux-${{ matrix.backend }}.md"
+          {
+            echo "**linux · ${{ matrix.backend }}** (runner \`${{ matrix.runner }}\`)"
+            echo "- addon: \`@qvac/llm-llamacpp@${ADDON_VERSION:-?}\` (published prebuild)"
+            echo "- git: \`${{ needs.context.outputs.head_sha }}\` (ref \`${{ needs.context.outputs.ref }}\`)"
+            echo "- node: $(node -v 2>/dev/null) · bare: $(bare --version 2>/dev/null || echo n/a)"
+            echo "- os: $(. /etc/os-release 2>/dev/null; echo "$PRETTY_NAME") $(uname -m)"
+            echo "- cpu: $(lscpu 2>/dev/null | sed -n 's/^Model name:[[:space:]]*//p' | head -1) ($(nproc) cores)"
+            echo "- ram: $(free -h 2>/dev/null | awk '/^Mem:/{print $2}')"
+            if [ "${{ matrix.backend }}" = "gpu" ]; then
+              echo "- gpu: $(vulkaninfo --summary 2>/dev/null | sed -n 's/.*deviceName[[:space:]]*=[[:space:]]*//p' | head -1 || echo '?')"
+            fi
+          } > "$F"
+          cat "$F"
+
+      - name: Upload matrix log
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-matrix-log-linux-${{ matrix.backend }}-${{ github.run_number }}
+          path: |
+            ${{ env.WORKDIR }}/vlm-matrix-linux-${{ matrix.backend }}.log
+            ${{ env.WORKDIR }}/prov-linux-${{ matrix.backend }}.md
+          retention-days: 14
+          if-no-files-found: warn
+
+  # ── Matrix mode: Samsung S25 (AWS Device Farm) ─────────────────────
+  # Reuses the Android-only mobile workflow to run the SAME matrix harness
+  # on-device. qvac_perf_only restricts the run to perf-tests.json
+  # (runVlmMatrixTest) → only the vlmMatrix group is scheduled. The active
+  # preset on-device is config.defaultPreset (Device Farm forwards no custom
+  # env), so config.cjs defaultPreset governs the S25 set. The
+  # raw on-device log (bare_console.log) carries the [VLMROW] markers and is
+  # uploaded by collect-and-upload-logs as console-logs-llamacpp-llm-Android.
+  matrix-s25:
+    needs: context
+    # S25 runs the addon only; several-sources (native CLIs) is Linux-only.
+    if: inputs.run_matrix && inputs.run_matrix_s25 && inputs.matrix_mode != 'several-sources'
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.context.outputs.ref }}
+      repository: ${{ needs.context.outputs.repository }}
+      # Bootstrap the benchmark into the framework at launch (stages test/harness/config/
+      # fixture into test/integration + images into testAssets, regenerates the test list)
+      # — nothing committed outside benchmarks/vlm-benchmark/.
+      pre_build_script: benchmarks/vlm-benchmark/stage.cjs
+      # Fixture-image object store (kept only in this workflow). The reusable workflow
+      # syncs from this URI without referencing it literally.
+      fixture_images_uri: s3://tether-ai-dev/vlm-benchmark/
+      # Samsung S25 (Android) only — the benchmark targets the S25 device pool; skip iOS.
+      platforms: Android
+      # Select ONLY our test via the shard override (no edits to the committed
+      # test-groups.json / perf-tests.json). qvac_perf_only=false so the override isn't
+      # intersected with perf-tests.json (which we don't touch).
+      qvac_perf_only: false
+      test_groups: '[{"name":"vlmMatrix","grep":"runVlmMatrixTest"}]'
+
+  # ── Matrix mode: combine ───────────────────────────────────────────
+  # Aggregates [VLMROW]/[VLMSEG]/[VLMMETA] markers from every matrix log
+  # (Linux .log + S25 bare_console.log) into one quality+speed report via
+  # vlm-benchmark/aggregate.js, surfaced to the step summary + PR comment.
+  # This is the mechanism that makes mobile (Device Farm) results visible.
+  matrix-combine:
+    needs:
+      - context
+      - matrix-linux
+      - matrix-s25
+    if: always() && inputs.run_matrix && needs.context.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/llm-llamacpp/benchmarks/vlm-benchmark
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Download Linux matrix logs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: vlm-matrix-log-*-${{ github.run_number }}
+          path: matrix-logs
+
+      # S25 raw device logs (bare_console.log holds the [VLMROW] markers).
+      # continue-on-error so a Linux-only run (no S25 artifact) still combines.
+      - name: Download S25 device logs
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: console-logs-*
+          path: matrix-logs
+
+      - name: Aggregate matrix logs
+        shell: bash
+        run: |
+          mkdir -p consolidated
+          # Tag each input with its platform host so S25 rows don't collapse
+          # onto the Linux rows ([VLMROW].device is only cpu/gpu).
+          ARGS=""
+          # Linux legs: one log per backend (device field carries cpu/gpu).
+          for f in $(find matrix-logs -name 'vlm-matrix-linux-*.log' 2>/dev/null | sort); do
+            ARGS="$ARGS --in linux $f"
+          done
+          # S25: the Samsung device's full logcat carries the [VLMROW] markers
+          # (the Android pool may also include a Pixel; we surface S25 here).
+          for f in $(find matrix-logs -name '*Galaxy_S25*logcat_full*' 2>/dev/null | sort); do
+            ARGS="$ARGS --in s25 $f"
+          done
+          # HW/SW provenance: Linux legs ship prov-linux-*.md; synthesize one for S25.
+          PROV=""
+          for p in $(find matrix-logs -name 'prov-*.md' 2>/dev/null | sort); do
+            PROV="$PROV --provenance $p"
+          done
+          # S25 hardware provenance, parsed from the device's own logcat (model /
+          # Android / ABI from the Play-store UA line, RAM from the JS totalMemory
+          # line, GPU from the Adreno-Vulkan driver load).
+          S25F=$(find matrix-logs -name '*Galaxy_S25*logcat_full*' 2>/dev/null | head -1)
+          if [ -n "$S25F" ]; then
+            MODEL=$(grep -oE 'model=SM-[A-Z0-9]+' "$S25F" | head -1 | cut -d= -f2)
+            ANDROID=$(grep -oE 'platformVersionRelease=[0-9]+' "$S25F" | head -1 | cut -d= -f2)
+            ABI=$(grep -oE 'supportedAbis=[a-z0-9-]+' "$S25F" | head -1 | cut -d= -f2)
+            RAMB=$(grep -oE 'totalMemory: [0-9]+' "$S25F" | head -1 | grep -oE '[0-9]+$')
+            RAMGB=$(awk -v b="${RAMB:-0}" 'BEGIN{ if (b>0) printf "%.1f GB", b/1073741824; else printf "?" }')
+            GPU=$(grep -qiE 'AdrenoVK|vulkan\.adreno' "$S25F" && echo 'Adreno (Vulkan)' || echo '?')
+            {
+              echo "**s25** — Samsung Galaxy S25 Ultra (AWS Device Farm)"
+              echo "- device: ${MODEL:-SM-?} · Android ${ANDROID:-?} · ${ABI:-arm64-v8a}"
+              echo "- ram: ${RAMGB} · gpu: ${GPU}"
+              echo "- engine: \`@qvac/llm-llamacpp\` addon (published prebuild)"
+            } > prov-s25.md
+            PROV="$PROV --provenance prov-s25.md"
+          fi
+          echo "aggregate inputs:$ARGS"
+          echo "provenance:$PROV"
+          if [ -z "$ARGS" ]; then
+            echo "> No VLM matrix logs found for run #${{ github.run_number }}." > consolidated/vlm-matrix-consolidated.md
+          else
+            node packages/llm-llamacpp/benchmarks/vlm-benchmark/aggregate.js \
+              --title "VLM Matrix — ${{ inputs.matrix_mode }} / ${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
+              --mode "${{ inputs.matrix_mode }}" --engine "${{ inputs.matrix_engine }}" \
+              --out consolidated/vlm-matrix-consolidated.md \
+              $PROV $ARGS
+          fi
+
+      - name: Post step summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "# VLM Matrix — Consolidated"
+            echo ""
+            cat consolidated/vlm-matrix-consolidated.md 2>/dev/null || echo "No consolidated matrix report generated."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post PR comment
+        if: always() && hashFiles('consolidated/vlm-matrix-consolidated.md') != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ needs.context.outputs.ref }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "$REF" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "No open PR found for ref $REF — skipping PR comment."
+            exit 0
+          fi
+          {
+            echo "## VLM Matrix Benchmark"
+            echo ""
+            echo "_Run #${{ github.run_number }} — [full report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+            echo ""
+            cat consolidated/vlm-matrix-consolidated.md
+          } > /tmp/matrix-comment.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/matrix-comment.md
+
+      - name: Upload consolidated matrix report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vlm-matrix-consolidated-${{ github.run_number }}
+          path: consolidated/
+          retention-days: 30
+          if-no-files-found: warn
