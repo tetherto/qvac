@@ -4,9 +4,9 @@
 
 QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package is a thin, branded wrapper around [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that points at a running `qvac serve openai` HTTP server and re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
-> **Status — managed mode is unreleased (lands in the next `0.2.0`; package is currently `0.1.0`).** Two modes:
-> - **External** (default, the published `0.1.0` surface): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
-> - **Managed** (`mode: 'managed'`, unreleased): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
+> **Status — `0.2.0`.** Two modes:
+> - **External** (default): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
+> - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
 >
 > See the [QVAC-19194 epic](https://app.asana.com/1/45238840754660/task/1214968611313049).
 
@@ -313,7 +313,7 @@ type EndpointCategory =
   | 'image'
 ```
 
-The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package — `0.1.0` ships 729 OpenAI-surface model constants covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`onnx-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
+The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package, covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`onnx-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
 
 ```bash
 npm run update-models     # writes src/models/constants.ts + models/history/<sha>.txt
