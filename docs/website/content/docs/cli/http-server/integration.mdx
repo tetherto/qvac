@@ -52,6 +52,33 @@ qvac.textEmbeddingModel('embed-gemma') // text embeddings
 qvac.imageModel('flux-schnell')        // image generation
 ```
 
+## Managed mode (auto-spawn the server)
+
+<Callout type="info" title="Unreleased — lands in @qvac/ai-sdk-provider 0.2.0.">
+The behaviour below is on `main` but not yet in the published `0.1.0`. The default (external) mode shown above is unchanged.
+</Callout>
+
+The example above is **external mode**: you run `qvac serve openai` yourself and pass its `baseURL`. **Managed mode** instead lets the provider synthesize an ephemeral config from a model list and bring up `qvac serve` for you. In this mode `createQvac` is asynchronous and returns a `Promise<ManagedQvacProvider>`:
+
+```ts
+import { createQvac } from '@qvac/ai-sdk-provider'
+import { streamText } from 'ai'
+
+// Spawns (or reuses) a shared `qvac serve` on a free port, then resolves.
+await using qvac = await createQvac({
+  mode: 'managed',
+  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 32768, reasoning_budget: 0 } }]
+})
+
+const { textStream } = streamText({ model: qvac('QWEN3_8B_INST_Q4_K_M'), prompt: 'Hello!' })
+for await (const chunk of textStream) process.stdout.write(chunk)
+// Leaving the `await using` scope detaches this process from the serve.
+```
+
+The spawned serve is **shared** across processes (keyed by model set + per-model config + host + binary + pinned port) and owned by a detached supervisor that idle-reaps it once no consumer process remains for `serveIdleTimeout` (default 5 minutes). `provider.baseURL` / `provider.port` / `provider.pid` expose the live serve coordinates. Requires the optional `@qvac/cli` peer dependency.
+
+Managed mode needs the `@qvac/cli` peer dependency installed, and (because liveness is tracked by the process that called `createQvac`, not by HTTP traffic) a tool that connects directly to `baseURL` only keeps the serve warm while that resolving process stays alive — see the package [README](https://github.com/tetherto/qvac/tree/main/packages/ai-sdk-provider#using-with-coding-agents) for the wrapper pattern and the full option/lifecycle reference.
+
 ## Using with coding agents
 
 The HTTP server's primary use case is integrating local AI with coding agents (e.g., OpenCode, Cline, Aider, Continue, and Roo). Although the API is OpenAI-compatible, _the following behaviors require explicit configuration for this use case._
@@ -155,16 +182,37 @@ type EndpointCategory =
 
 ## API
 
-### `createQvac(options?: QvacOptions): QvacProvider`
+### `createQvac(options?: QvacOptions): QvacProvider | Promise<ManagedQvacProvider>`
 
 Factory returning a branded Vercel AI SDK provider. Wraps `createOpenAICompatible` with QVAC defaults.
 
+In the default **external** mode it is synchronous and returns a `QvacProvider`:
+
 ```ts
-interface QvacOptions {
+interface QvacExternalOptions {
+  mode?: 'external'                      // default
   baseURL?: string                       // default: see Default base URL
   apiKey?: string                        // default: 'qvac'
   headers?: Record<string, string>       // default: {}
   fetch?: typeof fetch                   // default: globalThis.fetch
+}
+```
+
+With `mode: 'managed'` it is asynchronous and returns a `Promise<ManagedQvacProvider>` that spawns/reuses a `qvac serve` for you (see [Managed mode](#managed-mode-auto-spawn-the-server)):
+
+```ts
+interface QvacManagedOptions {
+  mode: 'managed'
+  models: (string | { name: string; config?: Record<string, unknown>; preload?: boolean; default?: boolean })[]
+  servePort?: number                     // default: auto-allocate a free port
+  serveHost?: string                     // default: '127.0.0.1'
+  serveStartTimeout?: number             // ms; default: 180000
+  serveBinPath?: string                  // default: resolve @qvac/cli
+  reuse?: boolean                        // share a matching serve; default: true (false if servePort is pinned)
+  serveIdleTimeout?: number              // ms a shared serve lingers after its last consumer; default: 300000
+  apiKey?: string
+  headers?: Record<string, string>
+  fetch?: typeof fetch
 }
 ```
 
