@@ -51,7 +51,7 @@ qvac-ci pending-approvals \
 | `--team-leads-team` | GitHub team slug for Team Leads **(required)** | — |
 | `--min-approvals` | Minimum total approvals required | `2` |
 
-Exits with code `1` if the PR is not yet approved.
+Always exits with code `0` — this command is **informational only**. It surfaces pending review context as a PR comment; merge enforcement is delegated to GitHub-native branch protection (CODEOWNERS + ruleset approval requirements).
 
 #### Comment format
 
