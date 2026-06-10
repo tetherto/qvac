@@ -189,6 +189,11 @@ All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-refer
 | | `DELETE` | [`/v1/vector_stores/:id`](#delete-v1vector_storesid) |
 | | `POST` | [`/v1/vector_stores/:id/search`](#post-v1vector_storesidsearch) |
 | | `POST` | [`/v1/vector_stores/:id/files`](#post-v1vector_storesidfiles) |
+| [Videos](#videos) | `POST` | [`/v1/videos`](#post-v1videos) |
+| | `GET` | [`/v1/videos`](#get-v1videos) |
+| | `GET` | [`/v1/videos/:id`](#get-v1videosid) |
+| | `GET` | [`/v1/videos/:id/content`](#get-v1videosidcontent) |
+| | `DELETE` | [`/v1/videos/:id`](#delete-v1videosid) |
 
 <Callout type="info">
 All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the request body at **100 MB**.
@@ -986,6 +991,50 @@ Once a vector store has been ingested with a particular embedding model, subsequ
 #### Search results
 
 Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each chunk's `attributes` include the originating `file_id` and `filename` when they were attached through the file flow.
+
+### Videos
+
+OpenAI-compatible **async** text-to-video, backed by the SDK's `video({ mode: "txt2vid" })`. Creating a job returns immediately; the generation runs in the background. Poll for status, then download the bytes.
+
+Requires an alias whose endpoint category is `video` (SDK addon `sdcpp-video`). Register it in `serve.models` and add a `serve.openai.videos.models` aliasing block so OpenAI SDK clients can use a hard-coded model name. **Text-to-video only** — `input_reference`, `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
+
+#### `POST /v1/videos`
+
+Create a job. Returns the job resource with `status: "queued"`.
+
+#### `GET /v1/videos`
+
+List jobs (`limit` / `order` / `after`). **In-memory only** — a restart clears the list.
+
+#### `GET /v1/videos/:id`
+
+Poll job status (`queued` → `in_progress` → `completed` / `failed`).
+
+#### `GET /v1/videos/:id/content`
+
+Download the generated video. Defaults to `video/mp4` (lazy ffmpeg transcode + cache); `?format=avi` returns the native MJPG-AVI. A `?variant` other than `video` returns `501 unsupported_variant`.
+
+#### `DELETE /v1/videos/:id`
+
+Abort the running job and drop its assets.
+
+**End-to-end create + poll + download:**
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-video","prompt":"a timelapse of clouds","size":"512x512"}'
+
+curl http://localhost:11434/v1/videos/video_abc123
+
+curl http://localhost:11434/v1/videos/video_abc123/content --output out.mp4
+```
+
+#### Deviations from the OpenAI spec
+
+- `input_reference` is rejected with `400 unsupported_param` (no img2vid in the SDK).
+- `size` accepts any `WxH` (multiples of 8) in addition to OpenAI's 4-value enum.
+- `Content-Type: video/mp4` is produced by a server-side ffmpeg transcode; `?format=avi` returns the native container.
 
 ### Authentication
 

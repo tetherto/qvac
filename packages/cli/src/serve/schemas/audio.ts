@@ -6,7 +6,7 @@ export const transcriptionsBody = z.object({
   response_format: z.string().optional(),
   prompt: z.string().optional(),
   language: z.string().optional(),
-  temperature: z.string().optional()
+  temperature: z.coerce.number().optional()
 }).passthrough()
 
 export const translationsBody = z.object({
@@ -15,7 +15,7 @@ export const translationsBody = z.object({
   response_format: z.string().optional(),
   prompt: z.string().optional(),
   language: z.string().optional(),
-  temperature: z.string().optional()
+  temperature: z.coerce.number().optional()
 }).passthrough()
 
 export const audioSpeechBody = z.object({
