@@ -117,6 +117,11 @@
       "import": "./dist/schemas/plugin.js"
     },
     "./expo-plugin": "./dist/expo/plugins/index.js",
+    "./electron-forge": {
+      "require": "./electron-forge/index.cjs",
+      "import": "./electron-forge/index.cjs",
+      "default": "./electron-forge/index.cjs"
+    },
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-core": {
       "import": "./dist/server/worker-core.js"
@@ -159,6 +164,7 @@
   "files": [
     "bare-imports.json",
     "dist/**/*",
+    "electron-forge/**/*",
     "expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
@@ -238,6 +244,7 @@
     "zod": "^4.3.0"
   },
   "devDependencies": {
+    "@electron-forge/plugin-base": "^7.11.1",
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.4",
     "@lancedb/lancedb": "^0.21.3",
@@ -275,6 +282,7 @@
     "typescript-eslint": "^8.39.0"
   },
   "peerDependencies": {
+    "@electron-forge/plugin-base": "^7.11.1",
     "bare-link": ">=3.0.0",
     "expo-build-properties": ">=0.12.0",
     "expo-device": ">=8.0.0",
@@ -284,6 +292,9 @@
     "tsx": "*"
   },
   "peerDependenciesMeta": {
+    "@electron-forge/plugin-base": {
+      "optional": true
+    },
     "bare-link": {
       "optional": true
     },

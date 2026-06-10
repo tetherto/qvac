@@ -1,3 +1,7 @@
+import { randomBytes } from 'node:crypto'
+import { writeFile, unlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { extname, join } from 'node:path'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { transcribe, textToSpeech } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
@@ -129,13 +133,19 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     )
 
     const transcribeFn = app.qvac.transcribeOverride ?? transcribe
-    const op = transcribeFn({
-      modelId: sdkModelId,
-      audioChunk: file,
-      ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {})
-    })
-    req.bindCancel(op.requestId)
-    const text = await op
+    const tmpPath = await writeTempAudio(file, fileMeta)
+    let text: string
+    try {
+      const op = transcribeFn({
+        modelId: sdkModelId,
+        audioChunk: tmpPath,
+        ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {})
+      })
+      req.bindCancel(op.requestId)
+      text = await op
+    } finally {
+      await unlink(tmpPath).catch(() => undefined)
+    }
     app.qvac.logger.info(`  transcribe done chars=${text.length}`)
 
     if (responseFormat === 'text') {
@@ -180,13 +190,19 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     )
 
     const transcribeFn = app.qvac.transcribeOverride ?? transcribe
-    const op = transcribeFn({
-      modelId: sdkModelId,
-      audioChunk: file,
-      ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {})
-    })
-    req.bindCancel(op.requestId)
-    const text = await op
+    const tmpPath = await writeTempAudio(file, fileMeta)
+    let text: string
+    try {
+      const op = transcribeFn({
+        modelId: sdkModelId,
+        audioChunk: tmpPath,
+        ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {})
+      })
+      req.bindCancel(op.requestId)
+      text = await op
+    } finally {
+      await unlink(tmpPath).catch(() => undefined)
+    }
     app.qvac.logger.info(`  translate done chars=${text.length}`)
 
     if (responseFormat === 'text') {
@@ -427,6 +443,31 @@ function resolveVoice (raw: unknown, fallback: string | null): string | null {
     if (trimmed.length > 0) return trimmed
   }
   return fallback
+}
+
+const MIME_TO_EXT: Record<string, string> = {
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.mp4',
+  'audio/ogg': '.ogg',
+  'audio/wav': '.wav',
+  'audio/wave': '.wav',
+  'audio/webm': '.webm',
+  'audio/flac': '.flac',
+  'audio/aac': '.aac',
+  'audio/x-m4a': '.m4a'
+}
+
+// Returns the temp file path for an audio buffer. The caller is responsible
+// for deleting it (typically in a finally block).
+async function writeTempAudio (
+  audio: Buffer,
+  fileMeta: { filename: string; mimetype: string } | undefined
+): Promise<string> {
+  const originalName = fileMeta?.filename ?? ''
+  const ext = extname(originalName) || MIME_TO_EXT[fileMeta?.mimetype ?? ''] || '.bin'
+  const tmpPath = join(tmpdir(), `qvac-audio-${randomBytes(8).toString('hex')}${ext}`)
+  await writeFile(tmpPath, audio)
+  return tmpPath
 }
 
 export default plugin

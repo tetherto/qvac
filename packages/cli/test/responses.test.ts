@@ -116,6 +116,46 @@ describe('buildResponseObject', () => {
     assert.equal(u.total_tokens, 99)
   })
 
+  it('marks status incomplete with max_output_tokens reason when truncated by length', () => {
+    const o = buildResponseObject({
+      id: 'resp_len',
+      modelAlias: 'm',
+      text: 'truncated output',
+      toolCalls: [],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: 4,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: false,
+      stopReason: 'length'
+    })
+    assert.equal(o['status'], 'incomplete')
+    assert.deepEqual(o['incomplete_details'], { reason: 'max_output_tokens' })
+  })
+
+  it('tool calls take precedence over length truncation (requires_action, no incomplete_details)', () => {
+    const o = buildResponseObject({
+      id: 'resp_len_tc',
+      modelAlias: 'm',
+      text: '',
+      toolCalls: [{ id: 'c1', name: 'fn', arguments: {} }],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: false,
+      stopReason: 'length'
+    })
+    assert.equal(o['status'], 'requires_action')
+    assert.equal(o['incomplete_details'], undefined)
+  })
+
   it('ids use uuid suffix after prefix', () => {
     const o = buildResponseObject({
       id: 'resp_test',
@@ -176,10 +216,20 @@ function fakeCompletion (opts: {
   text: string
   toolCalls: ToolCall[]
   stats?: CompletionStats
+  stopReason?: string
 }): CompletionRun {
+  // Writers consume `result.events`; drive it the way the SDK does (content
+  // delta, tool calls, stats, terminal done) rather than the legacy promises.
+  async function * events (): AsyncGenerator<unknown> {
+    let seq = 0
+    if (opts.text) yield { type: 'contentDelta', seq: seq++, text: opts.text }
+    for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
+    if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
+    yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
+  }
   return {
     requestId: 'test',
-    events: (async function * empty (): AsyncGenerator<never> {})(),
+    events: events() as unknown as CompletionRun['events'],
     final: Promise.resolve(undefined) as unknown as CompletionRun['final'],
     text: Promise.resolve(opts.text),
     toolCalls: Promise.resolve(opts.toolCalls) as unknown as CompletionRun['toolCalls'],
