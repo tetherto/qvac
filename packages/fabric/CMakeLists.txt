@@ -13,14 +13,6 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
-# TEMPORARY: a local overlay port (vcpkg/ports/qvac-fabric) can pin the
-# llama.cpp/ggml runtime to a fork commit (e.g. to validate a fix before it
-# lands in qvac-registry-vcpkg). Guarded by EXISTS so it is inert once the
-# overlay directory is removed.
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/ports")
-  set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/ports;${VCPKG_OVERLAY_PORTS}")
-endif()
-
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" _pkg_json)
@@ -29,7 +21,7 @@ string(JSON _pkg_version GET "${_pkg_json}" "version")
 project(qvac-fabric VERSION ${_pkg_version} LANGUAGES C CXX)
 
 # Test-only AddressSanitizer build, enabled with QVAC_FABRIC_ASAN=1 (the same
-# flag the overlay triplet uses to instrument the qvac-fabric port). Here we
+# flag the overlay triplet uses to instrument the qvac-fabric dependency). Here we
 # instrument the module itself and, crucially, link the *shared* libc++ instead
 # of -static-libstdc++. A module-local static libc++ would provide its own
 # operator new/delete and the symbols.map `local: *` rule would bind them
