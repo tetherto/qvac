@@ -3,6 +3,7 @@ import type {
   CompletionEvent,
   CompletionFinal,
   CompletionStats,
+  StopReason,
   ToolCall,
 } from "@/schemas";
 import { normalizeAssistantCacheContent } from "@/utils/cache-normalize";
@@ -18,6 +19,7 @@ export type AggregatedEvents = {
   toolCalls: ToolCall[];
   rawFullText: string | undefined;
   error: CompletionError | undefined;
+  stopReason: StopReason | undefined;
   /**
    * True when the terminal `completionDone` carried
    * `stopReason: "cancelled"`. The client wrapper rejects the
@@ -34,6 +36,7 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
   let stats: CompletionStats | undefined;
   let rawFullText: string | undefined;
   let error: CompletionError | undefined;
+  let stopReason: StopReason | undefined;
   let cancelled = false;
   const toolCalls: ToolCall[] = [];
 
@@ -55,8 +58,13 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
       // unsafe to expose, regardless of why the loop exited.
       if (event.stopReason === "error" && "error" in event) {
         error = event.error;
-      } else if (event.stopReason === "cancelled") {
-        cancelled = true;
+      } else {
+        if (event.stopReason !== undefined) {
+          stopReason = event.stopReason;
+        }
+        if (event.stopReason === "cancelled") {
+          cancelled = true;
+        }
       }
     }
   }
@@ -68,6 +76,7 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
     toolCalls,
     rawFullText,
     error,
+    stopReason,
     cancelled,
   };
 }
@@ -87,6 +96,7 @@ export function buildFinalFromEvents(
     toolCalls,
     rawFullText,
     error,
+    stopReason,
     cancelled,
   } = aggregateEvents(events);
 
@@ -106,6 +116,7 @@ export function buildFinalFromEvents(
     ...(cacheableAssistantContent !== undefined && {
       cacheableAssistantContent,
     }),
+    ...(stopReason !== undefined && { stopReason }),
   };
 
   return { final, error, cancelled };

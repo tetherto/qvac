@@ -49,7 +49,7 @@ declare interface TTSGgmlFiles {
 declare interface TTSGgmlRuntimeConfig {
   /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available, on either Chatterbox or Supertonic.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts). */
+  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Supertonic still rejects `useGPU: true` at construction time (engine is CPU-only today). */
   useGPU?: boolean
   /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
   outputSampleRate?: number
@@ -68,7 +68,7 @@ declare interface TTSGgmlOptions {
   voiceDir?: string
   /** RNG seed for CFM initial noise + SineGen excitation (Chatterbox) / vector-estimator latent (Supertonic). */
   seed?: number
-  /** Move N layers to the GPU backend.  Chatterbox + Supertonic: pass 99 to move everything. */
+  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: must be 0 / unset (engine is CPU-only today). */
   nGpuLayers?: number
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number

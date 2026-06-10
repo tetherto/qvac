@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "qvac-fabric",
-      "version>=": "8828.0.2",
+      "version>=": "8828.1.0",
       "default-features": false
     },
     {

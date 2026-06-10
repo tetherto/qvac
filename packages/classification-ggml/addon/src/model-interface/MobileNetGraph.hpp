@@ -25,8 +25,8 @@ struct BlockConfig {
   int seReducedChannels;
 };
 
-inline constexpr int kNumBlocks = 11;
-inline constexpr std::array<BlockConfig, kNumBlocks> kBlocks = {{
+inline constexpr int NUM_BLOCKS = 11;
+inline constexpr std::array<BlockConfig, NUM_BLOCKS> BLOCKS = {{
     // idx  inC  expC  outC  k  s  hs     se     seR
     {1, 16, 16, 16, 3, 2, false, true, 8},
     {2, 16, 72, 24, 3, 2, false, false, 0},
@@ -41,12 +41,12 @@ inline constexpr std::array<BlockConfig, kNumBlocks> kBlocks = {{
     {11, 96, 576, 96, 5, 1, true, true, 144},
 }};
 
-inline constexpr int kStemOutChannels = 16;
-inline constexpr int kTailOutChannels = 576;
-inline constexpr int kClassifierHidden = 1024;
-inline constexpr int kNumClasses = 3;
-inline constexpr float kBatchNormEpsilon = 0.001F;
-inline constexpr int kInputHw = 224;
+inline constexpr int STEM_OUT_CHANNELS = 16;
+inline constexpr int TAIL_OUT_CHANNELS = 576;
+inline constexpr int CLASSIFIER_HIDDEN = 1024;
+inline constexpr int NUM_CLASSES = 3;
+inline constexpr float BATCH_NORM_EPSILON = 0.001F;
+inline constexpr int INPUT_HW = 224;
 
 /// ggml context + name→tensor map for every weight, plus the backing
 /// backend buffer. Lives for the entire model lifetime.
