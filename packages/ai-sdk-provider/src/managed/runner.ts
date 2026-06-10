@@ -8,7 +8,7 @@ import {
   ensureDirSync,
   liveConsumers,
   managedServesDir,
-  removeRecordSync,
+  removeRecord,
   writeRecordSync
 } from './registry.js'
 import { spawnServe, stopServe } from './serve-process.js'
@@ -51,7 +51,7 @@ export function decideReap (params: {
 }
 
 function cleanup (fleetKey: string, configPath: string): void {
-  removeRecordSync(fleetKey)
+  removeRecord(fleetKey)
   if (configPath.length > 0) {
     try {
       rmSync(dirname(configPath), { recursive: true, force: true })

@@ -28,7 +28,6 @@ import {
   managedServesDir,
   readRecord,
   removeConsumer,
-  removeConsumerSync,
   sweepServes
 } from './registry.js'
 import { runnerSpawnSpec } from './runner.js'
@@ -194,7 +193,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
       if (parentWatch !== undefined) clearInterval(parentWatch)
       void (async () => {
         if (providerClose !== null) await providerClose().catch(() => {})
-        else removeConsumerSync(fleetKey, consumerId)
+        else removeConsumer(fleetKey, consumerId)
         process.exit(0)
       })()
     }, PARENT_WATCH_INTERVAL_MS)
@@ -275,8 +274,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     // Resolution registered us as a consumer before it failed (timeout/spawn
     // error) — don't leave a stale-but-alive marker keeping a future serve on
     // this key warm longer than needed.
-    removeConsumerSync(fleetKey, consumerId)
-    await removeConsumer(fleetKey, consumerId).catch(() => {})
+    removeConsumer(fleetKey, consumerId)
     throw err
   }
   // Mutable live coordinates — updated on every respawn so the public getters
@@ -312,8 +310,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
       // hook), so it would linger until process exit and keep the serve warm.
       // Undo the re-registration and surface the original error.
       if (closed) {
-        removeConsumerSync(fleetKey, consumerId)
-        void removeConsumer(fleetKey, consumerId).catch(() => {})
+        removeConsumer(fleetKey, consumerId)
         throw err
       }
       live.baseURL = resolved.baseURL
@@ -336,7 +333,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   // abrupt termination (signal/crash) is handled by the runner's dead-pid
   // pruning, so we deliberately don't hijack SIGINT/SIGTERM here.
   function onExit (): void {
-    removeConsumerSync(fleetKey, consumerId)
+    removeConsumer(fleetKey, consumerId)
   }
   process.once('exit', onExit)
 
@@ -345,8 +342,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     closed = true
     if (parentWatch !== undefined) clearInterval(parentWatch)
     process.removeListener('exit', onExit)
-    removeConsumerSync(fleetKey, consumerId)
-    await removeConsumer(fleetKey, consumerId).catch(() => {})
+    removeConsumer(fleetKey, consumerId)
   }
   // Let the parent-death watch reuse the full close() path now that it exists.
   providerClose = close

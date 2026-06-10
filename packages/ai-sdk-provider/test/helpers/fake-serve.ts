@@ -105,7 +105,7 @@ export async function reapAllManaged (): Promise<void> {
         }
       }
     }
-    await removeRecord(rec.fleetKey).catch(() => {})
+    removeRecord(rec.fleetKey)
   }
   // Give the OS a beat to reap the killed processes before the test asserts.
   await new Promise((r) => setTimeout(r, 100))

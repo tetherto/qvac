@@ -115,13 +115,26 @@ export async function readAllRecords (): Promise<ServeRecord[]> {
 // runner will respawn this exact fleet key — the live markers must survive the
 // crash+respawn so the new runner inherits every still-alive consumer on its
 // first poll instead of reaping the serve out from under idle sessions.
-export async function removeRecord (
+//
+// Synchronous and best-effort: both call sites (the orphan sweep and the
+// runner's exit-path cleanup) want the same delete, and the runner's runs right
+// before `process.exit`, where async fs can't flush. One sync implementation
+// covers both — no async twin to keep in sync.
+export function removeRecord (
   fleetKey: string,
   opts?: { preserveConsumers?: boolean }
-): Promise<void> {
-  await rm(recordPath(fleetKey), { force: true }).catch(() => {})
+): void {
+  try {
+    unlinkSync(recordPath(fleetKey))
+  } catch {
+    // best-effort
+  }
   if (opts?.preserveConsumers !== true) {
-    await rm(consumersDir(fleetKey), { recursive: true, force: true }).catch(() => {})
+    try {
+      rmSync(consumersDir(fleetKey), { recursive: true, force: true })
+    } catch {
+      // best-effort
+    }
   }
 }
 
@@ -138,12 +151,11 @@ export async function addConsumer (fleetKey: string, consumerId: string | number
   await writeFile(join(dir, String(consumerId)), '', 'utf8')
 }
 
-export async function removeConsumer (fleetKey: string, consumerId: string | number): Promise<void> {
-  await rm(join(consumersDir(fleetKey), String(consumerId)), { force: true }).catch(() => {})
-}
-
-// Synchronous variant for `process.on('exit')`, where async work cannot run.
-export function removeConsumerSync (fleetKey: string, consumerId: string | number): void {
+// Synchronous and best-effort: removing a marker is a single `unlinkSync`, cheap
+// enough to use on every path — including `process.on('exit')` handlers, where
+// async work can't run. Keeping it sync everywhere avoids a redundant async twin
+// (the old code called both back-to-back, the second always a no-op).
+export function removeConsumer (fleetKey: string, consumerId: string | number): void {
   try {
     unlinkSync(join(consumersDir(fleetKey), String(consumerId)))
   } catch {
@@ -240,7 +252,7 @@ export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<str
     // Keep live consumer markers: a session re-resolving for this key will
     // respawn the serve, and the new runner must see the other still-alive
     // sessions instead of idle-reaping the fresh serve out from under them.
-    await removeRecord(rec.fleetKey, { preserveConsumers: true })
+    removeRecord(rec.fleetKey, { preserveConsumers: true })
     // The orphan's runner also owned the ephemeral config; clean it up.
     if (rec.configPath.length > 0) {
       await rm(dirname(rec.configPath), { recursive: true, force: true }).catch(() => {})
@@ -248,20 +260,6 @@ export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<str
     swept.push(rec.fleetKey)
   }
   return swept
-}
-
-// Synchronous best-effort record write, for the runner's exit path.
-export function removeRecordSync (fleetKey: string): void {
-  try {
-    unlinkSync(recordPath(fleetKey))
-  } catch {
-    // best-effort
-  }
-  try {
-    rmSync(consumersDir(fleetKey), { recursive: true, force: true })
-  } catch {
-    // best-effort
-  }
 }
 
 // Used by the runner to publish its record synchronously at exit-safe points is

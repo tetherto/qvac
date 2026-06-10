@@ -85,7 +85,7 @@ test('writeRecord / readRecord / removeRecord round-trip', async () => {
     assert.equal(rec?.port, 1234)
     assert.deepEqual(await readdir(managedServesDir()), ['abc.json'])
 
-    await removeRecord('abc')
+    removeRecord('abc')
     assert.equal(await readRecord('abc'), undefined)
   })
 })
@@ -100,7 +100,7 @@ test('consumer markers: add, prune-dead, remove', async () => {
     assert.deepEqual(live, [process.pid])
     assert.deepEqual(await readdir(consumersDir('fk')), [String(process.pid)])
 
-    await removeConsumer('fk', process.pid)
+    removeConsumer('fk', process.pid)
     assert.deepEqual(await liveConsumers('fk'), [])
   })
 })
@@ -136,7 +136,7 @@ test('per-instance consumer markers: one pid can hold several, removing one leav
     await addConsumer('fk', `${process.pid}.bbbb`)
     assert.deepEqual((await liveConsumers('fk')).sort(), [process.pid, process.pid])
 
-    await removeConsumer('fk', `${process.pid}.aaaa`)
+    removeConsumer('fk', `${process.pid}.aaaa`)
     assert.deepEqual(await liveConsumers('fk'), [process.pid])
     assert.deepEqual(await readdir(consumersDir('fk')), [`${process.pid}.bbbb`])
   })
@@ -155,7 +155,7 @@ test('sweepServes drops dead-serve records and leaves healthy owned serves untou
     assert.equal(await readRecord('deadserve'), undefined)
     assert.ok(await readRecord('healthy'))
 
-    await removeRecord('healthy')
+    removeRecord('healthy')
   })
 })
 
@@ -163,14 +163,14 @@ test('removeRecord preserves the consumers dir only when asked', async () => {
   await withFakeHome(async () => {
     await writeRecord(makeRecord({ fleetKey: 'keepc' }))
     await addConsumer('keepc', process.pid)
-    await removeRecord('keepc', { preserveConsumers: true })
+    removeRecord('keepc', { preserveConsumers: true })
     assert.equal(await readRecord('keepc'), undefined)
     assert.deepEqual(await readdir(consumersDir('keepc')), [String(process.pid)])
 
     // Default still clears the markers.
     await writeRecord(makeRecord({ fleetKey: 'dropc' }))
     await addConsumer('dropc', process.pid)
-    await removeRecord('dropc')
+    removeRecord('dropc')
     assert.deepEqual(await liveConsumers('dropc'), [])
   })
 })
@@ -221,7 +221,7 @@ test('sweepServes kills a confirmed runner-orphaned serve but keeps a live-but-u
       assert.ok(await readRecord('suspect'), 'record retained for a later sweep')
     } finally {
       if (stranger.pid !== undefined && isProcessAlive(stranger.pid)) stranger.kill('SIGKILL')
-      await removeRecord('suspect').catch(() => {})
+      removeRecord('suspect')
       setBehavior(undefined)
       await fake.cleanup()
     }
