@@ -25,7 +25,7 @@ This document describes the supported routes and how to configure `serve.models`
 | `GET` | `/v1/audio/models` | List READY text-to-speech models |
 | `POST` | `/v1/images/generations` | Diffusion txt2img (blocking + SSE) |
 | `POST` | `/v1/images/edits` | Diffusion img2img (multipart; blocking + SSE) |
-| `POST` | `/v1/videos` | Async video generation — txt2vid (JSON) or img2vid (multipart with `init_image`); returns a queued job |
+| `POST` | `/v1/videos` | Async video generation — txt2vid (JSON) or img2vid (JSON with `input_reference`); returns a queued job |
 | `GET` | `/v1/videos` | List video generation jobs |
 | `GET` | `/v1/videos/{id}` | Get video job status and progress |
 | `GET` | `/v1/videos/{id}/content` | Download rendered video (`video/mp4` or `video/avi`) |
@@ -588,12 +588,13 @@ in the background. Poll `GET /v1/videos/{id}` until `status` is `completed` (or
 Requires an alias whose **endpoint category** is `video` (SDK addon
 `sdcpp-video`). Register it in `serve.models`.
 
-Two generation modes:
+Two generation modes, both via JSON body:
 
-- **txt2vid** — JSON body with `prompt`. No image required.
-- **img2vid** — `multipart/form-data` with `init_image` (PNG or JPEG file
-  field). Mode is inferred from the presence of `init_image`; no explicit
-  `mode` field needed. `strength` (0–1) controls denoise intensity.
+- **txt2vid** — `prompt` only. No image required.
+- **img2vid** — add `input_reference: { image_url: { url } }` where `url` is
+  a base64 data URI (`data:image/jpeg;base64,...`) or an HTTP(S) URL the server
+  will fetch. Mode is inferred from the presence of `input_reference`; no
+  explicit `mode` field needed. `strength` (0–1) controls denoise intensity.
 
 `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
 
@@ -617,6 +618,7 @@ Two generation modes:
 
 | HTTP | `error.code` | When |
 |------|--------------|------|
+| 400 | `invalid_input_reference` | `input_reference.image_url.url` is not a data URI or HTTP URL, decode failed, or HTTP fetch returned non-200 |
 | 400 | `invalid_strength` | `strength` outside `[0, 1]` or non-numeric |
 | 400 | `invalid_model_type` | Alias is not a `video` model |
 | 404 | `video_not_found` | Unknown job id |

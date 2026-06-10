@@ -77,9 +77,16 @@ describe('videosCreateBody (Zod validation)', () => {
     })
   })
 
-  it('accepts init_image as a Buffer', () => {
-    const buf = Buffer.from('fake-png-bytes')
-    assert.equal(videosCreateBody.safeParse({ prompt: 'p', init_image: buf }).success, true)
+  it('accepts input_reference with image_url.url', () => {
+    const r = videosCreateBody.safeParse({
+      prompt: 'p',
+      input_reference: { image_url: { url: 'data:image/jpeg;base64,/9j/' } }
+    })
+    assert.equal(r.success, true)
+  })
+
+  it('rejects input_reference missing image_url', () => {
+    expectIssue({ prompt: 'p', input_reference: { not_image_url: 'x' } }, 'input_reference/image_url')
   })
 
   it('accepts strength as a number', () => {
@@ -88,12 +95,8 @@ describe('videosCreateBody (Zod validation)', () => {
     assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: 1 }).success, true)
   })
 
-  it('accepts strength as a numeric string (multipart coercion handled by extractor)', () => {
+  it('accepts strength as a number or numeric string', () => {
     assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: '0.85' }).success, true)
-  })
-
-  it('rejects input_reference — unsupported OpenAI img2vid field', () => {
-    expectIssue({ prompt: 'p', input_reference: { image_url: { url: 'x' } } }, 'input_reference')
   })
 })
 

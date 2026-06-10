@@ -742,6 +742,8 @@ TXT
 # reach requireModel and get 503 model_not_ready without GPU inference.
 
 VIDEO_ALIAS="test-video"
+# 1×1 transparent PNG, base64-encoded — minimal valid image for data URI tests.
+TINY_PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 @test "videos: JSON txt2vid reaches model check (returns 503 model_not_ready)" {
   local body
@@ -749,30 +751,25 @@ VIDEO_ALIAS="test-video"
   assert_error "${body}" "model_not_ready"
 }
 
-@test "videos: multipart without init_image reaches model check (returns 503 model_not_ready)" {
-  local body
-  body=$(curl -s "${BASE}/v1/videos" \
-    -F "model=${VIDEO_ALIAS}" \
-    -F "prompt=a bird flies")
-  assert_error "${body}" "model_not_ready"
-}
-
-@test "videos: multipart with init_image reaches model check (returns 503 model_not_ready)" {
-  local img_path="${BATS_TEST_TMPDIR}/fake.png"
-  printf '\x89PNG\r\n\x1a\n' > "${img_path}"
-  local body
-  body=$(curl -s "${BASE}/v1/videos" \
-    -F "model=${VIDEO_ALIAS}" \
-    -F "prompt=subject turns" \
-    -F "init_image=@${img_path};type=image/png")
-  assert_error "${body}" "model_not_ready"
-}
-
-@test "videos: input_reference field rejected with 400 unsupported_param" {
+@test "videos: JSON img2vid with data URI reaches model check (returns 503 model_not_ready)" {
   local body
   body=$(json_post "/v1/videos" \
-    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"p\",\"input_reference\":{\"image_url\":{\"url\":\"x\"}}}")
-  assert_error "${body}" "unsupported_param"
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":{\"url\":\"data:image/png;base64,${TINY_PNG_B64}\"}}}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: JSON img2vid with HTTP URL reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":{\"url\":\"http://127.0.0.1:${E2E_PORT}/v1/models\"}}}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: input_reference with wrong shape returns 400 invalid_request" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"p\",\"input_reference\":{\"not_image_url\":\"x\"}}")
+  assert_error "${body}" "invalid_request"
 }
 
 # ── Model lifecycle ───────────────────────────────────────────────────

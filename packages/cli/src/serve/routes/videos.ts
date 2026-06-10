@@ -4,7 +4,6 @@ import { video, cancel } from '@qvac/sdk'
 import type { VideoClientParams } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
 import { requireModel } from '../plugins/require-model.js'
-import { multipartToBody } from '../lib/multipart.js'
 import {
   videosCreateBody,
   videoResource,
@@ -27,13 +26,13 @@ Async video generation. Returns immediately with \`status: queued\`; poll
 \`GET /v1/videos/{id}\` and fetch bytes from \`GET /v1/videos/{id}/content\`
 once \`status: completed\`.
 
-**Text-to-video (txt2vid):** send a JSON body with \`prompt\` (and optional
-parameters). No image required.
+**Text-to-video (txt2vid):** send a JSON body with \`prompt\`. No image needed.
 
-**Image-to-video (img2vid):** send a \`multipart/form-data\` request with an
-\`init_image\` file field (PNG or JPEG). Mode is inferred from the presence
-of the image — no explicit \`mode\` field needed. Add \`strength\` (0–1) to
-control how much the output diverges from the first frame.
+**Image-to-video (img2vid):** include \`input_reference: { image_url: { url } }\`
+where \`url\` is a base64 data URI (\`data:image/...;base64,...\`) or an HTTP(S)
+URL. Mode is inferred from the presence of \`input_reference\` — no explicit
+\`mode\` field needed. Add \`strength\` (0–1) to control divergence from the
+first frame.
 
 **Job store is in-memory only.** IDs and rendered bytes are lost on restart.
 `.trim(),
@@ -95,6 +94,39 @@ function tearDownJob (ctx: QvacContext, job: VideoJob): void {
 }
 
 export { tearDownJob }
+
+async function resolveInputReferenceImage (url: string): Promise<Uint8Array> {
+  if (url.startsWith('data:')) {
+    const commaIdx = url.indexOf(',')
+    if (commaIdx === -1) {
+      throw new HttpError(400, 'invalid_input_reference',
+        'input_reference.image_url.url: data URI is missing the comma separator.')
+    }
+    const header = url.slice(5, commaIdx)
+    if (!header.endsWith(';base64')) {
+      throw new HttpError(400, 'invalid_input_reference',
+        'input_reference.image_url.url: only base64-encoded data URIs are supported (e.g. data:image/jpeg;base64,...).')
+    }
+    return Buffer.from(url.slice(commaIdx + 1), 'base64')
+  }
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    let res: Response
+    try {
+      res = await fetch(url)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new HttpError(400, 'invalid_input_reference',
+        `input_reference.image_url.url: failed to fetch image — ${message}`)
+    }
+    if (!res.ok) {
+      throw new HttpError(400, 'invalid_input_reference',
+        `input_reference.image_url.url: server returned HTTP ${res.status}.`)
+    }
+    return new Uint8Array(await res.arrayBuffer())
+  }
+  throw new HttpError(400, 'invalid_input_reference',
+    'input_reference.image_url.url must be a base64 data URI or an HTTP(S) URL.')
+}
 
 async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClientParams, alias: string): Promise<void> {
   const store = ctx.videoJobsStore
@@ -289,18 +321,18 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       tags: ['Videos'],
       summary: 'Create a video generation job',
       description: descriptions.create,
-      consumes: ['application/json', 'multipart/form-data'],
       response: { 200: videoResource }
     },
-    preValidation: multipartToBody,
     preHandler: requireModel('video')
   }, async (req, reply) => {
     const ctx = app.qvac
     const { alias, sdkModelId } = req.qvacModel!
-    const initImageFile = (req.multipartFiles ?? []).find((f) => f.fieldname === 'init_image')
+    const initImage = req.body.input_reference
+      ? await resolveInputReferenceImage(req.body.input_reference.image_url.url)
+      : undefined
     let params: VideoClientParams
     try {
-      params = extractVideoCreateParams(req.body, initImageFile?.buffer, sdkModelId)
+      params = extractVideoCreateParams(req.body, initImage, sdkModelId)
     } catch (err) {
       if (err instanceof InvalidVideoStrengthError) throw new HttpError(400, 'invalid_strength', err.message)
       throw err
