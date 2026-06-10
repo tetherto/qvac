@@ -113,13 +113,9 @@ export async function readAllRecords (): Promise<ServeRecord[]> {
 // Drops a serve record. By default it also clears the consumers dir (the serve
 // is gone, so its markers are meaningless). Pass `preserveConsumers` when a new
 // runner will respawn this exact fleet key — the live markers must survive the
-// crash+respawn so the new runner inherits every still-alive consumer on its
-// first poll instead of reaping the serve out from under idle sessions.
-//
-// Synchronous and best-effort: both call sites (the orphan sweep and the
-// runner's exit-path cleanup) want the same delete, and the runner's runs right
-// before `process.exit`, where async fs can't flush. One sync implementation
-// covers both — no async twin to keep in sync.
+// crash+respawn so the new runner inherits every still-alive consumer instead of
+// reaping the serve out from under idle sessions. Sync so it also works in the
+// runner's exit-path cleanup, where async fs can't flush.
 export function removeRecord (
   fleetKey: string,
   opts?: { preserveConsumers?: boolean }
@@ -151,10 +147,8 @@ export async function addConsumer (fleetKey: string, consumerId: string | number
   await writeFile(join(dir, String(consumerId)), '', 'utf8')
 }
 
-// Synchronous and best-effort: removing a marker is a single `unlinkSync`, cheap
-// enough to use on every path — including `process.on('exit')` handlers, where
-// async work can't run. Keeping it sync everywhere avoids a redundant async twin
-// (the old code called both back-to-back, the second always a no-op).
+// Sync (and best-effort) so it works in `process.on('exit')` handlers too, where
+// async can't run; removing a marker is a single `unlinkSync` anyway.
 export function removeConsumer (fleetKey: string, consumerId: string | number): void {
   try {
     unlinkSync(join(consumersDir(fleetKey), String(consumerId)))
@@ -262,9 +256,6 @@ export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<str
   return swept
 }
 
-// Used by the runner to publish its record synchronously at exit-safe points is
-// not needed; the runner uses the async writeRecord. Exposed sync mkdir helper
-// kept minimal for the runner's startup.
 export function ensureDirSync (): void {
   mkdirSync(managedServesDir(), { recursive: true })
 }
