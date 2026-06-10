@@ -164,43 +164,25 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
   }
 })
 
-test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  // QVAC-19255: Supertonic gained Vulkan/Metal/Adreno-OpenCL support
-  // in tts-cpp@2026-06-05 (QVAC-18605 rounds 1-13 + QVAC-19254 sched).
-  // This test mirrors the Chatterbox GPU smoke above: useGPU=true on
-  // a GPU-capable platform must resolve to a real GPU backend, not
-  // silently fall back to CPU.
-  const baseDir = getBaseDir()
-  const modelsDir = path.join(baseDir, 'models')
-
-  const download = await ensureSupertonicModel({ targetDir: modelsDir })
-  if (!download || !download.success) {
-    t.fail('Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
-    return
-  }
-
-  const supertonicPath = download.path ||
-    path.join(modelsDir, 'supertonic.gguf')
-
-  const model = await loadSupertonicTTS({
-    supertonicModelPath: supertonicPath,
-    language: 'en',
-    voice: 'F1',
-    useGPU: true
-  })
+test('Supertonic GPU smoke - useGPU=true is rejected at constructor (engine is CPU-only today)', { timeout: 60000 }, async (t) => {
+  const TTSGgml = require('@qvac/tts-ggml')
+  let threw = false
   try {
-    const result = await runSupertonicTTS(
-      model,
-      { text: 'GPU smoke check.' },
-      { minSamples: 5000 }
-    )
-    console.log(result.output)
-    t.ok(result.passed, 'Supertonic/GPU produced expected sample count')
-    t.ok(result.data.sampleCount > 0, 'Supertonic/GPU produced audio')
-    assertGpuBackend(t, 'Supertonic', result.data.stats)
-  } finally {
-    try { await model.unload() } catch (_e) {}
+    /* eslint no-new: 0 */
+    new TTSGgml({
+      engine: TTSGgml.ENGINE_SUPERTONIC,
+      files: { supertonicModel: '/dev/null' },
+      voice: 'F1',
+      config: { language: 'en', useGPU: true }
+    })
+  } catch (e) {
+    threw = true
+    t.ok(/CPU only today/.test(e.message),
+      'rejection message references the engine docstring')
+    t.ok(/Pass config:.*useGPU: false/.test(e.message),
+      'rejection message tells user how to fix')
   }
+  t.ok(threw, 'TTSGgml constructor should throw on Supertonic + useGPU:true')
 })
 
 // CPU smoke: useGPU:false must actually pin the engine to CPU on every

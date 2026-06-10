@@ -41,6 +41,21 @@ on:
         type: string
         required: false
         default: ""
+      pre_build_script:
+        description: "Optional node script (path under packages/llm-llamacpp) run before the mobile build to bootstrap a benchmark into the framework (stage files + regenerate the test list). Default '' = no-op."
+        type: string
+        required: false
+        default: ""
+      fixture_images_uri:
+        description: "Optional object-store URI (e.g. s3://…) the bootstrap syncs fixture assets from before staging. Caller supplies the URI; default '' = skip."
+        type: string
+        required: false
+        default: ""
+      platforms:
+        description: "Optional CSV-ish platform filter: 'Android' or 'iOS' to run a single platform. Default '' = both (unchanged for existing callers)."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -84,13 +99,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: Android
-            os: ubuntu-22.04
-            runner: qvac-ubuntu2204-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+        # Default (platforms='') runs both, preserving behaviour for every existing
+        # caller; a caller may pass platforms='Android' or 'iOS' to run a single one.
+        include: ${{ fromJSON(inputs.platforms == 'Android' && '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]' || inputs.platforms == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]') }}
 
     steps:
       - name: Validate Dispatch Inputs
@@ -129,6 +140,36 @@ jobs:
           addon-npm-name: '@qvac/llm-llamacpp'
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # ── Benchmark bootstrap (additive, opt-in via pre_build_script) ──────────
+      # When a caller passes pre_build_script (only the VLM benchmark does), run the
+      # bootstrap: optionally pull fixture assets from the caller-supplied object-store
+      # URI (fixture_images_uri — the literal URI lives in the caller, not here), copy
+      # the test/harness/config/fixture into test/integration + assets into testAssets,
+      # then regenerate the mobile test list so the new test is bundled. All in the
+      # ephemeral checkout — nothing committed. Other callers leave these inputs '' → no-op.
+      - name: Configure AWS credentials (benchmark assets)
+        if: inputs.fixture_images_uri != ''
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Bootstrap benchmark into the mobile framework (pre-build)
+        if: inputs.pre_build_script != ''
+        working-directory: addon/packages/llm-llamacpp
+        env:
+          FIXTURE_IMAGES_URI: ${{ inputs.fixture_images_uri }}
+        run: |
+          if [ -n "$FIXTURE_IMAGES_URI" ]; then
+            aws s3 sync "$FIXTURE_IMAGES_URI" benchmarks/vlm-benchmark/images/
+          fi
+          node "${{ inputs.pre_build_script }}"
+          # the test-list generator runs under `bare` and imports bare-fs/bare-path,
+          # so the addon's JS deps must be present (skip native build via --ignore-scripts).
+          npm install --no-audit --no-fund --ignore-scripts
+          npm install -g bare 2>/dev/null || true
+          npm run test:mobile:generate
+          echo "bootstrapped: staged files + regenerated mobile test list"
 
       - name: Build mobile app
         id: build
@@ -190,6 +231,13 @@ jobs:
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Collect and upload Device Farm logs
         if: always() && !cancelled()

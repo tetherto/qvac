@@ -6,6 +6,7 @@
 #include <llama/mtmd/mtmd.h>
 
 #include "../utils/UTF8TokenBuffer.hpp"
+#include "ContextSlider.hpp"
 #include "LlmContext.hpp"
 #include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -108,6 +109,9 @@ public:
    */
   void setNPast(llama_pos nPast) override;
 
+  [[nodiscard]] llama_pos getCacheTokens() const override;
+  void setCacheTokens(llama_pos cacheTokens) override;
+
   /**
    * The get first msg tokens method. It returns the first msg tokens.
    *
@@ -121,6 +125,9 @@ public:
    * @param first_msg_tokens - the first msg tokens.
    */
   void setFirstMsgTokens(llama_pos firstMsgTokens) override;
+
+  [[nodiscard]] llama_pos getFirstMsgCacheTokens() const override;
+  void setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) override;
 
   /**
    * The set n_discarded method. It sets the n_discarded.
@@ -213,9 +220,9 @@ private:
   std::vector<llama_token> antipromptTokens_;
 
   mtmd::bitmaps bitmaps_;
-  llama_pos nPast_ = 0;
+  ContextUsage current_;
+  ContextUsage protectedPrefix_;
   llama_pos nDiscarded_ = 0;
-  llama_pos firstMsgTokens_ = 0;
   int32_t nSlides_ = 0;
 
   // UTF-8 token buffer for handling incomplete emoji sequences

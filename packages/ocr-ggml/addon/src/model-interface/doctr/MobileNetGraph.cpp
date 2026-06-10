@@ -192,6 +192,9 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
+    // NOTE: ggml_conv_2d_direct (fused GGML_OP_CONV_2D) measured ~2x SLOWER
+    // than im2col + mul_mat on Metal — the matmul path rides the tuned GEMM
+    // kernel.
     struct ggml_tensor* conv =
         ggml_conv_2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
@@ -263,11 +266,76 @@ struct GraphBuilder {
         upsampleMode);
   }
 
+  /// Sub-pixel (pixel-shuffle) equivalent of a 2x2 / stride-2 / pad-0
+  /// transposed convolution.
+  ///
+  /// ggml's Metal `kernel_conv_transpose_2d` is pathologically slow — it
+  /// launches one tiny (KW*KH-thread) threadgroup per output element and does a
+  /// serial per-threadgroup reduction, so the two deconvs in the DocTR prob
+  /// head dominate detection latency on Metal (~16s of a ~17s run on an M4).
+  ///
+  /// A 2x2/stride-2/pad-0 deconv is mathematically identical to a 1x1
+  /// convolution that produces `OC*4` channels followed by a depth-to-space
+  /// (pixel shuffle) with block size 2. Concretely:
+  ///   out[2x+kw, 2y+kh, oc] = sum_ic W[kw, kh, oc, ic] * in[x, y, ic]
+  /// so each input pixel maps to a 2x2 output block, one weight matrix per
+  /// (kw, kh) sub-position. This runs as im2col + mul_mat on Metal (fast) and
+  /// is numerically equivalent.
+  ///
+  /// The deconv weight is ggml-shaped [KW=2, KH=2, OC, IC] (memory index
+  /// kw + 2*kh + 4*oc + 4*OC*ic). Reshaping/transposing it into a 1x1 conv
+  /// kernel [1, 1, IC, P] with P = 4*OC and channel index p = kw + 2*kh + 4*oc
+  /// makes conv output channel p at (x, y) equal the deconv contribution for
+  /// sub-position (kw, kh) of output pixel (2x+kw, 2y+kh), channel oc. The
+  /// pixel shuffle then scatters those P channels into the 2x2 blocks in that
+  /// exact (kw, kh, oc) order.
+  struct ggml_tensor* subPixelConvTranspose2x2(
+      struct ggml_tensor* input, struct ggml_tensor* deconvWeight) const {
+    if (deconvWeight->ne[0] != 2 || deconvWeight->ne[1] != 2) {
+      raise("subPixelConvTranspose2x2 requires a 2x2 kernel");
+    }
+    const int64_t oc = deconvWeight->ne[2];
+    const int64_t ic = deconvWeight->ne[3];
+    const int64_t p = 4 * oc;
+
+    // Reshape the deconv weight into a 1x1 conv kernel [1, 1, IC, P].
+    struct ggml_tensor* wr = ggml_reshape_2d(ctx, deconvWeight, p, ic);
+    struct ggml_tensor* wt = ggml_cont(ctx, ggml_transpose(ctx, wr)); // [IC,P]
+    struct ggml_tensor* w1 = ggml_reshape_4d(ctx, wt, 1, 1, ic, p);
+
+    // 1x1 conv: [W, H, IC] -> [W, H, P].
+    struct ggml_tensor* conv = ggml_conv_2d(ctx, w1, input, 1, 1, 0, 0, 1, 1);
+
+    const int64_t cw = conv->ne[0];
+    const int64_t ch = conv->ne[1];
+
+    // Depth-to-space (block 2), channel order p = kw + 2*kh + 4*oc.
+    //
+    // A naive width interleave produces a tensor with ne0 == 2 (the doubled
+    // width axis innermost), which makes the ggml_cont write 2-element rows —
+    // pathologically uncoalesced on Metal (~100ms for a 16M-element copy). To
+    // avoid that, the width pass is fused with a W<->H transpose so every cont
+    // keeps a large innermost dimension.
+    struct ggml_tensor* y =
+        ggml_reshape_4d(ctx, conv, cw, ch, 2, 2 * oc); // [W,H,kw,rest=kh+2oc]
+    // permute (2,0,1,3): -> [H, kw, W, rest] (large ne0 = H), then combine
+    // (kw,W) into the doubled width with xx = 2x + kw.
+    y = ggml_cont(ctx, ggml_permute(ctx, y, 2, 0, 1, 3)); // [H, 2, W, rest]
+    y = ggml_reshape_3d(ctx, y, ch, 2 * cw, 2 * oc);      // [H, 2W, rest]
+    y = ggml_cont(ctx, ggml_permute(ctx, y, 1, 0, 2, 3)); // [2W, H, rest]
+    // Height pass: split rest -> (kh=2, oc), interleave kh into y; ne0 stays
+    // 2W.
+    y = ggml_reshape_4d(ctx, y, 2 * cw, ch, 2, oc);
+    y = ggml_cont(ctx, ggml_permute(ctx, y, 0, 2, 1, 3)); // [2W, 2, H, OC]
+    y = ggml_reshape_3d(ctx, y, 2 * cw, 2 * ch, oc);      // [2W, 2H, OC]
+    return y;
+  }
+
   struct ggml_tensor* convTransposeBnAct(
       struct ggml_tensor* input, const std::string& convPrefix,
       const std::string& bnPrefix) const {
     struct ggml_tensor* conv =
-        ggml_conv_transpose_2d_p0(ctx, t(convPrefix + ".weight"), input, 2);
+        subPixelConvTranspose2x2(input, t(convPrefix + ".weight"));
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
     struct ggml_tensor* normed = applyFoldedBn(
         ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
@@ -285,8 +353,7 @@ struct GraphBuilder {
         /*useHardswish=*/false);
     output =
         convTransposeBnAct(output, "dbnet.prob_head.3", "dbnet.prob_head.4");
-    output = ggml_conv_transpose_2d_p0(
-        ctx, t("dbnet.prob_head.6.weight"), output, 2);
+    output = subPixelConvTranspose2x2(output, t("dbnet.prob_head.6.weight"));
     return ggml_add(ctx, output, t("dbnet.prob_head.6.bias_br"));
   }
 
@@ -298,6 +365,9 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
+    // NOTE: Metal does not implement GGML_OP_CONV_2D_DW, so the direct
+    // depthwise variant aborts there. Keep the im2col + mul_mat path
+    // (decomposes into Metal-supported ops).
     struct ggml_tensor* conv =
         ggml_conv_2d_dw(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
@@ -308,19 +378,14 @@ struct GraphBuilder {
 
   /// Squeeze-and-excite block: global avg pool → 1x1 conv (reduce) → ReLU →
   /// 1x1 conv (expand) → HardSigmoid → element-wise multiply with input.
-  struct ggml_tensor* seBlock(
-      struct ggml_tensor* x, const std::string& sePrefix, int spatialHw) const {
-    // Global avg pool: kernel = full spatial extent, stride = same.
+  struct ggml_tensor*
+  seBlock(struct ggml_tensor* x, const std::string& sePrefix) const {
+    // Global avg pool over the full (possibly non-square) spatial extent, read
+    // from the tensor dims so the graph works at any input size.
+    const int poolW = static_cast<int>(x->ne[0]);
+    const int poolH = static_cast<int>(x->ne[1]);
     struct ggml_tensor* pooled = ggml_pool_2d(
-        ctx,
-        x,
-        GGML_OP_POOL_AVG,
-        spatialHw,
-        spatialHw,
-        spatialHw,
-        spatialHw,
-        0,
-        0);
+        ctx, x, GGML_OP_POOL_AVG, poolW, poolH, poolW, poolH, 0, 0);
 
     struct ggml_tensor* fc1 = ggml_conv_2d(
         ctx, t(sePrefix + ".fc1.weight"), pooled, 1, 1, 0, 0, 1, 1);
@@ -338,13 +403,10 @@ struct GraphBuilder {
 
   /// One torchvision InvertedResidual block.
   struct ggml_tensor* invertedResidual(
-      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-      struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex,
-      int inputSpatialHw) const {
+      struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex) const {
     const std::string base = "features." + std::to_string(featuresIndex);
     const bool hasExpand = cfg.expansionSize != cfg.inputChannels;
 
-    int spatial = inputSpatialHw;
     struct ggml_tensor* y = x;
 
     int dwBlockIdx = 0;
@@ -386,15 +448,12 @@ struct GraphBuilder {
         cfg.stride,
         cfg.depthwiseKernel,
         cfg.useHardswish);
-    if (cfg.stride == 2) {
-      spatial = (spatial + 1) / 2;
-    }
 
     // Squeeze-and-excite.
     if (cfg.useSe) {
       const std::string sePrefix =
           base + ".block." + std::to_string(seBlockIdx);
-      y = seBlock(y, sePrefix, spatial);
+      y = seBlock(y, sePrefix);
     }
 
     // Project (no activation on the tail conv).
@@ -941,7 +1000,8 @@ WeightsBundle loadWeights(
 }
 
 ComputeGraph buildGraph(
-    const WeightsBundle& weights, std::vector<ggml_backend_t>& backends) {
+    const WeightsBundle& weights, std::vector<ggml_backend_t>& backends,
+    int inputW, int inputH) {
   ComputeGraph cg;
   const size_t ctxSize =
       (ggml_tensor_overhead() * kCtxTensorOverhead) + ggml_graph_overhead();
@@ -953,8 +1013,10 @@ ComputeGraph buildGraph(
   }
   struct ggml_context* ctx = cg.ctx.get();
 
-  // WHCN order: W, H, C, N.
-  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kInputHw, kInputHw, 3, 1);
+  // WHCN order: W, H, C, N. The canvas is the resized image padded to a
+  // multiple of 32 per axis (not necessarily square — see preprocessImage),
+  // so the backbone only convolves real content plus minimal padding.
+  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, inputW, inputH, 3, 1);
   ggml_set_name(cg.input, "input");
 
   GraphBuilder gb{.ctx = ctx, .w = weights.tensors};
@@ -969,15 +1031,11 @@ ComputeGraph buildGraph(
       /*activate=*/true,
       /*useHardswish=*/true);
 
-  int spatial = kInputHw / 2; // 112 after stem
-
-  // 15 inverted residual blocks.
+  // 15 inverted residual blocks. Spatial dims flow from the input tensor
+  // (SE pools and FPN upsamples read them directly), so no size tracking here.
   int graphFeatureIndex = 1;
   for (const BlockConfig& cfg : kBlocks) {
-    x = gb.invertedResidual(x, cfg, graphFeatureIndex, spatial);
-    if (cfg.stride == 2) {
-      spatial = (spatial + 1) / 2;
-    }
+    x = gb.invertedResidual(x, cfg, graphFeatureIndex);
     switch (graphFeatureIndex) {
     case kFpnFeatureTap1:
       cg.output_1 = x;
@@ -1035,7 +1093,9 @@ ComputeGraph buildGraph(
   struct ggml_tensor* fpnCat34 = ggml_concat(ctx, cg.output_3, cg.output_4, 2);
   cg.output_4 = ggml_concat(ctx, fpnCat12, fpnCat34, 2);
   cg.output_4 = gb.probHead(cg.output_4);
-  // cg.output_4 = ggml_sigmoid(ctx, cg.output_4);
+  // Apply sigmoid on-device: a single fast Metal kernel over the 1024x1024 map
+  // replaces a ~1M-element cv::exp on the CPU after readback.
+  cg.output_4 = ggml_sigmoid(ctx, cg.output_4);
 
   ggml_set_name(cg.output_1, "output_1");
   ggml_set_name(cg.output_2, "output_2");

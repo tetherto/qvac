@@ -77,14 +77,16 @@ ggml_tensor* conv_bias_relu(
 
 // ---------- BiLSTM helpers ---------------------------------------------------
 //
-// State per direction: a hidden vector h and cell vector c, both of shape
-// [hidden] (ggml ne [hidden]).  We materialize the `(W_ih @ x_t) + b_ih` part
-// for the entire sequence in a single matmul (call it `Wx`, ggml ne
-// [4*hidden, T]) before the time-step loop, and per-step we add the
-// `(W_hh @ h_{t-1}) + b_hh` contribution.
+// Batched over N sequences (QVAC-19796): state per direction is a hidden
+// matrix h and cell matrix c, both of shape [hidden, N] (ggml ne
+// [hidden, N]).  We materialize the `(W_ih @ x_t) + b_ih` part for the entire
+// sequence/batch in a single matmul (`Wx`, ggml ne [4*hidden, T, N]) before
+// the time-step loop, and per-step we add the `(W_hh @ h_{t-1}) + b_hh`
+// contribution.  N==1 reduces to the original single-sequence behaviour.
 
-// Apply one LSTM cell timestep.  All inputs are [hidden] (ggml ne [hidden]).
-// Returns a struct { h_new, c_new }.
+// Apply one LSTM cell timestep for a whole batch.  `gates_x_t` is [4*hidden,
+// N]; `h_prev`/`c_prev` are [hidden, N].  Returns a struct { h_new, c_new }
+// shaped [hidden, N].
 struct LstmStep {
   ggml_tensor* h;
   ggml_tensor* c;
@@ -93,23 +95,33 @@ struct LstmStep {
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 LstmStep lstm_cell_step(
     ggml_context* ctx,
-    ggml_tensor* gates_x_t, // [4*hidden]   = W_ih·x_t + b_ih
+    ggml_tensor* gates_x_t, // [4*hidden, N] = W_ih·x_t + b_ih
     ggml_tensor* W_hh,      // ggml ne [hidden, 4*hidden]
     ggml_tensor* b_hh,      // [4*hidden]
-    ggml_tensor* h_prev,    // [hidden]
-    ggml_tensor* c_prev) {  // [hidden]
+    ggml_tensor* h_prev,    // [hidden, N]
+    ggml_tensor* c_prev) {  // [hidden, N]
   // NOLINTEND(bugprone-easily-swappable-parameters)
   const int64_t hidden = h_prev->ne[0];
+  const int64_t batchN = h_prev->ne[1];
 
-  // gates = gates_x_t + W_hh·h_prev + b_hh
-  auto* gates = ggml_mul_mat(ctx, W_hh, h_prev); // ggml ne [4*hidden]
+  // gates[4h, N] = (W_hh·h_prev) + gates_x_t + b_hh.  b_hh ([4h]) broadcasts
+  // over the N columns; gates_x_t already carries b_ih.
+  auto* gates = ggml_mul_mat(ctx, W_hh, h_prev); // ggml ne [4*hidden, N]
   gates = ggml_add(ctx, gates, gates_x_t);
   gates = ggml_add(ctx, gates, b_hh);
 
-  // Split into 4 [hidden] gates.  PyTorch's gate ordering is i, f, g, o.
+  // Split into 4 [hidden, N] gates: rows [k*hidden, (k+1)*hidden) of every
+  // column.  A 2D view + cont gives the nonlinearities a contiguous input.
+  // PyTorch's gate ordering is i, f, g, o.
   auto slice = [&](int64_t k) {
-    return ggml_view_1d(
-        ctx, gates, hidden, static_cast<size_t>(k * hidden) * sizeof(float));
+    auto* v = ggml_view_2d(
+        ctx,
+        gates,
+        hidden,
+        batchN,
+        gates->nb[1],
+        static_cast<size_t>(k * hidden) * sizeof(float));
+    return ggml_cont(ctx, v); // [hidden, N]
   };
   auto* i_gate = ggml_sigmoid(ctx, slice(0));
   auto* f_gate = ggml_sigmoid(ctx, slice(1));
@@ -133,7 +145,7 @@ LstmStep lstm_cell_step(
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 ggml_tensor* lstm_one_direction(
     ggml_context* ctx,
-    ggml_tensor* seq,  // ggml ne [input, T]
+    ggml_tensor* seq,  // ggml ne [input, T, N]
     ggml_tensor* W_ih, // ggml ne [input, 4*hidden]
     ggml_tensor* W_hh, // ggml ne [hidden, 4*hidden]
     ggml_tensor* b_ih, // [4*hidden]
@@ -141,43 +153,50 @@ ggml_tensor* lstm_one_direction(
     bool reverse) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
   const int64_t T = seq->ne[1];
+  const int64_t batchN = seq->ne[2];
   const int64_t hidden4 = W_ih->ne[1];
   const int64_t hidden = hidden4 / 4;
 
-  // Full-sequence input projection: Wx[4h, T] = W_ih · seq[input, T] + b_ih
-  // We add b_ih once via repeat-broadcast across T.
-  auto* Wx = ggml_mul_mat(ctx, W_ih, seq); // ne [4h, T]
-  {
-    auto* b_ih_2d = ggml_reshape_2d(ctx, b_ih, hidden4, 1); // ne [4h, 1]
-    Wx = ggml_add(ctx, Wx, ggml_repeat(ctx, b_ih_2d, Wx));
-  }
+  // Full-sequence/full-batch input projection:
+  //   Wx[4h, T, N] = (W_ih · seq[input, T, N]) + b_ih
+  // b_ih ([4h]) broadcasts across both the T and N axes.
+  auto* Wx = ggml_mul_mat(ctx, W_ih, seq); // ne [4h, T, N]
+  Wx = ggml_add(ctx, Wx, b_ih);
 
-  // Initial states: zeros.  Allocate a ones-like and zero-out via mul(0).
-  // Cleaner: declare a fresh tensor in ctx and let the gallocr zero it
-  // implicitly... but ggml does NOT auto-zero scratch.  We use a small
-  // trick: Wx[:, 0] - Wx[:, 0] gives a zero vector of the right shape.
-  auto* zero1d = ggml_view_1d(ctx, Wx, hidden, /*offset=*/0);
-  zero1d = ggml_sub(ctx, zero1d, zero1d); // [hidden] zeros
+  // Initial states: zeros of shape [hidden, N].  Derive from a 2D slice of Wx
+  // (rows [0, hidden) of timestep 0, every N column) scaled by 0, so no
+  // scratch tensor is needed in the no_alloc graph context.
+  auto* zeroHN = ggml_scale(
+      ctx,
+      ggml_cont(
+          ctx, ggml_view_2d(ctx, Wx, hidden, batchN, Wx->nb[2], /*offset=*/0)),
+      0.0F); // [hidden, N] zeros
 
-  ggml_tensor* h_prev = zero1d;
-  ggml_tensor* c_prev = zero1d;
+  ggml_tensor* h_prev = zeroHN;
+  ggml_tensor* c_prev = zeroHN;
 
-  // h_t outputs collected via concat.
+  // h_t outputs collected via concat into [hidden, T, N].
   ggml_tensor* out = nullptr;
 
   auto step_iter = [&](int64_t t) {
-    // gates_x_t = view of Wx column t
-    auto* gates_x_t =
-        ggml_view_1d(ctx, Wx, hidden4, static_cast<size_t>(t * Wx->nb[1]));
-    // ggml_view_1d's offset is in bytes; nb[1] is the stride between
-    // columns (bytes per row * rows == bytes per column in 2D).
+    // gates_x_t[4h, N] = column t of Wx across all N, made contiguous.
+    // Wx is [4h, T, N]: nb[1] strides over T, nb[2] strides over N.
+    auto* gates_x_t = ggml_cont(
+        ctx,
+        ggml_view_2d(
+            ctx,
+            Wx,
+            hidden4,
+            batchN,
+            Wx->nb[2],
+            static_cast<size_t>(t) * Wx->nb[1]));
 
     auto step = lstm_cell_step(ctx, gates_x_t, W_hh, b_hh, h_prev, c_prev);
     h_prev = step.h;
     c_prev = step.c;
 
-    // Reshape h_prev to [hidden, 1] so we can concat along T.
-    auto* h_col = ggml_reshape_2d(ctx, h_prev, hidden, 1);
+    // Reshape h_prev [hidden, N] to [hidden, 1, N] so we can concat along T.
+    auto* h_col = ggml_reshape_3d(ctx, h_prev, hidden, 1, batchN);
 
     if (out == nullptr) {
       out = ggml_cont(ctx, h_col);
@@ -198,7 +217,7 @@ ggml_tensor* lstm_one_direction(
       step_iter(t);
     }
   }
-  return out; // ggml ne [hidden, T]
+  return out; // ggml ne [hidden, T, N]
 }
 
 // One BidirectionalLSTM block (templated so it works for either weights
@@ -309,20 +328,23 @@ ggml_tensor* build_crnn_gen2(
         /*s1=*/static_cast<int>(Hp),
         /*p0=*/0.0F,
         /*p1=*/0.0F);
-    // h is now ne [W', 1, 256, 1].  Squeeze the size-1 dim by reshaping
-    // to [256, W'] (== ggml ne for PyTorch [W', 256], i.e. [T, C]).
-    const int64_t Wp = h->ne[0];
-    const int64_t C = h->ne[2];
-    // Permute (W', 1, C, 1) -> (C, W', 1, 1) so the per-timestep features
-    // are on ne[0].  ggml_permute uses `result.ne[axis[i]] = a.ne[i]`.
+    // h is now ne [W', 1, 256, N].  Reshape to the sequence layout
+    // [256, W', N] (== ggml ne for PyTorch [N, W', 256], i.e. [N, T, C]),
+    // preserving the batch axis N so the LSTM runs over all sequences at once
+    // (QVAC-19796). N==1 yields the original [256, W'] sequence.
+    const int64_t Wp = h->ne[0]; // W' (== T)
+    const int64_t C = h->ne[2];  // 256
+    const int64_t Nb = h->ne[3]; // batch N
+    // Permute (W', 1, C, N) -> (C, W', N, 1) so the per-timestep features are
+    // on ne[0].  ggml_permute uses `result.ne[axis[i]] = a.ne[i]`.
     h = ggml_permute(
         ctx,
         h,
-        /*axis0=*/1,                 // W' -> ne[1]
-        /*axis1=*/3,                 // size-1 -> ne[3]
-        /*axis2=*/0,                 // C -> ne[0]
-        /*axis3=*/2);                // size-1 -> ne[2]
-    h = ggml_cont_2d(ctx, h, C, Wp); // -> ne [C=256, T=W']
+        /*axis0=*/1,                     // W' -> ne[1]
+        /*axis1=*/3,                     // size-1 -> ne[3]
+        /*axis2=*/0,                     // C -> ne[0]
+        /*axis3=*/2);                    // N -> ne[2]
+    h = ggml_cont_3d(ctx, h, C, Wp, Nb); // -> ne [C=256, T=W', N]
   }
   tap(taps, crnn_taps::kSequence, h);
 

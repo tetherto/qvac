@@ -1,0 +1,65 @@
+name: Mobile Test — Cancel Device Farm Runs
+description: |
+  Cancellation handler for the mobile integration test pipeline.
+
+  Runs only when the GitHub Actions job is cancelled (e.g. by concurrency
+  cancel-in-progress). Calls `aws devicefarm stop-run` on every in-flight
+  Device Farm run so AWS stops billing metered device minutes immediately
+  instead of letting the run continue until jobTimeoutMinutes expires.
+
+inputs:
+  run-arns:
+    description: "JSON array of Device Farm run ARNs to cancel"
+    required: true
+  aws-role-to-assume:
+    description: "AWS IAM role ARN for OIDC"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: us-west-2
+        role-duration-seconds: 900
+
+    - name: Stop Device Farm runs
+      shell: bash
+      env:
+        RUN_ARNS_JSON: ${{ inputs.run-arns }}
+      run: |
+        if [ -z "$RUN_ARNS_JSON" ] || [ "$RUN_ARNS_JSON" = "[]" ]; then
+          echo "No run ARNs to cancel"
+          exit 0
+        fi
+
+        echo "🛑 GitHub Actions job was cancelled — stopping Device Farm runs"
+
+        STOPPED=0
+        SKIPPED=0
+        FAILED=0
+
+        for ARN in $(echo "$RUN_ARNS_JSON" | jq -r '.[]'); do
+          STATUS=$(aws devicefarm get-run --arn "$ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
+          echo "  Run $ARN: status=$STATUS"
+
+          if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ] || \
+             [ "$STATUS" = "PENDING_CONCURRENCY" ] || [ "$STATUS" = "PENDING_DEVICE" ] || \
+             [ "$STATUS" = "SCHEDULING" ] || [ "$STATUS" = "PREPARING" ]; then
+            if aws devicefarm stop-run --arn "$ARN" 2>/dev/null; then
+              echo "    ✅ stop-run issued"
+              STOPPED=$((STOPPED + 1))
+            else
+              echo "    ⚠️  stop-run failed (run may have already completed)"
+              FAILED=$((FAILED + 1))
+            fi
+          else
+            echo "    ⏭️  already $STATUS, skipping"
+            SKIPPED=$((SKIPPED + 1))
+          fi
+        done
+
+        echo ""
+        echo "Summary: $STOPPED stopped, $SKIPPED already finished, $FAILED failed"
