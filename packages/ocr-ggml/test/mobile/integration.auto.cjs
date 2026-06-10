@@ -31,11 +31,6 @@ async function runCanvasSizeTest (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/canvas-size.test.js', options)
 }
 
-async function runCraftKernelPrecisionTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCraftKernelPrecisionTest')) return __FILTERED
-  return runIntegrationModule('../integration/craft-kernel-precision.test.js', options)
-}
-
 async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrBasicTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-basic.test.js', options)
@@ -89,6 +84,11 @@ async function runFullOcrSuiteTest (options = {}) { // eslint-disable-line no-un
 async function runImageFormatsTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runImageFormatsTest')) return __FILTERED
   return runIntegrationModule('../integration/image-formats.test.js', options)
+}
+
+async function runKernelPrecisionTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKernelPrecisionTest')) return __FILTERED
+  return runIntegrationModule('../integration/kernel-precision.test.js', options)
 }
 
 async function runLargeImagesTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
