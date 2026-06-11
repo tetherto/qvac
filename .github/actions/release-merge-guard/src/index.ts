@@ -46,18 +46,22 @@ try {
     )
   }
 
-  // ── Changelog must be modified in this push (skipped on initial branch creation)
+  // ── Changelog must be modified when this push changes the release version.
   if (isInitialPush) {
     core.info('Initial branch push detected (no base SHA) — skipping changelog check')
   } else {
+    const basePkg = JSON.parse(execSync(`git show ${baseSha}:${pkgJsonPath}`).toString())
     const changedFiles = execSync(
       `git diff --name-only ${baseSha} ${headSha}`
-    ).toString()
+    ).toString().split('\n').filter(Boolean)
+    const versionChanged = basePkg.version !== headPkg.version
 
-    if (!changedFiles.includes(changelogPath)) {
+    if (versionChanged && !changedFiles.includes(changelogPath)) {
       errors.push(
         `Missing CHANGELOG update — file not modified: ${changelogPath}`
       )
+    } else if (!versionChanged) {
+      core.info('Package version unchanged in this push — skipping changelog check')
     }
   }
 

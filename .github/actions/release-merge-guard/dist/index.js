@@ -25713,14 +25713,19 @@ try {
     if (branchVersion && headPkg.version !== branchVersion) {
         errors.push(`Version mismatch — branch version: ${branchVersion}, package.json: ${headPkg.version}`);
     }
-    // ── Changelog must be modified in this push (skipped on initial branch creation)
+    // ── Changelog must be modified when this push changes the release version.
     if (isInitialPush) {
         core.info('Initial branch push detected (no base SHA) — skipping changelog check');
     }
     else {
-        const changedFiles = (0, child_process_1.execSync)(`git diff --name-only ${baseSha} ${headSha}`).toString();
-        if (!changedFiles.includes(changelogPath)) {
+        const basePkg = JSON.parse((0, child_process_1.execSync)(`git show ${baseSha}:${pkgJsonPath}`).toString());
+        const changedFiles = (0, child_process_1.execSync)(`git diff --name-only ${baseSha} ${headSha}`).toString().split('\n').filter(Boolean);
+        const versionChanged = basePkg.version !== headPkg.version;
+        if (versionChanged && !changedFiles.includes(changelogPath)) {
             errors.push(`Missing CHANGELOG update — file not modified: ${changelogPath}`);
+        }
+        else if (!versionChanged) {
+            core.info('Package version unchanged in this push — skipping changelog check');
         }
     }
     // ── Report results
