@@ -6,9 +6,27 @@ schemaType: HowTo
 
 ## Overview
 
-QVAC configuration is loaded once during initialization from `qvac.config.*` file — `qvac.config.json`, `qvac.config.js`, or `qvac.config.ts` — and remains immutable for the lifetime of the SDK instance. To provide configuration, either set the `QVAC_CONFIG_PATH` environment variable or place a `qvac.config.*` file at the root of your project.
+QVAC configuration is loaded once during initialization from a `qvac.config.*` file and remains immutable for the lifetime of the SDK instance. To provide configuration, either set the `QVAC_CONFIG_PATH` environment variable or place a `qvac.config.*` file at the root of your project.
+
+<Callout type="info">
 
 When using only the SDK, providing a configuration is **not required**. If you do not provide one, the SDK uses the default settings. *When using the HTTP server, however, providing a configuration **is required**.*
+
+</Callout>
+
+## File formats
+
+The `qvac.config.*` format you can use depends on the JS environment where QVAC will run in:
+
+| Format | Node.js | Bare | Expo |
+| --- | --- | --- | --- |
+| `qvac.config.json` | ✅ | ✅ | ✅ |
+| `qvac.config.js` | ✅ | ✅ | ❌ |
+| `qvac.config.ts` | ✅ | ❌ | ❌ |
+
+<Callout type="info">
+`qvac.config.ts` requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
+</Callout>
 
 ## Examples
 
@@ -52,6 +70,9 @@ Below are examples of `qvac.config.*` files. Values marked with `<placeholders>`
 </Tab>
 
 <Tab value="js" label="JavaScript">
+<Callout type="warn">
+Supported on Node.js and Bare. Not supported in Expo — use JSON instead.
+</Callout>
 <WrapCode>
 ```js title="qvac.config.js" lineNumbers
 module.exports = {
@@ -88,6 +109,9 @@ module.exports = {
 </Tab>
 
 <Tab value="ts" label="TypeScript">
+<Callout type="info">
+Supported on Node.js only, and requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
+</Callout>
 <WrapCode>
 
 ```ts title="qvac.config.ts" lineNumbers
