@@ -374,6 +374,7 @@ export const executor = createExecutor({
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
+    new SkipExecutor(/^bci-/, "BCI addon tests are desktop-only until mobile support is enabled"),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -384,6 +385,12 @@ export const executor = createExecutor({
       "lifecycle-rapid-toggle",
       "lifecycle-suspend-during-inference",
     ], "suspend() hangs the runner on mobile"),
+    ...(Platform.OS === "android" ? [
+      skipTests([
+        "parakeet-stream-eou",
+        "parakeet-stream-iterator-throw",
+      ], "Parakeet streaming EOU/iterator recovery is flaky on Android"),
+    ] : []),
     ...(Platform.OS === "ios" ? [
       // QVAC-19557: Chatterbox TTS variants OOM on iOS Device Farm under the current memory budget.
       new SkipExecutor(/^tts-chatterbox-/, "Chatterbox TTS is flaky on iOS under Device Farm memory pressure (OOM)"),

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2]
+
+This release fixes Android Parakeet stability on devices where Vulkan or OpenCL backend discovery can abort the process before CPU inference starts. Android Parakeet already forces CPU inference while GPU support is disabled, so the prebuild packaging now matches that runtime policy by staging only CPU ggml backend modules.
+
+## Bug Fixes
+
+### Android CPU Backend Packaging
+
+Android prebuilds now stage only the CPU ggml backend `.so` files for Parakeet while `useGPU` is forced off on Android. This prevents Vulkan and OpenCL modules from being discovered during CPU model loading, avoiding native aborts on affected Mali and Adreno devices while keeping desktop and non-Android backend packaging unchanged.
+
+## Pull Requests
+
+No linked pull request numbers were found in the package-scoped commit messages for this release.
+
 ## [0.7.1] - 2026-06-02
 
 ### Changed
