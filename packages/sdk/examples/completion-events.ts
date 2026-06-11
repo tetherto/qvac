@@ -57,6 +57,9 @@ try {
   if (final.toolCalls.length > 0) {
     console.log(`Tool calls: ${final.toolCalls.map((c) => c.name).join(", ")}`);
   }
+  if (final.stopReason) {
+    console.log(`Stop reason: ${final.stopReason}`);
+  }
   console.log(`Raw output length: ${final.raw.fullText.length} chars`);
 
   await unloadModel({ modelId, clearStorage: false });

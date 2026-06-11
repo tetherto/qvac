@@ -74,7 +74,7 @@ test('Supertonic: ttsParams shape passes voice/steps/speed/seed/threads/useGPU',
   t.is(params.speed, 1.25)
   t.is(params.seed, 7)
   t.is(params.threads, 2)
-  t.is(params.nGpuLayers, 0, 'nGpuLayers is passed through verbatim to ttsParams')
+  t.is(params.nGpuLayers, 0, 'nGpuLayers=0 is the only allowed GPU value for supertonic today')
   t.is(params.useGPU, false, 'useGPU follows config.useGPU')
   t.absent(params.t3ModelPath, 'no t3 path leaked into supertonic params')
   t.absent(params.s3genModelPath, 'no s3gen path leaked into supertonic params')

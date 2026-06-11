@@ -37,6 +37,14 @@ export const transcribeStatsSchema = z.object({
   encoderTime: z.number().optional(),
   decoderTime: z.number().optional(),
   melSpecTime: z.number().optional(),
+  // Backend selection captured once at model load (whisper engine).
+  // `0` CPU / `1` GPU; `backendId` codes the GPU family (see the addon's
+  // BackendId enum). gpu memory fields are `-1` when the backend exposes
+  // no accounting, and absent entirely for the parakeet engine.
+  backendDevice: z.number().optional(),
+  backendId: z.number().optional(),
+  gpuMemTotalMb: z.number().optional(),
+  gpuMemFreeMb: z.number().optional(),
 });
 
 export const transcribeSegmentSchema = z.object({

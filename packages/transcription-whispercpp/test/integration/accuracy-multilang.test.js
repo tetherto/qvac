@@ -66,6 +66,16 @@ const LANGUAGE_TESTS = {
     code: 'ja',
     sampleFile: 'sample_ja.raw',
     expected: 'インターネットで 敵対的環境コース について検索すると おそらく現地企業の住所が出てくるでしょう'
+  },
+  auto: {
+    name: 'Auto-detect',
+    code: 'auto',
+    sampleFile: 'sample.raw',
+    // Reuses the English sample. With language "auto" whisper must auto-detect
+    // the language AND transcribe. A regression where detect_language is forced
+    // true would only detect the language and return zero segments, so this
+    // case guards against empty output as well as accuracy.
+    expected: 'Alice was beginning to get very tired of sitting by her sister on the bank and of having nothing to do. Once or twice she had peeped into the book her sister was reading but it had no pictures or conversations in it. And what is the use of a book thought Alice without pictures or conversations?'
   }
 }
 
@@ -185,4 +195,12 @@ test('Accuracy test - Russian', { timeout: 300000 }, async (t) => {
 
 test('Accuracy test - Japanese', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.ja)
+})
+
+test('Accuracy test - Auto language detection', { timeout: 300000 }, async (t) => {
+  const result = await runLanguageAccuracyTest(t, LANGUAGE_TESTS.auto)
+  if (!result.skipped) {
+    t.ok(result.actualText && result.actualText.length > 0,
+      'Auto-detect should produce a non-empty transcription, not just detect the language')
+  }
 })
