@@ -440,3 +440,6 @@ qvac bundle sdk
 ## License
 
 This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENSE) file for details.
+
+<!-- CI validation marker (do not merge): triggers the SDK Pod Checks CLI matrix to exercise the workspace + published SDK legs. -->
+
