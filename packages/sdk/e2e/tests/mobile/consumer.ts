@@ -384,6 +384,12 @@ export const executor = createExecutor({
       "lifecycle-rapid-toggle",
       "lifecycle-suspend-during-inference",
     ], "suspend() hangs the runner on mobile"),
+    ...(Platform.OS === "android" ? [
+      skipTests([
+        "parakeet-stream-eou",
+        "parakeet-stream-iterator-throw",
+      ], "Parakeet streaming EOU/iterator recovery is flaky on Android"),
+    ] : []),
     ...(Platform.OS === "ios" ? [
       // QVAC-19557: Chatterbox TTS variants OOM on iOS Device Farm under the current memory budget.
       new SkipExecutor(/^tts-chatterbox-/, "Chatterbox TTS is flaky on iOS under Device Farm memory pressure (OOM)"),

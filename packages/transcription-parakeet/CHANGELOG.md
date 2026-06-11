@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The desktop RTF benchmark now actually runs. `integration-test-transcription-parakeet.yml` gained the `run_rtf_benchmarks` input + an RTF benchmark step (per-`(modelType, useGPU)` matrix via `scripts/run-rtf-benchmark-matrix.js`, Vulkan on GPU runners) that `benchmark-performance-transcription-parakeet.yml` already expected but which did not exist, so the orchestrator previously passed an undefined input and produced no results. The matrix runner is now resilient (a single model-type/backend failure no longer sinks the whole leg), and the orchestrator's summarize no longer `merge-multiple`-clobbers same-platform runners. CI-only; not shipped with the npm package.
 
+## [0.7.2]
+
+This release fixes Android Parakeet stability on devices where Vulkan or OpenCL backend discovery can abort the process before CPU inference starts. Android Parakeet already forces CPU inference while GPU support is disabled, so the prebuild packaging now matches that runtime policy by staging only CPU ggml backend modules.
+
+## Bug Fixes
+
+### Android CPU Backend Packaging
+
+Android prebuilds now stage only the CPU ggml backend `.so` files for Parakeet while `useGPU` is forced off on Android. This prevents Vulkan and OpenCL modules from being discovered during CPU model loading, avoiding native aborts on affected Mali and Adreno devices while keeping desktop and non-Android backend packaging unchanged.
+
+## Pull Requests
+
+No linked pull request numbers were found in the package-scoped commit messages for this release.
+
+## [0.7.1] - 2026-06-02
+
 ### Changed
 
 - Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.1`.
