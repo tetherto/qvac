@@ -10,7 +10,7 @@ Brain–computer interface (BCI) transcription uses a **GGML** engine ([`@qvac/b
 
 BCI consumes a **neural-signal buffer**. Provide the signal as `neuralData`, either as a file path (string, to a `.bin` file) or an in-memory `Uint8Array` buffer.
 
-`bciTranscribe()` returns the full transcription as a single `string`. If you need partial results as they become available, use `bciTranscribeStream()` to open a duplex session that decodes a sliding window over the signal as data arrives.
+`bciTranscribe()` returns the complete transcript as a `string`, or — with `metadata: true` (as in the batch example below) — an array of segments, each with `text` and `startMs`/`endMs` timing. If you need partial results as they become available, use `bciTranscribeStream()` to open a duplex session that decodes a sliding window over the signal and yields transcript text as data arrives.
 
 ## Functions
 
@@ -26,7 +26,7 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 </Callout>
 
 <Callout type="info">
-**On the day index:** sessions recorded on different days use different day-specific projections. The day index used at inference time must match the recording session of the input signal — otherwise the decoded text will be misleading.
+**On the day index:** sessions recorded on different days use different day-specific projections. Set `modelConfig.bciConfig.day_idx` in `loadModel()` to match the recording session of the input signal — otherwise the decoded text will be misleading.
 </Callout>
 
 ## Models
@@ -43,9 +43,45 @@ For model artifacts available as constants, see [SDK — Models](/introduction#m
 
 The following script transcribes a full neural signal up-front and prints the decoded text:
 
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/bci/bci-filesystem.js title="bci-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/bci/bci-filesystem.ts title="bci-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 ### Streaming
 
 The following script feeds neural-signal chunks into a duplex session and prints transcript text as it is decoded:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/bci/bci-filesystem-streaming.js title="bci-filesystem-streaming.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/bci/bci-filesystem-streaming.ts title="bci-filesystem-streaming.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
