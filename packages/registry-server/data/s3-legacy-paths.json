@@ -31,5 +31,11 @@
   "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/encoder-model.onnx",
   "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/decoder_joint-model.onnx",
   "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/vocab.txt",
-  "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/preprocessor.onnx"
+  "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/preprocessor.onnx",
+  "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/char.bin",
+  "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/dicrc",
+  "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/matrix.bin",
+  "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/mecabrc",
+  "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/sys.dic",
+  "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/unk.dic"
 ]
