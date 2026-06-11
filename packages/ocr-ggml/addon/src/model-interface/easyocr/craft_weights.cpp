@@ -1,7 +1,6 @@
 #include "craft_weights.hpp"
 
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -93,26 +92,6 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
   return out;
 }
 
-// Whether to store the CRAFT detector conv kernels as F16. The default is
-// backend-aware (see ocr_kernels_default_f16): F16 on GPUs with a fast F16
-// GEMM and on Apple-Silicon CPUs, F32 on Mali Vulkan and other CPUs where F16
-// is slower. Env overrides (read once at model-load time; only the exact value
-// "1" applies) take precedence: OCR_GGML_CRAFT_KERNEL_F32=1 forces F32,
-// OCR_GGML_CRAFT_KERNEL_F16=1 forces F16 (e.g. for A/B benchmarking).
-// BN-folding math and bias always stay F32 — only the conv kernel storage type
-// changes.
-bool craft_kernels_use_f16(ggml_backend_t backend) {
-  const char* force_f32 = std::getenv("OCR_GGML_CRAFT_KERNEL_F32");
-  if (force_f32 != nullptr && std::strcmp(force_f32, "1") == 0) {
-    return false;
-  }
-  const char* force_f16 = std::getenv("OCR_GGML_CRAFT_KERNEL_F16");
-  if (force_f16 != nullptr && std::strcmp(force_f16, "1") == 0) {
-    return true;
-  }
-  return ocr_kernels_default_f16(backend);
-}
-
 } // namespace
 
 CraftWeights::CraftWeights(const GgufLoader& loader, ggml_backend_t backend) {
@@ -169,9 +148,13 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     return;
   }
 
-  // Conv kernel storage type (F16 on fast-F16 backends, else F32); bias F32.
+  // Conv kernel storage type (F16 on fast-F16 backends, else F32; the env
+  // overrides force one way); bias always stays F32.
   const ggml_type kernel_type =
-      craft_kernels_use_f16(backend) ? GGML_TYPE_F16 : GGML_TYPE_F32;
+      ocr_kernels_use_f16(
+          backend, "OCR_GGML_CRAFT_KERNEL_F32", "OCR_GGML_CRAFT_KERNEL_F16")
+          ? GGML_TYPE_F16
+          : GGML_TYPE_F32;
 
   for (const auto& d : kConvInventory) {
     auto* w_src = loader.get_tensor(std::string(d.conv) + ".weight");
@@ -296,20 +279,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
       }
     }
 
-    ::ggml_tensor* w_dst = w_[conv_path];
-    if (w_dst->type == GGML_TYPE_F16) {
-      // Convert the folded F32 kernel to F16 before upload so ggml_conv_2d
-      // takes the F16 fast path (mirrors the doctr StepDoctrRecognitionGGML
-      // F16 weight upload).
-      const size_t count = static_cast<size_t>(total_w);
-      std::vector<ggml_fp16_t> w_f16(count);
-      ggml_fp32_to_fp16_row(
-          w_folded.data(), w_f16.data(), static_cast<int64_t>(count));
-      ggml_backend_tensor_set(
-          w_dst, w_f16.data(), 0, w_f16.size() * sizeof(ggml_fp16_t));
-    } else {
-      ggml_backend_tensor_set(w_dst, w_folded.data(), 0, ggml_nbytes(w_dst));
-    }
+    ocr_upload_kernel(w_[conv_path], w_folded);
     ggml_backend_tensor_set(
         b_[conv_path], b_folded.data(), 0, ggml_nbytes(b_[conv_path]));
   }

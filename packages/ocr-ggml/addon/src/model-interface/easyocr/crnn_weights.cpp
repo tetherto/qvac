@@ -1,7 +1,6 @@
 #include "crnn_weights.hpp"
 
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -56,26 +55,6 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
     }
   }
   return out;
-}
-
-// Whether to store the CRNN feature-extractor conv kernels as F16. The default
-// is backend-aware (see ocr_kernels_default_f16): F16 on GPUs with a fast F16
-// GEMM and on Apple-Silicon CPUs, F32 on Mali Vulkan and other CPUs where F16
-// is slower. Env overrides (read once at model-load time; only the exact value
-// "1" applies) take precedence: OCR_GGML_CRNN_KERNEL_F32=1 forces F32,
-// OCR_GGML_CRNN_KERNEL_F16=1 forces F16 (e.g. for A/B benchmarking). BN-folding
-// math, biases, and the LSTM/linear/Prediction weights always stay F32 — only
-// the conv kernel storage type changes.
-bool crnn_kernels_use_f16(ggml_backend_t backend) {
-  const char* force_f32 = std::getenv("OCR_GGML_CRNN_KERNEL_F32");
-  if (force_f32 != nullptr && std::strcmp(force_f32, "1") == 0) {
-    return false;
-  }
-  const char* force_f16 = std::getenv("OCR_GGML_CRNN_KERNEL_F16");
-  if (force_f16 != nullptr && std::strcmp(force_f16, "1") == 0) {
-    return true;
-  }
-  return ocr_kernels_default_f16(backend);
 }
 
 // Verbatim-load list for gen-2: everything after the
@@ -192,20 +171,7 @@ std::string upload_weights(
       }
     }
 
-    ::ggml_tensor* w_dst = w_[d.conv_path];
-    if (w_dst->type == GGML_TYPE_F16) {
-      // Convert the folded F32 kernel to F16 before upload so ggml_conv_2d
-      // takes the F16 fast path (mirrors the doctr StepDoctrRecognitionGGML
-      // F16 weight upload).
-      const size_t count = static_cast<size_t>(total_w);
-      std::vector<ggml_fp16_t> w_f16(count);
-      ggml_fp32_to_fp16_row(
-          w_folded.data(), w_f16.data(), static_cast<int64_t>(count));
-      ggml_backend_tensor_set(
-          w_dst, w_f16.data(), 0, w_f16.size() * sizeof(ggml_fp16_t));
-    } else {
-      ggml_backend_tensor_set(w_dst, w_folded.data(), 0, ggml_nbytes(w_dst));
-    }
+    ocr_upload_kernel(w_[d.conv_path], w_folded);
     ggml_backend_tensor_set(
         b_[d.conv_path], b_folded.data(), 0, ggml_nbytes(b_[d.conv_path]));
   }
@@ -377,9 +343,13 @@ void build_crnn_weights_impl(
     return;
   }
 
-  // Conv kernel storage type (F16 on fast-F16 backends, else F32); bias F32.
+  // Conv kernel storage type (F16 on fast-F16 backends, else F32; the env
+  // overrides force one way); bias always stays F32.
   const ggml_type kernel_type =
-      crnn_kernels_use_f16(backend) ? GGML_TYPE_F16 : GGML_TYPE_F32;
+      ocr_kernels_use_f16(
+          backend, "OCR_GGML_CRNN_KERNEL_F32", "OCR_GGML_CRNN_KERNEL_F16")
+          ? GGML_TYPE_F16
+          : GGML_TYPE_F32;
 
   if (auto e = declare_weights(
           loader, ctx_, kernel_type, convs, verbatim, w_, b_, t_);

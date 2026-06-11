@@ -24,10 +24,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <ggml-backend.h>
+#include <ggml.h>
 
 namespace easyocr::ggml {
 
@@ -58,14 +62,53 @@ inline bool ocr_kernels_default_f16(ggml_backend_t backend) {
     return false; // unknown device -> conservative F32
   }
   if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(__aarch64__)
     return true; // Apple-Silicon CPU has native FP16 arithmetic
 #else
-    return false; // x86 / non-Apple ARM CPU: F16 is emulated -> slower
+    return false; // Intel mac / x86 / non-Apple ARM CPU: F16 emulated -> slower
 #endif
   }
   // GPU / iGPU / accelerator: F16 unless Mali (its Vulkan F16 GEMM regresses).
   return !ocr_desc_contains(ggml_backend_dev_description(dev), "mali");
+}
+
+// True when env var `name` is set to exactly "1".
+inline bool ocr_env_is_one(const char* name) {
+  const char* v = std::getenv(name);
+  return v != nullptr && std::strcmp(v, "1") == 0;
+}
+
+// Resolve whether to store conv kernels as F16 for `backend`. The per-pipeline
+// env overrides take precedence over the backend-aware default: `env_f32`=1
+// forces F32, `env_f16`=1 forces F16 (F32 wins if both are set). Read at
+// model-load time.
+inline bool ocr_kernels_use_f16(
+    ggml_backend_t backend, const char* env_f32, const char* env_f16) {
+  if (ocr_env_is_one(env_f32)) {
+    return false;
+  }
+  if (ocr_env_is_one(env_f16)) {
+    return true;
+  }
+  return ocr_kernels_default_f16(backend);
+}
+
+// Upload a BatchNorm-folded F32 conv kernel into its (already-declared)
+// destination tensor. When `w_dst` is F16, convert the F32 data first so
+// ggml_conv_2d takes the F16 fast path (mirrors the doctr
+// StepDoctrRecognitionGGML F16 weight upload); otherwise upload F32 verbatim.
+// `w_folded` must hold exactly `ggml_nelements(w_dst)` values.
+inline void
+ocr_upload_kernel(::ggml_tensor* w_dst, const std::vector<float>& w_folded) {
+  if (w_dst->type == GGML_TYPE_F16) {
+    std::vector<ggml_fp16_t> w_f16(w_folded.size());
+    ggml_fp32_to_fp16_row(
+        w_folded.data(), w_f16.data(), static_cast<int64_t>(w_folded.size()));
+    ggml_backend_tensor_set(
+        w_dst, w_f16.data(), 0, w_f16.size() * sizeof(ggml_fp16_t));
+  } else {
+    ggml_backend_tensor_set(w_dst, w_folded.data(), 0, ggml_nbytes(w_dst));
+  }
 }
 
 // NOLINTEND(readability-identifier-naming)
