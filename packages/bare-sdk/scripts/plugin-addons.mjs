@@ -7,6 +7,7 @@ export const PLUGIN_ADDONS = new Set([
   "@qvac/llm-llamacpp",
   "@qvac/embed-llamacpp",
   "@qvac/transcription-whispercpp",
+  "@qvac/bci-whispercpp",
   "@qvac/transcription-parakeet",
   "@qvac/translation-nmtcpp",
   "@qvac/tts-ggml",

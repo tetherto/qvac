@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.2] - 2026-06-11
+
+### Fixed
+
+- Updated the `bergamot-translator` vcpkg dependency to registry version `1.0.1`,
+  which removes leftover crash-debugging stderr prints (`[BERGAMOT]` /
+  `[BERGAMOT_SERVICE]` lines on every model load and translation). These prints
+  bypassed the addon logger, so production apps with an error-only logger still
+  saw info-level noise on stderr.
+
 ## [5.0.1] - 2026-06-06
 
 ### Changed

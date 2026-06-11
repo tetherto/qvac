@@ -349,6 +349,13 @@ export const PLUGIN_WHISPER =
   "@qvac/sdk/whispercpp-transcription/plugin" as const;
 
 /**
+ * Brain-Computer Interface neural-signal transcription plugin
+ * (whisper.cpp). Provides: transcription of neural signals to text.
+ */
+export const PLUGIN_BCI =
+  "@qvac/sdk/bci-whispercpp-transcription/plugin" as const;
+
+/**
  * Speech-to-text transcription plugin (Parakeet ONNX).
  * Provides: audio transcription using NVIDIA Parakeet models.
  */
@@ -408,6 +415,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_WHISPER,
+  PLUGIN_BCI,
   PLUGIN_PARAKEET,
   PLUGIN_NMT,
   PLUGIN_TTS,
@@ -431,6 +439,9 @@ export const ADDON_EMBEDDING = "@qvac/embed-llamacpp" as const;
 
 /** Native addon package for Whisper transcription (whisper.cpp) */
 export const ADDON_WHISPER = "@qvac/transcription-whispercpp" as const;
+
+/** Native addon package for BCI neural-signal transcription (whisper.cpp) */
+export const ADDON_BCI = "@qvac/bci-whispercpp" as const;
 
 /** Native addon package for Parakeet transcription (ONNX) */
 export const ADDON_PARAKEET = "@qvac/transcription-parakeet" as const;

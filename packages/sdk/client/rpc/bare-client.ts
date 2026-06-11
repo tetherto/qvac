@@ -26,7 +26,6 @@ import { resolveModelConfig } from "@/server/bare/registry/model-config-registry
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
 import {
   initializeWorkerCore,
-  shutdownBareDirectWorker,
   cleanupForTerminate,
 } from "@/server/worker-core";
 import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
@@ -325,7 +324,7 @@ export async function getRPC() {
 }
 
 export async function close() {
-  await shutdownBareDirectWorker("rpc-close");
+  await cleanupForTerminate();
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

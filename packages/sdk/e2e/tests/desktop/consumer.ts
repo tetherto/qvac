@@ -40,6 +40,7 @@ import {
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
+  BCI_WINDOWED,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -68,6 +69,7 @@ import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { BciExecutor } from "./executors/bci-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
@@ -315,6 +317,18 @@ resources.define("parakeet-eou", {
   config: {},
 });
 
+resources.define("bci", {
+  constant: BCI_WINDOWED,
+  type: "bci",
+  config: {
+    whisperConfig: { language: "en", temperature: 0.0 },
+    miscConfig: { caption_enabled: false },
+    // Sample 2 (neural-not-too-controversial.bin) was recorded on session
+    // day 1; day_idx selects the matching day-specific projection matrices.
+    bciConfig: { day_idx: 1 },
+  },
+});
+
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
@@ -492,6 +506,7 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new ParakeetStreamExecutor(resources),
     new ParakeetExecutor(resources),
+    new BciExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
