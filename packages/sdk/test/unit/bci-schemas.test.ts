@@ -2,6 +2,7 @@ import test from "brittle";
 import { bciConfigSchema } from "@/schemas/bci-config";
 import {
   neuralInputSchema,
+  bciTranscribeClientParamsSchema,
   bciTranscribeRequestSchema,
   bciTranscribeResponseSchema,
   bciStreamOptsSchema,
@@ -73,6 +74,32 @@ test("neuralInputSchema: rejects an unknown discriminant", (t) => {
 
 test("neuralInputSchema: rejects a variant missing its value", (t) => {
   const result = neuralInputSchema.safeParse({ type: "base64" });
+  t.is(result.success, false);
+});
+
+// === bciTranscribeClientParamsSchema (batch client input) ===
+
+test("bciTranscribeClientParamsSchema: accepts path and Uint8Array neuralData", (t) => {
+  const pathResult = bciTranscribeClientParamsSchema.safeParse({
+    modelId: "model-1",
+    neuralData: "/a/b.bin",
+  });
+  const bytesResult = bciTranscribeClientParamsSchema.safeParse({
+    modelId: "model-1",
+    neuralData: new Uint8Array([1, 2, 3]),
+    metadata: true,
+  });
+
+  t.is(pathResult.success, true);
+  t.is(bytesResult.success, true);
+});
+
+test("bciTranscribeClientParamsSchema: rejects non-neuralData values", (t) => {
+  const result = bciTranscribeClientParamsSchema.safeParse({
+    modelId: "model-1",
+    neuralData: { type: "filePath", value: "/a/b.bin" },
+  });
+
   t.is(result.success, false);
 });
 

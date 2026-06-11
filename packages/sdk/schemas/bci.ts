@@ -9,26 +9,43 @@ import {
 // (not audio): pass it inline as base64 or point at a local `.bin` file.
 export const neuralInputSchema = z.discriminatedUnion("type", [
   z.object({
-    type: z.literal("base64"),
-    value: z.string(),
+    type: z.literal("base64").describe("Inline base64-encoded neural bytes."),
+    value: z
+      .string()
+      .describe("Base64-encoded contents of a BCI neural `.bin` recording."),
   }),
   z.object({
-    type: z.literal("filePath"),
-    value: z.string(),
+    type: z.literal("filePath").describe("Local neural `.bin` file path."),
+    value: z
+      .string()
+      .describe("Path to a BCI neural `.bin` recording on the provider."),
   }),
 ]);
 
 const bciTranscribeBaseSchema = z.object({
-  modelId: z.string(),
-  /**
-   * When true, the response yields per-segment metadata objects
-   * (`{ text, startMs, endMs, append, id }`) instead of joined text.
-   */
-  metadata: z.boolean().optional(),
+  modelId: z
+    .string()
+    .describe("Identifier returned by `loadModel()` for a loaded BCI model."),
+  metadata: z
+    .boolean()
+    .optional()
+    .describe(
+      "When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text.",
+    ),
 });
 
 export const bciTranscribeParamsSchema = bciTranscribeBaseSchema.extend({
-  neuralData: neuralInputSchema,
+  neuralData: neuralInputSchema.describe(
+    "Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.",
+  ),
+});
+
+export const bciTranscribeClientParamsSchema = bciTranscribeBaseSchema.extend({
+  neuralData: z
+    .union([z.string(), z.instanceof(Uint8Array)])
+    .describe(
+      "Convenience client input for BCI neural data: pass a local/provider `.bin` file path as a string, or raw neural bytes as a `Uint8Array`. The client converts this to `neuralInputSchema` before sending the request.",
+    ),
 });
 
 export const bciTranscribeRequestSchema = bciTranscribeParamsSchema.extend({
@@ -122,11 +139,22 @@ export type BciTranscribeStreamResponse = z.infer<
   typeof bciTranscribeStreamResponseSchema
 >;
 
-export type BciTranscribeClientParams = {
+/** Client parameters for `bciTranscribe()`. */
+export interface BciTranscribeClientParams {
+  /** Identifier returned by `loadModel()` for a loaded BCI model. */
   modelId: string;
+  /**
+   * BCI neural input. A string is treated as a local/provider `.bin` file path;
+   * a `Uint8Array` is treated as raw neural bytes and sent as base64 on the
+   * wire.
+   */
   neuralData: string | Uint8Array;
+  /**
+   * When true, resolves to transcript segment metadata objects
+   * (`{ text, startMs, endMs, append, id }`) instead of joined text.
+   */
   metadata?: boolean;
-};
+}
 
 export type BciTranscribeStreamClientParams = {
   modelId: string;

@@ -1,5 +1,6 @@
 import {
   bciTranscribeResponseSchema,
+  bciTranscribeClientParamsSchema,
   bciTranscribeStreamResponseSchema,
   type BciTranscribeRequest,
   type BciTranscribeClientParams,
@@ -68,8 +69,9 @@ export function bciTranscribe(
   params: BciTranscribeClientParams,
   options?: RPCOptions,
 ): Promise<string | TranscribeSegment[]> & { requestId: string } {
+  const parsed = bciTranscribeClientParamsSchema.parse(params);
   const requestId = generateClientRequestId();
-  const inner = runBciTranscribe(params, requestId, options);
+  const inner = runBciTranscribe(parsed, requestId, options);
   return decoratePromise(inner, { requestId });
 }
 
