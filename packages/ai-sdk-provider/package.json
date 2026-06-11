@@ -69,7 +69,13 @@
   },
   "peerDependencies": {
     "@ai-sdk/openai-compatible": "^2.0",
+    "@qvac/cli": "^0.5.0",
     "ai": "^6.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/cli": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "^2.0",

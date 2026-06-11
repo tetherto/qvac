@@ -1,0 +1,8 @@
+# Fixture images live in a fixture object store (not git); CI syncs them here.
+images/
+# several-sources CLI build artifacts (built at CI time by build-cli-sources.js).
+cli-builds/
+cli-sources-resolved.json
+# misc
+node_modules/
+*.tgz

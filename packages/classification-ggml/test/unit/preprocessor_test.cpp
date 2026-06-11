@@ -72,10 +72,10 @@ TEST(PreprocessorTest, EmptyBufferIsRejected) {
 }
 
 TEST(PreprocessorTest, NormalizeToWhcnProducesExpectedSize) {
-  std::vector<uint8_t> rgb(kInputSize * kInputSize * kChannels, 128);
+  std::vector<uint8_t> rgb(INPUT_SIZE * INPUT_SIZE * CHANNELS, 128);
   std::vector<float> out = normalizeToWhcn(rgb);
-  EXPECT_EQ(out.size(),
-            static_cast<size_t>(kInputSize) * kInputSize * kChannels);
+  EXPECT_EQ(
+      out.size(), static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE * CHANNELS);
   // Pixel value 128/255 is close to 0.502; subtracting ImageNet means and
   // dividing by std should produce values well inside [-3, 3] for all
   // channels.
@@ -88,24 +88,25 @@ TEST(PreprocessorTest, NormalizeToWhcnProducesExpectedSize) {
 TEST(PreprocessorTest, ResizeProducesExpectedDimensions) {
   std::vector<uint8_t> src(10 * 10 * 3, 200);
   std::vector<uint8_t> resized = resizeToInput(src, 10, 10);
-  EXPECT_EQ(resized.size(),
-            static_cast<size_t>(kInputSize) * kInputSize * kChannels);
+  EXPECT_EQ(
+      resized.size(), static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE * CHANNELS);
 }
 
 TEST(PreprocessorTest, NormalizeToWhcnChannelFirstLayout) {
   // Fill plane with (255, 0, 0) red; verify R channel first, then G, then B.
-  std::vector<uint8_t> rgb(kInputSize * kInputSize * kChannels, 0);
-  for (size_t i = 0; i < static_cast<size_t>(kInputSize) * kInputSize; ++i) {
+  std::vector<uint8_t> rgb(INPUT_SIZE * INPUT_SIZE * CHANNELS, 0);
+  for (size_t i = 0; i < static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE; ++i) {
     rgb[i * 3 + 0] = 255; // R
   }
   std::vector<float> out = normalizeToWhcn(rgb);
-  const size_t plane = static_cast<size_t>(kInputSize) * kInputSize;
+  const size_t plane = static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE;
   // R channel plane: normalized (1.0 - 0.485) / 0.229 ≈ 2.248
-  EXPECT_NEAR(out[0], (1.0F - kImageNetMean[0]) / kImageNetStd[0], 1e-3F);
+  EXPECT_NEAR(out[0], (1.0F - IMAGENET_MEAN[0]) / IMAGENET_STD[0], 1e-3F);
   // G channel plane (offset = plane) starts from 0.
-  EXPECT_NEAR(out[plane], (0.0F - kImageNetMean[1]) / kImageNetStd[1], 1e-3F);
+  EXPECT_NEAR(out[plane], (0.0F - IMAGENET_MEAN[1]) / IMAGENET_STD[1], 1e-3F);
   // B channel plane (offset = 2*plane) starts from 0.
-  EXPECT_NEAR(out[2 * plane], (0.0F - kImageNetMean[2]) / kImageNetStd[2], 1e-3F);
+  EXPECT_NEAR(
+      out[2 * plane], (0.0F - IMAGENET_MEAN[2]) / IMAGENET_STD[2], 1e-3F);
 }
 
 // -------- decodeToRgb coverage --------
@@ -120,11 +121,9 @@ TEST(PreprocessorTest, DecodeToRgbDecodesValidJpeg) {
   std::vector<uint8_t> rgb = decodeToRgb(jpeg, width, height);
   EXPECT_GT(width, 0u);
   EXPECT_GT(height, 0u);
-  EXPECT_LE(width, kMaxImageDimension);
-  EXPECT_LE(height, kMaxImageDimension);
-  EXPECT_EQ(
-      rgb.size(),
-      static_cast<size_t>(width) * height * kChannels);
+  EXPECT_LE(width, MAX_IMAGE_DIMENSION);
+  EXPECT_LE(height, MAX_IMAGE_DIMENSION);
+  EXPECT_EQ(rgb.size(), static_cast<size_t>(width) * height * CHANNELS);
 }
 
 TEST(PreprocessorTest, DecodeToRgbRejectsEmptyBuffer) {
@@ -167,8 +166,7 @@ TEST(PreprocessorTest, PreprocessToTensorAcceptsEncodedJpeg) {
   }
   std::vector<float> out = preprocessToTensor(jpeg, 0, 0, 0);
   EXPECT_EQ(
-      out.size(),
-      static_cast<size_t>(kInputSize) * kInputSize * kChannels);
+      out.size(), static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE * CHANNELS);
   for (float v : out) {
     EXPECT_TRUE(std::isfinite(v));
   }
@@ -177,12 +175,10 @@ TEST(PreprocessorTest, PreprocessToTensorAcceptsEncodedJpeg) {
 TEST(PreprocessorTest, PreprocessToTensorAcceptsRawRgb) {
   // 16x16 raw RGB block, every channel = 64.
   constexpr uint32_t kSide = 16;
-  std::vector<uint8_t> raw(
-      static_cast<size_t>(kSide) * kSide * kChannels, 64);
-  std::vector<float> out = preprocessToTensor(raw, kSide, kSide, kChannels);
+  std::vector<uint8_t> raw(static_cast<size_t>(kSide) * kSide * CHANNELS, 64);
+  std::vector<float> out = preprocessToTensor(raw, kSide, kSide, CHANNELS);
   EXPECT_EQ(
-      out.size(),
-      static_cast<size_t>(kInputSize) * kInputSize * kChannels);
+      out.size(), static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE * CHANNELS);
   for (float v : out) {
     EXPECT_TRUE(std::isfinite(v));
   }
@@ -227,20 +223,20 @@ TEST(PreprocessorTest, ValidateRawRgbRejectsOverKMaxImageDimensionWidth) {
   // must reject before any other validation.
   std::vector<uint8_t> buf(8, 0);
   EXPECT_THROW(
-      validateRawRgb(buf, kMaxImageDimension + 1, 1, 3), std::exception);
+      validateRawRgb(buf, MAX_IMAGE_DIMENSION + 1, 1, 3), std::exception);
 }
 
 TEST(PreprocessorTest, ValidateRawRgbRejectsOverKMaxImageDimensionHeight) {
   std::vector<uint8_t> buf(8, 0);
   EXPECT_THROW(
-      validateRawRgb(buf, 1, kMaxImageDimension + 1, 3), std::exception);
+      validateRawRgb(buf, 1, MAX_IMAGE_DIMENSION + 1, 3), std::exception);
 }
 
 // -------- normalizeToWhcn invalid input size --------
 
 TEST(PreprocessorTest, NormalizeToWhcnRejectsWrongInputSize) {
-  // One byte short of the expected (kInputSize^2 * kChannels) buffer.
+  // One byte short of the expected (INPUT_SIZE^2 * CHANNELS) buffer.
   std::vector<uint8_t> buf(
-      static_cast<size_t>(kInputSize) * kInputSize * kChannels - 1, 0);
+      static_cast<size_t>(INPUT_SIZE) * INPUT_SIZE * CHANNELS - 1, 0);
   EXPECT_THROW(normalizeToWhcn(buf), std::exception);
 }

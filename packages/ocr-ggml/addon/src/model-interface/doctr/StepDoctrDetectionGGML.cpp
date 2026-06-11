@@ -77,9 +77,10 @@ StepDoctrDetectionGGML::StepDoctrDetectionGGML(
                        : static_cast<int>(std::thread::hardware_concurrency());
     ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(dev);
     auto* fn_set_n_threads =
-        cpuReg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
-                     cpuReg, "ggml_backend_set_n_threads")
-               : nullptr;
+        cpuReg
+            ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
+                  cpuReg, "ggml_backend_set_n_threads")
+            : nullptr;
     if (fn_set_n_threads) {
       fn_set_n_threads(backend, effective);
     }
@@ -89,12 +90,22 @@ StepDoctrDetectionGGML::StepDoctrDetectionGGML(
   std::vector<std::string> labels;
   weights_ = qvac_lib_infer_ggml_classification::graph::loadWeights(
       pathDetector, backends_, labels);
-  computeGraph_ = qvac_lib_infer_ggml_classification::graph::buildGraph(
-      weights_, backends_);
+  // The compute graph is built lazily per input canvas size (see ensureGraph),
+  // since the canvas is the image's aspect ratio padded to a multiple of 32 —
+  // not a fixed square — so detection only convolves real content.
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[DoctrDetectionGGML] GGML detection model loaded");
+}
+
+void StepDoctrDetectionGGML::ensureGraph(int inputW, int inputH) {
+  if (computeGraph_.input != nullptr && computeGraph_.input->ne[0] == inputW &&
+      computeGraph_.input->ne[1] == inputH) {
+    return; // graph already matches this canvas size
+  }
+  computeGraph_ = qvac_lib_infer_ggml_classification::graph::buildGraph(
+      weights_, backends_, inputW, inputH);
 }
 
 StepDoctrDetectionGGML::~StepDoctrDetectionGGML() {
@@ -106,6 +117,13 @@ StepDoctrDetectionGGML::~StepDoctrDetectionGGML() {
     }
   }
   backends_.clear();
+}
+
+// Round up to the next multiple of the backbone's total stride (32) so the
+// MobileNetV3 downsampling and FPN taps land on integer feature-map sizes.
+int roundUpToStride(int v) {
+  constexpr int kStride = 32;
+  return ((v + kStride - 1) / kStride) * kStride;
 }
 
 std::tuple<cv::Mat, float, int, int, int, int>
@@ -124,13 +142,17 @@ StepDoctrDetectionGGML::preprocessImage(const cv::Mat& img) {
   cv::Mat floatImg;
   resized.convertTo(floatImg, CV_32FC3, 1.0 / PIXEL_MAX);
 
-  // Symmetric padding so the image is centred in the canvas.
-  const int deltaW = DBNET_INPUT_SIZE - newW;
-  const int deltaH = DBNET_INPUT_SIZE - newH;
-  const int padLeft = (deltaW + 1) / 2;
-  const int padTop = (deltaH + 1) / 2;
+  // Canvas = the resized image padded to the next multiple of 32 per axis,
+  // preserving aspect ratio (NOT a fixed square). The long side is already
+  // DBNET_INPUT_SIZE; the short side gets at most 31px of padding. This avoids
+  // convolving the ~25-30% zero-padding a square canvas would add for the
+  // typical portrait/landscape document. Symmetric padding matches OnnxTR.
+  const int canvasW = roundUpToStride(newW);
+  const int canvasH = roundUpToStride(newH);
+  const int padLeft = (canvasW - newW) / 2;
+  const int padTop = (canvasH - newH) / 2;
 
-  cv::Mat padded = cv::Mat::zeros(DBNET_INPUT_SIZE, DBNET_INPUT_SIZE, CV_32FC3);
+  cv::Mat padded = cv::Mat::zeros(canvasH, canvasW, CV_32FC3);
   floatImg.copyTo(padded(cv::Rect(padLeft, padTop, newW, newH)));
 
   cv::subtract(padded, DOCTR_DET_MEAN, padded);
@@ -142,9 +164,13 @@ StepDoctrDetectionGGML::preprocessImage(const cv::Mat& img) {
 cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
   const int H = preprocessed.rows;
   const int W = preprocessed.cols;
-  CV_Assert(H == DBNET_INPUT_SIZE && W == DBNET_INPUT_SIZE);
+  CV_Assert(W % 32 == 0 && H % 32 == 0);
+  CV_Assert(W <= DBNET_INPUT_SIZE && H <= DBNET_INPUT_SIZE);
   CV_Assert(preprocessed.type() == CV_32FC3);
   CV_Assert(preprocessed.isContinuous());
+
+  // Build (or reuse) the graph for this canvas size.
+  ensureGraph(W, H);
 
   // Deinterleave HWC -> CHW directly into the reusable inputBuffer_.
   // Previously this path used `cv::split` + a per-channel `memcpy`, which
@@ -179,8 +205,8 @@ cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
         std::to_string(static_cast<int>(status)));
   }
 
-  // The graph outputs raw logits (sigmoid is commented-out in buildGraph).
-  // Apply sigmoid here: prob = 1 / (1 + exp(-logit)).
+  // The graph applies sigmoid on-device, so output_4 is already the probability
+  // map; read it back directly.
   const auto nElems =
       static_cast<size_t>(ggml_nelements(computeGraph_.output_4));
   logitBuffer_.resize(nElems);
@@ -189,21 +215,15 @@ cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
 
   // GGML WHCN [W=1024, H=1024, C=1, N=1] lays out as [W*y + x] in memory
   // which matches OpenCV row-major [H, W] — direct wrap is safe.
-  cv::Mat logitMap(H, W, CV_32F, logitBuffer_.data());
-  cv::Mat expNeg;
-  cv::exp(-logitMap, expNeg);
-  cv::Mat probMap = 1.0F / (1.0F + expNeg);
+  cv::Mat probMap(H, W, CV_32F, logitBuffer_.data());
   // Clone before logitBuffer_ may be resized by the next call.
   return probMap.clone();
 }
 
 std::pair<std::vector<std::array<cv::Point2f, 4>>, std::vector<float>>
 StepDoctrDetectionGGML::extractPolygons(
-    const cv::Mat& probMap, float /*scale*/, int /*paddedW*/, int /*paddedH*/,
-    int /*padLeft*/, int /*padTop*/, int origW, int origH) {
-  const int mapH = probMap.rows;
-  const int mapW = probMap.cols;
-
+    const cv::Mat& probMap, float scale, int /*paddedW*/, int /*paddedH*/,
+    int padLeft, int padTop, int origW, int origH) {
   cv::Mat binary;
   cv::threshold(
       probMap,
@@ -241,50 +261,33 @@ StepDoctrDetectionGGML::extractPolygons(
     const double perim = 2.0 * (bbox.width + bbox.height);
     const double dist = area * UNCLIP_RATIO / perim;
 
-    float ex0 = static_cast<float>(bbox.x) - static_cast<float>(dist);
-    float ey0 = static_cast<float>(bbox.y) - static_cast<float>(dist);
-    float ex1 =
+    const float ex0 = static_cast<float>(bbox.x) - static_cast<float>(dist);
+    const float ey0 = static_cast<float>(bbox.y) - static_cast<float>(dist);
+    const float ex1 =
         static_cast<float>(bbox.x + bbox.width) + static_cast<float>(dist);
-    float ey1 =
+    const float ey1 =
         static_cast<float>(bbox.y + bbox.height) + static_cast<float>(dist);
 
-    // Normalise to [0, 1] in map space.
-    float nx0 = ex0 / static_cast<float>(mapW);
-    float ny0 = ey0 / static_cast<float>(mapH);
-    float nx1 = ex1 / static_cast<float>(mapW);
-    float ny1 = ey1 / static_cast<float>(mapH);
-
-    // Remove symmetric-padding bias (OnnxTR _remove_padding logic).
-    // The 0.5F offsets here re-center each normalized coordinate around the
-    // image midpoint before applying the aspect-ratio scale, then translate
-    // back; they are intrinsic to the symmetric-pad inverse and not a tunable
-    // parameter.
-    //
-    // Algebraically equivalent to undoing padLeft/padTop directly:
-    //   for origH > origW: padLeftFraction = (1 - origW/origH)/2 = (1 - 1/ratio)/2
-    //   so (nx - padLeftFraction) / (1 - 2*padLeftFraction) reduces to
-    //   (nx - 0.5)*ratio + 0.5. This is why padLeft/padTop are unused.
-    // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-    if (origH > origW) {
-      const float ratio = static_cast<float>(origH) / static_cast<float>(origW);
-      nx0 = ((nx0 - 0.5F) * ratio) + 0.5F;
-      nx1 = ((nx1 - 0.5F) * ratio) + 0.5F;
-    } else if (origW > origH) {
-      const float ratio = static_cast<float>(origW) / static_cast<float>(origH);
-      ny0 = ((ny0 - 0.5F) * ratio) + 0.5F;
-      ny1 = ((ny1 - 0.5F) * ratio) + 0.5F;
-    }
-    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-
-    nx0 = std::clamp(nx0, 0.0F, 1.0F);
-    ny0 = std::clamp(ny0, 0.0F, 1.0F);
-    nx1 = std::clamp(nx1, 0.0F, 1.0F);
-    ny1 = std::clamp(ny1, 0.0F, 1.0F);
-
-    const float x0 = nx0 * static_cast<float>(origW);
-    const float y0 = ny0 * static_cast<float>(origH);
-    const float x1 = nx1 * static_cast<float>(origW);
-    const float y1 = ny1 * static_cast<float>(origH);
+    // Map canvas pixel coords back to the original image: undo the symmetric
+    // pad offset, then the resize scale. This is the exact inverse of
+    // preprocessImage and works for any (aspect-ratio or square) padding —
+    // unlike the prior square-only normalized form.
+    const auto toOrigX = [&](float px) {
+      return std::clamp(
+          (px - static_cast<float>(padLeft)) / scale,
+          0.0F,
+          static_cast<float>(origW));
+    };
+    const auto toOrigY = [&](float py) {
+      return std::clamp(
+          (py - static_cast<float>(padTop)) / scale,
+          0.0F,
+          static_cast<float>(origH));
+    };
+    const float x0 = toOrigX(ex0);
+    const float y0 = toOrigY(ey0);
+    const float x1 = toOrigX(ex1);
+    const float y1 = toOrigY(ey1);
 
     if ((x1 - x0) < 1.0F || (y1 - y0) < 1.0F) {
       continue;

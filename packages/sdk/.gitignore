@@ -13,3 +13,4 @@ e2e/reports/*
 qvac/
 PR_DESCRIPTION.md
 examples/finetune/results/
+*.tgz

@@ -35,7 +35,7 @@ using qvac_errors::general_error::InternalError;
 using qvac_errors::general_error::InvalidArgument;
 
 namespace {
-constexpr const char* kModelName = "mobilenetv3-small-ggml-classification";
+constexpr const char* MODEL_NAME = "mobilenetv3-small-ggml-classification";
 } // namespace
 
 ClassificationModel::ClassificationModel(std::string modelPath)
@@ -52,9 +52,7 @@ ClassificationModel::~ClassificationModel() {
   }
 }
 
-std::string ClassificationModel::getName() const {
-  return kModelName;
-}
+std::string ClassificationModel::getName() const { return MODEL_NAME; }
 
 qvac_lib_inference_addon_cpp::RuntimeStats
 ClassificationModel::runtimeStats() const {
@@ -181,18 +179,20 @@ void ClassificationModel::load() {
   {
     constexpr uint32_t kWarmupSide = 32;
     std::vector<uint8_t> warmupRgb(
-        static_cast<size_t>(kWarmupSide) * kWarmupSide * preprocess::kChannels);
+        static_cast<size_t>(kWarmupSide) * kWarmupSide * preprocess::CHANNELS);
     for (size_t i = 0; i < warmupRgb.size(); ++i) {
       warmupRgb[i] = static_cast<uint8_t>((i * 7) & 0xFFU);
     }
     std::vector<float> warmupTensor = preprocess::preprocessToTensor(
         std::span<const uint8_t>(warmupRgb.data(), warmupRgb.size()),
-        kWarmupSide, kWarmupSide, preprocess::kChannels);
+        kWarmupSide,
+        kWarmupSide,
+        preprocess::CHANNELS);
     ggml_backend_tensor_set(
         compute_.input, warmupTensor.data(), 0,
         warmupTensor.size() * sizeof(float));
     (void)ggml_backend_graph_compute(backend_, compute_.graph);
-    float warmupLogits[graph::kNumClasses] = {0.0F};
+    float warmupLogits[graph::NUM_CLASSES] = {0.0F};
     ggml_backend_tensor_get(
         compute_.output, warmupLogits, 0, sizeof(warmupLogits));
     (void)warmupLogits;
@@ -231,8 +231,8 @@ std::any ClassificationModel::process(const std::any& input) {
       std::span<const uint8_t>(inPtr->data.data(), inPtr->data.size()),
       rawW, rawH, rawC);
 
-  const size_t expected = static_cast<size_t>(preprocess::kInputSize) *
-                          preprocess::kInputSize * preprocess::kChannels;
+  const size_t expected = static_cast<size_t>(preprocess::INPUT_SIZE) *
+                          preprocess::INPUT_SIZE * preprocess::CHANNELS;
   if (inputTensor.size() != expected) {
     throw StatusError(
         InternalError, "ClassificationModel: preprocessed tensor has wrong size");
@@ -250,11 +250,12 @@ std::any ClassificationModel::process(const std::any& input) {
                            std::to_string(static_cast<int>(status)));
   }
 
-  float logits[graph::kNumClasses] = {0.0F};
+  float logits[graph::NUM_CLASSES] = {0.0F};
   ggml_backend_tensor_get(
       compute_.output, logits, 0, sizeof(logits));
 
-  std::vector<float> probs = softmax(std::span<const float>(logits, graph::kNumClasses));
+  std::vector<float> probs =
+      softmax(std::span<const float>(logits, graph::NUM_CLASSES));
 
   ClassifyOutput output;
   output.results.reserve(probs.size());

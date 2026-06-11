@@ -14,11 +14,9 @@ flowchart LR
     LLM -->|response text| TTS[TTS<br/>Supertonic]
     TTS -->|audio| Spk([Speakers])
     Spk -.conversation loop.-> Mic
-
-    click ASR "/ai-capabilities/transcription" "Transcription"
-    click LLM "/ai-capabilities/text-generation" "Text generation"
-    click TTS "/ai-capabilities/text-to-speech" "Text-to-speech"
 ```
+
+Each stage maps to a QVAC capability — [Transcription](/ai-capabilities/transcription) (ASR), [Text generation](/ai-capabilities/text-generation) (LLM), and [Text-to-Speech](/ai-capabilities/text-to-speech) (TTS).
 
 Compared to using each capability individually, the key differences are:
 - You need to coordinate **three model loads** simultaneously (Whisper + VAD, LLM, and TTS bundle) — they all stay loaded for the duration of the session.

@@ -112,9 +112,9 @@ class LlamaInterface {
   /**
    * Cancel current inference job
    */
-  async cancel () {
+  async cancel (savePauseCheckpoint = 1) {
     if (!this._handle) return
-    await this._binding.cancel(this._handle)
+    await this._binding.cancel(this._handle, savePauseCheckpoint)
   }
 
   /**

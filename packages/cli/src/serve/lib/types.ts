@@ -22,7 +22,7 @@ export interface QvacContext {
   ffmpegAvailable: boolean
   transcribeOverride?: (opts: {
     modelId: string
-    audioChunk: Buffer
+    audioChunk: string | Buffer
     prompt?: string | undefined
   }) => Promise<string> & { requestId: string }
   /** Test seam — overrides `video()` from `@qvac/sdk` when set. */

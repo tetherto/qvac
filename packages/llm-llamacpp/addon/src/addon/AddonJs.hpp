@@ -422,6 +422,8 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  const bool savePauseCheckpoint =
+      args.getIntegralOptional<int>(1).value_or(1) != 0;
 
   // Capture by shared_ptr so the cancel work outlives a JS-side
   // destroyInstance(): the AddonCpp (and the LlamaModel it owns) must
@@ -430,10 +432,10 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   // which let the test framework's teardown free the addon out from under
   // an in-flight cancel and trip a destroyed-mutex UAF in JobRunner.
   auto addonCppRef = instance.addonCpp;
-  return js::JsAsyncTask::run(env, [addonCppRef]() {
+  return js::JsAsyncTask::run(env, [addonCppRef, savePauseCheckpoint]() {
     auto* llamaModel = static_cast<LlamaModel*>(&addonCppRef->model.get());
     if (llamaModel && llamaModel->finetuner().isFinetuneRunning() &&
-        llamaModel->finetuner().requestPause()) {
+        llamaModel->finetuner().requestPause(savePauseCheckpoint)) {
       llamaModel->finetuner().waitUntilFinetuningPauseComplete();
     } else {
       addonCppRef->cancelJob();

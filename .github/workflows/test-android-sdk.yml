@@ -743,6 +743,32 @@ jobs:
         with:
           report-dir: ${{ inputs.working-directory }}/reports
 
+      - name: Download run ARNs for cancellation cleanup
+        if: cancelled()
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: device-farm-arn-${{ needs.build.outputs.runId }}-*
+          path: ./run-arns
+          merge-multiple: true
+
+      - name: Configure AWS credentials for cancellation cleanup
+        if: cancelled()
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Stop Device Farm runs on cancellation
+        if: cancelled()
+        run: |
+          for f in ./run-arns/*.txt; do
+            [ -f "$f" ] || continue
+            arn=$(cat "$f")
+            echo "Stopping Device Farm run: $arn"
+            aws devicefarm stop-run --arn "$arn" || echo "stop-run failed for $arn"
+          done
+
   cleanup-device-farm:
     name: "[android] cleanup-device-farm"
     needs: [build, run-producer, device-farm]
