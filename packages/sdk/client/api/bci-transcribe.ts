@@ -4,6 +4,7 @@ import {
   bciTranscribeStreamResponseSchema,
   type BciTranscribeRequest,
   type BciTranscribeClientParams,
+  type BciTranscribeClientParamsParsed,
   type BciTranscribeStreamClientParams,
   type BciTranscribeStreamRequest,
   type BciTranscribeStreamResponse,
@@ -21,7 +22,7 @@ import { generateClientRequestId } from "@/client/api/client-request-id";
 const logger = getClientLogger();
 
 function buildBciTranscribeRequest(
-  params: BciTranscribeClientParams,
+  params: BciTranscribeClientParamsParsed,
   requestId: string,
 ): BciTranscribeRequest {
   return {
@@ -76,7 +77,7 @@ export function bciTranscribe(
 }
 
 async function runBciTranscribe(
-  params: BciTranscribeClientParams,
+  params: BciTranscribeClientParamsParsed,
   requestId: string,
   options?: RPCOptions,
 ): Promise<string | TranscribeSegment[]> {
@@ -119,6 +120,7 @@ async function runBciTranscribe(
 
 function buildBciTranscribeStreamRequest(
   params: BciTranscribeStreamClientParams,
+  requestId: string,
 ): BciTranscribeStreamRequest {
   const streamOpts = {
     ...(params.windowTimesteps !== undefined && {
@@ -135,6 +137,7 @@ function buildBciTranscribeStreamRequest(
     modelId: params.modelId,
     ...(params.metadata === true && { metadata: true }),
     ...(Object.keys(streamOpts).length > 0 && { streamOpts }),
+    requestId,
   };
 }
 
@@ -159,7 +162,9 @@ function buildBciTranscribeStreamRequest(
  * @param options - Optional RPC options including per-call profiling.
  * @returns A session object: call `write(neuralChunk)` with a `Uint8Array`
  *          to feed neural-signal bytes, iterate with `for await (...)` to
- *          receive transcription, and `end()` to signal end of input.
+ *          receive transcription, and `end()` to signal end of input. The
+ *          session exposes `requestId` synchronously for targeted
+ *          `cancel({ requestId })`.
  */
 export function bciTranscribeStream(
   params: BciTranscribeStreamClientParams & { metadata: true },
@@ -195,12 +200,14 @@ async function createBciStreamSession<T>(
   process: (line: string) => T | undefined | null,
   sessionName: string,
 ): Promise<{
+  requestId: string;
   write(neuralChunk: Uint8Array): void;
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<T>;
 }> {
-  const request = buildBciTranscribeStreamRequest(params);
+  const requestId = generateClientRequestId();
+  const request = buildBciTranscribeStreamRequest(params, requestId);
 
   const { requestStream, responseStream } = await duplex(request, options);
 
@@ -208,6 +215,7 @@ async function createBciStreamSession<T>(
   let consumed = false;
 
   return {
+    requestId,
     write(neuralChunk: Uint8Array) {
       requestStream.write(neuralChunk);
     },

@@ -26,8 +26,17 @@ interface BciAddonResponse {
     tokensPerSecond?: number;
     totalTokens?: number;
     totalSegments?: number;
-    audioDuration?: number;
+    audioDurationMs?: number;
     realTimeFactor?: number;
+    whisperEncodeMs?: number;
+    whisperDecodeMs?: number;
+    encoderMs?: number;
+    decoderMs?: number;
+    melSpecMs?: number;
+    backendDevice?: number;
+    backendId?: number;
+    gpuMemTotalMb?: number;
+    gpuMemFreeMb?: number;
   };
 }
 
@@ -144,8 +153,8 @@ export async function* bciTranscribe(
   const modelExecutionMs = nowMs() - modelStart;
 
   const stats: TranscribeStats = {
-    ...(response.stats?.audioDuration !== undefined && {
-      audioDuration: response.stats.audioDuration,
+    ...(response.stats?.audioDurationMs !== undefined && {
+      audioDuration: response.stats.audioDurationMs,
     }),
     ...(response.stats?.realTimeFactor !== undefined && {
       realTimeFactor: response.stats.realTimeFactor,
@@ -158,6 +167,33 @@ export async function* bciTranscribe(
     }),
     ...(response.stats?.totalSegments !== undefined && {
       totalSegments: response.stats.totalSegments,
+    }),
+    ...(response.stats?.whisperEncodeMs !== undefined && {
+      whisperEncodeTime: response.stats.whisperEncodeMs,
+    }),
+    ...(response.stats?.whisperDecodeMs !== undefined && {
+      whisperDecodeTime: response.stats.whisperDecodeMs,
+    }),
+    ...(response.stats?.encoderMs !== undefined && {
+      encoderTime: response.stats.encoderMs,
+    }),
+    ...(response.stats?.decoderMs !== undefined && {
+      decoderTime: response.stats.decoderMs,
+    }),
+    ...(response.stats?.melSpecMs !== undefined && {
+      melSpecTime: response.stats.melSpecMs,
+    }),
+    ...(response.stats?.backendDevice !== undefined && {
+      backendDevice: response.stats.backendDevice,
+    }),
+    ...(response.stats?.backendId !== undefined && {
+      backendId: response.stats.backendId,
+    }),
+    ...(response.stats?.gpuMemTotalMb !== undefined && {
+      gpuMemTotalMb: response.stats.gpuMemTotalMb,
+    }),
+    ...(response.stats?.gpuMemFreeMb !== undefined && {
+      gpuMemFreeMb: response.stats.gpuMemFreeMb,
     }),
   };
 

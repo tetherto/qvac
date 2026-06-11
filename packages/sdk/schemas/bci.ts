@@ -131,6 +131,9 @@ export type NeuralInput = z.infer<typeof neuralInputSchema>;
 export type BciTranscribeParams = z.infer<typeof bciTranscribeParamsSchema>;
 export type BciTranscribeRequest = z.infer<typeof bciTranscribeRequestSchema>;
 export type BciTranscribeResponse = z.infer<typeof bciTranscribeResponseSchema>;
+export type BciTranscribeClientParamsParsed = z.output<
+  typeof bciTranscribeClientParamsSchema
+>;
 export type BciStreamOpts = z.infer<typeof bciStreamOptsSchema>;
 export type BciTranscribeStreamRequest = z.infer<
   typeof bciTranscribeStreamRequestSchema
@@ -165,6 +168,11 @@ export type BciTranscribeStreamClientParams = {
 };
 
 export interface BciTranscribeStreamSession {
+  /**
+   * Stable id for this in-flight BCI stream. Pass to `cancel({ requestId })`
+   * to target this duplex session without cancelling other work on the model.
+   */
+  requestId: string;
   write(neuralChunk: Uint8Array): void;
   end(): void;
   destroy(): void;
@@ -172,6 +180,11 @@ export interface BciTranscribeStreamSession {
 }
 
 export interface BciTranscribeStreamMetadataSession {
+  /**
+   * Stable id for this in-flight BCI stream. Pass to `cancel({ requestId })`
+   * to target this duplex session without cancelling other work on the model.
+   */
+  requestId: string;
   write(neuralChunk: Uint8Array): void;
   end(): void;
   destroy(): void;

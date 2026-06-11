@@ -224,8 +224,18 @@ test("bciTranscribeStreamRequestSchema: accepts streamOpts + metadata", (t) => {
     modelId: "model-1",
     metadata: true,
     streamOpts: { windowTimesteps: 1500, hopTimesteps: 500, emit: "delta" },
+    requestId: "req-stream-1",
   });
   t.is(result.success, true);
+});
+
+test("bciTranscribeStreamRequestSchema: rejects an empty requestId", (t) => {
+  const result = bciTranscribeStreamRequestSchema.safeParse({
+    type: "bciTranscribeStream",
+    modelId: "model-1",
+    requestId: "",
+  });
+  t.is(result.success, false);
 });
 
 test("bciTranscribeStreamRequestSchema: rejects invalid streamOpts", (t) => {
