@@ -10,7 +10,10 @@
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/MtmdLlmContext.hpp"
+#include "model-interface/SequenceDriver.hpp"
 #include "test_common.hpp"
+#include "test_internal_peers.hpp"
 
 using test_common::getStatValue;
 
@@ -508,6 +511,114 @@ TEST_F(MtmdLlmContextTest, NonexistentFile) {
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
+/// A batch prompt may carry media as a string file path (not just inline
+/// `Uint8Array` bytes). The per-slot MTMD driver must load that file itself,
+/// exactly as the single-prompt path does. With the bug the path is loaded
+/// into the shared context instead, so the per-slot driver sees a media
+/// marker with no bitmap and the batch throws.
+TEST_F(MtmdLlmContextTest, BatchLoadsPathModeMediaPerSlot) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  // Resolve media/ whether the test binary runs from the package root or from
+  // build/test/unit (mirrors BaseTestModelPath's two-location model lookup).
+  fs::path imagePath = "../../../media/elephant.jpg";
+  if (!fs::exists(imagePath)) {
+    imagePath = "media/elephant.jpg";
+  }
+  ASSERT_TRUE(fs::exists(imagePath))
+      << "test image missing: " << fs::absolute(imagePath).string();
+  imagePath = fs::absolute(imagePath);
+
+  auto cfg = config_files;
+  cfg["parallel"] = "2";
+  cfg["n_predict"] = "16";
+  std::string modelPath = test_model_path;
+  std::string projectionPath = test_projection_path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::move(projectionPath), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      std::string(R"([{"role":"user","type":"media","content":")") +
+      imagePath.generic_string() +
+      R"("},{"role":"user","content":"What is in this image? One word."}])";
+
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW({
+    outputs =
+        model->processPromptBatch(std::vector<LlamaModel::Prompt>{prompt});
+  });
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty())
+      << "batch path-mode media produced no output: the per-slot driver "
+         "never loaded the image file";
+}
+
+/// A batch prompt may interleave a string-path media item and an inline
+/// `Uint8Array` byte media item. The per-slot MTMD driver loads media via the
+/// ordered plan, so each bitmap binds to its own marker in prompt-marker order
+/// rather than bytes-then-paths. Both images decode cleanly on their own, so
+/// the mixed-mode prompt is accepted and produces output. With the bug
+/// `preparePrefill` rejected any byte+path mix instead of preserving order.
+TEST_F(MtmdLlmContextTest, BatchPreservesMixedByteAndPathMediaOrder) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  // Resolve media/ whether the test binary runs from the package root or from
+  // build/test/unit (mirrors BaseTestModelPath's two-location model lookup).
+  fs::path mediaDir = "../../../media";
+  if (!fs::exists(mediaDir)) {
+    mediaDir = "media";
+  }
+  const fs::path pathImage = fs::absolute(mediaDir / "elephant.jpg");
+  const fs::path byteImage = fs::absolute(mediaDir / "fruitPlate.png");
+  ASSERT_TRUE(fs::exists(pathImage)) << pathImage.string();
+  ASSERT_TRUE(fs::exists(byteImage)) << byteImage.string();
+
+  std::ifstream byteStream(byteImage, std::ios::binary);
+  ASSERT_TRUE(byteStream) << "failed to open " << byteImage.string();
+  const std::vector<uint8_t> byteData(
+      (std::istreambuf_iterator<char>(byteStream)),
+      std::istreambuf_iterator<char>());
+  ASSERT_FALSE(byteData.empty());
+
+  auto cfg = config_files;
+  cfg["parallel"] = "2";
+  cfg["n_predict"] = "16";
+  std::string modelPath = test_model_path;
+  std::string projectionPath = test_projection_path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::move(projectionPath), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  // Path media item first, then a byte placeholder (empty content marks the
+  // hoisted `Uint8Array`), so the marker order is path, byte. The driver must
+  // load the path bitmap before the byte bitmap to match that order.
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      std::string(R"([{"role":"user","type":"media","content":")") +
+      pathImage.generic_string() +
+      R"("},{"role":"user","type":"media","content":""},)"
+      R"({"role":"user","content":"What is in these images? One word."}])";
+  prompt.media.push_back(byteData);
+
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW({
+    outputs =
+        model->processPromptBatch(std::vector<LlamaModel::Prompt>{prompt});
+  });
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty())
+      << "batch mixed byte+path media produced no output: the per-slot driver "
+         "never bound both bitmaps in prompt-marker order";
+}
+
 TEST_F(MtmdLlmContextTest, ProcessWithTools) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";
@@ -592,4 +703,82 @@ TEST_F(MtmdLlmContextTest, ProcessWithMultipleTools) {
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
+}
+
+/// `loadCache` may only restore a multimodal session when the GGSQ header
+/// carried all four `SessionMetadataField` values. The old gate accepted any
+/// `tokenCount > 1`, so a partial header (2 or 3 fields) was restored with
+/// `cacheTokens`/`firstMsgCacheTokens` defaulted to zero — which diverges from
+/// `nPast` under M-RoPE and corrupts later cap checks. An over-long layout
+/// (`> 4`) is equally unexpected. Only an exact four-field header is complete.
+TEST(MtmdSessionMetadataGate, AcceptsOnlyTheFullFourFieldContract) {
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(0));
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(1));
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(2));
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(3));
+  EXPECT_TRUE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT));
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT + 1));
+}
+
+TEST_F(MtmdLlmContextTest, RejectMediaMarkerWithoutBuffer) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  // Prompt with an empty media marker (no path) but no buffer provided.
+  // The marker will be recorded by formatPrompt as MediaSource::ByteBuffer
+  // but prompt.media is empty, so loadMedia should fail with a validation
+  // error.
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"type": "media", "content": ""}, {"role": "user", "content": "What is this?"}])";
+  // prompt.media is empty - missing the buffer that the marker expects
+
+  EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
+}
+
+/// Regression for review comment #3451899281. On the continuous-batching path
+/// the scheduler decodes generated tokens itself and reconciles the driver
+/// only through syncPosition(); cacheTokens is otherwise advanced solely by
+/// prefill/media eval. Each generated token is text and consumes exactly one
+/// KV cell, so syncPosition() must advance physical KV-cell usage in lockstep
+/// with the logical position. If it advances only the position, the per-slot
+/// KV-cell cap in onLogitsReady() keeps comparing against the frozen prefill
+/// count, and an M-RoPE slot (cacheTokens > pos) can generate past its budget.
+TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+  auto model = createModel();
+  ASSERT_NE(model, nullptr) << "Model failed to load";
+
+  LlmContext* ctx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(ctx, nullptr);
+  auto* driver = dynamic_cast<SequenceDriver*>(ctx);
+  ASSERT_NE(driver, nullptr)
+      << "MTMD context must expose the SequenceDriver interface";
+
+  // Seed an M-RoPE prefill state where physical KV cells exceed logical
+  // positions, as media does (cacheTokens > pos).
+  constexpr llama_pos prefillPos = 10;
+  constexpr llama_pos prefillCells = 20;
+  ctx->setNPast(prefillPos);
+  ctx->setCacheTokens(prefillCells);
+  ASSERT_EQ(driver->getKvCellsUsed(), prefillCells);
+
+  // The scheduler feeds three generated text tokens, advancing the logical
+  // position 10 -> 13. Generated text is one KV cell per position.
+  constexpr llama_pos generated = 3;
+  driver->syncPosition(prefillPos + generated);
+
+  EXPECT_EQ(ctx->getNPast(), prefillPos + generated);
+  EXPECT_EQ(driver->getKvCellsUsed(), prefillCells + generated)
+      << "syncPosition advanced the logical position but not physical KV-cell "
+         "usage; onLogitsReady's per-slot KV-cell cap would be checked against "
+         "a frozen prefill count";
 }

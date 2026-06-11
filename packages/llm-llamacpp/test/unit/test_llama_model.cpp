@@ -290,6 +290,34 @@ TEST_F(LlamaModelTest, ProcessBinaryInput) {
   }
 }
 
+// A media buffer supplied in `prompt.media` but NOT referenced by any media
+// marker in the prompt text must be rejected, not silently dropped. With the
+// load order built solely from the prompt's media plan, a marker-less buffer
+// produces an empty plan, so no loadMedia() ever runs and the text-only
+// rejection is never reached. This reproduces that drop on a text-only model.
+TEST_F(LlamaModelTest, RejectsUnreferencedMediaBuffer) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+  if (!test_projection_path.empty()) {
+    GTEST_SKIP() << "Text-only model required for this test";
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::vector<uint8_t> unreferenced_media = {0x89, 0x50, 0x4E, 0x47};
+  LlamaModel::Prompt prompt;
+  // No media marker in the prompt text — the buffer is unreferenced.
+  prompt.input = R"([{"role": "user", "content": "Describe nothing."}])";
+  prompt.media.push_back(std::move(unreferenced_media));
+  EXPECT_THROW({ model.processPrompt(prompt); }, qvac_errors::StatusError);
+}
+
 TEST_F(LlamaModelTest, ProcessEmptyInput) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

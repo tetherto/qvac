@@ -1,5 +1,7 @@
 #include "ContinuousBatchScheduler.hpp"
 
+#include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <exception>
 #include <filesystem>
@@ -15,7 +17,6 @@
 #include <llama.h>
 
 #include "GenerationParamsApply.hpp"
-#include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -55,21 +56,47 @@ void finalizeTerminalDriver(
   }
 }
 
+bool computeSlideCapable(
+    const SequenceDriver& driver, bool slideConfigured, bool isPrefill) {
+  return slideConfigured && !isPrefill && driver.supportsSliding();
+}
+
+bool generationBudgetExceeded(
+    unsigned promptSize, unsigned promptKvSize, int nPredict,
+    unsigned perSeqMaxTokens) {
+  // promptKvSize >= promptSize always (KV cells >= positions), so the KV-cell
+  // span is the binding budget and subsumes the position check.
+  const auto budgetSize = std::max(promptSize, promptKvSize);
+  return nPredict > 0 &&
+         budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
+}
+
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
     llama_pos configuredNDiscarded,
-    std::optional<ToolsCompactProfile> toolsCompactProfile)
+    std::optional<ToolsCompactProfile> toolsCompactProfile,
+    DriverFactory driverFactory)
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
       configuredNDiscarded_(configuredNDiscarded),
       toolsCompactProfile_(std::move(toolsCompactProfile)),
+      driverFactory_(std::move(driverFactory)),
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
       slots_(batchSize), decodeFunc_([](llama_context* ctx, llama_batch& b) {
         return llama_decode(ctx, b);
-      }) {
+      }),
+      evalMediaFunc_(
+          [](SequenceDriver& driver, size_t mediaIndex, llama_pos pos) {
+            return driver.evalMediaSegment(mediaIndex, pos);
+          }) {
+  if (!driverFactory_) {
+    throw std::invalid_argument(
+        "ContinuousBatchScheduler: a driver factory is required (the model "
+        "layer owns text-vs-multimodal driver selection)");
+  }
 
   const bool ctxValid = shared_.lctx != nullptr && shared_.model != nullptr &&
                         shared_.vocab != nullptr;
@@ -270,12 +297,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   }
   const uint32_t seqId = *maybeSeqId;
   auto tools = std::make_unique<ToolsCompactController>(toolsCompactProfile_);
-  std::unique_ptr<SequenceDriver> driver = std::make_unique<TextLlmContext>(
-      tmpParams,
-      shared_,
-      *tools,
-      seqId,
-      static_cast<llama_pos>(perSeqMaxTokens_));
+  std::unique_ptr<SequenceDriver> driver = driverFactory_(
+      tmpParams, *tools, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
 
   // `applyGenerationParamsToContext` above resolves the sampling/n_predict/
   // reasoning_budget overrides into `tmpParams` (which the driver copies),
@@ -302,18 +325,35 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   const bool isCacheLoaded =
       driver->loadCache(request.cacheKey, configuredNDiscarded_);
 
-  ScopeGuard cacheGuard([this, seqId] {
-    auto* mem = llama_get_memory(shared_.lctx);
-    if (mem != nullptr) {
-      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
-    }
-  });
+  ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
-  auto tokens = driver->preparePrefill(
-      request.chatMsgs, request.tools, isCacheLoaded, request.prefill);
+  PrefillPlan plan = driver->preparePrefill(
+      request.chatMsgs,
+      request.tools,
+      request.media,
+      request.mediaPlan,
+      isCacheLoaded,
+      request.prefill);
 
   const auto promptSize = static_cast<unsigned>(driver->getNPast()) +
-                          static_cast<unsigned>(tokens.size());
+                          static_cast<unsigned>(plan.totalPositions());
+  // M-RoPE media consumes more KV cells than positions; the cells must also
+  // fit under the per-sequence cap or the slot's KV-cache overruns. Size this
+  // from the physical KV-cell usage (getKvCellsUsed), which for a cache-loaded
+  // M-RoPE sequence exceeds getNPast(); they coincide for text.
+  const auto promptKvSize = static_cast<unsigned>(driver->getKvCellsUsed()) +
+                            static_cast<unsigned>(plan.totalKvTokens());
+  if (promptKvSize > perSeqMaxTokens_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler::submit: prompt of " +
+            std::to_string(promptKvSize) +
+            " KV cells exceeds per-sequence cap " +
+            std::to_string(perSeqMaxTokens_) +
+            " (ctxTotalTokens / n_parallel)");
+  }
   if (!request.prefill && promptSize >= perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -336,24 +376,30 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             std::to_string(perSeqMaxTokens_) +
             " (ctxTotalTokens / n_parallel)");
   }
-  if (!request.prefill && tmpParams.n_predict > 0 &&
-      promptSize + static_cast<unsigned>(tmpParams.n_predict) >
-          perSeqMaxTokens_) {
+  if (!request.prefill &&
+      generationBudgetExceeded(
+          promptSize, promptKvSize, tmpParams.n_predict, perSeqMaxTokens_)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
         "ContinuousBatchScheduler::submit: n_predict " +
             std::to_string(tmpParams.n_predict) + " + prompt " +
-            std::to_string(promptSize) + " exceeds per-sequence cap " +
+            std::to_string(promptKvSize) +
+            " KV cells exceeds per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
             " (ctxTotalTokens / n_parallel)");
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);
-  const bool slideCapable = configuredNDiscarded_ > 0 && !request.prefill;
+  const bool slideCapable =
+      computeSlideCapable(*driver, configuredNDiscarded_ > 0, request.prefill);
   if (auto status = batcher_.addRequestAt(
-          seqId, std::move(tokens), driver->getNPast(), slideCapable);
+          seqId,
+          std::move(plan),
+          driver->getNPast(),
+          slideCapable,
+          driver->getKvCellsUsed());
       status != MultiRequestBatcher::AddStatus::Ok) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -402,12 +448,6 @@ ContinuousBatchScheduler::getOutputCallback(SlotState& slot, uint32_t seqId) {
 }
 
 void ContinuousBatchScheduler::finalizeFinishedSequences() {
-  auto kvClear = [this](uint32_t seqId) {
-    llama_memory_t mem = llama_get_memory(shared_.lctx);
-    if (mem != nullptr) {
-      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
-    }
-  };
   auto finished = batcher_.extractFinished();
   for (const auto& req : finished) {
     if (hasValidDriverF()(req)) {
@@ -415,26 +455,162 @@ void ContinuousBatchScheduler::finalizeFinishedSequences() {
       finalizeTerminalDriver(
           *slot.driver, req.stopReason, slot.prefillOnly, {});
     }
-    kvClear(req.seqId);
+    clearSeqKv(req.seqId);
+    notifyDone(req.seqId);
+    freeSlot(req.seqId);
+  }
+}
+
+MultiRequestBatcher::PrefillCompleteFn
+ContinuousBatchScheduler::prefillCompleteFn() {
+  return
+      [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
+        auto& slot = slots_[seqId];
+        if (!slot.has_value() || !slot->driver) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InternalError),
+              "ContinuousBatchScheduler::step: missing sequence driver for "
+              "prefill-complete seqId " +
+                  std::to_string(seqId));
+        }
+        slot->driver->onPrefillComplete(currentPos, prefillTokenCount);
+        if (slot->prefillOnly) {
+          batcher_.markFinished(seqId);
+        }
+      };
+}
+
+void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) {
+  auto* mem = llama_get_memory(shared_.lctx);
+  if (mem != nullptr) {
+    llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+  }
+}
+
+void ContinuousBatchScheduler::failSlotLocked(
+    uint32_t seqId, std::exception_ptr error) {
+  auto& slot = slots_[seqId];
+  if (!slot.has_value()) {
+    return;
+  }
+  if (slot->group) {
+    failGroupLocked(slot->group, error);
+    return;
+  }
+  if (slot->driver) {
+    slot->driver->onCancel({});
+    if (const Request* req = batcher_.requestAt(seqId); req != nullptr) {
+      accumulateSlotRuntimeStats(*slot, *req);
+    }
+  }
+  notifyDone(seqId);
+  batcher_.cancel(seqId, [this](uint32_t sid) { clearSeqKv(sid); });
+  freeSlot(seqId);
+}
+
+ContinuousBatchScheduler::StepUnlockGuard::StepUnlockGuard(
+    ContinuousBatchScheduler& scheduler, std::unique_lock<std::mutex>* lock)
+    : scheduler_(scheduler), lock_(lock) {
+  if (lock_ != nullptr) {
+    lock_->unlock();
+  }
+}
+
+ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() {
+  if (lock_ != nullptr) {
+    lock_->lock();
+    scheduler_.applyDeferredTeardownLocked();
+  }
+}
+
+void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
+    std::unique_lock<std::mutex>* lock) {
+  const auto awaiting = batcher_.nextAwaitingMedia();
+  if (!awaiting.has_value()) {
+    return;
+  }
+  auto& slot = slots_[awaiting->seqId];
+  if (!slot.has_value() || !slot->driver) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InternalError),
+        "ContinuousBatchScheduler::step: missing sequence driver for "
+        "media-awaiting seqId " +
+            std::to_string(awaiting->seqId));
+  }
+
+  SequenceDriver& driver = *slot->driver;
+  llama_pos newPos = awaiting->currentPos;
+  std::exception_ptr error;
+  std::chrono::steady_clock::duration evalDuration{};
+  {
+    StepUnlockGuard unlockGuard(*this, lock);
+    const auto evalStart = std::chrono::steady_clock::now();
+    try {
+      newPos =
+          evalMediaFunc_(driver, awaiting->mediaIndex, awaiting->currentPos);
+    } catch (...) {
+      error = std::current_exception();
+    }
+    evalDuration = std::chrono::steady_clock::now() - evalStart;
+  }
+
+  if (error) {
+    failSlotLocked(awaiting->seqId, error);
+    return;
+  }
+  assert(
+      newPos >= awaiting->currentPos &&
+      "media segment must not move the sequence position backwards");
+  const auto mediaPositions =
+      static_cast<uint64_t>(newPos - awaiting->currentPos);
+  stats_.recordDecodeStep(
+      numActiveLocked(),
+      mediaPositions,
+      0,
+      std::chrono::duration_cast<std::chrono::nanoseconds>(evalDuration));
+  batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
+}
+
+void ContinuousBatchScheduler::drainFinishedLocked() {
+  auto finished = batcher_.extractFinished();
+  for (const auto& req : finished | std::views::filter(hasValidDriverF())) {
+    auto& slot = *slots_[req.seqId];
+    auto outputCallback = getOutputCallback(slot, req.seqId);
+    finalizeTerminalDriver(
+        *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
+    accumulateSlotRuntimeStats(slot, req);
+    saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+  }
+  for (const auto& req : finished) {
+    clearSeqKv(req.seqId);
     notifyDone(req.seqId);
     freeSlot(req.seqId);
   }
 }
 
 bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
+  serviceNextMediaSegmentLocked(lock);
+
   const auto fillResult = batcher_.fillBatch(batch_);
   if (fillResult.chunkSize == 0) {
+    // A media segment serviced above can finish a slot (prefill-only
+    // request or per-sequence cap) without leaving tokens to feed; drain
+    // here or the worker would spin on the occupied slot forever.
+    drainFinishedLocked();
     return true;
   }
 
-  if (lock != nullptr) {
-    lock->unlock();
-  }
-  const auto decodeStart = std::chrono::steady_clock::now();
-  const int decodeRc = decodeFunc_(shared_.lctx, *batch_);
-  const auto decodeDuration = std::chrono::steady_clock::now() - decodeStart;
-  if (lock != nullptr) {
-    lock->lock();
+  int decodeRc = 0;
+  std::chrono::steady_clock::duration decodeDuration{};
+  {
+    StepUnlockGuard unlockGuard(*this, lock);
+    const auto decodeStart = std::chrono::steady_clock::now();
+    decodeRc = decodeFunc_(shared_.lctx, *batch_);
+    decodeDuration = std::chrono::steady_clock::now() - decodeStart;
   }
 
   if (decodeRc != 0) {
@@ -471,24 +647,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       decodeTokens,
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
-  batcher_.advance(
-      fillResult.chunkSize,
-      [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
-        auto& slot = slots_[seqId];
-        if (!slot.has_value() || !slot->driver) {
-          throw qvac_errors::StatusError(
-              ADDON_ID,
-              qvac_errors::general_error::toString(
-                  qvac_errors::general_error::InternalError),
-              "ContinuousBatchScheduler::step: missing sequence driver for "
-              "prefill-complete seqId " +
-                  std::to_string(seqId));
-        }
-        slot->driver->onPrefillComplete(currentPos, prefillTokenCount);
-        if (slot->prefillOnly) {
-          batcher_.markFinished(seqId);
-        }
-      });
+  batcher_.advance(fillResult.chunkSize, prefillCompleteFn());
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
@@ -554,26 +713,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     batcher_.markAllFinished(StopReason::Cancelled);
   }
 
-  auto kvClear = [this](uint32_t seqId) {
-    auto* mem = llama_get_memory(shared_.lctx);
-    if (mem != nullptr) {
-      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
-    }
-  };
-  auto finished = batcher_.extractFinished();
-  for (const auto& req : finished | std::views::filter(hasValidDriverF())) {
-    auto& slot = *slots_[req.seqId];
-    auto outputCallback = getOutputCallback(slot, req.seqId);
-    finalizeTerminalDriver(
-        *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
-    accumulateSlotRuntimeStats(slot, req);
-    saveCacheForSlot(req.seqId, *slots_[req.seqId]);
-  }
-  for (const auto& req : finished) {
-    kvClear(req.seqId);
-    notifyDone(req.seqId);
-    freeSlot(req.seqId);
-  }
+  drainFinishedLocked();
 
   return true;
 }
@@ -637,7 +777,15 @@ void RuntimeStatsSnapshot::accumulateSlot(
   contextSlides += nSlides;
   thinkingBlockDiscards += thinkingDiscards;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
-  promptTokens += static_cast<int64_t>(req.prefillTokenCount);
+  // Count tokens actually prefilled, not the prompt size planned at admission:
+  // once prefill completes, prefillFedCount is reset to 0, so the full prompt
+  // is read from prefillTokenCount; a request cancelled mid/pre-prefill instead
+  // reports the partial prefillFedCount (0 if no step ever ran). This keeps the
+  // `cacheTokens ~= promptTokens + generatedTokens` invariant honest on the
+  // cancel path.
+  promptTokens += req.isPrefillComplete()
+                      ? static_cast<int64_t>(req.prefillTokenCount)
+                      : static_cast<int64_t>(req.prefillFedCount);
 }
 
 double RuntimeStatsSnapshot::avgConcurrentSeq() const {
@@ -695,13 +843,7 @@ void ContinuousBatchScheduler::cancelSlotLocked(uint32_t seqId) {
     saveCacheForSlot(seqId, *slots_[seqId]);
   }
   notifyDone(seqId);
-  auto kvClear = [this](uint32_t s) {
-    auto* mem = llama_get_memory(shared_.lctx);
-    if (mem != nullptr) {
-      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(s), -1, -1);
-    }
-  };
-  batcher_.cancel(seqId, kvClear);
+  batcher_.cancel(seqId, [this](uint32_t s) { clearSeqKv(s); });
   freeSlot(seqId);
 }
 
@@ -741,13 +883,7 @@ void ContinuousBatchScheduler::clearLocked() {
       freeSlot(seqId);
     }
   }
-  auto kvClear = [this](uint32_t s) {
-    auto* mem = llama_get_memory(shared_.lctx);
-    if (mem != nullptr) {
-      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(s), -1, -1);
-    }
-  };
-  batcher_.clear(kvClear);
+  batcher_.clear([this](uint32_t s) { clearSeqKv(s); });
 }
 
 void ContinuousBatchScheduler::completeGroupRequestLocked(
@@ -772,12 +908,6 @@ void ContinuousBatchScheduler::failGroupLocked(
   group->stats = stats_;
   group->done = true;
 
-  auto kvClear = [this](uint32_t seqId) {
-    auto* mem = llama_get_memory(shared_.lctx);
-    if (mem != nullptr) {
-      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
-    }
-  };
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value() && slots_[seqId]->group == group) {
       if (slots_[seqId]->driver) {
@@ -788,7 +918,7 @@ void ContinuousBatchScheduler::failGroupLocked(
         saveCacheForSlot(seqId, *slots_[seqId]);
       }
       notifyDone(seqId);
-      batcher_.cancel(seqId, kvClear);
+      batcher_.cancel(seqId, [this](uint32_t s) { clearSeqKv(s); });
       freeSlot(seqId);
     }
   }
