@@ -88,13 +88,10 @@ function resolvePackagedWorkerPath(): string | undefined {
  */
 function getDefaultWorkerPath(): string {
   type ImportMetaAsset = { asset?: (spec: string) => string };
-  const hasAsset =
-    typeof (import.meta as ImportMetaAsset).asset === "function";
+  const hasAsset = typeof (import.meta as ImportMetaAsset).asset === "function";
 
   const packagedUrl = hasAsset
-    ? new URL(
-        (import.meta as ImportMetaAsset).asset!("../../server/worker.js"),
-      )
+    ? new URL((import.meta as ImportMetaAsset).asset!("../../server/worker.js"))
     : new URL("../../server/worker.js", import.meta.url);
   const packaged = fileURLToPath(packagedUrl);
   if (fs.existsSync(packaged)) return packaged;
@@ -371,6 +368,8 @@ async function ensureRPC(): Promise<RPC> {
                 : os.homedir(),
             }),
           ],
+          platform: process.platform,
+          arch: process.arch,
           stdio: ["inherit", "inherit", "inherit"],
         });
       } catch (error) {
