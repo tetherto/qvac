@@ -1,5 +1,5 @@
 name: Release Merge Guard
-description: Enforces release branch naming, version matching, and changelog updates when the release version changes
+description: Enforces release branch naming, version bump and changelog update on merge
 inputs:
   github-token:
     required: false

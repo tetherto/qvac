@@ -23,6 +23,8 @@ The managed serve lifecycle is designed for coding agents and other local tools 
 
 The package now exposes a small public catalog that maps models.dev-style ids, such as `qwen3.5-9b`, to the SDK constants that `qvac serve` loads. This keeps model ids consistent across catalog UIs, provider configuration, and generated serve configs while preserving support for raw SDK constants.
 
+The generated catalog was refreshed against the live QVAC registry for this release, adding 17 OpenAI-compatible model constants with no removals.
+
 ## Compatibility
 
 External mode is unchanged and remains the default synchronous path. Managed mode is loaded only when `mode: 'managed'` is used and requires `@qvac/cli` as an optional peer dependency.
