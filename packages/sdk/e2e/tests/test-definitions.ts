@@ -36,6 +36,7 @@ import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
 import { multiGpuTests } from "./multi-gpu-tests.js";
 import { cancellationTests } from "./cancellation-tests.js";
+import { vlaTests } from "./vla-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -295,6 +296,11 @@ export const tests = [
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
+
+  // VLA (SmolVLA + π₀.₅) — runs on desktop; mobile skips via SkipExecutor
+  // (see mobile/consumer.ts) because the GGUFs are too large for the
+  // Device Farm infra (see note there).
+  ...vlaTests,
 
   // Additional model tests
   modelSwitchLlm,

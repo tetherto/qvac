@@ -126,12 +126,19 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
               "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
     }
   }
-  // GPU execution is supported as of tts-cpp@2026-06-05 (QVAC-18605
-  // Supertonic Vulkan/Metal optimisations + QVAC-19254 sched/cpu_backend
-  // refactor for Adreno OpenCL).  Backend selection follows tts-cpp's
-  // init_gpu_backend tier policy: Adreno 700+ -> OpenCL, otherwise
-  // Vulkan/Metal/CUDA via the registry walk, otherwise CPU.  Caller
-  // intent (useGPU / nGpuLayers) is honoured.
+  const bool wantsGpu =
+      cfg.useGpu.value_or(false) ||
+      (cfg.nGpuLayers.has_value() && *cfg.nGpuLayers != 0);
+  if (wantsGpu) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "SupertonicModel: GPU execution is not supported by the Supertonic "
+        "engine yet (see tts-cpp include/tts-cpp/supertonic/engine.h: \"CPU "
+        "only today\"). GPU output is currently silently wrong "
+        "(~4x quieter, slightly truncated) on the Vulkan vector-estimator "
+        "+ vocoder path. Pass useGPU: false (and leave nGpuLayers unset or "
+        "0) when constructing a Supertonic model.");
+  }
 }
 
 void SupertonicModel::load() {
@@ -153,13 +160,23 @@ void SupertonicModel::reload() {
 void SupertonicModel::loadLocked() {
   if (engine_) return;
 
-  // Android GPU policy is delegated to tts-cpp's init_gpu_backend tier
-  // policy as of QVAC-19254: it allowlists Qualcomm Adreno (OpenCL on
-  // Adreno 700+, falls through to Vulkan / CPU on other tiers) and
-  // skips Mali / non-Adreno GPUs that would abort ggml_backend_graph_
-  // compute.  No extra force-off at this boundary; consumers asking
-  // for useGPU=true on Android will get Adreno-OpenCL when available
-  // and CPU otherwise.
+  // Force useGPU to false on Android until Vulkan (Mali) and OpenCL (Adreno)
+  // stabilize for the Supertonic graph.
+#ifdef __ANDROID__
+  {
+    const bool wantsGpu =
+        cfg_.useGpu.value_or(false) ||
+        (cfg_.nGpuLayers.has_value() && *cfg_.nGpuLayers != 0);
+    if (wantsGpu) {
+      QLOG(logger::Priority::WARNING,
+           "Supertonic: useGPU=true is currently ignored on Android "
+           "(GPU backends disabled at engine boundary pending Vulkan/Mali "
+           "and OpenCL/Adreno driver fixes); falling back to CPU.");
+    }
+    cfg_.useGpu     = false;
+    cfg_.nGpuLayers = 0;
+  }
+#endif
 
   try {
     engine_ = std::make_shared<tts_cpp::supertonic::Engine>(toEngineOptions(cfg_));

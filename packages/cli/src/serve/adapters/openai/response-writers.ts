@@ -1,6 +1,7 @@
 import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool } from '@qvac/sdk'
 import { sendSSE, endSSE } from '../../lib/sse.js'
+import { drainCompletion } from './completion-result.js'
 import { sdkToolCallsToOpenai } from './tool-calls.js'
 import type { GenerationParams, ResponseFormat } from '../../schemas/common.js'
 import { buildResponseObject, functionCallOutputItemId, messageId } from './responses-shape.js'
@@ -40,9 +41,7 @@ export async function writeBlockingResponse (
   p: ResponsesHandlerParams,
   result: CompletionRun
 ): Promise<Record<string, unknown>> {
-  const text = await result.text
-  const toolCalls = await result.toolCalls
-  const stats = await result.stats
+  const { text, toolCalls, stats, stopReason } = await drainCompletion(result)
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -57,6 +56,7 @@ export async function writeBlockingResponse (
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
 
@@ -114,7 +114,7 @@ export async function writeStreamingResponse (
     response_id: p.rid
   })
 
-  for await (const token of result.tokenStream) {
+  const { toolCalls, stats, stopReason } = await drainCompletion(result, (token) => {
     fullText += token
     sendSSE(res, {
       type: 'response.output_text.delta',
@@ -124,9 +124,7 @@ export async function writeStreamingResponse (
       delta: token,
       response_id: p.rid
     })
-  }
-
-  const toolCalls = await result.toolCalls
+  })
   const hasToolCalls = toolCalls.length > 0
 
   sendSSE(res, {
@@ -196,8 +194,6 @@ export async function writeStreamingResponse (
     }
   }
 
-  const stats = await result.stats
-
   const responseObject = buildResponseObject({
     id: p.rid,
     modelAlias: p.modelAlias,
@@ -213,6 +209,7 @@ export async function writeStreamingResponse (
     store: p.storeEnabled,
     messageItemId: msgId,
     ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
+    ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
 
@@ -228,7 +225,8 @@ export async function writeStreamingResponse (
     p.ctx.responsesStore.put(rec)
   }
 
-  sendSSE(res, { type: 'response.completed', response: responseObject })
+  const terminalType = responseObject['status'] === 'incomplete' ? 'response.incomplete' : 'response.completed'
+  sendSSE(res, { type: terminalType, response: responseObject })
   endSSE(res, { sentinel: false })
   p.ctx.logger.info(`  responses stream done id=${p.rid} stored=${p.storeEnabled}`)
   return responseObject
