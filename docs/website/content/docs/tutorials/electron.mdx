@@ -553,15 +553,14 @@ export default App
 
 The chat UI is now fully wired to QVAC. On mount, it loads the model and subscribes to streaming tokens. `handleSend` pushes the conversation history through the preload bridge, and each token appends to the latest assistant bubble. The `bottomRef` keeps the view scrolled to the newest message.
 </Step>
-</Steps>
 
-## Run in development
-
+<Step>
 Run the app from the project root:
-
 ```bash
 npm run dev
 ```
+</Step>
+</Steps>
 
 On the first run, the model may download from peers (watch the terminal for progress). Once it finishes, type a message and press **Enter** or click **Send** — the response should stream into the UI token by token:
 
@@ -575,7 +574,7 @@ On the first run, the model may download from peers (watch the terminal for prog
 
 ## Step 4: package for distribution
 
-Now that the app works in development, let's build a distributable using the `@qvac/sdk/electron-forge` plugin, which:
+Now that the app works in dev env, let's build a distributable using `@qvac/sdk/electron-forge`, which:
 
 - Bundles the QVAC worker for the target platform/arch.
 - Tree-shakes unused `@qvac/*` addons.
@@ -585,17 +584,17 @@ Now that the app works in development, let's build a distributable using the `@q
 <Steps>
 
 <Step>
-Install electron-forge and the QVAC plugin's peer dependency:
+Install Electron Forge and `@qvac/sdk/electron-forge` peer dependency:
 
 ```bash
 npm i -D @electron-forge/cli @electron-forge/plugin-base @electron-forge/maker-zip
 ```
 
-`@electron-forge/plugin-base` is the QVAC plugin's only peer dependency. `@electron-forge/maker-zip` produces a zip distributable; add other makers (`@electron-forge/maker-dmg`, `@electron-forge/maker-squirrel`, etc.) as needed.
+`@electron-forge/plugin-base` is `@qvac/sdk/electron-forge` only peer dependency. `@electron-forge/maker-zip` produces a zip distributable; add other makers (`@electron-forge/maker-dmg`, `@electron-forge/maker-squirrel`, etc.) as needed.
 </Step>
 
 <Step>
-Resolve the `out/` directory collision. electron-forge writes packaged output to `out/`, and electron-vite's default output dir is also `out/` — they conflict. Move electron-vite's output to `dist/`:
+Move `electron-vite` output to `dist/`, to resolve the `out/` directory collision:
 
 ```ts title="electron.vite.config.ts" lineNumbers
 import { resolve } from 'path'
@@ -621,8 +620,10 @@ export default defineConfig({
   }
 })
 ```
+</Step>
 
-Update `package.json`'s `main` field to point at the new location:
+<Step>
+Update field `main` in `package.json` to point at the new location:
 
 ```bash
 npm pkg set main="./dist/main/index.js"
@@ -630,7 +631,7 @@ npm pkg set main="./dist/main/index.js"
 </Step>
 
 <Step>
-Add a `forge.config.cjs` at the project root:
+Add `forge.config.cjs` at project root:
 
 ```js title="forge.config.cjs" lineNumbers
 "use strict";
@@ -652,8 +653,10 @@ module.exports = {
   ]
 };
 ```
+</Step>
 
-Optionally, add a `qvac.config.json` to declare which QVAC plugins your app uses:
+<Step>
+_(Optional)_ Add a `qvac.config.json` to declare which QVAC plugins your app uses:
 
 ```json title="qvac.config.json"
 {
@@ -661,11 +664,12 @@ Optionally, add a `qvac.config.json` to declare which QVAC plugins your app uses
 }
 ```
 
-With no `qvac.config.json` the plugin auto-discovers and bundles all built-in QVAC plugins. Listing only what you use produces a smaller worker bundle.
+With no `qvac.config.json`, `QvacForgePlugin` auto-discovers, and bundles all built-in QVAC plugins. Listing only what you use produces a smaller worker bundle. See [Plugin system](/configuration/plugins) for details.
+
 </Step>
 
 <Step>
-Add `package` and `make` scripts that compile your code with electron-vite, then package with electron-forge:
+Add `package` and `make` scripts that compile your code with `electron-vite`, then package with `electron-forge`:
 
 ```bash
 npm pkg set scripts.package="electron-vite build && electron-forge package"
@@ -687,23 +691,29 @@ This will:
 4. Package the app to `out/<name>-<platform>-<arch>/`.
 5. Tree-shake unused `@qvac/*` addons and prune non-target prebuilds.
 
-Run `npm run make` to also produce `.zip` / `.dmg` / `.exe` distributables from the makers in `forge.config.cjs`.
 </Step>
 
+<Step>
+Finally, produce `.zip` / `.dmg` / `.exe` distributables from the makers in `forge.config.cjs`:
+
+```bash
+npm run make
+```
+</Step>
 </Steps>
 
-### Behavioral notes
+## Packaging caveats
 
-- **`asar: false` is forced.** The Bare worker can't load addons from inside an ASAR archive — paths inside `app.asar` aren't real files on disk. The plugin overrides any `packagerConfig.asar` setting and warns if you've set it to anything else.
+- **`asar: false` is forced.** The Bare worker can't load addons from inside an ASAR archive — paths inside `app.asar` aren't real files on disk. `QvacForgePlugin` overrides any `packagerConfig.asar` setting and warns if you've set it to anything else.
 
-- **macOS universal builds are blocked.** Native addon prebuilds are arch-specific (`darwin-arm64.bare` vs `darwin-x64.bare`); a universal Electron app would need to ship both prebuild sets, which conflicts with the plugin's single-arch pruning. Build the two arches separately:
+- **macOS universal builds are blocked.** Native addon prebuilds are arch-specific (`darwin-arm64.bare` vs `darwin-x64.bare`); a universal Electron app would need to ship both prebuild sets, which conflicts with `QvacForgePlugin` single-arch pruning. Build the two architectures separately:
 
   ```bash
   npx electron-forge package --platform=darwin --arch=arm64
   npx electron-forge package --platform=darwin --arch=x64
   ```
 
-- **Cross-platform packaging is supported.** The plugin reads `--platform` and `--arch` from CLI args (and from `packagerConfig` in the config file) to drive both `bundleSdk` and `verifyBundle`. From a darwin-arm64 host you can package for darwin-x64 as long as each addon ships a `darwin-x64.bare` prebuild:
+- **Cross-platform packaging is supported.** `QvacForgePlugin` reads `--platform` and `--arch` from CLI args (and from `packagerConfig` in the config file) to drive both `bundleSdk` and `verifyBundle`. From a darwin-arm64 host you can package for darwin-x64 as long as each addon ships a `darwin-x64.bare` prebuild:
 
   ```bash
   npx electron-forge package --platform=darwin --arch=x64
