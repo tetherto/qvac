@@ -31,7 +31,7 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 Supported model families:
 
 - **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Expects **2 camera views** and a **continuous** robot state. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
-- **[π₀.₅ (pi05)](https://www.physicalintelligence.company/blog/pi05)**: single all-in-one `*.gguf` file. Expects **3 camera views** and a **discrete** robot state. The state is tokenized into the language prompt instead of passed as a buffer, and the `noise` prior is required. Available constant: `PI05_BASE_Q_AGGRESSIVE`.
+- **[π₀.₅ (pi05)](https://www.physicalintelligence.company/blog/pi05)**: single all-in-one `*.gguf` file. Expects **`vlaHparams().numCameras` camera views** (3 for `PI05_BASE_Q_AGGRESSIVE`) and a **discrete** robot state tokenized into the language prompt instead of a state buffer; the `noise` prior is required. Available constant: `PI05_BASE_Q_AGGRESSIVE`.
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
