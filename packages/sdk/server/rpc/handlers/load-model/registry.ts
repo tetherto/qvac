@@ -387,6 +387,7 @@ export async function downloadModelFromRegistry(
         return await downloadCompanionSetFromRegistry({
           companionSet: modelMetadata.companionSet,
           downloadKey,
+          allowLegacyFlatCache: modelMetadata.addon === "nmt",
           progressCallback: ctx.broadcastProgress,
           signal: ctx.signal,
           hooks: companionHooks,

@@ -28,6 +28,8 @@ export * from "./unload-model";
 export * from "./heartbeat";
 export * from "./common";
 export * from "./transcription";
+export * from "./bci";
+export * from "./bci-config";
 export * from "./translate";
 export * from "./translation-config";
 export * from "./llamacpp-config";
