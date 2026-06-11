@@ -59,28 +59,39 @@ export const bciTranscribeResponseSchema = bciTranscriptionResultBase.extend({
  * (`transcribeStream`). Each field maps 1:1 to the addon's `streamOpts`;
  * any field omitted falls back to the addon default.
  */
-export const bciStreamOptsSchema = z.object({
-  windowTimesteps: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe("Decode window size in timesteps (addon default: 1500)."),
-  hopTimesteps: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe(
-      "How far the window advances between decodes (addon default: 500). Must be < windowTimesteps.",
-    ),
-  emit: z
-    .enum(["delta", "full"])
-    .optional()
-    .describe(
-      "'delta' (default) emits only the newly-discovered tail per window; 'full' emits the full running transcript each update.",
-    ),
-});
+export const bciStreamOptsSchema = z
+  .object({
+    windowTimesteps: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Decode window size in timesteps (addon default: 1500)."),
+    hopTimesteps: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        "How far the window advances between decodes (addon default: 500). Must be < windowTimesteps.",
+      ),
+    emit: z
+      .enum(["delta", "full"])
+      .optional()
+      .describe(
+        "'delta' (default) emits only the newly-discovered tail per window; 'full' emits the full running transcript each update.",
+      ),
+  })
+  .refine(
+    (opts) =>
+      opts.windowTimesteps === undefined ||
+      opts.hopTimesteps === undefined ||
+      opts.hopTimesteps < opts.windowTimesteps,
+    {
+      message: "hopTimesteps must be < windowTimesteps",
+      path: ["hopTimesteps"],
+    },
+  );
 
 export const bciTranscribeStreamRequestSchema = bciTranscribeBaseSchema.extend({
   type: z.literal("bciTranscribeStream"),

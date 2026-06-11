@@ -163,6 +163,20 @@ test("bciStreamOptsSchema: rejects a non-integer hopTimesteps", (t) => {
   t.is(bciStreamOptsSchema.safeParse({ hopTimesteps: 10.5 }).success, false);
 });
 
+test("bciStreamOptsSchema: rejects hopTimesteps greater than or equal to windowTimesteps", (t) => {
+  const equalResult = bciStreamOptsSchema.safeParse({
+    windowTimesteps: 500,
+    hopTimesteps: 500,
+  });
+  const greaterResult = bciStreamOptsSchema.safeParse({
+    windowTimesteps: 500,
+    hopTimesteps: 501,
+  });
+
+  t.is(equalResult.success, false);
+  t.is(greaterResult.success, false);
+});
+
 test("bciStreamOptsSchema: rejects an unknown emit mode", (t) => {
   t.is(bciStreamOptsSchema.safeParse({ emit: "partial" }).success, false);
 });
