@@ -1,5 +1,6 @@
 import { ModelType } from "./model-types";
 import {
+  ADDON_BCI,
   ADDON_CLASSIFICATION,
   ADDON_DIFFUSION,
   ADDON_EMBEDDING,
@@ -22,6 +23,7 @@ import {
 export const ENGINE_TO_ADDON = {
   [ModelType.llamacppCompletion]: "llm",
   [ModelType.whispercppTranscription]: "whisper",
+  [ModelType.bciWhispercppTranscription]: "bci",
   [ModelType.llamacppEmbedding]: "embeddings",
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
@@ -39,6 +41,7 @@ export const ENGINE_TO_ADDON = {
 const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   [ADDON_LLM]: ModelType.llamacppCompletion,
   [ADDON_WHISPER]: ModelType.whispercppTranscription,
+  [ADDON_BCI]: ModelType.bciWhispercppTranscription,
   [ADDON_EMBEDDING]: ModelType.llamacppEmbedding,
   [ADDON_NMT]: ModelType.nmtcppTranslation,
   [ADDON_TTS]: ModelType.ttsGgml,
@@ -52,6 +55,7 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   // Tag-style names (used by some older registry entries)
   generation: ModelType.llamacppCompletion,
   transcription: ModelType.whispercppTranscription,
+  bci: ModelType.bciWhispercppTranscription,
   embedding: ModelType.llamacppEmbedding,
   translation: ModelType.nmtcppTranslation,
   vad: "onnx-vad",
