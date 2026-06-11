@@ -167,6 +167,17 @@ runs:
           SHOULD_PUBLISH=true
         fi
 
+        # feature/tmp dev streams publish to GPR (see ci-validation.md)
+        if [[ "$EVENT_NAME" == "push" && "$BRANCH_NAME" == feature-* ]]; then
+          echo "✅ Publishing: push to feature branch"
+          SHOULD_PUBLISH=true
+        fi
+
+        if [[ "$EVENT_NAME" == "push" && "$BRANCH_NAME" == tmp-* ]]; then
+          echo "✅ Publishing: push to tmp branch"
+          SHOULD_PUBLISH=true
+        fi
+
         # manual dispatch
         if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
           echo "✅ Publishing: manual workflow_dispatch"
