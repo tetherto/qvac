@@ -108,9 +108,6 @@ find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
-if(APPLE)
-  SET(VCPKG_OVERLAY_PORTS "vcpkg-overlay-ports")
-endif()
 
 project(inference-tts C CXX)
 
@@ -129,6 +126,7 @@ endif()
 
 set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
 find_package(qvac-onnx CONFIG REQUIRED)
+find_package(mecab CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-utf8proc CONFIG REQUIRED)
 if(TARGET utf8proc::utf8proc)
@@ -151,6 +149,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxLanguageMode.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
@@ -211,6 +210,7 @@ if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNA
     ${inference-tts}
     PRIVATE
       qvac-onnx::qvac-onnx-static
+      mecab::mecab
       tokenizers::tokenizers_cpp
       nlohmann_json::nlohmann_json
       ${QVAC_UTF8PROC_TARGET}
@@ -222,6 +222,7 @@ else()
     ${inference-tts}
     PRIVATE
       qvac-onnx::headers
+      mecab::mecab
       tokenizers::tokenizers_cpp
       nlohmann_json::nlohmann_json
       ${QVAC_UTF8PROC_TARGET}
@@ -258,6 +259,20 @@ if(WIN32)
     ${inference-tts}
     PRIVATE
       msvcrt.lib
+  )
+  # mecab.lib and bare_delay_load.lib both export DllMain. mecab's
+  # libmecab.cpp:45 defines a stub that returns TRUE; bare_delay_load defines
+  # the real entry point used to dispatch the /DELAYLOAD:bare.exe and
+  # /DELAYLOAD:qvac__onnx.bare imports the module relies on. bare_delay_load.lib
+  # is listed before mecab.lib in the link line, so /FORCE:MULTIPLE makes the
+  # linker pick the bare_delay_load DllMain and discard the mecab stub. The
+  # clean upstream fix is to patch the mecab port in qvac-registry-vcpkg to
+  # skip DllMain on static builds; until that lands we keep this targeted
+  # override for Windows.
+  target_link_options(
+    ${inference-tts}_module
+    PRIVATE
+      /FORCE:MULTIPLE
   )
 endif()
 

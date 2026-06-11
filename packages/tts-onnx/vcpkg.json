@@ -14,6 +14,7 @@
       "name": "tokenizers-cpp",
       "version>=": "0.1.1#2"
     },
+    "mecab",
     "utf8proc",
     {
       "name": "nlohmann-json",

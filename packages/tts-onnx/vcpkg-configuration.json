@@ -1,8 +1,9 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "4e4c52f549cb5912f66d202f360282cdcf992047",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+    "baseline": "74db93600a33ac51fd6f87206b17cff1da378cf9",
+    "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
+    "reference": "QVAC-14222/tts-onnx-mecab"
   },
   "registries": [
     {

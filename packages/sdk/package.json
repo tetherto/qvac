@@ -80,6 +80,10 @@
       "types": "./dist/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
       "import": "./dist/server/bare/plugins/whispercpp-transcription/plugin.js"
     },
+    "./bci-whispercpp-transcription/plugin": {
+      "types": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.js"
+    },
     "./parakeet-transcription/plugin": {
       "types": "./dist/server/bare/plugins/parakeet-transcription/plugin.d.ts",
       "import": "./dist/server/bare/plugins/parakeet-transcription/plugin.js"
@@ -202,6 +206,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
+    "@qvac/bci-whispercpp": "^0.2.0",
     "@qvac/classification-ggml": "^0.3.1",
     "@qvac/decoder-audio": "^0.3.7",
     "@qvac/diffusion-cpp": "^0.11.2",
