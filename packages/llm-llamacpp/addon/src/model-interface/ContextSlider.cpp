@@ -94,7 +94,8 @@ ContextSlideOutcome trySlidePrefillImpl(
 
     auto mem = ops.memory(lctx);
 
-    if (exactWipeFits && ops.seqRm(mem, seqId, protectedPrefixPos, currentPos)) {
+    if (exactWipeFits &&
+        ops.seqRm(mem, seqId, protectedPrefixPos, currentPos)) {
       if (tools.enabled()) {
         tools.reset();
       }
@@ -148,6 +149,7 @@ ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_seq_id seqId, ContextUsage current,
     ContextUsage protectedPrefix, ContextUsage append, llama_pos nDiscarded,
     ToolsCompactController& tools, const IContextSliderOps& ops) {
+  constexpr llama_pos effectiveCtx = -1;
   return trySlidePrefillImpl(
       lctx,
       seqId,
@@ -157,7 +159,7 @@ ContextSlideOutcome trySlidePrefill(
       nDiscarded,
       tools,
       ops,
-      /*effectiveCtx=*/-1);
+      effectiveCtx);
 }
 
 ContextSlideOutcome trySlideGeneration(
