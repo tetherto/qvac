@@ -2,7 +2,7 @@ name: Mobile Integration Tests (LLM)
 
 # Migrated to .github/actions/run-mobile-integration-tests in QVAC-18168.
 #
-# LLM uses sharded scheduling: 6 Android groups + 15 iOS groups, each
+# LLM uses sharded scheduling: 8 Android groups + 15 iOS groups, each
 # scheduled as its own Device Farm run against the LLM device pool. The
 # group definitions live in the addon at test/mobile/test-groups.json so
 # adding/moving a test changes the shard composition without editing this

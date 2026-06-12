@@ -47,32 +47,36 @@
     "gemma": [
       "runGemma4Test"
     ],
+    "cacheStateMachine": [
+      "runCacheStateMachineTest"
+    ],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
-      "runOcrPaddleTest",
-      "runToolsCompactTest",
-      "runGrammarTest",
-      "runUtf8OutputTest",
-      "runOcrLightonTest",
+      "runSlidingContextTest",
+      "runTurboquantTest",
+      "runBitnetTest",
       "runConfigParametersTest",
-      "runMultiGpuTest",
-      "runQuantizedKvcacheTest"
+      "runQuantizedKvcacheTest",
+      "runOcrLightonTest",
+      "runMultiGpuTest"
     ],
     "funcShardB": [
-      "runCacheStateMachineTest",
-      "runSlidingContextTest",
-      "runMropeSlidingContextTest",
-      "runQwen35Test",
-      "runMultiInstanceTest",
-      "runImageFruitPlateTest",
-      "runApiBehaviorTest",
-      "runModelLoadingTest",
-      "runTurboquantTest",
-      "runReasoningTest",
+      "runOcrPaddleTest",
+      "runToolsCompactTest",
       "runImageElephantTest",
+      "runGrammarTest"
+    ],
+    "funcShardC": [
       "runGenerationParamsTest",
-      "runBitnetTest",
-      "runImageHighResAuroraTest"
+      "runMropeSlidingContextTest",
+      "runMultiInstanceTest",
+      "runQwen35Test",
+      "runReasoningTest",
+      "runUtf8OutputTest",
+      "runApiBehaviorTest",
+      "runImageHighResAuroraTest",
+      "runModelLoadingTest",
+      "runImageFruitPlateTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
