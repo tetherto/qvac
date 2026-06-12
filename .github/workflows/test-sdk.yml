@@ -50,9 +50,9 @@ on:
         type: number
         default: 90
       desktop-platforms:
-        description: "JSON array of runner labels for desktop tests"
+        description: "JSON array of runner labels for desktop tests (empty = default GPU desktop matrix)"
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+        default: ""
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -87,12 +87,52 @@ on:
         default: 90
       desktop-platforms:
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+        default: ""
       test-version:
         type: string
       cache-models:
         type: boolean
         default: true
+
+
+
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
+env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
 
 permissions:
   actions: read
@@ -102,7 +142,7 @@ permissions:
 
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     outputs:
       suite: ${{ steps.resolve.outputs.suite }}
     steps:
@@ -126,7 +166,7 @@ jobs:
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
+      platforms: ${{ inputs.desktop-platforms != '' && inputs.desktop-platforms || format('["{0}","{1}","{2}"]', env.RN_QVAC_WIN25_GPU, env.RN_QVAC_U22_GPU, env.RN_MINI_M4_GPU) }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}

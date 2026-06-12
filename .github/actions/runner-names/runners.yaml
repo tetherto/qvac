@@ -1,0 +1,53 @@
+# Canonical GitHub Actions runner labels for QVAC CI.
+# Edit this file only — run `node .github/scripts/sync-runner-names.mjs` to
+# regenerate action metadata and workflow env references.
+
+# Default orchestration runner (lint, publish, PR gates)
+orch: ubuntu-latest
+
+# GitHub-hosted Linux
+u22: ubuntu-22.04
+u24: ubuntu-24.04
+u22_arm: ubuntu-22.04-arm
+u24_arm: ubuntu-24.04-arm
+
+# GitHub-hosted macOS
+mac14: macos-14
+mac14_xl: macos-14-xlarge
+mac15: macos-15
+mac15_intel: macos-15-intel
+mac15_lg: macos-15-large
+mac15_xl: macos-15-xlarge
+
+# GitHub-hosted Windows
+win22: windows-2022
+win25: windows-2025
+
+# Self-hosted QVAC runners
+qvac_u22: qvac-ubuntu2204-x64
+qvac_u22_gpu: qvac-ubuntu2204-x64-gpu
+qvac_u24: qvac-ubuntu2404-x64
+qvac_u24_gpu: qvac-ubuntu2404-x64-gpu
+qvac_win25: qvac-win25-x64
+qvac_win25_gpu: qvac-win25-x64-gpu
+
+# Self-hosted AI benchmark runners
+ai_linux: ai-run-linux
+ai_linux_gpu: ai-run-linux-gpu
+ai_u22: ai-run-ubuntu-22.04
+ai_win11_gpu: ai-run-windows11-gpu
+
+# Self-hosted image builder / Apple Silicon lab
+gen_win11: generator-windows11
+mini_m4: mac-mini-m4
+mini_m4_gpu: mac-mini-m4-gpu
+
+# Benchmark / Device Farm device labels (not always valid runs-on values)
+lbl_u22_x64: ubuntu-22.04-x64
+lbl_u22_x64_gpu: ubuntu-22.04-x64-gpu
+lbl_u24_x64: ubuntu-24.04-x64
+lbl_u24_x64_gpu: ubuntu-24.04-x64-gpu
+lbl_u24_arm64: ubuntu-24.04-arm64
+lbl_win22_x64: windows-2022-x64
+lbl_win25_x64: windows-2025-x64
+lbl_win25_x64_gpu: windows-2025-x64-gpu

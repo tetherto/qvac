@@ -127,6 +127,46 @@ on:
         default: true
         type: boolean
 
+
+
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
+env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
+
 jobs:
   run-integration-tests:
     if: ${{ inputs.run_integration_tests != false }}
@@ -143,15 +183,15 @@ jobs:
       matrix:
         # Only darwin-arm64 (macos-14-xlarge) runs all Chatterbox quantization variants; others use q4 only.
         include:
-          - {os: ubuntu-22.04, runner: qvac-ubuntu2204-x64-gpu, variant: q4, platform: linux, arch: x64, os_version: u22}
-          - {os: ubuntu-24.04, runner: qvac-ubuntu2404-x64-gpu, variant: q4, platform: linux, arch: x64, os_version: u24}
-          - {os: ubuntu-24.04-arm, variant: q4, platform: linux, arch: arm64, os_version: u24}
-          - {os: macos-14-xlarge, variant: fp32, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: fp16, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: q4, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-15-large, variant: q4, platform: darwin, arch: x64, os_version: m15}
-          - {os: windows-2025, runner: qvac-win25-x64-gpu, variant: q4, platform: win32, arch: x64, os_version: w25,}
+          - {os: ${{ env.RN_U22 }}, runner: ${{ env.RN_QVAC_U22_GPU }}, variant: q4, platform: linux, arch: x64, os_version: u22}
+          - {os: ${{ env.RN_U24 }}, runner: ${{ env.RN_QVAC_U24_GPU }}, variant: q4, platform: linux, arch: x64, os_version: u24}
+          - {os: ${{ env.RN_U24_ARM }}, variant: q4, platform: linux, arch: arm64, os_version: u24}
+          - {os: ${{ env.RN_MAC14_XL }}, variant: fp32, platform: darwin, arch: arm64, os_version: m14}
+          - {os: ${{ env.RN_MAC14_XL }}, variant: fp16, platform: darwin, arch: arm64, os_version: m14}
+          - {os: ${{ env.RN_MAC14_XL }}, variant: q4, platform: darwin, arch: arm64, os_version: m14}
+          - {os: ${{ env.RN_MAC14_XL }}, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
+          - {os: ${{ env.RN_MAC15_LG }}, variant: q4, platform: darwin, arch: x64, os_version: m15}
+          - {os: ${{ env.RN_WIN25 }}, runner: ${{ env.RN_QVAC_WIN25_GPU }}, variant: q4, platform: win32, arch: x64, os_version: w25,}
 
     steps:
       - name: Setup Node.js
@@ -273,83 +313,83 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ${{ env.RN_U22 }}
             platform: linux
             arch: x64
-            runner_label: qvac-ubuntu2204-x64
-            device_label: ubuntu-22.04-x64
+            runner_label: ${{ env.RN_QVAC_U22 }}
+            device_label: ${{ env.RN_LBL_U22_X64 }}
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: ubuntu-24.04
+          - os: ${{ env.RN_U24 }}
             platform: linux
             arch: x64
-            runner_label: qvac-ubuntu2404-x64
-            device_label: ubuntu-24.04-x64
+            runner_label: ${{ env.RN_QVAC_U24 }}
+            device_label: ${{ env.RN_LBL_U24_X64 }}
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: ubuntu-22.04
+          - os: ${{ env.RN_U22 }}
             platform: linux
             arch: x64
-            runner_label: qvac-ubuntu2204-x64-gpu
-            device_label: ubuntu-22.04-x64-gpu
+            runner_label: ${{ env.RN_QVAC_U22_GPU }}
+            device_label: ${{ env.RN_LBL_U22_X64_GPU }}
             backend: cuda
             use_gpu: true
             run_python: false
             round_trip_test: true
-          - os: ubuntu-24.04
+          - os: ${{ env.RN_U24 }}
             platform: linux
             arch: x64
-            runner_label: qvac-ubuntu2404-x64-gpu
-            device_label: ubuntu-24.04-x64-gpu
+            runner_label: ${{ env.RN_QVAC_U24_GPU }}
+            device_label: ${{ env.RN_LBL_U24_X64_GPU }}
             backend: cuda
             use_gpu: true
             run_python: false
             round_trip_test: true
-          - os: ubuntu-24.04-arm
+          - os: ${{ env.RN_U24_ARM }}
             platform: linux
             arch: arm64
-            runner_label: ubuntu-24.04-arm
-            device_label: ubuntu-24.04-arm64
+            runner_label: ${{ env.RN_U24_ARM }}
+            device_label: ${{ env.RN_LBL_U24_ARM64 }}
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: macos-14-xlarge
+          - os: ${{ env.RN_MAC14_XL }}
             platform: darwin
             arch: arm64
-            runner_label: macos-14-xlarge
-            device_label: macos-14-xlarge
+            runner_label: ${{ env.RN_MAC14_XL }}
+            device_label: ${{ env.RN_MAC14_XL }}
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: macos-14-xlarge
+          - os: ${{ env.RN_MAC14_XL }}
             platform: darwin
             arch: arm64
-            runner_label: macos-14-xlarge
-            device_label: macos-14-xlarge
+            runner_label: ${{ env.RN_MAC14_XL }}
+            device_label: ${{ env.RN_MAC14_XL }}
             backend: coreml
             use_gpu: true
             run_python: false
             round_trip_test: true
-          - os: windows-2025
+          - os: ${{ env.RN_WIN25 }}
             platform: win32
             arch: x64
-            runner_label: qvac-win25-x64
-            device_label: windows-2025-x64
+            runner_label: ${{ env.RN_QVAC_WIN25 }}
+            device_label: ${{ env.RN_LBL_WIN25_X64 }}
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: false
-          - os: windows-2025
+          - os: ${{ env.RN_WIN25 }}
             platform: win32
             arch: x64
-            runner_label: qvac-win25-x64-gpu
-            device_label: windows-2025-x64-gpu
+            runner_label: ${{ env.RN_QVAC_WIN25_GPU }}
+            device_label: ${{ env.RN_LBL_WIN25_X64_GPU }}
             backend: directml
             use_gpu: true
             run_python: false
@@ -741,7 +781,7 @@ jobs:
   summarize-supertonic-desktop-benchmarks:
     if: ${{ always() && !cancelled() && inputs.run_supertonic_desktop_benchmarks == true }}
     needs: run-supertonic-desktop-benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     permissions:
       contents: read
     steps:

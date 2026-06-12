@@ -12,14 +12,50 @@ on:
       - ".github/workflows/pr-test-inference-addon-cpp.yml"
   workflow_dispatch:
 
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
 env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
   PKG_DIR: packages/inference-addon-cpp
   VCPKG_CACHE_DIR: ${{ github.workspace }}/packages/inference-addon-cpp/vcpkg/cache
   VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/inference-addon-cpp/vcpkg/cache,read"
 
 jobs:
   authorize:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     permissions:
       contents: read
     outputs:
@@ -62,31 +98,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ${{ env.RN_U22 }}
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
-          - os: ubuntu-22.04
+            runner: ${{ env.RN_QVAC_U22 }}
+          - os: ${{ env.RN_U22 }}
             platform: android
             arch: arm64
             flags: -D ANDROID_STL=c++_shared
-            runner: qvac-ubuntu2204-x64
-          - os: macos-14
+            runner: ${{ env.RN_QVAC_U22 }}
+          - os: ${{ env.RN_MAC14 }}
             platform: ios
             arch: arm64
-          - os: macos-14
+          - os: ${{ env.RN_MAC14 }}
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator
-          - os: macos-14
+          - os: ${{ env.RN_MAC14 }}
             platform: darwin
             arch: arm64
-          - os: windows-2025
+          - os: ${{ env.RN_WIN25 }}
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
-
+            runner: ${{ env.RN_QVAC_WIN25 }}
     runs-on: ${{ matrix.runner || matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
@@ -106,7 +141,7 @@ jobs:
         with:
           workdir: ${{ env.PKG_DIR }}
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+      - if: ${{ matrix.os == env.RN_U22 }}
         name: Maximize build space
         run: |
           sudo docker image prune --all --force
@@ -114,13 +149,13 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/share/dotnet
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.os == env.RN_U22 && matrix.arch == 'arm64' }}
         name: Install tooling for cross compilation - ubuntu arm64
         run: |
           sudo apt update
           sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
 
-      - if: ${{ matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == env.RN_WIN25 }}
         name: setup cmake windows
         run: |
           cd ..
@@ -131,7 +166,7 @@ jobs:
           cat $env:GITHUB_PATH >> temp
           mv temp $env:GITHUB_PATH -Force
 
-      - if: ${{ matrix.os == 'macos-14' }}
+      - if: ${{ matrix.os == env.RN_MAC14 }}
         name: setup cmake macos
         run: |
           cd ..
@@ -141,7 +176,7 @@ jobs:
           cat $GITHUB_PATH >> temp
           mv temp $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'macos-14' }}
+      - if: ${{ matrix.os == env.RN_MAC14 }}
         name: Install vcpkg in macos
         run: |
           cd ..
@@ -151,29 +186,29 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+      - if: ${{ matrix.os == env.RN_U22 }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == env.RN_WIN25 }}
         name: Configure vcpkg in windows
         run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == env.RN_U22 || matrix.os == env.RN_WIN25 }}
         name: Cleanup vcpkg
         shell: bash
         run: |
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
 
-      - if: ${{ matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == env.RN_WIN25 }}
         name: Configure cmake generator in windows
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2025' && matrix.arch == 'x64' }}
+      - if: ${{ matrix.os == env.RN_WIN25 && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2025' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.os == env.RN_WIN25 && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
       - if: ${{ matrix.platform == 'android' }}

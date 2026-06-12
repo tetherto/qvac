@@ -27,6 +27,46 @@ on:
         default: ""
         type: string
 
+
+
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
+env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
+
 permissions:
   contents: read
   pull-requests: read
@@ -36,7 +76,7 @@ permissions:
 jobs:
   label-gate:
     name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     permissions:
       contents: read
       pull-requests: write
@@ -55,7 +95,7 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
   publish-logic:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -106,7 +146,7 @@ jobs:
     name: Release Merge Guard
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -146,7 +186,7 @@ jobs:
     continue-on-error: true
     outputs:
       published_version: ${{ steps.capture_version.outputs.published_version }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     permissions:
       contents: read
       packages: write
@@ -219,7 +259,7 @@ jobs:
       needs.label-gate.outputs.authorised == 'true' && (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     outputs:
       published_version: ${{ steps.capture_version.outputs.published_version }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     environment: npm
     permissions:
       contents: write
@@ -289,7 +329,7 @@ jobs:
 
   post-build-gate:
     name: Post-Build Gate
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     needs: [publish-gpr, publish-npm]
     if: "!cancelled()"
     outputs:

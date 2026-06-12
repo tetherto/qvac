@@ -53,6 +53,46 @@ on:
         required: false
         default: false
 
+
+
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
+env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
+
 jobs:
   run-integration-tests:
     timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
@@ -79,43 +119,43 @@ jobs:
         # and `actions/download-artifact` silently dropped one of each,
         # hiding GPU data in the combined report.
         include:
-          - os: ubuntu-22.04
+          - os: ${{ env.RN_U22 }}
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: ${{ env.RN_QVAC_U22_GPU }}
             label: linux-x64-u22-gpu
-          - os: ubuntu-24.04
+          - os: ${{ env.RN_U24 }}
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ env.RN_QVAC_U24_GPU }}
             timeout_minutes: 480
             label: linux-x64-u24-gpu
-          - os: ubuntu-24.04-arm
+          - os: ${{ env.RN_U24_ARM }}
             platform: linux
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ${{ env.RN_U24_ARM }}
             no_gpu: 'true'
             label: linux-arm64-u24
-          - os: ubuntu-22.04-arm
+          - os: ${{ env.RN_U22_ARM }}
             platform: linux
             arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ${{ env.RN_U22_ARM }}
             no_gpu: 'true'
             label: linux-arm64-u22
-          - os: macos-15-xlarge
+          - os: ${{ env.RN_MAC15_XL }}
             platform: darwin
             arch: arm64
-            runner: macos-15-xlarge
+            runner: ${{ env.RN_MAC15_XL }}
             label: darwin-arm64
-          - os: macos-15-large
+          - os: ${{ env.RN_MAC15_LG }}
             platform: darwin
             arch: x64
-            runner: macos-15-large
+            runner: ${{ env.RN_MAC15_LG }}
             label: darwin-x64
-          - os: windows-2025
+          - os: ${{ env.RN_WIN25 }}
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ env.RN_QVAC_WIN25_GPU }}
             label: win32-x64
 
     steps:
@@ -263,7 +303,7 @@ jobs:
           Get-ChildItem prebuilds/
 
       - name: Linux - install dependencies
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == env.RN_U22_ARM || matrix.os == env.RN_U24_ARM
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 

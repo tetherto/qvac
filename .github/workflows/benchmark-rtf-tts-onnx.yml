@@ -43,17 +43,53 @@ on:
   schedule:
     - cron: '0 6 * * 1'
 
+
 permissions:
   contents: read
   packages: read
   id-token: write
 
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
 env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
   ADDON_DIR: packages/tts-onnx
 
 jobs:
   context:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     outputs:
       repository: ${{ steps.ctx.outputs.repository }}
       ref: ${{ steps.ctx.outputs.ref }}
@@ -112,21 +148,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ${{ env.RN_U22 }}
             variant: q4
             platform: linux
             arch: x64
             os_version: u22
             benchmark_matrix_json: >-
               [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"}]
-          - os: ubuntu-24.04-arm
+          - os: ${{ env.RN_U24_ARM }}
             variant: q4
             platform: linux
             arch: arm64
             os_version: u24
             benchmark_matrix_json: >-
               [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"}]
-          - os: windows-2022
+          - os: ${{ env.RN_WIN22 }}
             variant: q4
             platform: win32
             arch: x64
@@ -309,20 +345,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ai-run-ubuntu-22.04
+          - os: ${{ env.RN_AI_U22 }}
             variant: q4
             platform: linux
             arch: x64
             os_version: u22-self-hosted
-            device_label: ai-run-ubuntu-22.04 (stable-baseline)
+            device_label: ${{ env.RN_AI_U22 }} (stable-baseline)
             benchmark_matrix_json: >-
               [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"}]
-          - os: ai-run-linux-gpu
+          - os: ${{ env.RN_AI_LINUX_GPU }}
             variant: q4
             platform: linux
             arch: x64
             os_version: cuda
-            device_label: ai-run-linux-gpu (cuda)
+            device_label: ${{ env.RN_AI_LINUX_GPU }} (cuda)
             benchmark_matrix_json: >-
               [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-en","useGPU":true,"backendHint":"cuda"},{"engine":"chatterbox-multi","useGPU":true,"backendHint":"cuda"},{"engine":"supertonic","useGPU":true,"backendHint":"cuda"}]
 
@@ -511,7 +547,7 @@ jobs:
   summarize:
     needs: [context, benchmarks-github-hosted, benchmarks-self-hosted, mobile-benchmarks]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     permissions:
       contents: read
     steps:

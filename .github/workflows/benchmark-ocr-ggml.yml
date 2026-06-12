@@ -28,7 +28,43 @@ on:
         default: true
         type: boolean
 
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
 env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
   PKG_DIR: packages/ocr-ggml
   EASYOCR_S3_PREFIX: qvac_models_compiled/ocr/gguf/easyocr/2026-05-14
   DOCTR_S3_PREFIX: qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15
@@ -39,7 +75,7 @@ permissions:
 jobs:
   label-gate:
     name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     permissions:
       contents: read
       pull-requests: write
@@ -62,7 +98,7 @@ jobs:
   build:
     needs: label-gate
     if: needs.label-gate.outputs.authorised == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ env.RN_U24 }}
     environment: release
     timeout-minutes: 120
     name: Build QVAC OCR GGML addon
@@ -159,7 +195,7 @@ jobs:
       - build
       - label-gate
     if: needs.label-gate.outputs.authorised == 'true' && needs.build.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ env.RN_U24 }}
     environment: release
     timeout-minutes: 180
     name: Run Evaluation
@@ -363,7 +399,7 @@ jobs:
 
   summarize:
     needs: evaluate
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.RN_ORCH }}
     timeout-minutes: 10
     if: always()
 

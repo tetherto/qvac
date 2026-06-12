@@ -28,6 +28,46 @@ on:
         required: false
         default: "packages/embed-llamacpp"
 
+
+
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
+env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
+
 jobs:
   run-cpp-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
@@ -41,21 +81,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ${{ env.RN_U24 }}
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64
-          - os: macos-14
+            runner: ${{ env.RN_QVAC_U24 }}
+          - os: ${{ env.RN_MAC14 }}
             platform: darwin
             arch: arm64
-          - os: macos-15-intel
+          - os: ${{ env.RN_MAC15_INTEL }}
             platform: darwin
             arch: x64
-          - os: windows-2025
+          - os: ${{ env.RN_WIN25 }}
             platform: windows
             arch: x64
-            runner: qvac-win25-x64
-
+            runner: ${{ env.RN_QVAC_WIN25 }}
     env:
       WORKDIR: ${{ inputs.workdir }}
       # Keep vcpkg cache under the package directory in a monorepo
@@ -101,7 +140,7 @@ jobs:
         run: npm install -g --force bare bare-make
 
 
-      - if: ${{ matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == env.RN_WIN25 }}
         name: Set Vulkan SDK Path on Windows Server 2025
         working-directory: ${{ env.WORKDIR }}
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
@@ -120,7 +159,7 @@ jobs:
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
 
-      - if: ${{ matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == env.RN_WIN25 }}
         name: Configure CMake generator on Windows
         shell: powershell
         run: |
@@ -175,13 +214,13 @@ jobs:
           sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
 
       - name: Build C++ tests with coverage
-        if: ${{ matrix.os == 'ubuntu-24.04' }}
+        if: ${{ matrix.os == env.RN_U24 }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm run coverage:cpp:build
 
       - name: Build C++ tests
-        if: ${{ matrix.os != 'ubuntu-24.04' }}
+        if: ${{ matrix.os != env.RN_U24 }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm run test:cpp:build
@@ -216,7 +255,7 @@ jobs:
           fi
 
       - name: Generate Coverage Report
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
+        if: ${{ matrix.os == env.RN_U24 && always() && !cancelled() }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -225,7 +264,7 @@ jobs:
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
 
       - name: Archive Coverage Results
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
+        if: ${{ matrix.os == env.RN_U24 && always() && !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
@@ -238,7 +277,7 @@ jobs:
 
 
       - name: Coverage Summary
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
+        if: ${{ matrix.os == env.RN_U24 && always() && !cancelled() }}
         shell: bash
         run: |
           echo "## 🎯 C++ Test Coverage Summary" >> $GITHUB_STEP_SUMMARY

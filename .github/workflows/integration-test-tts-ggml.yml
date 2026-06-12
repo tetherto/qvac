@@ -35,6 +35,46 @@ on:
 # actions/missing-workflow-permissions).  Individual jobs widen this as
 # needed; today the only job (run-integration-tests) explicitly requests
 # contents:read + packages:read, both already covered here.
+
+
+
+# Canonical runner labels — .github/actions/runner-names/runners.yaml
+env:
+  RN_ORCH: ubuntu-latest
+  RN_U22: ubuntu-22.04
+  RN_U24: ubuntu-24.04
+  RN_U22_ARM: ubuntu-22.04-arm
+  RN_U24_ARM: ubuntu-24.04-arm
+  RN_MAC14: macos-14
+  RN_MAC14_XL: macos-14-xlarge
+  RN_MAC15: macos-15
+  RN_MAC15_INTEL: macos-15-intel
+  RN_MAC15_LG: macos-15-large
+  RN_MAC15_XL: macos-15-xlarge
+  RN_WIN22: windows-2022
+  RN_WIN25: windows-2025
+  RN_QVAC_U22: qvac-ubuntu2204-x64
+  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
+  RN_QVAC_U24: qvac-ubuntu2404-x64
+  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
+  RN_QVAC_WIN25: qvac-win25-x64
+  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
+  RN_AI_LINUX: ai-run-linux
+  RN_AI_LINUX_GPU: ai-run-linux-gpu
+  RN_AI_U22: ai-run-ubuntu-22.04
+  RN_AI_WIN11_GPU: ai-run-windows11-gpu
+  RN_GEN_WIN11: generator-windows11
+  RN_MINI_M4: mac-mini-m4
+  RN_MINI_M4_GPU: mac-mini-m4-gpu
+  RN_LBL_U22_X64: ubuntu-22.04-x64
+  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
+  RN_LBL_U24_X64: ubuntu-24.04-x64
+  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
+  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
+  RN_LBL_WIN22_X64: windows-2022-x64
+  RN_LBL_WIN25_X64: windows-2025-x64
+  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
+
 permissions:
   contents: read
   packages: read
@@ -64,36 +104,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ${{ env.RN_U22 }}
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
-          - os: ubuntu-24.04
+            runner: ${{ env.RN_QVAC_U22_GPU }}
+          - os: ${{ env.RN_U24 }}
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
-          - os: ubuntu-24.04-arm
+            runner: ${{ env.RN_QVAC_U24_GPU }}
+          - os: ${{ env.RN_U24_ARM }}
             platform: linux
             arch: arm64
             no_gpu: 'true'
-          - os: macos-14-xlarge
+          - os: ${{ env.RN_MAC14_XL }}
             platform: darwin
             arch: arm64
             no_gpu: 'true'
-          - os: macos-15-large
+          - os: ${{ env.RN_MAC15_LG }}
             platform: darwin
             arch: x64
             no_gpu: 'true'
-          - os: windows-2025
+          - os: ${{ env.RN_WIN25 }}
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
+            runner: ${{ env.RN_QVAC_WIN25 }}
             no_gpu: 'true'
-          - os: windows-2025
+          - os: ${{ env.RN_WIN25 }}
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
-
+            runner: ${{ env.RN_QVAC_WIN25_GPU }}
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -180,7 +219,7 @@ jobs:
           #              useGPU=false when NO_GPU=true).
           sudo apt-get install -y libgomp1 libomp5 libblas3 mesa-vulkan-drivers
 
-      - if: ${{ matrix.os == 'windows-2025' }}
+      - if: ${{ matrix.os == env.RN_WIN25 }}
         name: Set Vulkan SDK Path on Windows Server 2025
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
