@@ -14,8 +14,6 @@
 
 namespace {
 
-using LlamaModel = qvac_lib_inference_addon_llama::LlamaModel;
-
 class ReloadCancelStateTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -56,7 +54,7 @@ TEST_F(ReloadCancelStateTest, InferenceWorksAfterFinetuneReload) {
 
   // Simulate finetuning start: reload with finetune overrides
   // (In real code this happens in LlamaFinetuner::finetune() line 113)
-  qvac_lib_inference_addon_llama::FinetuneConfigOverrides finetuneConfig{
+  FinetuneConfigOverrides finetuneConfig{
       .active = true,
       .batchSize = 2,
       .microBatchSize = 1,
@@ -69,7 +67,7 @@ TEST_F(ReloadCancelStateTest, InferenceWorksAfterFinetuneReload) {
   // (In real code this happens in LlamaFinetuner::finetune() line 410)
   // At this point activeSingleJobs_ is 0, so cancel() in reload()
   // won't call stop() on the old context.
-  model->reload(qvac_lib_inference_addon_llama::FinetuneConfigOverrides{});
+  model->reload(FinetuneConfigOverrides{});
 
   // Try to run inference - this should work, not fail with
   // "[TextLlm] failed to decode next token"
@@ -102,7 +100,7 @@ TEST_F(ReloadCancelStateTest, ReloadAfterIdleCancelDoesNotPoisonInference) {
 
   // Reload - if cancel() didn't clear stopGeneration_ because counters were 0,
   // the old context might still have the flag set when it's destroyed
-  model->reload(qvac_lib_inference_addon_llama::FinetuneConfigOverrides{});
+  model->reload(FinetuneConfigOverrides{});
 
   // Try inference - should work, not fail with "failed to decode next token"
   LlamaModel::Prompt prompt;
