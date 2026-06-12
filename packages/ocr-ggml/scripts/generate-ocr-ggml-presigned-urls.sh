@@ -16,7 +16,7 @@
 #                                 (default: qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15)
 #   OUTPUT_DIR                  - Directory to write ocr-ggml-model-urls.json (default: .)
 #   MODEL_URL_EXPIRES_IN        - Presigned-URL lifetime in seconds
-#                                 (default: 43200 = 12h). Must exceed the time
+#                                 (default: 21600 = 6h). Must exceed the time
 #                                 between URL generation and the on-device
 #                                 download (build + upload + device-farm queue +
 #                                 sequential per-group runs), or S3 returns
@@ -39,9 +39,10 @@ JSON_FILE="${OUTPUT_DIR}/ocr-ggml-model-urls.json"
 # Presigned URLs are generated early (build/upload phase) but devices fetch the
 # models much later — after build, upload, device-farm queue, and sequential
 # per-group runs. The previous 1h TTL expired before long-queued devices reached
-# the download step, causing HTTP 403 and a failed mobile run. 12h comfortably
-# covers the worst-case run (full iOS matrix ~2h plus queueing).
-EXPIRES_IN="${MODEL_URL_EXPIRES_IN:-43200}"
+# the download step, causing HTTP 403 and a failed mobile run. 6h covers the
+# worst-case run (full iOS matrix ~2h plus queueing) with margin, while keeping
+# the bearer-URL exposure window as short as practical.
+EXPIRES_IN="${MODEL_URL_EXPIRES_IN:-21600}"
 
 if [ -z "$BUCKET" ]; then
   echo "ERROR: MODEL_S3_BUCKET is not set."
@@ -81,4 +82,12 @@ printf '  "generatedAt": "%s"\n}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$JSON_F
 
 echo ""
 echo "Created ${JSON_FILE}"
-cat "$JSON_FILE"
+# Do NOT print the file contents: it holds presigned bearer URLs (valid for
+# ${EXPIRES_IN}s) whose query-string signatures would otherwise leak into CI
+# logs. Log only the JSON keys and object paths — never the signed URLs.
+echo "  keys: craft_mlt_25k_url, latin_g2_url, db_mobilenet_v3_large_url, crnn_mobilenet_v3_small_url"
+echo "  objects:"
+echo "    ${EASYOCR_PREFIX}/craft_mlt_25k.gguf"
+echo "    ${EASYOCR_PREFIX}/latin_g2.gguf"
+echo "    ${DOCTR_PREFIX}/db_mobilenet_v3_large.gguf"
+echo "    ${DOCTR_PREFIX}/crnn_mobilenet_v3_small.gguf"
