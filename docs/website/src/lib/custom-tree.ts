@@ -174,6 +174,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Languages'),
   },
   {
+    name: 'BCI',
+    url: '/ai-capabilities/bci',
+    type: 'page',
+    icon: resolveIcon('Brain'),
+  },
+  {
     name: 'VLA',
     url: '/ai-capabilities/vla',
     type: 'page',
