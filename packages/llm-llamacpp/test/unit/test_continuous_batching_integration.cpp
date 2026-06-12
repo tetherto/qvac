@@ -983,3 +983,58 @@ TEST_F(ContinuousBatchingIntegrationTest, PrefillOnlyBatchSavesAndLoadsCache) {
   fs::remove(cachePathA);
   fs::remove(cachePathB);
 }
+
+/// Cancel-all issued while the scheduler is idle must be a no-op for
+/// future work. `requestCancelAll()` only sets `cancelRequested_`; with no
+/// worker running to consume it, the flag goes stale and the first batch
+/// submitted afterwards is drained as Cancelled before it ever runs.
+TEST_F(ContinuousBatchingIntegrationTest, IdleCancelDoesNotCancelNextBatch) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+
+  model->cancel();
+
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("What is the capital of France? Answer in one word.")};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_TRUE(containsCaseInsensitive(outputs[0], "Paris"))
+      << "STALE CANCEL FLAG: a cancel issued while the scheduler was idle "
+         "cancelled the next batch; output: "
+      << outputs[0];
+}
+
+/// Cancelling batch work must not leak into single-prompt mode. Cancel-all
+/// also stopped the single-prompt `llmContext_`, whose `stopGeneration_`
+/// flag is consumed only by the next single prompt — which then aborts
+/// during prompt eval and returns empty output.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchCancelDoesNotPoisonNextSinglePrompt) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "128";
+  auto model = loadModel();
+
+  std::atomic<bool> cancelOnce = false;
+  auto prompt = makePrompt(
+      "Write several sentences about astronomy so cancellation happens "
+      "during generation.");
+  prompt.outputCallback = [&model, &cancelOnce](const std::string&) {
+    bool expected = false;
+    if (cancelOnce.compare_exchange_strong(expected, true)) {
+      model->cancel();
+    }
+  };
+  std::vector<LlamaModel::Prompt> prompts{std::move(prompt)};
+  auto outputs = model->processPromptBatch(prompts);
+  ASSERT_EQ(outputs.size(), 1u);
+  ASSERT_TRUE(cancelOnce.load());
+
+  const std::string single = model->processPrompt(
+      makePrompt("What is the capital of France? Answer in one word."));
+  EXPECT_TRUE(containsCaseInsensitive(single, "Paris"))
+      << "STALE STOP FLAG: cancelling batch work poisoned the idle "
+         "single-prompt context; single prompt returned: '"
+      << single << "'";
+}
