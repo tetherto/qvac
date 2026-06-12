@@ -205,6 +205,7 @@ class TTSGgml {
       seed,
       nGpuLayers,
       nCtx,
+      kvCacheType,
       threads,
       streamChunkTokens,
       streamFirstChunkTokens,
@@ -310,6 +311,7 @@ class TTSGgml {
     this._seed = seed
     this._nGpuLayers = nGpuLayers
     this._nCtx = nCtx
+    this._kvCacheType = kvCacheType
     this._threads = threads
     this._streamChunkTokens = streamChunkTokens
     this._streamFirstChunkTokens = streamFirstChunkTokens
@@ -769,6 +771,7 @@ class TTSGgml {
     if (this._seed != null) params.seed = this._seed | 0
     if (this._nGpuLayers != null) params.nGpuLayers = this._nGpuLayers | 0
     if (this._nCtx != null) params.nCtx = this._nCtx | 0
+    if (this._kvCacheType != null) params.kvCacheType = String(this._kvCacheType)
     if (this._threads != null) params.threads = this._threads | 0
     if (this._streamChunkTokens != null) params.streamChunkTokens = this._streamChunkTokens | 0
     if (this._streamFirstChunkTokens != null) {

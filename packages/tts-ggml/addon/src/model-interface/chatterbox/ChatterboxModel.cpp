@@ -32,11 +32,24 @@ namespace logger = qvac_lib_inference_addon_cpp::logger;
 // n_ctx, and the Turbo GGUF ships n_ctx=8196 — the F32 KV cache allocated
 // up-front at that length is n_embd(1024) x n_layer(24) x n_ctx x 4 B x 2
 // (K+V) ~= 1.6 GB, which is what pushed the iOS QVAC SDK test process to a
-// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  2048 tokens keep
-// ~80 s of generated audio per synthesize() call (T3 speech tokens run at
-// 25 Hz) for ~400 MB of KV.  Hosts that need longer single-call synthesis
-// can raise the cap, or pass nCtx=0 to restore the uncapped behaviour.
-constexpr int kDefaultNCtx = 2048;
+// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  With the q8_0
+// default KV dtype below, 4096 tokens (~160 s of generated audio per
+// synthesize() call; T3 speech tokens run at 25 Hz) cost ~210 MB of KV —
+// less memory than f32@2048 AND double the context.  Hosts that need
+// longer single-call synthesis can raise the cap, or pass nCtx=0 to
+// restore the uncapped behaviour.
+constexpr int kDefaultNCtx = 4096;
+
+// Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  q8_0 stores
+// the cache at ~27% of f32.  Upstream validation on real GGUFs
+// (qvac-ext-lib-whisper.cpp#43): Turbo greedy token sequences are
+// byte-identical across f32/f16/q8_0 on CPU and Metal; the multilingual
+// variant's CFG mixing can flip a near-tie argmax (same class of
+// variation as a seed change — whisper transcribes the q8_0 output to
+// the exact input text); Metal decode is 20-30% faster from the
+// bandwidth saving.  Pass kvCacheType:"f32" for bit-exact parity with
+// the pre-quantisation behaviour.
+constexpr const char * kDefaultKvCacheType = "q8_0";
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;
@@ -48,6 +61,8 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (cfg.seed.has_value())    opts.seed         = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
   opts.n_ctx = cfg.nCtx.value_or(kDefaultNCtx);
+  opts.kv_cache_type =
+      cfg.kvCacheType.empty() ? kDefaultKvCacheType : cfg.kvCacheType;
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
   } else if (cfg.useGpu.has_value()) {
@@ -153,6 +168,16 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
         "ChatterboxModel: nCtx must be >= 0 (0 = use the GGUF's full "
         "context, > 0 = cap the T3 context / KV-cache length), got " +
             std::to_string(*cfg.nCtx));
+  }
+  // Reject unknown KV dtypes at construction instead of inheriting
+  // tts-cpp's warn-and-fall-back-to-f32, which would silently change
+  // the memory profile the caller asked for.
+  if (!cfg.kvCacheType.empty() && cfg.kvCacheType != "f32" &&
+      cfg.kvCacheType != "f16" && cfg.kvCacheType != "q8_0") {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ChatterboxModel: kvCacheType must be one of f32|f16|q8_0, got '" +
+            cfg.kvCacheType + "'");
   }
   if (cfg.t3ModelPath.empty()) {
     throw StatusError(general_error::InvalidArgument, "t3ModelPath is required");

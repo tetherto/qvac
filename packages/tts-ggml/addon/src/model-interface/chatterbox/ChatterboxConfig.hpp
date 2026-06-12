@@ -42,12 +42,26 @@ struct ChatterboxConfig {
    * When unset, {@link ChatterboxModel} applies kDefaultNCtx (2048,
    * ~400 MB KV on Turbo, ≈80 s of audio per synthesize() call).
    *
-   *   - unset:  kDefaultNCtx (2048)
+   *   - unset:  kDefaultNCtx (4096)
    *   - > 0:    explicit cap (prompt + generated speech tokens)
    *   - 0:      escape hatch — no cap, use the GGUF's full n_ctx
    *   - < 0:    rejected by validateConfig
    */
   std::optional<int> nCtx;
+  /**
+   * T3 KV-cache storage type, forwarded to
+   * `tts_cpp::chatterbox::EngineOptions::kv_cache_type`:
+   * "f32" | "f16" | "q8_0".  The cache is allocated up-front at nCtx,
+   * so the dtype directly scales resident memory — q8_0 stores it at
+   * ~27% of f32 (one fp16 scale per 32 values).  Upstream validation
+   * (qvac-ext-lib-whisper.cpp#43): greedy token sequences are
+   * byte-identical across all three dtypes on the Turbo model
+   * (CPU + Metal), and Metal decode gets 20-30% FASTER from the
+   * bandwidth saving.  Empty/unset -> {@link ChatterboxModel}'s
+   * kDefaultKvCacheType ("q8_0"); anything outside the three values
+   * is rejected by validateConfig.
+   */
+  std::string kvCacheType;
   /** Post-processing output sample rate.  Currently unused (engine always emits 24 kHz). */
   std::optional<int> outputSampleRate;
   /**
