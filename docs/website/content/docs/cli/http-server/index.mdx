@@ -16,7 +16,7 @@ At the moment, the HTTP server supports the following QVAC AI capabilities:
 * [Text embeddings](#embeddings) — via `/v1/embeddings`.
 * RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
 * [Image generation](#images) — via `/v1/images/generations` and `/v1/images/edits`.
-* [Video generation](#videos) (text-to-video and image-to-video) — via `/v1/videos`.
+* [Video generation](#videos) — via `/v1/videos`.
 * Transcription — via [Audio](#audio) (`/v1/audio/transcriptions`).
 * Text-to-speech — via [Audio](#audio) (`/v1/audio/speech`).
 * Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
@@ -186,7 +186,7 @@ All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-refer
 | | `DELETE` | [`/v1/videos/:id`](#delete-v1videosid) |
 
 <Callout type="info">
-All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`, `/v1/videos`) cap the request body at **100 MB**.
+All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the request body at **100 MB**.
 </Callout>
 
 ### Models
@@ -1016,7 +1016,7 @@ Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each ch
 
 ### Videos
 
-OpenAI-compatible **async** video generation — text-to-video (`txt2vid`) and image-to-video (`img2vid`), backed by the SDK's `video()`. Creating a job returns immediately with `status: "queued"`; the generation runs in the background. Poll for status, then download the bytes. The OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented (the SDK exposes no underlying modes for them).
+OpenAI-compatible **async** text-to-video, backed by the SDK's `video({ mode: "txt2vid" })`. Creating a job returns immediately with `status: "queued"`; the generation runs in the background. Poll for status, then download the bytes. Image-to-video and the OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented (the SDK exposes no underlying modes for them).
 
 #### Loaded model
 
@@ -1043,20 +1043,11 @@ Register an alias whose endpoint category is `video` using the virtual SDK type 
 
 Clients select the model by passing the alias key (or its `src` string) in the request `model` field. There is no separate videos aliasing block — to be a drop-in for OpenAI SDK clients (`client.videos.create(...)`, which defaults to `model: "sora-2"`), name the alias after the OpenAI model the client sends (e.g. `"sora-2"`).
 
-<Callout type="info">
-**Image-to-video** additionally requires the loaded model to declare **`clipVisionModelSrc`** in its `config` (it accepts an SDK constant name, resolved by the registry like the other model-source fields). Text-to-video does not need it.
-</Callout>
-
 #### `POST /v1/videos`
 
-Create a generation job. The endpoint accepts two content types:
-
-- **`application/json`** — text-to-video (`txt2vid`).
-- **`multipart/form-data`** — image-to-video (`img2vid`), selected by including an `init_image` file field. The mode is inferred from the presence of that image; there is no explicit `mode` field.
+Create a generation job. The endpoint accepts `application/json` only — the SDK has no image-to-video mode, so multipart with `init_image` is not accepted.
 
 Returns `200` with the `Video` resource at `status: "queued"`.
-
-**Text-to-video (JSON):**
 
 ```bash
 curl http://localhost:11434/v1/videos \
@@ -1075,25 +1066,13 @@ curl http://localhost:11434/v1/videos \
   }'
 ```
 
-**Image-to-video (multipart, animates a first frame):**
-
-```bash
-curl http://localhost:11434/v1/videos \
-  -F "model=wan-i2v" \
-  -F "prompt=the subject slowly turns and smiles, cinematic lighting" \
-  -F "init_image=@portrait.png" \
-  -F "strength=0.85"
-```
-
 ##### Request fields
 
 | Field | Description | Required |
 | --- | --- | --- |
 | `model` | Alias declared under `serve.models` (endpoint category `video`). | Yes |
 | `prompt` | Text prompt, 1–32000 characters. | Yes |
-| `init_image` | **Multipart only.** First-frame image file (PNG or JPEG). When present, the job runs in `img2vid` mode; omit it for `txt2vid`. | No |
-| `strength` | `img2vid` denoise strength in `[0, 1]` — how much the output may diverge from the first frame. Only meaningful with `init_image`. Out-of-range or non-numeric → `400 invalid_strength`. | No |
-| `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 16. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
+| `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 8. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
 | `seconds` | Target duration as a **string** (e.g. `"2"`; OpenAI uses `"4"` / `"8"` / `"12"`). Mapped together with `fps` to the addon's `video_frames` (rounded to the nearest `4k+1`). | No |
 | `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. | No |
 | `steps` | QVAC extension. Diffusion sampler step count. | No |
@@ -1102,10 +1081,8 @@ curl http://localhost:11434/v1/videos \
 | `cfg_scale` | QVAC extension. Classifier-free guidance scale (Wan range ~5–8). | No |
 | `flow_shift` | QVAC extension. Flow-matching shift; Wan 2.1 T2V needs `3.0` for visible motion. | No |
 
-In `multipart/form-data` requests, the numeric fields (`fps`, `steps`, `seed`, `cfg_scale`, `flow_shift`, `strength`) may be sent as strings — they are coerced server-side.
-
 <Callout type="info">
-`img2vid` is selected by sending an `init_image` file; OpenAI's `input_reference` field is not used (it is ignored if present).
+OpenAI's `input_reference` (image-to-video) is rejected with `400 unsupported_param` — the SDK exposes only text-to-video.
 </Callout>
 
 The `Video` resource returned by `POST` (and by `GET /v1/videos/:id`):
@@ -1179,9 +1156,9 @@ Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
 | HTTP | `error.code` | When |
 | --- | --- | --- |
 | 400 | `missing_prompt` / `missing_model` | Required field absent. |
-| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 16. |
+| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 8. |
 | 400 | `invalid_seconds` | `seconds` is not a positive-integer string. |
-| 400 | `invalid_strength` | `strength` is outside `[0, 1]` or non-numeric. |
+| 400 | `unsupported_param` | `input_reference` (image-to-video) was sent. |
 | 400 | `invalid_model_type` | Alias is not a `video` model. |
 | 404 | `video_not_found` | Unknown job id. |
 | 409 | `video_not_ready` | `/content` requested before the job is `completed` (response carries `Retry-After`). |
