@@ -1,7 +1,9 @@
 {
+  "$note": "default-registry temporarily tracks the tts-cpp-2026-06-12 branch (qvac-registry-vcpkg#188) so CI can resolve tts-cpp>=2026-06-12 before that PR merges; once #188 lands, drop 'reference' and move 'baseline' to the merged main commit.",
   "default-registry": {
     "kind": "git",
-    "baseline": "88663627cb9667b04b2b034045b7d3d65e8b8fc4",
+    "baseline": "12e78be6cc05846865d3d1f3c53f58db04b47262",
+    "reference": "tts-cpp-2026-06-12",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
