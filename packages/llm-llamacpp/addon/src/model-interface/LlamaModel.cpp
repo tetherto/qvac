@@ -451,6 +451,14 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt);
 }
 
+batching::ContinuousBatchScheduler* LlamaModel::batchSchedulerForTesting() {
+  std::shared_lock lock(stateMtx_);
+  if (!state_) {
+    return nullptr;
+  }
+  return state_->batchScheduler_.get();
+}
+
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {

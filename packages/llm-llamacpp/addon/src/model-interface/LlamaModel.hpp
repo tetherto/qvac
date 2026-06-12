@@ -193,6 +193,11 @@ public:
   LlamaFinetuner& finetuner() { return finetuner_; }
   const LlamaFinetuner& finetuner() const { return finetuner_; }
 
+  /// For unit tests only: access the internal batch scheduler so tests can
+  /// inject a decode stub via setDecodeFuncForTesting(). Returns null when
+  /// batching is not active (n_parallel < 2 or multimodal model).
+  batching::ContinuousBatchScheduler* batchSchedulerForTesting();
+
 private:
   friend class LlamaFinetuner;
 

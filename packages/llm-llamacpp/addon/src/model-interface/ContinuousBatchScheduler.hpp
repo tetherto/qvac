@@ -185,6 +185,12 @@ public:
   /// Cancel every active request.
   void clear();
 
+  /// Override the decode function used by stepLocked(). For unit tests only --
+  /// inject a stub that returns a non-zero rc to exercise the decode-error
+  /// path without a real llama_decode call succeeding.
+  using DecodeFunc = std::function<int(llama_context*, llama_batch&)>;
+  void setDecodeFuncForTesting(DecodeFunc fn) { decodeFunc_ = std::move(fn); }
+
 private:
   struct BatchGroup {
     explicit BatchGroup(size_t requestCount) : outputs(requestCount) {}
@@ -259,6 +265,10 @@ private:
   bool workerStarted_ = false;
   bool stopping_ = false;
   RuntimeStatsSnapshot stats_;
+
+  /// Decode function used in stepLocked(). Defaults to llama_decode; can be
+  /// overridden via setDecodeFuncForTesting() to inject a failing stub.
+  DecodeFunc decodeFunc_;
 };
 
 } // namespace qvac_lib_inference_addon_llama::batching

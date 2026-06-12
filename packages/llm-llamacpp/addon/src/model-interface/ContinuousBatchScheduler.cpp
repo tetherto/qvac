@@ -64,7 +64,10 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
-      slots_(batchSize) {
+      slots_(batchSize),
+      decodeFunc_([](llama_context* ctx, llama_batch& b) {
+        return llama_decode(ctx, b);
+      }) {
 
   const bool ctxValid = shared_.lctx != nullptr && shared_.model != nullptr &&
                         shared_.vocab != nullptr;

@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 
+#include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
@@ -1037,4 +1038,41 @@ TEST_F(
       << "STALE STOP FLAG: cancelling batch work poisoned the idle "
          "single-prompt context; single prompt returned: '"
       << single << "'";
+}
+
+/// When llama_decode returns non-zero, processBatch must throw a
+/// StatusError(FailedToDecode) for every group. Before the fix the decode-error
+/// branch called finalizeFinishedSequences() which routed through the success
+/// path (completeGroupRequestLocked), leaving group->error == null. processBatch
+/// then unblocked and returned silently with empty/partial outputs instead of
+/// propagating the error.
+///
+/// The test injects a stub decode function that always returns 1, triggers one
+/// batch step, and asserts the resulting exception carries the FailedToDecode
+/// error code rather than an empty-output success.
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchDecodeErrorThrowsFailedToDecode) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+
+  auto* scheduler = model->batchSchedulerForTesting();
+  ASSERT_NE(scheduler, nullptr)
+      << "batchSchedulerForTesting() returned null -- is parallel >= 2?";
+
+  scheduler->setDecodeFuncForTesting(
+      [](llama_context*, llama_batch&) -> int { return 1; });
+
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("What is the capital of France? Answer in one word."),
+      makePrompt("What is the natural satellite of Earth? Answer in one word.")};
+
+  try {
+    model->processPromptBatch(prompts);
+    FAIL() << "DECODE ERROR BUG: processPromptBatch returned successfully even "
+              "though llama_decode was injected to fail. Expected a "
+              "FailedToDecode StatusError.";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("FailedToDecode"), std::string::npos)
+        << "expected FailedToDecode in error code, got: " << e.codeString();
+  }
 }
