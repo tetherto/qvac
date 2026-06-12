@@ -90,11 +90,13 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
 }
 
 // Phase timings derived from progress-callback boundaries. generate_image/
-// _video runs: [conditioning] -> [N denoise steps] -> [vae decode]. Because
-// progress_cb(i) fires AFTER step i completes, (lastStepTime - firstStepTime)
-// spans (stepCount - 1) step intervals; we back out per-step time from that to
-// estimate the full denoise window and remove the one step baked into the
-// pre-first-callback window when attributing conditioner time.
+// _video runs: [conditioning] -> [N denoise steps] -> [vae decode]. sd.cpp
+// invokes the progress callback N+1 times for an N-step sampler: once at step 0
+// (the start of sampling, i.e. right after conditioning) and once after each of
+// the N steps. So firstStepTime marks the conditioning->denoise boundary and
+// (lastStepTime - firstStepTime) is the full denoise duration over
+// (stepCount-1) real steps; the remainder up to generate_*() returning is the
+// VAE decode.
 struct PhaseStats {
   double conditionerMs = 0.0;
   double denoiseMs = 0.0;
@@ -109,21 +111,21 @@ PhaseStats computePhaseStats(
   const auto toMs = [](auto d) {
     return std::chrono::duration<double, std::milli>(d).count();
   };
-  const int steps = g_progressCtx.stepCount;
-  if (steps >= 2) {
-    const double perStepMs =
-        toMs(g_progressCtx.lastStepTime - g_progressCtx.firstStepTime) /
-        static_cast<double>(steps - 1);
-    ps.denoiseMs = perStepMs * steps;
-    ps.conditionerMs = toMs(g_progressCtx.firstStepTime - t0) - perStepMs;
+  const int ticks = g_progressCtx.stepCount;
+  if (ticks >= 2) {
+    const double spanMs =
+        toMs(g_progressCtx.lastStepTime - g_progressCtx.firstStepTime);
+    const int steps = ticks - 1; // real sampler steps spanned by the ticks
+    ps.conditionerMs = toMs(g_progressCtx.firstStepTime - t0);
+    ps.denoiseMs = spanMs;
     ps.vaeMs = toMs(tGen - g_progressCtx.lastStepTime);
-    ps.stepsPerSecond = perStepMs > 0.0 ? 1000.0 / perStepMs : 0.0;
-  } else if (steps == 1) {
-    // Single-step run (e.g. distilled / LTX): can't infer per-step time from
-    // intervals, so treat everything up to the lone callback as denoise.
-    ps.denoiseMs = toMs(g_progressCtx.lastStepTime - t0);
+    ps.stepsPerSecond = spanMs > 0.0 ? steps * 1000.0 / spanMs : 0.0;
+  } else if (ticks == 1) {
+    // Single tick (e.g. a 1-step distilled / LTX sampler): no interval to
+    // measure, so attribute everything before the tick to conditioning and
+    // everything after generate_*() returns to VAE; denoise/rate stay 0.
+    ps.conditionerMs = toMs(g_progressCtx.firstStepTime - t0);
     ps.vaeMs = toMs(tGen - g_progressCtx.lastStepTime);
-    ps.stepsPerSecond = ps.denoiseMs > 0.0 ? 1000.0 / ps.denoiseMs : 0.0;
   }
   if (ps.conditionerMs < 0.0)
     ps.conditionerMs = 0.0; // clamp tiny negative jitter
