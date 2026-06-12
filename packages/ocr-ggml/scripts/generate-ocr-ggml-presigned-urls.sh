@@ -15,12 +15,17 @@
 #   DOCTR_S3_PREFIX             - S3 prefix for DocTR models
 #                                 (default: qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15)
 #   OUTPUT_DIR                  - Directory to write ocr-ggml-model-urls.json (default: .)
-#   MODEL_URL_EXPIRES_IN        - Presigned-URL lifetime in seconds
-#                                 (default: 21600 = 6h). Must exceed the time
-#                                 between URL generation and the on-device
-#                                 download (build + upload + device-farm queue +
-#                                 sequential per-group runs), or S3 returns
-#                                 HTTP 403 (expired signature) mid-suite.
+#   MODEL_URL_EXPIRES_IN        - Presigned-URL lifetime in seconds (default:
+#                                 21600 = 6h). Must exceed the time between URL
+#                                 generation and the on-device download (build +
+#                                 upload + device-farm queue + sequential
+#                                 per-group runs), or S3 returns HTTP 403
+#                                 (expired) mid-suite. NOTE: when signed with
+#                                 temporary STS credentials (CI OIDC role), the
+#                                 *effective* lifetime is min(this value, the
+#                                 remaining STS session) — i.e. capped by the
+#                                 workflow's role-duration-seconds (~2h today),
+#                                 since a presigned URL dies with its session.
 #
 # Output:
 #   Creates ocr-ggml-model-urls.json with presigned URLs keyed by <model_stem>_url.
@@ -39,9 +44,17 @@ JSON_FILE="${OUTPUT_DIR}/ocr-ggml-model-urls.json"
 # Presigned URLs are generated early (build/upload phase) but devices fetch the
 # models much later — after build, upload, device-farm queue, and sequential
 # per-group runs. The previous 1h TTL expired before long-queued devices reached
-# the download step, causing HTTP 403 and a failed mobile run. 6h covers the
-# worst-case run (full iOS matrix ~2h plus queueing) with margin, while keeping
-# the bearer-URL exposure window as short as practical.
+# the download step, causing HTTP 403 and a failed mobile run.
+#
+# Effective lifetime is min(EXPIRES_IN, remaining STS session): in CI the URLs
+# are signed with temporary OIDC-role credentials, and a SigV4 URL signed with a
+# session token is rejected once that session expires regardless of
+# --expires-in. With the workflow's role-duration-seconds (~2h today) this 6h
+# default is clamped to ~2h — which covers the observed failures (downloads ~70-
+# 85 min after generation) with headroom over the old 1h. Extending the
+# effective window beyond ~2h additionally requires raising role-duration-seconds
+# (and the IAM role's MaxSessionDuration). 6h is kept so the script doesn't
+# re-cap things if role-duration-seconds is later raised.
 EXPIRES_IN="${MODEL_URL_EXPIRES_IN:-21600}"
 
 if [ -z "$BUCKET" ]; then
