@@ -173,7 +173,7 @@ export interface RunOptions {
 
 export interface BatchPrompt {
   id?: string
-  prompt: Message[]
+  prompt: (UserTextMessage | ChatFunctionDefinition)[]
   runOptions?: RunOptions
 }
 
