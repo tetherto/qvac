@@ -23,6 +23,11 @@ on:
         type: string
         required: false
         default: "packages/tts-ggml"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF + streaming benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -40,6 +45,11 @@ on:
         type: string
         required: false
         default: "packages/tts-ggml"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF + streaming benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -102,6 +112,35 @@ jobs:
           prebuild-artifact-prefix: 'tts-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
+      # Benchmark opt-in (run_rtf_benchmarks=true): patch the addon's
+      # test/mobile/integration-runtime.cjs to stub `bare-os.getEnv` so the
+      # on-device test/integration/{rtf,streaming}-benchmark.test.js shims see
+      # QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 and delegate to the canonical
+      # test/benchmark/* suites instead of soft-skipping. The shims emit
+      # [PERF_REPORT_START] blocks scraped by the Extract step below. Must run
+      # AFTER setup (which checks out the addon) and BEFORE build-mobile-app
+      # (which bakes the runtime into the bundle). No-op on normal PR runs.
+      - name: Inject benchmark env into mobile runtime
+        if: ${{ inputs.run_rtf_benchmarks }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          echo "Injecting QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 into mobile runtime"
+          cat > test/mobile/inject-env.cjs <<NODE
+          const os = require('bare-os')
+          const originalGetEnv = os.getEnv
+          os.getEnv = function (key) {
+            if (key === 'QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') return '1'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_DEVICE') return '$PLATFORM-device-farm'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_RUNNER') return 'aws-device-farm-$PLATFORM'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-q4'
+            return originalGetEnv ? originalGetEnv.call(this, key) : undefined
+          }
+          NODE
+          cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
+          mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
+
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
@@ -126,7 +165,7 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
-          enables-perf: 'false'
+          enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           mocha-timeout-ms: '2700000'
           wdio-waitfor-timeout-ms: '600000'
 
@@ -161,9 +200,25 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           addon-npm-name: '@qvac/tts-ggml'
-          enables-perf: 'false'
+          enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      # Benchmark runs (run_rtf_benchmarks=true) print one [PERF_REPORT_START]
+      # block per suite (RTF + streaming) into bare_console.log. Scrape every
+      # block with --merge (no last-write-wins) and union them per device. The
+      # artifact name is what benchmark-rtf-tts-ggml.yml's summarize job
+      # downloads (pattern perf-report-tts-ggml-*). Skipped on normal PR runs.
+      - name: Extract and report TTS-GGML performance
+        if: always() && !cancelled() && inputs.run_rtf_benchmarks && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          filter: ''
+          merge: 'true'
+          unzip-customer-artifacts: 'true'
+          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }})'
+          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

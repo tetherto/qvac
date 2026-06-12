@@ -1,0 +1,21 @@
+{
+  "platform": "android-arm64",
+  "platformName": "android",
+  "arch": "arm64",
+  "isMobile": true,
+  "engine": "supertonic",
+  "modelType": "supertonic",
+  "variant": "q4",
+  "useGPU": false,
+  "backendHint": "cpu",
+  "deviceLabel": "Pixel 9 Pro",
+  "runnerLabel": "manual-device",
+  "label": "android-q4",
+  "summary": {
+    "rtf": { "mean": 0.85, "p50": 0.84, "p95": 0.92 },
+    "wallMs": { "mean": 2100 },
+    "coldRtf": 1.1,
+    "modelLoadMs": 3400,
+    "tokensPerSecond": { "mean": 0 }
+  }
+}

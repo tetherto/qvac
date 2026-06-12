@@ -79,6 +79,11 @@ export const customTree: Node[] = [
         icon: resolveIcon('Server'),
         children: [
           {
+            name: 'Connect tools',
+            url: '/cli/http-server/connection',
+            type: 'page',
+          },
+          {
             name: 'Integration',
             url: '/cli/http-server/integration',
             type: 'page',
