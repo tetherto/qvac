@@ -2,6 +2,7 @@ import test from "brittle";
 import {
   loadModelOptionsToRequestSchema,
   downloadAssetOptionsToRequestSchema,
+  bciTranscribeStreamRequestSchema,
 } from "@/schemas";
 import { ragRequestSchema } from "@/schemas/rag";
 import { ModelType } from "@/schemas/model-types";
@@ -64,6 +65,19 @@ test("downloadAssetOptionsToRequestSchema: requestId is optional", (t) => {
     assetSrc: "/tmp/asset.bin",
   });
   t.is((parsed as { requestId?: string }).requestId, undefined);
+});
+
+test("bciTranscribeStreamRequestSchema: forwards requestId onto the wire envelope", (t) => {
+  const parsed = bciTranscribeStreamRequestSchema.parse({
+    type: "bciTranscribeStream",
+    modelId: "model-bci",
+    requestId: "client-uuid-bci-stream",
+  });
+  t.is(
+    (parsed as { requestId?: string }).requestId,
+    "client-uuid-bci-stream",
+    "BCI stream envelope must carry the client-generated requestId",
+  );
 });
 
 test("ragRequestSchema: forwards requestId for ingest", (t) => {
