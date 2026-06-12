@@ -63,6 +63,10 @@ function pickStats(raw: unknown): VlaStats | undefined {
   const r = raw as Record<string, unknown>;
   const out: VlaStats = {};
   if (typeof r["vision_ms"] === "number") out.vision_ms = r["vision_ms"];
+  if (typeof r["prefill_compute_ms"] === "number")
+    out.prefill_compute_ms = r["prefill_compute_ms"];
+  if (typeof r["prefill_total_ms"] === "number")
+    out.prefill_total_ms = r["prefill_total_ms"];
   if (typeof r["smollm2_compute_ms"] === "number")
     out.smollm2_compute_ms = r["smollm2_compute_ms"];
   if (typeof r["smollm2_total_ms"] === "number")

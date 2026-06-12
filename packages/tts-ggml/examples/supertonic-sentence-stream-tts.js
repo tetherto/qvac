@@ -20,9 +20,9 @@
  * Expects the Supertonic GGUF at:
  *   models/supertonic.gguf
  *
- * NOTE: Supertonic gained GPU support in tts-cpp@2026-06-05; this
- * example keeps useGPU=false so it runs identically everywhere.  See
- * supertonic-tts.js for the GPU opt-in pattern.
+ * NOTE: Supertonic supports GPU on capable hosts (CPU-only on Android);
+ * this example keeps useGPU=false. See supertonic-tts.js for the full
+ * GPU opt-in context.
  */
 
 const fs = require('bare-fs')

@@ -23,6 +23,7 @@ import {
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLA_LIBERO_VISION_Q8,
+  PI05_BASE_Q_AGGRESSIVE,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
@@ -39,6 +40,7 @@ import {
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
+  BCI_WINDOWED,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -56,7 +58,7 @@ import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
-import { VlaExecutor } from "./executors/vla-executor.js";
+import { VlaExecutor } from "../shared/executors/vla-executor.js";
 import { ClassificationExecutor } from "./executors/classification-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
@@ -67,6 +69,7 @@ import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { BciExecutor } from "./executors/bci-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
@@ -156,6 +159,12 @@ resources.define("ocr", {
 
 resources.define("vla", {
   constant: SMOLVLA_LIBERO_VISION_Q8,
+  type: "vla",
+  config: { backend: "cpu" },
+});
+
+resources.define("vla-pi05", {
+  constant: PI05_BASE_Q_AGGRESSIVE,
   type: "vla",
   config: { backend: "cpu" },
 });
@@ -306,6 +315,18 @@ resources.define("parakeet-eou", {
   constant: PARAKEET_EOU_120M_V1_Q8_0,
   type: "parakeet",
   config: {},
+});
+
+resources.define("bci", {
+  constant: BCI_WINDOWED,
+  type: "bci",
+  config: {
+    whisperConfig: { language: "en", temperature: 0.0 },
+    miscConfig: { caption_enabled: false },
+    // Sample 2 (neural-not-too-controversial.bin) was recorded on session
+    // day 1; day_idx selects the matching day-specific projection matrices.
+    bciConfig: { day_idx: 1 },
+  },
 });
 
 resources.define("vision", {
@@ -485,6 +506,7 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new ParakeetStreamExecutor(resources),
     new ParakeetExecutor(resources),
+    new BciExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),

@@ -110,7 +110,8 @@ function normalizeOnnxTtsFiles (files) {
     unicodeIndexer: firstNonEmpty(f.unicodeIndexer, f.unicodeIndexerPath),
     ttsConfig: firstNonEmpty(f.ttsConfig, f.ttsConfigPath),
     voiceStyle: firstNonEmpty(f.voiceStyle, f.voiceStyleJsonPath),
-    voicesDir: firstNonEmpty(f.voicesDir)
+    voicesDir: firstNonEmpty(f.voicesDir),
+    mecabDictPath: firstNonEmpty(f.mecabDictPath, f.mecabDictDir)
   }
 }
 
@@ -241,6 +242,7 @@ class ONNXTTS {
         this._conditionalDecoderPath = normalizedFiles.conditionalDecoder
         this._languageModelPath = normalizedFiles.languageModel
       }
+      this._mecabDictPath = firstNonEmpty(normalizedFiles.mecabDictPath)
       this._referenceAudio = referenceAudio
       this._numThreads = numThreads != null ? numThreads : 0
     } else {
@@ -672,26 +674,39 @@ class ONNXTTS {
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
     } else {
-      ttsParams = {
-        tokenizerPath: this._tokenizerPath || '',
-        speechEncoderPath: this._speechEncoderPath || '',
-        embedTokensPath: this._embedTokensPath || '',
-        conditionalDecoderPath: this._conditionalDecoderPath || '',
-        languageModelPath: this._languageModelPath || '',
-        language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false,
-        lazySessionLoading: this._lazySessionLoading,
-        numThreads: String(this._numThreads || 0)
-      }
-      if (this._referenceAudio != null) {
-        ttsParams.referenceAudio = this._referenceAudio
-      }
+      ttsParams = this._getChatterboxTtsParams()
     }
 
     Object.assign(ttsParams, this._getEnhancerParams())
 
     this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
     await this.addon.activate()
+  }
+
+  _getChatterboxTtsParams () {
+    const language = this._config?.language || 'en'
+    if (language === 'ja' && !this._mecabDictPath) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_LOAD,
+        adds: 'Chatterbox Japanese requires files.mecabDictPath (alias files.mecabDictDir) pointing to the IPAdic dictionary directory. No dictionary is bundled with @qvac/tts-onnx.'
+      })
+    }
+    const params = {
+      tokenizerPath: this._tokenizerPath || '',
+      speechEncoderPath: this._speechEncoderPath || '',
+      embedTokensPath: this._embedTokensPath || '',
+      conditionalDecoderPath: this._conditionalDecoderPath || '',
+      languageModelPath: this._languageModelPath || '',
+      mecabDictPath: this._mecabDictPath || '',
+      language,
+      useGPU: this._config?.useGPU || false,
+      lazySessionLoading: this._lazySessionLoading,
+      numThreads: String(this._numThreads || 0)
+    }
+    if (this._referenceAudio != null) {
+      params.referenceAudio = this._referenceAudio
+    }
+    return params
   }
 
   _getSupertonicTtsParams () {
@@ -942,20 +957,7 @@ class ONNXTTS {
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
     } else {
-      ttsParams = {
-        tokenizerPath: this._tokenizerPath || '',
-        speechEncoderPath: this._speechEncoderPath || '',
-        embedTokensPath: this._embedTokensPath || '',
-        conditionalDecoderPath: this._conditionalDecoderPath || '',
-        languageModelPath: this._languageModelPath || '',
-        language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false,
-        lazySessionLoading: this._lazySessionLoading,
-        numThreads: String(this._numThreads || 0)
-      }
-      if (this._referenceAudio != null) {
-        ttsParams.referenceAudio = this._referenceAudio
-      }
+      ttsParams = this._getChatterboxTtsParams()
     }
 
     Object.assign(ttsParams, this._getEnhancerParams())
