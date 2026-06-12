@@ -77,16 +77,22 @@ describe('videosCreateBody (Zod validation)', () => {
     })
   })
 
-  it('accepts input_reference with image_url.url', () => {
-    const r = videosCreateBody.safeParse({
+  it('accepts input_reference with image_url as a flat string', () => {
+    assert.equal(videosCreateBody.safeParse({
       prompt: 'p',
-      input_reference: { image_url: { url: 'data:image/jpeg;base64,/9j/' } }
-    })
-    assert.equal(r.success, true)
+      input_reference: { image_url: 'data:image/jpeg;base64,/9j/' }
+    }).success, true)
   })
 
-  it('rejects input_reference missing image_url', () => {
-    expectIssue({ prompt: 'p', input_reference: { not_image_url: 'x' } }, 'input_reference/image_url')
+  it('accepts input_reference with file_id', () => {
+    assert.equal(videosCreateBody.safeParse({
+      prompt: 'p',
+      input_reference: { file_id: 'file-abc123' }
+    }).success, true)
+  })
+
+  it('rejects input_reference with neither image_url nor file_id', () => {
+    expectIssue({ prompt: 'p', input_reference: { not_image_url: 'x' } }, 'input_reference')
   })
 
   it('accepts strength as a number', () => {

@@ -28,11 +28,12 @@ once \`status: completed\`.
 
 **Text-to-video (txt2vid):** send a JSON body with \`prompt\`. No image needed.
 
-**Image-to-video (img2vid):** include \`input_reference: { image_url: { url } }\`
-where \`url\` is a base64 data URI (\`data:image/...;base64,...\`) or an HTTP(S)
-URL. Mode is inferred from the presence of \`input_reference\` — no explicit
-\`mode\` field needed. Add \`strength\` (0–1) to control divergence from the
-first frame.
+**Image-to-video (img2vid):** include \`input_reference: { image_url }\` where
+\`image_url\` is a base64 data URI (\`data:image/...;base64,...\`) or an HTTP(S)
+URL; or \`input_reference: { file_id }\` to reference a file uploaded via
+\`POST /v1/files\`. Mode is inferred from the presence of \`input_reference\` —
+no explicit \`mode\` field needed. Add \`strength\` (0–1) to control divergence
+from the first frame.
 
 **Job store is in-memory only.** IDs and rendered bytes are lost on restart.
 `.trim(),
@@ -95,17 +96,30 @@ function tearDownJob (ctx: QvacContext, job: VideoJob): void {
 
 export { tearDownJob }
 
-async function resolveInputReferenceImage (url: string): Promise<Uint8Array> {
+async function resolveInputReferenceImage (
+  ref: { image_url?: string | undefined; file_id?: string | undefined },
+  ctx: QvacContext
+): Promise<Uint8Array> {
+  if (ref.file_id !== undefined) {
+    const record = ctx.ephemeralFiles.get(ref.file_id)
+    if (!record) {
+      throw new HttpError(400, 'invalid_input_reference',
+        `input_reference.file_id: file "${ref.file_id}" not found — upload the image via POST /v1/files first.`)
+    }
+    return new Uint8Array(record.data)
+  }
+
+  const url = ref.image_url!
   if (url.startsWith('data:')) {
     const commaIdx = url.indexOf(',')
     if (commaIdx === -1) {
       throw new HttpError(400, 'invalid_input_reference',
-        'input_reference.image_url.url: data URI is missing the comma separator.')
+        'input_reference.image_url: data URI is missing the comma separator.')
     }
     const header = url.slice(5, commaIdx)
     if (!header.endsWith(';base64')) {
       throw new HttpError(400, 'invalid_input_reference',
-        'input_reference.image_url.url: only base64-encoded data URIs are supported (e.g. data:image/jpeg;base64,...).')
+        'input_reference.image_url: only base64-encoded data URIs are supported (e.g. data:image/jpeg;base64,...).')
     }
     return Buffer.from(url.slice(commaIdx + 1), 'base64')
   }
@@ -116,16 +130,16 @@ async function resolveInputReferenceImage (url: string): Promise<Uint8Array> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       throw new HttpError(400, 'invalid_input_reference',
-        `input_reference.image_url.url: failed to fetch image — ${message}`)
+        `input_reference.image_url: failed to fetch image — ${message}`)
     }
     if (!res.ok) {
       throw new HttpError(400, 'invalid_input_reference',
-        `input_reference.image_url.url: server returned HTTP ${res.status}.`)
+        `input_reference.image_url: server returned HTTP ${res.status}.`)
     }
     return new Uint8Array(await res.arrayBuffer())
   }
   throw new HttpError(400, 'invalid_input_reference',
-    'input_reference.image_url.url must be a base64 data URI or an HTTP(S) URL.')
+    'input_reference.image_url must be a base64 data URI or an HTTP(S) URL.')
 }
 
 async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClientParams, alias: string): Promise<void> {
@@ -328,7 +342,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     const ctx = app.qvac
     const { alias, sdkModelId } = req.qvacModel!
     const initImage = req.body.input_reference
-      ? await resolveInputReferenceImage(req.body.input_reference.image_url.url)
+      ? await resolveInputReferenceImage(req.body.input_reference, ctx)
       : undefined
     let params: VideoClientParams
     try {

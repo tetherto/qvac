@@ -55,10 +55,21 @@ export const videosCreateBody = z.object({
     'QVAC extension. Flow-matching shift. Wan 2.1 T2V needs `flow_shift: 3.0` for visible motion.'
   ),
   input_reference: z.object({
-    image_url: z.object({ url: z.string() })
-  }).optional().describe(
-    'OpenAI img2vid. Reference image as a data URI (`data:image/...;base64,...`) or an HTTP(S) URL. ' +
-    'When present the job runs in img2vid mode; omit for text-to-video.'
+    image_url: z.string().optional().describe(
+      'Base64 data URI (`data:image/...;base64,...`) or HTTP(S) URL of the reference image.'
+    ),
+    file_id: z.string().optional().describe(
+      'ID of a file previously uploaded via POST /v1/files.'
+    )
+  })
+  .refine(ref => ref.image_url !== undefined || ref.file_id !== undefined, {
+    message: 'input_reference must contain either image_url or file_id.'
+  })
+  .optional()
+  .describe(
+    'OpenAI img2vid. Provide the reference image via `image_url` (data URI or HTTP URL) or `file_id` ' +
+    '(a file uploaded via POST /v1/files). When present the job runs in img2vid mode; omit for txt2vid. ' +
+    'Raw multipart file upload (OpenAI SDK `Uploadable`) is not supported — use `image_url` with a data URI instead.'
   ),
   strength: z.union([z.string(), z.number()]).optional().describe(
     'QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `input_reference` is provided.'

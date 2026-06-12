@@ -754,14 +754,14 @@ TINY_PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDw
 @test "videos: JSON img2vid with data URI reaches model check (returns 503 model_not_ready)" {
   local body
   body=$(json_post "/v1/videos" \
-    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":{\"url\":\"data:image/png;base64,${TINY_PNG_B64}\"}}}")
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":\"data:image/png;base64,${TINY_PNG_B64}\"}}")
   assert_error "${body}" "model_not_ready"
 }
 
 @test "videos: JSON img2vid with HTTP URL reaches model check (returns 503 model_not_ready)" {
   local body
   body=$(json_post "/v1/videos" \
-    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":{\"url\":\"http://127.0.0.1:${E2E_PORT}/v1/models\"}}}")
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":\"http://127.0.0.1:${E2E_PORT}/v1/models\"}}")
   assert_error "${body}" "model_not_ready"
 }
 
