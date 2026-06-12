@@ -326,6 +326,16 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
+
+  /// In-flight run counters per execution engine, used by cancelImpl() to
+  /// route a cancel to the engine actually running work. Lock-free on
+  /// purpose: cancel() can arrive on the scheduler's worker thread from a
+  /// streaming callback that holds the scheduler mutex, so routing must not
+  /// take any scheduler lock. Routing also isolates cancel state per
+  /// engine — an unconditional broadcast left a stale stop flag on the idle
+  /// engine that silently cancelled its next, unrelated run.
+  mutable std::atomic<unsigned> activeSingleJobs_{0};
+  mutable std::atomic<unsigned> activeBatchJobs_{0};
   int64_t runtimeBackendDevice_ = 0;
 
   bool isBitnetModel() const;

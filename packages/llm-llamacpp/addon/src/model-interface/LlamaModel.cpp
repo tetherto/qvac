@@ -533,19 +533,18 @@ void LlamaModel::cancel() const {
 }
 
 void LlamaModel::cancelImpl() const {
-  if (state_ && state_->batchScheduler_) {
-    // No `hasWork()` guard here: the user's per-token streaming
-    // callback (`SubmitRequest::streams.onToken`) is invoked from the
-    // scheduler's worker thread WHILE that thread holds the scheduler's
-    // `mutex_` (only released around `llama_decode`). Re-entering any
-    // method that takes `mutex_` from inside the callback — including
-    // `hasWork()` — self-deadlocks the non-recursive `std::mutex`.
-    // `requestCancelAll()` is lock-free (atomic store + `notify_all`),
-    // idempotent, and a no-op when there is nothing to cancel, so the
-    // guard was both unsafe and unnecessary.
+  // Guarded by the run counters, never by the scheduler's `hasWork()`:
+  // the per-token streaming callback runs on the scheduler's worker
+  // thread while it holds the scheduler `mutex_`, so any locking
+  // scheduler method called from a cancel issued inside that callback
+  // self-deadlocks. The counters are also what keeps cancel state
+  // isolated per engine: only the engine with work in flight gets its
+  // stop flag set, so an idle engine never carries a stale flag into
+  // its next run.
+  if (state_ && state_->batchScheduler_ && activeBatchJobs_.load() > 0) {
     state_->batchScheduler_->requestCancelAll();
   }
-  if (state_ && state_->llmContext_) {
+  if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
     state_->llmContext_->stop();
   }
 }
@@ -625,6 +624,8 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 }
 
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
+  activeSingleJobs_.fetch_add(1);
+  ScopeGuard jobGuard([this] { activeSingleJobs_.fetch_sub(1); });
   state_->lastRun_ = {};
   state_->lastRun_.wasPrefill = prompt.prefill;
   if (state_->batchScheduler_) {
@@ -727,6 +728,8 @@ bool LlamaModel::supportsBatching() const {
 
 std::vector<std::string>
 LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
+  activeBatchJobs_.fetch_add(1);
+  ScopeGuard jobGuard([this] { activeBatchJobs_.fetch_sub(1); });
   validateBitnetQuantization();
   state_->lastRun_ = {};
   state_->lastRun_.wasBatch = true;
