@@ -188,6 +188,10 @@ private:
   struct RecognizerGraphCache {
     int height = 0;
     int width = 0;
+    // Batch size N the cached graph was built for. The graph topology is
+    // identical for any N at a fixed (height, width), but the input tensor
+    // ne[3] and the LSTM state shapes depend on N, so it is part of the key.
+    int batchN = 0;
     size_t graphSize = 0;
     std::vector<std::uint8_t> ctxBuf;
     OcrGgmlContextPtr gctx = nullptr;
@@ -211,7 +215,8 @@ private:
   runBatchInference(const std::vector<cv::Mat>& images, int dynamicWidth);
   cv::Mat runRecognizerOneCached(
       const float* inputData, int height, int width, size_t graphSize);
-  void ensureRecognizerGraph(int height, int width, size_t graphSize);
+  void
+  ensureRecognizerGraph(int height, int width, int batchN, size_t graphSize);
   void destroyRecognizerGraph();
 
   std::vector<InferredText> processImgList(const std::atomic<bool>* cancelFlag);

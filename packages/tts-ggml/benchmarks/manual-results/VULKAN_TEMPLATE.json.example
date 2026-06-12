@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 2,
+  "platform": "linux-x64",
+  "platformName": "linux",
+  "arch": "x64",
+  "isMobile": false,
+  "engine": "chatterbox",
+  "model": {
+    "type": "chatterbox",
+    "variant": "q4",
+    "sizeBytes": 320000000
+  },
+  "labels": {
+    "runner": "manual-yourname",
+    "device": "RTX 4090 desktop",
+    "backend": "vulkan",
+    "requestedBackend": "gpu",
+    "label": "manual-vulkan"
+  },
+  "requested": {
+    "engine": "chatterbox",
+    "variant": "q4",
+    "useGPU": true,
+    "backendHint": "vulkan",
+    "deviceLabel": "RTX 4090 desktop",
+    "runnerLabel": "manual-yourname",
+    "numThreads": null
+  },
+  "summary": {
+    "rtf": { "mean": 0.21, "min": 0.19, "max": 0.24, "stddev": 0.015, "p50": 0.2, "p95": 0.23, "count": 5 },
+    "wallMs": { "mean": 540 },
+    "tokensPerSecond": { "mean": 0 },
+    "coldRtf": 0.32,
+    "modelLoadMs": 1800,
+    "peakRssBytes": 1400000000,
+    "modelSizeBytes": 320000000,
+    "noisy": false
+  }
+}

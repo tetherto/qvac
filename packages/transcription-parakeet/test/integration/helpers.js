@@ -21,11 +21,21 @@ const isMobile = platform === 'ios' || platform === 'android'
 // chunks JSON into [PERF_REPORT_START]/[PERF_CHUNK] markers — the exact
 // format scripts/perf-report/extract-from-log.js already understands.
 // ---------------------------------------------------------------------------
+// QVAC-20499: inject bare-subprocess so performance-reporter.js's _detectGpu()
+// can shell out to nvidia-smi / vulkaninfo / system_profiler on desktop runners
+// and populate device.gpu (the hardware model name). Resolving from this caller
+// file works (it lives next to transcription-parakeet/node_modules); resolving
+// from inside scripts/test-utils/ does not, since that directory has no
+// node_modules walk. Mobile leaves device.gpu null — the probes don't apply
+// there and the Device Farm device name is the proxy.
+let _subprocess = null
+try { _subprocess = require('bare-subprocess') } catch (_) {}
+
 let createPerformanceReporter
 const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
 try {
   const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
-  perfReporterMod.configure({ fs, path, process, os })
+  perfReporterMod.configure({ fs, path, process, os, subprocess: _subprocess })
   createPerformanceReporter = perfReporterMod.createPerformanceReporter
 } catch (_) {
   createPerformanceReporter = function (opts) {

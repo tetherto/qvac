@@ -8,7 +8,7 @@ schemaType: HowTo
 
 Vision-language-action (VLA) inference uses a **GGML** engine ([`@qvac/vla-ggml`](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml)) to run VLA policies. Load a model using `modelType: "vla"`. Then, feed it preprocessed camera frames, the robot's current state, and a tokenized natural-language instruction; the model returns an **action chunk** — `chunkSize` future timesteps of an `actionDim`-dimensional action vector — to drive the robot's actuators.
 
-`vla()` returns `{ actions, actionDim, chunkSize, stats }`, where `actions` is a `Float32Array` of length `chunkSize * actionDim` and `stats` reports per-stage timings (`vision_ms`, `smollm2_total_ms`, `ode_ms`, `total_ms`).
+The same `vla()` interface drives multiple policy families that differ in (i) how many camera views they expect, and (ii) how they consume the robot state. `vlaHparams()` reports these per-model traits — `numCameras` and `stateInputMode` — so you can shape your inputs accordingly without hardcoding to a single architecture. `vla()` returns the produced action chunk together with per-stage timing stats.
 
 ## Functions
 
@@ -18,25 +18,26 @@ Use the following sequence of function calls:
 3. [`vla()`](/reference/api#vla)
 4. [`unloadModel()`](/reference/api#unloadmodel)
 
-The SDK also exposes two pure-JS input helpers — `vlaPreprocessImage()` and `vlaPadState()` — to prepare the wire-format tensors expected by `vla()`. They are inlined client-side (no native binding required), so they work under Node, Bun, and Expo even without VLA prebuilds.
+The SDK also exposes two helpers to prepare the wire-format tensors expected by `vla()`:
+- `vlaPreprocessImage()`: prepares raw camera pixels into the image tensor `vla()` expects.
+- `vlaPadState()`: zero-pads a robot-state vector to `hparams.maxStateDim` (continuous-state models only).
+
+Both helpers are inlined client-side (no native binding required), so they work under Node, Bun, and Expo even without VLA prebuilds. The natural-language instruction must be tokenized on the consumer side using the model's tokenizer.
 
 For how to use each function, see [SDK — API reference](/reference/api/).
 
 ## Models
 
-Supported model families and their file layouts:
+Supported model families:
 
-- **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
-
-More VLA families are planned, and will load through the same `modelType: "vla"` interface.
+- **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Expects **2 camera views** and a **continuous** robot state. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
+- **[π₀.₅ (pi05)](https://www.physicalintelligence.company/blog/pi05)**: single all-in-one `*.gguf` file. Expects **`vlaHparams().numCameras` camera views** (3 for `PI05_BASE_Q_AGGRESSIVE`) and a **discrete** robot state tokenized into the language prompt instead of a state buffer; the `noise` prior is required. Available constant: `PI05_BASE_Q_AGGRESSIVE`.
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
-<Callout type="info">
-**On the input buffers:** `vla()` expects typed-array inputs sized exactly to the model's hparams — images of `hparams.visionImageSize × hparams.visionImageSize`, state of `hparams.maxStateDim`, tokens / mask of `hparams.tokenizerMaxLength`, and an optional noise prior of `hparams.chunkSize × hparams.maxActionDim`. Always call `vlaHparams()` first to size your buffers, and use `vlaPreprocessImage()` / `vlaPadState()` to produce the correct CHW image layout in `[-1, 1]` and zero-padded state vector. The instruction is tokenized on the consumer side using the **SmolVLM2** tokenizer.
-</Callout>
+## Examples
 
-## Example
+### SmolVLA
 
 The following script loads SmolVLA-LIBERO from the registry, builds synthetic inputs (zero-filled gray images + BOS-only tokens + zero state), and runs a single inference pass — printing the produced action chunk and per-stage timings:
 
@@ -53,6 +54,28 @@ The following script loads SmolVLA-LIBERO from the registry, builds synthetic in
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/vla-smolvla.ts title="vla-smolvla.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### pi05
+
+The following script loads pi05 from the registry, builds synthetic inputs (zero-filled gray images + BOS-only tokens + empty state), and runs a single inference pass — printing the produced action chunk and per-stage timings:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/vla-pi05.js title="vla-pi05.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/vla-pi05.ts title="vla-pi05.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

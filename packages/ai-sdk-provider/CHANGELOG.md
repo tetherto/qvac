@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Managed mode (`mode: 'managed'`).** `createQvac({ mode: 'managed', models, ... })` returns a `Promise<ManagedQvacProvider>` that synthesizes an ephemeral `qvac.config.json` from a model list and brings up `qvac serve openai` for you — no hand-authored config or separate CLI step. Serves are **shared** across processes via a *fleet key* (model set + per-model config + host + binary + pinned port), owned by a **detached runner** that idle-reaps the serve once no consumer process remains for `serveIdleTimeout` (default 5 min). `close()` / `await using` detaches the calling process; a serve still in use by another consumer keeps running. Includes crash-recovery (`fetch` re-resolves and retries once on `ECONNREFUSED`) and a self-healing registry under `~/.qvac/managed-serves/`. New options: `models`, `servePort`, `serveHost`, `serveStartTimeout`, `serveBinPath`, `reuse`, `serveIdleTimeout`. New exports: `ManagedQvacProvider`, `QvacManagedOptions`, `QvacManagedModel`, `QvacExternalOptions`, and the managed error classes (`QvacManagedModeError` + subclasses) with the `QvacManagedErrorCode` union. Requires the optional `@qvac/cli` peer dependency. **External mode is unchanged**; the managed subsystem is dynamically imported only when `mode: 'managed'` is set.
+
+---
+
 ## [0.1.0]
 
 Release Date: 2026-05-27

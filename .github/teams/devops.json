@@ -13,5 +13,33 @@
     ".github/actions/",
     ".github/scripts/",
     "scripts/"
+  ],
+  "extraRepos": [
+    "tetherto/github-ops",
+    "tetherto/oss-actions",
+    "tetherto/qvac-actions",
+    "tetherto/qvac-devops",
+    "tetherto/qvac-testops",
+    "tetherto/release-ops",
+    "tetherto/data-github-ops",
+    "tetherto/qvac-workbench",
+    "tetherto/qvac-internal",
+    "tetherto/qvac-test-suite",
+    "tetherto/qvac-registry-vcpkg",
+    "tetherto/qvac-ext-lib-whisper.cpp",
+    "tetherto/qvac-ext-stable-diffusion.cpp",
+    "tetherto/qvac-fabric-llm.cpp",
+    "tetherto/qvac-ext-ggml",
+    "tetherto/qvac-ext-bergamot-translator",
+    "tetherto/qvac-ext-marian-dev",
+    "tetherto/qvac-research-tool-call",
+    "tetherto/qvac-research-medpsy",
+    "tetherto/qvac-research-translations-nmt",
+    "tetherto/qvac-research-evaluate",
+    "tetherto/qvac-research-synthetic-data-creation",
+    "tetherto/qvac-research-model-training",
+    "tetherto/qvac-model-tools",
+    "tetherto/qvac-rnd-fabric-llm-bitnet",
+    "tetherto/qvac-rnd-fabric-llm-finetune"
   ]
 }

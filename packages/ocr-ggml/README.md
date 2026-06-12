@@ -226,6 +226,42 @@ and the index selection share one code path).
   as an interim lever (e.g. in CI or a launcher script) when you cannot pass
   `gpuDevice` through the API. It does not affect Metal.
 
+### Kernel precision (`OCR_GGML_CRAFT_KERNEL_F32/F16` / `OCR_GGML_CRNN_KERNEL_F32/F16`)
+
+The EasyOCR pipeline can store its convolution kernels as **F16** in the
+weights buffer, which lets ggml take the faster F16 im2col→GEMM conv path (and
+run on GPU backends). Kernels are cast F32→F16 at model-load time from the F32
+GGUF — no separate F16 model file is needed, and biases plus the
+BatchNorm-fold math stay F32 (the recognizer's LSTM / linear / Prediction
+weights also stay F32).
+
+F16 only helps where the **resolved backend** has a fast F16 GEMM, so the
+default is **backend-aware** (decided at model-load time from the selected ggml
+device):
+
+| Resolved backend / device | Default |
+|---|---|
+| GPU / iGPU with fast F16 (NVIDIA, Apple Metal, Intel, AMD…) | **F16** |
+| Mali GPU (Vulkan) | **F32** (its F16 GEMM is ~4× slower) |
+| Apple-Silicon CPU (native FP16) | **F16** |
+| Other CPUs — x86, non-Apple ARM (F16 emulated) | **F32** |
+
+> Adreno Vulkan is already skipped by backend selection (it runs on CPU), so it
+> follows the CPU rule above.
+
+Per-pipeline env vars override the backend-aware default (read once when the
+model is loaded; only the exact value `1` applies; `_F32` wins if both are set):
+
+| Env var | Affects | Effect |
+|---|---|---|
+| `OCR_GGML_CRAFT_KERNEL_F32=1` | CRAFT **detector** conv kernels | force F32 |
+| `OCR_GGML_CRAFT_KERNEL_F16=1` | CRAFT **detector** conv kernels | force F16 |
+| `OCR_GGML_CRNN_KERNEL_F32=1` | CRNN gen-2 **recognizer** feature-extractor conv kernels | force F32 |
+| `OCR_GGML_CRNN_KERNEL_F16=1` | CRNN gen-2 **recognizer** feature-extractor conv kernels | force F16 |
+
+These are useful for A/B-benchmarking the F16 fast path or bisecting an accuracy
+regression. None of them affect the DocTR pipeline.
+
 ### `run(input)` shape
 
 ```ts

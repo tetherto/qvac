@@ -98,6 +98,37 @@ test("vlaHparamsSchema: rejects negative dims", (t) => {
   t.is(result.success, false);
 });
 
+test("vlaHparamsSchema: accepts canonical π₀.₅ shape (numCameras + discrete state)", (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 50,
+    actionDim: 32,
+    maxActionDim: 32,
+    maxStateDim: 32,
+    tokenizerMaxLength: 200,
+    visionImageSize: 224,
+    numCameras: 3,
+    stateInputMode: "discrete",
+  });
+  t.is(result.success, true);
+  if (result.success) {
+    t.is(result.data.numCameras, 3);
+    t.is(result.data.stateInputMode, "discrete");
+  }
+});
+
+test("vlaHparamsSchema: rejects unknown stateInputMode", (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 50,
+    actionDim: 32,
+    maxActionDim: 32,
+    maxStateDim: 32,
+    tokenizerMaxLength: 200,
+    visionImageSize: 224,
+    stateInputMode: "tokenised",
+  });
+  t.is(result.success, false);
+});
+
 // ============================================
 // vlaStatsSchema
 // ============================================
@@ -107,6 +138,18 @@ test("vlaStatsSchema: accepts addon's full RuntimeStats shape", (t) => {
     vision_ms: 12.3,
     smollm2_compute_ms: 4.5,
     smollm2_total_ms: 7.1,
+    ode_ms: 2.2,
+    total_ms: 25.6,
+    backendDevice: 1,
+  });
+  t.is(result.success, true);
+});
+
+test("vlaStatsSchema: accepts architecture-neutral prefill_* timings", (t) => {
+  const result = vlaStatsSchema.safeParse({
+    vision_ms: 12.3,
+    prefill_compute_ms: 4.5,
+    prefill_total_ms: 7.1,
     ode_ms: 2.2,
     total_ms: 25.6,
     backendDevice: 1,
@@ -180,6 +223,19 @@ test("vlaRunRequestSchema: rejects state with invalid base64 characters", (t) =>
     state: "not valid base64!!!",
   });
   t.is(result.success, false);
+});
+
+test("vlaRunRequestSchema: accepts empty state (discrete-state π₀.₅ path)", (t) => {
+  // π₀.₅ ignores `state` (it's tokenised into the prompt). The caller encodes
+  // an empty Float32Array, which base64-encodes to "". The wire schema must
+  // accept it.
+  const empty = encodeBase64(new Uint8Array(new Float32Array(0).buffer));
+  t.is(empty, "");
+  const result = vlaRunRequestSchema.safeParse({
+    ...makeValidRunRequest(),
+    state: empty,
+  });
+  t.is(result.success, true);
 });
 
 // ============================================
@@ -686,6 +742,33 @@ test("vlaGetHparams op: returns the model's hparams + backend", async function (
       const result = await vlaGetHparams({ type: "vlaHparams", modelId });
       t.alike(result.hparams, hp);
       t.is(result.backendName, "CPU");
+    },
+  );
+});
+
+test("vlaGetHparams op: surfaces π₀.₅ numCameras + stateInputMode", async function (t) {
+  const hp = {
+    chunkSize: 50,
+    actionDim: 32,
+    maxActionDim: 32,
+    maxStateDim: 32,
+    tokenizerMaxLength: 200,
+    visionImageSize: 224,
+    numCameras: 3,
+    stateInputMode: "discrete" as const,
+  };
+  await withRegisteredVlaModel(
+    {
+      runImpl: async function () {
+        throw new Error("run not exercised");
+      },
+      hparams: hp as unknown as { actionDim: number; chunkSize: number },
+    },
+    async (modelId) => {
+      const result = await vlaGetHparams({ type: "vlaHparams", modelId });
+      t.alike(result.hparams, hp);
+      t.is(result.hparams.numCameras, 3);
+      t.is(result.hparams.stateInputMode, "discrete");
     },
   );
 });
