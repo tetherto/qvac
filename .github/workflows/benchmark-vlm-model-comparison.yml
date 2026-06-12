@@ -79,8 +79,12 @@ jobs:
   # Matrix is computed here (instead of via job-level `if:`) because
   # GitHub Actions doesn't allow `matrix.*` references in job-level
   # conditions — they're evaluated before the matrix is expanded.
+  runner_names:
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   context:
-    runs-on: ubuntu-latest
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     outputs:
       repository: ${{ steps.ctx.outputs.repository }}
       ref: ${{ steps.ctx.outputs.ref }}
@@ -110,6 +114,9 @@ jobs:
           RUN_MATRIX: ${{ inputs.run_matrix }}
           MATRIX_LINUX: ${{ inputs.matrix_linux }}
           MATRIX_MODE: ${{ inputs.matrix_mode }}
+          RUNNER_QVAC_U22: ${{ needs.runner_names.outputs.qvac_u22 }}
+          RUNNER_ORCH: ${{ needs.runner_names.outputs.orch }}
+          RUNNER_QVAC_U24_GPU: ${{ needs.runner_names.outputs.qvac_u24_gpu }}
         run: |
           cells='[]'
           if [[ "$RUN_MATRIX" == "true" ]]; then
@@ -118,11 +125,11 @@ jobs:
               sel=$(echo "$raw" | xargs)
               # several-sources builds native fabric/upstream CLIs, so the CPU leg
               # needs a runner with cmake+toolchain → GitHub-hosted ubuntu-latest.
-              cpu_runner=qvac-ubuntu2204-x64
-              if [[ "$MATRIX_MODE" == "several-sources" ]]; then cpu_runner=ubuntu-latest; fi
+              cpu_runner="$RUNNER_QVAC_U22"
+              if [[ "$MATRIX_MODE" == "several-sources" ]]; then cpu_runner="$RUNNER_ORCH"; fi
               case "$sel" in
                 linux-cpu) backend=cpu; runner=$cpu_runner;             no_gpu=true ;;
-                linux-gpu) backend=gpu; runner=qvac-ubuntu2404-x64-gpu;  no_gpu=false ;;
+                linux-gpu) backend=gpu; runner="$RUNNER_QVAC_U24_GPU";  no_gpu=false ;;
                 "") continue ;;
                 *) echo "::warning::Unknown matrix_linux token '$sel' (known: linux-cpu, linux-gpu)"; continue ;;
               esac
@@ -400,12 +407,12 @@ jobs:
   # vlm-benchmark/aggregate.js, surfaced to the step summary + PR comment.
   # This is the mechanism that makes mobile (Device Farm) results visible.
   matrix-combine:
-    needs:
+    needs: [runner_names, ]
       - context
       - matrix-linux
       - matrix-s25
     if: always() && inputs.run_matrix && needs.context.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     timeout-minutes: 10
     steps:
       - name: Checkout repository

@@ -31,49 +31,18 @@ on:
 permissions:
   contents: read
 
-# Canonical runner labels — .github/actions/runner-names/runners.yaml
 env:
-  RN_ORCH: ubuntu-latest
-  RN_U22: ubuntu-22.04
-  RN_U24: ubuntu-24.04
-  RN_U22_ARM: ubuntu-22.04-arm
-  RN_U24_ARM: ubuntu-24.04-arm
-  RN_MAC14: macos-14
-  RN_MAC14_XL: macos-14-xlarge
-  RN_MAC15: macos-15
-  RN_MAC15_INTEL: macos-15-intel
-  RN_MAC15_LG: macos-15-large
-  RN_MAC15_XL: macos-15-xlarge
-  RN_WIN22: windows-2022
-  RN_WIN25: windows-2025
-  RN_QVAC_U22: qvac-ubuntu2204-x64
-  RN_QVAC_U22_GPU: qvac-ubuntu2204-x64-gpu
-  RN_QVAC_U24: qvac-ubuntu2404-x64
-  RN_QVAC_U24_GPU: qvac-ubuntu2404-x64-gpu
-  RN_QVAC_WIN25: qvac-win25-x64
-  RN_QVAC_WIN25_GPU: qvac-win25-x64-gpu
-  RN_AI_LINUX: ai-run-linux
-  RN_AI_LINUX_GPU: ai-run-linux-gpu
-  RN_AI_U22: ai-run-ubuntu-22.04
-  RN_AI_WIN11_GPU: ai-run-windows11-gpu
-  RN_GEN_WIN11: generator-windows11
-  RN_MINI_M4: mac-mini-m4
-  RN_MINI_M4_GPU: mac-mini-m4-gpu
-  RN_LBL_U22_X64: ubuntu-22.04-x64
-  RN_LBL_U22_X64_GPU: ubuntu-22.04-x64-gpu
-  RN_LBL_U24_X64: ubuntu-24.04-x64
-  RN_LBL_U24_X64_GPU: ubuntu-24.04-x64-gpu
-  RN_LBL_U24_ARM64: ubuntu-24.04-arm64
-  RN_LBL_WIN22_X64: windows-2022-x64
-  RN_LBL_WIN25_X64: windows-2025-x64
-  RN_LBL_WIN25_X64_GPU: windows-2025-x64-gpu
   PKG_DIR: packages/registry-server
   NAME_SUFFIX: "-mono"
 
 jobs:
+  runner_names:
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   label-gate:
+    needs: runner_names
     name: Authorise (label-gate)
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     permissions:
       contents: read
       pull-requests: write
@@ -92,7 +61,8 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
   authorize:
-    runs-on: ${{ env.RN_ORCH }}
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     permissions:
       contents: read
       pull-requests: write
@@ -108,10 +78,11 @@ jobs:
           github-token: ${{ github.token }}
 
   release-merge-guard-schema:
+    needs: runner_names
     name: Release Merge Guard (Schema)
     if: >-
       github.event_name == 'push' && startsWith(github.ref_name, 'release-qvac-registry-schema')
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -127,10 +98,11 @@ jobs:
           changelog-path: packages/registry-server/shared/CHANGELOG.md
 
   release-merge-guard-client:
+    needs: runner_names
     name: Release Merge Guard (Client)
     if: >-
       github.event_name == 'push' && startsWith(github.ref_name, 'release-qvac-registry-client')
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -146,10 +118,10 @@ jobs:
           changelog-path: packages/registry-server/client/CHANGELOG.md
 
   detect-changes:
-    needs:
+    needs: [runner_names, ]
       - authorize
       - label-gate
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     environment: release
     if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
     outputs:
@@ -213,8 +185,8 @@ jobs:
           fi
 
   publish-logic:
-    needs: [authorize]
-    runs-on: ${{ env.RN_ORCH }}
+    needs: [runner_names, authorize]
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     if: needs.authorize.outputs.allowed == 'true'
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
@@ -263,14 +235,14 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-schema-gpr:
-    needs:
+    needs: [runner_names, ]
       - authorize
       - detect-changes
       - publish-logic
       - label-gate
     if: |-
       needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     environment: release
     permissions:
       contents: write
@@ -300,7 +272,7 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-schema-npm:
-    needs:
+    needs: [runner_names, ]
       - authorize
       - detect-changes
       - publish-logic
@@ -308,7 +280,7 @@ jobs:
       - label-gate
     if: |-
       needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped'))
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -351,12 +323,12 @@ jobs:
 
   publish-schema:
     name: Publish Schema (meta)
-    needs: [authorize, publish-schema-gpr, publish-schema-npm]
+    needs: [runner_names, authorize, publish-schema-gpr, publish-schema-npm]
     if: |
       needs.authorize.outputs.allowed == 'true' &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
       (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     steps:
       - run: echo "Schema publish completed or skipped."
 
@@ -374,7 +346,7 @@ jobs:
       workdir: "packages/registry-server/shared"
 
   lint-and-test:
-    needs:
+    needs: [runner_names, ]
       - authorize
       - detect-changes
       - label-gate
@@ -383,7 +355,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     environment: release
     steps:
       - name: Checkout base repository
@@ -445,7 +417,7 @@ jobs:
         run: npm run typecheck
 
   publish-client-gpr:
-    needs:
+    needs: [runner_names, ]
       - authorize
       - detect-changes
       - publish-logic
@@ -453,7 +425,7 @@ jobs:
       - label-gate
     if: |-
       needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     environment: release
     permissions:
       contents: write
@@ -485,7 +457,7 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs:
+    needs: [runner_names, ]
       - authorize
       - detect-changes
       - publish-logic
@@ -494,7 +466,7 @@ jobs:
       - label-gate
     if: |-
       needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped'))
-    runs-on: ${{ env.RN_ORCH }}
+    runs-on: ${{ needs.runner_names.outputs.orch }}
     environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
