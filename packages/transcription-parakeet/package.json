@@ -17,6 +17,7 @@
     "test:integration": "npm run test:integration:generate && bash test/integration/run-tests.sh",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js",
     "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
+    "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target parakeet_tests && bare-make install",
     "test:cpp:run": "cd build && LLVM_PROFILE_FILE=default.profraw ./parakeet_tests --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",

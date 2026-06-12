@@ -144,6 +144,60 @@
   }
 }
 
+/*
+ * 5) Expose the notebook's side-column widths to fixed-position siblings
+ *    of the layout (the Ask AI bar / chat modal).
+ *
+ * The Ask AI composer bar — and the closed/open chat modal that grows
+ * out of it — must span exactly the central column: the main grid track
+ * that holds the article body PLUS the inter-column gaps on each side
+ * (i.e. "corpo do texto + espaço entre-colunas"), NOT an arbitrary fixed
+ * cap. The bar pins itself to that track's left/right edges (see
+ * ask-ai-chat-shell.tsx) via `--qvac-askai-left` / `--qvac-askai-right`.
+ *
+ * Each edge = outer page gutter + the adjacent side-column width:
+ *   - gutter = max(0, (100% − layout-width) / 2) — how the layout centers
+ *     `--fd-layout-width` on wide screens; 0 once the viewport is narrower
+ *     than it. `100%` resolves against the fixed bar's containing block
+ *     (the viewport) at use time.
+ *   - `max(0.5rem, side-column)` floors each edge so the bar never sits
+ *     flush against the viewport edge where a side column is absent (TOC
+ *     at `md`, both on mobile). Width then follows from the two insets,
+ *     so it always matches the column with no overflow risk.
+ *
+ * Fumadocs only mounts the sidebar at `md` and the TOC at `xl`, so we
+ * mirror those breakpoints with the SAME pixel values used for
+ * `#nd-notebook-layout` above (keep the two in sync).
+ *
+ * These MUST live on `:root` (not the layout container) because the bar
+ * is `position: fixed` and renders as a sibling of `#nd-notebook-layout`,
+ * so it cannot inherit the container's `--fd-sidebar-width` /
+ * `--fd-toc-width`.
+ */
+:root {
+  --qvac-askai-sidebar: 0px;
+  --qvac-askai-toc: 0px;
+  --qvac-askai-gutter: max(0px, calc((100% - var(--fd-layout-width)) / 2));
+  --qvac-askai-left: calc(
+    var(--qvac-askai-gutter) + max(0.5rem, var(--qvac-askai-sidebar))
+  );
+  --qvac-askai-right: calc(
+    var(--qvac-askai-gutter) + max(0.5rem, var(--qvac-askai-toc))
+  );
+}
+
+@media (min-width: 768px) {
+  :root {
+    --qvac-askai-sidebar: 288px; /* keep in sync with #nd-notebook-layout sidebar */
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --qvac-askai-toc: 288px; /* keep in sync with #nd-notebook-layout toc */
+  }
+}
+
 /* ===========================================
    VIEWPORT ADJUSTMENTS - END
    =========================================== */
@@ -293,6 +347,64 @@
   STEPS ADJUSMENTS - END
   =========================================== */
 
+
+/* ===========================================
+  ASK AI — bouncing typing-dots loader
+  ===========================================
+  Three "." glyphs bounce in sequence after the cycling label in the
+  assistant bubble while the response is in flight (see
+  ask-ai-chat-message.tsx), like a classic messenger "typing…" indicator.
+  The dots are real text periods, so the bounce is expressed in `em`
+  (relative to the inherited font size) rather than `%` (relative to the
+  box) — that keeps the hop proportional to the small glyph. The per-dot
+  stagger is supplied via an inline `animation-delay` so it never depends
+  on utility ordering; `animation-*` longhands (not the `animation`
+  shorthand) are used so they don't reset the inline delay.
+*/
+@keyframes qvac-typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-0.4em);
+    opacity: 1;
+  }
+}
+
+.qvac-typing-dot {
+  animation-name: qvac-typing-dot;
+  animation-duration: 1.2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qvac-typing-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ===========================================
+  ASK AI — consistent chat font size
+  ===========================================
+  Every turn in the chat (user message, loading indicator and assistant
+  answer) must render at the same size as the user message: `text-sm`
+  (0.875rem) with `leading-relaxed`. Fumadocs' `.prose` hard-codes
+  `font-size: 1rem; line-height: 1.75rem`, so the markdown answer comes
+  out visibly larger than the rest of the chat. Re-pin it here, scoped to
+  the messages rail (`[data-ask-ai-messages]`, specificity 0,2,0 > the
+  preset's `.prose` 0,1,0) so docs-page prose is left untouched. Headings
+  / inline code use `em`, so they keep scaling proportionally off the new
+  base.
+*/
+[data-ask-ai-messages] .prose {
+  font-size: 0.875rem; /* == text-sm / user message */
+  line-height: 1.625; /* == leading-relaxed */
+}
 
 /* Sidebar with same "page background" of Fumadocs */
 @layer utilities {

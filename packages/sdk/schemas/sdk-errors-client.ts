@@ -45,6 +45,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   BARE_PACK_ERROR: 50611,
   INVALID_PLUGIN_SPECIFIER: 50612,
   BARE_IMPORTS_MAP_NOT_FOUND: 50613,
+  BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800,
@@ -221,6 +222,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "BARE_IMPORTS_MAP_NOT_FOUND",
     message: (sdkName: string, expectedPath: string) =>
       `bare-imports.json not found.\n\n  Expected at: ${expectedPath}\n\n  Make sure ${sdkName} is installed in your project.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND]: {
+    name: "BARE_RUNTIME_BINARY_NOT_FOUND",
+    message: (platform: string, arch: string) =>
+      `Could not load the Bare runtime binary for ${platform}-${arch}. The platform package "bare-runtime-${platform}-${arch}" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \`pnpm add bare-runtime-${platform}-${arch}\`) or by installing with npm or bun. See https://github.com/tetherto/qvac/issues/1492`,
   },
 
   // Profiler Errors (50,800-50,899)
