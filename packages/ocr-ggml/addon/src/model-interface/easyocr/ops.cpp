@@ -13,30 +13,32 @@ namespace easyocr::ggml::ops {
 
 namespace {
 
-// Opt-in (OCR_GGML_CRAFT_BIAS_BROADCAST=1): add the channel bias via ggml_add's
-// implicit broadcast instead of materialising a full [W,H,OC,N] copy with
-// ggml_repeat. ggml_add officially broadcasts its second operand
-// (ggml_can_repeat) and the CPU/Vulkan/Metal kernels all implement it, so the
-// result is numerically identical while saving a buffer + an op per conv.
-// Default off until CI confirms it across backends. Read via getenv at
-// graph-build time (not a hot path) so a single-process test can toggle it.
-bool bias_broadcast_enabled() {
-  const char* v = std::getenv("OCR_GGML_CRAFT_BIAS_BROADCAST");
+// Escape hatch (OCR_GGML_CRAFT_BIAS_REPEAT=1): fall back to the legacy
+// ggml_repeat broadcast for the channel bias. The default adds the [1,1,OC,1]
+// bias via ggml_add's implicit broadcast (ggml_can_repeat), which the
+// CPU/Vulkan/Metal kernels all implement — numerically identical to the repeat
+// path while saving a materialised [W,H,OC,N] buffer + an op per conv (verified
+// equal on CPU, NVIDIA Vulkan, and Apple Metal; ~8-15% faster on CPU). The
+// lever exists only to recover without a code change if some backend's
+// broadcast-add ever misbehaves. Read via getenv at graph-build time (not a hot
+// path) so a single-process test can toggle it.
+bool bias_use_repeat() {
+  const char* v = std::getenv("OCR_GGML_CRAFT_BIAS_REPEAT");
   return v != nullptr && std::strcmp(v, "1") == 0;
 }
 
-// Add a [OC] bias to a [W, H, OC, N] activation map. By default we broadcast
-// via ggml_repeat (the historical, always-supported path); the env flag opts
-// into ggml_add's implicit broadcast, dropping the ggml_repeat.
+// Add a [OC] bias to a [W, H, OC, N] activation map. By default we rely on
+// ggml_add's implicit broadcast (no ggml_repeat); the escape-hatch env forces
+// the legacy materialised-repeat path.
 ::ggml_tensor* add_channel_bias(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* bias) {
   const int64_t oc = bias->ne[0];
   auto* b4 = ggml_reshape_4d(ctx, bias, 1, 1, oc, 1);
-  if (bias_broadcast_enabled()) {
-    return ggml_add(ctx, x, b4);
+  if (bias_use_repeat()) {
+    return ggml_add(ctx, x, ggml_repeat(ctx, b4, x));
   }
-  return ggml_add(ctx, x, ggml_repeat(ctx, b4, x));
+  return ggml_add(ctx, x, b4);
 }
 
 } // namespace

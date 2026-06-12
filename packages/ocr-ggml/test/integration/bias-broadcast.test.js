@@ -7,12 +7,12 @@ const { isMobile, platform, getImagePath, ensureModelPath, runOcrComparison } = 
 
 const DESKTOP_TIMEOUT = 180 * 1000 // 3 minutes: runs the pipeline twice
 
-// Guards the opt-in conv-bias broadcast path added in QVAC-20533. By default
-// the channel bias is broadcast via ggml_repeat; OCR_GGML_CRAFT_BIAS_BROADCAST=1
-// drops the ggml_repeat and uses ggml_add's implicit broadcast instead. The two
-// must be numerically equivalent, so this runs the SAME image on the same
-// backend twice — flag off (repeat) then on (broadcast) — and asserts identical
-// recognized output, plus that each pass is absolutely correct.
+// Guards the conv-bias broadcast path (QVAC-20533). The default adds the
+// channel bias via ggml_add's implicit broadcast; OCR_GGML_CRAFT_BIAS_REPEAT=1
+// forces the legacy ggml_repeat path. The two must be numerically equivalent,
+// so this runs the SAME image on the same backend twice — repeat (forced) then
+// broadcast (default) — and asserts identical recognized output, plus that each
+// pass is absolutely correct.
 //
 // The toggle is read by the native addon via getenv at graph-build time, so we
 // set it through bare-os (which maps to setenv) before constructing the addon
@@ -20,8 +20,8 @@ const DESKTOP_TIMEOUT = 180 * 1000 // 3 minutes: runs the pipeline twice
 // propagate these process env vars, and on Windows uv_os_setenv
 // (SetEnvironmentVariableW) does not update the CRT table that the addon's
 // std::getenv reads — so the toggle wouldn't take effect and both passes would
-// run the default ggml_repeat path, making the comparison vacuous.
-const ENV_KEY = 'OCR_GGML_CRAFT_BIAS_BROADCAST'
+// run the default broadcast path, making the comparison vacuous.
+const ENV_KEY = 'OCR_GGML_CRAFT_BIAS_REPEAT'
 
 test('EasyOCR conv-bias broadcast matches ggml_repeat (CRAFT)', { timeout: DESKTOP_TIMEOUT }, async function (t) {
   if (isMobile) {
@@ -73,8 +73,8 @@ test('EasyOCR conv-bias broadcast matches ggml_repeat (CRAFT)', { timeout: DESKT
       perfOpts: { skipReport: true }
     }
 
-    t.comment('Pass A: default ggml_repeat bias; image: ' + imagePath + ', platform: ' + platform)
-    setEnv('')
+    t.comment('Pass A: forced ggml_repeat bias; image: ' + imagePath + ', platform: ' + platform)
+    setEnv('1')
     const resRepeat = await runOcrComparison(t, {
       ...baseCfg,
       perfLabel: '[EasyOCR basic_test bias-repeat]',
@@ -82,8 +82,8 @@ test('EasyOCR conv-bias broadcast matches ggml_repeat (CRAFT)', { timeout: DESKT
     })
     const outRepeat = resRepeat.output
 
-    t.comment('Pass B: ggml_add broadcast bias')
-    setEnv('1')
+    t.comment('Pass B: default ggml_add broadcast bias')
+    setEnv('')
     const resBroadcast = await runOcrComparison(t, {
       ...baseCfg,
       perfLabel: '[EasyOCR basic_test bias-broadcast]',
