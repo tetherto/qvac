@@ -32,6 +32,7 @@ const logger = getServerLogger();
 export interface DownloadCompanionSetOptions {
   companionSet: CompanionSetMetadata;
   downloadKey: string;
+  allowLegacyFlatCache?: boolean | undefined;
   progressCallback?: ((progress: ModelProgressUpdate) => void) | undefined;
   signal?: AbortSignal | undefined;
   hooks?: DownloadHooks | undefined;
@@ -50,6 +51,7 @@ export async function downloadCompanionSetFromRegistry(
   const {
     companionSet,
     downloadKey,
+    allowLegacyFlatCache = false,
     progressCallback,
     signal,
     hooks,
@@ -75,7 +77,7 @@ export async function downloadCompanionSetFromRegistry(
   // Legacy flat-cache compatibility for Bergamot-style companion sets.
   // This is valid only for families whose runtime still works with explicit
   // per-file absolute paths; it is not a generic rule for all companion sets.
-  if (!isLegacyOnnxSet(files)) {
+  if (allowLegacyFlatCache && !isLegacyOnnxSet(files)) {
     const flatPath = await checkLegacyFlatCache(files, primaryKey, hooks);
     if (flatPath) {
       logger.info(`✅ Using legacy flat cache for companion set: ${flatPath}`);

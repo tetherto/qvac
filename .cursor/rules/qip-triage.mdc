@@ -1,0 +1,20 @@
+---
+description: When planning, implementing, or reviewing changes that clearly match technical proposal triggers, invoke qv-qip-triage before continuing. Prefer false negatives over false positives.
+alwaysApply: false
+---
+
+# QIP proposal nudge
+
+This rule does not define the workflow. It only nudges agents to invoke `qv-qip-triage` when appropriate.
+
+## When to invoke
+
+During planning, implementation, or PR review, invoke `qv-qip-triage` when a change clearly affects stable contracts, package boundaries, native/platform support, runtime/transport/storage choices, published NFRs, technical principles, or delivery architecture in CI.
+
+## When not to invoke
+
+Do not invoke for ordinary refactors, localized bug fixes, routine tests, documentation edits, or CI maintenance such as cache tuning, matrix cleanup, or flaky-test fixes unless they change one of the behaviors above.
+
+## Outcome
+
+The skill recommends creating a QIP. It is advisory only and must not block work mechanically.
