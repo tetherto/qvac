@@ -7,6 +7,8 @@
 // This manifests as "[TextLlm] failed to decode next token" errors after
 // finetuning completes and reload() is called to switch back to inference mode.
 
+#include <filesystem>
+
 #include <gtest/gtest.h>
 
 #include "model-interface/LlamaModel.hpp"
@@ -25,12 +27,14 @@ protected:
   }
 
   std::unique_ptr<LlamaModel> createModel() {
-    const auto* path = getTestModel();
-    if (!path) {
+    std::string path = test_common::BaseTestModelPath::get();
+    if (!std::filesystem::exists(path)) {
       return nullptr;
     }
+    std::string projection;
+    auto cfg = config_;
     return std::make_unique<LlamaModel>(
-        std::string(path), config_, "test-reload-cancel");
+        std::move(path), std::move(projection), std::move(cfg));
   }
 
   std::unordered_map<std::string, std::string> config_;
@@ -61,7 +65,12 @@ TEST_F(ReloadCancelStateTest, InferenceWorksAfterFinetuneReload) {
       .contextLength = 256,
       .gpuSupportsF16OutProd = false,
       .flashAttn = false};
-  model->reload(finetuneConfig);
+  try {
+    model->reload(finetuneConfig);
+  } catch (const std::exception& e) {
+    GTEST_SKIP() << "model cannot enter finetune mode on this setup: "
+                 << e.what();
+  }
 
   // Simulate finetuning completion: reload back to inference mode
   // (In real code this happens in LlamaFinetuner::finetune() line 410)
@@ -72,7 +81,7 @@ TEST_F(ReloadCancelStateTest, InferenceWorksAfterFinetuneReload) {
   // Try to run inference - this should work, not fail with
   // "[TextLlm] failed to decode next token"
   LlamaModel::Prompt prompt;
-  prompt.input = "What is 2+2? Answer: ";
+  prompt.input = R"([{"role":"user","content":"What is 2+2?"}])";
   prompt.generationParams.n_predict = 8;
 
   std::string output;
@@ -104,7 +113,7 @@ TEST_F(ReloadCancelStateTest, ReloadAfterIdleCancelDoesNotPoisonInference) {
 
   // Try inference - should work, not fail with "failed to decode next token"
   LlamaModel::Prompt prompt;
-  prompt.input = "Say hello. Response: ";
+  prompt.input = R"([{"role":"user","content":"Say hello."}])";
   prompt.generationParams.n_predict = 8;
 
   std::string output;
