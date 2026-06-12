@@ -23,12 +23,103 @@ import { useInkeepCaptcha } from './use-inkeep-captcha';
 const INKEEP_BASE_URL = 'https://api.inkeep.com/v1';
 const INKEEP_MODEL = 'inkeep-qa-expert';
 
+/**
+ * Tool registration that asks Inkeep's `qa` model to return the
+ * sources it used. Inkeep streams these back as a `provideLinks`
+ * tool-call whose JSON arguments are `{ links: [...] }`. Declared as a
+ * plain JSON schema (no zod helper needed). Inkeep may also stream a
+ * `provideRecordsConsidered` tool-call; we ignore everything except
+ * `provideLinks`.
+ */
+const PROVIDE_LINKS_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'provideLinks',
+    description: 'Provide the source links (citations) used to answer the question.',
+    parameters: {
+      type: 'object',
+      properties: {
+        links: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              url: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+              type: { type: 'string' },
+            },
+            required: ['url'],
+          },
+        },
+      },
+      required: ['links'],
+    },
+  },
+};
+
+/**
+ * Parse the accumulated JSON arguments of a `provideLinks` tool-call
+ * into a clean, de-duplicated reference list. Defensive on every
+ * field: a partial / malformed payload yields an empty list rather
+ * than throwing (the answer text is still valuable without sources).
+ */
+function parseProvideLinks(argsJson: string): AskAIReference[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(argsJson);
+  } catch {
+    return [];
+  }
+  const links = (parsed as { links?: unknown } | null)?.links;
+  if (!Array.isArray(links)) return [];
+
+  const seen = new Set<string>();
+  const references: AskAIReference[] = [];
+  for (const raw of links) {
+    if (!raw || typeof raw !== 'object') continue;
+    const link = raw as Record<string, unknown>;
+    const url = typeof link.url === 'string' ? link.url.trim() : '';
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    references.push({
+      url,
+      title: typeof link.title === 'string' ? link.title : undefined,
+      description:
+        typeof link.description === 'string' ? link.description : undefined,
+      label: typeof link.label === 'string' ? link.label : undefined,
+      type: typeof link.type === 'string' ? link.type : undefined,
+    });
+  }
+  return references;
+}
+
 export type ChatRole = 'user' | 'assistant' | 'system';
+
+/**
+ * A single source link returned by Inkeep's `provideLinks` tool and
+ * rendered as a citation beneath the assistant's answer. Mirrors the
+ * fields Inkeep emits; only `url` is guaranteed to be present.
+ */
+export interface AskAIReference {
+  url: string;
+  title?: string;
+  description?: string;
+  label?: string;
+  type?: string;
+}
 
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
+  /**
+   * Source links for an assistant message, attached once the stream
+   * finishes (parsed from the `provideLinks` tool call). Absent while
+   * streaming and on messages with no citations.
+   */
+  references?: AskAIReference[];
 }
 
 export interface UseAskAIChatOptions {
@@ -208,8 +299,11 @@ export function useAskAIChat({ apiKey }: UseAskAIChatOptions): UseAskAIChatResul
 
         // Use the SDK's streaming method (same one Inkeep's widget
         // calls). Stream events look like `{ choices: [{ delta: {
-        // content?: '...' } }] }`; we accumulate the text deltas into
-        // the placeholder assistant message addressed by `id`.
+        // content?: '...', tool_calls?: [...] } }] }`; we accumulate
+        // the text deltas into the placeholder assistant message and
+        // the `provideLinks` tool-call arguments into `toolCallArgs`
+        // (keyed by the call index, since fragments arrive split
+        // across chunks).
         const stream = await client.chat.completions.create(
           {
             model: INKEEP_MODEL,
@@ -218,6 +312,8 @@ export function useAskAIChat({ apiKey }: UseAskAIChatOptions): UseAskAIChatResul
               role: m.role,
               content: m.content,
             })),
+            tools: [PROVIDE_LINKS_TOOL],
+            tool_choice: 'auto',
           },
           {
             signal: controller.signal,
@@ -226,16 +322,47 @@ export function useAskAIChat({ apiKey }: UseAskAIChatOptions): UseAskAIChatResul
           },
         );
 
+        const toolCallArgs = new Map<number, { name: string; args: string }>();
+
         for await (const chunk of stream) {
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (typeof delta !== 'string' || delta.length === 0) continue;
-          setMessages((current) =>
-            current.map((m) =>
-              m.id === assistantMessage.id
-                ? { ...m, content: m.content + delta }
-                : m,
-            ),
-          );
+          const delta = chunk.choices?.[0]?.delta;
+          if (!delta) continue;
+
+          if (typeof delta.content === 'string' && delta.content.length > 0) {
+            const text = delta.content;
+            setMessages((current) =>
+              current.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, content: m.content + text }
+                  : m,
+              ),
+            );
+          }
+
+          if (delta.tool_calls) {
+            for (const call of delta.tool_calls) {
+              const entry = toolCallArgs.get(call.index) ?? { name: '', args: '' };
+              if (call.function?.name) entry.name = call.function.name;
+              if (call.function?.arguments) entry.args += call.function.arguments;
+              toolCallArgs.set(call.index, entry);
+            }
+          }
+        }
+
+        // Stream finished cleanly: surface any citations Inkeep
+        // returned via the `provideLinks` tool-call.
+        const linksCall = [...toolCallArgs.values()].find(
+          (call) => call.name === 'provideLinks',
+        );
+        if (linksCall) {
+          const references = parseProvideLinks(linksCall.args);
+          if (references.length > 0) {
+            setMessages((current) =>
+              current.map((m) =>
+                m.id === assistantMessage.id ? { ...m, references } : m,
+              ),
+            );
+          }
         }
       } catch (caught) {
         if (caught instanceof APIUserAbortError) {

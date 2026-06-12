@@ -9,9 +9,9 @@ import { customTree } from '@/lib/custom-tree';
 import {
   AskAISearchToggleLarge,
   AskAISearchToggleSmall,
+  AskAIShell,
   // AskAITextSelection,  // disabled while we sort out the legacy fallback
 } from '@/components/ask-ai';
-import { AskAILegacyShell, AskAIPill } from '@/components/ask-ai-legacy';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   const linkItems: LinkItemType[] = [
@@ -73,18 +73,19 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         {children}
       </DocsLayout>
       {/*
-       * Legacy fallback while the custom `AskAIChatShell` (composer +
-       * chat panel) is parked for bug fixes:
-       *  - `AskAILegacyShell` mounts a single Inkeep modal (chat-first)
-       *    controlled by the same `AskAIProvider` state every existing
-       *    trigger feeds.
-       *  - `AskAIPill` is the bottom click-to-open bar that replaces
-       *    the buggy composer.
-       * Both are `position: fixed`, so they sit as siblings of
-       * `<DocsLayout>` and don't interact with its grid template.
+       * Custom Mintlify-style assistant. The unified `AskAIShell`
+       * mounts ONE persistent fixed container: a bottom-anchored
+       * composer bar that morphs into the chat modal, driven by the
+       * same `AskAIProvider` state every existing trigger feeds
+       * (top-nav button, hotkey, deep link, Cmd/Ctrl+K search hijack).
+       * It is `position: fixed`, so it sits as a sibling of
+       * `<DocsLayout>` and doesn't interact with its grid template.
+       *
+       * The legacy Inkeep modal (`AskAILegacyShell` + `AskAIPill`) is
+       * preserved under `@/components/ask-ai-legacy` as an unmounted
+       * fallback should the custom shell need to be parked again.
        */}
-      <AskAILegacyShell />
-      <AskAIPill />
+      <AskAIShell />
       <KeetRoomModalMount />
       {/* AskAITextSelection disabled — re-enable by uncommenting the import above and rendering <AskAITextSelection /> here. */}
     </>
