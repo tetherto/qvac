@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink } from 'lucide-react';
+import { BookOpen, ExternalLink } from 'lucide-react';
 
 import type { AskAIReference } from './use-ask-ai-chat';
 
@@ -90,7 +90,7 @@ export function AskAIReferences({ references }: { references: AskAIReference[] }
     <div className="mt-3 border-t border-fd-border/60 pt-2.5">
       <p className="mb-1.5 text-xs font-medium text-fd-muted-foreground">Sources</p>
       <ul className="flex flex-col gap-1.5">
-        {references.map((reference, index) => (
+        {references.map((reference) => (
           <li key={reference.url}>
             <a
               href={reference.url}
@@ -98,12 +98,12 @@ export function AskAIReferences({ references }: { references: AskAIReference[] }
               rel="noreferrer noopener"
               className="group flex items-center gap-2.5 rounded-lg border border-fd-border bg-fd-card px-2.5 py-2 transition-colors hover:bg-fd-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
             >
-              {/* Numbered badge — matches the inline citation numbers in
-                  the answer (1-based, in the order Inkeep returned the
-                  links), so readers can map each "(n)" in the text to its
-                  source card like footnotes in a paper. */}
-              <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-fd-border bg-fd-popover text-xs font-medium tabular-nums text-fd-muted-foreground transition-colors group-hover:border-fd-primary/40 group-hover:text-fd-primary">
-                {index + 1}
+              {/* Open-book badge — a neutral "documentation source" glyph.
+                  The inline citations were removed from the answer text, so
+                  there's no longer a number to map back to; the icon just
+                  marks each card as a docs reference. */}
+              <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-fd-border bg-fd-popover text-fd-muted-foreground transition-colors group-hover:border-fd-primary/40 group-hover:text-fd-primary">
+                <BookOpen className="size-3.5" aria-hidden="true" />
               </span>
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="truncate text-xs font-medium text-fd-popover-foreground">

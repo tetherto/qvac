@@ -155,17 +155,26 @@ function AssistantTypingDots() {
 const REMARK_PLUGINS = [remarkGfm];
 
 const MARKDOWN_COMPONENTS: Components = {
-  a: ({ href, children, ...rest }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer noopener"
-      className="text-fd-primary underline underline-offset-2 hover:text-fd-primary/80"
-      {...rest}
-    >
-      {children}
-    </a>
-  ),
+  a: ({ href, children, ...rest }) => {
+    // Drop inline source citations. Inkeep injects a citation link (e.g.
+    // "(1)") after most sentences; they're redundant with the Sources
+    // cards below and far too noisy, so any link whose visible text is
+    // just a citation marker ("(1)", "[1]", "1") renders nothing. Genuine
+    // links (descriptive text) are unaffected.
+    const text = nodeToText(children).trim();
+    if (/^\(?\[?\s*\d+\s*\]?\)?$/.test(text)) return null;
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="text-fd-primary underline underline-offset-2 hover:text-fd-primary/80"
+        {...rest}
+      >
+        {children}
+      </a>
+    );
+  },
   // The `code` override is now ONLY ever reached for inline code. Block
   // code is intercepted by the `pre` override below, which reads the
   // fenced `<code>` element's props directly and renders its own markup
