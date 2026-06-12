@@ -178,6 +178,8 @@ void ContinuousBatchScheduler::workerLoop() {
       const bool stepOk = stepLocked(&lock);
       (void)stepOk;
     } catch (...) {
+      // Unexpected internal error: a throw mid-step can leave slot state
+      // inconsistent, so the only safe recovery is to fail all and clear.
       const std::exception_ptr error = std::current_exception();
       for (const auto& slot : slots_) {
         if (slot.has_value() && slot->group) {
