@@ -290,6 +290,20 @@ void LlamaModel::setInitLoader(
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   cancel();
   std::unique_lock lock(stateMtx_);
+  // Unconditionally stop the old contexts before destroying them, regardless
+  // of job counters. cancel() above only routes to active engines (counters >
+  // 0), but reload() must clean up *any* residual state in the old context
+  // (e.g. after finetuning, which doesn't increment the counters) before
+  // discarding it. Without this, stale stop flags or other state can survive
+  // into the next operation and cause decode failures.
+  if (state_) {
+    if (state_->batchScheduler_) {
+      state_->batchScheduler_->requestCancelAll();
+    }
+    if (state_->llmContext_) {
+      state_->llmContext_->stop();
+    }
+  }
   if (newFinetuneOverrides.has_value()) {
     pendingFinetuneOverrides_ = *newFinetuneOverrides;
   }
