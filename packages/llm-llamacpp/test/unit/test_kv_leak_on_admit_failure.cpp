@@ -122,26 +122,33 @@ TEST_F(KvLeakOnAdmitFailureTest, KvRowsCleanedAfterAdmitFailurePostCache) {
   // Stage 2: submit with cache key + oversized prompt.
   // perSeqMaxTokens varies by model ctx_size (model GGUF may override config).
   // Use 2000 tokens to reliably exceed any reasonable per-seq cap.
+  // Throws AFTER loadCache has populated KV rows.
   auto oversizedPrompt = makeKvLeakPrompt(makeTokenFillerText(2000));
   oversizedPrompt.cacheKey = cachePath.string();
 
   bool threw = false;
+  std::string errCode;
+  std::string errMsg;
   try {
     model->processPromptBatch(
         std::vector<LlamaModel::Prompt>{std::move(oversizedPrompt)});
   } catch (const qvac_errors::StatusError& e) {
     threw = true;
-    const std::string code = e.codeString();
+    errCode = e.codeString();
+    errMsg = e.what();
     EXPECT_TRUE(
-        code.find("InvalidArgument") != std::string::npos ||
-        code.find("ContextOverflow") != std::string::npos)
-        << "unexpected error: " << code;
+        errCode.find("InvalidArgument") != std::string::npos ||
+        errCode.find("ContextOverflow") != std::string::npos)
+        << "unexpected error: " << errCode;
   }
 
   if (!threw) {
     fs::remove(cachePath);
+    std::cout << "DEBUG: Prompt of length " << makeTokenFillerText(2000).size() << " did not throw!" << std::endl;
     GTEST_SKIP() << "oversized prompt did not exceed perSeqMaxTokens cap -- "
                     "increase token filler or reduce ctx_size/parallel ratio";
+  } else {
+    std::cout << "DEBUG: Threw expected exception: " << errCode << " / " << errMsg << std::endl;
   }
 
   // Stage 3: assert KV memory for seqId=0 is clean after the failed admit.

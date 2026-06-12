@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
@@ -18,6 +19,7 @@
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
 
@@ -270,11 +272,29 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       *tools,
       seqId,
       static_cast<llama_pos>(perSeqMaxTokens_));
-  const bool isCacheLoaded =
-      driver->loadCache(request.cacheKey, configuredNDiscarded_);
-  const bool hasKvCacheContext = isCacheLoaded || driver->getNPast() > 0;
+
+  bool hasKvCacheContext = false;
+  if (!request.cacheKey.empty()) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(request.cacheKey, ec);
+    if (!ec && size != 0) {
+      hasKvCacheContext = true;
+    }
+  }
+
   driver->validatePromptPolicy(
       request.chatMsgs, request.tools, request.layout, hasKvCacheContext);
+
+  const bool isCacheLoaded =
+      driver->loadCache(request.cacheKey, configuredNDiscarded_);
+
+  ScopeGuard cacheGuard([this, seqId] {
+    auto* mem = llama_get_memory(shared_.lctx);
+    if (mem != nullptr) {
+      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+    }
+  });
+
   auto tokens = driver->preparePrefill(
       request.chatMsgs, request.tools, isCacheLoaded, request.prefill);
 
@@ -338,6 +358,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
           .prefillOnly = request.prefill});
+  cacheGuard.dismiss();
   return seqId;
 }
 
