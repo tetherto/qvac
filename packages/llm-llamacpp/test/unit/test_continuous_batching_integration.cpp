@@ -1153,3 +1153,131 @@ TEST_F(
       << "CacheTokens only counted the prompt (driver position frozen at "
          "prefill); generated tokens are missing from the stat";
 }
+
+namespace {
+
+/// Drives one batch on a background thread and blocks the first
+/// llama_decode (after it actually ran) so the test can observe how
+/// scheduler APIs behave while a decode is in flight. The scheduler's
+/// worker releases its mutex across the decode, so calls like
+/// cancel(seqId)/clear() CAN acquire it mid-decode; they must defer any
+/// mutation of the shared llama_context until the step finishes.
+class BlockedDecodeHarness {
+public:
+  explicit BlockedDecodeHarness(
+      LlamaModel& model,
+      qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler&
+          scheduler)
+      : model_(model) {
+    scheduler.setDecodeFuncForTesting(
+        [this](llama_context* ctx, llama_batch& batch) {
+          const int rc = llama_decode(ctx, batch);
+          if (decodeCalls_.fetch_add(1) == 0) {
+            decodeInFlight_.store(true);
+            while (!releaseDecode_.load()) {
+              std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            decodeInFlight_.store(false);
+          }
+          return rc;
+        });
+  }
+
+  ~BlockedDecodeHarness() {
+    releaseDecode_.store(true);
+    if (future_.valid()) {
+      future_.wait();
+    }
+  }
+
+  void startBatch(const std::string& userText) {
+    future_ = std::async(std::launch::async, [this, userText] {
+      LlamaModel::Prompt prompt;
+      prompt.input = R"([{"role":"user","content":")" + userText + R"("}])";
+      std::vector<LlamaModel::Prompt> prompts{std::move(prompt)};
+      return model_.processPromptBatch(prompts);
+    });
+  }
+
+  [[nodiscard]] bool waitForBlockedDecode() {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (!decodeInFlight_.load() &&
+           std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return decodeInFlight_.load();
+  }
+
+  std::vector<std::string> releaseAndFinish() {
+    releaseDecode_.store(true);
+    return future_.get();
+  }
+
+private:
+  LlamaModel& model_;
+  std::future<std::vector<std::string>> future_;
+  std::atomic<int> decodeCalls_ = 0;
+  std::atomic<bool> decodeInFlight_ = false;
+  std::atomic<bool> releaseDecode_ = false;
+};
+
+} // namespace
+
+/// cancel(seqId) acquires the scheduler mutex that the worker releases
+/// across llama_decode, then mutates the shared llama_context
+/// (onCancel -> removeLastNTokens, llama_memory_seq_rm). Applied
+/// mid-decode that is a data race on the context. The safe contract:
+/// the call may only REQUEST cancellation; the slot must stay occupied
+/// until the worker applies it after the in-flight step.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    CancelSeqIsNotAppliedWhileDecodeInFlight) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  auto* scheduler = model->batchSchedulerForTesting();
+  ASSERT_NE(scheduler, nullptr);
+
+  BlockedDecodeHarness harness(*model, *scheduler);
+  harness.startBatch("Write a short paragraph about redwood forests.");
+  ASSERT_TRUE(harness.waitForBlockedDecode())
+      << "test setup: decode never started";
+
+  const bool wasActive = scheduler->cancel(0);
+  EXPECT_TRUE(wasActive);
+  EXPECT_EQ(scheduler->numActive(), 1u)
+      << "RACE: cancel(seqId) mutated scheduler/llama_context state while "
+         "llama_decode was still in flight (mutex_ is released across the "
+         "decode); it must be deferred to the worker";
+
+  auto outputs = harness.releaseAndFinish();
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_EQ(scheduler->numActive(), 0u)
+      << "deferred cancel was never applied after the decode finished";
+}
+
+/// Same contract as above for clear(): it must not tear down slots (and
+/// touch the llama_context) while the worker is mid-decode.
+TEST_F(
+    ContinuousBatchingIntegrationTest, ClearIsNotAppliedWhileDecodeInFlight) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  auto* scheduler = model->batchSchedulerForTesting();
+  ASSERT_NE(scheduler, nullptr);
+
+  BlockedDecodeHarness harness(*model, *scheduler);
+  harness.startBatch("Write a short paragraph about coral reefs.");
+  ASSERT_TRUE(harness.waitForBlockedDecode())
+      << "test setup: decode never started";
+
+  scheduler->clear();
+  EXPECT_EQ(scheduler->numActive(), 1u)
+      << "RACE: clear() tore down slots and touched the llama_context while "
+         "llama_decode was still in flight (mutex_ is released across the "
+         "decode); it must be deferred to the worker";
+
+  auto outputs = harness.releaseAndFinish();
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_EQ(scheduler->numActive(), 0u)
+      << "deferred clear was never applied after the decode finished";
+}
