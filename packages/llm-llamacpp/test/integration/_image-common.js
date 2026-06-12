@@ -283,47 +283,49 @@ function runImageRecognitionTest (testCase, deviceConfig) {
     const imageFilePath = getMediaPath(testCase.imageFile)
     t.ok(fs.existsSync(imageFilePath), `${label} ${testCase.imageFile} image file should exist`)
 
-    // QVAC-17830 / QVAC-19xxx: mobile small-image pre-warmup. On Device
-    // Farm the fruit-plate 10 MB PNG can crash the app during the very
-    // first vision_encode — Metal shaders (iOS) or GPU driver buffers
-    // (Android) get allocated, KV cache grows, and image-prefill
-    // buffers materialise all in one shot. Running a cheap inference
-    // first on a tiny image (e.g. elephant.jpg ~23 KB) pays those
-    // one-shot costs ahead of time so the real image's first pass only
-    // needs the incremental delta.
-    //
-    // Originally iOS-only (iosWarmupImage), extended to all mobile
-    // platforms because the Android shard split means each image test
-    // runs in its own Device Farm group — no cross-test warmup from
-    // elephant running first in the same process.
-    const warmupImage = testCase.iosWarmupImage
-    let preWarmupRan = false
-    if (isMobile && warmupImage) {
+    // QVAC-17830: iOS-only small-image pre-warmup. On Device Farm iPhones
+    // the fruit-plate 10 MB PNG crashes the app during the very first
+    // vision_encode before any perf record() fires — Metal shaders get
+    // JIT-compiled, the KV cache grows, and the image-prefill buffer
+    // allocates all in one shot. Running a cheap inference first on a
+    // tiny image (e.g. elephant.jpg ~23 KB) pays those one-shot costs
+    // ahead of time so the real image's first pass only needs the
+    // incremental delta. Guarded by testCase.iosWarmupImage so it only
+    // fires for the tests that actually opt in (fruit plate today),
+    // and only on iOS so desktop/Android timings are untouched. When
+    // this pre-warmup successfully runs we treat it AS the test's
+    // warmup pass and skip the standard PERF_WARMUP_RUNS loop below
+    // — the whole point is to keep the iOS cold-path inference count
+    // as low as possible (1 small + 1 real instead of 1 small + 1 +
+    // counted), so a heavy image like fruit-plate stays under the
+    // ~3.3 GB Jetsam ceiling.
+    let iosPreWarmupRan = false
+    if (platform === 'ios' && testCase.iosWarmupImage) {
       try {
-        const warmupPath = getMediaPath(warmupImage)
+        const warmupPath = getMediaPath(testCase.iosWarmupImage)
         if (fs.existsSync(warmupPath)) {
           t.comment(
-            `${label} mobile pre-warmup with ${warmupImage} ` +
+            `${label} iOS pre-warmup with ${testCase.iosWarmupImage} ` +
             '(perf NOT recorded)'
           )
           const w = await describeImage(inference, warmupPath, TEST_CONSTANTS.defaultPrompt)
           t.comment(
-            `${label} mobile pre-warmup done in ${w.endTime - w.startTime}ms ` +
+            `${label} iOS pre-warmup done in ${w.endTime - w.startTime}ms ` +
             `(${w.generatedText.length} chars)`
           )
-          preWarmupRan = true
+          iosPreWarmupRan = true
         } else {
           t.comment(
-            `${label} mobile pre-warmup image not found at ${warmupPath} ` +
+            `${label} iOS pre-warmup image not found at ${warmupPath} ` +
             '— skipping pre-warmup'
           )
         }
       } catch (err) {
-        t.comment(`${label} mobile pre-warmup failed (non-fatal): ${err.message}`)
+        t.comment(`${label} iOS pre-warmup failed (non-fatal): ${err.message}`)
       }
     }
 
-    if (!preWarmupRan) {
+    if (!iosPreWarmupRan) {
       for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
         const { generatedText, startTime, endTime } =
           await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
@@ -334,8 +336,8 @@ function runImageRecognitionTest (testCase, deviceConfig) {
       }
     } else {
       t.comment(
-        `${label} skipping standard warmup — mobile pre-warmup with ` +
-        `${warmupImage} already exercised the multimodal pipeline`
+        `${label} skipping standard warmup — iOS pre-warmup with ` +
+        `${testCase.iosWarmupImage} already exercised the multimodal pipeline`
       )
     }
 
