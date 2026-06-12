@@ -230,3 +230,16 @@ test('Chatterbox: nCtx forwards to ttsParams; omitted when unset (QVAC-19557)', 
   const defaulted = new TTSGgml({ files, config: { language: 'en' } })
   t.absent(defaulted._buildTtsParams().nCtx, 'nCtx omitted when unset so the addon applies its 2048 default')
 })
+
+test('Chatterbox: kvCacheType forwards to ttsParams; omitted when unset (QVAC-19557)', (t) => {
+  const files = {
+    t3Model: './models/chatterbox-t3-turbo.gguf',
+    s3genModel: './models/chatterbox-s3gen.gguf'
+  }
+
+  const explicit = new TTSGgml({ files, config: { language: 'en' }, kvCacheType: 'f32' })
+  t.is(explicit._buildTtsParams().kvCacheType, 'f32', 'explicit kvCacheType forwarded to the addon')
+
+  const defaulted = new TTSGgml({ files, config: { language: 'en' } })
+  t.absent(defaulted._buildTtsParams().kvCacheType, 'kvCacheType omitted when unset so the addon applies its q8_0 default')
+})
