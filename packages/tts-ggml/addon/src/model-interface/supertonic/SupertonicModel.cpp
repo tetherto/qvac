@@ -126,19 +126,10 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
               "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
     }
   }
-  const bool wantsGpu =
-      cfg.useGpu.value_or(false) ||
-      (cfg.nGpuLayers.has_value() && *cfg.nGpuLayers != 0);
-  if (wantsGpu) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "SupertonicModel: GPU execution is not supported by the Supertonic "
-        "engine yet (see tts-cpp include/tts-cpp/supertonic/engine.h: \"CPU "
-        "only today\"). GPU output is currently silently wrong "
-        "(~4x quieter, slightly truncated) on the Vulkan vector-estimator "
-        "+ vocoder path. Pass useGPU: false (and leave nGpuLayers unset or "
-        "0) when constructing a Supertonic model.");
-  }
+  // GPU execution is honored for Supertonic on GPU-capable hosts (Metal on
+  // Apple, Vulkan/CUDA on desktop). On Android it is still forced to CPU in
+  // loadLocked() below (Adreno OpenCL/Vulkan ggml graph compute is unstable);
+  // the cross-field conflict check above is the only hard rejection here.
 }
 
 void SupertonicModel::load() {
