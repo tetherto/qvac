@@ -386,6 +386,14 @@ export interface RuntimeStats {
   height: number
   /** Seed used for the most recent generation */
   seed: number
+  /** Conditioning (text-encode) phase before denoising, most recent job (ms) */
+  conditionerMs: number
+  /** Denoising loop duration, most recent job (ms) */
+  denoiseMs: number
+  /** VAE decode phase after denoising, most recent job (ms) */
+  vaeMs: number
+  /** Denoising throughput, most recent job (steps per second) */
+  stepsPerSecond: number
 }
 
 export interface EsrganRuntimeStats {

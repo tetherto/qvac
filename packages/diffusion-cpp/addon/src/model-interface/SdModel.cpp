@@ -36,6 +36,15 @@ namespace {
 struct ProgressCtx {
   const SdModel::GenerationJob* job = nullptr;
   std::chrono::steady_clock::time_point startTime;
+
+  // Phase-boundary capture for conditioner / denoise / vae timing.
+  // sd.cpp fires the progress callback once per denoising step, between the
+  // conditioning (text-encode) phase and the VAE decode phase. Recording the
+  // first and last callback times lets us slice generate_image/_video wall
+  // time into those three phases without dedicated library hooks.
+  std::chrono::steady_clock::time_point firstStepTime;
+  std::chrono::steady_clock::time_point lastStepTime;
+  int stepCount = 0; // number of progress callbacks observed this job
 };
 
 thread_local ProgressCtx g_progressCtx;
@@ -58,19 +67,67 @@ std::string preferredBackendToString(enum sd_backend_preference_t pref) {
 }
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
+  // Record phase boundaries even if no progress consumer is attached, so
+  // conditioner/denoise/vae timings remain available for runtimeStats().
+  const auto now = std::chrono::steady_clock::now();
+  if (g_progressCtx.stepCount == 0)
+    g_progressCtx.firstStepTime = now;
+  g_progressCtx.lastStepTime = now;
+  ++g_progressCtx.stepCount;
+
   if (!g_progressCtx.job || !g_progressCtx.job->progressCallback)
     return;
 
-  const auto elapsed =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now() - g_progressCtx.startTime)
-          .count();
+  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           now - g_progressCtx.startTime)
+                           .count();
 
   std::ostringstream oss;
   oss << R"({"step":)" << step << R"(,"total":)" << steps << R"(,"elapsed_ms":)"
       << elapsed << "}";
 
   g_progressCtx.job->progressCallback(oss.str());
+}
+
+// Phase timings derived from progress-callback boundaries. generate_image/
+// _video runs: [conditioning] -> [N denoise steps] -> [vae decode]. Because
+// progress_cb(i) fires AFTER step i completes, (lastStepTime - firstStepTime)
+// spans (stepCount - 1) step intervals; we back out per-step time from that to
+// estimate the full denoise window and remove the one step baked into the
+// pre-first-callback window when attributing conditioner time.
+struct PhaseStats {
+  double conditionerMs = 0.0;
+  double denoiseMs = 0.0;
+  double vaeMs = 0.0;
+  double stepsPerSecond = 0.0;
+};
+
+PhaseStats computePhaseStats(
+    std::chrono::steady_clock::time_point t0,
+    std::chrono::steady_clock::time_point tGen) {
+  PhaseStats ps;
+  const auto toMs = [](auto d) {
+    return std::chrono::duration<double, std::milli>(d).count();
+  };
+  const int steps = g_progressCtx.stepCount;
+  if (steps >= 2) {
+    const double perStepMs =
+        toMs(g_progressCtx.lastStepTime - g_progressCtx.firstStepTime) /
+        static_cast<double>(steps - 1);
+    ps.denoiseMs = perStepMs * steps;
+    ps.conditionerMs = toMs(g_progressCtx.firstStepTime - t0) - perStepMs;
+    ps.vaeMs = toMs(tGen - g_progressCtx.lastStepTime);
+    ps.stepsPerSecond = perStepMs > 0.0 ? 1000.0 / perStepMs : 0.0;
+  } else if (steps == 1) {
+    // Single-step run (e.g. distilled / LTX): can't infer per-step time from
+    // intervals, so treat everything up to the lone callback as denoise.
+    ps.denoiseMs = toMs(g_progressCtx.lastStepTime - t0);
+    ps.vaeMs = toMs(tGen - g_progressCtx.lastStepTime);
+    ps.stepsPerSecond = ps.denoiseMs > 0.0 ? 1000.0 / ps.denoiseMs : 0.0;
+  }
+  if (ps.conditionerMs < 0.0)
+    ps.conditionerMs = 0.0; // clamp tiny negative jitter
+  return ps;
 }
 
 // Abort callback -- wired into sd_set_abort_callback() so that
@@ -330,6 +387,7 @@ std::any SdModel::process(const std::any& input) {
   cancelRequested_.store(false);
   g_progressCtx.job = &job;
   g_progressCtx.startTime = std::chrono::steady_clock::now();
+  g_progressCtx.stepCount = 0; // reset phase-boundary capture for this job
   sd_set_progress_callback(sdProgressCallback, nullptr);
   g_abortModel = this;
   sd_set_abort_callback(sdAbortCallback, nullptr);
@@ -690,6 +748,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   SdImageBatch results(
       generate_image(sdCtx_.get(), &genParams), gen.batchCount);
 
+  // VAE-decode boundary: captured before PNG encode / upscale / output so
+  // vaeMs reflects only the in-library decode, not post-processing.
+  const auto tGen = std::chrono::steady_clock::now();
+
   if (initImg.data) {
     free(initImg.data);
   }
@@ -790,6 +852,13 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   lastStats_.emplace_back("width", statsWidth);
   lastStats_.emplace_back("height", statsHeight);
   lastStats_.emplace_back("seed", gen.seed);
+
+  // Phase breakdown derived from progress-callback boundaries.
+  const PhaseStats phase = computePhaseStats(t0, tGen);
+  lastStats_.emplace_back("conditionerMs", phase.conditionerMs);
+  lastStats_.emplace_back("denoiseMs", phase.denoiseMs);
+  lastStats_.emplace_back("vaeMs", phase.vaeMs);
+  lastStats_.emplace_back("stepsPerSecond", phase.stepsPerSecond);
 
   // Return empty -- images are already delivered via outputCallback,
   // and stats are emitted by queueJobEnded() -> runtimeStats().
@@ -992,6 +1061,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   sd_audio_t* rawAudio = nullptr;
   const bool genOk = generate_video(
       sdCtx_.get(), &vidParams, &rawFrames, &numFramesOut, &rawAudio);
+
+  // VAE-decode boundary: captured before per-frame PNG / AVI mux so vaeMs
+  // reflects only the in-library decode, not output encoding.
+  const auto tGen = std::chrono::steady_clock::now();
+
   qvac_lib_inference_addon_sd::SdVideoFrames frames(rawFrames, numFramesOut);
   // RAII ownership of the optional LTX-2 audio waveform (null for Wan and for
   // LTX runs without an audio VAE). The new 5-arg generate_video() hands the
@@ -1079,6 +1153,13 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   lastStats_.emplace_back("hasAudio", audio ? 1 : 0);
   lastStats_.emplace_back(
       "audioSampleRate", audio ? static_cast<int64_t>(audio->sample_rate) : 0);
+
+  // Phase breakdown derived from progress-callback boundaries.
+  const PhaseStats phase = computePhaseStats(t0, tGen);
+  lastStats_.emplace_back("conditionerMs", phase.conditionerMs);
+  lastStats_.emplace_back("denoiseMs", phase.denoiseMs);
+  lastStats_.emplace_back("vaeMs", phase.vaeMs);
+  lastStats_.emplace_back("stepsPerSecond", phase.stepsPerSecond);
 
   return std::any{};
 }
