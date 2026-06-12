@@ -177,12 +177,19 @@ public:
   void resetRuntimeStats();
   [[nodiscard]] RuntimeStatsSnapshot runtimeStats() const;
 
-  /// Cancel one slot. Frees the per-slot sampler and KV-cache entries
-  /// and fires onDone with `Cancelled`.
+  /// Cancel one slot: frees the per-slot sampler and KV-cache entries
+  /// and fires onDone with `Cancelled`. While the worker thread is
+  /// running, the cancellation is only recorded and applied by the
+  /// worker between decode steps -- the worker releases `mutex_` across
+  /// `llama_decode`, so mutating the shared `llama_context` from the
+  /// calling thread would race the in-flight decode. Applied
+  /// synchronously when no worker has been started.
+  /// @return whether the slot was occupied when the cancel was issued.
   bool cancel(uint32_t seqId);
   void requestCancelAll();
 
-  /// Cancel every active request.
+  /// Cancel every active request. Deferred to the worker thread when it
+  /// is running, for the same reason as `cancel(seqId)`.
   void clear();
 
   /// Override the decode function used by stepLocked(). For unit tests only --
@@ -232,6 +239,11 @@ private:
       const std::shared_ptr<BatchGroup>& group, std::exception_ptr error);
   void cancelPendingLocked();
   void clearLocked();
+  void cancelSlotLocked(uint32_t seqId);
+  /// Apply teardown requests recorded by cancel()/clear() while the
+  /// worker was mid-step. Must run before admitting pending requests so
+  /// a deferred cancel can never hit a freed-and-reused slot.
+  void applyDeferredTeardownLocked();
   void notifyDone(uint32_t seqId);
   void freeSlot(uint32_t seqId);
   void finalizeFinishedSequences();
@@ -264,6 +276,8 @@ private:
   std::thread worker_;
   bool workerStarted_ = false;
   bool stopping_ = false;
+  std::vector<uint32_t> pendingSlotCancels_;
+  bool clearRequested_ = false;
   RuntimeStatsSnapshot stats_;
 
   /// Decode function used in stepLocked(). Defaults to llama_decode; can be

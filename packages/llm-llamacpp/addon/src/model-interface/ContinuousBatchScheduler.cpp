@@ -160,11 +160,13 @@ void ContinuousBatchScheduler::workerLoop() {
   while (true) {
     workCv_.wait(lock, [this] {
       return stopping_ || cancelRequested_.load() ||
+             !pendingSlotCancels_.empty() || clearRequested_ ||
              pending_.size_approx() > 0 || hasWorkLocked();
     });
     if (stopping_) {
       break;
     }
+    applyDeferredTeardownLocked();
     if (cancelRequested_.load() && !hasWorkLocked()) {
       cancelPendingLocked();
       cancelRequested_.store(false);
@@ -200,6 +202,7 @@ void ContinuousBatchScheduler::workerLoop() {
     // followed by admitting `pending_`: those queued prompts belong to the
     // cancelled work and would otherwise start running post-cancel. Drain
     // them here instead so cancel-all atomically covers active + queued.
+    applyDeferredTeardownLocked();
     if (cancelRequested_.exchange(false)) {
       cancelPendingLocked();
     } else {
@@ -638,27 +641,51 @@ double RuntimeStatsSnapshot::prefillTokensPerSecond() const {
 
 bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
   std::scoped_lock lock(mutex_);
-  bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
+  const bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
   if (occupied) {
-    const Request* req = batcher_.requestAt(seqId);
-    if (slots_[seqId]->driver) {
-      slots_[seqId]->driver->onCancel({});
-      if (req != nullptr) {
-        accumulateSlotRuntimeStats(*slots_[seqId], *req);
-      }
-      saveCacheForSlot(seqId, *slots_[seqId]);
+    if (workerStarted_ && !stopping_) {
+      pendingSlotCancels_.push_back(seqId);
+      workCv_.notify_all();
+    } else {
+      cancelSlotLocked(seqId);
     }
-    notifyDone(seqId);
-    auto kvClear = [this](uint32_t s) {
-      auto* mem = llama_get_memory(shared_.lctx);
-      if (mem != nullptr) {
-        llama_memory_seq_rm(mem, static_cast<llama_seq_id>(s), -1, -1);
-      }
-    };
-    batcher_.cancel(seqId, kvClear);
-    freeSlot(seqId);
   }
   return occupied;
+}
+
+void ContinuousBatchScheduler::cancelSlotLocked(uint32_t seqId) {
+  const bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
+  if (!occupied) {
+    return;
+  }
+  const Request* req = batcher_.requestAt(seqId);
+  if (slots_[seqId]->driver) {
+    slots_[seqId]->driver->onCancel({});
+    if (req != nullptr) {
+      accumulateSlotRuntimeStats(*slots_[seqId], *req);
+    }
+    saveCacheForSlot(seqId, *slots_[seqId]);
+  }
+  notifyDone(seqId);
+  auto kvClear = [this](uint32_t s) {
+    auto* mem = llama_get_memory(shared_.lctx);
+    if (mem != nullptr) {
+      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(s), -1, -1);
+    }
+  };
+  batcher_.cancel(seqId, kvClear);
+  freeSlot(seqId);
+}
+
+void ContinuousBatchScheduler::applyDeferredTeardownLocked() {
+  for (const uint32_t seqId : pendingSlotCancels_) {
+    cancelSlotLocked(seqId);
+  }
+  pendingSlotCancels_.clear();
+  if (clearRequested_) {
+    clearRequested_ = false;
+    clearLocked();
+  }
 }
 
 void ContinuousBatchScheduler::requestCancelAll() {
@@ -668,7 +695,12 @@ void ContinuousBatchScheduler::requestCancelAll() {
 
 void ContinuousBatchScheduler::clear() {
   std::scoped_lock lock(mutex_);
-  clearLocked();
+  if (workerStarted_ && !stopping_) {
+    clearRequested_ = true;
+    workCv_.notify_all();
+  } else {
+    clearLocked();
+  }
 }
 
 void ContinuousBatchScheduler::clearLocked() {
