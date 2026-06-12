@@ -374,6 +374,7 @@ export const executor = createExecutor({
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
+    new SkipExecutor(/^bci-/, "BCI addon tests are desktop-only until mobile support is enabled"),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().

@@ -1,6 +1,9 @@
 {
   "dependencies": [
-    "bergamot-translator",
+    {
+      "name": "bergamot-translator",
+      "version>=": "1.0.1"
+    },
     {
       "name": "qvac-lib-inference-addon-cpp",
       "version>=": "1.2.1"

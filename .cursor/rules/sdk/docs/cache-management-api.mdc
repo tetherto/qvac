@@ -159,10 +159,14 @@ Models are cached in the configured cache directory (default: `~/.qvac/models/`)
   ├── a1b2c3d_model.gguf        # {shortHash}_{modelId}
   ├── e4f5g6h_whisper-tiny.bin
   ├── sharded/<cacheKey>/        # Sharded model files
+  ├── sets/<setKey>/             # Companion-set files in canonical layout
   └── onnx/<cacheKey>/           # ONNX model + data pairs
 ```
 
-File naming and cache path logic is in `server/utils/cache.ts`.
+File naming and cache path logic is in `server/utils/cache.ts`. Non-ONNX
+companion sets use the canonical `sets/<setKey>/` layout by default; only
+NMT/Bergamot companion sets may report or reuse legacy flat-cache files because
+that runtime accepts explicit per-file paths.
 
 ## Cache States
 

@@ -108,12 +108,16 @@ jobs:
           ref: ${{ needs.context.outputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      # No merge-multiple: same-platform runners (e.g. qvac-ubuntu2204-x64 and
+      # qvac-ubuntu2204-x64-gpu) emit identically named rtf-benchmark-*.json
+      # files, so merging into one directory would clobber all but the last.
+      # Per-artifact subdirectories keep every runner; the aggregator's
+      # walkFiles recurses and dedupes on device.
       - name: Download desktop benchmark artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: rtf-results-*
           path: benchmark-artifacts/desktop
-          merge-multiple: true
 
       - name: Generate consolidated benchmark report
         run: |

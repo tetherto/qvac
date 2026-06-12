@@ -947,14 +947,18 @@ WeightsBundle loadWeights(
     if (wTensor->type == GGML_TYPE_F16) {
       std::vector<ggml_fp16_t> wbuf(n);
       ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+      // F16 has no arithmetic: batch-decode each channel row to F32 with ggml's
+      // SIMD row converters, apply the per-channel scale, then re-encode. The
+      // weight stays F16-stored (not an f16->f16 copy).
+      std::vector<float> f32buf(static_cast<size_t>(perOc));
       for (int64_t o = 0; o < oc; ++o) {
         const float s = scale[static_cast<size_t>(o)];
+        ggml_fp16_t* row = wbuf.data() + (o * perOc);
+        ggml_fp16_to_fp32_row(row, f32buf.data(), perOc);
         for (int64_t i = 0; i < perOc; ++i) {
-          const size_t idx = static_cast<size_t>((o * perOc) + i);
-          // F16 has no arithmetic: decode to F32, apply the per-channel scale,
-          // then re-encode. The weight stays F16-stored (not an f16->f16 copy).
-          wbuf[idx] = ggml_fp32_to_fp16(ggml_fp16_to_fp32(wbuf[idx]) * s);
+          f32buf[static_cast<size_t>(i)] *= s;
         }
+        ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
       }
       ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
     } else if (wTensor->type == GGML_TYPE_F32) {
@@ -1007,7 +1011,12 @@ WeightsBundle loadWeights(
       std::vector<float> v =
           loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_var");
       if (w.size() != n || b.size() != n || m.size() != n || v.size() != n) {
-        raise("BN param size mismatch for " + bnPrefix);
+        raise(
+            "BN param size mismatch for " + bnPrefix + ": expected " +
+            std::to_string(n) + ", got scale=" + std::to_string(w.size()) +
+            " shift=" + std::to_string(b.size()) +
+            " running_mean=" + std::to_string(m.size()) +
+            " running_var=" + std::to_string(v.size()));
       }
       for (size_t i = 0; i < n; ++i) {
         const float invStd = 1.0F / std::sqrt(v[i] + eps);
