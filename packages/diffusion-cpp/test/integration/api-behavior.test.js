@@ -11,6 +11,7 @@ const {
   setupJsLogger,
   safeTest
 } = require('./utils')
+const { recordPerformance } = require('./_perf-helper')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
@@ -90,6 +91,8 @@ function saveGeneratedImages (modelDir, filenameSuffix, images) {
 
 safeTest('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
+  const tGen = Date.now()
+  let ttfbMs = null
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
   t.ok(typeof response.onUpdate === 'function', 'response has onUpdate')
@@ -97,11 +100,19 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, 
 
   const images = []
   await response.onUpdate(data => {
+    if (ttfbMs === null) ttfbMs = Date.now() - tGen
     if (data instanceof Uint8Array) images.push(data)
   }).await()
 
   t.ok(images.length > 0, 'run produces at least one image')
   saveGeneratedImages(modelDir, 'idle-run', images)
+
+  t.comment(recordPerformance('[SD2.1 Q4_0 txt2img 256x256] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
+    scenario: 'txt2img',
+    model: 'stable-diffusion-v2-1-Q4_0',
+    execution_provider: useCpu ? 'cpu' : 'gpu',
+    ttfbMs
+  }))
 })
 
 safeTest('idle | cancel: allowed, no-op', { timeout: testTimeout }, async t => {

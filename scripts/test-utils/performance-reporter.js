@@ -511,6 +511,16 @@ const METRIC_COLUMNS = {
     { key: 'ttfa_ms', label: 'TTFA (ms)' },
     { key: 'inter_chunk_p95_ms', label: 'Inter-chunk P95 (ms)' }
   ],
+  diffusion: [
+    { key: 'model_load_ms', label: 'Load (ms)' },
+    { key: 'generation_ms', label: 'Gen (ms)' },
+    { key: 'ttfb_ms', label: 'TTFB (ms)' },
+    { key: 'total_steps', label: 'Steps' },
+    { key: 'steps_per_second', label: 'Steps/sec' },
+    { key: 'megapixels_per_second', label: 'MP/sec' },
+    { key: 'width', label: 'Width' },
+    { key: 'height', label: 'Height' }
+  ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
     { key: 'tps', label: 'TPS' }
@@ -593,6 +603,14 @@ function createPerformanceReporter (opts) {
           ode_time_ms: null,
           backend: null,
           platform: null,
+          model_load_ms: null,
+          generation_ms: null,
+          ttfb_ms: null,
+          total_steps: null,
+          steps_per_second: null,
+          megapixels_per_second: null,
+          width: null,
+          height: null,
           ...metrics
         },
         input: (extra && extra.input) || null,
