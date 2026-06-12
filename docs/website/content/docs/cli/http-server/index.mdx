@@ -9,7 +9,7 @@ tocMaxDepth: 3
 
 To run the server, install the `@qvac/cli` npm package — it depends on `@qvac/sdk` directly, so the SDK is installed automatically. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls. As a result, any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can point to `http://localhost:11434/v1/` and work without changes.
 
-### AI capabilities
+## AI capabilities
 
 At the moment, the HTTP server supports the following QVAC AI capabilities:
 * Text generation — via [Chat](#chat) (`/v1/chat/completions`), [Responses](#responses) (`/v1/responses`, modern), or [Legacy completions](#legacy-completions) (`/v1/completions`).
@@ -19,21 +19,6 @@ At the moment, the HTTP server supports the following QVAC AI capabilities:
 * Transcription — via [Audio](#audio) (`/v1/audio/transcriptions`).
 * Text-to-speech — via [Audio](#audio) (`/v1/audio/speech`).
 * Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
-
-### Compatible tools
-
-The following tools have been verified to work as drop-in replacements by pointing their base URL to the QVAC server:
-
-| Tool | Required endpoints |
-| --- | --- |
-| [Open WebUI](https://openwebui.com) | `/v1/chat/completions`, `/v1/models`; TTS via `/v1/audio/speech` (mp3/opus/aac/flac with ffmpeg), `/v1/audio/voices`, `/v1/audio/models` |
-| [Continue.dev](https://continue.dev) | `/v1/chat/completions` (streaming SSE), `/v1/models` |
-| [LangChain](https://langchain.com) | `/v1/chat/completions`, `/v1/embeddings`, `/v1/models` |
-| [Open Interpreter](https://openinterpreter.com) | `/v1/chat/completions` (streaming, tool calls), `/v1/models` |
-| [Cline](https://github.com/cline/cline) | `/v1/chat/completions` (streaming, tool calls) |
-| [Roo Code](https://roomote.dev) | `/v1/chat/completions` (streaming, tool calls) |
-| [Aider](https://aider.chat) | `/v1/chat/completions` (streaming) |
-| [OpenCode](https://opencode.ai) | `/v1/chat/completions` (streaming, tool calls) |
 
 ## Running the server
 
@@ -91,6 +76,10 @@ curl http://localhost:11434/v1/chat/completions \
 ## Configuration
 
 Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/configuration#serveconfig).
+
+<Card href="/cli/http-server/connection" title="Connect AI tools">
+  Learn how to use the HTTP server as a local model provider for AI tools that support OpenAI-compatible API.
+</Card>
 
 ### Example
 
