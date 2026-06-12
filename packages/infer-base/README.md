@@ -1,8 +1,8 @@
 # infer-base
 
-Utility primitives for QVAC inference addons.
+This library contains the base class for inference addon clients. It defines a common lifecycle for all models, and provides a set of generic methods to interact with the addon.
 
-This package exposes a small set of standalone utilities used by the addon-side runtime: the `QvacResponse` class returned from inference jobs, an `exclusiveRunQueue` for serialized async work, a `getApiDefinition` platform mapper, and a `createJobHandler` lifecycle helper.
+This package also exports `QvacResponse`, the response class used by all QVAC inference operations.
 
 ## Installation
 
@@ -12,100 +12,235 @@ npm install @qvac/infer-base
 
 ## Usage
 
+### BaseInference
+
 ```javascript
-const {
-  QvacResponse,
-  exclusiveRunQueue,
-  getApiDefinition,
-  createJobHandler
-} = require('@qvac/infer-base')
+const BaseInference = require('@qvac/infer-base')
 
-// Serialize concurrent calls so they run one at a time.
-const runExclusive = exclusiveRunQueue()
-await runExclusive(async () => { /* serialized work */ })
+class MyInference extends BaseInference {
+  constructor(args) {
+    super(args)
+  }
 
-// Pick the addon API for the current platform ('metal' / 'vulkan' / 'vulkan-32').
-const api = getApiDefinition()
+  getApiDefinition() {
+    return 'my-api'
+  }
 
-// Single-job lifecycle helper for addons that expose one in-flight job at a time.
-const jobs = createJobHandler({
-  cancel: () => addon.cancel(currentJobId)
-})
+  // Required
+  async _load() {
+    // Load model configuration to addon, if it's executed with an already loaded instance, it will unload the previous one
+  }
 
-const response = jobs.start()  // returns a QvacResponse and tracks it as active
-jobs.output(chunk)              // forward addon output to the active response
-jobs.end(stats)                 // mark the active response finished
-jobs.fail(err)                  // mark the active response errored
-const active = jobs.active      // current QvacResponse | null
+  // Optional
+  async _loadWeights(loader, close, reportProgressCallback) {
+    // Load model weights from the loader
+  }
 
-// QvacResponse can also be constructed directly when not using createJobHandler.
-const r = new QvacResponse({
-  cancelHandler: () => addon.cancel(jobId),
-  // Optional: forward the caller-supplied AbortSignal so timeout /
-  // crash settles the response without polling. The abort
-  // `reason` becomes the response error — pass an Error reason
-  // (e.g. `controller.abort(new AddonCrashedError(...))`) to surface
-  // a structured failure unchanged.
-  signal: opts.signal
-})
+  // Optional
+  async _unloadWeights() {
+    // Unload model weights from memory
+  }
 
-r.onUpdate(chunk => { /* incremental output */ })
-r.onFinish(result => { /* terminal payload */ })
-r.onError(err => { /* failure */ })
-r.onCancel(() => { /* cancellation */ })
+  _getConfigPathNames() {
+    return ['config.json']
+  }
 
-const finalOutput = await r.await()
+  async _runInternal(input) {
+    // Execute inference and return QvacResponse
+    return new this._createResponse(jobId)
+  }
+}
 ```
+
+### QvacResponse
+
+`QvacResponse` is exported from this package and provides an interface for handling asynchronous responses with update notifications, error handling, and pause/resume functionality.
+
+```javascript
+const { QvacResponse } = require('@qvac/infer-base')
+
+const response = new QvacResponse({
+  cancelHandler: async () => { /* cancel logic */ },
+  pauseHandler: async () => { /* pause logic */ },
+  continueHandler: async () => { /* continue logic */ }
+})
+
+// Use the response
+response.onUpdate(output => console.log('Update:', output))
+response.onFinish(outputs => console.log('Complete:', outputs))
+
+const finalOutputs = await response.await()
+```
+
+For detailed QvacResponse documentation, see the response class implementation.
+
+The subclass must implement the following methods:
+
+- `getApiDefinition()`: Returns the API definition for the current environment.
+- `_load()`: Loads the model configuration to the addon.
+- `_loadNew(config, loader, close, reportProgressCallback)`: Loads new configuration and weights.
+- `_loadWeights(loader, close, reportProgressCallback)`: Loads model weights from the provided loader. (Optional)
+- `_unloadWeights()`: Unloads the model weights from memory. (Optional)
 
 ## API
 
-### `QvacResponse`
-
-Response object returned from inference jobs.
+### Constructor
 
 ```javascript
-new QvacResponse({ cancelHandler, signal })
+new BaseInference(args)
 ```
 
-- `cancelHandler`: `() => Promise<void>` invoked when `cancel()` is called.
-- `signal` (optional): `AbortSignal` typically forwarded from the addon's `model.run(input, { signal })` call. When aborted, the response is failed with the abort `reason` — passed through unchanged when it's an Error, otherwise wrapped in a default `Error('Aborted: ...')`. Callers that want a structured error should attach it as the abort reason (e.g. `controller.abort(new AddonCrashedError(...))`). The abort listener is automatically detached when the response settles, so passing a long-lived / shared signal (e.g. a process-wide crash controller) does not leak listeners.
+Arguments:
 
-Listeners and lifecycle:
+- `args.opts` (optional): Configuration options
+  - `stats` (boolean): Whether to collect inference statistics
+- `args.logger` (optional): Logger instance
+- `args.loader` (optional): Model loader implementation
+  - `getFileSize(filepath)`: Get file size in bytes
+  - `download(progressReport)`: Download model files
+  - `deleteLocal()`: Delete local model files
+  - `getStream(filepath)`: Get file stream
+- `args.addon` (optional): Addon implementation
+  - `loadWeights(params)`: Load model weights
+  - `destroy()`: Clean up resources
+  - `pause()`: Pause inference
+  - `activate()`: Resume inference
+  - `stop()`: Stop inference
+  - `status()`: Get inference status
+  - `append(input)`: Append input to inference
+  - `cancel(jobId)`: Cancel a running inference job
 
-- `onUpdate(cb)` — fires for each incremental output chunk
-- `onFinish(cb)` — fires with the terminal payload
-- `onError(cb)` — fires on failure
-- `onCancel(cb)` — fires on cancellation
-- `await()` — resolves with the final output, or rejects on error
-- `iterate()` — async iterator over output chunks; wakes up immediately on output/end/error events instead of polling out the remaining `pollInterval` window. A single pair of EventEmitter listeners is attached for the lifetime of the iterator, so high-frequency token streams do not churn listener registrations.
-- `getLatest()` — most recent output chunk
-- `cancel()` — invokes `cancelHandler` and emits cancellation
+### ProgressData Interface
 
-Terminal settlement (`failed()` / `ended()`) is idempotent — repeated calls after the response has already settled are no-ops, so the abort-signal wiring can race with the addon's own settlement without producing double-rejects or double-emits.
+The `ProgressData` interface is used for progress reporting during model loading:
 
-### `exclusiveRunQueue()`
-
-Returns a function `(fn) => Promise` that runs `fn` only after every previously queued `fn` has settled. Useful for serializing addon work — for example weight loads or any operation that must not run concurrently.
-
-```javascript
-const runExclusive = exclusiveRunQueue()
-await runExclusive(async () => addon.loadWeights(params))
+```typescript
+interface ProgressData {
+    action: 'loadingFile' | 'completeFile'
+    totalSize: number
+    totalFiles: number
+    filesProcessed: number
+    currentFile: string
+    currentFileProgress: string
+    overallProgress: string
+}
 ```
 
-### `getApiDefinition()`
+### Methods
 
-Returns the graphics API identifier for the current platform: `'metal'`, `'vulkan'`, or `'vulkan-32'`. Falls back to `'vulkan'` on unknown platforms.
+#### `getApiDefinition()`
 
-### `createJobHandler({ cancel })`
+Returns the API definition to use for the current environment. Must be implemented by subclasses.
 
-Single-job lifecycle helper that replaces the per-addon `_jobToResponse` Map / `_saveJobToResponseMapping` / `_deleteJobMapping` boilerplate.
+#### `getState()`
 
-- `start(runOpts?)` — creates a new `QvacResponse` and registers it as active; fails any stale active response. `runOpts.signal` is forwarded into the response (see [`QvacResponse`](#qvacresponse)) so the per-call abort signal from `model.run(input, { signal })` settles the job without polling
-- `startWith(response)` — registers a pre-built response (e.g. a custom subclass) as active
-- `output(data)` — routes output data to the active response (no-op if idle)
-- `end(stats?, result?)` — ends the active response, optionally forwarding stats first
-- `fail(error)` — fails the active response with an error
-- `active` — the current `QvacResponse`, or `null` if idle
+Returns the current state of the inference client, including whether configuration and weights are loaded.
+
+#### `load()`
+
+Loads the model and required files. Must be implemented by subclasses.
+
+#### `loadWeights(loader, close, reportProgressCallback)`
+
+Loads model weights from the provided loader.
+
+- `loader`: Loader to fetch model weights from
+- `close` (optional): Whether to close the loader after loading (default: false)
+- `reportProgressCallback` (optional): Callback for progress reporting
+
+#### `unloadWeights()`
+
+Unloads the model weights from memory.
+
+#### `loadNew(config, loader, close, reportProgressCallback)`
+
+Loads new configuration and weights.
+
+- `config`: Configuration for the model
+- `loader`: Loader to fetch model weights from
+- `close` (optional): Whether to close the loader after loading (default: false)
+- `reportProgressCallback` (optional): Callback for progress reporting
+
+#### `initProgressReport(weightFiles, callbackFunction)`
+
+Initializes progress reporting for model loading.
+
+#### `download(progressReport)`
+
+Downloads model files.
+
+#### `delete()`
+
+Deletes local model files.
+
+#### `run(input)`
+
+Runs inference on the input data.
+
+#### `unload()`
+
+Unloads the model from memory.
+
+#### `pause()`
+
+Pauses the inference process.
+
+#### `unpause()`
+
+Resumes the inference process.
+
+#### `stop()`
+
+Stops the inference process.
+
+#### `status()`
+
+Gets the current inference status.
+
+#### `destroy()`
+
+Unloads the model and all associated resources, making it unusable.
+
+### Protected Methods
+
+#### `_getConfigs()`
+
+Gets configuration files content.
+
+#### `_getFileContent(filepath)`
+
+Gets file content from loader.
+
+#### `_getConfigPathNames()`
+
+Gets configuration file paths. Must be implemented by subclasses.
+
+#### `_runInternal(input)`
+
+Internal method to run inference. Must be implemented by subclasses.
+
+#### `_createAddon(AddonInterface, ...args)`
+
+Creates addon instance with the provided configuration and interface.
+
+- `AddonInterface`: Interface class to instantiate
+- `...args`: Arguments to pass to the interface constructor
+
+#### `_createResponse(jobId)`
+
+Creates a response instance for a job with handlers for cancellation, pausing, and continuation.
+
+#### `outputCallback(addon, event, jobId, data, error)`
+
+Handles output callbacks from the inference process.
+
+#### `saveJobToResponseMapping(jobId, response)`
+
+Saves job to response mapping.
+
+#### `deleteJobMapping(jobId)`
+
+Deletes job mapping.
 
 ## License
 

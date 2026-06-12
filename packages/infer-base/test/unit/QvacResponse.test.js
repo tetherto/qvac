@@ -2,9 +2,10 @@
 
 const test = require('brittle')
 const QvacResponse = require('../../src/QvacResponse')
-const { makeAbortable } = require('../mocks/abortable')
 
 const dummyCancelHandler = async () => {}
+const dummyPauseHandler = async () => {}
+const dummyContinueHandler = async () => {}
 
 // ------------------------------
 // Test hooks and iterator (onUpdate, onFinish, onError, getLatest, iterate)
@@ -12,7 +13,9 @@ const dummyCancelHandler = async () => {}
 
 test('onUpdate should trigger callback on updateOutput', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
   let received = null
   response.onUpdate(data => {
@@ -28,7 +31,9 @@ test('onUpdate should trigger callback on updateOutput', async t => {
 
 test('onFinish resolves with final outputs on ended via await()', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
   let finishCallbackOutput = null
 
@@ -55,7 +60,9 @@ test('onFinish resolves with final outputs on ended via await()', async t => {
 
 test('onFinish and await resolve with custom terminal result', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
 
   const terminalResult = {
@@ -83,7 +90,9 @@ test('onFinish and await resolve with custom terminal result', async t => {
 
 test('failed should trigger error and reject await()', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
   let errorCallbackCalled = false
 
@@ -106,7 +115,9 @@ test('failed should trigger error and reject await()', async t => {
 
 test('getLatest returns the most recent output', t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
   t.is(
     response.getLatest(),
@@ -127,7 +138,9 @@ test('getLatest returns the most recent output', t => {
 test('iterate yields outputs until ended', async t => {
   const response = new QvacResponse(
     {
-      cancelHandler: dummyCancelHandler
+      cancelHandler: dummyCancelHandler,
+      pauseHandler: dummyPauseHandler,
+      continueHandler: dummyContinueHandler
     },
     10
   )
@@ -145,12 +158,16 @@ test('iterate yields outputs until ended', async t => {
 
 test('chaining should return the same instance', t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
   const chainedInstance = response
     .onUpdate(() => {})
     .onError(() => {})
     .onCancel(() => {})
+    .onPause(() => {})
+    .onContinue(() => {})
     .onFinish(() => {})
   t.is(
     chainedInstance,
@@ -170,7 +187,9 @@ test('cancel calls cancelHandler and emits cancel', async t => {
     cancelHandlerCalled = true
   }
   const response = new QvacResponse({
-    cancelHandler
+    cancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
 
   let cancelEventCalled = false
@@ -186,7 +205,9 @@ test('cancel calls cancelHandler and emits cancel', async t => {
 test('cancel is a no-op if response is already finished', async t => {
   let cancelHandlerCalled = false
   const response = new QvacResponse({
-    cancelHandler: async () => { cancelHandlerCalled = true }
+    cancelHandler: async () => { cancelHandlerCalled = true },
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
   response.ended()
 
@@ -195,238 +216,102 @@ test('cancel is a no-op if response is already finished', async t => {
 })
 
 // ------------------------------
+// Pause / Continue Tests
+// ------------------------------
+
+test('pause triggers pauseHandler and changes state to PAUSED', async t => {
+  let pauseHandlerCalled = false
+  const pauseHandler = async () => {
+    pauseHandlerCalled = true
+  }
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    pauseHandler,
+    continueHandler: dummyContinueHandler
+  })
+
+  let pauseEventCalled = false
+  response.onPause(() => {
+    pauseEventCalled = true
+  })
+
+  await response.pause()
+  t.ok(pauseHandlerCalled, 'pauseHandler was called')
+  t.ok(pauseEventCalled, 'pause event was emitted')
+  t.is(response.getStatus(), 'paused', 'response state is PAUSED')
+})
+
+test('continue triggers continueHandler and changes state to RUNNING', async t => {
+  let continueHandlerCalled = false
+  const continueHandler = async () => {
+    continueHandlerCalled = true
+  }
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler
+  })
+
+  await response.pause()
+
+  let continueEventCalled = false
+  response.onContinue(() => {
+    continueEventCalled = true
+  })
+  await response.continue()
+  t.ok(continueHandlerCalled, 'continueHandler was called')
+  t.ok(continueEventCalled, 'continue event was emitted')
+  t.is(response.getStatus(), 'running', 'response state is RUNNING')
+})
+
+test('pause should throw error if not in RUNNING state', async t => {
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
+  })
+
+  response._status = 'ended'
+  try {
+    await response.pause()
+    t.fail('pause should throw error when state is not RUNNING')
+  } catch (err) {
+    t.is(
+      err.message,
+      'ERR_NOT_RUNNING',
+      'pause threw the correct error message'
+    )
+  }
+})
+
+test('continue should throw error if not in PAUSED state', async t => {
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
+  })
+
+  try {
+    await response.continue()
+    t.fail('continue should throw error when state is not PAUSED')
+  } catch (err) {
+    t.is(
+      err.message,
+      'ERR_NOT_PAUSED',
+      'continue threw the correct error message'
+    )
+  }
+})
+
+// ------------------------------
 // Chaining onFinish and await Test
 // ------------------------------
 
-// ------------------------------
-// Idempotent terminal settlement
-// ------------------------------
-
-test('failed is idempotent — second failed() does not re-emit or re-reject', async t => {
-  const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
-  let errorEmits = 0
-  response.onError(() => { errorEmits++ })
-
-  response.failed(new Error('first'))
-  response.failed(new Error('second'))
-
-  t.is(errorEmits, 1, 'error event emits exactly once')
-
-  try {
-    await response.await()
-    t.fail('await should reject')
-  } catch (err) {
-    t.is(err.message, 'first', 'finish promise carries the first error')
-  }
-})
-
-test('ended after failed is a no-op', async t => {
-  const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
-  response.failed(new Error('boom'))
-  response.ended('payload')
-
-  try {
-    await response.await()
-    t.fail('await should reject')
-  } catch (err) {
-    t.is(err.message, 'boom', 'finish promise still carries the original error')
-  }
-})
-
-test('failed after ended is a no-op', async t => {
-  const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
-  response.updateOutput('value')
-  response.ended()
-  response.failed(new Error('late'))
-
-  const result = await response.await()
-  t.alike(result, ['value'], 'finish promise still resolves with the original payload')
-})
-
-// ------------------------------
-// Constructor signal wiring
-// ------------------------------
-
-test('constructor signal — abort after construction fails the response with the abort reason', async t => {
-  const controller = makeAbortable()
-  class TestCancel extends Error {
-    constructor () { super('test-cancel'); this.name = 'TestCancel' }
-  }
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    signal: controller.signal
-  })
-
-  const reason = new TestCancel()
-  controller.abort(reason)
-
-  try {
-    await response.await()
-    t.fail('await should reject')
-  } catch (err) {
-    t.is(err, reason, 'await rejects with the abort reason unchanged')
-  }
-})
-
-test('constructor signal — already-aborted signal fails the response with the abort reason', async t => {
-  const controller = makeAbortable()
-  controller.abort(new Error('precancel'))
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    signal: controller.signal
-  })
-
-  try {
-    await response.await()
-    t.fail('await should reject')
-  } catch (err) {
-    t.is(err.message, 'precancel', 'await rejects with the abort reason')
-  }
-})
-
-test('constructor signal — already-aborted signal fires onError listeners attached after construction', async t => {
-  const controller = makeAbortable()
-  controller.abort(new Error('precancel'))
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    signal: controller.signal
-  })
-
-  // Settlement is deferred to a microtask so a listener attached here still fires.
-  let received = null
-  response.onError(err => { received = err })
-
-  await response.await().catch(() => {})
-
-  t.ok(received instanceof Error, 'error listener fired')
-  t.is(received.message, 'precancel', 'error listener received the abort reason')
-})
-
-test('constructor signal — synchronous ended() after already-aborted construction does not win the race', async t => {
-  const controller = makeAbortable()
-  controller.abort(new Error('precancel'))
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    signal: controller.signal
-  })
-
-  // Synchronous terminal callback fired before the deferred notification runs
-  // must not settle the response with success — the abort reserved the state.
-  response.ended('success')
-
-  try {
-    await response.await()
-    t.fail('await should reject')
-  } catch (err) {
-    t.is(err.message, 'precancel', 'await rejects with the abort reason despite synchronous ended()')
-  }
-})
-
-test('constructor signal — non-Error abort reason is wrapped in a default Error', async t => {
-  const controller = makeAbortable()
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    signal: controller.signal
-  })
-
-  controller.abort('plain string reason')
-
-  try {
-    await response.await()
-    t.fail('await should reject')
-  } catch (err) {
-    t.ok(err instanceof Error, 'rejection is an Error')
-    t.is(err.message, 'Aborted: plain string reason', 'message embeds the stringified reason')
-  }
-})
-
-test('constructor signal — abort with no reason produces a default Error', async t => {
-  const controller = makeAbortable()
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    signal: controller.signal
-  })
-
-  controller.abort()
-
-  try {
-    await response.await()
-    t.fail('await should reject')
-  } catch (err) {
-    t.ok(err instanceof Error, 'rejection is an Error')
-    t.is(err.message, 'Aborted', 'default message when reason is undefined')
-  }
-})
-
-test('constructor signal — listener detaches on natural terminal', async t => {
-  const controller = makeAbortable()
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    signal: controller.signal
-  })
-
-  response.ended('done')
-
-  // Late abort must not re-emit / re-reject — listener should be detached.
-  controller.abort(new Error('late'))
-  const result = await response.await()
-  t.is(result, 'done', 'await resolves with the original result')
-})
-
-// ------------------------------
-// iterate behavior under external settle
-// ------------------------------
-
-test('iterate stops promptly when the response is externally failed', async t => {
-  const controller = makeAbortable()
-  const response = new QvacResponse(
-    {
-      cancelHandler: dummyCancelHandler,
-      signal: controller.signal
-    },
-    1000 // long poll interval — if iterate fell back to polling we would notice
-  )
-
-  const collected = []
-  const iterStart = Date.now()
-  setTimeout(() => controller.abort(new Error('aborted')), 20)
-
-  try {
-    for await (const data of response.iterate()) {
-      collected.push(data)
-    }
-    t.fail('iterate should throw on external failure')
-  } catch (err) {
-    t.is(err.message, 'aborted', 'iterate rethrows the failure error')
-    const elapsed = Date.now() - iterStart
-    t.ok(elapsed < 500, `iterate woke up promptly (${elapsed}ms)`)
-  }
-  t.alike(collected, [], 'no outputs collected before abort')
-})
-
-test('iterate wakes promptly on output events without polling', async t => {
-  const response = new QvacResponse(
-    { cancelHandler: dummyCancelHandler },
-    1000 // long poll interval — wake must come from the output event
-  )
-
-  setTimeout(() => response.updateOutput('a'), 10)
-  setTimeout(() => response.updateOutput('b'), 25)
-  setTimeout(() => response.ended(), 40)
-
-  const collected = []
-  const iterStart = Date.now()
-  for await (const data of response.iterate()) {
-    collected.push(data)
-  }
-  const elapsed = Date.now() - iterStart
-  t.alike(collected, ['a', 'b'], 'all outputs collected')
-  t.ok(elapsed < 500, `iterate woke up on events not pollInterval (${elapsed}ms)`)
-})
-
 test('onFinish chaining and await returns final outputs', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
   })
 
   response

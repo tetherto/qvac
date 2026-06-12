@@ -1,5 +1,11 @@
 import EventEmitter from 'bare-events'
 
+declare type ResponseStatus =
+  | 'running'
+  | 'cancelled'
+  | 'ended'
+  | 'errored'
+  | 'paused'
 declare class QvacResponse<Output = any> extends EventEmitter {
   protected output: Output[]
   protected stats: any
@@ -7,15 +13,10 @@ declare class QvacResponse<Output = any> extends EventEmitter {
   constructor(
     handlers: {
       cancelHandler: () => Promise<void>
-      /**
-       * Optional abort signal. When aborted, the response is failed with
-       * the abort `reason` — passed through unchanged when it's an Error,
-       * otherwise wrapped in a default `Error('Aborted: ...')`. Wires
-       * external timeout / crash into the response without polling. Addons
-       * typically forward the signal they received from
-       * `model.run(input, { signal })` straight into the response.
-       */
-      signal?: AbortSignal
+      /** @deprecated Will be removed in a future version. */
+      pauseHandler?: () => Promise<void>
+      /** @deprecated Will be removed in a future version. */
+      continueHandler?: () => Promise<void>
     },
     pollInterval?: number
   )
@@ -30,6 +31,12 @@ declare class QvacResponse<Output = any> extends EventEmitter {
 
   onCancel(callback: () => void): this
 
+  /** @deprecated Will be removed in a future version. */
+  onPause(callback: () => void): this
+
+  /** @deprecated Will be removed in a future version. */
+  onContinue(callback: () => void): this
+
   updateOutput(output: Output): void
   updateStats(stats: any): void
   failed(error: Error): void
@@ -38,6 +45,13 @@ declare class QvacResponse<Output = any> extends EventEmitter {
   iterate(): AsyncIterableIterator<Output>
 
   cancel(): Promise<void>
+  /** @deprecated Will be removed in a future version. */
+  pause(): Promise<void>
+  /** @deprecated Will be removed in a future version. */
+  continue(): Promise<void>
+  /** @deprecated Will be removed in a future version. */
+  getStatus(): ResponseStatus
 }
 
 export = QvacResponse
+

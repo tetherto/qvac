@@ -5,12 +5,21 @@ const EventEmitter = require('bare-events')
 const statuses = Object.freeze({
   RUNNING: 'running',
   ENDED: 'ended',
-  ERRORED: 'errored'
+  ERRORED: 'errored',
+  CANCELLED: 'cancelled',
+  PAUSED: 'paused'
 })
+
+const _deprecationWarned = {}
+function _warnDeprecated (method) {
+  if (_deprecationWarned[method]) return
+  _deprecationWarned[method] = true
+  console.warn(`@qvac/infer-base: QvacResponse.${method}() is deprecated and will be removed in a future version.`)
+}
 
 /**
  * QvacResponse provides an interface for handling asynchronous responses
- * with update notifications, error handling, and more.
+ * with update notifications, error handling, pause/resume functionality, and more.
  * It extends EventEmitter to allow event-based interaction.
  */
 class QvacResponse extends EventEmitter {
@@ -18,26 +27,23 @@ class QvacResponse extends EventEmitter {
 
   /**
    * Creates a new QvacResponse instance.
-   *
    * @param {Object} handlers - An object containing handler functions.
-   * @param {Function} handlers.cancelHandler - Function returning a Promise, called by `cancel()`.
-   * @param {AbortSignal} [handlers.signal] - When aborted, fails the response with the abort
-   *   `reason` (passed through unchanged when it is an Error, otherwise wrapped in a default
-   *   `Error('Aborted: ...')`). Typically the signal forwarded from `model.run(input, { signal })`.
-   * @param {number} [pollInterval=100] - Iterator polling interval in ms. Safety net only —
-   *   `iterate()` wakes immediately on output/end/error events.
+   * @param {Function} handlers.cancelHandler - A function that returns a Promise, called to cancel the response.
+   * @param {Function} [handlers.pauseHandler] - @deprecated A function that returns a Promise, called to pause the response.
+   * @param {Function} [handlers.continueHandler] - @deprecated A function that returns a Promise, called to continue the response.
+   * @param {number} [pollInterval=100] - Polling interval in milliseconds for the async iterator.
    */
   constructor (
-    { cancelHandler, signal } = {},
+    { cancelHandler, pauseHandler, continueHandler } = {},
     pollInterval = 100
   ) {
     super()
     this.output = []
     this.stats = {}
     this._cancelHandler = cancelHandler
+    this._pauseHandler = pauseHandler
+    this._continueHandler = continueHandler
     this._pollInterval = pollInterval
-    this._abortSignal = null
-    this._onAbort = null
 
     this._finishPromise = new Promise((resolve, reject) => {
       this._resolveFinish = resolve
@@ -45,8 +51,6 @@ class QvacResponse extends EventEmitter {
     })
 
     this._finishPromise.catch(() => {}) // Error already handled via error event if listener exists
-
-    if (signal) this._wireAbortSignal(signal)
   }
 
   /**
@@ -101,6 +105,30 @@ class QvacResponse extends EventEmitter {
   }
 
   /**
+   * @deprecated Will be removed in a future version.
+   * Registers a callback to be invoked when the response is paused.
+   * @param {Function} callback - Function invoked when a pause event occurs.
+   * @returns {QvacResponse} The current instance for chaining.
+   */
+  onPause (callback) {
+    _warnDeprecated('onPause')
+    this.on('pause', callback)
+    return this
+  }
+
+  /**
+   * @deprecated Will be removed in a future version.
+   * Registers a callback to be invoked when the response continues from a paused state.
+   * @param {Function} callback - Function invoked when a continue event occurs.
+   * @returns {QvacResponse} The current instance for chaining.
+   */
+  onContinue (callback) {
+    _warnDeprecated('onContinue')
+    this.on('continue', callback)
+    return this
+  }
+
+  /**
    * Adds an output update and emits an 'output' event.
    * @param {*} output - The output data to add.
    */
@@ -120,18 +148,15 @@ class QvacResponse extends EventEmitter {
 
   /**
    * Marks the response as failed, emits an 'error' event, and rejects the finish promise.
-   * Idempotent: no-op once already settled. Detaches the abort-signal listener (if any).
    * @param {Error} error - The error that caused the failure.
    */
   failed (error) {
-    if (this._status !== statuses.RUNNING) return
     if (!(error instanceof Error)) {
       error = new Error(String(error).trim())
     }
 
     this._status = statuses.ERRORED
     this._error = error
-    this._teardownAbort()
     const errorListeners = this.listenerCount('error')
     if (errorListeners > 0) {
       this.emit('error', error)
@@ -141,12 +166,9 @@ class QvacResponse extends EventEmitter {
 
   /**
    * Marks the response as ended, emits an 'end' event, and resolves the finish promise.
-   * Idempotent: no-op once already settled. Detaches the abort-signal listener (if any).
    */
   ended (result = this.output) {
-    if (this._status !== statuses.RUNNING) return
     this._status = statuses.ENDED
-    this._teardownAbort()
     this.emit('end', result)
     this._resolveFinish(result)
   }
@@ -161,13 +183,6 @@ class QvacResponse extends EventEmitter {
 
   /**
    * Async generator that yields each output update until the response stops running.
-   *
-   * Wakes up immediately on output/end/error events instead of polling
-   * out the remaining `pollInterval` window. A single pair of EventEmitter
-   * listeners is attached for the lifetime of the iterator (not per
-   * yielded chunk), so high-frequency token streams don't churn
-   * listener registrations.
-   *
    * @async
    * @generator
    * @yields {*} Each output update.
@@ -178,119 +193,74 @@ class QvacResponse extends EventEmitter {
       throw this._error
     }
 
-    let pendingResolve = null
-    const wake = () => {
-      if (pendingResolve === null) return
-      // Clear before resolving so repeated events don't reuse this waiter.
-      const rslv = pendingResolve
-      pendingResolve = null
-      rslv()
-    }
-    this.on('output', wake)
-    this.on('end', wake)
-    this.on('error', wake)
-
-    try {
-      let i = 0
-      while (true) {
-        while (i < this.output.length) yield this.output[i++]
-        if (this._status !== statuses.RUNNING) break
-        await new Promise((resolve) => {
-          let timer = null
-          pendingResolve = () => {
-            if (timer !== null) {
-              clearTimeout(timer)
-              timer = null
-            }
-            resolve()
-          }
-          timer = setTimeout(() => {
-            pendingResolve = null
-            timer = null
-            resolve()
-          }, this._pollInterval)
-        })
+    const sleep = delay => new Promise(resolve => setTimeout(resolve, delay))
+    let i = 0
+    while (true) {
+      while (i < this.output.length) {
+        yield this.output[i++]
       }
-    } finally {
-      this.off('output', wake)
-      this.off('end', wake)
-      this.off('error', wake)
-      pendingResolve = null
+      if (this._status !== statuses.RUNNING) break
+      await sleep(this._pollInterval)
     }
 
     if (this._status === statuses.ERRORED) throw this._error
   }
 
-  _wireAbortSignal (signal) {
-    const buildError = () => {
-      const reason = signal.reason
-      if (reason instanceof Error) return reason
-      if (reason !== undefined && reason !== null) {
-        return new Error(`Aborted: ${String(reason)}`)
-      }
-      return new Error('Aborted')
-    }
-
-    if (signal.aborted) {
-      this._markAbortPending(buildError())
-      return
-    }
-
-    const onAbort = () => this.failed(buildError())
-    this._abortSignal = signal
-    this._onAbort = onAbort
-    signal.addEventListener('abort', onAbort, { once: true })
-  }
-
-  /**
-   * Reserves the errored terminal state synchronously for an already-aborted
-   * signal, but defers the observable notification (error event + finish-promise
-   * rejection) to a microtask.
-   *
-   * Reserving `_status`/`_error` synchronously closes the race where a synchronous
-   * terminal callback (e.g. `ended()` from a synchronous native `runJob` callback)
-   * fired right after construction would otherwise settle the response with success
-   * before the abort failure ran. Deferring the notification still lets callers and
-   * `createJobHandler.bindCleanup()` attach listeners before `error` is emitted.
-   *
-   * @param {Error} error - The abort error to settle with.
-   */
-  _markAbortPending (error) {
-    if (this._status !== statuses.RUNNING) return
-    this._status = statuses.ERRORED
-    this._error = error
-    this._teardownAbort()
-
-    queueMicrotask(() => {
-      if (this.listenerCount('error') > 0) {
-        this.emit('error', error)
-      }
-      this._rejectFinish(error)
-    })
-  }
-
-  _teardownAbort () {
-    if (this._abortSignal !== null && this._onAbort !== null) {
-      try {
-        this._abortSignal.removeEventListener('abort', this._onAbort)
-      } catch {
-        // Best-effort detach; ignore exotic signal implementations.
-      }
-      this._abortSignal = null
-      this._onAbort = null
-    }
-  }
-
   /**
    * Cancels the response by invoking the cancel handler and emitting a 'cancel' event.
    * @returns {Promise<void>}
+   * @throws {Error} If the response is not in a running state.
    */
   async cancel () {
-    if (this._status !== statuses.RUNNING) {
-      return
+    if (this._status !== statuses.RUNNING && this._status !== statuses.PAUSED) {
+      return // Already finished/errored/cancelled
     }
     await this._cancelHandler()
     this.emit('cancel')
+  }
+
+  /**
+   * @deprecated Will be removed in a future version. The single-job addon model has no pause semantics.
+   * Pauses the response by invoking the pause handler and emitting a 'pause' event.
+   * @returns {Promise<void>}
+   * @throws {Error} If the response is not in a running state.
+   */
+  async pause () {
+    _warnDeprecated('pause')
+    if (this._status !== statuses.RUNNING) {
+      throw new Error('ERR_NOT_RUNNING')
+    }
+
+    this._status = statuses.PAUSED
+    await this._pauseHandler()
+    this.emit('pause')
+  }
+
+  /**
+   * @deprecated Will be removed in a future version. The single-job addon model has no pause semantics.
+   * Continues a paused response by invoking the continue handler and emitting a 'continue' event.
+   * @returns {Promise<void>}
+   * @throws {Error} If the response is not in a paused state.
+   */
+  async continue () {
+    _warnDeprecated('continue')
+    if (this._status !== statuses.PAUSED) {
+      throw new Error('ERR_NOT_PAUSED')
+    }
+
+    this._status = statuses.RUNNING
+    await this._continueHandler()
+    this.emit('continue')
+  }
+
+  /**
+   * @deprecated Will be removed in a future version. Use response event listeners instead.
+   * Returns the current status of the response.
+   * @returns {string} The current status.
+   */
+  getStatus () {
+    _warnDeprecated('getStatus')
+    return this._status
   }
 }
 

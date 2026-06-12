@@ -1,14 +1,9 @@
 'use strict'
 
-let diagnostics
-try { diagnostics = require('@qvac/diagnostics') } catch (e) { diagnostics = null }
-
 const QvacLogger = require('@qvac/logging')
 const { platform } = require('bare-os')
-const path = require('bare-path')
-const ProgressReport = require('./src/utils/progressReport')
-const { QvacInferenceBaseError, ERR_CODES } = require('./src/error')
-const QvacResponse = require('./src/QvacResponse')
+const { QvacInferenceBaseError, ERR_CODES } = require('../src/error')
+const QvacResponse = require('../src/QvacResponse')
 
 const platformDefinitions = {
   android: 'vulkan',
@@ -20,13 +15,16 @@ const platformDefinitions = {
 
 /**
  * Base class for inference client implementations
+ * @param {Object} opts - Configuration options
+ * @param {boolean} [exclusiveRun=false] - Whether to use exclusive run queue for inference operations.
  */
 class BaseInference {
-  constructor ({ opts = {}, loader = null, ...args }) {
+  constructor ({ opts = {}, ...args }) {
     this.opts = opts
     this.logger = new QvacLogger(args?.logger)
-    this.loader = loader
     this._jobToResponse = new Map()
+    this._runQueueWaiter = Promise.resolve()
+    this.exclusiveRun = !!args.exclusiveRun
 
     this.state = {
       configLoaded: false,
@@ -66,136 +64,23 @@ class BaseInference {
 
     await this._load(...args)
     this.state.configLoaded = true
-
-    if (diagnostics && this._packageName) {
-      diagnostics.registerAddon({
-        name: this._packageName,
-        version: this._packageVersion || 'unknown',
-        getDiagnostics: () => this._getDiagnosticsJSON ? this._getDiagnosticsJSON() : '{}'
-      })
-    }
   }
 
   async _load () {
     throw new QvacInferenceBaseError({ code: ERR_CODES.NOT_IMPLEMENTED, adds: '_load' })
   }
 
-  /**
-   * Loads the model weights from the provided loader.
-   * @param loader - loader to fetch model weights from.
-   * @param close - Optional boolean to close the loader after it finish (default: false).
-   * @param reportProgressCallback - Optional callback function for reporting progress.
-   * @returns {Promise<void>} - A promise that resolves when the weights are fully loaded.
-   */
-  async loadWeights (loader, close = false, reportProgressCallback) {
-    // Call internal _loadWeights method if it exists
-    await this._loadWeights(loader, close, reportProgressCallback)
-
-    this.state.weightsLoaded = true
+  async downloadWeights (onDownloadProgress, opts = {}) {
+    return this._downloadWeights(onDownloadProgress, opts)
   }
 
-  async _loadWeights (loader, close = false, reportProgressCallback) {
-    this.logger.debug('No _loadWeights method defined, skipping weight loading')
-  }
-
-  /**
-   * Unloads weights from the memory.
-   * @returns {Promise<void>} - A promise that resolves when the weights are unloaded.
-   */
-  async unloadWeights () {
-    // Call internal _unloadWeights method if it exists
-    await this._unloadWeights()
-
-    this.state.weightsLoaded = false
-  }
-
-  async _unloadWeights () {
-    this.logger.debug(
-      'No _unloadWeights method defined, skipping weight unloading'
-    )
-  }
-
-  /**
-   * Downloads the model weights from the provided loader.
-   * @param source - source to fetch model weights from.
-   * @param diskPath - path to download the weights to.
-   * @param reportProgressCallback - Optional callback function for reporting progress.
-   * @returns {Promise<void>} - A promise that resolves when the weights are fully downloaded.
-   */
-  async downloadWeights (source, diskPath = '', reportProgressCallback) {
-    await this._downloadWeights(source, diskPath, reportProgressCallback)
-  }
-
-  async _downloadWeights (source, diskPath = '', reportProgressCallback) {
-    this.logger.debug(
-      'No _downloadWeights method defined, skipping weight downloading'
-    )
-  }
-
-  /**
-   * Initializes progress reporting for model loading
-   */
-  async initProgressReport (weightFiles, callbackFunction) {
-    if (this.loader?.getFileSize && callbackFunction) {
-      this.logger.info(
-        `Initializing progress report for ${weightFiles.length} weight files`
-      )
-      const filesizeMapping = {}
-
-      await Promise.all(
-        weightFiles.map(async filepath => {
-          const currentFileName = path.basename(filepath)
-          this.logger.debug(`Getting file size for: ${currentFileName}`)
-          const currentFileSize = await this.loader.getFileSize(filepath)
-          filesizeMapping[currentFileName] = currentFileSize
-          this.logger.debug(
-            `File size for ${currentFileName}: ${currentFileSize} bytes`
-          )
-        })
-      )
-
-      const totalSize = Object.values(filesizeMapping).reduce(
-        (sum, size) => sum + size,
-        0
-      )
-      this.logger.info(
-        `Progress report initialized. Total size to download: ${totalSize} bytes across ${weightFiles.length} files`
-      )
-      const progressReport = new ProgressReport(
-        filesizeMapping,
-        callbackFunction
-      )
-      return progressReport
-    } else {
-      if (!this.loader?.getFileSize) {
-        this.logger.warn(
-          'Progress report initialization skipped - loader missing getFileSize capability'
-        )
-      }
-      if (!callbackFunction) {
-        this.logger.warn(
-          'Progress report initialization skipped - no callback function provided'
-        )
-      }
-      return null
-    }
-  }
-
-  /**
-   * Deletes local model files
-   */
-  async delete () {
-    if (!this.loader?.deleteLocal) {
-      throw new QvacInferenceBaseError({
-        code: ERR_CODES.LOAD_NOT_IMPLEMENTED,
-        adds: 'deleteLocal'
-      })
-    }
-    await this.loader.deleteLocal()
+  async _downloadWeights () {
+    throw new QvacInferenceBaseError({ code: ERR_CODES.NOT_IMPLEMENTED, adds: '_downloadWeights' })
   }
 
   /**
    * Runs the process of inference output for a given input
+   * Automatically wraps _runInternal with _withExclusiveRun when exclusiveRun is true
    */
   async run (input) {
     if (!this._runInternal) {
@@ -204,6 +89,11 @@ class BaseInference {
         adds: '_runInternal'
       })
     }
+
+    if (this.exclusiveRun) {
+      return await this._withExclusiveRun(() => this._runInternal(input))
+    }
+
     return await this._runInternal(input)
   }
 
@@ -264,6 +154,53 @@ class BaseInference {
   }
 
   /**
+   * Ensures exclusive execution of async functions in a queue
+   * @param {Function} fn - The async function to execute exclusively
+   * @returns {Promise} The result of the executed function
+   */
+  async _withExclusiveRun (fn) {
+    const prev = this._runQueueWaiter || Promise.resolve()
+    let release
+    this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    await prev
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
+  }
+
+  /**
+   * Cancels a specific job by its ID
+   * @param {string} jobId - The identifier of the job to cancel
+   */
+  async cancel (jobId) {
+    if (!this.addon) {
+      throw new QvacInferenceBaseError({
+        code: ERR_CODES.ADDON_NOT_INITIALIZED
+      })
+    }
+
+    if (!this.addon.cancel) {
+      throw new QvacInferenceBaseError({
+        code: ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
+        adds: 'cancel'
+      })
+    }
+
+    if (!this.addon.activate) {
+      throw new QvacInferenceBaseError({
+        code: ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
+        adds: 'activate'
+      })
+    }
+
+    await this.stop()
+    await this.addon.cancel(jobId)
+    await this.addon.activate()
+  }
+
+  /**
    * Gets the current status
    */
   async status () {
@@ -307,49 +244,6 @@ class BaseInference {
     this.state.configLoaded = false
     this.state.weightsLoaded = false
     this.state.destroyed = true
-
-    if (diagnostics && this._packageName) {
-      diagnostics.unregisterAddon(this._packageName)
-    }
-  }
-
-  /**
-   * Gets configuration files content
-   */
-  async _getConfigs () {
-    const configs = {}
-    for (const path of this._getConfigPathNames()) {
-      configs[path] = await this._getFileContent(path)
-    }
-    return configs
-  }
-
-  /**
-   * Gets file content from loader
-   */
-  async _getFileContent (filepath) {
-    if (!this.loader) {
-      this.logger.error('Failed to get file content - loader not initialized')
-      throw new QvacInferenceBaseError({ code: ERR_CODES.LOADER_NOT_FOUND })
-    }
-
-    this.logger.debug(`Reading file content from: ${filepath}`)
-    const content = []
-    const cStream = await this.loader.getStream(filepath)
-    for await (const c of cStream) {
-      content.push(c)
-    }
-    return Buffer.concat(content)
-  }
-
-  /**
-   * Gets configuration file paths
-   */
-  _getConfigPathNames () {
-    throw new QvacInferenceBaseError({
-      code: ERR_CODES.NOT_IMPLEMENTED,
-      adds: '_getConfigPathNames'
-    })
   }
 
   /**
@@ -380,7 +274,7 @@ class BaseInference {
     if (!this.addon) {
       throw new QvacInferenceBaseError({ code: ERR_CODES.ADDON_NOT_INITIALIZED })
     }
-    return new QvacResponse({
+    const response = new QvacResponse({
       cancelHandler: () => {
         return this.addon.cancel(jobId)
       },
@@ -391,6 +285,9 @@ class BaseInference {
         return this.addon.activate()
       }
     })
+
+    this._saveJobToResponseMapping(jobId, response)
+    return response
   }
 
   /**
@@ -408,14 +305,31 @@ class BaseInference {
       response.failed(error)
       this._deleteJobMapping(jobId)
     } else if (event === 'Output') {
-      this.logger.debug(`Job ${jobId} produced output: ${dataAsString(data)}`)
+      try {
+        this.logger.debug(`Job ${jobId} produced output: ${dataAsString(data)}`)
+      } catch (err) {
+        if (err instanceof RangeError) {
+          this.logger.debug(`Job ${jobId} produced output: [data too large]`)
+        } else {
+          throw err
+        }
+      }
       response.updateOutput(data)
+    } else if (event === 'FinetuneProgress') {
+      if (this.opts?.stats) {
+        response.updateStats(data.stats)
+      }
     } else if (event === 'JobEnded') {
       this.logger.info(`Job ${jobId} completed. Stats: ${JSON.stringify(data)}`)
-      if (this.opts?.stats) {
+      const isFinetuneTerminal = data && typeof data === 'object' && data.op === 'finetune' && typeof data.status === 'string'
+      if (this.opts?.stats && !isFinetuneTerminal) {
         response.updateStats(data)
       }
-      response.ended()
+      if (isFinetuneTerminal) {
+        response.ended(data)
+      } else {
+        response.ended()
+      }
       this._deleteJobMapping(jobId)
     } else {
       this.logger.debug(`Received event for job ${jobId}: ${event}`)
@@ -437,7 +351,3 @@ function dataAsString (data) {
 }
 
 module.exports = BaseInference
-module.exports.QvacResponse = QvacResponse
-module.exports.exclusiveRunQueue = require('./src/utils/exclusiveRunQueue')
-module.exports.getApiDefinition = require('./src/utils/getApiDefinition')
-module.exports.createJobHandler = require('./src/utils/createJobHandler')
