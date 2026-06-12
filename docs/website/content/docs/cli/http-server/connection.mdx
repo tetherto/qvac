@@ -48,8 +48,7 @@ The only QVAC-specific setting for connecting an AI tool is the `serve.models` b
         "preload": true,
         "config": {
           "ctx_size": 16384,
-          "reasoning_budget": 0,
-          "tools": true
+          "reasoning_budget": 0
         }
       }
     }
@@ -86,6 +85,7 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
       "models": {
         "qwen3-8b-chat": {
           "name": "Qwen3 8B (chat)",
+          "tool_call": true,
           "limit": { "context": 16384 },
           "modalities": { "input": ["text"], "output": ["text"] }
         },
