@@ -9,6 +9,8 @@ import { handleUnloadModel } from "@/server/rpc/handlers/unload-model";
 import { handleUnloadModelDelegated } from "@/server/rpc/handlers/unload-model-delegated";
 import { handleTranscribe } from "@/server/rpc/handlers/transcribe";
 import { handleTranscribeStream } from "@/server/rpc/handlers/transcribe-stream";
+import { handleBciTranscribe } from "@/server/rpc/handlers/bci-transcribe";
+import { handleBciTranscribeStream } from "@/server/rpc/handlers/bci-transcribe-stream";
 import { handleEmbed } from "@/server/rpc/handlers/embed";
 import { handleTranslate } from "@/server/rpc/handlers/translate";
 import { handleLoggingStream } from "@/server/rpc/handlers/logging-stream";
@@ -127,6 +129,8 @@ export const registry: Record<string, HandlerEntry> = {
   // Simple Stream handlers
   transcribe: { type: "stream", handler: handleTranscribe },
   transcribeStream: { type: "duplex", handler: handleTranscribeStream },
+  bciTranscribe: { type: "stream", handler: handleBciTranscribe },
+  bciTranscribeStream: { type: "duplex", handler: handleBciTranscribeStream },
   loggingStream: { type: "stream", handler: handleLoggingStream },
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },

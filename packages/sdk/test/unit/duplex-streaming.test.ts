@@ -12,6 +12,7 @@ import {
   type TranscribeStreamResponse,
   type TranscribeStreamSession,
 } from "@/schemas/transcription";
+import type { BciTranscribeStreamSession } from "@/schemas/bci";
 import { createErrorResponse } from "@/schemas/error";
 import { textToSpeechStreamRequestSchema } from "@/schemas/text-to-speech";
 
@@ -168,6 +169,30 @@ test("TranscribeStreamSession: destroy() tears down both streams", (t) => {
   session.destroy();
   t.ok(writeDestroyed, "writable stream destroyed");
   t.ok(readDestroyed, "readable stream destroyed");
+});
+
+test("BciTranscribeStreamSession: interface includes requestId and destroy()", (t) => {
+  let destroyed = false;
+
+  const session: BciTranscribeStreamSession = {
+    requestId: "req-bci-stream",
+    write(_chunk: Uint8Array) {},
+    end() {},
+    destroy() {
+      destroyed = true;
+    },
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          return { done: true as const, value: undefined };
+        },
+      };
+    },
+  };
+
+  t.is(session.requestId, "req-bci-stream");
+  session.destroy();
+  t.ok(destroyed, "destroy() was called");
 });
 
 // =============================================================================

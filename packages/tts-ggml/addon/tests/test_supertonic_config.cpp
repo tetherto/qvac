@@ -80,65 +80,50 @@ TEST(SupertonicValidate, NonexistentNoiseNpyRejected) {
   EXPECT_THROW(SupertonicModel{cfg}, StatusError);
 }
 
-TEST(SupertonicValidate, UseGpuTrueAcceptedAtConstruction) {
-  // QVAC-19255 (companion to PR-bump-to-tts-cpp-128dae42): Supertonic
-  // gained Vulkan/Metal GPU support in tts-cpp@2026-06-05 (QVAC-18605
-  // rounds 1-13 + QVAC-19254 sched). validateConfig must now ACCEPT
-  // useGPU=true at construction time. The stub GGUF file still fails
-  // parsing on load() — that's exercised below — but construction
-  // itself no longer rejects on GPU intent.
+TEST(SupertonicValidate, UseGpuTrueRejectedWithExplanation) {
   auto cfg = minimallyValidStubConfig();
   cfg.useGpu = true;
-  std::unique_ptr<SupertonicModel> m;
-  EXPECT_NO_THROW(m = std::make_unique<SupertonicModel>(cfg));
-  ASSERT_NE(m, nullptr);
-  EXPECT_FALSE(m->isLoaded());
-}
-
-TEST(SupertonicValidate, NGpuLayersGreaterThanZeroAccepted) {
-  // Companion to UseGpuTrueAcceptedAtConstruction: explicit
-  // nGpuLayers > 0 is no longer rejected at validation. Loading the
-  // stub will throw on GGUF parse, but the constructor must succeed.
-  auto cfg = minimallyValidStubConfig();
-  cfg.nGpuLayers = 99;
-  std::unique_ptr<SupertonicModel> m;
-  EXPECT_NO_THROW(m = std::make_unique<SupertonicModel>(cfg));
-  ASSERT_NE(m, nullptr);
-  EXPECT_FALSE(m->isLoaded());
-}
-
-TEST(SupertonicValidate, UseGpuNGpuLayersConflictStillRejected) {
-  // The cross-field conflict check (useGPU=true + nGpuLayers=0, or
-  // useGPU=false + nGpuLayers!=0) is still enforced after the GPU
-  // gate was lifted, so callers can't silently get the opposite
-  // backend they asked for.
-  auto cfg = minimallyValidStubConfig();
-  cfg.useGpu = true;
-  cfg.nGpuLayers = 0;
   bool threw = false;
   try {
     SupertonicModel m(cfg);
   } catch (const StatusError& e) {
     threw = true;
     const std::string what = e.what();
-    EXPECT_NE(what.find("conflicts with nGpuLayers"), std::string::npos)
-        << "error should explain the conflict; got: " << what;
+    EXPECT_NE(what.find("GPU"), std::string::npos)
+        << "error should mention GPU; got: " << what;
+    EXPECT_NE(what.find("Supertonic"), std::string::npos)
+        << "error should mention Supertonic engine; got: " << what;
   }
   EXPECT_TRUE(threw);
+}
+
+TEST(SupertonicValidate, NGpuLayersGreaterThanZeroRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.nGpuLayers = 99;
+  EXPECT_THROW(SupertonicModel{cfg}, StatusError);
 }
 
 TEST(SupertonicValidate, NGpuLayersZeroAcceptedAndDeferredLoad) {
   auto cfg = minimallyValidStubConfig();
   cfg.nGpuLayers = 0;
-  // Validation passes (CPU path); the stub file then fails GGUF
-  // parsing on load() (not at construction — load is deferred to
-  // waitForLoadInitialization). Locks the contract that construction
-  // succeeds for any internally-consistent CPU config.
+  // Validation passes (CPU-only path); the stub file then fails GGUF
+  // parsing on load() (not at construction — load is now deferred to
+  // waitForLoadInitialization).  The eventual throw must NOT be the
+  // GPU-rejection branch.
   std::unique_ptr<SupertonicModel> m;
   EXPECT_NO_THROW(m = std::make_unique<SupertonicModel>(cfg));
   ASSERT_NE(m, nullptr);
   EXPECT_FALSE(m->isLoaded());
-  EXPECT_THROW(m->load(), StatusError);
+  bool threw = false;
+  try {
+    m->load();
+  } catch (const StatusError& e) {
+    threw = true;
+    const std::string what = e.what();
+    EXPECT_EQ(what.find("GPU"), std::string::npos)
+        << "nGpuLayers=0 should not trigger the GPU-rejection path; got: " << what;
+  }
+  EXPECT_TRUE(threw);
   EXPECT_FALSE(m->isLoaded());
 }
 

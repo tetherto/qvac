@@ -27,25 +27,29 @@ function f32FromBase64(b64: string): Float32Array {
 }
 
 /**
- * Run SmolVLA inference on a loaded VLA model and return the produced action
- * chunk plus per-stage timings.
+ * Run VLA inference on a loaded model (SmolVLA or π₀.₅) and return the
+ * produced action chunk plus per-stage timings.
  *
  * @param params - Inference inputs.
  * @param params.modelId - Identifier of the loaded VLA model (returned by
  *   `loadModel({ modelType: "vla", ... })`).
- * @param params.images - One or more preprocessed camera frames; each is a
+ * @param params.images - The preprocessed camera frames; each is a
  *   `Float32Array` of length `3 * imgWidth * imgHeight` in CHW layout, range
- *   `[-1, 1]`. Use the addon's `preprocessImage()` (re-exported as
+ *   `[-1, 1]`. Pass exactly `hparams.numCameras` frames (2 for SmolVLA, 3
+ *   for π₀.₅). Use the addon's `preprocessImage()` (re-exported as
  *   `vlaPreprocessImage`) to produce them.
  * @param params.imgWidth - Width of each preprocessed image; must equal
  *   `hparams.visionImageSize`.
  * @param params.imgHeight - Height of each preprocessed image; must equal
  *   `hparams.visionImageSize`.
- * @param params.state - Robot end-effector / gripper state padded to
- *   `hparams.maxStateDim` (use `vlaPadState`).
+ * @param params.state - Robot end-effector / gripper state. For
+ *   continuous-state models (SmolVLA) pad to `hparams.maxStateDim` with
+ *   `vlaPadState`. For discrete-state models (π₀.₅,
+ *   `hparams.stateInputMode === 'discrete'`) the state is tokenised into the
+ *   prompt and this buffer is ignored — pass an empty `Float32Array(0)`.
  * @param params.tokens - Tokenized instruction (`Int32Array` of length
  *   `hparams.tokenizerMaxLength`). Tokenize on the consumer side with the
- *   SmolVLM2 tokenizer.
+ *   model's tokenizer (SmolVLM2 for SmolVLA, PaliGemma/Gemma for π₀.₅).
  * @param params.mask - Token attention mask (`Uint8Array` matching `tokens`).
  * @param params.noise - Optional seeded noise prior
  *   (`Float32Array` of length `hparams.chunkSize * hparams.maxActionDim`).

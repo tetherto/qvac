@@ -9,31 +9,17 @@ tocMaxDepth: 3
 
 To run the server, install the `@qvac/cli` npm package — it depends on `@qvac/sdk` directly, so the SDK is installed automatically. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls. As a result, any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can point to `http://localhost:11434/v1/` and work without changes.
 
-### AI capabilities
+## AI capabilities
 
 At the moment, the HTTP server supports the following QVAC AI capabilities:
 * Text generation — via [Chat](#chat) (`/v1/chat/completions`), [Responses](#responses) (`/v1/responses`, modern), or [Legacy completions](#legacy-completions) (`/v1/completions`).
 * [Text embeddings](#embeddings) — via `/v1/embeddings`.
 * RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
 * [Image generation](#images) — via `/v1/images/generations` and `/v1/images/edits`.
+* [Video generation](#videos) — via `/v1/videos`.
 * Transcription — via [Audio](#audio) (`/v1/audio/transcriptions`).
 * Text-to-speech — via [Audio](#audio) (`/v1/audio/speech`).
 * Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
-
-### Compatible tools
-
-The following tools have been verified to work as drop-in replacements by pointing their base URL to the QVAC server:
-
-| Tool | Required endpoints |
-| --- | --- |
-| [Open WebUI](https://openwebui.com) | `/v1/chat/completions`, `/v1/models`; TTS via `/v1/audio/speech` (mp3/opus/aac/flac with ffmpeg), `/v1/audio/voices`, `/v1/audio/models` |
-| [Continue.dev](https://continue.dev) | `/v1/chat/completions` (streaming SSE), `/v1/models` |
-| [LangChain](https://langchain.com) | `/v1/chat/completions`, `/v1/embeddings`, `/v1/models` |
-| [Open Interpreter](https://openinterpreter.com) | `/v1/chat/completions` (streaming, tool calls), `/v1/models` |
-| [Cline](https://github.com/cline/cline) | `/v1/chat/completions` (streaming, tool calls) |
-| [Roo Code](https://roomote.dev) | `/v1/chat/completions` (streaming, tool calls) |
-| [Aider](https://aider.chat) | `/v1/chat/completions` (streaming) |
-| [OpenCode](https://opencode.ai) | `/v1/chat/completions` (streaming, tool calls) |
 
 ## Running the server
 
@@ -91,6 +77,10 @@ curl http://localhost:11434/v1/chat/completions \
 ## Configuration
 
 Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/configuration#serveconfig).
+
+<Card href="/cli/http-server/connection" title="Connect AI tools">
+  Learn how to use the HTTP server as a local model provider for AI tools that support OpenAI-compatible API.
+</Card>
 
 ### Example
 
@@ -300,6 +290,18 @@ curl http://localhost:11434/v1/chat/completions \
   }'
 ```
 
+#### Message content
+
+`messages[].content` accepts both the plain string form and the OpenAI **array-of-parts** form (`[{ "type": "text", "text": "…" }, …]`) that modern clients such as Cline and Open WebUI send. Parts of type `text` are concatenated into a single string; non-text parts (`image_url`, `input_audio`, `file`) are **silently dropped** — the chat surface is text-only and vision is out of scope. Both shapes below are valid:
+
+```jsonc
+// string form
+{ "role": "user", "content": "Describe a sunset." }
+
+// array form (non-text parts ignored)
+{ "role": "user", "content": [{ "type": "text", "text": "Describe a sunset." }] }
+```
+
 #### Generation parameters
 
 The following OpenAI parameters are forwarded to the model on each request:
@@ -346,6 +348,22 @@ Structured output (`json_object` / `json_schema`) cannot be combined with `tools
 #### Unsupported parameters
 
 The following OpenAI parameters are accepted but ignored (a warning is logged): `n`, `logprobs`, `stop`, `top_logprobs`, `logit_bias`, `parallel_tool_calls`, `stream_options`.
+
+#### Response: `finish_reason` and token usage
+
+Each choice carries a `finish_reason` that reflects how generation actually ended:
+
+| `finish_reason` | When |
+| --- | --- |
+| `stop` | The model reached a natural end-of-sequence or a stop sequence. |
+| `length` | Generation was truncated because it hit `max_tokens` / `max_completion_tokens` (the SDK's token budget was exhausted). |
+| `tool_calls` | The model emitted one or more function/tool calls. |
+
+`usage.prompt_tokens` is reported as `0` (the SDK does not yet expose a prompt token count). `usage.completion_tokens` comes from the SDK completion stats (`generatedTokens`) when available, falling back to a whitespace word count of the output. The same accounting is shared across `/v1/chat/completions`, `/v1/completions`, and `/v1/responses`, so token counts no longer drift between blocking and streaming paths. In streaming mode the `usage` object is attached to the final SSE chunk (for plain completions; tool-call streams end on a `tool_calls` chunk).
+
+<Callout type="warn">
+If inference fails mid-stream, the request surfaces a `502 inference_failed` error instead of returning a partial `200`.
+</Callout>
 
 ### Responses
 
@@ -396,6 +414,8 @@ The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_toke
 <Callout type="warn">
 **Volatile state.** Stored responses live in process memory only — there is no disk or P2P persistence. They expire on server restart, after the per-entry TTL (1 h by default), or when the LRU cap (256 entries) evicts them. Each response carries the `X-QVAC-Stub: responses-volatile` header. Pass `store: false` in the request body to skip persistence entirely.
 </Callout>
+
+When generation is truncated because it hit `max_output_tokens` / `max_tokens`, the response is returned with `status: "incomplete"` and `incomplete_details.reason: "max_output_tokens"` — the Responses-API analogue of chat's `finish_reason: "length"`. `usage.output_tokens` uses the same SDK-stats accounting as the other chat-category routes (`input_tokens` is `0`).
 
 The following Responses-API features are intentionally rejected with `400`: `conversation`, `background: true`, and built-in tools (`web_search`, `file_search`, `code_interpreter`). `function`-typed tools work normally.
 
@@ -466,6 +486,8 @@ curl http://localhost:11434/v1/completions \
 </Callout>
 
 The same generation parameters as `/v1/chat/completions` are accepted. The following OpenAI fields are accepted and ignored (warning logged): `logprobs`, `echo`, `best_of`, `suffix`, `stop`, `logit_bias`, `stream_options`, `user`, `response_format`, and `n` when greater than `1`.
+
+`choices[].finish_reason` follows the same rules as [Chat](#response-finish_reason-and-token-usage): `stop` for a natural end, `length` when output is truncated by `max_tokens`. Token usage uses the same SDK-stats accounting; for multi-prompt requests, `usage` aggregates `completion_tokens` across every prompt.
 
 ### Embeddings
 
@@ -563,7 +585,7 @@ curl http://localhost:11434/v1/audio/transcriptions \
 Unsupported `response_format` values (`srt`, `vtt`, `verbose_json`) return a `400` error.
 
 <Callout type="info">
-`language` and `temperature` are accepted but currently only configurable at model load time (via `serve.models` config), not per-request. A warning is logged when these are sent.
+`language` and `temperature` are accepted but currently only configurable at model load time (via `serve.models` config), not per-request. A warning is logged when these are sent. `temperature` is parsed as a **number** per the OpenAI spec (e.g. `temperature=0.0`); the same applies to `/v1/audio/translations`.
 </Callout>
 
 #### `POST /v1/audio/translations`
@@ -994,47 +1016,164 @@ Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each ch
 
 ### Videos
 
-OpenAI-compatible **async** text-to-video, backed by the SDK's `video({ mode: "txt2vid" })`. Creating a job returns immediately; the generation runs in the background. Poll for status, then download the bytes.
+OpenAI-compatible **async** text-to-video, backed by the SDK's `video({ mode: "txt2vid" })`. Creating a job returns immediately with `status: "queued"`; the generation runs in the background. Poll for status, then download the bytes. Image-to-video and the OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented (the SDK exposes no underlying modes for them).
 
-Requires an alias whose endpoint category is `video` (SDK addon `sdcpp-video`). Register it in `serve.models` and add a `serve.openai.videos.models` aliasing block so OpenAI SDK clients can use a hard-coded model name. **Text-to-video only** — `input_reference`, `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
+#### Loaded model
+
+Register an alias whose endpoint category is `video` using the virtual SDK type **`sdcpp-video`** (it resolves to the `sdcpp-generation` addon with `mode: "video"`). Nested model-source fields (`t5XxlModelSrc`, `vaeModelSrc`, `clipLModelSrc`, …) accept SDK constant names, which the P2P registry resolves to downloadable weights:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "wan-t2v": {
+        "src": "WAN2_1_T2V_1_3B_FP16",
+        "type": "sdcpp-video",
+        "preload": true,
+        "config": {
+          "t5XxlModelSrc": "UMT5_XXL_FP16",
+          "vaeModelSrc": "WAN_2_1_COMFYUI_REPACKAGED_VAE",
+          "offload_to_cpu": true
+        }
+      }
+    }
+  }
+}
+```
+
+Clients select the model by passing the alias key (or its `src` string) in the request `model` field. There is no separate videos aliasing block — to be a drop-in for OpenAI SDK clients (`client.videos.create(...)`, which defaults to `model: "sora-2"`), name the alias after the OpenAI model the client sends (e.g. `"sora-2"`).
 
 #### `POST /v1/videos`
 
-Create a job. Returns the job resource with `status: "queued"`.
+Create a generation job. The endpoint accepts `application/json` only — the SDK has no image-to-video mode, so multipart with `init_image` is not accepted.
 
-#### `GET /v1/videos`
-
-List jobs (`limit` / `order` / `after`). **In-memory only** — a restart clears the list.
-
-#### `GET /v1/videos/:id`
-
-Poll job status (`queued` → `in_progress` → `completed` / `failed`).
-
-#### `GET /v1/videos/:id/content`
-
-Download the generated video. Defaults to `video/mp4` (lazy ffmpeg transcode + cache); `?format=avi` returns the native MJPG-AVI. A `?variant` other than `video` returns `501 unsupported_variant`.
-
-#### `DELETE /v1/videos/:id`
-
-Abort the running job and drop its assets.
-
-**End-to-end create + poll + download:**
+Returns `200` with the `Video` resource at `status: "queued"`.
 
 ```bash
 curl http://localhost:11434/v1/videos \
   -H "Content-Type: application/json" \
-  -d '{"model":"my-video","prompt":"a timelapse of clouds","size":"512x512"}'
+  -d '{
+    "model": "wan-t2v",
+    "prompt": "a colorful bird flapping its wings in a sunny garden",
+    "size": "480x832",
+    "seconds": "2",
+    "fps": 16,
+    "steps": 30,
+    "cfg_scale": 6.0,
+    "flow_shift": 3.0,
+    "negative_prompt": "blurry, low quality, static",
+    "seed": 42
+  }'
+```
 
+##### Request fields
+
+| Field | Description | Required |
+| --- | --- | --- |
+| `model` | Alias declared under `serve.models` (endpoint category `video`). | Yes |
+| `prompt` | Text prompt, 1–32000 characters. | Yes |
+| `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 8. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
+| `seconds` | Target duration as a **string** (e.g. `"2"`; OpenAI uses `"4"` / `"8"` / `"12"`). Mapped together with `fps` to the addon's `video_frames` (rounded to the nearest `4k+1`). | No |
+| `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. | No |
+| `steps` | QVAC extension. Diffusion sampler step count. | No |
+| `seed` | QVAC extension. Random seed; the SDK picks one when omitted. | No |
+| `negative_prompt` | QVAC extension. Negative prompt for the sampler. | No |
+| `cfg_scale` | QVAC extension. Classifier-free guidance scale (Wan range ~5–8). | No |
+| `flow_shift` | QVAC extension. Flow-matching shift; Wan 2.1 T2V needs `3.0` for visible motion. | No |
+
+<Callout type="info">
+OpenAI's `input_reference` (image-to-video) is rejected with `400 unsupported_param` — the SDK exposes only text-to-video.
+</Callout>
+
+The `Video` resource returned by `POST` (and by `GET /v1/videos/:id`):
+
+```json
+{
+  "id": "video_8f3a…",
+  "object": "video",
+  "model": "wan-t2v",
+  "status": "queued",
+  "progress": 0,
+  "created_at": 1748800000,
+  "completed_at": null,
+  "expires_at": 253402300799,
+  "prompt": "a colorful bird flapping its wings in a sunny garden",
+  "size": "480x832",
+  "seconds": "2",
+  "remixed_from_video_id": null,
+  "error": null
+}
+```
+
+`progress` is a monotonic 0–100 high-water mark. `expires_at` is a far-future sentinel — the resource itself has no TTL; the **rendered bytes** expire in the ephemeral file store (after which `/content` returns `410 video_expired`).
+
+#### `GET /v1/videos/:id`
+
+Poll job status. `status` cycles `queued` → `in_progress` → `completed` / `failed`. Returns the same `Video` resource shape.
+
+```bash
 curl http://localhost:11434/v1/videos/video_abc123
+```
 
+#### `GET /v1/videos/:id/content`
+
+Download the rendered bytes (only valid once `status` is `completed`).
+
+```bash
 curl http://localhost:11434/v1/videos/video_abc123/content --output out.mp4
 ```
 
-#### Deviations from the OpenAI spec
+- **Default container** is `video/mp4` (fragmented MP4) **when `ffmpeg` is on the server's `PATH` at startup**; otherwise it falls back to `video/avi` (the SDK's native MJPG-AVI) and logs a warning once.
+- **`?format=mp4`** forces MP4. With no ffmpeg available this returns `503 transcode_unavailable` — omit `?format` or use `?format=avi`.
+- **`?format=avi`** forces the native MJPG-AVI and never transcodes.
+- The MP4 transcode is **lazy and cached**: the first fetch after completion may take a few seconds; later fetches serve the cached bytes.
+- **`?variant`** other than `video` (e.g. `thumbnail`, `spritesheet`) returns `501 unsupported_variant` — those assets are not rendered.
 
-- `input_reference` is rejected with `400 unsupported_param` (no img2vid in the SDK).
-- `size` accepts any `WxH` (multiples of 8) in addition to OpenAI's 4-value enum.
-- `Content-Type: video/mp4` is produced by a server-side ffmpeg transcode; `?format=avi` returns the native container.
+#### `GET /v1/videos`
+
+List jobs, newest first by default. Cursor pagination via `limit` (default `20`, max `100`), `order` (`asc` / `desc`, default `desc`), and `after`. **In-memory only** — a restart clears the list, and old jobs are dropped once the 256-entry cap is reached.
+
+```json
+{
+  "object": "list",
+  "data": [ { "id": "video_8f3a…", "object": "video", "status": "completed" } ],
+  "first_id": "video_8f3a…",
+  "last_id": "video_8f3a…",
+  "has_more": false
+}
+```
+
+#### `DELETE /v1/videos/:id`
+
+Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
+
+```json
+{ "id": "video_abc123", "object": "video.deleted", "deleted": true }
+```
+
+#### Errors
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `missing_prompt` / `missing_model` | Required field absent. |
+| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 8. |
+| 400 | `invalid_seconds` | `seconds` is not a positive-integer string. |
+| 400 | `unsupported_param` | `input_reference` (image-to-video) was sent. |
+| 400 | `invalid_model_type` | Alias is not a `video` model. |
+| 404 | `video_not_found` | Unknown job id. |
+| 409 | `video_not_ready` | `/content` requested before the job is `completed` (response carries `Retry-After`). |
+| 409 | `video_failed` | Generation failed. |
+| 410 | `video_expired` | Rendered bytes have been evicted from the ephemeral store. |
+| 501 | `unsupported_variant` | `?variant` other than `video`. |
+| 502 | `transcode_failed` | ffmpeg failed or timed out (retry with `?format=avi`). |
+| 503 | `transcode_unavailable` | `?format=mp4` requested but ffmpeg is not on the server's `PATH`. |
+| 503 | `model_not_ready` | Model not loaded yet. |
+
+### Request cancellation
+
+When an HTTP client disconnects before a response finishes (closes the connection or aborts the request), the server cancels the in-flight inference for that request instead of letting it run to completion — freeing the model to serve the next call. This applies to both blocking and streaming requests across the inference routes (`/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/audio/*`).
+
+Video jobs are asynchronous and are not tied to the creating connection; cancel them explicitly with `DELETE /v1/videos/{id}` (see [Videos](#videos)).
 
 ### Authentication
 

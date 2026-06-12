@@ -60,6 +60,10 @@ export interface TranscribeStats {
   encoderMs?: number;
   decoderMs?: number;
   melSpecMs?: number;
+  backendDevice?: number;
+  backendId?: number;
+  gpuMemTotalMb?: number;
+  gpuMemFreeMb?: number;
 }
 
 export interface TranscribeAddonSegment {

@@ -1,12 +1,14 @@
-#include "mocks/OnnxInferSessionMock.hpp"
-#include "src/model-interface/ChatterboxEngine.hpp"
-#include "src/model-interface/IChatterboxEngine.hpp"
 #include <cstdlib>
 #include <fstream>
-#include <gtest/gtest.h>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include <gtest/gtest.h>
+
+#include "mocks/OnnxInferSessionMock.hpp"
+#include "src/model-interface/ChatterboxEngine.hpp"
+#include "src/model-interface/IChatterboxEngine.hpp"
 
 namespace qvac::ttslib::chatterbox::testing {
 
@@ -43,7 +45,8 @@ TEST(ChatterboxEngineFactoryTest, injectedFactoryIsUsedWhenLoadingSessions) {
   const std::string langPath = "language_model.onnx";
 
   ChatterboxConfig config{"en",      referenceAudio, tokenizerPath, speechPath,
-                          embedPath, condDecPath,    langPath,      false};
+                          embedPath, condDecPath,    langPath,      "",
+                          false};
 
   ChatterboxEngine engine(config, factory);
 
@@ -66,7 +69,8 @@ TEST(ChatterboxEngineFactoryTest,
   const std::vector<float> referenceAudio = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
   const std::string dummyPath = "dummy.onnx";
   ChatterboxConfig config{"en",      referenceAudio, tokenizerPath, dummyPath,
-                          dummyPath, dummyPath,      dummyPath,     true};
+                          dummyPath, dummyPath,      dummyPath,     "",
+                          true};
 
   EXPECT_NO_THROW({
     ChatterboxEngine engine(config, nullptr);
