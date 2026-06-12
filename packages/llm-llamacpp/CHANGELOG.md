@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.25.0] - 2026-06-12
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.1` (adds the direct Metal `CONV_2D_DW` depthwise-convolution kernel).
+
+## Pull Requests
+
+- [#2536](https://github.com/tetherto/qvac/pull/2536) - feat[api]: DocTR depthwise convs via direct Metal CONV_2D_DW kernel
+
 ## [0.24.0] - 2026-06-06
 
 This release adds sliding-context support for M-RoPE/iM-RoPE models such as Qwen3.5 and Qwen-VL style decoders. Long-running multimodal sessions can now slide under context pressure while preserving image recall, cache save/load behavior, and quantized KV-cache operation.
