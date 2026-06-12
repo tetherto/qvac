@@ -734,6 +734,23 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
   state_->lastRun_ = {};
   state_->lastRun_.wasBatch = true;
 
+  // Invalidate single-prompt cache state and clear any stale KV data left by
+  // single-prompt runs. The batch scheduler will manage KV slots itself.
+  if (state_->cacheManager_.has_value()) {
+    state_->cacheManager_->invalidate();
+  }
+  llama_context* lctx = getContext();
+  if (lctx != nullptr) {
+    llama_memory_t mem = llama_get_memory(lctx);
+    if (mem != nullptr) {
+      // Clear all sequences to ensure batch scheduler starts with clean KV state
+      const int nSeqMax = llama_n_seq_max(lctx);
+      for (int seqId = 0; seqId < nSeqMax; seqId++) {
+        llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+      }
+    }
+  }
+
   if (prompts.empty()) {
     return {};
   }
