@@ -107,6 +107,10 @@ runs:
   fs.writeFileSync(actionPath, content.endsWith('\n') ? content : content + '\n')
 }
 
+function shellSingleQuote (value) {
+  return "'" + value.replace(/'/g, "'\\''") + "'"
+}
+
 function writeReusableWorkflow (runners) {
   const workflowOutputs = Object.keys(runners).map((key) => {
     const desc = describeKey(key, runners[key]).replace(/"/g, '\\"')
@@ -114,7 +118,11 @@ function writeReusableWorkflow (runners) {
   }).join('\n')
 
   const jobOutputs = Object.keys(runners).map((key) => {
-    return `      ${key}: \${{ steps.runner_names.outputs.${key} }}`
+    return `      ${key}: \${{ steps.export.outputs.${key} }}`
+  }).join('\n')
+
+  const exportRunLines = Object.entries(runners).map(([key, value]) => {
+    return `          echo ${key}=${shellSingleQuote(value)} >> "$GITHUB_OUTPUT"`
   }).join('\n')
 
   const content = `# Reusable workflow — canonical CI runner labels for caller workflows.
@@ -137,8 +145,10 @@ jobs:
     outputs:
 ${jobOutputs}
     steps:
-      - uses: ./.github/actions/runner-names
-        id: runner_names
+      - id: export
+        shell: bash
+        run: |
+${exportRunLines}
 `
 
   fs.writeFileSync(reusableWorkflowPath, content.endsWith('\n') ? content : content + '\n')

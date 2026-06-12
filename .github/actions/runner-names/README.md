@@ -69,8 +69,8 @@ When a job already depends on other jobs, prepend `runner_names` to `needs`:
 
 ## Composite action
 
-[action.yml](./action.yml) exposes the same keys as composite action outputs. The reusable workflow calls this action internally; callers should prefer `needs.runner_names.outputs.*` rather than invoking the composite action directly.
+[action.yml](./action.yml) exposes the same keys as composite action outputs for jobs that already run `actions/checkout`. Callers should prefer `needs.runner_names.outputs.*` via the reusable workflow; use the composite action directly only when a job already has the repo checked out and cannot depend on `runner_names`.
 
 ## Why a reusable workflow?
 
-GitHub evaluates `runs-on` and job matrices before any step runs, so a composite action cannot populate workflow env in time for those fields. The reusable workflow resolves labels in a tiny bootstrap job and exposes them as job outputs that downstream jobs can reference safely.
+GitHub evaluates `runs-on` and job matrices before any step runs, so a composite action cannot populate workflow env in time for those fields. The reusable workflow resolves labels in a tiny bootstrap job and exposes them as job outputs that downstream jobs can reference safely. The bootstrap job writes static values from `runners.yaml` directly to `GITHUB_OUTPUT` — no checkout required.
