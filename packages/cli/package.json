@@ -46,7 +46,8 @@
     "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats",
     "test:e2e:local": "npm run build && bats test/e2e-local.bats",
     "dev:link": "npm install ../sdk",
-    "dev:unlink": "node scripts/dev-unlink.cjs"
+    "dev:unlink": "node scripts/dev-unlink.cjs",
+    "sdk-source:workspace": "node scripts/preinstall-build-local-sdk.cjs && npm install ../sdk"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.0",

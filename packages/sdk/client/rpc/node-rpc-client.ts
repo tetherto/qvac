@@ -14,6 +14,7 @@ import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
 import {
+  BareRuntimeBinaryNotFoundError,
   RPCInitTimeoutError,
   WorkerCrashedError,
   WorkerShutdownError,
@@ -87,13 +88,10 @@ function resolvePackagedWorkerPath(): string | undefined {
  */
 function getDefaultWorkerPath(): string {
   type ImportMetaAsset = { asset?: (spec: string) => string };
-  const hasAsset =
-    typeof (import.meta as ImportMetaAsset).asset === "function";
+  const hasAsset = typeof (import.meta as ImportMetaAsset).asset === "function";
 
   const packagedUrl = hasAsset
-    ? new URL(
-        (import.meta as ImportMetaAsset).asset!("../../server/worker.js"),
-      )
+    ? new URL((import.meta as ImportMetaAsset).asset!("../../server/worker.js"))
     : new URL("../../server/worker.js", import.meta.url);
   const packaged = fileURLToPath(packagedUrl);
   if (fs.existsSync(packaged)) return packaged;
@@ -177,19 +175,49 @@ function bestEffortUnlinkSocket(socketPath: string | null) {
   }
 }
 
-function snapshotAndResetState() {
-  const workerToClose = bareWorkerProc;
-  const serverToClose = ipcServer;
-  const socketPathToClose = currentSocketPath;
-
+function resetModuleState() {
   rpcInstance = null;
   rpcPromise = null;
   bareWorkerProc = null;
   ipcServer = null;
   currentSocketPath = null;
   workerLifeController = null;
+}
+
+function snapshotAndResetState() {
+  const workerToClose = bareWorkerProc;
+  const serverToClose = ipcServer;
+  const socketPathToClose = currentSocketPath;
+
+  resetModuleState();
 
   return { workerToClose, serverToClose, socketPathToClose };
+}
+
+// Shared cleanup for every init reject path: reset module state, stop the
+// worker + IPC server, and remove the socket so a failed start never leaks
+// resources. Mirrors closeSyncForExit without the planned-shutdown abort.
+function teardownFailedInit() {
+  const { workerToClose, serverToClose, socketPathToClose } =
+    snapshotAndResetState();
+
+  if (workerToClose) {
+    try {
+      workerToClose.kill("SIGTERM");
+    } catch (error) {
+      logger.debug("Failed to kill bare worker after init failure", { error });
+    }
+  }
+
+  if (serverToClose) {
+    try {
+      serverToClose.close();
+    } catch (error) {
+      logger.debug("Failed to close IPC server after init failure", { error });
+    }
+  }
+
+  bestEffortUnlinkSocket(socketPathToClose);
 }
 
 export function getWorkerLifeSignal(): AbortSignal | null {
@@ -200,6 +228,23 @@ interface SpawnResources {
   controller: AbortController;
   server: ReturnType<typeof createServer>;
   socketPath: string;
+}
+
+// `bare-runtime` resolves its platform binary with
+// `require('bare-runtime-<platform>-<arch>')` and throws a terse
+// `No binaries found for target '<platform>-<arch>'` whenever that package —
+// or one of its nested deps — is absent. Under pnpm that happens even on a
+// supported platform, so surface an actionable error instead of the raw throw.
+function mapBareSpawnError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/No binar(?:y|ies) found for target/i.test(message)) {
+    return new BareRuntimeBinaryNotFoundError(
+      process.platform,
+      process.arch,
+      error,
+    );
+  }
+  return error instanceof Error ? error : new Error(message);
 }
 
 // `spawn` carries this listener's own captured resources. Module-level
@@ -223,12 +268,7 @@ function handlePostHandshakeExit(
 
   // Only clear module state if we're still the active spawn.
   if (workerLifeController === spawn.controller) {
-    rpcInstance = null;
-    rpcPromise = null;
-    bareWorkerProc = null;
-    ipcServer = null;
-    currentSocketPath = null;
-    workerLifeController = null;
+    resetModuleState();
   }
 
   try {
@@ -286,12 +326,7 @@ async function ensureRPC(): Promise<RPC> {
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      rpcPromise = null;
-      rpcInstance = null;
-      bareWorkerProc = null;
-      ipcServer = null;
-      currentSocketPath = null;
-      workerLifeController = null;
+      teardownFailedInit();
       reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS));
     }, RPC_INIT_TIMEOUT_MS);
 
@@ -310,12 +345,7 @@ async function ensureRPC(): Promise<RPC> {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      rpcPromise = null;
-      rpcInstance = null;
-      bareWorkerProc = null;
-      ipcServer = null;
-      currentSocketPath = null;
-      workerLifeController = null;
+      teardownFailedInit();
       reject(error);
     });
 
@@ -326,19 +356,34 @@ async function ensureRPC(): Promise<RPC> {
         socketPath,
       };
 
-      bareWorkerProc = spawn("bare", {
-        args: [
-          WORKER_PATH,
-          JSON.stringify({
-            QVAC_IPC_SOCKET_PATH: socketPath,
-            // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
-            HOME_DIR: process.env["SNAP_USER_COMMON"]
-              ? String(process.env["SNAP_USER_COMMON"])
-              : os.homedir(),
-          }),
-        ],
-        stdio: ["inherit", "inherit", "inherit"],
-      });
+      try {
+        bareWorkerProc = spawn("bare", {
+          args: [
+            WORKER_PATH,
+            JSON.stringify({
+              QVAC_IPC_SOCKET_PATH: socketPath,
+              // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
+              HOME_DIR: process.env["SNAP_USER_COMMON"]
+                ? String(process.env["SNAP_USER_COMMON"])
+                : os.homedir(),
+            }),
+          ],
+          platform: process.platform,
+          arch: process.arch,
+          stdio: ["inherit", "inherit", "inherit"],
+        });
+      } catch (error) {
+        // `spawn` resolves the bare binary synchronously and can throw before
+        // the worker exists, so there is no process to emit "exit". Without
+        // this, the throw escapes the `listen` callback as an uncaught
+        // exception and crashes the host process.
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        teardownFailedInit();
+        reject(mapBareSpawnError(error));
+        return;
+      }
 
       if (bareWorkerProc) {
         bareWorkerProc.on(
@@ -355,12 +400,7 @@ async function ensureRPC(): Promise<RPC> {
             // Worker died before handshake — reject the init promise.
             settled = true;
             clearTimeout(timer);
-            rpcPromise = null;
-            rpcInstance = null;
-            bareWorkerProc = null;
-            ipcServer = null;
-            currentSocketPath = null;
-            workerLifeController = null;
+            teardownFailedInit();
             reject(
               new RPCInitTimeoutError(
                 RPC_INIT_TIMEOUT_MS,

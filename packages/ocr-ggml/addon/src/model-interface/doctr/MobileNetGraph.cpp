@@ -197,14 +197,13 @@ struct GraphBuilder {
     // kernel.
     struct ggml_tensor* conv =
         ggml_conv_2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
-
-    struct ggml_tensor* bn = applyFoldedBn(
-        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
+    // BN scale folded into the conv weights at load time; `.shift` carries the
+    // combined (conv bias + BN shift) offset. One add instead of add+mul+add.
+    conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
     if (!activate) {
-      return bn;
+      return conv;
     }
-    return this->activate(bn, useHardswish);
+    return this->activate(conv, useHardswish);
   }
 
   struct ggml_tensor*
@@ -370,10 +369,10 @@ struct GraphBuilder {
     // (decomposes into Metal-supported ops).
     struct ggml_tensor* conv =
         ggml_conv_2d_dw(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
-    struct ggml_tensor* bn = applyFoldedBn(
-        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
-    return activate(bn, useHardswish);
+    // BN scale folded into the depthwise weights at load time; `.shift` carries
+    // the combined (conv bias + BN shift) offset.
+    conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
+    return activate(conv, useHardswish);
   }
 
   /// Squeeze-and-excite block: global avg pool → 1x1 conv (reduce) → ReLU →
@@ -899,42 +898,113 @@ WeightsBundle loadWeights(
     ggml_backend_tensor_set(dst, buf.data(), 0, buf.size() * sizeof(float));
   };
 
-  auto foldBnWithEps = [&](const std::string& bnPrefix, float eps) {
-    // When running stats are absent the BN was already folded offline into the
-    // conv weights/biases. Upload identity (scale=1, shift=0) so that
-    // applyFoldedBn becomes a no-op and the conv bias carries the offset.
-    if (gguf_find_tensor(gguf, (bnPrefix + ".running_mean").c_str()) < 0) {
-      const size_t n =
-          static_cast<size_t>(ggml_nelements(tensors.at(bnPrefix + ".scale")));
-      std::vector<float> ones(n, 1.0F);
-      std::vector<float> zeros(n, 0.0F);
-      uploadF32(tensors.at(bnPrefix + ".scale"), ones);
-      uploadF32(tensors.at(bnPrefix + ".shift"), zeros);
-      return;
+  // Fold the BN per-channel scale into the preceding conv's F16 weights and
+  // combine the conv bias + BN shift into a single bias, so the runtime graph
+  // collapses `conv + add(bias) + mul(scale) + add(shift)` down to
+  // `conv + add(combined)`. Removing two full-tensor elementwise passes per
+  // conv is exact (out = scale*(W*x + bias) + shift = (scale*W)*x +
+  // (scale*bias + shift)) and matters most on bandwidth-bound mobile GPUs.
+  // The conv tensor for a BN named "<P>.1" is "<P>.0.weight" and its broadcast
+  // bias is "<P>.0.bias_br" (both already uploaded before this pass runs).
+  auto foldScaleIntoConv = [&](const std::string& bnPrefix,
+                               const std::vector<float>& scale,
+                               std::vector<float>& shift) {
+    if (bnPrefix.size() < 2 || bnPrefix.substr(bnPrefix.size() - 2) != ".1") {
+      raise("BN fold expects a '<prefix>.1' name, got " + bnPrefix);
     }
-    std::vector<float> w = loadVector1d(gguf, ggmlCtx, bnPrefix + ".scale");
-    std::vector<float> b = loadVector1d(gguf, ggmlCtx, bnPrefix + ".shift");
-    std::vector<float> m =
-        loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_mean");
-    std::vector<float> v =
-        loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_var");
-    const size_t n = w.size();
-    if (b.size() != n || m.size() != n || v.size() != n) {
-      raise("BN param size mismatch for " + bnPrefix);
+    const std::string stem = bnPrefix.substr(0, bnPrefix.size() - 2);
+    const std::string convName = stem + ".0.weight";
+    auto wIt = tensors.find(convName);
+    if (wIt == tensors.end()) {
+      raise("BN fold: conv weight not found: " + convName);
     }
-    std::vector<float> scale(n);
-    std::vector<float> shift(n);
-    for (size_t i = 0; i < n; ++i) {
-      const float invStd = 1.0F / std::sqrt(v[i] + eps);
-      scale[i] = w[i] * invStd;
-      shift[i] = b[i] - (m[i] * scale[i]);
+    struct ggml_tensor* wTensor = wIt->second;
+    if (wTensor->type != GGML_TYPE_F16) {
+      raise(
+          "BN fold: unsupported conv weight dtype " +
+          std::string(ggml_type_name(wTensor->type)) + " for " + convName +
+          " (expected F16; quantized weights are not supported by the BN "
+          "fold)");
+    }
+    const int64_t oc = wTensor->ne[3];
+    if (static_cast<size_t>(oc) != scale.size()) {
+      raise(
+          "BN fold: output-channel mismatch for " + convName +
+          ": conv oc=" + std::to_string(oc) +
+          ", BN scale size=" + std::to_string(scale.size()));
+    }
+    const int64_t perOc = wTensor->ne[0] * wTensor->ne[1] * wTensor->ne[2];
+    const size_t n = static_cast<size_t>(oc * perOc);
+    std::vector<ggml_fp16_t> wbuf(n);
+    ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+    // F16 has no arithmetic: batch-decode each channel row to F32 with ggml's
+    // SIMD row converters, apply the per-channel scale, then re-encode. The
+    // weight stays F16-stored (not an f16->f16 copy).
+    std::vector<float> f32buf(static_cast<size_t>(perOc));
+    for (int64_t o = 0; o < oc; ++o) {
+      const float s = scale[static_cast<size_t>(o)];
+      ggml_fp16_t* row = wbuf.data() + (o * perOc);
+      ggml_fp16_to_fp32_row(row, f32buf.data(), perOc);
+      for (int64_t i = 0; i < perOc; ++i) {
+        f32buf[static_cast<size_t>(i)] *= s;
+      }
+      ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
+    }
+    ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+
+    // combined bias = scale * bias_br + shift (bias_br is zeros for bias=False
+    // convs, the offset for offline-folded models).
+    auto bIt = tensors.find(stem + ".0.bias_br");
+    if (bIt != tensors.end()) {
+      std::vector<float> biasBr(scale.size());
+      ggml_backend_tensor_get(
+          bIt->second, biasBr.data(), 0, biasBr.size() * sizeof(float));
+      for (size_t i = 0; i < shift.size(); ++i) {
+        shift[i] += scale[i] * biasBr[i];
+      }
+    }
+  };
+
+  auto foldBnWithEps = [&](const std::string& bnPrefix,
+                           float eps,
+                           bool foldIntoConv) {
+    const size_t n =
+        static_cast<size_t>(ggml_nelements(tensors.at(bnPrefix + ".scale")));
+    std::vector<float> scale(n, 1.0F);
+    std::vector<float> shift(n, 0.0F);
+    // When running stats are present compute the standard BN fold; otherwise
+    // the BN was already folded offline (identity scale/shift; any offset is
+    // carried by the conv bias, which foldScaleIntoConv absorbs).
+    if (gguf_find_tensor(gguf, (bnPrefix + ".running_mean").c_str()) >= 0) {
+      std::vector<float> w = loadVector1d(gguf, ggmlCtx, bnPrefix + ".scale");
+      std::vector<float> b = loadVector1d(gguf, ggmlCtx, bnPrefix + ".shift");
+      std::vector<float> m =
+          loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_mean");
+      std::vector<float> v =
+          loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_var");
+      if (w.size() != n || b.size() != n || m.size() != n || v.size() != n) {
+        raise(
+            "BN param size mismatch for " + bnPrefix + ": expected " +
+            std::to_string(n) + ", got scale=" + std::to_string(w.size()) +
+            " shift=" + std::to_string(b.size()) +
+            " running_mean=" + std::to_string(m.size()) +
+            " running_var=" + std::to_string(v.size()));
+      }
+      for (size_t i = 0; i < n; ++i) {
+        const float invStd = 1.0F / std::sqrt(v[i] + eps);
+        scale[i] = w[i] * invStd;
+        shift[i] = b[i] - (m[i] * scale[i]);
+      }
+    }
+    if (foldIntoConv) {
+      foldScaleIntoConv(bnPrefix, scale, shift);
     }
     uploadF32(tensors.at(bnPrefix + ".scale"), scale);
     uploadF32(tensors.at(bnPrefix + ".shift"), shift);
   };
 
   auto foldBn = [&](const std::string& bnPrefix) {
-    foldBnWithEps(bnPrefix, bnEps);
+    foldBnWithEps(bnPrefix, bnEps, /*foldIntoConv=*/true);
   };
 
   for (auto& [name, dst] : tensors) {
@@ -976,16 +1046,21 @@ WeightsBundle loadWeights(
 
   for (int branch = 0; branch < fpnInBranchCount; ++branch) {
     const std::string base = "dbnet.fpn.in_branches." + std::to_string(branch);
-    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon);
+    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
   }
 
   for (int branch = 0; branch < fpnInBranchCount; ++branch) {
     const std::string base = "dbnet.fpn.out_branches." + std::to_string(branch);
-    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon);
+    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
   }
 
-  foldBnWithEps("dbnet.prob_head.1", dbnetBatchNormEpsilon);
-  foldBnWithEps("dbnet.prob_head.4", dbnetBatchNormEpsilon);
+  // prob_head.0 is a plain 3x3 conv (foldable); prob_head.3/.4 is the
+  // sub-pixel transposed conv whose weight is reshaped at graph build, so its
+  // BN stays as a runtime scale/shift (applyFoldedBn in convTransposeBnAct).
+  foldBnWithEps(
+      "dbnet.prob_head.1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
+  foldBnWithEps(
+      "dbnet.prob_head.4", dbnetBatchNormEpsilon, /*foldIntoConv=*/false);
 
   // Classifier FC tensors stay FP16 and are copied directly from GGUF bytes.
   // auto uploadClassifierTensor = [&](const std::string& name) {

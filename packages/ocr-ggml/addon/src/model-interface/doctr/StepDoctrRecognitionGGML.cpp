@@ -451,8 +451,12 @@ struct GraphBuilder {
 
   struct ggml_tensor*
   applyBn(struct ggml_tensor* x, const std::string& bnPrefix) const {
-    struct ggml_tensor* scaled = ggml_mul(ctx, x, t(bnPrefix + ".scale"));
-    return ggml_add(ctx, scaled, t(bnPrefix + ".shift"));
+    // The BN per-channel scale is folded into the preceding conv's weights at
+    // load time (see the BN fold pass in loadGraphWeights()), so only the shift
+    // remains.
+    // This drops one full-tensor multiply per conv from the feature-extractor
+    // graph, which runs once per recognition batch (many times per page).
+    return ggml_add(ctx, x, t(bnPrefix + ".shift"));
   }
 
   struct ggml_tensor* convBnAct(
@@ -1005,6 +1009,11 @@ private:
       raise("failed to allocate GGML weights context");
     }
 
+    // BN prefixes whose scale must be folded into the preceding conv weights
+    // (see the fold pass below). Collected here rather than re-derived from the
+    // weight map because the ".scale" tensor is no longer allocated.
+    std::vector<std::string> bnFoldPrefixes;
+
     auto addRaw = [&](const std::string& name) {
       struct ggml_tensor* dst = cloneRaw(graph.weightsCtx.get(), srcCtx, name);
       graph.weights.emplace(name, dst);
@@ -1051,14 +1060,14 @@ private:
       }
       const std::array<int64_t, 4> shape = {
           1, 1, static_cast<int64_t>(weight.size()), 1};
-      graph.weights.emplace(
-          prefix + ".scale",
-          newF32Tensor(
-              graph.weightsCtx.get(), prefix + ".scale", 4, shape.data()));
+      // The per-channel scale is folded into the conv weights at load time and
+      // has no graph consumer, so it is not allocated as a weight tensor; only
+      // the shift remains (consumed by applyBn).
       graph.weights.emplace(
           prefix + ".shift",
           newF32Tensor(
               graph.weightsCtx.get(), prefix + ".shift", 4, shape.data()));
+      bnFoldPrefixes.push_back(prefix);
     };
 
     auto addConvBn = [&](const std::string& convPrefix,
@@ -1120,8 +1129,7 @@ private:
         graph.weightsBuffer, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
 
     for (const auto& [name, dst] : graph.weights) {
-      if (name.ends_with(".scale") || name.ends_with(".shift") ||
-          name.ends_with("_br")) {
+      if (name.ends_with(".shift") || name.ends_with("_br")) {
         continue;
       }
       struct ggml_tensor* src = ggml_get_tensor(srcCtx, name.c_str());
@@ -1156,12 +1164,25 @@ private:
           dst, values.data(), 0, values.size() * sizeof(float));
     }
 
-    for (const auto& [name, dst] : graph.weights) {
-      if (!name.ends_with(".scale")) {
-        continue;
+    // applyBn now adds only the shift, so every BN's per-channel scale must be
+    // folded into the preceding conv's F16 weights here. A BN named "<P>.1"
+    // pairs with conv weight "<P>.0.weight". A missing or mis-named conv means
+    // the scale would be silently dropped (wrong output), so both are errors.
+    for (const std::string& prefix : bnFoldPrefixes) {
+      if (prefix.size() < 2 || prefix.substr(prefix.size() - 2) != ".1") {
+        raise(
+            "BN fold: unexpected BN tensor name " + prefix +
+            " (expected it to end in \".1\" so the conv weight can be located)");
       }
-      const std::string prefix =
-          name.substr(0, name.size() - std::string(".scale").size());
+      const std::string convWeightName =
+          prefix.substr(0, prefix.size() - 2) + ".0.weight";
+      auto it = graph.weights.find(convWeightName);
+      if (it == graph.weights.end()) {
+        raise(
+            "BN fold: conv weight " + convWeightName + " not found for BN " +
+            prefix + " (scale cannot be folded; output would be incorrect)");
+      }
+
       const std::vector<float> weight = tensorToF32(
           ggml_get_tensor(srcCtx, (prefix + ".weight").c_str()),
           prefix + ".weight");
@@ -1172,8 +1193,41 @@ private:
       for (size_t i = 0; i < weight.size(); ++i) {
         scale[i] = weight[i] / std::sqrt(var[i] + kBatchNormEps);
       }
-      ggml_backend_tensor_set(
-          dst, scale.data(), 0, scale.size() * sizeof(float));
+
+      struct ggml_tensor* wTensor = it->second;
+      if (wTensor->type != GGML_TYPE_F16) {
+        raise(
+            "BN fold: unsupported conv weight dtype " +
+            std::string(ggml_type_name(wTensor->type)) + " for " +
+            convWeightName +
+            " (expected F16; quantized weights are not supported by the BN "
+            "fold)");
+      }
+      const int64_t oc = wTensor->ne[3];
+      if (static_cast<size_t>(oc) != scale.size()) {
+        raise(
+            "BN fold: output-channel mismatch for " + convWeightName +
+            ": conv oc=" + std::to_string(oc) +
+            ", BN scale size=" + std::to_string(scale.size()));
+      }
+      const int64_t perOc = wTensor->ne[0] * wTensor->ne[1] * wTensor->ne[2];
+      const size_t n = static_cast<size_t>(oc * perOc);
+      std::vector<ggml_fp16_t> wbuf(n);
+      ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+      // F16 has no arithmetic: batch-decode each channel row to F32 with ggml's
+      // SIMD row converters, apply the per-channel scale, then re-encode. Stays
+      // F16-stored (not an f16->f16 copy).
+      std::vector<float> f32buf(static_cast<size_t>(perOc));
+      for (int64_t o = 0; o < oc; ++o) {
+        const float s = scale[static_cast<size_t>(o)];
+        ggml_fp16_t* row = wbuf.data() + (o * perOc);
+        ggml_fp16_to_fp32_row(row, f32buf.data(), perOc);
+        for (int64_t i = 0; i < perOc; ++i) {
+          f32buf[static_cast<size_t>(i)] *= s;
+        }
+        ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
+      }
+      ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
     }
 
     for (const auto& [name, dst] : graph.weights) {

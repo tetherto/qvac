@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ai-sdk-provider",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Vercel AI SDK provider for the QVAC local AI runtime (chat, embeddings, transcription, translation, speech, OCR, image)",
   "author": "Tether",
   "license": "Apache-2.0",
