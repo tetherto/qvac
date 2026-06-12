@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bare-sdk",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "license": "Apache-2.0",
   "description": "Bare-targeted slim assembly of the QVAC SDK. Consumers install only the addon packages they need and register plugins explicitly. No addon dependencies pulled in by default.",
   "repository": {
@@ -155,7 +155,7 @@
     "build": "rm -rf dist && bun run bundle && bun run check:no-addon-deps && bun run check:no-addon-leaks && bun run check:deps-vs-sdk"
   },
   "dependencies": {
-    "@qvac/decoder-audio": "^0.3.7",
+    "@qvac/decoder-audio": "^0.4.0",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
@@ -163,7 +163,7 @@
     "@qvac/registry-client": "^0.6.0",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.15.0",
-    "bare-fetch": "^2.9.1",
+    "bare-fetch": "^3.0.1",
     "bare-fs": "^4.5.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
