@@ -12,6 +12,7 @@
 #include "ggml-backend.h"
 #include "ggml.h"
 #include "gguf_loader.hpp"
+#include "kernel_precision.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // BatchNorm fold loops iterate over raw tensor byte buffers with pointer
@@ -170,8 +171,7 @@ std::string upload_weights(
       }
     }
 
-    ggml_backend_tensor_set(
-        w_[d.conv_path], w_folded.data(), 0, ggml_nbytes(w_[d.conv_path]));
+    ocr_upload_kernel(w_[d.conv_path], w_folded);
     ggml_backend_tensor_set(
         b_[d.conv_path], b_folded.data(), 0, ggml_nbytes(b_[d.conv_path]));
   }
@@ -205,13 +205,15 @@ std::string upload_weights(
 // matching the on-disk shape.  Populates the maps so `upload_weights` can
 // then fill them.
 std::string declare_weights(
-    const GgufLoader& loader, ::ggml_context* ctx,
+    const GgufLoader& loader, ::ggml_context* ctx, ggml_type kernel_type,
     const std::vector<ConvSpec>& convs,
     const std::vector<std::string>& verbatim_paths,
     std::unordered_map<std::string, ::ggml_tensor*>& w_,
     std::unordered_map<std::string, ::ggml_tensor*>& b_,
     std::unordered_map<std::string, ::ggml_tensor*>& t_) {
 
+  // `kernel_type` (F16 on fast-F16 backends, else F32) is chosen by the caller;
+  // bias stays F32.
   for (const auto& d : convs) {
     auto* w_src = loader.get_tensor(d.conv_path + ".weight");
     if (w_src == nullptr) {
@@ -221,7 +223,7 @@ std::string declare_weights(
     const int64_t kh = w_src->ne[1];
     const int64_t ic = w_src->ne[2];
     const int64_t oc = w_src->ne[3];
-    auto* w_dst = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kw, kh, ic, oc);
+    auto* w_dst = ggml_new_tensor_4d(ctx, kernel_type, kw, kh, ic, oc);
     ggml_set_name(w_dst, (d.conv_path + ".W").c_str());
     w_[d.conv_path] = w_dst;
     auto* b_dst = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, oc);
@@ -341,7 +343,16 @@ void build_crnn_weights_impl(
     return;
   }
 
-  if (auto e = declare_weights(loader, ctx_, convs, verbatim, w_, b_, t_);
+  // Conv kernel storage type (F16 on fast-F16 backends, else F32; the env
+  // overrides force one way); bias always stays F32.
+  const ggml_type kernel_type =
+      ocr_kernels_use_f16(
+          backend, "OCR_GGML_CRNN_KERNEL_F32", "OCR_GGML_CRNN_KERNEL_F16")
+          ? GGML_TYPE_F16
+          : GGML_TYPE_F32;
+
+  if (auto e = declare_weights(
+          loader, ctx_, kernel_type, convs, verbatim, w_, b_, t_);
       !e.empty()) {
     err_ = e;
     return;

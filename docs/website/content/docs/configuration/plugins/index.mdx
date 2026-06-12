@@ -22,6 +22,8 @@ All the built-in plugins you can select, along with the AI tasks that depend on 
 | Embeddings | `@qvac/sdk/llamacpp-embedding/plugin` | [Text embeddings](/ai-capabilities/text-embeddings); [RAG](/ai-capabilities/rag) |
 | ASR with customized Whisper engine | `@qvac/sdk/whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription) |
 | ASR with Parakeet | `@qvac/sdk/parakeet-transcription/plugin` | [Transcription](/ai-capabilities/transcription) |
+| BCI transcription | `@qvac/sdk/bci-whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription#bci-neural-signal-transcription) |
+| BCI transcription | `@qvac/sdk/bci-whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription#bci-neural-signal-transcription) |
 | NMT | `@qvac/sdk/nmtcpp-translation/plugin` | [Translation](/ai-capabilities/translation) |
 | TTS | `@qvac/sdk/onnx-tts/plugin` | [Text-to-Speech](/ai-capabilities/text-to-speech) |
 | OCR | `@qvac/sdk/onnx-ocr/plugin` | [OCR](/ai-capabilities/ocr) |
@@ -71,6 +73,7 @@ Only the selected plugins are included in your bundle, significantly reducing yo
 **Tips:**
 - You **do not need** the CLI (`@qvac/cli`) to bundle the SDK. See [Notes](#notes) to learn how to do it programmatically via `@qvac/sdk/commands`.
 - See [QVAC CLI](/cli) to learn how to install and use it.
+- When developing an Electron app, you can bundle the SDK during packaging via Electron Forge. See [Tutorials → Electron → Step 4: package for distribution](/tutorials/electron#step-4-package-for-distribution).
 </Callout>
 
 ## Custom plugins
