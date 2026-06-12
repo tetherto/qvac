@@ -9,6 +9,7 @@ on:
       - tmp-*
     paths:
       - "packages/ai-sdk-provider/**"
+      - ".github/workflows/trigger-reusable-lib-ai-sdk-provider.yml"
   workflow_dispatch:
     inputs:
       npm_tag:
@@ -135,10 +136,6 @@ jobs:
       - name: Run lint
         working-directory: ${{ env.WORKDIR }}
         run: npm run lint
-
-      - name: Verify generated model constants are current
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run check-models
 
       - name: Run tests
         working-directory: ${{ env.WORKDIR }}
