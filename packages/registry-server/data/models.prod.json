@@ -4419,6 +4419,114 @@
     "notes": ""
   },
   {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/char.bin",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (char.bin) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/dicrc",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (dicrc) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/matrix.bin",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (matrix.bin) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/mecabrc",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (mecabrc) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/sys.dic",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (sys.dic) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/unk.dic",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (unk.dic) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
     "link": "https://huggingface.co/ResembleAI/chatterbox",

@@ -24,6 +24,7 @@ import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
 import { parakeetStreamTests } from "./parakeet-stream-tests.js";
+import { bciTests } from "./bci-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
@@ -200,6 +201,9 @@ export const tests = [
 
   // Transcription tests
   ...transcriptionTests,
+
+  // BCI (neural-signal) transcription tests
+  ...bciTests,
 
   // transcribeStream VAD + endOfTurn event tests
   ...transcribeStreamEventsTests,
