@@ -338,8 +338,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);
-  if (auto status =
-          batcher_.addRequestAt(seqId, std::move(tokens), driver->getNPast());
+  const bool slideCapable = configuredNDiscarded_ > 0 && !request.prefill;
+  if (auto status = batcher_.addRequestAt(
+          seqId, std::move(tokens), driver->getNPast(), slideCapable);
       status != MultiRequestBatcher::AddStatus::Ok) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -499,17 +500,18 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
           slot->streams.onToken(seqId, text);
         }
       };
+      slot->driver->syncPosition(req->currentPos);
       const SequenceStepResult result = slot->driver->onLogitsReady(
           logitIdx, generatedAfterAccept, outputCallback);
-      if (result.contextOverflow) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_lib_inference_addon_llama::errors::toString(
-                qvac_lib_inference_addon_llama::errors::ContextOverflow),
-            "ContinuousBatchScheduler::step: context overflow for seqId " +
-                std::to_string(seqId));
+      if (result.discarded > 0) {
+        batcher_.applySlide(seqId, result.discarded);
       }
-      if (result.finished) {
+      if (result.contextOverflow) {
+        // The slot's window is full and the driver could not slide; stop
+        // this one sequence at its cap like a LimitReached truncation
+        // instead of failing the whole batch.
+        batcher_.markFinished(seqId, StopReason::LimitReached);
+      } else if (result.finished) {
         batcher_.markFinished(seqId);
       }
       return result.token;

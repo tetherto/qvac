@@ -499,6 +499,10 @@ std::vector<llama_token> TextLlmContext::preparePrefill(
   return inputTokens;
 }
 
+void TextLlmContext::syncPosition(llama_pos currentPos) {
+  nPast_ = currentPos;
+}
+
 void TextLlmContext::onPrefillComplete(
     llama_pos currentPos, size_t prefillTokenCount) {
   nPast_ = currentPos;
@@ -536,7 +540,7 @@ void TextLlmContext::emitOutputPiece(
   }
 }
 
-void TextLlmContext::applyContextDiscard() {
+llama_pos TextLlmContext::applyContextDiscard() {
   auto outcome = trySlideGeneration(
       modelCtx_.lctx,
       seqId_,
@@ -554,7 +558,9 @@ void TextLlmContext::applyContextDiscard() {
         string_format(
             "[TextLlm] discarded %d tokens after the first message\n",
             outcome.discarded));
-  } else if (outcome.kind == ContextSlideOutcome::Kind::MemoryOperationFailed) {
+    return outcome.discarded;
+  }
+  if (outcome.kind == ContextSlideOutcome::Kind::MemoryOperationFailed) {
     std::string errorMsg = string_format(
         "[TextLlm] failed to slide context memory during generation "
         "(nPast=%d, nDiscarded=%d)\n",
@@ -563,6 +569,7 @@ void TextLlmContext::applyContextDiscard() {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextSlideFailed), errorMsg);
   }
+  return 0;
 }
 
 void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
@@ -677,7 +684,14 @@ SequenceStepResult TextLlmContext::onLogitsReady(
             tools_.enabled() ? "true" : "false"));
     return {.finished = true, .contextOverflow = true};
   }
-  applyContextDiscard();
+  const llama_pos discarded = applyContextDiscard();
+  // Batch path only: the scheduler cannot retry a full window, so a slot
+  // that is still at its ceiling after the slide attempt must stop here.
+  // Single-prompt keeps its legacy behavior (warn inside the slider and
+  // continue).
+  if (inlineDecodeBatch == nullptr && nPast_ + 1 > ctxCeiling()) {
+    return {.finished = true, .contextOverflow = true, .discarded = discarded};
+  }
 
   bool sampledToken = forcedTokens_.empty();
   llama_token tokenId = LLAMA_TOKEN_NULL;
@@ -706,7 +720,11 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     if (inlineDecodeBatch != nullptr) {
       if (handleQwen3ReasoningEOS(
               tokenId, tokenStr, **inlineDecodeBatch, nPast_, outputCallback)) {
-        return {.token = tokenId, .finished = false, .decodedInline = true};
+        return {
+            .token = tokenId,
+            .finished = false,
+            .decodedInline = true,
+            .discarded = discarded};
       }
     } else if (
         reasoningState_.inside_reasoning &&
@@ -723,7 +741,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       if (!completeChars.empty()) {
         emitOutputPiece(outputCallback, completeChars);
       }
-      return {.token = tokenId, .finished = false};
+      return {.token = tokenId, .finished = false, .discarded = discarded};
     }
   }
   // Batch path only: scheduler stops solely on `finished`. Single-prompt's
@@ -741,14 +759,14 @@ SequenceStepResult TextLlmContext::onLogitsReady(
         common_token_to_piece(modelCtx_.lctx, tokenId, true);
     emitOutputPiece(outputCallback, callMarker);
     flushPendingUtf8ToCallback(outputCallback);
-    return {.token = tokenId, .finished = true};
+    return {.token = tokenId, .finished = true, .discarded = discarded};
   }
   const bool finished = isEos || reachedBudget || checkAntiprompt();
   if (finished) {
     flushPendingUtf8ToCallback(outputCallback);
   }
 
-  return {.token = tokenId, .finished = finished};
+  return {.token = tokenId, .finished = finished, .discarded = discarded};
 }
 
 void TextLlmContext::onSequenceEnd(

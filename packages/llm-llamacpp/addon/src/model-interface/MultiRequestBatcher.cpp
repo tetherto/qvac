@@ -9,17 +9,22 @@ namespace views = std::views;
 
 Request::Request(
     uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
-    llama_pos initialPos)
+    llama_pos initialPos, bool canSlide)
     : seqId(rid), pendingPrefillTokens(std::move(toks)),
       prefillTokenCount(pendingPrefillTokens.size()), currentPos(initialPos),
-      maxTokensPerSequence(maxTokens) {}
+      slideCapable(canSlide), maxTokensPerSequence(maxTokens) {}
 
 bool Request::isPrefillComplete() const {
   return prefillFedCount >= pendingPrefillTokens.size();
 }
 
 bool Request::exceededLimit() const {
-  return currentPos >= static_cast<llama_pos>(maxTokensPerSequence);
+  // A slide-capable generating sequence may touch the cap: the driver's
+  // next step slides it back below (or reports contextOverflow and the
+  // scheduler truncates it explicitly).
+  const bool slideMayRecover = slideCapable && isPrefillComplete();
+  return currentPos >= static_cast<llama_pos>(maxTokensPerSequence) &&
+         !slideMayRecover;
 }
 
 bool Request::isFinished() const {
@@ -96,7 +101,8 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequest(
 }
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
-    uint32_t seqId, std::vector<llama_token>&& tokens, llama_pos initialPos) {
+    uint32_t seqId, std::vector<llama_token>&& tokens, llama_pos initialPos,
+    bool slideCapable) {
   if (tokens.empty()) {
     return AddStatus::ErrEmptyTokens;
   }
@@ -108,7 +114,8 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     return AddStatus::ErrNoFreeSlot;
   }
   slots_[seqId].emplace(
-      seqId, std::move(tokens), maxTokensPerSequence_, initialPos);
+      seqId, std::move(tokens), maxTokensPerSequence_, initialPos,
+      slideCapable);
   return AddStatus::Ok;
 }
 
@@ -249,12 +256,19 @@ const Request* MultiRequestBatcher::requestAt(uint32_t seqId) const {
   return &*slots_[seqId];
 }
 
-bool MultiRequestBatcher::markFinished(uint32_t seqId) {
+bool MultiRequestBatcher::markFinished(uint32_t seqId, StopReason reason) {
   bool valid = isValid(seqId);
   if (valid) {
-    slots_[seqId]->stopReason = StopReason::Finished;
+    slots_[seqId]->stopReason = reason;
   }
   return valid;
+}
+
+void MultiRequestBatcher::applySlide(uint32_t seqId, llama_pos discarded) {
+  if (isValid(seqId) && discarded > 0) {
+    Request& req = *slots_[seqId];
+    req.currentPos = std::max<llama_pos>(0, req.currentPos - discarded);
+  }
 }
 
 void MultiRequestBatcher::markAllFinished(StopReason reason) {

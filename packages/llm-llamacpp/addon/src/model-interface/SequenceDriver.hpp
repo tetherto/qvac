@@ -20,6 +20,10 @@ struct SequenceStepResult {
   bool finished = false;
   bool decodedInline = false;
   bool contextOverflow = false;
+  /// Tokens dropped from this sequence's KV-cache by an in-step context
+  /// slide. The scheduler must subtract it from the request's position
+  /// before feeding the next token.
+  llama_pos discarded = 0;
 };
 
 /// Standalone per-sequence driver interface exercised by the
@@ -69,6 +73,12 @@ public:
   /// `prefillTokenCount` tokens up to absolute position `currentPos`.
   virtual void
   onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) = 0;
+
+  /// Reconcile the driver's KV position with the batcher's authoritative
+  /// per-request position. Called by the scheduler before every
+  /// `onLogitsReady` so context-window decisions (sliding, overflow) see
+  /// the live value rather than one frozen at prefill time.
+  virtual void syncPosition(llama_pos currentPos) = 0;
 
   /// Driven by the scheduler once `llama_decode` has produced logits for
   /// this sequence's last batch entry. Implementations sample the next

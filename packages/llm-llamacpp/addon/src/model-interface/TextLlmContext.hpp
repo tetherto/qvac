@@ -168,6 +168,8 @@ public:
   void
   onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
 
+  void syncPosition(llama_pos currentPos) override;
+
   SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
@@ -229,7 +231,9 @@ private:
   void initializeCommonState();
   void initializeOwnedThreadpools();
   [[nodiscard]] llama_pos ctxCeiling() const;
-  void applyContextDiscard();
+  /// Slide the context window if the next token would not fit. Returns
+  /// the number of tokens discarded (0 when no slide happened).
+  llama_pos applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
   ToolsCompactController& tools_;

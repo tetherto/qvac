@@ -28,12 +28,17 @@ struct Request {
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
   bool hasUnfedSample = false;
+  /// When true, the sequence driver can slide its context window during
+  /// generation: `exceededLimit()` then lets the position reach the cap
+  /// so the slide (which drops it back below) gets a chance to fire
+  /// instead of hard-truncating the sequence.
+  bool slideCapable = false;
   StopReason stopReason = StopReason::None;
   unsigned maxTokensPerSequence;
 
   Request(
       uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
-      llama_pos initialPos = 0);
+      llama_pos initialPos = 0, bool canSlide = false);
 
   [[nodiscard]] bool isPrefillComplete() const;
   [[nodiscard]] bool exceededLimit() const;
@@ -84,7 +89,7 @@ public:
   addRequest(std::vector<llama_token>&& tokens, uint32_t& seqId);
   [[nodiscard]] AddStatus addRequestAt(
       uint32_t seqId, std::vector<llama_token>&& tokens,
-      llama_pos initialPos = 0);
+      llama_pos initialPos = 0, bool slideCapable = false);
 
   [[nodiscard]] std::optional<uint32_t> firstFreeSeqId() const;
 
@@ -98,7 +103,12 @@ public:
   /// logit-index bookkeeping it relies on is refreshed by every fillBatch().
   void sampleAndAppendIdle(const SamplerFn& samplerFn);
 
-  bool markFinished(uint32_t seqId);
+  bool markFinished(uint32_t seqId, StopReason reason = StopReason::Finished);
+
+  /// Drop `discarded` tokens from a sequence's position after the driver
+  /// performed an in-step context slide, so the next token feeds at the
+  /// compacted position.
+  void applySlide(uint32_t seqId, llama_pos discarded);
 
   /// Mark every active slot as finished with `reason`. Used to terminate
   /// all in-flight requests (e.g. on a fatal decode error). No-op for

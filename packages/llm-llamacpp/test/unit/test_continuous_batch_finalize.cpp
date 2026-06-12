@@ -36,6 +36,7 @@ public:
     return {};
   }
   void onPrefillComplete(llama_pos, size_t) override {}
+  void syncPosition(llama_pos) override {}
   SequenceStepResult onLogitsReady(
       int, unsigned, const std::function<void(const std::string&)>&,
       LlamaBatch*) override {
