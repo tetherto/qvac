@@ -97,8 +97,9 @@ echo ""
 echo "Created ${JSON_FILE}"
 # Do NOT print the file contents: it holds presigned bearer URLs (valid for
 # ${EXPIRES_IN}s) whose query-string signatures would otherwise leak into CI
-# logs. Log only the JSON keys and object paths — never the signed URLs.
-echo "  keys: craft_mlt_25k_url, latin_g2_url, db_mobilenet_v3_large_url, crnn_mobilenet_v3_small_url"
+# logs. Log only the JSON field names and S3 object paths — never the signed
+# URLs (these are not AWS credentials; "fields" = JSON keys like *_url).
+echo "  fields: craft_mlt_25k_url, latin_g2_url, db_mobilenet_v3_large_url, crnn_mobilenet_v3_small_url"
 echo "  objects:"
 echo "    ${EASYOCR_PREFIX}/craft_mlt_25k.gguf"
 echo "    ${EASYOCR_PREFIX}/latin_g2.gguf"
