@@ -4,19 +4,19 @@
   "dependencies": [
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-06-04#0",
+      "version>=": "2026-06-10",
       "features": ["metal"],
       "platform": "osx | ios"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-06-04#0",
+      "version>=": "2026-06-10",
       "features": ["vulkan", "opencl"],
       "platform": "android"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-06-04#0",
+      "version>=": "2026-06-10",
       "features": ["vulkan"],
       "platform": "!(osx | ios | android)"
     },
