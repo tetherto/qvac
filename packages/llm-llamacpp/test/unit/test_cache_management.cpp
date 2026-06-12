@@ -971,12 +971,8 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
   }
 
   // Assert response is valid and correctly remembers the context from the loaded cache.
-  // With the bug: response2 will be empty because CacheManager thinks seq 0 is resident
-  // but batch already wiped it, causing nPast/KV mismatch and decode failure.
-  // With the fix: invalidate() clears stale state, cache reloads, valid output.
   EXPECT_FALSE(response2.empty())
       << "STALE CACHE RESIDENCY BUG: CacheManager believed the cache was resident in seq 0 "
-         "even though the batch scheduler occupied and wiped seq 0. Empty output indicates "
-         "decode failed due to nPast/KV mismatch.";
+         "even though the batch scheduler occupied and wiped seq 0. processPrompt returned empty output.";
 }
 

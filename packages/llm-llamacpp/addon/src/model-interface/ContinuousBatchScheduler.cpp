@@ -6,6 +6,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 
 #include <common/common.h>
@@ -394,7 +395,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     lock->unlock();
   }
   const auto decodeStart = std::chrono::steady_clock::now();
-  const int decodeRc = llama_decode(shared_.lctx, *batch_);
+  const int decodeRc = decodeFunc_(shared_.lctx, *batch_);
   const auto decodeDuration = std::chrono::steady_clock::now() - decodeStart;
   if (lock != nullptr) {
     lock->lock();
@@ -402,7 +403,24 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   if (decodeRc != 0) {
     batcher_.markAllFinished(StopReason::DecodeError);
-    finalizeFinishedSequences();
+    
+    std::unordered_set<std::shared_ptr<BatchGroup>> affectedGroups;
+    for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
+      if (slots_[seqId].has_value() && slots_[seqId]->group) {
+        affectedGroups.insert(slots_[seqId]->group);
+      }
+    }
+    
+    auto decodeError = std::make_exception_ptr(qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::FailedToDecode),
+        "llama_decode returned non-zero: " + std::to_string(decodeRc)));
+    
+    for (const auto& group : affectedGroups) {
+      failGroupLocked(group, decodeError);
+    }
+    
     return false;
   }
   const unsigned numGenerating =
