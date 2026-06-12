@@ -1,9 +1,10 @@
-name: Download release artifact (with expiry guard)
+name: Download release artifact (with availability guard)
 description: >
-  Download a build artifact produced earlier in the run. When the artifact has
-  expired (GitHub Actions retention window elapsed while a release run waited
-  for manual approval), fail fast with an actionable message instead of the
-  cryptic "Artifact not found" download error.
+  Download a build artifact produced earlier in the run. If the download fails
+  (most commonly because the artifact expired while a release run waited for
+  manual approval, but also on transient registry/network errors, a renamed
+  artifact, or a permissions issue), fail fast with an actionable message
+  instead of the cryptic "Artifact not found" download error.
 
 inputs:
   name:
@@ -24,11 +25,11 @@ runs:
         name: ${{ inputs.name }}
         path: ${{ inputs.path }}
 
-    - name: Guard against expired artifact
+    - name: Guard against unavailable artifact
       if: steps.dl.outcome == 'failure'
       shell: bash
       env:
         ARTIFACT_NAME: ${{ inputs.name }}
       run: |
-        echo "::error title=Build artifact expired::The '${ARTIFACT_NAME}' build artifact is no longer available (GitHub Actions retention window elapsed while this run waited for release approval). Re-running ONLY the failed jobs will NOT help because the artifact is gone for good. Re-run the ENTIRE workflow ('Re-run all jobs') or re-trigger it (push / workflow_dispatch) on the release branch so the build job regenerates the artifact before publish."
+        echo "::error title=Build artifact unavailable::The '${ARTIFACT_NAME}' build artifact could not be downloaded (see the download step log above for the underlying error). The most common cause is expiry: the GitHub Actions retention window elapsed while this run waited for release approval. If so, re-running ONLY the failed jobs will NOT help because the artifact is gone for good - re-run the ENTIRE workflow ('Re-run all jobs') or re-trigger it (push / workflow_dispatch) on the release branch so the build job regenerates the artifact before publish."
         exit 1
