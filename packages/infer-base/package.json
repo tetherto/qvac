@@ -1,6 +1,6 @@
 {
   "name": "@qvac/infer-base",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Base class for inference clients",
   "main": "index.js",
   "scripts": {
@@ -20,7 +20,7 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/logging": "^0.1.0",
-    "bare-events": "2.4.2",
+    "bare-events": "^2.9.1",
     "bare-os": "^3.2.0",
     "bare-path": "^3.0.0"
   },
