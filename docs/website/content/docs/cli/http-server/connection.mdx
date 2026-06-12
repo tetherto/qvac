@@ -39,7 +39,8 @@ The only QVAC-specific setting for connecting an AI tool is the `serve.models` b
         "preload": true,
         "config": {
           "ctx_size": 16384,
-          "reasoning_budget": 0
+          "reasoning_budget": 0,
+          "tools": true
         }
       },
       "qwen3-8b-title": {
@@ -47,7 +48,8 @@ The only QVAC-specific setting for connecting an AI tool is the `serve.models` b
         "preload": true,
         "config": {
           "ctx_size": 16384,
-          "reasoning_budget": 0
+          "reasoning_budget": 0,
+          "tools": true
         }
       }
     }
@@ -100,11 +102,19 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
 }
 ```
 
-For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker. Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly; and `modalities` declares the input/output types the model accepts. Use `["text"]` for text-only LLMs — add `"image"` to `input` for a vision model, otherwise OpenCode disables image input for that model regardless of what the underlying model supports.
+For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker.
+
+Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly; and `modalities` declares the input/output types the model accepts. Note that text is currently the only supported modality.
+
+For details on configuring a custom provider in OpenCode, see [OpenCode docs › Custom providers](https://opencode.ai/docs/providers/#custom-provider).
 
 ## Caveats
 
 The following behaviors are not configured the same way (or at all) on either side every time — they depend on your tool, your models, and how you launched the server.
+
+### Text is the only supported modality
+
+The chat endpoint currently accepts and returns text only. Non-text content parts (images, audio, etc.) are dropped before reaching the model, so keep `modalities` set to `{ "input": ["text"], "output": ["text"] }` for every model. Declaring `"image"` (or any other modality) would let the tool send inputs that QVAC silently discards — the model never sees them.
 
 ### `@qvac/sdk` must be resolvable next to the CLI running `qvac serve`
 
