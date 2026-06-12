@@ -39,6 +39,7 @@ add_executable(
   test_continuous_batch_finalize.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
+  test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
