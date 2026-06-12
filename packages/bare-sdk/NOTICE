@@ -85,6 +85,8 @@ Third-Party Model Licenses
     https://huggingface.co/personalizedrefrigerator/whisper-base-fr
   fr-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-fr
+  gemma-4-E2B-it-GGUF
+    https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF
   ggml-bci-windowed
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/ggml-bci-windowed.bin
   google_gemma-4-31B-it-GGUF
@@ -115,6 +117,8 @@ Third-Party Model Licenses
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parseq
     https://github.com/felixdittrich92/OnnxTR
+  pi05-base-q-aggressive
+    https://huggingface.co/lerobot/pi05_base
   pt-base-ggml-model-f16
     https://huggingface.co/mariana-coelho-9/whisper-base-pt
   Qwen3-0.6B-GGUF
@@ -135,6 +139,8 @@ Third-Party Model Licenses
     https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
   Qwen3.5-0.8B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF
+  Qwen3.5-0.8B-GGUF
+    https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF
   Qwen3.5-2B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-2B-GGUF
   Qwen3.5-4B-GGUF
@@ -189,6 +195,10 @@ Third-Party Model Licenses
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
   Wan_2.1_ComfyUI_repackaged
     https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
+  Wan2.1-I2V-14B-480P-gguf
+    https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf
+  Wan2.1-I2V-14B-720P-gguf
+    https://huggingface.co/city96/Wan2.1-I2V-14B-720P-gguf
   Wan2.1-T2V-14B-gguf
     https://huggingface.co/city96/Wan2.1-T2V-14B-gguf
 
@@ -588,7 +598,8 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperswarm-secret-stream
   @qvac/decoder-audio@0.3.8
     https://github.com/tetherto/qvac
-  @qvac/diagnostics@0.1.1
+  @qvac/diagnostics@0.1.2
+    https://github.com/tetherto/qvac
   @qvac/error@0.1.1
   @qvac/infer-base@0.4.1
     https://github.com/tetherto/qvac
@@ -616,15 +627,15 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-ansi-escapes
   bare-assert@1.2.0
     https://github.com/holepunchto/bare-assert
-  bare-buffer@3.6.0
+  bare-buffer@3.6.1
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.10.0
     https://github.com/holepunchto/bare-bundle
   bare-bundle-id@1.0.2
     https://github.com/holepunchto/bare-bundle-id
-  bare-channel@5.2.3
+  bare-channel@5.2.4
     https://github.com/holepunchto/bare-channel
-  bare-crypto@1.13.7
+  bare-crypto@1.15.3
     https://github.com/holepunchto/bare-crypto
   bare-dns@2.1.4
     https://github.com/holepunchto/bare-dns
@@ -632,7 +643,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-env
   bare-events@2.4.2
     https://github.com/holepunchto/bare-events
-  bare-events@2.8.3
+  bare-events@2.9.1
     https://github.com/holepunchto/bare-events
   bare-fetch@2.9.1
     https://github.com/holepunchto/bare-fetch
@@ -640,13 +651,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
-  bare-fs@4.7.1
+  bare-fs@4.7.2
     https://github.com/holepunchto/bare-fs
   bare-hrtime@2.1.1
     https://github.com/holepunchto/bare-hrtime
-  bare-http-parser@1.1.4
+  bare-http-parser@1.1.5
     https://github.com/holepunchto/bare-http-parser
-  bare-http1@4.5.6
+  bare-http1@4.5.7
     https://github.com/holepunchto/bare-http1
   bare-https@3.0.0
     https://github.com/holepunchto/bare-https
@@ -654,29 +665,29 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-inspect
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
-  bare-module-lexer@1.4.7
+  bare-module-lexer@1.5.2
     https://github.com/holepunchto/bare-module-lexer
   bare-module-resolve@1.12.2
     https://github.com/holepunchto/bare-module-resolve
-  bare-module-traverse@2.0.2
+  bare-module-traverse@2.1.2
     https://github.com/holepunchto/bare-module-traverse
-  bare-net@2.3.1
+  bare-net@2.3.2
     https://github.com/holepunchto/bare-net
   bare-os@3.9.1
     https://github.com/holepunchto/bare-os
-  bare-pack@2.0.1
+  bare-pack@2.1.2
     https://github.com/holepunchto/bare-pack
-  bare-path@3.0.0
+  bare-path@3.0.1
     https://github.com/holepunchto/bare-path
-  bare-pipe@4.1.5
+  bare-pipe@4.2.2
     https://github.com/holepunchto/bare-pipe
   bare-process@4.4.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.3.2
+  bare-rpc@1.3.3
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.28.5
+  bare-runtime@1.28.6
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.28.5
+  bare-runtime-darwin-arm64@1.28.6
     https://github.com/holepunchto/bare-runtime
   bare-semver@1.0.3
     https://github.com/holepunchto/bare-semver
@@ -684,27 +695,27 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-signals
   bare-stdio@1.0.2
     https://github.com/holepunchto/bare-stdio
-  bare-stream@2.13.1
+  bare-stream@2.13.3
     https://github.com/holepunchto/bare-stream
   bare-structured-clone@1.5.5
     https://github.com/holepunchto/bare-structured-clone
   bare-subprocess@5.2.3
     https://github.com/holepunchto/bare-subprocess
-  bare-tcp@2.2.13
+  bare-tcp@2.5.1
     https://github.com/holepunchto/bare-tcp
-  bare-tls@3.1.5
+  bare-tls@3.1.7
     https://github.com/holepunchto/bare-tls
-  bare-tty@5.1.0
+  bare-tty@5.1.1
     https://github.com/holepunchto/bare-tty
   bare-type@1.1.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.4.3
+  bare-url@2.4.5
     https://github.com/holepunchto/bare-url
-  bare-zlib@1.3.3
+  bare-zlib@1.4.0
     https://github.com/holepunchto/bare-zlib
   blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
-  compact-encoding@3.1.0
+  compact-encoding@3.2.0
     https://github.com/holepunchto/compact-encoding
   compact-encoding-bitfield@1.1.0
     https://github.com/compact-encoding/compact-encoding-bitfield
@@ -718,7 +729,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/fd-lock
   fs-native-extensions@1.5.0
     https://github.com/holepunchto/fs-native-extensions
-  hyperblobs@2.12.0
+  hyperblobs@2.12.1
     https://github.com/holepunchto/hyperblobs
   hypercore-errors@1.5.0
     https://github.com/holepunchto/hypercore-errors
@@ -726,7 +737,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-stats@2.4.0
     https://github.com/holepunchto/hypercore-stats
-  hypercore-storage@2.9.0
+  hypercore-storage@3.1.1
     https://github.com/holepunchto/hypercore-storage
   hyperdb@6.7.0
     https://github.com/holepunchto/hyperdb
@@ -740,7 +751,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdrive
   hyperschema@1.21.0
     https://github.com/holepunchto/hyperschema
-  hyperswarm-stats@1.3.0
+  hyperswarm-stats@1.3.1
     https://github.com/holepunchto/hyperswarm-stats
   index-encoder@3.5.0
     https://github.com/holepunchto/index-encoder
@@ -768,7 +779,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.15.1
+  rocksdb-native@3.15.2
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -778,7 +789,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/sub-encoder
   text-decoder@1.2.7
     https://github.com/holepunchto/text-decoder
-  udx-native@1.19.2
+  udx-native@1.20.7
     https://github.com/holepunchto/udx-native
   unslab@1.3.0
     https://github.com/holepunchto/unslab
@@ -803,7 +814,7 @@ JavaScript Dependencies
     https://github.com/crypto-browserify/parse-asn1
   quickbit-universal@2.2.0
     https://github.com/holepunchto/quickbit-universal
-  semver@7.8.1
+  semver@7.8.4
     https://github.com/npm/node-semver
   simdle-universal@1.1.2
     https://github.com/holepunchto/simdle-universal
@@ -848,7 +859,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/codecs
   core-util-is@1.0.3
     https://github.com/isaacs/core-util-is
-  corestore@7.9.2
+  corestore@7.10.1
     https://github.com/holepunchto/corestore
   create-ecdh@4.0.4
     https://github.com/crypto-browserify/createECDH
@@ -912,13 +923,13 @@ JavaScript Dependencies
     https://github.com/crypto-browserify/hash-base
   hash.js@1.1.7
     https://github.com/indutny/hash.js
-  hasown@2.0.3
+  hasown@2.0.4
     https://github.com/inspect-js/hasOwn
   hmac-drbg@1.0.1
     https://github.com/indutny/hmac-drbg
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.30.2
+  hypercore@11.33.1
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
@@ -1010,7 +1021,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/sodium-universal
   speedometer@1.1.0
     https://github.com/mafintosh/speedometer
-  streamx@2.26.0
+  streamx@2.27.0
     https://github.com/mafintosh/streamx
   string_decoder@1.1.1
     https://github.com/nodejs/string_decoder
@@ -1038,7 +1049,7 @@ JavaScript Dependencies
     https://github.com/TooTallNate/util-deprecate
   varint@5.0.0
     https://github.com/chrisdickinson/varint
-  which-typed-array@1.1.21
+  which-typed-array@1.1.22
     https://github.com/inspect-js/which-typed-array
   xache@1.2.1
     https://github.com/mafintosh/xache
