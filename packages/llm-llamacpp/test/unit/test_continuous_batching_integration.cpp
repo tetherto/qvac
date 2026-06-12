@@ -1077,3 +1077,79 @@ TEST_F(
         << "expected FailedToDecode in error code, got: " << e.codeString();
   }
 }
+
+/// A batched sequence that outgrows its per-slot window (ctx / n_parallel)
+/// must slide (`contextSlides > 0`) and keep generating, like the
+/// single-prompt path does, instead of being hard-truncated at the window.
+/// `CacheTokens` must reflect the generated tokens, not just the prompt.
+///
+/// The slide machinery reads the driver's `nPast_`, but during batched
+/// generation only the batcher's `Request::currentPos` advances; `nPast_`
+/// stays frozen at the prompt length, so the slide condition never fires
+/// and `Request::exceededLimit()` truncates the sequence first.
+///
+/// Setup: ctx 256 with parallel 2 targets a small per-slot window;
+/// n_predict -1 (unbounded) so admission does not cap the request, and
+/// n_discarded 32 enables sliding. llama.cpp's memory-fit step may
+/// adjust the requested ctx, so the effective window is read back via
+/// the decode stub (`llama_n_ctx / parallel`). The prompt elicits an
+/// output long enough to cross the window; once enough pieces stream
+/// out to prove generation survived past it, the test cancels to bound
+/// the run.
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchGenerationSlidesPastPerSlotWindow) {
+  REQUIRE_MODEL(model_);
+  constexpr size_t kParallel = 2;
+  config_["ctx_size"] = "256";
+  config_["parallel"] = std::to_string(kParallel);
+  config_["n_predict"] = "-1";
+  config_["n_discarded"] = "32";
+  auto model = loadModel();
+
+  auto* scheduler = model->batchSchedulerForTesting();
+  ASSERT_NE(scheduler, nullptr);
+  std::atomic<size_t> perSlotWindow = 0;
+  scheduler->setDecodeFuncForTesting(
+      [&perSlotWindow](llama_context* ctx, llama_batch& batch) {
+        perSlotWindow.store(static_cast<size_t>(llama_n_ctx(ctx)) / kParallel);
+        return llama_decode(ctx, batch);
+      });
+
+  std::atomic<size_t> pieces = 0;
+  std::atomic<bool> cancelOnce = false;
+  auto prompt = makePrompt(
+      "Count upward from 1, one number per line, and do not stop counting.");
+  prompt.outputCallback =
+      [&model, &pieces, &perSlotWindow, &cancelOnce](const std::string&) {
+        // Pieces under-count tokens (UTF-8 buffering), so once the piece
+        // count alone exceeds the whole per-slot window, prompt + generated
+        // tokens crossed it for sure.
+        constexpr size_t kPastWindowMargin = 32;
+        const size_t window = perSlotWindow.load();
+        if (window > 0 &&
+            pieces.fetch_add(1) + 1 >= window + kPastWindowMargin) {
+          bool expected = false;
+          if (cancelOnce.compare_exchange_strong(expected, true)) {
+            model->cancel();
+          }
+        }
+      };
+
+  std::vector<LlamaModel::Prompt> prompts{std::move(prompt)};
+  auto outputs = model->processPromptBatch(prompts);
+  const auto stats = model->runtimeStats();
+  const double contextSlides =
+      test_common::getStatValue(stats, "contextSlides");
+  const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
+  const double promptTokens = test_common::getStatValue(stats, "promptTokens");
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_GT(contextSlides, 0.0)
+      << "SLIDE NEVER FIRED: the sequence was truncated at the per-slot "
+         "window instead of sliding; pieces emitted: "
+      << pieces.load() << ", per-slot window: " << perSlotWindow.load();
+  EXPECT_GT(cacheTokens, promptTokens)
+      << "CacheTokens only counted the prompt (driver position frozen at "
+         "prefill); generated tokens are missing from the stat";
+}
