@@ -1238,7 +1238,8 @@ private:
       // isDepthwiseWeight). Fold the per-channel scale in either dtype.
       if (wTensor->type == GGML_TYPE_F16) {
         std::vector<ggml_fp16_t> wbuf(n);
-        ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+        ggml_backend_tensor_get(
+            wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
         // F16 has no arithmetic: batch-decode each channel row to F32 with
         // ggml's SIMD row converters, apply the per-channel scale, then
         // re-encode. Stays F16-stored (not an f16->f16 copy).
@@ -1252,7 +1253,8 @@ private:
           }
           ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
         }
-        ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+        ggml_backend_tensor_set(
+            wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
       } else if (wTensor->type == GGML_TYPE_F32) {
         std::vector<float> wbuf(n);
         ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(float));
