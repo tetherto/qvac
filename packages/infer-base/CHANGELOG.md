@@ -6,6 +6,10 @@ Widen the `bare-events` dependency from the exact pin `2.4.2` to the caret `^2.9
 
 - `dependencies.bare-events`: `2.4.2` → `^2.9.1` (exact pin → caret).
 
+### Notes
+
+- Republished with the fixed `publish-library-to-npm` action (QVAC-17357 / #2574 — emit npm-valid backport dist-tag); the initial `0.4.2` publish failed on the old action's invalid `v0.4` dist-tag. Package contents unchanged.
+
 ## [0.4.1] - 2026-04-28
 
 This release drops the vestigial `@qvac/dl-hyperdrive` peer dependency from `@qvac/infer-base`'s manifest. Since the `Loader` interface moved into this package and `ready()`/`close()` became optional in `0.4.0`, the peer-dep declaration was no longer required by anything in the runtime — consumers no longer carry an `@qvac/dl-hyperdrive` peer-dep through `@qvac/infer-base` when installing it.
