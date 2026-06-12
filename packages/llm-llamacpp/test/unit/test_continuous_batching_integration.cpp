@@ -1043,9 +1043,9 @@ TEST_F(
 /// When llama_decode returns non-zero, processBatch must throw a
 /// StatusError(FailedToDecode) for every group. Before the fix the decode-error
 /// branch called finalizeFinishedSequences() which routed through the success
-/// path (completeGroupRequestLocked), leaving group->error == null. processBatch
-/// then unblocked and returned silently with empty/partial outputs instead of
-/// propagating the error.
+/// path (completeGroupRequestLocked), leaving group->error == null.
+/// processBatch then unblocked and returned silently with empty/partial outputs
+/// instead of propagating the error.
 ///
 /// The test injects a stub decode function that always returns 1, triggers one
 /// batch step, and asserts the resulting exception carries the FailedToDecode
@@ -1064,7 +1064,8 @@ TEST_F(
 
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("What is the capital of France? Answer in one word."),
-      makePrompt("What is the natural satellite of Earth? Answer in one word.")};
+      makePrompt(
+          "What is the natural satellite of Earth? Answer in one word.")};
 
   try {
     model->processPromptBatch(prompts);

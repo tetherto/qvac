@@ -765,7 +765,8 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
   if (lctx != nullptr) {
     llama_memory_t mem = llama_get_memory(lctx);
     if (mem != nullptr) {
-      // Clear all sequences to ensure batch scheduler starts with clean KV state
+      // Clear all sequences to ensure batch scheduler starts with clean KV
+      // state
       const int nSeqMax = llama_n_seq_max(lctx);
       for (int seqId = 0; seqId < nSeqMax; seqId++) {
         llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);

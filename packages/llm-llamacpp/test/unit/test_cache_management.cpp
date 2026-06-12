@@ -947,8 +947,10 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
   }
 
   // 1. Seed the cache file using the single-prompt path.
-  std::string singlePrompt = R"([{"role": "user", "content": "The sky is blue. What color is the sky?"}])";
-  std::string response1 = processPromptWithCacheOptions(model, singlePrompt, cacheFile, true);
+  std::string singlePrompt =
+      R"([{"role": "user", "content": "The sky is blue. What color is the sky?"}])";
+  std::string response1 =
+      processPromptWithCacheOptions(model, singlePrompt, cacheFile, true);
   ASSERT_FALSE(response1.empty());
   ASSERT_TRUE(fs::exists(cacheFile));
 
@@ -956,23 +958,30 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
   // execute, and upon completion clear seq 0's KV cells.
   LlamaModel::Prompt batchPrompt;
   batchPrompt.input = R"([{"role": "user", "content": "Count from 1 to 3."}])";
-  auto batchOutputs = model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(batchPrompt)});
+  auto batchOutputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(batchPrompt)});
   ASSERT_EQ(batchOutputs.size(), 1u);
   ASSERT_FALSE(batchOutputs[0].empty());
 
   // 3. Run a subsequent single-prompt with the same cache file.
-  // The CacheManager must detect that seq 0 was wiped (or simply invalidate its state)
-  // and force a reload from disk, leading to a valid completion.
-  std::string response2 = processPromptWithCacheOptions(model, R"([{"role": "user", "content": "What color did I say the sky was?"}])", cacheFile, false);
-  
+  // The CacheManager must detect that seq 0 was wiped (or simply invalidate its
+  // state) and force a reload from disk, leading to a valid completion.
+  std::string response2 = processPromptWithCacheOptions(
+      model,
+      R"([{"role": "user", "content": "What color did I say the sky was?"}])",
+      cacheFile,
+      false);
+
   // Clean up cache file.
   if (fs::exists(cacheFile)) {
     fs::remove(cacheFile);
   }
 
-  // Assert response is valid and correctly remembers the context from the loaded cache.
+  // Assert response is valid and correctly remembers the context from the
+  // loaded cache.
   EXPECT_FALSE(response2.empty())
-      << "STALE CACHE RESIDENCY BUG: CacheManager believed the cache was resident in seq 0 "
-         "even though the batch scheduler occupied and wiped seq 0. processPrompt returned empty output.";
+      << "STALE CACHE RESIDENCY BUG: CacheManager believed the cache was "
+         "resident in seq 0 "
+         "even though the batch scheduler occupied and wiped seq 0. "
+         "processPrompt returned empty output.";
 }
-

@@ -67,8 +67,7 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
-      slots_(batchSize),
-      decodeFunc_([](llama_context* ctx, llama_batch& b) {
+      slots_(batchSize), decodeFunc_([](llama_context* ctx, llama_batch& b) {
         return llama_decode(ctx, b);
       }) {
 
@@ -424,24 +423,25 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   if (decodeRc != 0) {
     batcher_.markAllFinished(StopReason::DecodeError);
-    
+
     std::unordered_set<std::shared_ptr<BatchGroup>> affectedGroups;
     for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
       if (slots_[seqId].has_value() && slots_[seqId]->group) {
         affectedGroups.insert(slots_[seqId]->group);
       }
     }
-    
-    auto decodeError = std::make_exception_ptr(qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_lib_inference_addon_llama::errors::toString(
-            qvac_lib_inference_addon_llama::errors::FailedToDecode),
-        "llama_decode returned non-zero: " + std::to_string(decodeRc)));
-    
+
+    auto decodeError = std::make_exception_ptr(
+        qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_lib_inference_addon_llama::errors::toString(
+                qvac_lib_inference_addon_llama::errors::FailedToDecode),
+            "llama_decode returned non-zero: " + std::to_string(decodeRc)));
+
     for (const auto& group : affectedGroups) {
       failGroupLocked(group, decodeError);
     }
-    
+
     return false;
   }
   const unsigned numGenerating =

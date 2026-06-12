@@ -39,8 +39,7 @@ std::string uniqueKvLeakTestId() {
 
 static LlamaModel::Prompt makeKvLeakPrompt(const std::string& userText) {
   LlamaModel::Prompt p;
-  p.input = std::string(R"([{"role":"user","content":")")
-             + userText + R"("}])";
+  p.input = std::string(R"([{"role":"user","content":")") + userText + R"("}])";
   return p;
 }
 
@@ -81,9 +80,7 @@ protected:
     std::string projectionPath{};
     std::unordered_map<std::string, std::string> config(config_);
     auto m = std::make_unique<LlamaModel>(
-        std::move(modelPath),
-        std::move(projectionPath),
-        std::move(config));
+        std::move(modelPath), std::move(projectionPath), std::move(config));
     m->waitForLoadInitialization();
     return m;
   }
@@ -103,9 +100,8 @@ TEST_F(KvLeakOnAdmitFailureTest, KvRowsCleanedAfterAdmitFailurePostCache) {
   REQUIRE_MODEL(model_);
   auto model = loadTestModel();
 
-  const fs::path cachePath =
-      fs::temp_directory_path() /
-      ("kv-leak-test-" + uniqueKvLeakTestId() + ".bin");
+  const fs::path cachePath = fs::temp_directory_path() /
+                             ("kv-leak-test-" + uniqueKvLeakTestId() + ".bin");
 
   // Stage 1: seed the cache file so loadCache will populate real KV rows.
   auto seedPrompt = makeKvLeakPrompt("Remember: the sky is blue.");
@@ -144,11 +140,13 @@ TEST_F(KvLeakOnAdmitFailureTest, KvRowsCleanedAfterAdmitFailurePostCache) {
 
   if (!threw) {
     fs::remove(cachePath);
-    std::cout << "DEBUG: Prompt of length " << makeTokenFillerText(2000).size() << " did not throw!" << std::endl;
+    std::cout << "DEBUG: Prompt of length " << makeTokenFillerText(2000).size()
+              << " did not throw!" << std::endl;
     GTEST_SKIP() << "oversized prompt did not exceed perSeqMaxTokens cap -- "
                     "increase token filler or reduce ctx_size/parallel ratio";
   } else {
-    std::cout << "DEBUG: Threw expected exception: " << errCode << " / " << errMsg << std::endl;
+    std::cout << "DEBUG: Threw expected exception: " << errCode << " / "
+              << errMsg << std::endl;
   }
 
   // Stage 3: assert KV memory for seqId=0 is clean after the failed admit.
@@ -163,7 +161,9 @@ TEST_F(KvLeakOnAdmitFailureTest, KvRowsCleanedAfterAdmitFailurePostCache) {
   const llama_pos leakedPosMax = llama_memory_seq_pos_max(mem, /*seqId=*/0);
   EXPECT_EQ(leakedPosMax, -1)
       << "KV CACHE LEAK: after failed batch admit (throw after loadCache), "
-         "seqId=0 has orphaned KV data at pos_max=" << leakedPosMax << ". "
+         "seqId=0 has orphaned KV data at pos_max="
+      << leakedPosMax
+      << ". "
          "llama_memory_seq_rm was never called. Fix: move loadCache after "
          "validatePromptPolicy and add RAII guard to clean up on throw.";
 
