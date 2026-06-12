@@ -132,6 +132,10 @@ MultiRequestBatcher::getChunkSizeForActiveSeqs(const LlamaBatch& batch) const {
     if (slot->isPrefillPending()) {
       numPrefilling++;
     }
+    // Global min: a generating slot (remainingToFeed()==1) throttles
+    // concurrent prefills to 1 token/step. Deliberate tradeoff: keeps the
+    // chunk global and fillBatch/advance simple, while all active slots
+    // still advance in parallel every step (continuous batching).
     chunkSize = std::min(chunkSize, slot->remainingToFeed());
   }
   if (numActive == 0) {
