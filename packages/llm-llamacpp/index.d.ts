@@ -334,7 +334,7 @@ export default class LlmLlamacpp {
 
   load(): Promise<void>
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
-  run(prompt: Message[][] | BatchPrompt[]): Promise<BatchResponse>
+  run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
   finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>
   cancel(): Promise<void>
   pause(): Promise<void>
