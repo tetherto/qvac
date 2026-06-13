@@ -364,11 +364,12 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
-    // NOTE: Metal does not implement GGML_OP_CONV_2D_DW, so the direct
-    // depthwise variant aborts there. Keep the im2col + mul_mat path
-    // (decomposes into Metal-supported ops).
+    // Direct depthwise kernel (GGML_OP_CONV_2D_DW) — much faster than the
+    // im2col + per-channel batched matmul on GPU backends. Weight is
+    // [KW,KH,1,C] and promoted to F32 (see addConvWeight) so it runs on every
+    // backend.
     struct ggml_tensor* conv =
-        ggml_conv_2d_dw(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
+        ggml_conv_2d_dw_direct(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
     // BN scale folded into the depthwise weights at load time; `.shift` carries
     // the combined (conv bias + BN shift) offset.
     conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
@@ -690,8 +691,14 @@ WeightsBundle loadWeights(
           "Expected convolution weight tensor name to end with .weight: " +
           name);
     }
+    // Depthwise weights ([KW,KH,1,C], KW>1) are promoted to F32 so the direct
+    // GGML_OP_CONV_2D_DW kernel runs on every backend (CPU requires F32).
+    struct ggml_tensor* srcW = ggml_get_tensor(ggmlCtx, name.c_str());
+    const bool isDw = srcW != nullptr && srcW->ne[2] == 1 && srcW->ne[0] > 1;
     struct ggml_tensor* weightTensor =
-        cloneRaw(bundle.ctx.get(), gguf, ggmlCtx, name.c_str());
+        isDw ? cloneAsFp32(
+                   bundle.ctx.get(), name.c_str(), ggml_n_dims(srcW), srcW->ne)
+             : cloneRaw(bundle.ctx.get(), gguf, ggmlCtx, name.c_str());
     registerTensor(weightTensor);
     addBiasBroadcast(
         name.substr(0, name.size() - std::string(".weight").size()) + ".bias");
@@ -845,10 +852,17 @@ WeightsBundle loadWeights(
     if (src == nullptr) {
       raise("Source tensor missing from GGUF: " + name);
     }
-    if (src->type != dst->type) {
+    if (src->type == dst->type) {
+      ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
+    } else if (dst->type == GGML_TYPE_F32 && src->type == GGML_TYPE_F16) {
+      // Depthwise weights are promoted to F32 (see addConvWeight).
+      const size_t count = ggml_nelements(src);
+      std::vector<float> values(count);
+      fp16ToFp32(src->data, values.data(), count);
+      ggml_backend_tensor_set(dst, values.data(), 0, count * sizeof(float));
+    } else {
       raise("Dtype mismatch while copying tensor: " + name);
     }
-    ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
   }
 
   // Kept for the future classifier-bytes upload path (see commented-out
@@ -919,13 +933,6 @@ WeightsBundle loadWeights(
       raise("BN fold: conv weight not found: " + convName);
     }
     struct ggml_tensor* wTensor = wIt->second;
-    if (wTensor->type != GGML_TYPE_F16) {
-      raise(
-          "BN fold: unsupported conv weight dtype " +
-          std::string(ggml_type_name(wTensor->type)) + " for " + convName +
-          " (expected F16; quantized weights are not supported by the BN "
-          "fold)");
-    }
     const int64_t oc = wTensor->ne[3];
     if (static_cast<size_t>(oc) != scale.size()) {
       raise(
@@ -935,22 +942,43 @@ WeightsBundle loadWeights(
     }
     const int64_t perOc = wTensor->ne[0] * wTensor->ne[1] * wTensor->ne[2];
     const size_t n = static_cast<size_t>(oc * perOc);
-    std::vector<ggml_fp16_t> wbuf(n);
-    ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
-    // F16 has no arithmetic: batch-decode each channel row to F32 with ggml's
-    // SIMD row converters, apply the per-channel scale, then re-encode. The
-    // weight stays F16-stored (not an f16->f16 copy).
-    std::vector<float> f32buf(static_cast<size_t>(perOc));
-    for (int64_t o = 0; o < oc; ++o) {
-      const float s = scale[static_cast<size_t>(o)];
-      ggml_fp16_t* row = wbuf.data() + (o * perOc);
-      ggml_fp16_to_fp32_row(row, f32buf.data(), perOc);
-      for (int64_t i = 0; i < perOc; ++i) {
-        f32buf[static_cast<size_t>(i)] *= s;
+    // Pointwise/regular conv weights are F16; depthwise weights are F32 (see
+    // addConvWeight). Fold the per-channel scale in whichever dtype.
+    if (wTensor->type == GGML_TYPE_F16) {
+      std::vector<ggml_fp16_t> wbuf(n);
+      ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+      // F16 has no arithmetic: batch-decode each channel row to F32 with ggml's
+      // SIMD row converters, apply the per-channel scale, then re-encode. The
+      // weight stays F16-stored (not an f16->f16 copy).
+      std::vector<float> f32buf(static_cast<size_t>(perOc));
+      for (int64_t o = 0; o < oc; ++o) {
+        const float s = scale[static_cast<size_t>(o)];
+        ggml_fp16_t* row = wbuf.data() + (o * perOc);
+        ggml_fp16_to_fp32_row(row, f32buf.data(), perOc);
+        for (int64_t i = 0; i < perOc; ++i) {
+          f32buf[static_cast<size_t>(i)] *= s;
+        }
+        ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
       }
-      ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
+      ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+    } else if (wTensor->type == GGML_TYPE_F32) {
+      std::vector<float> wbuf(n);
+      ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(float));
+      for (int64_t o = 0; o < oc; ++o) {
+        const float s = scale[static_cast<size_t>(o)];
+        for (int64_t i = 0; i < perOc; ++i) {
+          const size_t idx = static_cast<size_t>((o * perOc) + i);
+          wbuf[idx] *= s;
+        }
+      }
+      ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(float));
+    } else {
+      raise(
+          "BN fold: unsupported conv weight dtype " +
+          std::string(ggml_type_name(wTensor->type)) + " for " + convName +
+          " (expected F16 or F32; quantized weights are not supported by the "
+          "BN fold)");
     }
-    ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
 
     // combined bias = scale * bias_br + shift (bias_br is zeros for bias=False
     // convs, the offset for offline-folded models).
