@@ -80,26 +80,29 @@ TEST(SupertonicValidate, NonexistentNoiseNpyRejected) {
   EXPECT_THROW(SupertonicModel{cfg}, StatusError);
 }
 
-TEST(SupertonicValidate, UseGpuTrueRejectedWithExplanation) {
+TEST(SupertonicValidate, UseGpuTrueAcceptedAtConstruction) {
+  // GPU intent is now honored for Supertonic on GPU-capable hosts (Metal on
+  // Apple, Vulkan/CUDA on desktop); Android is forced back to CPU at load
+  // (loadLocked). Construction must NOT reject useGpu=true -- the GGUF parse
+  // is deferred to load(), so a bare stub config validates cleanly.
   auto cfg = minimallyValidStubConfig();
   cfg.useGpu = true;
-  bool threw = false;
-  try {
-    SupertonicModel m(cfg);
-  } catch (const StatusError& e) {
-    threw = true;
-    const std::string what = e.what();
-    EXPECT_NE(what.find("GPU"), std::string::npos)
-        << "error should mention GPU; got: " << what;
-    EXPECT_NE(what.find("Supertonic"), std::string::npos)
-        << "error should mention Supertonic engine; got: " << what;
-  }
-  EXPECT_TRUE(threw);
+  EXPECT_NO_THROW(SupertonicModel{cfg});
 }
 
-TEST(SupertonicValidate, NGpuLayersGreaterThanZeroRejected) {
+TEST(SupertonicValidate, NGpuLayersGreaterThanZeroAccepted) {
   auto cfg = minimallyValidStubConfig();
   cfg.nGpuLayers = 99;
+  EXPECT_NO_THROW(SupertonicModel{cfg});
+}
+
+TEST(SupertonicValidate, UseGpuNGpuLayersConflictStillRejected) {
+  // The cross-field conflict check is preserved: useGPU=true paired with
+  // nGpuLayers=0 (or useGPU=false with nGpuLayers!=0) is contradictory and
+  // must still throw so callers can't silently get the opposite backend.
+  auto cfg = minimallyValidStubConfig();
+  cfg.useGpu = true;
+  cfg.nGpuLayers = 0;
   EXPECT_THROW(SupertonicModel{cfg}, StatusError);
 }
 
