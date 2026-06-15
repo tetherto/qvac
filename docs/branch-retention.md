@@ -161,6 +161,9 @@ deleted without warning:
 - A **max-deletions-per-run** cap guards against a logic bug deleting many branches at
   once.
 - Protected branches and `main` can never be selected, by construction.
+- **Issues must be enabled** (the tracking issue is the grace-period ledger). If Issues
+  are disabled in a repo, the workflow runs in **report-only mode** — it logs the
+  candidate list but deletes nothing.
 
 Implementation lives in:
 

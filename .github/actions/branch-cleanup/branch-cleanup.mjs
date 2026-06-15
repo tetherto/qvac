@@ -297,6 +297,16 @@ function renderIssueBody (ledger, sections, cfg, now) {
   return lines.join('\n')
 }
 
+// Whether the repo has Issues enabled (the tracking-issue ledger depends on it).
+async function issuesEnabled (github, owner, repo) {
+  try {
+    const { data } = await github.rest.repos.get({ owner, repo })
+    return data.has_issues !== false
+  } catch {
+    return true // assume enabled; downstream issue ops are still guarded
+  }
+}
+
 async function findOrCreateIssue (github, owner, repo, body, create) {
   const issues = await github.paginate(github.rest.issues.listForRepo, {
     owner,
@@ -424,6 +434,22 @@ export async function processBranchCleanup ({ github, context, core, env = proce
   }
 
   core.info(`Computed ${candidates.size} deletion candidate(s)`)
+
+  // The tracking issue is the durable grace-period ledger. If Issues are disabled in
+  // this repo, firstFlagged dates cannot be persisted, so we degrade to report-only
+  // (compute + log candidates, never delete) instead of crashing.
+  if (!(await issuesEnabled(github, owner, repo))) {
+    core.warning('Issues are disabled in this repository. Branch cleanup needs Issues enabled for the grace-period tracking ledger; running in report-only mode (no branches will be deleted).')
+    core.summary
+      .addHeading('Branch cleanup (report-only — Issues disabled)', 2)
+      .addRaw(`${candidates.size} candidate(s); no deletions (no tracking ledger available).\n\n`)
+    for (const [branch, reason] of candidates) {
+      core.info(`[report-only] candidate: ${branch} — ${reason}`)
+      core.summary.addRaw(`- \`${branch}\` — ${reason}\n`)
+    }
+    await core.summary.write()
+    return { candidates: [...candidates.keys()], deleted: [], pending: [], reprieved: [], skipped: [], reportOnly: true }
+  }
 
   // Load ledger + acks from the tracking issue.
   const issue = await findOrCreateIssue(github, owner, repo, '', false)
