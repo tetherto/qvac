@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.13.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.1
+
+Dependency-maintenance patch. `@qvac/sdk` and `@qvac/bare-sdk` adopt `bare-fetch` 3.x and `@qvac/decoder-audio` 0.4.x, and move dev-only `bare-subprocess` to 6.x. This removes the deprecated `@qvac/response` and its exact `bare-events 2.4.2` pin from the dependency tree.
+
+## Maintenance
+
+Bump `bare-fetch` to `^3.0.1` (public fetch API unchanged) and dev `bare-subprocess` to `^6.1.0`. Bump `@qvac/decoder-audio` to `^0.4.0` (drops deprecated `@qvac/response`); `decoder-audio@0.4.0` returns its `QvacResponse` synchronously, so `server/utils/audio/decoder.ts` no longer `await`s `decoder.run()`. `@qvac/sdk`/`@qvac/bare-sdk` bumped in lockstep.
+
 ## [0.13.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.0
