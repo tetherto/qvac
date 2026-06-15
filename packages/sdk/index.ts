@@ -213,8 +213,12 @@ export {
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
 // rpc-client life-signal race when the bare worker exits unexpectedly
 // or close()/process-exit teardown runs while a caller is in flight.
-// Exported so consumers can pattern-match with `instanceof`.
+// `BareRuntimeBinaryNotFoundError` is thrown when the worker fails to
+// spawn because the platform's `bare-runtime-<platform>-<arch>` package is
+// missing (common under pnpm). Exported so consumers can pattern-match with
+// `instanceof`.
 export {
+  BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
 } from "./utils/errors-client";

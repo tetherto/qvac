@@ -7,7 +7,7 @@ description: |
   1. Sharded (test-specs has >1 entry):
        Schedule one Device Farm run per spec, all against the addon's own
        device pool (android-device-pool-arn / ios-device-pool-arn). Used by
-       LLM (10 iOS + 2 Android shards) and OCR (perf + regular).
+       LLM (12 iOS + 7 Android shards) and OCR (perf + regular).
 
   2. Single-pool (test-specs has 1 entry AND scheduling-mode=single-pool):
        Schedule one Device Farm run against the addon's pool. Used by Embed

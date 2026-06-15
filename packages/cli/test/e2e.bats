@@ -63,6 +63,11 @@ setup_file() {
         "model": "WHISPER_EN_TINY_Q8_0",
         "type": "whispercpp-audio-translation",
         "preload": true
+      },
+      "test-video": {
+        "src": "placeholder",
+        "type": "sdcpp-video",
+        "preload": false
       }
     }
   }
@@ -605,7 +610,7 @@ TXT
 @test "legacy completions: blocking returns text_completion shape" {
   local body
   body=$(json_post "/v1/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":512}")
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":4096}")
 
   echo "${body}" | jq -e '.id | startswith("cmpl-")' >/dev/null
   echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
@@ -730,6 +735,54 @@ TXT
   local body
   body=$(json_post "/v1/responses" "{\"model\":\"${EMBED_ALIAS}\",\"input\":\"hello\"}")
   assert_error "${body}" "invalid_model_type"
+}
+
+# ── Videos (HTTP-layer only; model not loaded) ───────────────────────
+# test-video has preload:false so all requests that pass schema validation
+# reach requireModel and get 503 model_not_ready without GPU inference.
+
+VIDEO_ALIAS="test-video"
+# 1×1 transparent PNG, base64-encoded — minimal valid image for data URI tests.
+TINY_PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+@test "videos: JSON txt2vid reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"a bird flies\"}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: JSON img2vid with data URI reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":\"data:image/png;base64,${TINY_PNG_B64}\"}}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: JSON img2vid with HTTP URL reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":\"http://127.0.0.1:${E2E_PORT}/v1/models\"}}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: input_reference with wrong shape returns 400 invalid_request" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"p\",\"input_reference\":{\"not_image_url\":\"x\"}}")
+  assert_error "${body}" "invalid_request"
+}
+
+@test "videos: multipart POST with input_reference file reaches model check (503 model_not_ready)" {
+  local tmpimg
+  tmpimg=$(mktemp /tmp/tiny-ref-XXXXXX.png)
+  printf '%s' "${TINY_PNG_B64}" | base64 --decode > "${tmpimg}"
+  local body
+  body=$(curl -s -X POST "${BASE}/v1/videos" \
+    --form "model=${VIDEO_ALIAS}" \
+    --form "prompt=subject turns" \
+    --form "input_reference=@${tmpimg}")
+  rm -f "${tmpimg}"
+  assert_error "${body}" "model_not_ready"
 }
 
 # ── Model lifecycle ───────────────────────────────────────────────────

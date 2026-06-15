@@ -79,6 +79,11 @@ export const customTree: Node[] = [
         icon: resolveIcon('Server'),
         children: [
           {
+            name: 'Connect tools',
+            url: '/cli/http-server/connection',
+            type: 'page',
+          },
+          {
             name: 'Integration',
             url: '/cli/http-server/integration',
             type: 'page',
@@ -172,6 +177,12 @@ export const customTree: Node[] = [
     url: '/ai-capabilities/translation',
     type: 'page',
     icon: resolveIcon('Languages'),
+  },
+  {
+    name: 'BCI',
+    url: '/ai-capabilities/bci',
+    type: 'page',
+    icon: resolveIcon('Brain'),
   },
   {
     name: 'VLA',

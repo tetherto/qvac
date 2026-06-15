@@ -262,6 +262,21 @@ model is loaded; only the exact value `1` applies; `_F32` wins if both are set):
 These are useful for A/B-benchmarking the F16 fast path or bisecting an accuracy
 regression. None of them affect the DocTR pipeline.
 
+### Conv bias broadcast (`OCR_GGML_CRAFT_BIAS_REPEAT`)
+
+Each convolution adds a per-output-channel bias. By default the EasyOCR
+pipeline adds the `[OC]` bias via `ggml_add`'s implicit broadcast
+(`ggml_add(x, bias_reshaped[1,1,OC,1])`), so the `[W,H,OC,N]` activation never
+has to materialise a full repeated copy of the bias — a small memory/op saving
+on every conv. This is numerically identical to the older `ggml_repeat` path
+(`ggml_add` broadcasts its second operand on CPU/Vulkan/Metal; verified equal on
+all three and ~8-15% faster on CPU).
+
+Set `OCR_GGML_CRAFT_BIAS_REPEAT=1` to fall back to the legacy `ggml_repeat`
+broadcast — an escape hatch to recover without a code change if a backend's
+broadcast-add ever misbehaves (read once at graph-build time; only the exact
+value `1` enables it). It does not affect the DocTR pipeline.
+
 ### `run(input)` shape
 
 ```ts

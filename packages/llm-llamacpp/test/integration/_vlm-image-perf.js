@@ -36,6 +36,20 @@ function _envInt (key, fallback) {
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
 const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 
+// QVAC-19368: skip the heaviest image (aurora) only on Android non-benchmark
+// on-PR runs where the 30-min Device Farm per-test cap is tight. iOS and
+// desktop always run aurora (fast enough). The benchmark (QVAC_PERF_ONLY=true)
+// always runs the full set regardless of platform. Uses the explicit
+// QVAC_PERF_ONLY flag (already plumbed to the device via the testspec config)
+// instead of proxying off PERF_RUNS, per review feedback.
+function _envStr (key) {
+  if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
+  if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
+  return ''
+}
+const isBenchmark = _envStr('QVAC_PERF_ONLY') === 'true'
+const skipHeavyImages = platform === 'android' && !isBenchmark
+
 // Image cases shared by both models. ctxSize is per-image because Qwen3.5-VL
 // uses dense patch tokenization (the 1472x1472 fruit plate → ~4k image
 // tokens, the 3000x4000 aurora more), so the large images need a bigger ctx
@@ -202,5 +216,6 @@ module.exports = {
   IMAGE_CASES,
   GEMMA4_MODEL,
   QWEN35_MODEL,
+  skipHeavyImages,
   runVlmImagePerf
 }
