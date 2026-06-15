@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "GGML-backed OCR addon for qvac (EasyOCR pipeline on GGUF weights)",
   "addon": true,
   "engines": {
@@ -64,7 +64,7 @@
   "devDependencies": {
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
-    "bare-fetch": "^2.5.1",
+    "bare-fetch": "^3.0.1",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
