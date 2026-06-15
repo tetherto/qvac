@@ -8,11 +8,18 @@
 #include "../utils/Qwen3ReasoningUtils.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
+#include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
 
-class TextLlmContext : public LlmContext {
+/// Concrete text-only LLM context. Implements both the legacy
+/// `LlmContext` API (driven by the single-prompt path in `LlamaModel`)
+/// and the per-sequence `SequenceDriver` API (driven by the
+/// `ContinuousBatchScheduler`). The overlapping state-query methods
+/// (`getNPast`, `getNSlides`, `validatePromptPolicy`) appear on both
+/// bases; a single override below satisfies both vtables.
+class TextLlmContext : public LlmContext, public SequenceDriver {
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
@@ -22,6 +29,10 @@ public:
   TextLlmContext(
       common_params& commonParams, common_init_result_ptr llamaInit,
       ToolsCompactController& tools);
+  TextLlmContext(
+      const common_params& commonParams, const LlmModelContext& shared,
+      ToolsCompactController& tools, llama_seq_id seqId,
+      llama_pos perSeqCtxCeiling = -1);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -80,7 +91,7 @@ public:
   /**
    * Access the underlying llama model pointer.
    */
-  llama_model* getModel() override { return model_; }
+  llama_model* getModel() override { return modelCtx_.model; }
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -121,6 +132,14 @@ public:
    */
   void setNDiscarded(llama_pos nDiscarded) override;
 
+  /**
+   * The get n_discarded method. It returns the configured context-shift
+   * discard budget. A value of 0 means context shifting is disabled.
+   *
+   * @return - the number of tokens to discard on overflow.
+   */
+  [[nodiscard]] llama_pos getNDiscarded() const;
+
   [[nodiscard]] int32_t getNSlides() const override;
   void resetNSlides() override;
 
@@ -141,7 +160,45 @@ public:
    */
   llama_pos removeLastNTokens(llama_pos count) override;
 
+  std::vector<llama_token> preparePrefill(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+      bool prefill) override;
+
+  void
+  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
+
+  void syncPosition(llama_pos currentPos) override;
+
+  SequenceStepResult onLogitsReady(
+      int logitIdx, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch = nullptr) override;
+
+  void onSequenceEnd(
+      const std::function<void(const std::string&)>& outputCallback) override;
+
+  void onGenerationFinished(
+      const std::function<void(const std::string&)>& outputCallback) override;
+
+  void onCancel(
+      const std::function<void(const std::string&)>& outputCallback) override;
+
+  void validatePromptPolicy(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
+      bool hasKvCacheContext) const override;
+
+  [[nodiscard]] bool loadCache(
+      const std::string& cacheKey, llama_pos configuredNDiscarded) override;
+  void saveCache(const std::string& cacheKey) const override;
+
 private:
+  /// Hook fired exactly once per slot, immediately before the policy
+  /// flushes its UTF-8 buffer at end-of-generation. Internal helper for
+  /// `onGenerationFinished`.
+  void onGenerationCompletePolicy(std::string_view assistantOutput);
+
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
@@ -168,24 +225,35 @@ private:
 
   void flushPendingUtf8ToCallback(
       const std::function<void(const std::string&)>& outputCallback);
-  void applyContextDiscard();
+  void emitOutputPiece(
+      const std::function<void(const std::string&)>& outputCallback,
+      const std::string& text);
+  void initializeCommonState();
+  void initializeOwnedThreadpools();
+  [[nodiscard]] llama_pos ctxCeiling() const;
+  /// Slide the context window if the next token would not fit. Returns
+  /// the number of tokens discarded (0 when no slide happened).
+  llama_pos applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
-  llama_model* model_;
-  llama_context* lctx_;
-  const llama_vocab* vocab_;
+  LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
 
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
+  llama_pos perSeqCtxCeiling_ = -1;
   int32_t nSlides_ = 0;
+  bool pendingBatchFirstMsg_ = false;
+  bool generationStarted_ = false;
+  std::string assistantOutput_;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
 

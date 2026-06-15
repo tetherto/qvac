@@ -11,6 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <common/arg.h>
@@ -226,15 +227,18 @@ void LlamaModel::tuneConfigMap(
 #endif
   if (isOpenCl || kIsMetal) {
     auto isTurboQuantKvType = [](const std::string& v) {
-      return v == "tbq3_0" || v == "tbq4_0" ||
-             v == "pq3_0"  || v == "pq4_0";
+      return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
     };
-    auto checkCacheType = [&](const char* hyphenKey, const char* underscoreKey,
+    auto checkCacheType = [&](const char* hyphenKey,
+                              const char* underscoreKey,
                               const char* side) {
       auto it = configFilemap.find(hyphenKey);
-      if (it == configFilemap.end()) it = configFilemap.find(underscoreKey);
-      if (it == configFilemap.end()) return;
-      if (!isTurboQuantKvType(it->second)) return;
+      if (it == configFilemap.end())
+        it = configFilemap.find(underscoreKey);
+      if (it == configFilemap.end())
+        return;
+      if (!isTurboQuantKvType(it->second))
+        return;
       const char* backendName = isOpenCl ? "OpenCL" : "Metal";
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
@@ -286,6 +290,20 @@ void LlamaModel::setInitLoader(
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   cancel();
   std::unique_lock lock(stateMtx_);
+  // Unconditionally stop the old contexts before destroying them, regardless
+  // of job counters. cancel() above only routes to active engines (counters >
+  // 0), but reload() must clean up *any* residual state in the old context
+  // (e.g. after finetuning, which doesn't increment the counters) before
+  // discarding it. Without this, stale stop flags or other state can survive
+  // into the next operation and cause decode failures.
+  if (state_) {
+    if (state_->batchScheduler_) {
+      state_->batchScheduler_->requestCancelAll();
+    }
+    if (state_->llmContext_) {
+      state_->llmContext_->stop();
+    }
+  }
   if (newFinetuneOverrides.has_value()) {
     pendingFinetuneOverrides_ = *newFinetuneOverrides;
   }
@@ -411,6 +429,48 @@ void LlamaModel::init(bool acquireLock) {
         snap->configuredNDiscarded_,
         [this](bool resetStats) { this->resetState(resetStats); });
   }
+
+  if (isMultiBatchActivated(*snap)) {
+    snap->batchScheduler_ = initBatchScheduler(*snap);
+  }
+}
+
+bool LlamaModel::isMultiBatchActivated(ReloadableState& state) {
+  return state.llmContext_ && state.isTextLlm_ &&
+         llama_n_seq_max(state.llmContext_->getCtx()) > 1;
+}
+
+std::unique_ptr<batching::ContinuousBatchScheduler>
+LlamaModel::initBatchScheduler(ReloadableState& state) {
+  llama_context* ctx = state.llmContext_->getCtx();
+  llama_model* mdl = state.llmContext_->getModel();
+  const common_params& cparams = state.llmContext_->getParams();
+  const auto batchSize = static_cast<size_t>(llama_n_seq_max(ctx));
+  const auto ctxTotalTokens = static_cast<unsigned>(llama_n_ctx(ctx));
+  const auto batchCapacity = static_cast<int32_t>(cparams.n_batch);
+  const auto maxChunkSize = static_cast<unsigned>(cparams.n_ubatch);
+  LlmModelContext shared{
+      .model = mdl,
+      .lctx = ctx,
+      .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
+  };
+  return std::make_unique<batching::ContinuousBatchScheduler>(
+      shared,
+      maxChunkSize,
+      ctxTotalTokens,
+      batchSize,
+      batchCapacity,
+      cparams,
+      state.configuredNDiscarded_,
+      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt);
+}
+
+batching::ContinuousBatchScheduler* LlamaModel::batchSchedulerForTesting() {
+  std::shared_lock lock(stateMtx_);
+  if (!state_) {
+    return nullptr;
+  }
+  return state_->batchScheduler_.get();
 }
 
 void LlamaModel::setWeightsForFile(
@@ -495,18 +555,34 @@ void LlamaModel::cancel() const {
 }
 
 void LlamaModel::cancelImpl() const {
-  if (state_ && state_->llmContext_) {
+  // Guarded by the run counters, never by the scheduler's `hasWork()`:
+  // the per-token streaming callback runs on the scheduler's worker
+  // thread while it holds the scheduler `mutex_`, so any locking
+  // scheduler method called from a cancel issued inside that callback
+  // self-deadlocks. The counters are also what keeps cancel state
+  // isolated per engine: only the engine with work in flight gets its
+  // stop flag set, so an idle engine never carries a stale flag into
+  // its next run.
+  if (state_ && state_->batchScheduler_ && activeBatchJobs_.load() > 0) {
+    state_->batchScheduler_->requestCancelAll();
+  }
+  if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
     state_->llmContext_->stop();
   }
 }
 
 std::any LlamaModel::process(const std::any& input) {
   std::shared_lock lock(stateMtx_);
-  if (input.type() != typeid(Prompt)) {
+  if (input.type() != typeid(Prompt) &&
+      input.type() != typeid(std::vector<Prompt>)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
         "Invalid input type");
+  }
+  if (input.type() == typeid(std::vector<Prompt>)) {
+    const auto& prompts = std::any_cast<const std::vector<Prompt>&>(input);
+    return {processPromptBatchImpl(prompts)};
   }
   validateBitnetQuantization();
   const auto& prompt = std::any_cast<const Prompt&>(input);
@@ -533,7 +609,7 @@ std::any LlamaModel::process(const std::any& input) {
         "Finetuning not available in standalone test build");
   }
 #endif
-  return processPrompt(prompt);
+  return {processPromptImpl(prompt)};
 }
 
 LlamaModel::ResolvedPrompt
@@ -570,7 +646,13 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 }
 
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
-  state_->lastRunWasPrefill_ = prompt.prefill;
+  activeSingleJobs_.fetch_add(1);
+  ScopeGuard jobGuard([this] { activeSingleJobs_.fetch_sub(1); });
+  state_->lastRun_ = {};
+  state_->lastRun_.wasPrefill = prompt.prefill;
+  if (state_->batchScheduler_) {
+    state_->batchScheduler_->resetRuntimeStats();
+  }
 
   // Reset per-inference slide counter so it doesn't leak across runs
   state_->llmContext_->resetNSlides();
@@ -592,7 +674,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     hasKvCacheContext = true;
   }
 
-  state_->toolsCompact_->validatePrompt(
+  state_->llmContext_->validatePromptPolicy(
       resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
@@ -631,15 +713,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture = state_->toolsCompact_->enabled();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
-  } else if (needsOutputCapture) {
-    callback = [&](const std::string& token) {
-      oss << token;
-      prompt.outputCallback(token);
-    };
   }
 
   if (!state_->llmContext_->generateResponse(callback)) {
@@ -653,26 +729,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     out = oss.str();
   }
 
-  // Post-generation tools trim decision via controller
-  std::string ossStr;
-  if (needsOutputCapture && prompt.outputCallback) {
-    // Only materialize a second copy when output streamed via callback.
-    ossStr = oss.str();
-  }
-  const std::string& outputToCheck =
-      needsOutputCapture ? (prompt.outputCallback ? ossStr : out) : out;
-  auto decision = state_->toolsCompact_->onGenerationComplete(
-      outputToCheck,
-      state_->llmContext_->getNPast(),
-      state_->llmContext_->getFirstMsgTokens());
-  if (decision.trim) {
-    state_->llmContext_->removeLastNTokens(decision.tokensToRemoveFromTail);
-    if (decision.clampFirstMsgTokensToNPast &&
-        state_->llmContext_->getFirstMsgTokens() >
-            state_->llmContext_->getNPast()) {
-      state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
-    }
-  }
   maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
 
   if (resolved.shouldResetAfterInference) {
@@ -681,36 +737,177 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   return out;
 }
 
+std::vector<std::string>
+LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
+  std::shared_lock lock(stateMtx_);
+  return processPromptBatchImpl(prompts);
+}
+
+bool LlamaModel::supportsBatching() const {
+  std::shared_lock lock(stateMtx_);
+  return state_ && isMultiBatchActivated(*state_);
+}
+
+std::vector<std::string>
+LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
+  activeBatchJobs_.fetch_add(1);
+  ScopeGuard jobGuard([this] { activeBatchJobs_.fetch_sub(1); });
+  validateBitnetQuantization();
+  state_->lastRun_ = {};
+  state_->lastRun_.wasBatch = true;
+
+  // Invalidate single-prompt cache state and clear any stale KV data left by
+  // single-prompt runs. The batch scheduler will manage KV slots itself.
+  if (state_->cacheManager_.has_value()) {
+    state_->cacheManager_->invalidate();
+  }
+  llama_context* lctx = getContext();
+  if (lctx != nullptr) {
+    llama_memory_t mem = llama_get_memory(lctx);
+    if (mem != nullptr) {
+      // Clear all sequences to ensure batch scheduler starts with clean KV
+      // state
+      const int nSeqMax = llama_n_seq_max(lctx);
+      for (int seqId = 0; seqId < nSeqMax; seqId++) {
+        llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+      }
+    }
+  }
+
+  if (prompts.empty()) {
+    return {};
+  }
+
+  if (!state_->batchScheduler_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "Model is not configured for continuous batching: requires a "
+        "text-only model with n_seq_max > 1");
+  }
+  auto& scheduler = *state_->batchScheduler_;
+
+  std::vector<batching::SubmitRequest> requests;
+  requests.reserve(prompts.size());
+  std::unordered_set<std::string> saveCacheKeys;
+  for (size_t i = 0; i < prompts.size(); i++) {
+    const Prompt& prompt = prompts[i];
+    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty() &&
+        !saveCacheKeys.insert(prompt.cacheKey).second) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: duplicate cacheKey '" + prompt.cacheKey +
+              "' with saveCacheToDisk in the same batch would overwrite "
+              "itself; each saved cache must use a distinct key");
+    }
+    if (!prompt.media.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: media is not supported in batch mode");
+    }
+    if (prompt.finetuningParams.has_value()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: finetuning is not a batch processing operation");
+    }
+    ParsedPromptPayload parsed = formatPrompt(prompt.input);
+    if (parsed.chatMsgs.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(EmptyPrompt),
+          "processPromptBatch: prompt produced no chat messages");
+    }
+    batching::SubmitRequest sr;
+    sr.chatMsgs = std::move(parsed.chatMsgs);
+    sr.tools = std::move(parsed.tools);
+    sr.layout = std::move(parsed.layout);
+    sr.prefill = prompt.prefill;
+    sr.cacheKey = prompt.cacheKey;
+    sr.saveCacheToDisk = prompt.saveCacheToDisk;
+    sr.overrides = prompt.generationParams;
+    sr.streams.onToken = [userCb = prompt.outputCallback](
+                             [[maybe_unused]] uint32_t seqId,
+                             const std::string& piece) {
+      if (userCb) {
+        userCb(piece);
+      }
+    };
+
+    requests.push_back(std::move(sr));
+  }
+
+  batching::BatchResult result = scheduler.processBatch(std::move(requests));
+
+  return result.outputs;
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   std::shared_lock lock(stateMtx_);
+  if (state_->lastRun_.wasBatch && state_->batchScheduler_) {
+    return batchRuntimeStatsLocked();
+  }
+  return singleRuntimeStatsLocked();
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats
+LlamaModel::batchRuntimeStatsLocked() const {
+  // Pull the live snapshot from the scheduler. It already aggregates
+  // across every `processBatch` caller in the current idle epoch
+  // (`stats_.reset()` only fires when the queue is both empty and has no
+  // in-flight work), so this composes correctly with multiple queued /
+  // in-flight batches without LlamaModel having to cache state.
+  const batching::RuntimeStatsSnapshot stats =
+      state_->batchScheduler_->runtimeStats();
+  // TTFT comes from `llama_perf_context` to match legacy single-prompt
+  // semantics; the scheduler does not yet expose a batch-aware TTFT.
+  // Reset the perf counters so the next single-prompt run sees a clean
+  // slate.
+  auto perfData = llama_perf_context(state_->llmContext_->getCtx());
+  llama_perf_context_reset(state_->llmContext_->getCtx());
+  return {
+      {"TTFT", perfData.t_p_eval_ms},
+      {"TPS", stats.decodeTokensPerSecond()},
+      {"ppTPS", stats.prefillTokensPerSecond()},
+      {"CacheTokens", stats.cacheTokens},
+      {"generatedTokens", stats.generatedTokens},
+      {"promptTokens", stats.promptTokens},
+      {"contextSlides", stats.contextSlides},
+      {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"backendDevice", runtimeBackendDevice_}};
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats
+LlamaModel::singleRuntimeStatsLocked() const {
   auto perfData = llama_perf_context(state_->llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
-
-  double timeToFirstToken =
-      state_->lastRunWasPrefill_ ? 0.0 : perfData.t_p_eval_ms;
-  double tokensPerSecond =
-      (!state_->lastRunWasPrefill_ && perfData.t_eval_ms > 0)
+  const bool wasPrefill = state_->lastRun_.wasPrefill;
+  const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
+  const int64_t generatedTokens =
+      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_eval);
+  const int64_t promptTokens =
+      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
+  const double tokensPerSecond =
+      (!wasPrefill && perfData.t_eval_ms > 0)
           ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
           : 0.0;
-  double promptProcessingTPS =
+  const double promptProcessingTPS =
       perfData.t_p_eval_ms > 0
           ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
           : 0.0;
-
-  int32_t generatedTokens = state_->lastRunWasPrefill_ ? 0 : perfData.n_eval;
-  int32_t promptTokens = state_->lastRunWasPrefill_ ? 0 : perfData.n_p_eval;
   llama_perf_context_reset(state_->llmContext_->getCtx());
-
-  int32_t contextSlides = state_->llmContext_->getNSlides();
-
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"ppTPS", promptProcessingTPS},
-      {"CacheTokens", state_->llmContext_->getNPast()},
+      {"CacheTokens", static_cast<int64_t>(state_->llmContext_->getNPast())},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
-      {"contextSlides", static_cast<int64_t>(contextSlides)},
+      {"contextSlides",
+       static_cast<int64_t>(state_->llmContext_->getNSlides())},
+      {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
 }
 
@@ -806,8 +1003,7 @@ void LlamaModel::commonParamsParse(
     const char* begin = raw.data();
     const char* end = begin + raw.size();
     const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end ||
-        (value != 0 && value != -1)) {
+    if (ec != std::errc{} || ptr != end || (value != 0 && value != -1)) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
@@ -1016,8 +1212,8 @@ void LlamaModel::commonParamsParse(
     }
   }
 
-  auto ctxArg =
-      common_params_parser_init(params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
+  auto ctxArg = common_params_parser_init(
+      params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
 
   // disable warmup run
   params.warmup = false;
