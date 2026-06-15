@@ -137,7 +137,7 @@ export async function resolveInputReferenceImage (
       throw new HttpError(400, 'invalid_input_reference',
         'input_reference.image_url: data URI decoded to empty bytes.')
     }
-    return decoded
+    return new Uint8Array(decoded)
   }
   if (url.startsWith('http://') || url.startsWith('https://')) {
     let res: Response

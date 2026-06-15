@@ -298,16 +298,32 @@ describe('createVideoJobsStore', () => {
 function makeCtxStub (opts: {
   cancelOverride?: QvacContext['cancelOverride']
   removed?: string[]
+  files?: Record<string, { data: Buffer } | undefined>
 } = {}): QvacContext {
   const removed = opts.removed ?? []
+  const files = opts.files ?? {}
   const stub = {
     logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-    ephemeralFiles: { remove: (id: string) => { removed.push(id) } }
+    ephemeralFiles: {
+      remove: (id: string) => { removed.push(id) },
+      get: (id: string) => files[id]
+    }
   } as unknown as QvacContext
   if (opts.cancelOverride) {
     (stub as { cancelOverride?: QvacContext['cancelOverride'] }).cancelOverride = opts.cancelOverride
   }
   return stub
+}
+
+// Temporarily replaces globalThis.fetch for a single async test body; always restores.
+async function withMockFetch<T> (mock: typeof globalThis.fetch, fn: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch
+  globalThis.fetch = mock
+  try {
+    return await fn()
+  } finally {
+    globalThis.fetch = original
+  }
 }
 
 function makeJob (overrides: Partial<VideoJob> = {}): VideoJob {
@@ -334,6 +350,24 @@ function makeJob (overrides: Partial<VideoJob> = {}): VideoJob {
 }
 
 describe('resolveInputReferenceImage', () => {
+  // ── data URI ─────────────────────────────────────────────────────────
+
+  it('rejects data URI missing the comma separator', async () => {
+    const ctx = makeCtxStub()
+    await assert.rejects(
+      () => resolveInputReferenceImage({ image_url: 'data:image/jpeg;base64' }, ctx),
+      (err: unknown) => err instanceof Error && err.message.includes('comma separator')
+    )
+  })
+
+  it('rejects data URI with non-base64 encoding header', async () => {
+    const ctx = makeCtxStub()
+    await assert.rejects(
+      () => resolveInputReferenceImage({ image_url: 'data:image/jpeg;utf8,hello' }, ctx),
+      (err: unknown) => err instanceof Error && err.message.includes('base64-encoded')
+    )
+  })
+
   it('rejects data URI with invalid base64 characters', async () => {
     const ctx = makeCtxStub()
     await assert.rejects(
@@ -347,6 +381,129 @@ describe('resolveInputReferenceImage', () => {
     await assert.rejects(
       () => resolveInputReferenceImage({ image_url: 'data:image/jpeg;base64,' }, ctx),
       (err: unknown) => err instanceof Error && err.message.includes('empty bytes')
+    )
+  })
+
+  it('returns decoded bytes for a valid data URI', async () => {
+    const ctx = makeCtxStub()
+    // "AQID" is base64 for [0x01, 0x02, 0x03]
+    const result = await resolveInputReferenceImage({ image_url: 'data:image/png;base64,AQID' }, ctx)
+    assert.deepEqual(result, new Uint8Array([0x01, 0x02, 0x03]))
+  })
+
+  // ── unknown scheme ───────────────────────────────────────────────────
+
+  it('rejects an unknown URL scheme', async () => {
+    const ctx = makeCtxStub()
+    await assert.rejects(
+      () => resolveInputReferenceImage({ image_url: 'ftp://example.com/img.png' }, ctx),
+      (err: unknown) => err instanceof Error && err.message.includes('base64 data URI or an HTTP(S) URL')
+    )
+  })
+
+  // ── file_id ──────────────────────────────────────────────────────────
+
+  it('rejects an unknown file_id', async () => {
+    const ctx = makeCtxStub({ files: {} })
+    await assert.rejects(
+      () => resolveInputReferenceImage({ file_id: 'file-missing' }, ctx),
+      (err: unknown) => err instanceof Error && err.message.includes('not found')
+    )
+  })
+
+  it('returns bytes for a known file_id', async () => {
+    const data = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    const ctx = makeCtxStub({ files: { 'file-abc': { data } } })
+    const result = await resolveInputReferenceImage({ file_id: 'file-abc' }, ctx)
+    assert.deepEqual(result, new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
+  })
+
+  // ── HTTP fetch ───────────────────────────────────────────────────────
+
+  it('rejects HTTP URL that returns a non-200 response', async () => {
+    const ctx = makeCtxStub()
+    await withMockFetch(
+      async () => ({ ok: false, status: 404 } as Response),
+      async () => {
+        await assert.rejects(
+          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
+          (err: unknown) => err instanceof Error && err.message.includes('HTTP 404')
+        )
+      }
+    )
+  })
+
+  it('rejects HTTP URL when fetch throws a network error', async () => {
+    const ctx = makeCtxStub()
+    await withMockFetch(
+      async () => { throw new Error('ECONNREFUSED') },
+      async () => {
+        await assert.rejects(
+          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
+          (err: unknown) => err instanceof Error && err.message.includes('ECONNREFUSED')
+        )
+      }
+    )
+  })
+
+  it('rejects HTTP URL when fetch times out on initial connect', async () => {
+    const ctx = makeCtxStub()
+    const timeoutErr = Object.assign(new Error('fetch timed out'), { name: 'TimeoutError' })
+    await withMockFetch(
+      async () => { throw timeoutErr },
+      async () => {
+        await assert.rejects(
+          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
+          (err: unknown) => err instanceof Error && err.message.includes('timed out after')
+        )
+      }
+    )
+  })
+
+  it('rejects HTTP URL when response body exceeds the 100 MB limit', async () => {
+    const ctx = makeCtxStub()
+    const bigChunk = new Uint8Array(101 * 1024 * 1024)
+    await withMockFetch(
+      async () => ({
+        ok: true,
+        status: 200,
+        body: {
+          getReader: () => ({
+            read: async () => ({ done: false, value: bigChunk }),
+            cancel: async () => {},
+            releaseLock: () => {}
+          })
+        }
+      } as unknown as Response),
+      async () => {
+        await assert.rejects(
+          () => resolveInputReferenceImage({ image_url: 'https://example.com/big.png' }, ctx),
+          (err: unknown) => err instanceof Error && err.message.includes('exceeds')
+        )
+      }
+    )
+  })
+
+  it('rejects HTTP URL when body read throws an error', async () => {
+    const ctx = makeCtxStub()
+    await withMockFetch(
+      async () => ({
+        ok: true,
+        status: 200,
+        body: {
+          getReader: () => ({
+            read: async () => { throw new Error('stream error') },
+            cancel: async () => {},
+            releaseLock: () => {}
+          })
+        }
+      } as unknown as Response),
+      async () => {
+        await assert.rejects(
+          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
+          (err: unknown) => err instanceof Error && err.message.includes('failed reading response body')
+        )
+      }
     )
   })
 })
