@@ -77,8 +77,6 @@ TICKET prefix[tags]: subject
 
 ## PR Body
 ```markdown
-**Note**: be concise and prefer bullet points.
-
 ## 🎯 What problem does this PR solve?
 ...
 ```
@@ -174,6 +172,7 @@ Before outputting the PR description, verify:
 - [ ] `[api]` tag has usage example
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
+- [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
 - [ ] If diff touches `packages/sdk/package.json` deps/version, the sync skill ran (or `--no-sync` was set with a reminder emitted), and `check:deps-vs-sdk` passes
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 
