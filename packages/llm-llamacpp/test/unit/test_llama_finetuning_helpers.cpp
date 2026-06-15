@@ -474,8 +474,9 @@ TEST(
 }
 
 TEST(LlamaFinetuningHelpers, TryHandlePauseRequest_NullStateReturnsFalse) {
-  EXPECT_FALSE(llama_finetuning_helpers::tryHandlePauseRequest(
-      nullptr, nullptr, true, 1, 10));
+  EXPECT_FALSE(
+      llama_finetuning_helpers::tryHandlePauseRequest(
+          nullptr, nullptr, true, 1, 10));
 }
 
 TEST(
@@ -484,8 +485,9 @@ TEST(
   llama_finetuning_helpers::TrainingCheckpointState state;
   state.pauseRequested.store(false);
 
-  EXPECT_FALSE(llama_finetuning_helpers::tryHandlePauseRequest(
-      nullptr, &state, true, 1, 10));
+  EXPECT_FALSE(
+      llama_finetuning_helpers::tryHandlePauseRequest(
+          nullptr, &state, true, 1, 10));
 }
 
 TEST(
@@ -498,8 +500,9 @@ TEST(
   state.isFinetuning.store(true);
   state.isPaused.store(false);
 
-  EXPECT_TRUE(llama_finetuning_helpers::tryHandlePauseRequest(
-      nullptr, &state, true, 5, 10));
+  EXPECT_TRUE(
+      llama_finetuning_helpers::tryHandlePauseRequest(
+          nullptr, &state, true, 5, 10));
 
   EXPECT_FALSE(state.shouldExit.load());
   EXPECT_TRUE(state.isFinetuning.load());
@@ -547,8 +550,9 @@ TEST(
       fs::temp_directory_path() / ("nonexistent_ckpt_" + uniqueTestId());
   llama_finetuning_helpers::CheckpointMetadata meta{};
 
-  EXPECT_FALSE(llama_finetuning_helpers::loadPauseCheckpoint(
-      noDir, nullptr, nullptr, nullptr, nullptr, meta));
+  EXPECT_FALSE(
+      llama_finetuning_helpers::loadPauseCheckpoint(
+          noDir, nullptr, nullptr, nullptr, nullptr, meta));
 }
 
 TEST(
@@ -560,8 +564,9 @@ TEST(
   fs::create_directories(ckptDir);
 
   llama_finetuning_helpers::CheckpointMetadata meta{};
-  EXPECT_FALSE(llama_finetuning_helpers::loadPauseCheckpoint(
-      ckptDir, nullptr, nullptr, nullptr, nullptr, meta));
+  EXPECT_FALSE(
+      llama_finetuning_helpers::loadPauseCheckpoint(
+          ckptDir, nullptr, nullptr, nullptr, nullptr, meta));
 
   fs::remove_all(tmpDir);
 }

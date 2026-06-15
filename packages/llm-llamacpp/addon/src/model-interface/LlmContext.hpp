@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
@@ -11,6 +12,8 @@
 #include "llama.h"
 
 using namespace qvac_lib_inference_addon_llama::errors;
+
+struct PromptLayout;
 
 struct GenerationParams {
   std::optional<int> n_predict;
@@ -56,17 +59,21 @@ using CommonSamplerPtr = std::unique_ptr<common_sampler, CommonSamplerDeleter>;
 class LlamaBatch {
   llama_batch batch_;
   bool initialized_ = false;
+  int32_t capacity_ = 0;
 
 public:
   LlamaBatch() noexcept : batch_{}, initialized_(false) {}
 
   LlamaBatch(int32_t nTokens, int32_t embd, int32_t nSeqMax)
-      : batch_(llama_batch_init(nTokens, embd, nSeqMax)), initialized_(true) {}
+      : batch_(llama_batch_init(nTokens, embd, nSeqMax)), initialized_(true),
+        capacity_(nTokens) {}
 
   LlamaBatch(LlamaBatch&& other) noexcept
-      : batch_(other.batch_), initialized_(other.initialized_) {
+      : batch_(other.batch_), initialized_(other.initialized_),
+        capacity_(other.capacity_) {
     other.batch_ = llama_batch{};
     other.initialized_ = false;
+    other.capacity_ = 0;
   }
 
   LlamaBatch& operator=(LlamaBatch&& other) noexcept {
@@ -76,8 +83,10 @@ public:
       }
       batch_ = other.batch_;
       initialized_ = other.initialized_;
+      capacity_ = other.capacity_;
       other.batch_ = llama_batch{};
       other.initialized_ = false;
+      other.capacity_ = 0;
     }
     return *this;
   }
@@ -99,6 +108,8 @@ public:
 
   llama_batch* operator->() noexcept { return &batch_; }
   const llama_batch* operator->() const noexcept { return &batch_; }
+
+  [[nodiscard]] int32_t capacity() const noexcept { return capacity_; }
 };
 
 struct ThreadPoolDeleter {
@@ -126,6 +137,12 @@ struct ThreadPoolDeleter {
   }
 };
 using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
+
+struct LlmModelContext {
+  llama_model* model = nullptr;
+  llama_context* lctx = nullptr;
+  const llama_vocab* vocab = nullptr;
+};
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
@@ -319,4 +336,47 @@ public:
    *
    */
   virtual void resetMedia() {};
+
+  /// Validates an incoming prompt against any policy-level constraints
+  /// (size, layout, KV-cache state). Default is a no-op; concrete
+  /// contexts (`TextLlmContext`, `MtmdLlmContext`) override as needed.
+  /// Used by both the legacy single-prompt path and the per-slot
+  /// continuous-batching path before admission.
+  virtual void validatePromptPolicy(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
+      bool hasKvCacheContext) const {
+    (void)chatMsgs;
+    (void)tools;
+    (void)layout;
+    (void)hasKvCacheContext;
+  }
+
+protected:
+  void clearSequenceMemory(
+      llama_context* lctx, llama_pos startPos = -1,
+      llama_pos endPos = -1) const {
+    if (auto* mem = llama_get_memory(lctx); mem == nullptr) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "LlmContext: llama memory is null while clearing sequence");
+    } else if (!llama_memory_seq_rm(mem, seqId_, startPos, endPos)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "LlmContext: failed to clear sequence from KV memory");
+    }
+  }
+
+  /// llama-side sequence id this context owns. Stamped onto every
+  /// token added to a `llama_batch` and used as the `seq_id` argument
+  /// to `llama_memory_seq_*` calls. Defaults to 0 so the legacy
+  /// single-prompt path (one `LlmContext` per `llama_context`) keeps
+  /// its old "always seq 0" behaviour byte-for-byte. Per-slot
+  /// instances under `ContinuousBatchScheduler` set this to their
+  /// scheduler-assigned slot id at construction.
+  llama_seq_id seqId_ = 0;
 };

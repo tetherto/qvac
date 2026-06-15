@@ -84,6 +84,79 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: 600_000 }, asyn
   )
 })
 
+safeTest('idle | run batch: returns ids, keyed chunks, ordered results', { timeout: 600_000 }, async t => {
+  const { model } = await setupModel(t, {
+    parallel: '2', // 3 prompts but 2 in parallel at a time
+    n_predict: '16'
+  })
+  const batchPrompts = [
+    {
+      prompt: [
+        { role: 'system', content: 'You answer with one short word.' },
+        { role: 'user', content: 'Say red.' }
+      ],
+      runOptions: { generationParams: { predict: 8 } }
+    },
+    {
+      id: 'explicit-blue',
+      prompt: [
+        { role: 'system', content: 'You answer with one short word.' },
+        { role: 'user', content: 'Say blue.' }
+      ]
+    },
+    [
+      { role: 'system', content: 'You answer with one short word.' },
+      { role: 'user', content: 'Say green.' }
+    ]
+  ]
+
+  await t.exception.all(
+    () => model.run(batchPrompts, { generationParams: { predict: 8 } }),
+    /Batch run options must be set per BatchPrompt item/,
+    'batch run rejects separate runOptions'
+  )
+
+  const response = await model.run(batchPrompts)
+  t.ok(Array.isArray(response.ids), 'batch response exposes generated ids')
+  t.is(response.ids.length, 3, 'one id per prompt')
+  t.ok(response.ids.includes('explicit-blue'), 'explicit id is preserved')
+  t.is(new Set(response.ids).size, 3, 'generated ids are unique')
+
+  const chunksById = {}
+  response.onUpdate(({ id, chunk }) => {
+    chunksById[id] = (chunksById[id] || '') + chunk
+  })
+  const results = await response.await()
+  for (const result of results) {
+    t.comment(`${result.id}: ${result.output.trim()}`)
+  }
+  t.comment(`avgConcurrentSeq: ${toNumber(response?.stats?.avgConcurrentSeq)}`)
+
+  t.alike(results.map(result => result.id), response.ids, 'results preserve generated id order')
+  t.ok(results.every(result => typeof result.output === 'string'), 'each result has output text')
+  t.ok(
+    Object.keys(chunksById).every(id => response.ids.includes(id)),
+    'streamed chunks are keyed by generated ids'
+  )
+  t.ok(toNumber(response?.stats?.avgConcurrentSeq) > 1.1, 'batch stats report concurrent sequence decoding')
+})
+
+safeTest('idle | run batch without parallel >= 2: rejects before admission', { timeout: 600_000 }, async t => {
+  // Default load (parallel = 1) leaves continuous batching inactive, so batch
+  // input must be rejected up front rather than reaching the worker thread.
+  const { model } = await setupModel(t)
+  const batchPrompts = [
+    [{ role: 'user', content: 'Say red.' }],
+    [{ role: 'user', content: 'Say blue.' }]
+  ]
+
+  await t.exception.all(
+    () => model.run(batchPrompts),
+    /parallel >= 2/,
+    'batch run rejects when the model was not loaded with parallel >= 2'
+  )
+})
+
 safeTest('idle | run with prefill: evaluates prompt without token generation', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
 
