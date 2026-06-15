@@ -162,7 +162,6 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
     t.ok(diff <= tolerance,
       `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`)
 
-
     // Save output for CI artifact upload — filename encodes test origin
     // Saved to modelDir so mobile has write permission to the same path
     const outPath = path.join(modelDir, 'generate-image--sd2-txt2img-seed42.png')
