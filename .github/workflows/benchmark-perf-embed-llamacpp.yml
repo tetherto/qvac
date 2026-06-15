@@ -233,6 +233,7 @@ jobs:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
             packages/embed-llamacpp/benchmarks/performance/render-report.js
+            packages/embed-llamacpp/benchmarks/performance/_sweep-grid.js
             packages/embed-llamacpp/benchmarks/performance/models.manifest.json
             packages/embed-llamacpp/package.json
 
