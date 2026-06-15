@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -68,7 +68,7 @@
     "@qvac/dl-base": "^0.1.0",
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
-    "bare-fetch": "^2.5.1",
+    "bare-fetch": "^3.0.1",
     "bare-fs": "^4.5.1",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",

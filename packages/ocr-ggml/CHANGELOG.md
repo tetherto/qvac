@@ -4,6 +4,13 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-06-15
+
+### Changed
+- Bumped the `bare-fetch` dependency to the latest major (`^3.0.1`), aligning
+  with the rest of the monorepo and removing the duplicate older `bare-fetch`
+  major from the dependency tree.
+
 ## [0.2.0] - 2026-06-12
 
 ### Added
