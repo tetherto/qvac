@@ -96,8 +96,8 @@ test('Chatterbox TTS (ggml): English synthesis + optional WER verification', { t
 
     const st = result.data?.stats || {}
     t.comment(recordTtsStats(
-      `[${forceNoGpu ? 'CPU' : 'GPU'}] chatterbox english ${i + 1}`,
-      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: result.data?.sampleCount },
+      `chatterbox english ${i + 1}`,
+      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: result.data?.sampleCount, backendDevice: st.backendDevice },
       { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox', output: text }
     ))
 

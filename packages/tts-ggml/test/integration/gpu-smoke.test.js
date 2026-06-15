@@ -123,18 +123,18 @@ function assertCpuBackend (t, engineTag, stats) {
   t.is(id, 0, `${engineTag}: useGPU:false must resolve to backendId=0 (CPU), got ${name}`)
 }
 
-// Records a perf row for a smoke run. The CPU/GPU tag is taken from the
-// backend the engine actually resolved to (stats.backendDevice: 0=CPU,
-// 1=GPU) rather than what was requested, so a relaxed GPU fallback is
-// reported honestly. recordTtsStats derives RTF from wall time + audio
-// duration when the addon doesn't report a positive realTimeFactor.
+// Records a perf row for a smoke run. Passes stats.backendDevice so
+// recordTtsStats tags the row CPU/GPU from the backend the engine actually
+// resolved to (0=CPU, 1=GPU) rather than what was requested — so a relaxed
+// GPU→CPU fallback is reported honestly. recordTtsStats also derives RTF from
+// wall time + audio duration when the addon doesn't report a positive
+// realTimeFactor.
 function recordSmoke (t, label, result, wallMs) {
   const st = (result && result.data && result.data.stats) || {}
-  const ep = st.backendDevice === 1 ? 'gpu' : st.backendDevice === 0 ? 'cpu' : null
   t.comment(recordTtsStats(
-    `[${ep ? ep.toUpperCase() : 'CPU'}] ${label}`,
-    { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || (result && result.data && result.data.durationMs), totalSamples: st.totalSamples },
-    { wallMs, sampleCount: result && result.data && result.data.sampleCount, model: label, executionProvider: ep }
+    label,
+    { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || (result && result.data && result.data.durationMs), totalSamples: st.totalSamples, backendDevice: st.backendDevice },
+    { wallMs, sampleCount: result && result.data && result.data.sampleCount, model: label }
   ))
 }
 

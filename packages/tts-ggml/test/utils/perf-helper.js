@@ -162,19 +162,27 @@ function _num (v) {
  * Record a Chatterbox (ggml) synthesis stats row through the shared perf
  * reporter.
  *
- * @param {string} label - Test label, e.g. '[GPU] chatterbox english 1'.
- *                         The execution-provider is auto-detected from the
- *                         label when it contains [CPU] or [GPU].
+ * @param {string} label - Test label, e.g. 'chatterbox english 1'. A leading
+ *                         [CPU]/[GPU] is optional and only used as a fallback
+ *                         hint — the row is tagged from the resolved backend
+ *                         (stats.backendDevice) when available, and the prefix
+ *                         is normalized to match.
  * @param {Object} stats - response.stats from the addon:
- *                         { realTimeFactor, audioDurationMs, totalSamples, ... }
+ *                         { realTimeFactor, audioDurationMs, totalSamples,
+ *                           backendDevice, ... }
  * @param {Object} [extra] - Optional overrides:
  *                         { wallMs, sampleCount, model, output,
  *                           executionProvider }.
  */
 function recordTtsStats (label, stats, extra) {
   const s = stats || {}
+  const resolvedEp = s.backendDevice === 1 ? 'gpu' : s.backendDevice === 0 ? 'cpu' : null
   const epOverride = extra && extra.executionProvider
-  const ep = epOverride || (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
+  const labelEp = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  const ep = resolvedEp || epOverride || labelEp
+
+  const baseLabel = label.replace(/^\s*\[(?:cpu|gpu)\]\s*/i, '')
+  const finalLabel = ep ? `[${ep.toUpperCase()}] ${baseLabel}` : baseLabel
 
   const rtf = _num(s.realTimeFactor)
   const sampleCount = (extra && _num(extra.sampleCount)) != null
@@ -199,7 +207,7 @@ function recordTtsStats (label, stats, extra) {
     : (wallMs != null && audioMs ? wallMs / audioMs : null)
   const rtfSource = usingComputeRtf ? 'compute' : (effRtf != null ? 'wall' : null)
 
-  _perfReporter.record(label, {
+  _perfReporter.record(finalLabel, {
     total_time_ms: wallMs,
     tps,
     real_time_factor: effRtf,
@@ -219,7 +227,7 @@ function recordTtsStats (label, stats, extra) {
   }
 
   const lines = [
-    `${label} Performance Metrics (platform=${platformLabel}):`,
+    `${finalLabel} Performance Metrics (platform=${platformLabel}):`,
     `    - Wall time: ${wallMs !== null ? wallMs + 'ms' : 'n/a'}`,
     `    - RTF: ${effRtf !== null ? effRtf.toFixed(4) + ' (' + rtfSource + ')' : 'n/a'}`,
     `    - Samples: ${sampleCount !== null ? sampleCount : 'n/a'}`,

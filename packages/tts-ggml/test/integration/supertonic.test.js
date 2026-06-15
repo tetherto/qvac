@@ -49,8 +49,8 @@ test('Supertonic TTS (ggml): basic synthesis returns ~44.1 kHz audio + stats', {
 
     const st = result.data?.stats || {}
     t.comment(recordTtsStats(
-      '[CPU] supertonic en',
-      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples },
+      'supertonic en',
+      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
       { wallMs, sampleCount: result.data?.sampleCount, model: 'supertonic', output: text }
     ))
     if (result.data.stats) {

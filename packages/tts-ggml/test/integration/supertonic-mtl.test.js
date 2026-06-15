@@ -76,8 +76,8 @@ test('Supertonic MTL TTS (ggml): synthesizes across es/fr/pt with shared engine'
 
       const st = result.data?.stats || {}
       t.comment(recordTtsStats(
-        `[CPU] supertonic mtl ${lang}`,
-        { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples },
+        `supertonic mtl ${lang}`,
+        { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
         { wallMs, sampleCount: result.data?.sampleCount, model: 'supertonic-mtl', output: text }
       ))
     }

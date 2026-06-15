@@ -104,8 +104,8 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt with shared engi
 
       const st = result.data?.stats || {}
       t.comment(recordTtsStats(
-        `[CPU] chatterbox mtl ${lang}`,
-        { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples },
+        `chatterbox mtl ${lang}`,
+        { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
         { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox-mtl', output: text }
       ))
     }
