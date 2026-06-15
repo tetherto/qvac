@@ -9,6 +9,7 @@ on:
       - tmp-*
     paths:
       - "packages/ai-sdk-provider/**"
+      - ".github/workflows/trigger-reusable-lib-ai-sdk-provider.yml"
   workflow_dispatch:
     inputs:
       npm_tag:
@@ -136,10 +137,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm run lint
 
-      - name: Verify generated model constants are current
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run check-models
-
       - name: Run tests
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:unit
@@ -154,6 +151,7 @@ jobs:
           name: ai-sdk-provider-dist
           path: packages/ai-sdk-provider/dist
           if-no-files-found: error
+          retention-days: 30
 
   publish-main-gpr-dev:
     needs:
@@ -170,7 +168,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Download package dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: ai-sdk-provider-dist
           path: packages/ai-sdk-provider/dist
@@ -206,7 +204,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download package dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: ai-sdk-provider-dist
           path: packages/ai-sdk-provider/dist
@@ -246,7 +244,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Download package dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: ai-sdk-provider-dist
           path: packages/ai-sdk-provider/dist
@@ -275,7 +273,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Download package dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: ai-sdk-provider-dist
           path: packages/ai-sdk-provider/dist

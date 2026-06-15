@@ -8,7 +8,9 @@
   },
   {
     "package": "cli",
-    "path": "packages/cli"
+    "path": "packages/cli",
+    "sdk_sources": ["workspace"],
+    "sdk_sources_release": ["workspace", "published"]
   },
   {
     "package": "rag",

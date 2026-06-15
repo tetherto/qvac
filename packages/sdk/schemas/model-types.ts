@@ -9,6 +9,7 @@ import { z } from "zod";
 export const ModelType = {
   llamacppCompletion: "llamacpp-completion",
   whispercppTranscription: "whispercpp-transcription",
+  bciWhispercppTranscription: "bci-whispercpp-transcription",
   llamacppEmbedding: "llamacpp-embedding",
   nmtcppTranslation: "nmtcpp-translation",
   onnxTts: "onnx-tts",
@@ -24,6 +25,7 @@ export const ModelType = {
 const AliasKeys = {
   llm: "llm",
   whisper: "whisper",
+  bci: "bci",
   embeddings: "embeddings",
   nmt: "nmt",
   parakeet: "parakeet",
@@ -42,6 +44,7 @@ const AliasKeys = {
 export const ModelTypeAliases = {
   [AliasKeys.llm]: ModelType.llamacppCompletion,
   [AliasKeys.whisper]: ModelType.whispercppTranscription,
+  [AliasKeys.bci]: ModelType.bciWhispercppTranscription,
   [AliasKeys.embeddings]: ModelType.llamacppEmbedding,
   [AliasKeys.nmt]: ModelType.nmtcppTranslation,
   [AliasKeys.parakeet]: ModelType.parakeetTranscription,
@@ -165,6 +168,18 @@ export const whisperModelTypeSchema = modelTypeInputSchema
     'Whisper model type: "whisper" (alias) or "whispercpp-transcription" (canonical)',
   );
 export type WhisperModelTypeInput = z.infer<typeof whisperModelTypeSchema>;
+
+/**
+ * BCI/Transcription model type schema.
+ * - Alias: `"bci"` → resolves to `"bci-whispercpp-transcription"`
+ * - Canonical: `"bci-whispercpp-transcription"`
+ */
+export const bciModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.bci, ModelType.bciWhispercppTranscription])
+  .describe(
+    'BCI model type: "bci" (alias) or "bci-whispercpp-transcription" (canonical)',
+  );
+export type BciModelTypeInput = z.infer<typeof bciModelTypeSchema>;
 
 /**
  * Parakeet/Transcription model type schema.

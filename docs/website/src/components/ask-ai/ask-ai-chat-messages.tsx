@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -70,12 +70,25 @@ export function AskAIChatMessages({ messages, isStreaming }: AskAIChatMessagesPr
         <EmptyState />
       ) : (
         <div className="flex flex-col divide-y divide-fd-border/60">
-          {messages.map((message) => (
-            <AskAIChatMessage key={message.id} message={message} />
-          ))}
-          {isStreaming && messages[messages.length - 1]?.role === 'user' ? (
-            <StreamingPlaceholder />
-          ) : null}
+          {messages.map((message, index) => {
+            // The assistant placeholder is appended (empty) the moment
+            // the user submits, so it's the last message until the
+            // first token streams in. While it's still empty we render
+            // the cycling "waiting" indicator in its place instead of a
+            // blank bubble.
+            const isWaiting =
+              isStreaming &&
+              index === messages.length - 1 &&
+              message.role === 'assistant' &&
+              message.content.length === 0;
+            return (
+              <AskAIChatMessage
+                key={message.id}
+                message={message}
+                isWaiting={isWaiting}
+              />
+            );
+          })}
         </div>
       )}
     </div>
@@ -87,20 +100,6 @@ function EmptyState() {
     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center text-sm text-fd-muted-foreground">
       <Sparkles className="size-6 text-fd-primary" aria-hidden="true" />
       <p>Ask anything about QVAC.</p>
-    </div>
-  );
-}
-
-/**
- * Shown when the user has just submitted but no assistant tokens have
- * arrived yet. Avoids a "blank flash" between submission and the
- * first streamed chunk.
- */
-function StreamingPlaceholder() {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 text-sm text-fd-muted-foreground">
-      <Loader2 className="size-4 animate-spin text-fd-primary" aria-hidden="true" />
-      <span>Thinking…</span>
     </div>
   );
 }

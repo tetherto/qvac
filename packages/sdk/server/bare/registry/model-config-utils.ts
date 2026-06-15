@@ -11,6 +11,7 @@ import {
   whisperConfigSchema,
   parakeetRuntimeConfigSchema,
 } from "@/schemas/transcription-config";
+import { bciConfigSchema } from "@/schemas/bci-config";
 import { ocrConfigSchema } from "@/schemas/ocr";
 import { sdcppConfigSchema } from "@/schemas/sdcpp-config";
 import { vlaConfigSchema } from "@/schemas/vla";
@@ -20,6 +21,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: "llm",
   [ModelType.llamacppEmbedding]: "embeddings",
   [ModelType.whispercppTranscription]: "whisper",
+  [ModelType.bciWhispercppTranscription]: "bci",
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
@@ -36,6 +38,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<
   [ModelType.llamacppCompletion]: llmConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
+  [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.onnxOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,

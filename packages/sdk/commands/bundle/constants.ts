@@ -2,11 +2,13 @@ export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   "llamacpp-completion": { exportName: "llmPlugin" },
   "llamacpp-embedding": { exportName: "embeddingsPlugin" },
   "whispercpp-transcription": { exportName: "whisperPlugin" },
+  "bci-whispercpp-transcription": { exportName: "bciPlugin" },
   "parakeet-transcription": { exportName: "parakeetPlugin" },
   "nmtcpp-translation": { exportName: "nmtPlugin" },
   "tts-ggml": { exportName: "ttsPlugin" },
   "onnx-ocr": { exportName: "ocrPlugin" },
   "sdcpp-generation": { exportName: "diffusionPlugin" },
+  "ggml-vla": { exportName: "vlaPlugin" },
 };
 
 export const BUILTIN_SUFFIXES = Object.keys(BUILTIN_PLUGINS);
