@@ -1,6 +1,6 @@
 import './global.css';
 import { Inter, Inconsolata } from 'next/font/google';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { GoogleTagManager } from '@next/third-parties/google';
 import { AskAIProvider } from '@/components/ask-ai';
 import { Provider } from "./provider";
@@ -32,6 +32,16 @@ export const metadata: Metadata = {
     ],
   },
   robots: docsRootMetadataRobots(),
+};
+
+// `viewportFit: cover` lets `env(safe-area-inset-*)` resolve to real
+// values on notched devices (used by the Ask AI shell's bottom
+// padding). `interactiveWidget: resizes-content` shrinks the layout
+// viewport when the on-screen keyboard opens so the fixed chat panel
+// rides above the keyboard instead of being hidden behind it.
+export const viewport: Viewport = {
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
 };
 
 const gtmId = process.env.NEXT_PUBLIC_GTM_ID ?? 'GTM-WDD9NCZ4';

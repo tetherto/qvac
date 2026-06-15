@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.12.2",
+  "version": "0.13.1",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -208,7 +208,7 @@
   "dependencies": {
     "@qvac/bci-whispercpp": "^0.2.0",
     "@qvac/classification-ggml": "^0.3.1",
-    "@qvac/decoder-audio": "^0.3.7",
+    "@qvac/decoder-audio": "^0.4.0",
     "@qvac/diffusion-cpp": "^0.11.2",
     "@qvac/embed-llamacpp": "^0.19.1",
     "@qvac/error": "^0.1.1",
@@ -225,7 +225,7 @@
     "@qvac/vla-ggml": "^0.3.2",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.15.0",
-    "bare-fetch": "^2.9.1",
+    "bare-fetch": "^3.0.1",
     "bare-fs": "^4.5.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
@@ -257,7 +257,7 @@
     "@types/semver": "^7.7.1",
     "@types/tar-stream": "^3.1.4",
     "bare-readline": "^1.2.0",
-    "bare-subprocess": "^5.2.3",
+    "bare-subprocess": "^6.1.0",
     "bare-url": "^2.4.3",
     "brittle": "^4.0.0",
     "chromadb": "^3.0.14",

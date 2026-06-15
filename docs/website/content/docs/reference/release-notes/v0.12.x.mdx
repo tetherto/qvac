@@ -1,0 +1,318 @@
+---
+title: SDK Release Notes — v0.12.x
+description: Release notes for QVAC SDK v0.12.0.
+---
+
+## v0.12.0
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.12.0
+
+This release expands the SDK into new modalities and tightens the Bare distribution story. You can now run vision-language-action inference (SmolVLA), image classification, and text-to-video generation from the same SDK surface that already handles LLMs and diffusion. TTS moves from the ONNX stack to `@qvac/tts-ggml`, Parakeet transcription advances to the 0.6.0 GGUF backend, and a new `@qvac/bare-sdk` package lets Bare workers register only the plugins they need. Tooling consumers get `@qvac/sdk/commands` for bundling and verification, the model registry picks up Gemma 4 and Qwen 3.5/3.6 multimodal constants, and several mobile and delegation fixes land alongside the feature work.
+
+#### Breaking Changes
+
+##### TTS migrates from ONNX to tts-ggml
+
+The SDK TTS plugin now targets `@qvac/tts-ggml` instead of `@qvac/tts-onnx`. The old multi-file ONNX Chatterbox layout — separate speech encoder, embed tokens, conditional decoder, and language model paths — is replaced by single GGUF constants and a simpler load path.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "chatterbox",
+    language: "en",
+    ttsSpeechEncoderSrc: TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX.src,
+    ttsEmbedTokensSrc: TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX.src,
+    ttsConditionalDecoderSrc: TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX.src,
+    ttsLanguageModelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
+  },
+});
+```
+
+**After:**
+
+```typescript
+import { TTS_S3GEN_MULTILINGUAL_CHATTERBOX } from "@qvac/sdk";
+
+await loadModel({
+  modelSrc: TTS_S3GEN_MULTILINGUAL_CHATTERBOX,
+  modelType: "tts",
+});
+```
+
+New registry constants cover Chatterbox and Supertonic variants in GGUF form (`TTS_S3GEN_*`, `TTS_T3_*`, `TTS_*_SUPERTONIC_*`).
+
+##### Parakeet advances to 0.6.0 GGML
+
+Building on the 0.11.0 single-file GGUF migration, Parakeet now targets `@qvac/transcription-parakeet` 0.6.0. Per-variant `modelType` discriminators and multi-file encoder/decoder/vocab fields are gone — pass a single GGUF constant and the addon detects TDT, CTC, EOU, or Sortformer from metadata.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelType: "parakeet",
+  modelConfig: {
+    modelType: "tdt",
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR,
+  },
+});
+```
+
+**After:**
+
+```typescript
+import { PARAKEET_TDT_0_6B_V3_Q8_0 } from "@qvac/sdk";
+
+await loadModel({
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelType: "parakeet",
+});
+```
+
+##### `@qvac/bare-sdk` requires explicit plugin registration
+
+Bare consumers that previously called `getRPC()` against the full `@qvac/sdk` worker must switch to `@qvac/bare-sdk` and register only the plugins their worker uses. The slim package ships no built-in addon dependencies — unregistered calls raise `WorkerPluginsNotRegisteredError`.
+
+**Before:**
+
+```typescript
+import { getRPC } from "@qvac/sdk";
+
+const rpc = await getRPC();
+await rpc.loadModel({ /* any built-in modelType works */ });
+```
+
+**After:**
+
+```typescript
+import { plugins } from "@qvac/bare-sdk";
+import { nmtPlugin } from "@qvac/bare-sdk/nmtcpp-translation/plugin";
+import { llmPlugin } from "@qvac/bare-sdk/llamacpp-completion/plugin";
+
+const sdk = plugins([nmtPlugin, llmPlugin]);
+
+await sdk.loadModel({
+  modelSrc: BERGAMOT_EN_FR,
+  modelType: "nmt",
+});
+```
+
+Install matching addon packages (`@qvac/translation-nmtcpp`, `@qvac/llm-llamacpp`, etc.) alongside `@qvac/bare-sdk`. `@qvac/sdk` remains the right choice for Node and Expo apps that want the full default worker.
+
+##### CLI bundle/verify delegates to `@qvac/sdk/commands`
+
+`@qvac/cli` no longer embeds its own bundle and verify implementations. The commands are thin wrappers around `@qvac/sdk/commands`, and `@qvac/cli` now depends on `@qvac/sdk` directly rather than treating it as a dev-only peer with a runtime semver floor.
+
+**Before:**
+
+```typescript
+// packages/cli served with its own bundle logic and a runtime MIN_SDK_VERSION check
+const MIN_SDK_VERSION = "0.11.0";
+```
+
+**After:**
+
+```typescript
+import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
+
+await bundleSdk({
+  projectRoot: process.cwd(),
+  configPath: "./qvac.config.json",
+  quiet: true,
+});
+
+await verifyBundle({
+  projectRoot: process.cwd(),
+  addonsSource: "./qvac/worker.bundle.js",
+  hosts: ["android-arm64", "ios-arm64"],
+});
+```
+
+CLI publishers must confirm `@qvac/sdk@0.12.0` is on npm and flip `packages/cli/package.json` to `"@qvac/sdk": "^0.12.0"` before publishing `@qvac/cli`.
+
+##### react-native-bare-kit peer widened to ^0.14.0
+
+Mobile consumers should upgrade `react-native-bare-kit` to `^0.14.0` alongside `@qvac/sdk@0.12.0`. Pinning `0.12.x` will fail peer resolution.
+
+#### New APIs
+
+##### Vision-language-action with SmolVLA
+
+Load a SmolVLA model from the registry and run robot action inference with image preprocessing helpers:
+
+```typescript
+import {
+  loadModel,
+  vla,
+  vlaHparams,
+  vlaPreprocessImage,
+  vlaPadState,
+  SMOLVLA_LIBERO_VISION_Q8,
+} from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: SMOLVLA_LIBERO_VISION_Q8,
+  modelType: "vla",
+  modelConfig: { backend: "auto" },
+});
+
+const { hparams } = await vlaHparams({ modelId });
+const image = vlaPreprocessImage(pixels, width, height, {
+  size: hparams.visionImageSize,
+});
+const state = vlaPadState(robotState, hparams.maxStateDim);
+
+const { actions, actionDim, chunkSize } = await vla({
+  modelId,
+  images: [image],
+  imgWidth: hparams.visionImageSize,
+  imgHeight: hparams.visionImageSize,
+  state,
+  tokens,
+  mask,
+});
+```
+
+##### Image classification
+
+Classify JPEG/PNG buffers or raw RGB bytes with bundled MobileNetV3-Small or a custom GGUF:
+
+```typescript
+import { loadModel, classify } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelType: "classification",
+  modelConfig: { topK: 3 },
+});
+
+const results = await classify({ modelId, image: jpegBytes });
+// → [{ label: "food", confidence: 0.91 }, ...]
+```
+
+##### Text-to-video generation
+
+Generate video frames from text prompts using WAN models:
+
+```typescript
+import { video } from "@qvac/sdk";
+
+const run = video({
+  modelId,
+  mode: "txt2vid",
+  prompt: "a cat surfing a wave at sunset",
+  width: 480,
+  height: 832,
+  video_frames: 17,
+  fps: 16,
+  steps: 20,
+});
+
+for await (const tick of run.progressStream) {
+  console.log(`step ${tick.step}/${tick.totalSteps}`);
+}
+
+const frames = await run.outputs;
+```
+
+##### `@qvac/sdk/commands` for bundling and verification
+
+Programmatic access to worker bundling and prebuild verification — the same primitives `qvac bundle` and `qvac verify bundle` use:
+
+```typescript
+import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
+
+await bundleSdk({ projectRoot: process.cwd(), configPath: "./qvac.config.json" });
+await verifyBundle({
+  projectRoot: process.cwd(),
+  addonsSource: "./qvac/worker.bundle.js",
+  hosts: ["android-arm64", "ios-arm64"],
+});
+```
+
+##### RAG cancellation detection
+
+Detect cancelled RAG operations without importing `@qvac/rag/errors`:
+
+```typescript
+import { RAG_ERROR_CODES } from "@qvac/sdk";
+
+if (err.code === RAG_ERROR_CODES.OPERATION_CANCELLED) {
+  // ingest was cancelled
+}
+```
+
+##### Diffusion flash attention toggle
+
+`modelConfig.diffusion_fa` enables per-transformer flash attention on diffusion models (default on as of `@qvac/diffusion-cpp@0.8.0`). The deprecated `flux_flow` prediction mode is removed.
+
+##### Standalone ESRGAN device reporting
+
+The standalone upscaler now forwards `device` from load config and exposes `backendDevice` in upscale stats.
+
+##### Expo plugin hoisted SDK resolution
+
+Expo config plugins resolve `@qvac/sdk` from ancestor `node_modules` directories, fixing monorepo layouts where the SDK is hoisted above the app root.
+
+##### Completion prompt token counts and context overflow
+
+LLM completion now surfaces real input token counts in stats and throws a typed `ContextOverflowError` when the prompt exceeds the model context window — including across the Bare RPC boundary:
+
+```typescript
+import { ContextOverflowError } from "@qvac/sdk";
+
+const run = sdk.completion({ /* ... */ });
+try {
+  const final = await run.final;
+  console.log(final.stats?.promptTokens);
+} catch (err) {
+  if (err instanceof ContextOverflowError) {
+    console.warn(
+      `prompt of ${err.promptTokens} tokens exceeded ${err.ctxSize}`,
+    );
+  }
+}
+```
+
+#### Bug Fixes and Reliability
+
+- Bare delegated RPC now routes through the model registry instead of ad-hoc connection state.
+- `@qvac/sdk` builds cleanly under both Bun and npm.
+- Suspend/resume lifecycle ordering is corrected in the runtime.
+- Snap-packaged apps use the common directory for QVAC home.
+- SDK `peerDependencies` on Holepunch libraries are removed; CI enforces the expected peer ranges instead.
+- `@qvac/rag` and `@qvac/registry-client` bump to `^0.6.0`.
+
+#### Model Registry
+
+The registry sync adds Gemma 4 and Qwen 3.5/3.6 multimodal LLM/VLM constants, expands Bergamot translation pairs, introduces Parakeet 0.6.0 GGUF constants, and replaces ONNX TTS constants with tts-ggml equivalents.
+
+##### Added
+
+```
+GEMMA4_31B_MULTIMODAL_Q4_K_M
+GEMMA4_2B_MULTIMODAL_Q4_K_M
+QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
+QWEN3_6_27B_MULTIMODAL_Q4_K_XL
+TTS_S3GEN_MULTILINGUAL_CHATTERBOX
+TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0
+TTS_EN_SUPERTONIC_Q8_0
+PARAKEET_TDT_0_6B_V3_Q8_0
+(and 60+ more — see models.md)
+```
+
+##### Updated
+
+```
+BERGAMOT_EN_BG
+BERGAMOT_EN_HR
+BERGAMOT_EN_NL
+BERGAMOT_METADATA_13
+```
