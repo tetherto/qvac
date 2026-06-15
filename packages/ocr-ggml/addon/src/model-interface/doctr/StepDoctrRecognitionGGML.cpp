@@ -609,6 +609,51 @@ struct GraphBuilder {
   }
 };
 
+// Sort recognised text regions into human reading order: top-to-bottom, then
+// left-to-right within a row. Two regions share a row when their vertical
+// centres are within half the mean box height (matches the EasyOCR pipeline's
+// ycenter_ths in StepRecognizeText::populateImageList). The DocTR DB detector
+// emits boxes in raw contour order (roughly reversed), so without this pass the
+// full-page text assembly is out of reading order and order-sensitive metrics
+// (CER/WER/ANLS) collapse. y-centre/height/left-edge are derived from min/max
+// over all four corners so the result is robust to polygon point ordering.
+void sortIntoReadingOrder(std::vector<InferredText>& items) {
+  if (items.size() < 2) {
+    return;
+  }
+  const auto yBounds = [](const std::array<cv::Point2f, 4>& p) {
+    return std::minmax({p[0].y, p[1].y, p[2].y, p[3].y});
+  };
+  const auto yCenter = [&](const std::array<cv::Point2f, 4>& p) {
+    const auto [lo, hi] = yBounds(p);
+    return (lo + hi) / 2.0F;
+  };
+  const auto leftX = [](const std::array<cv::Point2f, 4>& p) {
+    return std::min({p[0].x, p[1].x, p[2].x, p[3].x});
+  };
+
+  float sumHeight = 0.0F;
+  for (const auto& item : items) {
+    const auto [lo, hi] = yBounds(item.boxCoordinates);
+    sumHeight += hi - lo;
+  }
+  const float meanHeight = sumHeight / static_cast<float>(items.size());
+  constexpr float kYCenterThreshold = 0.5F; // matches EasyOCR ycenter_ths
+  const float rowThreshold = kYCenterThreshold * meanHeight;
+
+  std::ranges::sort(
+      items,
+      [rowThreshold, &yCenter, &leftX](
+          const InferredText& a, const InferredText& b) {
+        const float ya = yCenter(a.boxCoordinates);
+        const float yb = yCenter(b.boxCoordinates);
+        if (std::abs(ya - yb) < rowThreshold) {
+          return leftX(a.boxCoordinates) < leftX(b.boxCoordinates);
+        }
+        return ya < yb;
+      });
+}
+
 } // namespace
 
 struct StepDoctrRecognitionGGML::Impl {
@@ -1672,6 +1717,10 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
         decoded[static_cast<size_t>(j)].first,
         decoded[static_cast<size_t>(j)].second);
   }
+
+  // Detection emits regions in raw contour order; reorder into reading order so
+  // the full-page text assembly (and order-sensitive metrics) line up.
+  sortIntoReadingOrder(results);
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
