@@ -30,7 +30,7 @@ function readConfig (env) {
     gracePeriodDays: toInt(env.GRACE_PERIOD_DAYS, 7),
     keepMajors: toInt(env.KEEP_MAJORS, 2),
     keepMinors: toInt(env.KEEP_MINORS, 3),
-    keepPatches: toInt(env.KEEP_PATCHES, 3),
+    keepPatches: toInt(env.KEEP_PATCHES, 1),
     featureInactivityDays: toInt(env.FEATURE_INACTIVITY_DAYS, 60),
     tmpInactivityDays: toInt(env.TMP_INACTIVITY_DAYS, 60),
     adhocInactivityDays: toInt(env.ADHOC_INACTIVITY_DAYS, 30),

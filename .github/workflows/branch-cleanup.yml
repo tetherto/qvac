@@ -6,7 +6,7 @@ name: Branch cleanup
 
 on:
   schedule:
-    - cron: "30 3 * * 1" # Mondays at 03:30 UTC
+    - cron: "0 8 * * 1" # Mondays at 08:00 UTC (09:00 CET)
   workflow_dispatch:
     inputs:
       dry_run:

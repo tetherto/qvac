@@ -81,7 +81,7 @@ Evaluated **per package**, using a nested semver window:
 
 - Keep the latest **2 major** lines (current + previous major).
 - Within each retained major, keep the latest **3 minor** lines.
-- Within each retained minor, keep the latest **3 patch** lines.
+- Within each retained minor, keep the latest **1 patch** line.
 
 Anything older than this window is **eligible for deletion** (subject to the
 [safelist](#safelist-never-delete) and the [grace period](#enforcement)).
@@ -94,8 +94,8 @@ Anything older than this window is **eligible for deletion** (subject to the
 
 - Keep majors **3** and **2**.
 - In major 3, keep minors **3.4 / 3.3 / 3.2**.
-- In `3.4`, keep patches **3.4.7 / 3.4.6 / 3.4.5**.
-- `release-pkg-3.4.4`, `release-pkg-3.1.x`, `release-pkg-1.x.x`, etc. are eligible.
+- In `3.4`, keep patch **3.4.7** only.
+- `release-pkg-3.4.6`, `release-pkg-3.1.x`, `release-pkg-1.x.x`, etc. are eligible.
 
 **`0.x` lines** are handled by the same "latest 2 majors" rule, with `0` counted as a
 major. They are retained until the package is two majors ahead (i.e. a `2.x` exists),
@@ -187,7 +187,7 @@ automatically.
 name: Branch cleanup
 on:
   schedule:
-    - cron: "30 3 * * 1" # weekly, Monday 03:30 UTC
+    - cron: "0 8 * * 1" # weekly, Monday 08:00 UTC (09:00 CET)
   workflow_dispatch:
     inputs:
       dry_run:
@@ -223,7 +223,7 @@ jobs:
 | `grace_period_days` | `7` | Days a branch must stay flagged before deletion. |
 | `keep_majors` | `2` | Major lines retained per package. |
 | `keep_minors` | `3` | Minor lines retained per kept major. |
-| `keep_patches` | `3` | Patch lines retained per kept minor. |
+| `keep_patches` | `1` | Patch lines retained per kept minor. |
 | `feature_inactivity_days` | `60` | `feature-*` inactivity threshold. |
 | `tmp_inactivity_days` | `60` | `tmp-*` inactivity threshold. |
 | `adhoc_inactivity_days` | `30` | ad-hoc branch inactivity threshold. |

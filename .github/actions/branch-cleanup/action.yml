@@ -22,7 +22,7 @@ inputs:
     default: "3"
   keep_patches:
     description: "Patch release lines retained per kept minor"
-    default: "3"
+    default: "1"
   feature_inactivity_days:
     description: "feature-* inactivity threshold (days)"
     default: "60"
