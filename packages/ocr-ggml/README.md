@@ -262,20 +262,34 @@ model is loaded; only the exact value `1` applies; `_F32` wins if both are set):
 These are useful for A/B-benchmarking the F16 fast path or bisecting an accuracy
 regression. None of them affect the DocTR pipeline.
 
-### 1×1 conv path (`OCR_GGML_CONV1X1_MULMAT`)
+### 1×1 conv path (backend-aware; `OCR_GGML_CONV1X1_MULMAT` / `OCR_GGML_CONV1X1_CONV2D`)
 
 A 1×1 convolution is a per-pixel linear map over channels — i.e. a plain matrix
-multiply. By default the EasyOCR pipeline runs every conv through
-`ggml_conv_2d` (im2col → GEMM). Setting `OCR_GGML_CONV1X1_MULMAT=1` routes the
-**1×1, stride-1, no-padding** convolutions through a direct `ggml_mul_mat`
-instead, skipping the im2col lowering. This mainly targets the CRAFT detector's
-1×1 convs (the `upconv*.conv.0` legs, `basenet.slice5.2`, and `conv_cls.6/.8`).
+multiply. The EasyOCR pipeline can run a **1×1, stride-1, no-padding** conv
+either through `ggml_conv_2d` (im2col → GEMM) or a direct `ggml_mul_mat` that
+skips the im2col lowering and its materialised buffer. This mainly affects the
+CRAFT detector's 1×1 convs (the `upconv*.conv.0` legs, `basenet.slice5.2`, and
+`conv_cls.6/.8`).
 
-Skipping im2col avoids materialising the lowered buffer, which is most valuable
-on GPU GEMM backends; on CPU the two paths do similar memory traffic, so the
-default is **off** until the CI quality/perf benchmark confirms the win per
-backend (read once at first use; only the exact value `1` enables it). It does
-not affect the DocTR pipeline.
+Skipping im2col helps GPU GEMM backends but adds permute/cont overhead that does
+not pay off on CPU, so the default is **backend-aware**, resolved once at
+model-load time (mirrors the F16 kernel decision):
+
+| Resolved backend | 1×1 conv default |
+|---|---|
+| GPU / accelerator (NVIDIA Vulkan, Apple Metal, …) | **`mul_mat`** (~−19% total / −43% detection on NVIDIA, ~−10% on Metal) |
+| Any CPU (x86, Apple-Silicon, non-Apple ARM) | **`conv_2d`** (`mul_mat` is neutral-to-slower there) |
+
+Two env vars override the default (read once at model load; only the exact value
+`1` applies; `CONV2D` wins if both are set):
+
+| Env var | Effect |
+|---|---|
+| `OCR_GGML_CONV1X1_MULMAT=1` | force the `mul_mat` path on every backend |
+| `OCR_GGML_CONV1X1_CONV2D=1` | force the `ggml_conv_2d` path on every backend |
+
+These are useful for A/B-benchmarking the two paths or as an escape hatch if a
+backend's `mul_mat` path ever misbehaves. They do not affect the DocTR pipeline.
 
 ### Conv bias broadcast (`OCR_GGML_CRAFT_BIAS_REPEAT`)
 

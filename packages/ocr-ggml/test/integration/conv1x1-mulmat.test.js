@@ -7,22 +7,24 @@ const { isMobile, platform, getImagePath, ensureModelPath, runOcrComparison } = 
 
 const DESKTOP_TIMEOUT = 180 * 1000 // 3 minutes: runs the pipeline twice
 
-// Guards the opt-in 1x1-conv -> ggml_mul_mat path added in QVAC-20532. The
-// CRAFT detector's 1x1 convs normally go through ggml_conv_2d (im2col + GEMM);
-// OCR_GGML_CONV1X1_MULMAT=1 routes them through a direct ggml_mul_mat instead.
-// The rewrite must be numerically equivalent for 1x1/stride-1 convs, so this
-// runs the SAME image on the same backend twice — flag off (conv_2d) then on
-// (mul_mat) — and asserts identical recognized output, plus that each pass is
-// absolutely correct.
+// Guards the 1x1-conv -> ggml_mul_mat path added in QVAC-20532. The CRAFT
+// detector's 1x1 convs can run either through ggml_conv_2d (im2col + GEMM) or a
+// direct ggml_mul_mat; the addon picks per backend at load time (mul_mat on
+// GPU, conv_2d on CPU). The rewrite must be numerically equivalent for
+// 1x1/stride-1 convs, so this runs the SAME image on the same backend twice and
+// forces each path explicitly — OCR_GGML_CONV1X1_CONV2D=1 (conv_2d) then
+// OCR_GGML_CONV1X1_MULMAT=1 (mul_mat) — and asserts identical recognized
+// output, plus that each pass is absolutely correct. The explicit force is
+// required because the unset default is backend-dependent (it would otherwise
+// run the same path twice on GPU vs CPU, making the comparison vacuous).
 //
-// The toggle is read by the native addon via getenv at graph-build time, so we
-// set it through bare-os (which maps to setenv) before constructing the addon
-// and restore it afterwards. Desktop POSIX only: mobile device-farm runs don't
-// propagate these process env vars, and on Windows uv_os_setenv
+// The toggles are read by the native addon via getenv at model-load time, so we
+// set them through bare-os (which maps to setenv) before constructing the addon
+// and restore them afterwards. Desktop POSIX only: mobile device-farm runs
+// don't propagate these process env vars, and on Windows uv_os_setenv
 // (SetEnvironmentVariableW) does not update the CRT table that the addon's
-// std::getenv reads — so the toggle wouldn't take effect and both passes would
-// run the default conv_2d path, making the comparison vacuous.
-const ENV_KEY = 'OCR_GGML_CONV1X1_MULMAT'
+// std::getenv reads — so the toggle wouldn't take effect.
+const ENV_KEYS = ['OCR_GGML_CONV1X1_MULMAT', 'OCR_GGML_CONV1X1_CONV2D']
 
 test('EasyOCR 1x1-conv mul_mat matches conv_2d (CRAFT)', { timeout: DESKTOP_TIMEOUT }, async function (t) {
   if (isMobile) {
@@ -36,22 +38,34 @@ test('EasyOCR 1x1-conv mul_mat matches conv_2d (CRAFT)', { timeout: DESKTOP_TIME
 
   const hasGetEnv = typeof os.getEnv === 'function'
   const hasSetEnv = typeof os.setEnv === 'function'
-  const prevValue = (hasGetEnv ? os.getEnv(ENV_KEY) : process.env[ENV_KEY]) || ''
+  const prev = new Map()
+  for (const key of ENV_KEYS) {
+    prev.set(key, (hasGetEnv ? os.getEnv(key) : process.env[key]) || '')
+  }
 
-  function setEnv (val) {
-    if (hasSetEnv) os.setEnv(ENV_KEY, val)
-    process.env[ENV_KEY] = val
+  function setEnv (key, val) {
+    if (hasSetEnv) os.setEnv(key, val)
+    process.env[key] = val
+  }
+
+  // Force exactly one path on (key=1) and clear every other toggle, so the
+  // backend-aware default never leaks into either pass.
+  function forceOnly (onKey) {
+    for (const key of ENV_KEYS) setEnv(key, key === onKey ? '1' : '')
   }
 
   function restoreEnv () {
-    if (prevValue) {
-      setEnv(prevValue)
-      return
+    for (const key of ENV_KEYS) {
+      const original = prev.get(key)
+      if (original) {
+        setEnv(key, original)
+        continue
+      }
+      if (typeof os.unsetEnv === 'function') os.unsetEnv(key)
+      else if (hasSetEnv) os.setEnv(key, '')
+      // bare-process's env proxy rejects `delete` (TypeError under strict mode); '' is sufficient since the addon reads via std::getenv.
+      process.env[key] = ''
     }
-    if (typeof os.unsetEnv === 'function') os.unsetEnv(ENV_KEY)
-    else if (hasSetEnv) os.setEnv(ENV_KEY, '')
-    // bare-process's env proxy rejects `delete` (TypeError under strict mode); '' is sufficient since the addon reads via std::getenv.
-    process.env[ENV_KEY] = ''
   }
 
   function assertCorrect (output, tag) {
@@ -74,8 +88,8 @@ test('EasyOCR 1x1-conv mul_mat matches conv_2d (CRAFT)', { timeout: DESKTOP_TIME
       perfOpts: { skipReport: true }
     }
 
-    t.comment('Pass A: default conv_2d path; image: ' + imagePath + ', platform: ' + platform)
-    setEnv('')
+    t.comment('Pass A: forced conv_2d path; image: ' + imagePath + ', platform: ' + platform)
+    forceOnly('OCR_GGML_CONV1X1_CONV2D')
     const resConv = await runOcrComparison(t, {
       ...baseCfg,
       perfLabel: '[EasyOCR basic_test conv2d]',
@@ -83,8 +97,8 @@ test('EasyOCR 1x1-conv mul_mat matches conv_2d (CRAFT)', { timeout: DESKTOP_TIME
     })
     const outConv = resConv.output
 
-    t.comment('Pass B: 1x1 mul_mat path')
-    setEnv('1')
+    t.comment('Pass B: forced 1x1 mul_mat path')
+    forceOnly('OCR_GGML_CONV1X1_MULMAT')
     const resMul = await runOcrComparison(t, {
       ...baseCfg,
       perfLabel: '[EasyOCR basic_test 1x1-mulmat]',

@@ -41,19 +41,6 @@ bool bias_use_repeat() {
   return ggml_add(ctx, x, b4);
 }
 
-// Opt-in (OCR_GGML_CONV1X1_MULMAT=1): route 1x1 stride-1 convs through a direct
-// ggml_mul_mat instead of ggml_conv_2d's im2col + GEMM. A 1x1 conv is a
-// per-pixel linear map over channels, i.e. a plain matmul; skipping im2col
-// avoids materialising the lowered buffer (a notable win on GPU GEMM backends).
-// Default off until CI perf confirms the win per backend (mirrors the F16
-// kernel A/B lever). Read via getenv on each call: graph building is not a hot
-// path, and a per-build read keeps the toggle honest when the env is set after
-// the process has already built other graphs (e.g. a single-process test run).
-bool conv1x1_mulmat_enabled() {
-  const char* v = std::getenv("OCR_GGML_CONV1X1_MULMAT");
-  return v != nullptr && std::strcmp(v, "1") == 0;
-}
-
 // True for a pointwise (1x1) conv with unit stride/dilation and no padding —
 // the only case where the mul_mat rewrite is exactly equivalent to conv_2d.
 bool is_pointwise_conv(
@@ -87,20 +74,24 @@ pointwise_conv(::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel) {
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 ::ggml_tensor* conv_2d_bias(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
-    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1) {
+    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1,
+    bool conv1x1_mulmat) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
-  auto* y = (conv1x1_mulmat_enabled() &&
-             is_pointwise_conv(kernel, s0, s1, p0, p1, d0, d1))
-                ? pointwise_conv(ctx, x, kernel)
-                : ggml_conv_2d(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
+  auto* y =
+      (conv1x1_mulmat && is_pointwise_conv(kernel, s0, s1, p0, p1, d0, d1))
+          ? pointwise_conv(ctx, x, kernel)
+          : ggml_conv_2d(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
   return add_channel_bias(ctx, y, bias);
 }
 
 ::ggml_tensor* conv_2d_bias_relu(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
-    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1) {
+    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1,
+    bool conv1x1_mulmat) {
   return ggml_relu(
-      ctx, conv_2d_bias(ctx, x, kernel, bias, s0, s1, p0, p1, d0, d1));
+      ctx,
+      conv_2d_bias(
+          ctx, x, kernel, bias, s0, s1, p0, p1, d0, d1, conv1x1_mulmat));
 }
 
 ::ggml_tensor* bilinear_to(
