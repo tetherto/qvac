@@ -8,7 +8,7 @@ import {
   DEFAULT_FPS
 } from '../src/serve/schemas/videos.js'
 import { createVideoJobsStore, type VideoJob } from '../src/serve/core/video-jobs-store.js'
-import { tearDownJob } from '../src/serve/routes/videos.js'
+import { tearDownJob, resolveInputReferenceImage } from '../src/serve/routes/videos.js'
 import type { QvacContext } from '../src/serve/lib/types.js'
 
 function expectIssue (input: unknown, path: string): { message: string } {
@@ -103,6 +103,11 @@ describe('videosCreateBody (Zod validation)', () => {
 
   it('accepts strength as a number or numeric string', () => {
     assert.equal(videosCreateBody.safeParse({ prompt: 'p', strength: '0.85' }).success, true)
+  })
+
+  it('accepts input_reference as a Buffer (multipart file)', () => {
+    const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    assert.equal(videosCreateBody.safeParse({ prompt: 'p', input_reference: buf }).success, true)
   })
 })
 
@@ -327,6 +332,24 @@ function makeJob (overrides: Partial<VideoJob> = {}): VideoJob {
   }
   return { ...base, ...overrides }
 }
+
+describe('resolveInputReferenceImage', () => {
+  it('rejects data URI with invalid base64 characters', async () => {
+    const ctx = makeCtxStub()
+    await assert.rejects(
+      () => resolveInputReferenceImage({ image_url: 'data:image/jpeg;base64,!!!invalid!!!' }, ctx),
+      (err: unknown) => err instanceof Error && err.message.includes('invalid base64 characters')
+    )
+  })
+
+  it('rejects data URI that decodes to empty bytes', async () => {
+    const ctx = makeCtxStub()
+    await assert.rejects(
+      () => resolveInputReferenceImage({ image_url: 'data:image/jpeg;base64,' }, ctx),
+      (err: unknown) => err instanceof Error && err.message.includes('empty bytes')
+    )
+  })
+})
 
 describe('tearDownJob', () => {
   it('aborts the controller and cancels the SDK request for in-progress jobs', () => {

@@ -1016,7 +1016,14 @@ Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each ch
 
 ### Videos
 
-OpenAI-compatible **async** text-to-video, backed by the SDK's `video({ mode: "txt2vid" })`. Creating a job returns immediately with `status: "queued"`; the generation runs in the background. Poll for status, then download the bytes. Image-to-video and the OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented (the SDK exposes no underlying modes for them).
+OpenAI-compatible **async** video generation backed by the SDK's `video()`. Creating a job returns immediately with `status: "queued"`; the generation runs in the background. Poll for status, then download the bytes.
+
+Two modes are supported:
+
+- **txt2vid** — JSON body with `prompt` only. No image needed.
+- **img2vid** — include `input_reference` as a multipart file field (OpenAI SDK `Uploadable`), or JSON `{ image_url }` (base64 data URI or HTTP(S) URL), or JSON `{ file_id }` (file uploaded via `POST /v1/files`). Mode is inferred automatically.
+
+The OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
 
 #### Loaded model
 
@@ -1045,7 +1052,7 @@ Clients select the model by passing the alias key (or its `src` string) in the r
 
 #### `POST /v1/videos`
 
-Create a generation job. The endpoint accepts `application/json` only — the SDK has no image-to-video mode, so multipart with `init_image` is not accepted.
+Create a generation job. Accepts `application/json` (txt2vid or img2vid via `{ image_url }` / `{ file_id }`) **or** `multipart/form-data` (img2vid via a binary `input_reference` file field — this is what the OpenAI SDK sends when given a local `File`/`Blob`).
 
 Returns `200` with the `Video` resource at `status: "queued"`.
 
@@ -1072,7 +1079,7 @@ curl http://localhost:11434/v1/videos \
 | --- | --- | --- |
 | `model` | Alias declared under `serve.models` (endpoint category `video`). | Yes |
 | `prompt` | Text prompt, 1–32000 characters. | Yes |
-| `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 8. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
+| `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 16. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
 | `seconds` | Target duration as a **string** (e.g. `"2"`; OpenAI uses `"4"` / `"8"` / `"12"`). Mapped together with `fps` to the addon's `video_frames` (rounded to the nearest `4k+1`). | No |
 | `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. | No |
 | `steps` | QVAC extension. Diffusion sampler step count. | No |
@@ -1080,9 +1087,11 @@ curl http://localhost:11434/v1/videos \
 | `negative_prompt` | QVAC extension. Negative prompt for the sampler. | No |
 | `cfg_scale` | QVAC extension. Classifier-free guidance scale (Wan range ~5–8). | No |
 | `flow_shift` | QVAC extension. Flow-matching shift; Wan 2.1 T2V needs `3.0` for visible motion. | No |
+| `input_reference` | img2vid reference image. Multipart file field, JSON `{ image_url }` (data URI or HTTP(S) URL, ≤ 100 MB / 30 s), or JSON `{ file_id }`. When present the job runs in img2vid mode; omit for txt2vid. | No |
+| `strength` | QVAC extension. img2vid denoise strength `[0, 1]`. Only meaningful with `input_reference`. | No |
 
 <Callout type="info">
-OpenAI's `input_reference` (image-to-video) is rejected with `400 unsupported_param` — the SDK exposes only text-to-video.
+**img2vid via `input_reference`** — supply the reference image as a multipart file field named `input_reference` (OpenAI SDK `Uploadable`), or as JSON `{ "image_url": "data:image/jpeg;base64,..." }` (data URI or HTTP(S) URL up to 100 MB), or as JSON `{ "file_id": "file-…" }` (file uploaded via `POST /v1/files`). Omit `input_reference` entirely for txt2vid.
 </Callout>
 
 The `Video` resource returned by `POST` (and by `GET /v1/videos/:id`):

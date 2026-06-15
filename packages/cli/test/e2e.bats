@@ -772,6 +772,19 @@ TINY_PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDw
   assert_error "${body}" "invalid_request"
 }
 
+@test "videos: multipart POST with input_reference file reaches model check (503 model_not_ready)" {
+  local tmpimg
+  tmpimg=$(mktemp /tmp/tiny-ref-XXXXXX.png)
+  printf '%s' "${TINY_PNG_B64}" | base64 --decode > "${tmpimg}"
+  local body
+  body=$(curl -s -X POST "${BASE}/v1/videos" \
+    --form "model=${VIDEO_ALIAS}" \
+    --form "prompt=subject turns" \
+    --form "input_reference=@${tmpimg}")
+  rm -f "${tmpimg}"
+  assert_error "${body}" "model_not_ready"
+}
+
 # ── Model lifecycle ───────────────────────────────────────────────────
 # Run last — unloading a model affects subsequent tests.
 
