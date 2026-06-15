@@ -1,13 +1,9 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "f4413a3e8783b8012c125762768a5b321286a157",
-    "reference": "QVAC-19305/registry-tts-cpp-supertonic3",
-    "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git"
+    "baseline": "31b6408ac046041c0c4dfbfc6e922592ed8181ae",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
-  "overlay-ports": [
-    "ports"
-  ],
   "registries": [
     {
       "kind": "git",
