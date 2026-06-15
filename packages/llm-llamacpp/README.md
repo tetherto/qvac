@@ -265,7 +265,8 @@ response.onUpdate(({ id, chunk }) => {
 
 // Ordered results once all sequences finish
 const results = await response.await()
-// results: [ { id: '0', output: 'Apple' }, { id: '1', output: 'France' }, { id: '2', output: 'Blue' } ]
+// Prompts passed as plain Message[] arrays get auto-minted ids: batch-1, batch-2, batch-3
+// results: [ { id: 'batch-1', output: 'Apple' }, { id: 'batch-2', output: 'France' }, { id: 'batch-3', output: 'Blue' } ]
 ```
 
 Pass `BatchPrompt` objects to supply a caller-assigned id or per-prompt `runOptions`:
@@ -273,7 +274,7 @@ Pass `BatchPrompt` objects to supply a caller-assigned id or per-prompt `runOpti
 ```javascript
 const response = await model.run([
   { id: 'fruit',   prompt: [{ role: 'user', content: 'Name a fruit.' }] },
-  { id: 'country', prompt: [{ role: 'user', content: 'Name a country.' }], runOptions: { generationParams: { temperature: 0.2 } } }
+  { id: 'country', prompt: [{ role: 'user', content: 'Name a country.' }], runOptions: { generationParams: { temp: 0.2 } } }
 ])
 ```
 
