@@ -126,10 +126,15 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
       << "runtimeStats() should be populated after generation";
 
   // Verify the four phase-breakdown fields are present and have sane values.
+  // RuntimeStats values are std::variant<double, int64_t> -- phase fields are
+  // stored as double, but generationMs is an int64_t, so read whichever
+  // alternative is held and widen to double.
   auto findStat = [&](const std::string& key) -> double {
     for (const auto& [k, v] : stats) {
       if (k == key) {
-        return std::get<double>(v);
+        if (std::holds_alternative<double>(v))
+          return std::get<double>(v);
+        return static_cast<double>(std::get<int64_t>(v));
       }
     }
     return -1.0;
