@@ -516,7 +516,6 @@ const METRIC_COLUMNS = {
     { key: 'generation_ms', label: 'Gen (ms)' },
     { key: 'ttfb_ms', label: 'TTFB (ms)' },
     { key: 'total_steps', label: 'Steps' },
-    { key: 'steps_per_second', label: 'Steps/sec' },
     { key: 'width', label: 'Width' },
     { key: 'height', label: 'Height' }
   ],
@@ -606,7 +605,6 @@ function createPerformanceReporter (opts) {
           generation_ms: null,
           ttfb_ms: null,
           total_steps: null,
-          steps_per_second: null,
           width: null,
           height: null,
           ...metrics

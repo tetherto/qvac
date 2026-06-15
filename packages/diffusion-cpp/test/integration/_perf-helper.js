@@ -75,7 +75,6 @@ try {
             generation_ms: null,
             ttfb_ms: null,
             total_steps: null,
-            steps_per_second: null,
             width: null,
             height: null
           }, metrics),
@@ -212,11 +211,6 @@ function recordPerformance (label, stats, extra) {
   const h = _num(stats.height)
   const ttfbMs = (extra && extra.ttfbMs != null) ? _num(extra.ttfbMs) : null
 
-  let stepsPerSecond = null
-  if (totalSteps && genMs && genMs > 0) {
-    stepsPerSecond = Number((totalSteps / (genMs / 1000)).toFixed(2))
-  }
-
   const labelDevice = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
   const effectiveDevice = (extra && extra.execution_provider) || labelDevice || 'gpu'
   const backend = resolveBackend(effectiveDevice)
@@ -226,7 +220,6 @@ function recordPerformance (label, stats, extra) {
     generation_ms: genMs,
     ttfb_ms: ttfbMs,
     total_steps: totalSteps,
-    steps_per_second: stepsPerSecond,
     width: w,
     height: h
   }, {
@@ -248,7 +241,7 @@ function recordPerformance (label, stats, extra) {
     `    - Model load: ${modelLoadMs != null ? modelLoadMs + 'ms' : 'n/a'}`,
     `    - Generation: ${genMs != null ? genMs + 'ms' : 'n/a'}`,
     `    - TTFB: ${ttfbMs != null ? Math.round(ttfbMs) + 'ms' : 'n/a'}`,
-    `    - Steps: ${totalSteps || 'n/a'} (${stepsPerSecond != null ? stepsPerSecond + ' steps/sec' : 'n/a'})`,
+    `    - Steps: ${totalSteps || 'n/a'}`,
     `    - Resolution: ${w || '?'}x${h || '?'}`
   ]
   return lines.join('\n')
