@@ -4,6 +4,19 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-06-15
+
+### Changed
+- **CRAFT detector adds its convolution bias by implicit broadcast** instead of
+  first materializing a full-size bias tensor with `ggml_repeat`. The bias is
+  reshaped to `[1, 1, out_channels, 1]` and added directly via `ggml_add`,
+  which broadcasts on every backend (CPU, Vulkan, Metal). This removes a
+  per-conv allocation and copy from the detection graph — the dominant phase of
+  the EasyOCR pipeline — for a measured detection-time improvement (~6% on x86
+  CPU and a larger win on NVIDIA Vulkan GPU) with byte-for-byte identical
+  output across all backends. The previous `ggml_repeat` path remains available
+  as an escape hatch by setting `OCR_GGML_CRAFT_BIAS_REPEAT=1`.
+
 ## [0.2.1] - 2026-06-15
 
 ### Changed
