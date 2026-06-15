@@ -1,8 +1,9 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "88663627cb9667b04b2b034045b7d3d65e8b8fc4",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+    "baseline": "f4413a3e8783b8012c125762768a5b321286a157",
+    "reference": "QVAC-19305/registry-tts-cpp-supertonic3",
+    "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
@@ -15,14 +16,6 @@
         "vulkan-headers",
         "vulkan-loader",
         "spirv-headers"
-      ]
-    },
-    {
-      "kind": "git",
-      "baseline": "a7b97a19572c27c27e8dd01fc5011ec8376c5f3d",
-      "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
-      "packages": [
-        "tts-cpp"
       ]
     }
   ]

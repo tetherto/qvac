@@ -1,20 +1,23 @@
 'use strict'
 
-// Supertonic 3 quantized integration: exercises the q8_0 + q4_0 block-quant
-// GGUFs across the five Supertonic 2 languages (en/ko/es/pt/fr) plus a few of
-// the new v3-only languages (de/it/nl).  This is the coverage that guards the
-// Supertonic-aware quantization work in tts-cpp:
+// Supertonic 3 integration: exercises the published fp16 / fp32 GGUFs plus the
+// q8_0 / q4_0 block-quant tiers across the five Supertonic 2 languages
+// (en/ko/es/pt/fr) and a few of the new v3-only languages (de/it/nl).  This is
+// the coverage that guards the v3 work in tts-cpp:
+//   - fp16 / fp32 must load + run across the inherited + new languages,
 //   - q4_0 must load + run (it used to SIGBUS before Q4_0 dequant-at-load),
 //   - the ConvNeXt pointwise convs squeezed by the requantizer must re-expand
 //     correctly via supertonic.pwconv_squeezed,
 //   - the v3 language-conditioning path must accept both the inherited and the
 //     new language codes.
 //
-// The v3 GGUFs aren't on S3 yet, so they're provisioned locally by
-// `npm run setup-supertonic3-models` (Hugging Face convert + requantize).  When
-// a quant tier isn't staged the corresponding test self-skips with a hint
-// rather than failing, so the suite stays green on runners where the local
-// provisioning step didn't run.
+// All four tiers are pulled from the QVAC model registry: fp16 / fp32 from the
+// 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants from the
+// 2026-06-15 build (QVAC-20686).  When a tier can't be fetched (offline, or the
+// @qvac/registry-client devDependency is missing) the corresponding test
+// self-skips with a hint (it can also be provisioned offline via
+// `npm run setup-supertonic3-models`) rather than failing, so the suite stays
+// green on every runner.
 
 const os = require('bare-os')
 const path = require('bare-path')
@@ -33,8 +36,9 @@ function getBaseDir () {
 
 const SAMPLE_RATE = 44100
 
-// Quant tiers to sweep.  Both are produced by setup-supertonic3-models.sh.
-const QUANTS = ['q8_0', 'q4_0']
+// Tiers to sweep.  All four are fetched from the registry (fp16/fp32 @
+// 2026-06-10, q8_0/q4_0 @ 2026-06-15); a tier that can't be fetched self-skips.
+const QUANTS = ['f16', 'f32', 'q8_0', 'q4_0']
 
 // Existing (inherited from Supertonic 2) + new v3-only languages.  The new
 // ones are deliberately Latin-script so the test sentences don't need
@@ -72,7 +76,8 @@ for (const quant of QUANTS) {
       quant
     })
     if (!download.success) {
-      t.pass(`skipped: supertonic3-${quant}.gguf not provisioned (run \`npm run setup-supertonic3-models\`)`)
+      t.pass(`skipped: supertonic3-${quant}.gguf unavailable ` +
+        '(registry fetch failed, or not provisioned locally)')
       return
     }
 

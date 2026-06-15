@@ -419,6 +419,8 @@ async function ensureWhisperModel (targetPath = null) {
 const REGISTRY_SOURCE = 's3'
 const REGISTRY_DATE_F16 = '2026-05-08' // chatterbox-s3gen* (no quant variant yet)
 const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
+const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32 (QVAC-20568)
+const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0 (QVAC-20686)
 
 // Size bands.  Both bounds are enforced (see `hasAllGgufsIn` below) so a
 // stale f16 cache from a previous test run gets rejected and re-fetched
@@ -429,10 +431,11 @@ const SIZE_CHATTERBOX_T3_Q4_0 = { minSize: 100_000_000, maxSize: 500_000_000 }
 const SIZE_CHATTERBOX_S3GEN_F16 = { minSize: 500_000_000, maxSize: 2_000_000_000 }
 const SIZE_SUPERTONIC_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
-// Supertonic 3 (31-language) quant tiers, produced locally by
-// scripts/setup-supertonic3-models.sh (HF convert + requantize): q8_0 ~126 MB,
-// q4_0 ~80 MB, f16 ~191 MB, f32 ~398 MB.  One generous band covers them all so
-// the resolver accepts whichever tier the setup step staged.
+// Supertonic 3 (31-language) tiers: q8_0 ~126 MB, q4_0 ~80 MB, f16 ~191 MB,
+// f32 ~398 MB.  f16 + f32 are published on the registry (QVAC-20568); the
+// block-quant tiers (q8_0 / q4_0) are still produced locally by
+// scripts/setup-supertonic3-models.sh until a follow-up upload.  One generous
+// band covers them all so the resolver accepts whichever tier got staged.
 const SIZE_SUPERTONIC3 = { minSize: 25_000_000, maxSize: 500_000_000 }
 
 const CHATTERBOX_GGUFS = [
@@ -803,26 +806,41 @@ async function ensureSupertonicMtlModel (options = {}) {
 // Supertonic 3 GGUF descriptor for a given quant tier.  The on-disk name
 // encodes the quant so q8_0 / q4_0 can coexist in one models/ dir (unlike v1/v2
 // which keep a single canonical filename and read the quant from metadata).
+// All four tiers are now published on the QVAC model registry: f16 / f32 under
+// the 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants under the
+// 2026-06-15 build (QVAC-20686).  Each tier maps to its own S3 build date.
+const SUPERTONIC3_REGISTRY_DATES = {
+  f16: REGISTRY_DATE_SUPERTONIC3,
+  f32: REGISTRY_DATE_SUPERTONIC3,
+  q8_0: REGISTRY_DATE_SUPERTONIC3_QUANT,
+  q4_0: REGISTRY_DATE_SUPERTONIC3_QUANT
+}
+
 function supertonic3Gguf (quant) {
-  return {
+  const gguf = {
     name: `supertonic3-${quant}.gguf`,
     ...SIZE_SUPERTONIC3
-    // No registryPath/registrySource yet: v3 GGUFs aren't on S3.  They're
-    // provisioned locally by scripts/setup-supertonic3-models.sh.  Once they
-    // land on the bucket, add registryPath/registrySource here (mirroring
-    // SUPERTONIC_MTL_GGUFS) so the registry-fetch fallback kicks in.
   }
+  const date = SUPERTONIC3_REGISTRY_DATES[quant]
+  if (date) {
+    gguf.registryPath =
+      `qvac_models_compiled/ggml/supertonic/${date}/supertonic3-${quant}.gguf`
+    gguf.registrySource = REGISTRY_SOURCE
+  }
+  return gguf
 }
 
 /**
  * Ensure a Supertonic 3 GGUF for the requested quant tier is staged in a
  * directory the native addon can read, and return that path.
  *
- * Unlike the v1/v2 helpers this is **check-only** (no registry fetch): the
- * Supertonic 3 GGUFs are not on S3 yet, so they're produced locally by
- * `npm run setup-supertonic3-models` (HF convert + requantize).  When the
- * file is missing the helper returns `{ success: false }` so the caller can
- * skip the test with a clear "run setup-supertonic3-models" hint.
+ * All four tiers are published on the QVAC model registry (f16 / f32 via
+ * QVAC-20568, q8_0 / q4_0 via QVAC-20686), so this helper falls back to a
+ * registry fetch when the file isn't staged locally (mirroring the v1/v2
+ * helpers).  If the fetch fails (offline, or the @qvac/registry-client
+ * devDependency is missing) it returns `{ success: false }` with a hint —
+ * including `npm run setup-supertonic3-models` for offline local provisioning —
+ * letting the caller skip the test instead of hard-failing.
  *
  * @param {Object} [options]
  * @param {string} [options.targetDir] - dir to look in (default ./models).
@@ -853,6 +871,19 @@ async function ensureSupertonic3Model (options = {}) {
     }
   }
 
+  // All tiers are on the registry — fetch into the (writable) requestedDir.
+  if (gguf.registryPath) {
+    if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
+      return { success: true, path: path.join(requestedDir, gguf.name), targetDir: requestedDir, quant }
+    }
+    console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) not found locally and registry fetch failed`)
+    console.log(' (network / registry unavailable, or the @qvac/registry-client devDependency is missing).')
+    console.log(` Expected on the registry at: ${gguf.registryPath}`)
+    console.log(' For offline runs you can provision it locally with: npm run setup-supertonic3-models')
+    return { success: false, path: null, targetDir: requestedDir, quant }
+  }
+
+  // No registry mapping for this tier (unexpected) — local provisioning only.
   console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) not found locally.  Provision it with:`)
   console.log('   npm run setup-supertonic3-models')
   console.log('   (downloads Supertone/supertonic-3 from Hugging Face, converts + requantizes locally)')
