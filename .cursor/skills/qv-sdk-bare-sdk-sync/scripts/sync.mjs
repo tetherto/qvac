@@ -51,8 +51,8 @@ const dryRun = args.has("--dry-run");
 const checkMode = args.has("--check");
 
 const DEP_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies"];
-// Keep aligned with check-deps-vs-sdk.mjs's SDK_ONLY_PACKAGES. Empty today.
-const SDK_ONLY_PACKAGES = new Set([]);
+// Keep aligned with check-deps-vs-sdk.mjs's SDK_ONLY_PACKAGES.
+const SDK_ONLY_PACKAGES = new Set(["bare-runtime", "bare-pack"]);
 
 function readPkg(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
