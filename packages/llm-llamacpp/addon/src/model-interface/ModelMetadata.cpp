@@ -4,8 +4,8 @@
 
 #include <common/common.h>
 #include <common/log.h>
-#include <llama-cpp.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama-cpp.h>
 
 #include "addon/LlmErrors.hpp"
 

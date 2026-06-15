@@ -26,6 +26,11 @@ async function runBatchedRecognizerTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/batched-recognizer.test.js', options)
 }
 
+async function runBiasBroadcastTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBiasBroadcastTest')) return __FILTERED
+  return runIntegrationModule('../integration/bias-broadcast.test.js', options)
+}
+
 async function runCanvasSizeTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCanvasSizeTest')) return __FILTERED
   return runIntegrationModule('../integration/canvas-size.test.js', options)
