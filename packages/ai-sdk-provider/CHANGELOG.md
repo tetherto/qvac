@@ -2,9 +2,17 @@
 
 ## [Unreleased]
 
+---
+
+## [0.2.1]
+
+Release Date: 2026-06-15
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.2.1
+
 ### Fixed
 
-- Widen the optional `@qvac/cli` peer dependency to accept the published `0.6.x` CLI line, so managed-mode consumers can install the provider alongside the current CLI without strict peer-resolution failures.
+- Require the published `@qvac/cli` `0.6.x` line as the optional managed-mode CLI peer, so consumers can install `@qvac/ai-sdk-provider` alongside the current CLI release without strict peer-resolution failures.
 
 ---
 
