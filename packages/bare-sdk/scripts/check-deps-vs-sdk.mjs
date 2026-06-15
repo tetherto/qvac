@@ -17,7 +17,13 @@ const bareSdkPkg = JSON.parse(fs.readFileSync(bareSdkPkgPath, "utf8"));
 const sdkPkg = JSON.parse(fs.readFileSync(sdkPkgPath, "utf8"));
 
 const DEP_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies"];
-const SDK_ONLY_PACKAGES = new Set([]);
+// Packages sdk declares but bare-sdk deliberately omits because they are never
+// reached on bare:
+//   - bare-runtime: only imported by node-rpc-client (the Node host path that
+//     spawns `bare`); bare-sdk pins `#rpc` to bare-client, so it's unused.
+//     Dropping it also avoids pulling its ~80MB of per-platform bare prebuilds.
+//   - bare-pack: only used by the Node-side `bundle` command, lazily resolved.
+const SDK_ONLY_PACKAGES = new Set(["bare-runtime", "bare-pack"]);
 
 const errors = [];
 
