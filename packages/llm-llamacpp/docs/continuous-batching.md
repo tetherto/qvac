@@ -64,11 +64,8 @@ Continuous batching works on text-only models. Multimodal (vision) models use a 
 // Single prompt — unchanged
 run(prompt: Message[]): Promise<QvacResponse>
 
-// Array of raw prompts
-run(prompt: Message[][]): Promise<BatchResponse>
-
-// Array of BatchPrompt wrappers (optional per-item id and runOptions)
-run(prompt: BatchPrompt[]): Promise<BatchResponse>
+// Batch prompts, with raw prompts and BatchPrompt wrappers allowed in the same array
+run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
 ```
 
 `BatchPrompt`:
@@ -86,14 +83,14 @@ interface BatchPrompt {
 
 ```ts
 interface BatchResponse extends QvacResponse {
-  ids: string[]                                        // assigned sequence ids, in input order
+  ids: string[]                                        // JS-facing ids, in input order
   on(event: 'output', cb: (chunk: BatchOutputChunk) => void): this
   onUpdate(cb: (chunk: BatchOutputChunk) => void): this
   await(): Promise<BatchResult[]>
 }
 
 interface BatchOutputChunk {
-  id: string    // sequence id
+  id: string    // JS-facing id
   chunk: string // decoded text fragment
 }
 
@@ -278,13 +275,19 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affe
 
 ## Sequence ids and streaming
 
-Each admitted sequence gets a `uint32_t seqId` equal to its slot index (0 to N-1). The JS side receives string-serialized ids via the `AddonBatchRunResult.ids` array after admission.
+Each admitted native sequence gets an internal `uint32_t seqId` equal to its
+slot index (0 to N-1). This is the llama.cpp slot id only.
+
+The JS-facing `id` is separate: it is the caller-provided `BatchPrompt.id` when
+present, or an auto-minted id such as `batch-1` when the prompt is passed as a
+plain `Message[]` or omits `id`. `AddonBatchRunResult.ids` returns those
+JS-facing ids in input order.
 
 Streaming works as follows:
 
-1. `processPromptBatch` returns `{accepted: true, ids: ["0","1","2"]}`.
+1. `processPromptBatch` returns `{accepted: true, ids: ["batch-1","batch-2","batch-3"]}` for plain `Message[]` inputs, or caller-provided ids such as `["fruit","country"]` for `BatchPrompt` inputs.
 2. `BatchHandler` stores these as `response.ids` on the `BatchResponse`.
-3. Each token from the native side fires a `BatchOutput` event carrying `{id, output}`.
+3. Each token from the native side fires a `BatchOutput` event carrying `{id, output}`, where `id` is the JS-facing id rather than the native slot index.
 4. `index.js` routes this to `batchHandler.onOutput(data)`, which calls `job.output({ id: data.id, chunk: data.output })`.
 5. The response emits an `output` event with a `BatchOutputChunk`.
 6. When all sequences finish, the scheduler fires a `BatchResult` event with the full ordered output array; `buildFinalResultIfActive()` maps it back to `{id, output}` pairs in input order.
