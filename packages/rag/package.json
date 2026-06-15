@@ -1,6 +1,6 @@
 {
   "name": "@qvac/rag",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "main": "index.js",
   "scripts": {
     "lint": "standard",
@@ -70,7 +70,7 @@
   "dependencies": {
     "@qvac/error": "^0.1.1",
     "bare-crypto": "^1.13.4",
-    "bare-fetch": "^2.5.0",
+    "bare-fetch": "^3.0.1",
     "crypto-browserify": "^3.12.1",
     "hyperdb": "^6.7.0",
     "hyperdht": "^6.23.0",

@@ -4,7 +4,7 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-06-12
 
 ### Added
 - Opt-in **Metal** GPU backend on Apple via `params.backendDevice: 'metal'`,
@@ -17,6 +17,13 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   DocTR pipelines.
 
 ### Changed
+- **DocTR depthwise convolutions now run on the direct Metal `CONV_2D_DW` kernel**
+  (via `qvac-fabric` `8828.1.1`), replacing the `im2col` + per-channel matmul
+  lowering that was pathologically slow on Metal. Cuts recognition latency
+  ~30–45% on Apple GPUs (M4 and real iOS devices) with identical output;
+  detection and recognition feature extractors both switch to
+  `ggml_conv_2d_dw_direct`, and depthwise weights load as F32 so the kernel runs
+  on every backend.
 - **Vulkan auto-selection now skips Adreno GPUs** and falls back to CPU — with
   an explicit `fallbackReason` — instead of silently using Adreno's
   numerically-broken Vulkan compute path (cos-sim ~0.73 vs reference on Adreno
