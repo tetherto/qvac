@@ -499,9 +499,7 @@ std::vector<llama_token> TextLlmContext::preparePrefill(
   return inputTokens;
 }
 
-void TextLlmContext::syncPosition(llama_pos currentPos) {
-  nPast_ = currentPos;
-}
+void TextLlmContext::syncPosition(llama_pos currentPos) { nPast_ = currentPos; }
 
 void TextLlmContext::onPrefillComplete(
     llama_pos currentPos, size_t prefillTokenCount) {

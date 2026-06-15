@@ -114,7 +114,10 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     return AddStatus::ErrNoFreeSlot;
   }
   slots_[seqId].emplace(
-      seqId, std::move(tokens), maxTokensPerSequence_, initialPos,
+      seqId,
+      std::move(tokens),
+      maxTokensPerSequence_,
+      initialPos,
       slideCapable);
   return AddStatus::Ok;
 }

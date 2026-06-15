@@ -1119,21 +1119,20 @@ TEST_F(
   std::atomic<bool> cancelOnce = false;
   auto prompt = makePrompt(
       "Count upward from 1, one number per line, and do not stop counting.");
-  prompt.outputCallback =
-      [&model, &pieces, &perSlotWindow, &cancelOnce](const std::string&) {
-        // Pieces under-count tokens (UTF-8 buffering), so once the piece
-        // count alone exceeds the whole per-slot window, prompt + generated
-        // tokens crossed it for sure.
-        constexpr size_t kPastWindowMargin = 32;
-        const size_t window = perSlotWindow.load();
-        if (window > 0 &&
-            pieces.fetch_add(1) + 1 >= window + kPastWindowMargin) {
-          bool expected = false;
-          if (cancelOnce.compare_exchange_strong(expected, true)) {
-            model->cancel();
-          }
-        }
-      };
+  prompt.outputCallback = [&model, &pieces, &perSlotWindow, &cancelOnce](
+                              const std::string&) {
+    // Pieces under-count tokens (UTF-8 buffering), so once the piece
+    // count alone exceeds the whole per-slot window, prompt + generated
+    // tokens crossed it for sure.
+    constexpr size_t kPastWindowMargin = 32;
+    const size_t window = perSlotWindow.load();
+    if (window > 0 && pieces.fetch_add(1) + 1 >= window + kPastWindowMargin) {
+      bool expected = false;
+      if (cancelOnce.compare_exchange_strong(expected, true)) {
+        model->cancel();
+      }
+    }
+  };
 
   std::vector<LlamaModel::Prompt> prompts{std::move(prompt)};
   auto outputs = model->processPromptBatch(prompts);
