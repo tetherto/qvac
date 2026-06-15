@@ -67,7 +67,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp#readme",
   "devDependencies": {
-    "@qvac/decoder-audio": "^0.3.3",
+    "@qvac/decoder-audio": "^0.5.0",
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.0",
     "@types/node": "^22",
