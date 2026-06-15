@@ -144,6 +144,7 @@ let _reportScheduled = false
 function _flushPerfReport () {
   if (_perfReporter.length === 0) return
   try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+  try { _perfReporter.writeStepSummary() } catch (_) {}
   try { _perfReporter.writeToConsole() } catch (_) {}
 }
 
@@ -167,7 +168,7 @@ function _num (v) {
  * @param {Object} stats - response.stats from the addon:
  *                         { realTimeFactor, audioDurationMs, totalSamples, ... }
  * @param {Object} [extra] - Optional overrides:
- *                         { wallMs, sampleCount, durationMs, model, output,
+ *                         { wallMs, sampleCount, model, output,
  *                           executionProvider }.
  */
 function recordTtsStats (label, stats, extra) {
@@ -179,9 +180,7 @@ function recordTtsStats (label, stats, extra) {
   const sampleCount = (extra && _num(extra.sampleCount)) != null
     ? _num(extra.sampleCount)
     : _num(s.totalSamples)
-  const audioMs = _num(s.audioDurationMs) != null
-    ? Math.round(_num(s.audioDurationMs))
-    : (extra && _num(extra.durationMs) != null ? Math.round(_num(extra.durationMs)) : null)
+  const audioMs = _num(s.audioDurationMs) != null ? Math.round(_num(s.audioDurationMs)) : null
   const wallMs = (extra && _num(extra.wallMs) != null) ? Math.round(_num(extra.wallMs)) : null
   const tps = _num(s.tokensPerSecond)
 
@@ -190,14 +189,21 @@ function recordTtsStats (label, stats, extra) {
   // — the same fallback the RTF benchmark uses — so the row still carries an
   // RTF instead of n/a. Callers that already pass a derived realTimeFactor
   // (addon.test.js) keep it untouched.
-  const effRtf = (rtf != null && rtf > 0)
+  //
+  // The two bases aren't comparable (compute-RTF excludes JS/marshalling
+  // overhead that wall-RTF includes), so record rtf_source per row: anyone
+  // comparing numbers across rows in a single report can see which is which.
+  const usingComputeRtf = rtf != null && rtf > 0
+  const effRtf = usingComputeRtf
     ? rtf
     : (wallMs != null && audioMs ? wallMs / audioMs : null)
+  const rtfSource = usingComputeRtf ? 'compute' : (effRtf != null ? 'wall' : null)
 
   _perfReporter.record(label, {
     total_time_ms: wallMs,
     tps,
     real_time_factor: effRtf,
+    rtf_source: rtfSource,
     sample_count: sampleCount,
     audio_duration_ms: audioMs
   }, {
@@ -215,7 +221,7 @@ function recordTtsStats (label, stats, extra) {
   const lines = [
     `${label} Performance Metrics (platform=${platformLabel}):`,
     `    - Wall time: ${wallMs !== null ? wallMs + 'ms' : 'n/a'}`,
-    `    - RTF: ${effRtf !== null ? effRtf.toFixed(4) : 'n/a'}`,
+    `    - RTF: ${effRtf !== null ? effRtf.toFixed(4) + ' (' + rtfSource + ')' : 'n/a'}`,
     `    - Samples: ${sampleCount !== null ? sampleCount : 'n/a'}`,
     `    - Audio: ${audioMs !== null ? audioMs + 'ms' : 'n/a'}`
   ]

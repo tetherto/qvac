@@ -95,12 +95,9 @@ test('Chatterbox TTS (ggml): English synthesis + optional WER verification', { t
     t.is(result.data.reportedSampleRate, 24000, 'Sample rate should be native 24 kHz')
 
     const st = result.data?.stats || {}
-    const audioMs = result.data?.durationMs || null
-    const computeMs = typeof st.totalTime === 'number' ? st.totalTime * 1000 : null
-    const rtf = (computeMs && audioMs) ? computeMs / audioMs : (audioMs ? wallMs / audioMs : null)
     t.comment(recordTtsStats(
       `[${forceNoGpu ? 'CPU' : 'GPU'}] chatterbox english ${i + 1}`,
-      { realTimeFactor: rtf, audioDurationMs: audioMs, totalSamples: result.data?.sampleCount },
+      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: result.data?.sampleCount },
       { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox', output: text }
     ))
 
