@@ -12,8 +12,8 @@ description: |
     * Default mode (test-groups input empty): a single test spec with the
       consumer's mocha-grep, scheduled later against dual-flagship devices.
     * Sharded mode (test-groups non-empty): N test specs, one per group,
-      scheduled later against the addon's own device pool. LLM uses 10 iOS +
-      2 Android groups; OCR uses 2 (perf + regular).
+      scheduled later against the addon's own device pool. LLM uses 12 iOS +
+      7 Android groups; OCR uses 2 (perf + regular).
 
   The WDIO config + post_test pulls live in wdio.template.js so we sidestep
   GitHub Actions' 21,000-character template-expression limit.
@@ -412,12 +412,34 @@ runs:
           fi
         }
 
+        # QVAC-19368: for the monitor's "Run → tests" legend, default
+        # single-spec mode (no test-groups.json) runs with an empty grep
+        # ("run all"), so there's no per-group test list to show. Enumerate
+        # the addon's generated mobile runners (integration.auto.cjs) once so
+        # the legend can list what "default" actually runs. Display only — the
+        # grep stays empty so run behaviour is unchanged.
+        ALL_TESTS_LIST=""
+        AUTO_FILE="addon/${ADDON_WORKDIR}/test/mobile/integration.auto.cjs"
+        if [ -n "$ADDON_WORKDIR" ] && [ -f "$AUTO_FILE" ]; then
+          ALL_TESTS_LIST=$(grep -oE 'async function run[A-Za-z0-9]+' "$AUTO_FILE" \
+            | sed 's/async function //' | paste -sd, - || true)
+        fi
+
         TEST_SPECS_JSON='[]'
         GROUP_COUNT=$(echo "$GROUPS_JSON" | jq 'length')
         for IDX in $(seq 0 $((GROUP_COUNT - 1))); do
           GROUP_NAME=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].name")
           RAW_GREP=$(echo "$GROUPS_JSON" | jq -r ".[$IDX].grep // \"\"")
           GROUP_GREP=$(filter_perf "$RAW_GREP")
+
+          # Legend display list: the group's grep tests when set, else the
+          # full enumerated runner list (default mode). Pipe-separated to
+          # match the grep format the monitor already splits on.
+          if [ -n "$GROUP_GREP" ]; then
+            GROUP_TESTS="$GROUP_GREP"
+          else
+            GROUP_TESTS=$(echo "$ALL_TESTS_LIST" | tr ',' '|')
+          fi
 
           if [ "$QVAC_PERF_ONLY" = "true" ] && [ -z "$GROUP_GREP" ]; then
             echo ""
@@ -512,8 +534,9 @@ runs:
           TEST_SPECS_JSON=$(echo "$TEST_SPECS_JSON" | jq \
             --arg name "$GROUP_NAME" \
             --arg grep "$GROUP_GREP" \
+            --arg tests "$GROUP_TESTS" \
             --arg arn "$SPEC_UPLOAD_ARN" \
-            '. + [{"name":$name,"grep":$grep,"arn":$arn}]')
+            '. + [{"name":$name,"grep":$grep,"tests":$tests,"arn":$arn}]')
         done
 
         echo ""

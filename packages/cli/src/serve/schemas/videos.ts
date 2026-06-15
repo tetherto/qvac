@@ -1,6 +1,15 @@
 import { z } from 'zod'
 import type { VideoClientParams } from '@qvac/sdk'
 
+// ─── Errors ──────────────────────────────────────────────────────────
+
+export class InvalidVideoStrengthError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidVideoStrengthError'
+  }
+}
+
 // ─── Constants ───────────────────────────────────────────────────────
 
 const SIZE_PATTERN = /^(\d+)x(\d+)$/
@@ -31,23 +40,43 @@ export const videosCreateBody = z.object({
         ctx.addIssue({ code: 'custom', message: `"size" dimensions must be positive (got ${JSON.stringify(raw)}).` })
         return
       }
-      if (width % 8 !== 0 || height % 8 !== 0) {
-        ctx.addIssue({ code: 'custom', message: `"size" dimensions must be multiples of 8 (got ${width}x${height}).` })
+      if (width % 16 !== 0 || height % 16 !== 0) {
+        ctx.addIssue({ code: 'custom', message: `"size" dimensions must be multiples of 16 (got ${width}x${height}).` })
       }
     })
     .optional()
-    .describe('"WIDTHxHEIGHT" with W,H multiples of 8. Accepts OpenAI\'s 4-value enum plus any sized WxH.'),
-  fps: z.number().positive().max(120).optional().describe('QVAC extension. 0 < fps ≤ 120, default 16.'),
-  steps: z.number().int().positive().optional().describe('QVAC extension. Diffusion sampler step count.'),
-  seed: z.number().int().optional().describe('QVAC extension. Random seed; SDK picks one when omitted.'),
+    .describe('"WIDTHxHEIGHT" with W,H multiples of 16. Accepts OpenAI\'s 4-value enum plus any sized WxH.'),
+  fps: z.coerce.number().positive().max(120).optional().describe('QVAC extension. 0 < fps ≤ 120, default 16.'),
+  steps: z.coerce.number().int().positive().optional().describe('QVAC extension. Diffusion sampler step count.'),
+  seed: z.coerce.number().int().optional().describe('QVAC extension. Random seed; SDK picks one when omitted.'),
   negative_prompt: z.string().optional().describe('QVAC extension. Negative prompt for the diffusion sampler.'),
-  cfg_scale: z.number().positive().optional().describe('QVAC extension. Classifier-free guidance scale (Wan range 5-8).'),
-  flow_shift: z.number().optional().describe(
+  cfg_scale: z.coerce.number().positive().optional().describe('QVAC extension. Classifier-free guidance scale (Wan range 5-8).'),
+  flow_shift: z.coerce.number().optional().describe(
     'QVAC extension. Flow-matching shift. Wan 2.1 T2V needs `flow_shift: 3.0` for visible motion.'
   ),
-  input_reference: z.never({
-    message: '"input_reference" (image-to-video) is not supported — the SDK exposes only text-to-video (txt2vid).'
-  }).optional()
+  input_reference: z.union([
+    z.instanceof(Buffer),
+    z.object({
+      image_url: z.string().optional().describe(
+        'Base64 data URI (`data:image/...;base64,...`) or HTTP(S) URL of the reference image.'
+      ),
+      file_id: z.string().optional().describe(
+        'ID of a file previously uploaded via POST /v1/files.'
+      )
+    })
+    .refine(ref => ref.image_url !== undefined || ref.file_id !== undefined, {
+      message: 'input_reference must contain either image_url or file_id.'
+    })
+  ])
+  .optional()
+  .describe(
+    'OpenAI img2vid. Provide the reference image as a multipart file field (OpenAI SDK `Uploadable`), ' +
+    'via `image_url` (data URI or HTTP URL), or via `file_id` (file uploaded via POST /v1/files). ' +
+    'When present the job runs in img2vid mode; omit for txt2vid.'
+  ),
+  strength: z.union([z.string(), z.number()]).optional().describe(
+    'QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `input_reference` is provided.'
+  )
 }).passthrough()
 
 export type VideosCreateBody = z.infer<typeof videosCreateBody>
@@ -138,19 +167,44 @@ function videoFramesFor (seconds: string, fps: number | undefined): number {
 // extractor doesn't repeat itself per field.
 const DIRECT_PARAM_KEYS = ['fps', 'seed', 'steps', 'negative_prompt', 'cfg_scale', 'flow_shift'] as const
 
-export function extractVideoCreateParams (body: VideosCreateBody, modelId: string): VideoClientParams {
-  const direct: Partial<VideoClientParams> = {}
-  for (const key of DIRECT_PARAM_KEYS) {
-    if (body[key] !== undefined) (direct as Record<string, unknown>)[key] = body[key]
+function coerceStrength (raw: string | number | undefined): number | undefined {
+  if (raw === undefined) return undefined
+  const value = typeof raw === 'string' ? parseFloat(raw) : raw
+  if (Number.isNaN(value)) {
+    throw new InvalidVideoStrengthError(`"strength" must be a number in [0, 1] (got ${JSON.stringify(raw)}).`)
   }
-  return {
+  if (value < 0 || value > 1) {
+    throw new InvalidVideoStrengthError(`"strength" must be in [0, 1] (got ${value}).`)
+  }
+  return value
+}
+
+export function extractVideoCreateParams (
+  body: VideosCreateBody,
+  initImage: Uint8Array | undefined,
+  modelId: string
+): VideoClientParams {
+  const direct: Record<string, unknown> = {}
+  for (const key of DIRECT_PARAM_KEYS) {
+    if (body[key] !== undefined) direct[key] = body[key]
+  }
+  const base = {
     modelId,
-    mode: 'txt2vid',
     prompt: body.prompt,
     ...direct,
     ...(body.size !== undefined ? parseSizeFields(body.size) : {}),
     ...(body.seconds !== undefined ? { video_frames: videoFramesFor(body.seconds, body.fps) } : {})
   }
+  if (initImage !== undefined) {
+    const strength = coerceStrength(body.strength as string | number | undefined)
+    return {
+      ...base,
+      mode: 'img2vid' as const,
+      init_image: initImage,
+      ...(strength !== undefined ? { strength } : {})
+    } as unknown as VideoClientParams
+  }
+  return { ...base, mode: 'txt2vid' } as unknown as VideoClientParams
 }
 
 export { DEFAULT_FPS }
