@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Widen the optional `@qvac/cli` peer dependency to accept the published `0.6.x` CLI line, so managed-mode consumers can install the provider alongside the current CLI without strict peer-resolution failures.
+
 ---
 
 ## [0.2.0]
