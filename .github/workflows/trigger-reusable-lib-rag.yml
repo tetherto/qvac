@@ -155,6 +155,17 @@ jobs:
       workdir: packages/rag
       caller_event_name: ${{ github.event_name }}
 
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
+    needs: [publish-release-npm]
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "rag"
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+
   publish-feature-gpr:
     needs:
       - publish-logic

@@ -241,6 +241,20 @@ jobs:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.PKG_DIR }}
 
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
+    needs:
+      - publish-npm
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && (!cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != '')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "ocr-ggml"
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
+
   post-build-gate:
     name: Post-Build Gate
     runs-on: ubuntu-latest

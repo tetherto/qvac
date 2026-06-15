@@ -324,6 +324,17 @@ jobs:
     steps:
       - run: echo "Schema publish completed or skipped."
 
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-schema-tag:
+    needs: [publish-schema-npm]
+    if: needs.publish-schema-npm.result == 'success' && needs.publish-schema-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "registry-server"
+      published_version: ${{ needs.publish-schema-npm.outputs.published_version }}
+
   lint-and-test:
     needs:
       - authorize
@@ -487,3 +498,14 @@ jobs:
         with:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.PKG_DIR }}/client
+
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-client-tag:
+    needs: [publish-client-npm]
+    if: needs.publish-client-npm.result == 'success' && needs.publish-client-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "registry-client"
+      published_version: ${{ needs.publish-client-npm.outputs.published_version }}

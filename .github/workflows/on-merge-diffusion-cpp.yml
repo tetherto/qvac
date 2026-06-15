@@ -259,3 +259,15 @@ jobs:
         with:
           tag: ${{ inputs.npm_tag }}
           workdir: packages/diffusion-cpp
+
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
+    needs: [publish-npm]
+    if: >-
+      !cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "diffusion-cpp"
+      published_version: ${{ needs.publish-npm.outputs.published_version }}

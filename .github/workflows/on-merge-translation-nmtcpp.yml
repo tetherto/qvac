@@ -227,6 +227,21 @@ jobs:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.PKG_DIR }}
 
+  # Tag the published version (no GitHub Release; SDK-only releases policy).
+  # Preserves the historical bare "v<version>" tag scheme for this package.
+  create-tag:
+    needs: [publish-npm]
+    if: |
+      !cancelled() &&
+      needs.publish-npm.result == 'success' &&
+      needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
+      tag_name: v${{ needs.publish-npm.outputs.published_version }}
+
   post-build-gate:
     name: Post-Build Gate
     runs-on: ubuntu-latest
