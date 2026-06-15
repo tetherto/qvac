@@ -514,3 +514,140 @@ test('Bergamot [CPU] - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT 
 
   t.pass(`Completed ${CYCLES} load/unload cycles without failure`)
 })
+
+// ---------------------------------------------------------------------------
+// #7 — Cancel mid-inference, then prove the model is still usable
+//
+// WHY: IndicTrans has a cancel+reusability test but Bergamot uses a
+// completely different native code path (intgemm vs GGML). A cancel that
+// corrupts intgemm state would go undetected without this test.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - cancel mid-inference leaves model reusable', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+
+    const longText = 'This is a deliberately long sentence intended to give the ' +
+      'translation process enough work to still be running when we cancel it, ' +
+      'so that the cancel path is exercised mid-inference rather than after ' +
+      'the job has already completed on its own.'
+
+    const response = await model.run(longText)
+    await response.cancel()
+    t.pass('cancel() during translation did not crash')
+
+    try { await response.await() } catch (_) { /* cancelled job may settle as error */ }
+
+    const r2 = await model.run('Thank you')
+    let out2 = ''
+    await r2.onUpdate(data => { out2 += data }).await()
+    t.ok(out2.length > 0, `model still translates after cancel: "${out2}"`)
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// #15 — Cancel then immediate destroy (race condition)
+//
+// WHY: The most dangerous teardown race — cancel's async resolution can
+// overlap the destroy thread-join. Mirrors the IndicTrans test for Bergamot's
+// intgemm path.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - cancel then immediate destroy does not crash', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+
+    const longText = 'This is a long sentence that should keep the translation ' +
+      'busy for long enough that destroying the model immediately after cancel ' +
+      'exercises the teardown race rather than a clean post-completion destroy.'
+
+    const response = await model.run(longText)
+    response.cancel()
+    await model.destroy()
+
+    t.pass('cancel() then destroy() did not crash')
+    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+  } finally {
+    if (model) {
+      try { await model.destroy() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// — run() after destroy() must throw
+//
+// WHY: destroy() is a permanent teardown. Apps must get a clear error, not
+// a segfault, when they try to use a destroyed model.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - run after destroy throws', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+    await model.load()
+    await model.destroy()
+
+    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+
+    try {
+      await model.run('Hello')
+      t.fail('Expected run() after destroy to throw')
+    } catch (e) {
+      t.ok(e, 'run() after destroy threw an error')
+      t.comment('Error message: ' + e.message)
+      t.pass('Destroyed model correctly rejects run()')
+    }
+  } finally {
+    if (model) {
+      try { await model.destroy() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// — run() before load() must throw
+//
+// WHY: Calling run() on a constructed but not-yet-loaded model should surface
+// a clear error rather than crashing on a null native handle.
+// ---------------------------------------------------------------------------
+
+test('Bergamot [CPU] - run before load throws', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const logger = createLogger()
+  let model
+
+  try {
+    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+
+    try {
+      await model.run('Hello')
+      t.fail('Expected run() before load to throw')
+    } catch (e) {
+      t.ok(e, 'run() before load threw an error')
+      t.comment('Error message: ' + e.message)
+      t.pass('Unloaded model correctly rejects run()')
+    }
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
