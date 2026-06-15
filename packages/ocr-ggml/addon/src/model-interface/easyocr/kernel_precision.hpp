@@ -103,22 +103,42 @@ inline bool ocr_kernels_use_f16(
 //   -----------------------------------  ------------------  ----------
 //   NVIDIA Vulkan GPU                    ~ -19% tot / -43% det  mul_mat
 //   Apple Metal GPU                      ~ -10% tot / -13% det  mul_mat
+//   Mali Vulkan GPU (Pixel)              ~ neutral (-1% det)    mul_mat
 //   x86 CPU                              ~ neutral (-1%)        conv_2d
 //   Apple-Silicon CPU                    ~ +7% SLOWER           conv_2d
 //   non-Apple ARM CPU (linux-arm64)      ~ flat / +1%           conv_2d
 //
 // So mul_mat is the default on GPU/accelerator devices (where avoiding im2col
-// pays off in the GEMM) and conv_2d on every CPU (where the two paths move
-// similar memory and mul_mat's extra permute/cont can regress). The env
-// overrides below take precedence. Adreno Vulkan is already forced onto CPU by
-// OcrBackendSelection, so it is covered by the CPU branch.
+// pays off, or is at worst neutral as on Mali — output verified identical on
+// CPU/Vulkan/Metal) and conv_2d on every CPU (where the two paths move similar
+// memory and mul_mat's extra permute/cont can regress).
+//
+// The ONE exclusion is Adreno on **Vulkan**: its Vulkan compute is numerically
+// fragile (cos-sim ~0.73 vs reference; a regularB test regressed on a Galaxy
+// S25 Ultra / Adreno when mul_mat ran there), and OcrBackendSelection already
+// auto-skips Adreno Vulkan to CPU. The exclusion is keyed on the backend *API*,
+// not the chip, so a future Adreno-OpenCL backend (QVAC-19798) is NOT blocked
+// and can adopt mul_mat once validated. The env overrides below take
+// precedence.
 inline bool ocr_conv1x1_mulmat_default(ggml_backend_t backend) {
   ggml_backend_dev_t dev =
       (backend != nullptr) ? ggml_backend_get_device(backend) : nullptr;
   if (dev == nullptr) {
     return false; // unknown device -> conservative conv_2d
   }
-  return ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_CPU;
+  if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+    return false; // CPU: mul_mat is neutral-to-slower -> conv_2d
+  }
+  // GPU / accelerator: mul_mat everywhere except Adreno's broken Vulkan path.
+  // Key on the API (not the chip) so Adreno-OpenCL is not caught by this guard.
+  if (ocr_desc_contains(ggml_backend_dev_description(dev), "adreno")) {
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const char* api = (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
+    if (api == nullptr || ocr_desc_contains(api, "vulkan")) {
+      return false; // Adreno Vulkan (or unknown API) -> conservative conv_2d
+    }
+  }
+  return true;
 }
 
 // Resolve whether to use the 1x1 mul_mat path for `backend`. Env overrides take

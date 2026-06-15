@@ -277,7 +277,8 @@ model-load time (mirrors the F16 kernel decision):
 
 | Resolved backend | 1×1 conv default |
 |---|---|
-| GPU / accelerator (NVIDIA Vulkan, Apple Metal, …) | **`mul_mat`** (~−19% total / −43% detection on NVIDIA, ~−10% on Metal) |
+| GPU / accelerator (NVIDIA Vulkan, Apple Metal, Mali Vulkan) | **`mul_mat`** (~−19% total / −43% detection on NVIDIA, ~−10% on Metal, ~neutral on Mali — output verified identical) |
+| **Adreno** on **Vulkan** | **`conv_2d`** — Adreno's Vulkan compute is numerically fragile (and is already auto-skipped to CPU). Keyed on the backend API, so a future Adreno-OpenCL backend is not affected. |
 | Any CPU (x86, Apple-Silicon, non-Apple ARM) | **`conv_2d`** (`mul_mat` is neutral-to-slower there) |
 
 Two env vars override the default (read once at model load; only the exact value
