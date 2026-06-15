@@ -610,7 +610,7 @@ TXT
 @test "legacy completions: blocking returns text_completion shape" {
   local body
   body=$(json_post "/v1/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":512}")
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":4096}")
 
   echo "${body}" | jq -e '.id | startswith("cmpl-")' >/dev/null
   echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
