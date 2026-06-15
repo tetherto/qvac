@@ -43,7 +43,7 @@ jobs:
         working-directory: .
         if: runner.environment != 'github-hosted'
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -60,14 +60,14 @@ jobs:
 
       - name: Get ccache cache
         if: matrix.platform == 'linux'
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR)) }}
           path: ~/.cache/ccache
           restore-keys: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 
@@ -99,14 +99,14 @@ jobs:
       # Engine identity does not matter; sortformer q4_0 is the
       # smallest at ~75 MiB and the cheapest payload to pull.
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # 6.2.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Cache Parakeet sortformer q4 GGUF
         id: cache-parakeet-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           path: |
             ${{ env.PKG_DIR }}/models/sortformer-4spk-v1.q4_0.gguf
@@ -172,7 +172,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: matrix.coverage
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |

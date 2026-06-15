@@ -62,7 +62,7 @@ jobs:
         working-directory: .
         if: runner.environment != 'github-hosted'
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -75,7 +75,7 @@ jobs:
 
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@352a7e862ddd6681e9eaa4b0a0935c76c30441bc
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -101,14 +101,14 @@ jobs:
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 
@@ -192,7 +192,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: ${{ always() && !cancelled() && matrix.os == 'ubuntu-24.04' }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |

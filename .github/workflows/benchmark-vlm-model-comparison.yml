@@ -140,7 +140,7 @@ jobs:
       # date). Needs a real clone — sparse checkout doesn't give us git
       # history.
       - name: Checkout for commit lookup
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           repository: ${{ steps.ctx.outputs.repository }}
           ref: ${{ steps.ctx.outputs.ref }}
@@ -203,13 +203,13 @@ jobs:
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -252,7 +252,7 @@ jobs:
       # Fixture images live in S3 (not committed to git). Pull them into the benchmark's
       # images/ dir so the harness and the several-sources CLI runner read them locally.
       - name: Configure AWS credentials (fixture images)
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # 6.2.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -287,7 +287,7 @@ jobs:
       # log so aggregate.js renders a 3-source comparison. Linux-only.
       - name: Cache CLI builds (several-sources)
         if: inputs.matrix_mode == 'several-sources'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.WORKDIR }}/benchmarks/vlm-benchmark/cli-builds
           key: vlm-cli-v3-linux-${{ matrix.backend }}-${{ inputs.fabric_ref }}-${{ inputs.upstream_ref }}
@@ -353,7 +353,7 @@ jobs:
 
       - name: Upload matrix log
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: vlm-matrix-log-linux-${{ matrix.backend }}-${{ github.run_number }}
           path: |
@@ -409,7 +409,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
@@ -418,7 +418,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -522,7 +522,7 @@ jobs:
 
       - name: Upload consolidated matrix report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: vlm-matrix-consolidated-${{ github.run_number }}
           path: consolidated/

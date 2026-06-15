@@ -43,7 +43,7 @@ jobs:
           echo "ref: ${{ github.event.pull_request.head.ref }}"
           echo "workdir: ${{ inputs.workdir }}"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -124,7 +124,7 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Enable Socket Firewall Guard
         uses: ./.github/actions/sfw-guard

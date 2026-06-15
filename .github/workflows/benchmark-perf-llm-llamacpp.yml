@@ -42,7 +42,7 @@ jobs:
       authorised: ${{ steps.gate.outputs.authorised }}
     steps:
       - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/label-gate
@@ -99,12 +99,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # 6.0.3
         with:
           ref: ${{ needs.context.outputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 
@@ -114,14 +114,14 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: linux-x64-${{ hashFiles('packages/llm-llamacpp/vcpkg.json', 'packages/llm-llamacpp/vcpkg-configuration.json', 'packages/llm-llamacpp/vcpkg/ports/**') }}
           path: packages/llm-llamacpp/vcpkg/cache
           restore-keys: linux-x64-
 
       - name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+        uses: tetherto/qvac/.github/actions/setup-llvm@352a7e862ddd6681e9eaa4b0a0935c76c30441bc
 
       - name: Build addon from source
         working-directory: packages/llm-llamacpp
@@ -219,7 +219,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: llm-param-sweep-desktop-${{ github.run_number }}
           path: packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/
