@@ -306,13 +306,12 @@ function generateModelsFromHistory(packageName, version, baseRef, changelogDir) 
   if (!changes) return false;
 
   let modelsMd = `# 📦 Model Changes v${version}\n\n`;
-  modelsMd += `Total model constants: ${changes.previousCount} → ${changes.newCount}`;
-  const delta = changes.newCount - changes.previousCount;
-  if (delta !== 0) {
-    modelsMd += ` (${delta > 0 ? "+" : ""}${delta})`;
-  }
-  modelsMd += "\n\n";
   modelsMd += `_Generated from model history files (no \\[mod\\] tagged PRs found)._\n\n`;
+  modelsMd += `Detected ${changes.added.length} added model constant${changes.added.length === 1 ? "" : "s"}`;
+  if (changes.removed.length > 0) {
+    modelsMd += ` and ${changes.removed.length} removed model constant${changes.removed.length === 1 ? "" : "s"}`;
+  }
+  modelsMd += ".\n\n";
 
   if (changes.added.length > 0) {
     modelsMd += `## Added Models\n\n`;
@@ -695,10 +694,9 @@ function generateChangelogFiles(packageName, version, prs, outputDir, baseRef) {
       let existing = fs.readFileSync(changelogPath, "utf8");
 
       let section = `## 📦 Models\n\n`;
-      section += `- Model registry updated: ${changes.previousCount} → ${changes.newCount}`;
-      const delta = changes.newCount - changes.previousCount;
-      if (delta !== 0) {
-        section += ` (${delta > 0 ? "+" : ""}${delta})`;
+      section += `- Model registry changes detected from model history: ${changes.added.length} added`;
+      if (changes.removed.length > 0) {
+        section += `, ${changes.removed.length} removed`;
       }
       section += `. See [model changes](./models.md) for full list.\n`;
 
@@ -746,8 +744,18 @@ function groupModelsByPrefix(names) {
       prefix = "Parakeet";
     } else if (name.startsWith("WHISPER_")) {
       prefix = "Whisper";
+    } else if (name.startsWith("BCI_")) {
+      prefix = "BCI";
     } else if (name.startsWith("OCR_")) {
       prefix = "OCR";
+    } else if (name.startsWith("TTS_")) {
+      prefix = "TTS";
+    } else if (name.startsWith("WAN")) {
+      prefix = "Wan video";
+    } else if (name.startsWith("PI05_")) {
+      prefix = "VLA";
+    } else if (name.startsWith("MMPROJ_")) {
+      prefix = "Multimodal projector";
     } else if (name.startsWith("EMBEDDINGS_")) {
       prefix = "Embeddings";
     } else {

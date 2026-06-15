@@ -82,13 +82,25 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           # Fail closed: any error here (git fetch/diff, jq) fails the step and
           # therefore the whole "SDK Pod Checks" job — never a silent green.
           set -euo pipefail
 
-          # Default optional fields when not specified in config
-          ALL_PACKAGES=$(jq -c '[.[] | .pkg_manager //= "npm" | .needs_bare //= false | .tests_bare //= false]' .github/sdk-pod-checks.json)
+          # Default optional fields. `sources` is which SDK variants to test a
+          # package against: sdk_sources_release on release-* PRs (and dispatch),
+          # else sdk_sources. Both default to ["default"] — one leg, no prep.
+          ALL_PACKAGES=$(jq -c --arg event "$EVENT" --arg base "${BASE_REF:-}" '
+            [ .[]
+              | .pkg_manager //= "npm"
+              | .needs_bare //= false
+              | .tests_bare //= false
+              | .sdk_sources //= ["default"]
+              | .sdk_sources_release //= .sdk_sources
+              | .sources = (if ($event == "workflow_dispatch" or ($base | startswith("release-")))
+                            then .sdk_sources_release else .sdk_sources end)
+            ]' .github/sdk-pod-checks.json)
 
           # Gates the bare-sdk dep-parity check to dep/version changes only.
           sdk_pkgjson_changed="false"
@@ -247,34 +259,62 @@ jobs:
             P_PATH=$(echo "$PACKAGES" | jq -r ".[$i].path")
             PM=$(echo "$PACKAGES" | jq -r ".[$i].pkg_manager")
             TESTS_BARE=$(echo "$PACKAGES" | jq -r ".[$i].tests_bare")
+            SOURCES=$(echo "$PACKAGES" | jq -r ".[$i].sources[]")
             i=$((i + 1))
 
             echo "::group::SDK pod checks - $PKG"
             cd "$WS/$P_PATH"
 
-            # Disallowed dependencies: no git URLs or dev/tmp versions.
+            # Disallowed dependencies: no git URLs or dev/tmp versions. Checked on
+            # the committed manifest, before any per-source prep can rewrite it.
             deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
             if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
               echo "::error::[$PKG] disallowed dependency detected (git URL or dev/tmp version)"
               fail=$((fail + 1))
             fi
 
-            # npm run --if-present reads package.json scripts and works regardless
-            # of the installer (bun lacks --if-present).
-            if [ "$PKG" = "sdk" ]; then
-              run "install" bun install
-            else
-              run "install" "$PM" install
-            fi
+            # Run the checks once per declared SDK source. The optional
+            # sdk-source:<source> script does that source's setup (e.g. link the
+            # in-repo SDK); absent = plain install of the committed dependency.
+            src_idx=0
+            for SRC in $SOURCES; do
+              # Bracketed source shown after each check name, e.g. "build [workspace]".
+              # Empty for the lone "default" source (single-leg packages stay clean).
+              src=""
+              if [ "$SRC" != "default" ]; then src="[$SRC]"; fi
 
-            run "lint" npm run --if-present lint
-            run "build:types" npm run --if-present build:types
-            run "build" npm run --if-present build
-            run "test:unit" npm run --if-present test:unit
-            if [ "$TESTS_BARE" = "true" ]; then
-              run "test:bare" npm run --if-present test:bare
-            fi
-            run "test:e2e" npm run --if-present test:e2e
+              # Reset to the committed manifest. For the 2nd+ source also wipe
+              # node_modules + lockfile — a prior `npm install ../sdk` leaves a
+              # symlink npm would keep, leaking that source into this one.
+              git checkout HEAD -- package.json 2>/dev/null || true
+              if [ "$src_idx" -gt 0 ]; then
+                rm -rf node_modules package-lock.json
+              fi
+
+              # npm run --if-present reads package.json scripts and works regardless
+              # of the installer (bun lacks --if-present).
+              if [ "$PKG" = "sdk" ]; then
+                run "install $src" bun install
+              else
+                run "install $src" "$PM" install
+              fi
+
+              # Per-source setup (no-op if the script is absent).
+              run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
+
+              run "lint $src" npm run --if-present lint
+              run "build:types $src" npm run --if-present build:types
+              run "build $src" npm run --if-present build
+              run "test:unit $src" npm run --if-present test:unit
+              if [ "$TESTS_BARE" = "true" ]; then
+                run "test:bare $src" npm run --if-present test:bare
+              fi
+              run "test:e2e $src" npm run --if-present test:e2e
+              src_idx=$((src_idx + 1))
+            done
+
+            # Back to the committed manifest for the sdk-only checks below.
+            git checkout HEAD -- package.json 2>/dev/null || true
 
             if [ "$PKG" = "sdk" ]; then
               # Assert bare-sdk stays in dep lockstep with sdk.

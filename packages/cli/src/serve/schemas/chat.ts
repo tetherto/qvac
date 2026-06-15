@@ -34,9 +34,14 @@ export const CHAT_UNSUPPORTED_PARAMS = [
   'stop'
 ] as const
 
+interface ContentPart {
+  type: string
+  text?: string
+}
+
 interface OpenAIMessage {
   role: string
-  content: string | null | undefined
+  content: string | null | undefined | ContentPart[]
   tool_calls?: Array<{
     id: string
     type: string
@@ -45,15 +50,23 @@ interface OpenAIMessage {
   tool_call_id?: string
 }
 
+function contentToString (content: OpenAIMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .filter((p): p is ContentPart & { type: 'text'; text: string } => p.type === 'text' && typeof p.text === 'string')
+      .map(p => p.text)
+      .join('')
+  }
+  return ''
+}
+
 export function openaiMessagesToHistory (messages: OpenAIMessage[]): Array<{ role: string; content: string }> {
   return messages.map((msg) => {
     if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
       return { role: 'assistant', content: synthesizeToolCallContent(msg.tool_calls) }
     }
-    return {
-      role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content : (msg.content ?? '').toString()
-    }
+    return { role: msg.role, content: contentToString(msg.content) }
   })
 }
 

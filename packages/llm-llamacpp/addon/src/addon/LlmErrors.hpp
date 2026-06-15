@@ -31,6 +31,8 @@ enum LlmErrorCode : uint32_t {
   UnableToLoadMetadata = 23,
   ReloadNotSupportedForStreamedModel = 24,
   UnableToSaveSessionFile = 25,
+  ContextSlideFailed = 26,
+  Cancelled = 27,
   // mode llm spesific errors here
 };
 
@@ -84,6 +86,10 @@ inline std::string toString(LlmErrorCode code) {
     return "ReloadNotSupportedForStreamedModel";
   case UnableToSaveSessionFile:
     return "UnableToSaveSessionFile";
+  case ContextSlideFailed:
+    return "ContextSlideFailed";
+  case Cancelled:
+    return "Cancelled";
   default:
     return "UnknownLLMError";
   }

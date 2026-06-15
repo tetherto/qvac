@@ -1,4 +1,56 @@
 # Changelog
+## [0.26.0] - 2026-06-15
+
+### Added
+
+- Continuous-batching support: `run()` now accepts an array of prompts and decodes them concurrently in a single native batch. Each request streams independently and resolves in the original submission order. Per-request generation params and explicit ids are supported via `BatchPrompt` wrappers.
+- `avgConcurrentSeq` runtime stat reporting the average number of sequences decoded together during a request.
+
+### Fixed
+
+- Token-budget stop (`n_predict`) no longer fires on the single-prompt decode path, where the generation loop already caps output. The guard was consuming an extra eval cycle and breaking C++ unit tests.
+
+## Pull Requests
+
+- [#2327](https://github.com/tetherto/qvac/pull/2327) - QVAC-18395: Continuous Batching (single-job)
+
+## [0.25.0] - 2026-06-12
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.1` (adds the direct Metal `CONV_2D_DW` depthwise-convolution kernel).
+
+## Pull Requests
+
+- [#2536](https://github.com/tetherto/qvac/pull/2536) - feat[api]: DocTR depthwise convs via direct Metal CONV_2D_DW kernel
+
+## [0.24.0] - 2026-06-06
+
+This release adds sliding-context support for M-RoPE/iM-RoPE models such as Qwen3.5 and Qwen-VL style decoders. Long-running multimodal sessions can now slide under context pressure while preserving image recall, cache save/load behavior, and quantized KV-cache operation.
+
+### Features
+
+#### M-RoPE/iM-RoPE sliding context
+
+`llm-llamacpp` now tracks multimodal context usage as both logical decoder positions and physical KV-cache cells. This lets Qwen3.5-style prompts slide at the right time even when image chunks occupy a different number of cache cells than position slots.
+
+Context sliding now supports bounded full-wipe and tail-preserving fallback behavior while respecting the configured discard budget. Native KV memory-operation failures surface as `ContextSlideFailed`, making them distinguishable from ordinary context overflow.
+
+Shifted multimodal cache metadata now persists both logical positions and KV-cache usage, so sessions that slide after image turns can be saved and loaded without losing track of protected prefixes or current cache occupancy.
+
+#### Quantized KV-cache sliding coverage
+
+The local `qvac-fabric` overlay now points at the Fabric branch with M-RoPE/iM-RoPE K-shift support and quantized KV-cache shift handling. Integration coverage exercises Qwen3.5 text sliding, tool-compaction pressure, multimodal image recall after sliding save/load, quantized K-cache sliding, and Llama RoPE baseline sliding.
+
+### New APIs
+
+#### `ContextSlideFailed`
+
+`ContextSlideFailed` is a new addon error code used when Fabric/native KV memory operations reject a sliding range. Callers can now tell this apart from context overflow, where there is simply not enough room to append the requested tokens.
+
+## Pull Requests
+
+- [#2438](https://github.com/tetherto/qvac/pull/2438) - feat[notask]: add M-RoPE sliding context support
 
 ## [0.23.2] - 2026-06-03
 

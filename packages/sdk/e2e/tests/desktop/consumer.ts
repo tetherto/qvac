@@ -23,6 +23,7 @@ import {
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLA_LIBERO_VISION_Q8,
+  PI05_BASE_Q_AGGRESSIVE,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
@@ -39,7 +40,9 @@ import {
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
+  BCI_WINDOWED,
 } from "@qvac/sdk";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { collectTestDeps } from "../shared/collect-test-deps.js";
@@ -56,7 +59,7 @@ import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
-import { VlaExecutor } from "./executors/vla-executor.js";
+import { VlaExecutor } from "../shared/executors/vla-executor.js";
 import { ClassificationExecutor } from "./executors/classification-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
@@ -67,6 +70,7 @@ import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { BciExecutor } from "./executors/bci-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
@@ -79,7 +83,9 @@ import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
 import { DesktopCancellationExecutor } from "./executors/cancellation-executor.js";
 
-const resources = new ResourceManager();
+const resources = new ResourceManager({
+  downloadTarget: "desktop",
+});
 const isMacosCi = process.platform === "darwin" && process.env["GITHUB_ACTIONS"] === "true";
 
 resources.define("llm", {
@@ -156,6 +162,12 @@ resources.define("ocr", {
 
 resources.define("vla", {
   constant: SMOLVLA_LIBERO_VISION_Q8,
+  type: "vla",
+  config: { backend: "cpu" },
+});
+
+resources.define("vla-pi05", {
+  constant: PI05_BASE_Q_AGGRESSIVE,
   type: "vla",
   config: { backend: "cpu" },
 });
@@ -308,6 +320,18 @@ resources.define("parakeet-eou", {
   config: {},
 });
 
+resources.define("bci", {
+  constant: BCI_WINDOWED,
+  type: "bci",
+  config: {
+    whisperConfig: { language: "en", temperature: 0.0 },
+    miscConfig: { caption_enabled: false },
+    // Sample 2 (neural-not-too-controversial.bin) was recorded on session
+    // day 1; day_idx selects the matching day-specific projection matrices.
+    bciConfig: { day_idx: 1 },
+  },
+});
+
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
@@ -428,16 +452,31 @@ resources.define("upscaler-cpu", {
   },
 });
 
+function readJsonConfig(configPath: string) {
+  return JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+}
+
 // Exercises registryDownloadMaxRetries + registryStreamTimeoutMs end-to-end (see config-tests.ts).
 function ensureDesktopE2EConfig() {
-  if (!process.env["QVAC_CONFIG_PATH"]) {
-    process.env["QVAC_CONFIG_PATH"] = path.resolve(
-      process.cwd(),
-      "fixtures/qvac.config.e2e.json",
+  const fixturePath = path.resolve(process.cwd(), "fixtures/qvac.config.e2e.json");
+  const existingPath = process.env["QVAC_CONFIG_PATH"];
+  const fixtureConfig = readJsonConfig(fixturePath);
+  const existingConfig = existingPath ? readJsonConfig(existingPath) : {};
+  const mergedConfig = {
+    ...fixtureConfig,
+    ...existingConfig,
+  };
+  const generatedPath = path.resolve(process.cwd(), "qvac.config.e2e.generated.json");
+
+  fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`);
+  process.env["QVAC_CONFIG_PATH"] = generatedPath;
+
+  if (existingPath) {
+    console.log(
+      `📦 Desktop e2e config merged ${fixturePath} with ${existingPath}; using ${generatedPath}`,
     );
-    console.log(`📦 Desktop e2e config set to ${process.env["QVAC_CONFIG_PATH"]}`);
   } else {
-    console.log(`📦 Desktop e2e config: QVAC_CONFIG_PATH already set to ${process.env["QVAC_CONFIG_PATH"]}, skipping`);
+    console.log(`📦 Desktop e2e config set to ${generatedPath}`);
   }
 }
 
@@ -485,6 +524,7 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new ParakeetStreamExecutor(resources),
     new ParakeetExecutor(resources),
+    new BciExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),

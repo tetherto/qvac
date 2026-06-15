@@ -64,10 +64,16 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
-          - os: macos-15-xlarge
+          # Self-hosted Apple-silicon (M4) runner with a real Metal GPU. The
+          # GitHub-hosted macos-15-xlarge runner's virtualized Metal is
+          # unreliable for sustained GPU compute (the DocTR pipeline runs
+          # correctly on real M4 hardware but non-deterministically aborts /
+          # returns garbage on the hosted VM), so the darwin Metal leg runs on
+          # the same self-hosted M4 that diffusion-cpp uses for its GPU tests.
+          - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: macos-15-xlarge
+            runner: mac-mini-m4-gpu
           - os: windows-2025
             platform: win32
             arch: x64
@@ -87,6 +93,14 @@ jobs:
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
 
+      # Self-hosted runners (e.g. mac-mini-m4-gpu) keep their workspace between
+      # jobs; wipe it before checkout so each run starts clean. No-op on
+      # GitHub-hosted runners. See docs/ci/SELF-HOSTED-RUNNERS.md.
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -109,7 +123,9 @@ jobs:
         shell: bash
         run: |
           npm install
-          npm install -g bare bare-make
+          # --force so the global install succeeds on the persistent
+          # self-hosted runner where these may already be present.
+          npm install -g --force bare bare-make
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -145,6 +161,41 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y g++-13
+
+      # The self-hosted mac-mini-m4-gpu runner does not ship the AWS CLI (hosted
+      # macOS runners do). Install it user-local (no sudo) so the S3 model
+      # download below works. Mirrors integration-test-vla.yml.
+      - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
+        name: Install AWS CLI on macOS (user-local fallback for runners without pre-installed aws)
+        shell: bash
+        run: |
+          # 1. Already on PATH?
+          if command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI already on PATH: $(command -v aws)"
+            aws --version
+            exit 0
+          fi
+          # 2. Any known install location?
+          for p in /opt/homebrew/bin/aws /usr/local/bin/aws "$HOME/.local/aws-cli/aws"; do
+            if [ -x "$p" ]; then
+              echo "AWS CLI at $p; adding $(dirname "$p") to PATH"
+              echo "$(dirname "$p")" >> "$GITHUB_PATH"
+              "$p" --version
+              exit 0
+            fi
+          done
+          # 3. User-local install (extract AWSCLIV2.pkg into $HOME instead
+          # of using `installer -target /` which requires sudo).
+          echo "Installing AWS CLI v2 user-local..."
+          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+          rm -rf /tmp/awscli-expanded
+          pkgutil --expand-full /tmp/AWSCLIV2.pkg /tmp/awscli-expanded
+          mkdir -p "$HOME/.local"
+          rm -rf "$HOME/.local/aws-cli"
+          mv /tmp/awscli-expanded/aws-cli.pkg/Payload/aws-cli "$HOME/.local/aws-cli"
+          rm -rf /tmp/awscli-expanded /tmp/AWSCLIV2.pkg
+          echo "$HOME/.local/aws-cli" >> "$GITHUB_PATH"
+          "$HOME/.local/aws-cli/aws" --version
 
       - name: Download EasyOCR + Doctr GGUF model files
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}

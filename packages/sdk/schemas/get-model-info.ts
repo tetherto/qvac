@@ -99,6 +99,7 @@ export const modelInfoSchema = z.object({
     .enum([
       "llm",
       "whisper",
+      "bci",
       "parakeet",
       "embeddings",
       "nmt",

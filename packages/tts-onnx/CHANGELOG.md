@@ -7,9 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-06-09
+
 ### Added
 
+- **Japanese (ja) support via MeCab**: word-level morphological preprocessing for Chatterbox multilingual. The addon now extracts phonetic readings from MeCab and converts katakana to hiragana before tokenization, fixing prior hallucinations caused by kanji being mapped to `[UNK]`.
+- `mecab` dependency added to `vcpkg.json` / `vcpkg-configuration.json` and linked from desktop, mobile and unit-test CMake targets.
+- New `mecabDictPath` field on the native `ChatterboxConfig`, propagated end-to-end (JS `ONNXTTS` -> `AddonJs` -> `TTSModel` -> `ChatterboxEngine`). The Cangjie table for `zh` keeps being resolved next to the tokenizer.
+- Public `files.mecabDictPath?: string` option on `ONNXTTS` (declared in `index.d.ts`); **required** when `config.language === 'ja'`. The npm package no longer ships a dictionary.
+- The compiled MeCab IPAdic dictionary is consumed from the QVAC model registry (S3) under `qvac_models_compiled/chatterbox/mecab-ipadic/`. The integration test stages it via `ensureMecabDict` in `test/utils/downloadModel.js` (lazy `@qvac/registry-client` devDependency) and passes the dictionary directory through `files.mecabDictPath`.
+- Japanese (kanji + MeCab) integration test added to `test/integration/addon.test.js` (`Chatterbox Multilingual TTS: Japanese ...`), validating end-to-end synthesis; it skips-as-pass when the multilingual models or the MeCab dictionary are unavailable (offline / no registry access).
 - Internal RTF + streaming benchmark suite for Chatterbox and Supertonic, runnable via the `Benchmark RTF (ONNX TTS)` GitHub Actions workflow. CI-only; not shipped with the npm package.
+- Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (ONNX TTS)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
+
+### Changed
+
+- `files.mecabDictPath` now points directly to the IPAdic dictionary directory (same semantics as `@qvac/tts-ggml`). `files.mecabDictDir` is accepted as an alias.
+- Refactor: text preprocessing moved from free functions in the `text_preprocess` namespace into a new `class ChatterboxTextPreprocessor` with RAII (`std::unique_ptr<mecab_t, MeCabDeleter>` for the MeCab tagger).
+- `ChatterboxEngine` now owns a single `ChatterboxTextPreprocessor` instead of separate Cangjie/MeCab members; `loadTextPreprocessor(tokenizerPath, mecabDictPath)` replaces the previous loader.
+- `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).
+
+### Fixed
+
+- **Windows prebuild blocked by `mecab` configure error (QVAC-19263).** The upstream `mecab` portfile (microsoft/vcpkg `ports/mecab` @ `8c901fe2`) passes `WINDOWS_USE_MSBUILD` to `vcpkg_cmake_configure`, which forces the `Visual Studio NN YYYY` generator and aborts on the self-hosted Windows runner. Added a local overlay-port at `packages/tts-onnx/vcpkg-overlay-ports/mecab/` that mirrors the upstream port (same `REF`, same patches, `port-version` bumped to `7`) with the single difference of dropping `WINDOWS_USE_MSBUILD` so the default Ninja generator drives `cl.exe` cleanly. `VCPKG_OVERLAY_PORTS` is now set on every platform (previously gated to `if(APPLE)`) using an absolute `${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports` reference. Build-infra only; no addon API change.
+- **Non-Japanese multilingual synthesis regression.** `prepareTextForTokenization` previously applied `applyLowercaseNfkd` + `replaceSpacesWithToken` to every non-English language, silently turning `"[es]Hola Mundo"` into `"[es]hola[SPACE]mundo"`. The NFKD + `[SPACE]` path is now gated to `language == "ja"` only; unit tests in `ChatterboxLanguageModeTest` pin this for `pt`, `es`, and `fr`.
+- **`maxSpeechTokens` regression for non-Japanese languages.** A new helper `computeMaxSpeechTokens` restores the proportional formula (`min(MAX_NEW_TOKENS_SPEECH, max(MIN_SPEECH_TOKENS, textTokenCount * SPEECH_TO_TEXT_MAX_RATIO))`) for every language except `ja`, which still uses the fixed `1024` cap required to keep MeCab-driven synthesis stable.
+- **`isStopTokenInTopK` forced-stop now Japanese-only.** The new `selectNextSpeechToken` helper short-circuits to `STOP_SPEECH_TOKEN` only when `language_ == "ja"`; every other language keeps the previous `sampleWithTemperature` path.
+- **Chinese Cangjie unit tests restored.** The `ChineseCangjieTest` suite is back in `ChatterboxTextPreprocessorTest.cpp`, guarding the still-reachable `convertChineseToCangjie` path even though `zh` is out of scope for this release.
 
 ## [0.9.1] - 2026-06-02
 

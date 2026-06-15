@@ -242,6 +242,10 @@ export async function* transcribe(
     ...(response.stats?.encoderMs !== undefined && { encoderTime: response.stats.encoderMs }),
     ...(response.stats?.decoderMs !== undefined && { decoderTime: response.stats.decoderMs }),
     ...(response.stats?.melSpecMs !== undefined && { melSpecTime: response.stats.melSpecMs }),
+    ...(response.stats?.backendDevice !== undefined && { backendDevice: response.stats.backendDevice }),
+    ...(response.stats?.backendId !== undefined && { backendId: response.stats.backendId }),
+    ...(response.stats?.gpuMemTotalMb !== undefined && { gpuMemTotalMb: response.stats.gpuMemTotalMb }),
+    ...(response.stats?.gpuMemFreeMb !== undefined && { gpuMemFreeMb: response.stats.gpuMemFreeMb }),
   };
 
   return buildStreamResult(modelExecutionMs, stats);
