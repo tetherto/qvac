@@ -5,12 +5,13 @@ name: Create Release Tag
 # create-github-release.yml); every other package just gets a version tag for
 # traceability, keeping the Releases page focused on the SDK.
 #
-# Signing: the tag is created as an annotated tag object via the REST API using
-# the default GITHUB_TOKEN (which authenticates as the github-actions[bot]
-# GitHub App). When the request carries no custom tagger/signature, GitHub signs
-# the object server-side with its web-flow key and marks it "Verified" -- no PAT
-# and no signing key on the runner. The step reads the verification result back
-# and warns (without failing) if GitHub did not sign it.
+# The tag is a lightweight, UNSIGNED tag created via the REST API with the
+# default GITHUB_TOKEN. This matches the previous behaviour of
+# softprops/action-gh-release (its tags were never signed either). Signed tags
+# are intentionally not attempted here: GITHUB_TOKEN cannot sign, and GitHub's
+# server-side web-flow signing covers API-created commits but NOT tag objects
+# (verified empirically -- an API-created annotated tag comes back
+# "reason: unsigned"). A Verified tag would require a GPG/SSH signing key.
 
 on:
   workflow_call:
@@ -38,7 +39,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Create signed git tag (no GitHub Release)
+      - name: Create git tag (no GitHub Release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_NAME: ${{ inputs.repo_name }}
@@ -63,32 +64,8 @@ jobs:
             exit 0
           fi
 
-          # Create an ANNOTATED tag object with no tagger/signature so GitHub
-          # web-flow signs it as github-actions[bot]. A lightweight ref-only tag
-          # has no object to sign and could never be "Verified".
-          tag_sha=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/tags" \
-            -f tag="${tag}" \
-            -f message="Release ${tag}" \
-            -f object="${TARGET_SHA}" \
-            -f type="commit" \
-            --jq '.sha')
-
           gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
             -f ref="refs/tags/${tag}" \
-            -f sha="${tag_sha}"
+            -f sha="${TARGET_SHA}"
 
-          verified=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.verified')
-          reason=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.reason')
-
-          echo "Created tag ${tag} -> ${TARGET_SHA} (object ${tag_sha}); verified=${verified} (${reason})"
-          {
-            echo "## Release tag created"
-            echo ""
-            echo "- Tag: \`${tag}\`"
-            echo "- Commit: \`${TARGET_SHA}\`"
-            echo "- Verified: \`${verified}\` (${reason})"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-          if [ "${verified}" != "true" ]; then
-            echo "::warning title=Tag not signed::GitHub did not sign tag ${tag} (reason: ${reason}). The tag was created but is not Verified."
-          fi
+          echo "Created tag ${tag} -> ${TARGET_SHA}"
