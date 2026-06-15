@@ -2,7 +2,7 @@ name: Mobile Integration Tests (LLM)
 
 # Migrated to .github/actions/run-mobile-integration-tests in QVAC-18168.
 #
-# LLM uses sharded scheduling: 2 Android groups + 10 iOS groups, each
+# LLM uses sharded scheduling: 8 Android groups + 15 iOS groups, each
 # scheduled as its own Device Farm run against the LLM device pool. The
 # group definitions live in the addon at test/mobile/test-groups.json so
 # adding/moving a test changes the shard composition without editing this
@@ -89,7 +89,7 @@ jobs:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    timeout-minutes: 150
     continue-on-error: true
     permissions:
       contents: read
@@ -231,6 +231,7 @@ jobs:
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
 
       - name: Cancel Device Farm runs on workflow cancellation
         if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
