@@ -124,4 +124,38 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
   const auto stats = model->runtimeStats();
   EXPECT_FALSE(stats.empty())
       << "runtimeStats() should be populated after generation";
+
+  // Verify the four phase-breakdown fields are present and have sane values.
+  auto findStat = [&](const std::string& key) -> double {
+    for (const auto& [k, v] : stats) {
+      if (k == key) {
+        return std::get<double>(v);
+      }
+    }
+    return -1.0;
+  };
+
+  const double conditionerMs = findStat("conditionerMs");
+  const double denoiseMs = findStat("denoiseMs");
+  const double vaeMs = findStat("vaeMs");
+  const double stepsPerSecond = findStat("stepsPerSecond");
+
+  EXPECT_GT(conditionerMs, 0.0)
+      << "conditionerMs must be positive (text encoding time)";
+  EXPECT_GT(denoiseMs, 0.0)
+      << "denoiseMs must be positive (10-step denoise time)";
+  EXPECT_GT(vaeMs, 0.0)
+      << "vaeMs must be positive (VAE decode time)";
+  EXPECT_GT(stepsPerSecond, 0.0)
+      << "stepsPerSecond must be positive (should be ~2–4 steps/sec)";
+
+  // Sum of phases should approximately equal the total generation time.
+  // Allow ±10% tolerance for scheduling jitter.
+  const double totalPhaseMs = conditionerMs + denoiseMs + vaeMs;
+  const int64_t generationMsInt = static_cast<int64_t>(findStat("generationMs"));
+  const double tolerance = generationMsInt * 0.1;
+  EXPECT_NEAR(totalPhaseMs, generationMsInt, tolerance)
+      << "Phase times should sum to total generation time within 10%: "
+      << "conditioner=" << conditionerMs << " + denoise=" << denoiseMs
+      << " + vae=" << vaeMs << " vs generation=" << generationMsInt;
 }

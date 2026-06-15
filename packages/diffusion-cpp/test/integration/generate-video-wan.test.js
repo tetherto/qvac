@@ -336,6 +336,25 @@ test(
         console.log(`Could not save AVI artifact: ${err.message}`)
       }
 
+      // ── Runtime stats (new phase-breakdown fields) ────────────────────────
+      const stats = response.stats
+      t.ok(stats, 'stats object is populated')
+      t.ok(typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
+        `conditionerMs is a positive number (got ${stats.conditionerMs})`)
+      t.ok(typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
+        `denoiseMs is a positive number (got ${stats.denoiseMs})`)
+      t.ok(typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
+        `vaeMs is a positive number (got ${stats.vaeMs})`)
+      t.ok(typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
+        `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`)
+
+      // Phase times should sum to the total generation time (within ±10% tolerance)
+      const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs
+      const tolerance = stats.generationMs * 0.1
+      const diff = Math.abs(totalPhaseMs - stats.generationMs)
+      t.ok(diff <= tolerance,
+        `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`)
+
       console.log('\n' + '='.repeat(60))
       console.log('TEST SUMMARY')
       console.log('='.repeat(60))
