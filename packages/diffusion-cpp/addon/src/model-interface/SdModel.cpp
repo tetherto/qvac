@@ -38,13 +38,24 @@ struct ProgressCtx {
   std::chrono::steady_clock::time_point startTime;
 
   // Phase-boundary capture for conditioner / denoise / vae timing.
-  // sd.cpp fires the progress callback once per denoising step, between the
-  // conditioning (text-encode) phase and the VAE decode phase. Recording the
-  // first and last callback times lets us slice generate_image/_video wall
-  // time into those three phases without dedicated library hooks.
-  std::chrono::steady_clock::time_point firstStepTime;
-  std::chrono::steady_clock::time_point lastStepTime;
-  int stepCount = 0; // number of progress callbacks observed this job
+  //
+  // sd.cpp emits a *separate* progress sequence for each phase, and every
+  // sequence restarts at step==0 (sampling: stable-diffusion.cpp
+  // pretty_progress (0, steps) at the first denoise step; tiling:
+  // ggml_extend.hpp sd_tiling pretty_progress(0, num_tiles)). Within a
+  // generate_*() call the order is:
+  //   [denoise loop] -> [VAE decode, tiled when vae_tiling is on]
+  // and ESRGAN upscaling (which also tiles) fires *more* sequences after
+  // generate_*() has returned. We therefore only track the FIRST sequence (the
+  // denoise loop); the gap between its last tick and generate_*() returning is
+  // the VAE decode. This keeps VAE-tiling ticks out of denoiseMs and prevents
+  // post-generate upscaler ticks from corrupting the denoise boundary.
+  std::chrono::steady_clock::time_point denoiseFirstTime;
+  std::chrono::steady_clock::time_point denoiseLastTime;
+  int denoiseTicks = 0;  // progress ticks observed in the denoise sequence
+  int denoiseSteps = 0;  // sampler step count ("total") reported during denoise
+  int segmentCount = 0;  // number of step==0 sequence-starts seen this job
+  int observedTicks = 0; // total progress ticks seen this job (all phases)
 };
 
 thread_local ProgressCtx g_progressCtx;
@@ -70,33 +81,50 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   // Record phase boundaries even if no progress consumer is attached, so
   // conditioner/denoise/vae timings remain available for runtimeStats().
   const auto now = std::chrono::steady_clock::now();
-  if (g_progressCtx.stepCount == 0)
-    g_progressCtx.firstStepTime = now;
-  g_progressCtx.lastStepTime = now;
-  ++g_progressCtx.stepCount;
+  auto& ctx = g_progressCtx;
 
-  if (!g_progressCtx.job || !g_progressCtx.job->progressCallback)
+  // A step==0 tick marks the start of a new progress sequence (denoise, then
+  // VAE / upscaler tiling). The very first tick of the job always opens the
+  // denoise sequence even on the off chance an engine skips the step==0 start.
+  if (step == 0 || ctx.observedTicks == 0)
+    ++ctx.segmentCount;
+  ++ctx.observedTicks;
+
+  // Capture only the first sequence (segmentCount == 1): the denoise loop.
+  if (ctx.segmentCount == 1) {
+    if (ctx.denoiseTicks == 0)
+      ctx.denoiseFirstTime = now;
+    ctx.denoiseLastTime = now;
+    ctx.denoiseSteps = steps; // sampler "total"; constant across the sequence
+    ++ctx.denoiseTicks;
+  }
+
+  if (!ctx.job || !ctx.job->progressCallback)
     return;
 
-  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           now - g_progressCtx.startTime)
-                           .count();
+  const auto elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.startTime)
+          .count();
 
   std::ostringstream oss;
   oss << R"({"step":)" << step << R"(,"total":)" << steps << R"(,"elapsed_ms":)"
       << elapsed << "}";
 
-  g_progressCtx.job->progressCallback(oss.str());
+  ctx.job->progressCallback(oss.str());
 }
 
-// Phase timings derived from progress-callback boundaries. generate_image/
-// _video runs: [conditioning] -> [N denoise steps] -> [vae decode]. sd.cpp
-// invokes the progress callback N+1 times for an N-step sampler: once at step 0
-// (the start of sampling, i.e. right after conditioning) and once after each of
-// the N steps. So firstStepTime marks the conditioning->denoise boundary and
-// (lastStepTime - firstStepTime) is the full denoise duration over
-// (stepCount-1) real steps; the remainder up to generate_*() returning is the
-// VAE decode.
+// Phase timings derived from the denoise progress sequence. A generate_*() call
+// runs [conditioning] -> [N denoise steps] -> [VAE decode], and the denoise
+// loop emits a step==0 start tick followed by one tick per step (see
+// ProgressCtx). Using only the denoise sequence's first/last tick:
+//   conditionerMs = denoiseFirst - t0   (encode + setup before sampling)
+//   denoiseMs     = denoiseLast  - denoiseFirst
+//   vaeMs         = tGen - denoiseLast   (decode, incl. any VAE tiling, before
+//                                         generate_*() returns)
+// Because vaeMs is bounded by tGen (captured the instant generate_*() returns),
+// ESRGAN upscaler tiling -- which fires later -- can't leak into it, and
+// VAE-tiling ticks are excluded from denoiseMs because they belong to a later
+// progress sequence than the one we capture.
 struct PhaseStats {
   double conditionerMs = 0.0;
   double denoiseMs = 0.0;
@@ -111,24 +139,29 @@ PhaseStats computePhaseStats(
   const auto toMs = [](auto d) {
     return std::chrono::duration<double, std::milli>(d).count();
   };
-  const int ticks = g_progressCtx.stepCount;
-  if (ticks >= 2) {
-    const double spanMs =
-        toMs(g_progressCtx.lastStepTime - g_progressCtx.firstStepTime);
-    const int steps = ticks - 1; // real sampler steps spanned by the ticks
-    ps.conditionerMs = toMs(g_progressCtx.firstStepTime - t0);
-    ps.denoiseMs = spanMs;
-    ps.vaeMs = toMs(tGen - g_progressCtx.lastStepTime);
-    ps.stepsPerSecond = spanMs > 0.0 ? steps * 1000.0 / spanMs : 0.0;
-  } else if (ticks == 1) {
+  const auto& ctx = g_progressCtx;
+  if (ctx.denoiseTicks >= 2) {
+    const double denoiseMs = toMs(ctx.denoiseLastTime - ctx.denoiseFirstTime);
+    // The denoise window spans (denoiseTicks - 1) step intervals, which equals
+    // the reported sampler "total" when every step fired a tick; prefer the
+    // reported total and fall back to the measured interval count.
+    const int steps =
+        ctx.denoiseSteps > 0 ? ctx.denoiseSteps : ctx.denoiseTicks - 1;
+    ps.conditionerMs = toMs(ctx.denoiseFirstTime - t0);
+    ps.denoiseMs = denoiseMs;
+    ps.vaeMs = toMs(tGen - ctx.denoiseLastTime);
+    ps.stepsPerSecond = denoiseMs > 0.0 ? steps * 1000.0 / denoiseMs : 0.0;
+  } else if (ctx.denoiseTicks == 1) {
     // Single tick (e.g. a 1-step distilled / LTX sampler): no interval to
     // measure, so attribute everything before the tick to conditioning and
     // everything after generate_*() returns to VAE; denoise/rate stay 0.
-    ps.conditionerMs = toMs(g_progressCtx.firstStepTime - t0);
-    ps.vaeMs = toMs(tGen - g_progressCtx.lastStepTime);
+    ps.conditionerMs = toMs(ctx.denoiseFirstTime - t0);
+    ps.vaeMs = toMs(tGen - ctx.denoiseLastTime);
   }
   if (ps.conditionerMs < 0.0)
     ps.conditionerMs = 0.0; // clamp tiny negative jitter
+  if (ps.vaeMs < 0.0)
+    ps.vaeMs = 0.0; // clamp tiny negative jitter
   return ps;
 }
 
@@ -389,7 +422,11 @@ std::any SdModel::process(const std::any& input) {
   cancelRequested_.store(false);
   g_progressCtx.job = &job;
   g_progressCtx.startTime = std::chrono::steady_clock::now();
-  g_progressCtx.stepCount = 0; // reset phase-boundary capture for this job
+  // Reset phase-boundary capture for this job.
+  g_progressCtx.denoiseTicks = 0;
+  g_progressCtx.denoiseSteps = 0;
+  g_progressCtx.segmentCount = 0;
+  g_progressCtx.observedTicks = 0;
   sd_set_progress_callback(sdProgressCallback, nullptr);
   g_abortModel = this;
   sd_set_abort_callback(sdAbortCallback, nullptr);

@@ -357,9 +357,14 @@ export interface GenerationParams {
  * across the lifetime of the model instance; per-job fields (generationMs, width,
  * height, seed) reflect only the most recent generation.
  *
- * Derivable rates (stepsPerSecond, msPerStep, megapixelsPerSecond) are intentionally
+ * The per-job phase breakdown (conditionerMs, denoiseMs, vaeMs) splits the most
+ * recent generation into its conditioning (text-encode), denoising, and VAE
+ * decode phases, and stepsPerSecond is the measured denoising throughput for
+ * that job. These are derived from the native progress sequence rather than
+ * from the cumulative totals.
+ *
+ * Other derivable rates (msPerStep, megapixelsPerSecond) are intentionally
  * omitted — callers can compute them from the primitives provided:
- *   stepsPerSecond    = totalSteps  / (totalWallMs / 1000)
  *   msPerStep         = totalWallMs / totalSteps
  *   megapixelsPerSec  = (totalPixels / 1e6) / (totalWallMs / 1000)
  */
