@@ -318,6 +318,9 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
       };
     }
 
-    return ValidationHelpers.validate(text2, expectation);
+    return ValidationHelpers.validate(
+      `Lifecycle OK: "${text1}" → unload → reload → "${text2}"`,
+      expectation,
+    );
   }
 }

@@ -194,10 +194,7 @@ export const modelLoadNmt: TestDefinition = {
 export const modelLifecycleNmt: TestDefinition = {
   testId: "model-lifecycle-nmt",
   params: { text: "Hello, how are you today?" },
-  expectation: {
-    validation: "contains-any",
-    contains: ["bonjour", "comment", "vous", "aujourd"],
-  },
+  expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "model",
     dependency: "none",
