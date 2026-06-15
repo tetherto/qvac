@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-* artifacts)"
+        required: false
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -30,6 +35,11 @@ on:
         type: boolean
         required: false
         default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-* artifacts)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   run-integration-tests:
@@ -185,3 +195,65 @@ jobs:
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      # RTF benchmark leg (run_rtf_benchmarks=true, set by
+      # benchmark-performance-transcription-parakeet.yml). Runs the matrix
+      # runner once per (modelType, useGPU) combo and writes per-config JSON
+      # under benchmarks/results/, uploaded as rtf-results-parakeet-* for the
+      # orchestrator's summarize job. GPU (Vulkan) combos run only on
+      # GPU-capable runners; CPU combos run everywhere. Skipped on normal
+      # integration runs.
+      - name: Run RTF benchmark
+        if: ${{ inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu || 'false' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          QVAC_PARAKEET_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_PARAKEET_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","useGPU":false},{"modelType":"ctc","useGPU":false},{"modelType":"eou","useGPU":false},{"modelType":"sortformer","useGPU":false}]'
+          else
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","useGPU":false},{"modelType":"ctc","useGPU":false},{"modelType":"eou","useGPU":false},{"modelType":"sortformer","useGPU":false},{"modelType":"tdt","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","useGPU":true,"backendHint":"vulkan"}]'
+          fi
+          node scripts/run-rtf-benchmark-matrix.js
+
+      # The matrix runner deliberately process.exit(0)s on PARTIAL failure (one
+      # model-type/backend shouldn't sink the whole leg). But a run that produced
+      # ZERO artifacts means every entry failed and must still fail loudly —
+      # mirrors the "Verify benchmark output exists" gate in
+      # benchmark-rtf-tts-ggml.yml.
+      - name: Verify RTF benchmark output exists
+        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: |
+          set -euo pipefail
+          results_dir="benchmarks/results"
+          mkdir -p "$results_dir"
+          rtf_count=$(find "$results_dir" -maxdepth 1 -type f -name 'rtf-benchmark-*.json' | wc -l)
+          echo "rtf-benchmark-*.json produced: $rtf_count"
+          ls -la "$results_dir" || true
+          if [ "$rtf_count" -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::scripts/run-rtf-benchmark-matrix.js produced zero rtf-benchmark-*.json files on ${{ matrix.runner || matrix.os }}. Every benchmark entry failed — check the matrix runner log above for model-fetch failures, prebuild path issues, or per-entry crashes."
+            exit 1
+          fi
+
+      - name: Upload RTF benchmark results
+        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-parakeet-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: packages/transcription-parakeet/benchmarks/results/rtf-benchmark-*.json
+          if-no-files-found: warn
+          retention-days: 30

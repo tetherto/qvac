@@ -49,6 +49,17 @@ function mapAddonEvent (rawEvent, rawData, rawError, state) {
   ) {
     return { type: 'FinetuneProgress', data: rawData, error: null }
   }
+  if (
+    rawData &&
+    typeof rawData === 'object' &&
+    rawData.type === 'batch_output' &&
+    typeof rawData.id === 'string'
+  ) {
+    return { type: 'BatchOutput', data: rawData, error: null }
+  }
+  if (Array.isArray(rawData)) {
+    return { type: 'BatchResult', data: rawData, error: null }
+  }
 
   // Name-based mapping. LogMsg must be checked before the string-to-Output
   // fallback: `JsLogMsgOutputHandler` delivers the log as a plain string,
@@ -112,9 +123,9 @@ class LlamaInterface {
   /**
    * Cancel current inference job
    */
-  async cancel () {
+  async cancel (savePauseCheckpoint = 1) {
     if (!this._handle) return
-    await this._binding.cancel(this._handle)
+    await this._binding.cancel(this._handle, savePauseCheckpoint)
   }
 
   /**

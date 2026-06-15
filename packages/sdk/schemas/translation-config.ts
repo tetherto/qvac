@@ -46,6 +46,7 @@ export const BERGAMOT_LANGUAGES = [
   "mt",
   "nb",
   "nn",
+  "no",
   "re",
   "ro",
   "sq",
@@ -53,6 +54,7 @@ export const BERGAMOT_LANGUAGES = [
   "sv",
   "ta",
   "te",
+  "th",
   "tr",
   "vi",
 ] as const;

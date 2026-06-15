@@ -38,6 +38,25 @@ export const vlaHparamsSchema = z.object({
   maxStateDim: z.number().int().nonnegative(),
   tokenizerMaxLength: z.number().int().nonnegative(),
   visionImageSize: z.number().int().nonnegative(),
+  numCameras: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Number of camera views the model expects (2 for SmolVLA, 3 for π₀.₅). " +
+        "Pass exactly this many preprocessed frames in `images`. Optional for " +
+        "back-compat — older addon builds may omit it.",
+    ),
+  stateInputMode: z
+    .enum(["continuous", "discrete"])
+    .optional()
+    .describe(
+      "How the robot state is consumed. `'continuous'` (SmolVLA): the `state` " +
+        "Float32Array is projected by an in-model linear layer. `'discrete'` " +
+        "(π₀.₅): the state is tokenised into the language prompt and the `state` " +
+        "buffer is ignored — pass an empty `Float32Array(0)`. Optional for back-compat.",
+    ),
 });
 
 export type VlaHparams = z.infer<typeof vlaHparamsSchema>;
@@ -48,6 +67,11 @@ export type VlaHparams = z.infer<typeof vlaHparamsSchema>;
 
 export const vlaStatsSchema = z.object({
   vision_ms: z.number().optional(),
+  // Architecture-neutral prefill timings (emitted by both SmolVLA and π₀.₅).
+  prefill_compute_ms: z.number().optional(),
+  prefill_total_ms: z.number().optional(),
+  // Legacy SmolVLA-named aliases for the prefill timings above; kept for
+  // back-compat with consumers written against the original SmolVLA surface.
   smollm2_compute_ms: z.number().optional(),
   smollm2_total_ms: z.number().optional(),
   ode_ms: z.number().optional(),
@@ -84,11 +108,14 @@ export const vlaRunRequestSchema = z.object({
   imgHeight: z.number().int().positive(),
   state: z
     .string()
-    .min(1)
     .regex(BASE64_PATTERN)
     .describe(
-      "Base64-encoded `Float32Array` of length `hparams.maxStateDim`. " +
-        "Use `vlaPadState(state, hparams.maxStateDim)` to zero-pad.",
+      "Base64-encoded `Float32Array`. For continuous-state models (SmolVLA) " +
+        "this is length `hparams.maxStateDim` — use " +
+        "`vlaPadState(state, hparams.maxStateDim)` to zero-pad. For " +
+        "discrete-state models (π₀.₅, `stateInputMode: 'discrete'`) the state " +
+        "is tokenised into the prompt and this buffer is ignored — encode an " +
+        "empty `Float32Array(0)` (which is the empty string).",
     ),
   tokens: z
     .string()

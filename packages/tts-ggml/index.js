@@ -372,14 +372,14 @@ class TTSGgml {
           'agnostic runStream() / runStreaming() / run({ streamOutput: true }) APIs.'
         )
       }
-      // GPU is supported as of tts-cpp@2026-06-05 (QVAC-18605 Supertonic
-      // Vulkan/Metal optimisations + QVAC-19254 sched/cpu_backend for
-      // Adreno OpenCL). Default-off mirrors Chatterbox; callers opt in
-      // with config: { useGPU: true } on GPU-capable hosts.
-      if (this._config.useGPU === undefined && this._nGpuLayers == null) {
-        this._config.useGPU = false
-      }
-    } else if (this._config.useGPU === undefined && this._nGpuLayers == null) {
+    }
+    // Default GPU off only when neither knob is set, for every engine. A
+    // caller passing nGpuLayers alone keeps it (no silent conflict with the
+    // JS-side default). Supertonic GPU intent now flows through to tts-cpp on
+    // GPU-capable hosts (Metal / Vulkan / CUDA); on Android it is forced back
+    // to CPU at the native engine boundary (SupertonicModel::loadLocked) until
+    // the Adreno OpenCL/Vulkan path stabilizes.
+    if (this._config.useGPU === undefined && this._nGpuLayers == null) {
       this._config.useGPU = false
     }
   }

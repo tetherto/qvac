@@ -110,14 +110,33 @@ function getUpperBound (benchmarkSettings) {
   return null
 }
 
+// parakeet.cpp (ggml) GPU backend cascade, per test/integration/gpu-smoke.test.js:
+//   - darwin / ios:   Metal
+//   - linux / win32:  Vulkan
+//   - android:        Vulkan (Adreno: OpenCL fallback)
+// (The previous coreml/nnapi/auto-gpu names were ONNX-era and never matched
+// the GGML runtime, which reports the real backend via stats.backendId.)
 function getRequestedBackendFamily (platformName, useGPU, backendHint) {
   if (backendHint) return backendHint
   if (!useGPU) return 'cpu'
-  if (platformName === 'darwin' || platformName === 'ios') return 'coreml-requested'
-  if (platformName === 'android') return 'nnapi-requested'
-  if (platformName === 'win32') return 'auto-gpu-requested'
-  if (platformName === 'linux') return 'auto-gpu-requested'
-  return 'gpu-requested'
+  if (platformName === 'darwin' || platformName === 'ios') return 'metal'
+  if (platformName === 'android') return 'vulkan'
+  if (platformName === 'win32' || platformName === 'linux') return 'vulkan'
+  return 'gpu'
+}
+
+// Maps stats.backendId (surfaced by ParakeetModel::runtimeStats() after
+// Engine::backend_name()) to the GGML backend family that actually ran.
+function backendIdToName (id) {
+  switch (id) {
+    case 0: return 'cpu'
+    case 1: return 'metal'
+    case 2: return 'cuda'
+    case 3: return 'vulkan'
+    case 4: return 'opencl'
+    case 99: return 'other-gpu'
+    default: return ''
+  }
 }
 
 function getArtifactFileName (benchmarkSettings) {
@@ -205,6 +224,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
   console.log(`  Audio duration: ${audioDurationSec.toFixed(2)}s\n`)
 
   const allResults = []
+  let observedBackendId = null
   const model = new TranscriptionParakeet({
     files: { model: modelPath },
     config: {
@@ -257,10 +277,18 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         continue
       }
 
+      // The GGML addon (parakeet.cpp) does not populate realTimeFactor in its
+      // runtimeStats — it reports `0` (and only raw, cumulative counters for
+      // audioDurationMs / totalTokens / totalTimeSec). So derive RTF from the
+      // measured per-call wall time and the known audio duration instead, and
+      // only prefer the addon value when a future build reports a positive one.
+      const statsRtf = jobStats.realTimeFactor || 0
+      const derivedRtf = audioDurationSec > 0 ? (wallMs / 1000) / audioDurationSec : 0
       const run = {
         iteration: i + 1,
         wallMs,
-        rtf: jobStats.realTimeFactor || 0,
+        rtf: statsRtf > 0 ? statsRtf : derivedRtf,
+        rtfSource: statsRtf > 0 ? 'addon' : 'wall',
         requestedModelType: benchmarkSettings.modelType,
         requestedUseGPU: benchmarkSettings.useGPU,
         totalTimeSec: jobStats.totalTime || 0,
@@ -273,8 +301,12 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         melSpecMs: jobStats.melSpecMs || 0,
         encoderMs: jobStats.encoderMs || 0,
         decoderMs: jobStats.decoderMs || 0,
-        totalWallMs: jobStats.totalWallMs || 0
+        totalWallMs: jobStats.totalWallMs || 0,
+        backendDevice: typeof jobStats.backendDevice === 'number' ? jobStats.backendDevice : null,
+        backendId: typeof jobStats.backendId === 'number' ? jobStats.backendId : null
       }
+
+      if (run.backendId !== null) observedBackendId = run.backendId
 
       allResults.push(run)
 
@@ -358,6 +390,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         runner: benchmarkSettings.runnerLabel,
         device: benchmarkSettings.deviceLabel,
         backend: getRequestedBackendFamily(platformName, benchmarkSettings.useGPU, benchmarkSettings.backendHint),
+        activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
         requestedBackend: benchmarkSettings.useGPU ? 'gpu' : 'cpu',
         label: benchmarkSettings.label
       },
@@ -388,7 +421,9 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         wallMs: wallStats,
         tokensPerSecond: tpsStats,
         encoderMs: encoderStats,
-        decoderMs: decoderStats
+        decoderMs: decoderStats,
+        backendId: observedBackendId,
+        activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : ''
       },
       runs: allResults
     }
@@ -401,6 +436,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       modelType: benchmarkSettings.modelType,
       useGPU: benchmarkSettings.useGPU,
       backendHint: getRequestedBackendFamily(platformName, benchmarkSettings.useGPU, benchmarkSettings.backendHint),
+      activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
       deviceLabel: benchmarkSettings.deviceLabel,
       runnerLabel: benchmarkSettings.runnerLabel,
       summary: report.summary

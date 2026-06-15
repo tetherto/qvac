@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.1] - 2026-06-15
+
+### Changed
+
+- Bumped the `bare-fetch` dependency to the latest major (`^3.0.1`), aligning
+  with the rest of the monorepo and removing the duplicate older `bare-fetch`
+  major from the dependency tree.
+
+## [6.0.0] - 2026-06-12
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.1` (adds the direct Metal `CONV_2D_DW` depthwise-convolution kernel).
+
+## Pull Requests
+
+- [#2536](https://github.com/tetherto/qvac/pull/2536) - feat[api]: DocTR depthwise convs via direct Metal CONV_2D_DW kernel
+
+## [5.0.2] - 2026-06-11
+
+### Fixed
+
+- Updated the `bergamot-translator` vcpkg dependency to registry version `1.0.1`,
+  which removes leftover crash-debugging stderr prints (`[BERGAMOT]` /
+  `[BERGAMOT_SERVICE]` lines on every model load and translation). These prints
+  bypassed the addon logger, so production apps with an error-only logger still
+  saw info-level noise on stderr.
+
+## [5.0.1] - 2026-06-06
+
+### Changed
+
+- Pinned to the Fabric revision used by the M-RoPE/iM-RoPE sliding-context work.
+
+## Pull Requests
+
+- [#2438](https://github.com/tetherto/qvac/pull/2438) - feat[notask]: add M-RoPE sliding context support
+
 ## [5.0.0] - 2026-06-02
 
 ### Changed

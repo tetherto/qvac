@@ -26,6 +26,14 @@ async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/multiple-runs.test.js', options)
 }
 
+async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/rtf-benchmark.test.js', options)
+}
+
+async function runStreamingBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/streaming-benchmark.test.js', options)
+}
+
 async function runSupertonicMtlTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/supertonic-mtl.test.js', options)
 }
@@ -44,6 +52,8 @@ module.exports = {
   runChatterboxMtlTest,
   runGpuSmokeTest,
   runMultipleRunsTest,
+  runRtfBenchmarkTest,
+  runStreamingBenchmarkTest,
   runSupertonicMtlTest,
   runSupertonicTest,
   runSupertonic3QuantTest

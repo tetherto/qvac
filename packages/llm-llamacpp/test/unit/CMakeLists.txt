@@ -17,6 +17,7 @@ add_executable(
   test_text_llm_context.cpp
   test_addon_cpp.cpp
   test_cancel_stale_flag.cpp
+  test_reload_cancel_state.cpp
   test_backend_selection.cpp
   test_tune_config_map.cpp
   # Placeholder tests (to be implemented)
@@ -35,7 +36,15 @@ add_executable(
   test_logging_macros.cpp
   test_llama_lazy_init_backend.cpp
   test_borrow_tracked_shared_buffer.cpp
+  test_continuous_batching_default.cpp
+  test_continuous_batch_finalize.cpp
+  test_multi_request_batcher.cpp
+  test_continuous_batching_integration.cpp
+  test_kv_leak_on_admit_failure.cpp
+  test_runtime_stats.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp

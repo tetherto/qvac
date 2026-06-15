@@ -4419,6 +4419,114 @@
     "notes": ""
   },
   {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/char.bin",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (char.bin) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/dicrc",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (dicrc) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/matrix.bin",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (matrix.bin) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/mecabrc",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (mecabrc) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/sys.dic",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (sys.dic) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/mecab-ipadic/unk.dic",
+    "engine": "@qvac/tts-ggml",
+    "link": "https://github.com/polm/ipadic-py",
+    "description": "MeCab IPAdic dictionary (unk.dic) for Japanese morphological segmentation in multilingual Chatterbox TTS",
+    "quantization": "",
+    "params": "",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "mecab",
+      "ipadic",
+      "ja",
+      "dictionary"
+    ],
+    "notes": ""
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
     "link": "https://huggingface.co/ResembleAI/chatterbox",
@@ -4723,6 +4831,70 @@
       "gguf"
     ],
     "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 3 TTS (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic3",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/supertone/supertonic-3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 3 TTS (GGUF, multilingual)",
+    "quantization": "fp32",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic3",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/supertone/supertonic-3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 3 TTS (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic3",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/supertone/supertonic-3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 3 TTS (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic3",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/supertone/supertonic-3"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
@@ -12606,6 +12778,21 @@
     ],
     "notes": "Vision tower linear weights Q8_0; SmolLM2 / action expert / flow-matching projections F32. Converted from HuggingFaceVLA/smolvla_libero.",
     "link": "https://huggingface.co/HuggingFaceVLA/smolvla_libero"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/vla/pi05-base/2026-05-21/pi05-base-q-aggressive.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "π₀.₅ (pi05) vision-language-action model from Physical Intelligence (LeRobot pi05_base). Single GGUF bundling a SigLIP vision tower, PaliGemma-style VLM, Gemma action expert, and flow-matching projections. Uses 3 camera views and discrete (tokenised) robot state (~3.7 GB).",
+    "quantization": "q_aggressive",
+    "params": "pi05-base",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "vla",
+      "pi05",
+      "robotics"
+    ],
+    "notes": "q_aggressive profile: Q5_0 vision tower + Q8_0 VLM + Q8_0 expert linears + F32 norms/ada; cos > 0.999 vs the PyTorch reference end-to-end. Converted from lerobot/pi05_base via convert_pi05_to_gguf.py.",
+    "link": "https://huggingface.co/lerobot/pi05_base"
   },
   {
     "source": "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/593b5a2e04c8f3e4ee880263f93e0bd2901ad47f/smollm2-360m-instruct-q8_0.gguf",

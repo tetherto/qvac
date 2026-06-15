@@ -899,5 +899,6 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 - [cache-api.md](cache-api.md) - KV cache persistence (`cacheKey`, `saveCacheToDisk`)
 - [tools-compact.md](tools-compact.md) - Tool-call compaction behavior
 - [finetuning.md](finetuning.md) - LoRA finetuning entrypoints and parameters
+- [continuous-batching.md](continuous-batching.md) - Continuous batching architecture (`parallel`, `ContinuousBatchScheduler`, slot lifecycle, cancellation)
 
 **Last Updated:** 2026-05-07

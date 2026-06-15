@@ -192,16 +192,18 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
+    // NOTE: ggml_conv_2d_direct (fused GGML_OP_CONV_2D) measured ~2x SLOWER
+    // than im2col + mul_mat on Metal — the matmul path rides the tuned GEMM
+    // kernel.
     struct ggml_tensor* conv =
         ggml_conv_2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
-
-    struct ggml_tensor* bn = applyFoldedBn(
-        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
+    // BN scale folded into the conv weights at load time; `.shift` carries the
+    // combined (conv bias + BN shift) offset. One add instead of add+mul+add.
+    conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
     if (!activate) {
-      return bn;
+      return conv;
     }
-    return this->activate(bn, useHardswish);
+    return this->activate(conv, useHardswish);
   }
 
   struct ggml_tensor*
@@ -263,11 +265,76 @@ struct GraphBuilder {
         upsampleMode);
   }
 
+  /// Sub-pixel (pixel-shuffle) equivalent of a 2x2 / stride-2 / pad-0
+  /// transposed convolution.
+  ///
+  /// ggml's Metal `kernel_conv_transpose_2d` is pathologically slow — it
+  /// launches one tiny (KW*KH-thread) threadgroup per output element and does a
+  /// serial per-threadgroup reduction, so the two deconvs in the DocTR prob
+  /// head dominate detection latency on Metal (~16s of a ~17s run on an M4).
+  ///
+  /// A 2x2/stride-2/pad-0 deconv is mathematically identical to a 1x1
+  /// convolution that produces `OC*4` channels followed by a depth-to-space
+  /// (pixel shuffle) with block size 2. Concretely:
+  ///   out[2x+kw, 2y+kh, oc] = sum_ic W[kw, kh, oc, ic] * in[x, y, ic]
+  /// so each input pixel maps to a 2x2 output block, one weight matrix per
+  /// (kw, kh) sub-position. This runs as im2col + mul_mat on Metal (fast) and
+  /// is numerically equivalent.
+  ///
+  /// The deconv weight is ggml-shaped [KW=2, KH=2, OC, IC] (memory index
+  /// kw + 2*kh + 4*oc + 4*OC*ic). Reshaping/transposing it into a 1x1 conv
+  /// kernel [1, 1, IC, P] with P = 4*OC and channel index p = kw + 2*kh + 4*oc
+  /// makes conv output channel p at (x, y) equal the deconv contribution for
+  /// sub-position (kw, kh) of output pixel (2x+kw, 2y+kh), channel oc. The
+  /// pixel shuffle then scatters those P channels into the 2x2 blocks in that
+  /// exact (kw, kh, oc) order.
+  struct ggml_tensor* subPixelConvTranspose2x2(
+      struct ggml_tensor* input, struct ggml_tensor* deconvWeight) const {
+    if (deconvWeight->ne[0] != 2 || deconvWeight->ne[1] != 2) {
+      raise("subPixelConvTranspose2x2 requires a 2x2 kernel");
+    }
+    const int64_t oc = deconvWeight->ne[2];
+    const int64_t ic = deconvWeight->ne[3];
+    const int64_t p = 4 * oc;
+
+    // Reshape the deconv weight into a 1x1 conv kernel [1, 1, IC, P].
+    struct ggml_tensor* wr = ggml_reshape_2d(ctx, deconvWeight, p, ic);
+    struct ggml_tensor* wt = ggml_cont(ctx, ggml_transpose(ctx, wr)); // [IC,P]
+    struct ggml_tensor* w1 = ggml_reshape_4d(ctx, wt, 1, 1, ic, p);
+
+    // 1x1 conv: [W, H, IC] -> [W, H, P].
+    struct ggml_tensor* conv = ggml_conv_2d(ctx, w1, input, 1, 1, 0, 0, 1, 1);
+
+    const int64_t cw = conv->ne[0];
+    const int64_t ch = conv->ne[1];
+
+    // Depth-to-space (block 2), channel order p = kw + 2*kh + 4*oc.
+    //
+    // A naive width interleave produces a tensor with ne0 == 2 (the doubled
+    // width axis innermost), which makes the ggml_cont write 2-element rows —
+    // pathologically uncoalesced on Metal (~100ms for a 16M-element copy). To
+    // avoid that, the width pass is fused with a W<->H transpose so every cont
+    // keeps a large innermost dimension.
+    struct ggml_tensor* y =
+        ggml_reshape_4d(ctx, conv, cw, ch, 2, 2 * oc); // [W,H,kw,rest=kh+2oc]
+    // permute (2,0,1,3): -> [H, kw, W, rest] (large ne0 = H), then combine
+    // (kw,W) into the doubled width with xx = 2x + kw.
+    y = ggml_cont(ctx, ggml_permute(ctx, y, 2, 0, 1, 3)); // [H, 2, W, rest]
+    y = ggml_reshape_3d(ctx, y, ch, 2 * cw, 2 * oc);      // [H, 2W, rest]
+    y = ggml_cont(ctx, ggml_permute(ctx, y, 1, 0, 2, 3)); // [2W, H, rest]
+    // Height pass: split rest -> (kh=2, oc), interleave kh into y; ne0 stays
+    // 2W.
+    y = ggml_reshape_4d(ctx, y, 2 * cw, ch, 2, oc);
+    y = ggml_cont(ctx, ggml_permute(ctx, y, 0, 2, 1, 3)); // [2W, 2, H, OC]
+    y = ggml_reshape_3d(ctx, y, 2 * cw, 2 * ch, oc);      // [2W, 2H, OC]
+    return y;
+  }
+
   struct ggml_tensor* convTransposeBnAct(
       struct ggml_tensor* input, const std::string& convPrefix,
       const std::string& bnPrefix) const {
     struct ggml_tensor* conv =
-        ggml_conv_transpose_2d_p0(ctx, t(convPrefix + ".weight"), input, 2);
+        subPixelConvTranspose2x2(input, t(convPrefix + ".weight"));
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
     struct ggml_tensor* normed = applyFoldedBn(
         ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
@@ -285,8 +352,7 @@ struct GraphBuilder {
         /*useHardswish=*/false);
     output =
         convTransposeBnAct(output, "dbnet.prob_head.3", "dbnet.prob_head.4");
-    output = ggml_conv_transpose_2d_p0(
-        ctx, t("dbnet.prob_head.6.weight"), output, 2);
+    output = subPixelConvTranspose2x2(output, t("dbnet.prob_head.6.weight"));
     return ggml_add(ctx, output, t("dbnet.prob_head.6.bias_br"));
   }
 
@@ -298,29 +364,28 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
+    // Direct depthwise kernel (GGML_OP_CONV_2D_DW) — much faster than the
+    // im2col + per-channel batched matmul on GPU backends. Weight is
+    // [KW,KH,1,C] and promoted to F32 (see addConvWeight) so it runs on every
+    // backend.
     struct ggml_tensor* conv =
-        ggml_conv_2d_dw(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
-    struct ggml_tensor* bn = applyFoldedBn(
-        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
-    return activate(bn, useHardswish);
+        ggml_conv_2d_dw_direct(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
+    // BN scale folded into the depthwise weights at load time; `.shift` carries
+    // the combined (conv bias + BN shift) offset.
+    conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
+    return activate(conv, useHardswish);
   }
 
   /// Squeeze-and-excite block: global avg pool → 1x1 conv (reduce) → ReLU →
   /// 1x1 conv (expand) → HardSigmoid → element-wise multiply with input.
-  struct ggml_tensor* seBlock(
-      struct ggml_tensor* x, const std::string& sePrefix, int spatialHw) const {
-    // Global avg pool: kernel = full spatial extent, stride = same.
+  struct ggml_tensor*
+  seBlock(struct ggml_tensor* x, const std::string& sePrefix) const {
+    // Global avg pool over the full (possibly non-square) spatial extent, read
+    // from the tensor dims so the graph works at any input size.
+    const int poolW = static_cast<int>(x->ne[0]);
+    const int poolH = static_cast<int>(x->ne[1]);
     struct ggml_tensor* pooled = ggml_pool_2d(
-        ctx,
-        x,
-        GGML_OP_POOL_AVG,
-        spatialHw,
-        spatialHw,
-        spatialHw,
-        spatialHw,
-        0,
-        0);
+        ctx, x, GGML_OP_POOL_AVG, poolW, poolH, poolW, poolH, 0, 0);
 
     struct ggml_tensor* fc1 = ggml_conv_2d(
         ctx, t(sePrefix + ".fc1.weight"), pooled, 1, 1, 0, 0, 1, 1);
@@ -338,13 +403,10 @@ struct GraphBuilder {
 
   /// One torchvision InvertedResidual block.
   struct ggml_tensor* invertedResidual(
-      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-      struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex,
-      int inputSpatialHw) const {
+      struct ggml_tensor* x, const BlockConfig& cfg, int featuresIndex) const {
     const std::string base = "features." + std::to_string(featuresIndex);
     const bool hasExpand = cfg.expansionSize != cfg.inputChannels;
 
-    int spatial = inputSpatialHw;
     struct ggml_tensor* y = x;
 
     int dwBlockIdx = 0;
@@ -386,15 +448,12 @@ struct GraphBuilder {
         cfg.stride,
         cfg.depthwiseKernel,
         cfg.useHardswish);
-    if (cfg.stride == 2) {
-      spatial = (spatial + 1) / 2;
-    }
 
     // Squeeze-and-excite.
     if (cfg.useSe) {
       const std::string sePrefix =
           base + ".block." + std::to_string(seBlockIdx);
-      y = seBlock(y, sePrefix, spatial);
+      y = seBlock(y, sePrefix);
     }
 
     // Project (no activation on the tail conv).
@@ -632,8 +691,14 @@ WeightsBundle loadWeights(
           "Expected convolution weight tensor name to end with .weight: " +
           name);
     }
+    // Depthwise weights ([KW,KH,1,C], KW>1) are promoted to F32 so the direct
+    // GGML_OP_CONV_2D_DW kernel runs on every backend (CPU requires F32).
+    struct ggml_tensor* srcW = ggml_get_tensor(ggmlCtx, name.c_str());
+    const bool isDw = srcW != nullptr && srcW->ne[2] == 1 && srcW->ne[0] > 1;
     struct ggml_tensor* weightTensor =
-        cloneRaw(bundle.ctx.get(), gguf, ggmlCtx, name.c_str());
+        isDw ? cloneAsFp32(
+                   bundle.ctx.get(), name.c_str(), ggml_n_dims(srcW), srcW->ne)
+             : cloneRaw(bundle.ctx.get(), gguf, ggmlCtx, name.c_str());
     registerTensor(weightTensor);
     addBiasBroadcast(
         name.substr(0, name.size() - std::string(".weight").size()) + ".bias");
@@ -787,10 +852,17 @@ WeightsBundle loadWeights(
     if (src == nullptr) {
       raise("Source tensor missing from GGUF: " + name);
     }
-    if (src->type != dst->type) {
+    if (src->type == dst->type) {
+      ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
+    } else if (dst->type == GGML_TYPE_F32 && src->type == GGML_TYPE_F16) {
+      // Depthwise weights are promoted to F32 (see addConvWeight).
+      const size_t count = ggml_nelements(src);
+      std::vector<float> values(count);
+      fp16ToFp32(src->data, values.data(), count);
+      ggml_backend_tensor_set(dst, values.data(), 0, count * sizeof(float));
+    } else {
       raise("Dtype mismatch while copying tensor: " + name);
     }
-    ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
   }
 
   // Kept for the future classifier-bytes upload path (see commented-out
@@ -840,42 +912,127 @@ WeightsBundle loadWeights(
     ggml_backend_tensor_set(dst, buf.data(), 0, buf.size() * sizeof(float));
   };
 
-  auto foldBnWithEps = [&](const std::string& bnPrefix, float eps) {
-    // When running stats are absent the BN was already folded offline into the
-    // conv weights/biases. Upload identity (scale=1, shift=0) so that
-    // applyFoldedBn becomes a no-op and the conv bias carries the offset.
-    if (gguf_find_tensor(gguf, (bnPrefix + ".running_mean").c_str()) < 0) {
-      const size_t n =
-          static_cast<size_t>(ggml_nelements(tensors.at(bnPrefix + ".scale")));
-      std::vector<float> ones(n, 1.0F);
-      std::vector<float> zeros(n, 0.0F);
-      uploadF32(tensors.at(bnPrefix + ".scale"), ones);
-      uploadF32(tensors.at(bnPrefix + ".shift"), zeros);
-      return;
+  // Fold the BN per-channel scale into the preceding conv's F16 weights and
+  // combine the conv bias + BN shift into a single bias, so the runtime graph
+  // collapses `conv + add(bias) + mul(scale) + add(shift)` down to
+  // `conv + add(combined)`. Removing two full-tensor elementwise passes per
+  // conv is exact (out = scale*(W*x + bias) + shift = (scale*W)*x +
+  // (scale*bias + shift)) and matters most on bandwidth-bound mobile GPUs.
+  // The conv tensor for a BN named "<P>.1" is "<P>.0.weight" and its broadcast
+  // bias is "<P>.0.bias_br" (both already uploaded before this pass runs).
+  auto foldScaleIntoConv = [&](const std::string& bnPrefix,
+                               const std::vector<float>& scale,
+                               std::vector<float>& shift) {
+    if (bnPrefix.size() < 2 || bnPrefix.substr(bnPrefix.size() - 2) != ".1") {
+      raise("BN fold expects a '<prefix>.1' name, got " + bnPrefix);
     }
-    std::vector<float> w = loadVector1d(gguf, ggmlCtx, bnPrefix + ".scale");
-    std::vector<float> b = loadVector1d(gguf, ggmlCtx, bnPrefix + ".shift");
-    std::vector<float> m =
-        loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_mean");
-    std::vector<float> v =
-        loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_var");
-    const size_t n = w.size();
-    if (b.size() != n || m.size() != n || v.size() != n) {
-      raise("BN param size mismatch for " + bnPrefix);
+    const std::string stem = bnPrefix.substr(0, bnPrefix.size() - 2);
+    const std::string convName = stem + ".0.weight";
+    auto wIt = tensors.find(convName);
+    if (wIt == tensors.end()) {
+      raise("BN fold: conv weight not found: " + convName);
     }
-    std::vector<float> scale(n);
-    std::vector<float> shift(n);
-    for (size_t i = 0; i < n; ++i) {
-      const float invStd = 1.0F / std::sqrt(v[i] + eps);
-      scale[i] = w[i] * invStd;
-      shift[i] = b[i] - (m[i] * scale[i]);
+    struct ggml_tensor* wTensor = wIt->second;
+    const int64_t oc = wTensor->ne[3];
+    if (static_cast<size_t>(oc) != scale.size()) {
+      raise(
+          "BN fold: output-channel mismatch for " + convName +
+          ": conv oc=" + std::to_string(oc) +
+          ", BN scale size=" + std::to_string(scale.size()));
+    }
+    const int64_t perOc = wTensor->ne[0] * wTensor->ne[1] * wTensor->ne[2];
+    const size_t n = static_cast<size_t>(oc * perOc);
+    // Pointwise/regular conv weights are F16; depthwise weights are F32 (see
+    // addConvWeight). Fold the per-channel scale in whichever dtype.
+    if (wTensor->type == GGML_TYPE_F16) {
+      std::vector<ggml_fp16_t> wbuf(n);
+      ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+      // F16 has no arithmetic: batch-decode each channel row to F32 with ggml's
+      // SIMD row converters, apply the per-channel scale, then re-encode. The
+      // weight stays F16-stored (not an f16->f16 copy).
+      std::vector<float> f32buf(static_cast<size_t>(perOc));
+      for (int64_t o = 0; o < oc; ++o) {
+        const float s = scale[static_cast<size_t>(o)];
+        ggml_fp16_t* row = wbuf.data() + (o * perOc);
+        ggml_fp16_to_fp32_row(row, f32buf.data(), perOc);
+        for (int64_t i = 0; i < perOc; ++i) {
+          f32buf[static_cast<size_t>(i)] *= s;
+        }
+        ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
+      }
+      ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+    } else if (wTensor->type == GGML_TYPE_F32) {
+      std::vector<float> wbuf(n);
+      ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(float));
+      for (int64_t o = 0; o < oc; ++o) {
+        const float s = scale[static_cast<size_t>(o)];
+        for (int64_t i = 0; i < perOc; ++i) {
+          const size_t idx = static_cast<size_t>((o * perOc) + i);
+          wbuf[idx] *= s;
+        }
+      }
+      ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(float));
+    } else {
+      raise(
+          "BN fold: unsupported conv weight dtype " +
+          std::string(ggml_type_name(wTensor->type)) + " for " + convName +
+          " (expected F16 or F32; quantized weights are not supported by the "
+          "BN fold)");
+    }
+
+    // combined bias = scale * bias_br + shift (bias_br is zeros for bias=False
+    // convs, the offset for offline-folded models).
+    auto bIt = tensors.find(stem + ".0.bias_br");
+    if (bIt != tensors.end()) {
+      std::vector<float> biasBr(scale.size());
+      ggml_backend_tensor_get(
+          bIt->second, biasBr.data(), 0, biasBr.size() * sizeof(float));
+      for (size_t i = 0; i < shift.size(); ++i) {
+        shift[i] += scale[i] * biasBr[i];
+      }
+    }
+  };
+
+  auto foldBnWithEps = [&](const std::string& bnPrefix,
+                           float eps,
+                           bool foldIntoConv) {
+    const size_t n =
+        static_cast<size_t>(ggml_nelements(tensors.at(bnPrefix + ".scale")));
+    std::vector<float> scale(n, 1.0F);
+    std::vector<float> shift(n, 0.0F);
+    // When running stats are present compute the standard BN fold; otherwise
+    // the BN was already folded offline (identity scale/shift; any offset is
+    // carried by the conv bias, which foldScaleIntoConv absorbs).
+    if (gguf_find_tensor(gguf, (bnPrefix + ".running_mean").c_str()) >= 0) {
+      std::vector<float> w = loadVector1d(gguf, ggmlCtx, bnPrefix + ".scale");
+      std::vector<float> b = loadVector1d(gguf, ggmlCtx, bnPrefix + ".shift");
+      std::vector<float> m =
+          loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_mean");
+      std::vector<float> v =
+          loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_var");
+      if (w.size() != n || b.size() != n || m.size() != n || v.size() != n) {
+        raise(
+            "BN param size mismatch for " + bnPrefix + ": expected " +
+            std::to_string(n) + ", got scale=" + std::to_string(w.size()) +
+            " shift=" + std::to_string(b.size()) +
+            " running_mean=" + std::to_string(m.size()) +
+            " running_var=" + std::to_string(v.size()));
+      }
+      for (size_t i = 0; i < n; ++i) {
+        const float invStd = 1.0F / std::sqrt(v[i] + eps);
+        scale[i] = w[i] * invStd;
+        shift[i] = b[i] - (m[i] * scale[i]);
+      }
+    }
+    if (foldIntoConv) {
+      foldScaleIntoConv(bnPrefix, scale, shift);
     }
     uploadF32(tensors.at(bnPrefix + ".scale"), scale);
     uploadF32(tensors.at(bnPrefix + ".shift"), shift);
   };
 
   auto foldBn = [&](const std::string& bnPrefix) {
-    foldBnWithEps(bnPrefix, bnEps);
+    foldBnWithEps(bnPrefix, bnEps, /*foldIntoConv=*/true);
   };
 
   for (auto& [name, dst] : tensors) {
@@ -917,16 +1074,21 @@ WeightsBundle loadWeights(
 
   for (int branch = 0; branch < fpnInBranchCount; ++branch) {
     const std::string base = "dbnet.fpn.in_branches." + std::to_string(branch);
-    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon);
+    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
   }
 
   for (int branch = 0; branch < fpnInBranchCount; ++branch) {
     const std::string base = "dbnet.fpn.out_branches." + std::to_string(branch);
-    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon);
+    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
   }
 
-  foldBnWithEps("dbnet.prob_head.1", dbnetBatchNormEpsilon);
-  foldBnWithEps("dbnet.prob_head.4", dbnetBatchNormEpsilon);
+  // prob_head.0 is a plain 3x3 conv (foldable); prob_head.3/.4 is the
+  // sub-pixel transposed conv whose weight is reshaped at graph build, so its
+  // BN stays as a runtime scale/shift (applyFoldedBn in convTransposeBnAct).
+  foldBnWithEps(
+      "dbnet.prob_head.1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
+  foldBnWithEps(
+      "dbnet.prob_head.4", dbnetBatchNormEpsilon, /*foldIntoConv=*/false);
 
   // Classifier FC tensors stay FP16 and are copied directly from GGUF bytes.
   // auto uploadClassifierTensor = [&](const std::string& name) {
@@ -941,7 +1103,8 @@ WeightsBundle loadWeights(
 }
 
 ComputeGraph buildGraph(
-    const WeightsBundle& weights, std::vector<ggml_backend_t>& backends) {
+    const WeightsBundle& weights, std::vector<ggml_backend_t>& backends,
+    int inputW, int inputH) {
   ComputeGraph cg;
   const size_t ctxSize =
       (ggml_tensor_overhead() * kCtxTensorOverhead) + ggml_graph_overhead();
@@ -953,8 +1116,10 @@ ComputeGraph buildGraph(
   }
   struct ggml_context* ctx = cg.ctx.get();
 
-  // WHCN order: W, H, C, N.
-  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kInputHw, kInputHw, 3, 1);
+  // WHCN order: W, H, C, N. The canvas is the resized image padded to a
+  // multiple of 32 per axis (not necessarily square — see preprocessImage),
+  // so the backbone only convolves real content plus minimal padding.
+  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, inputW, inputH, 3, 1);
   ggml_set_name(cg.input, "input");
 
   GraphBuilder gb{.ctx = ctx, .w = weights.tensors};
@@ -969,15 +1134,11 @@ ComputeGraph buildGraph(
       /*activate=*/true,
       /*useHardswish=*/true);
 
-  int spatial = kInputHw / 2; // 112 after stem
-
-  // 15 inverted residual blocks.
+  // 15 inverted residual blocks. Spatial dims flow from the input tensor
+  // (SE pools and FPN upsamples read them directly), so no size tracking here.
   int graphFeatureIndex = 1;
   for (const BlockConfig& cfg : kBlocks) {
-    x = gb.invertedResidual(x, cfg, graphFeatureIndex, spatial);
-    if (cfg.stride == 2) {
-      spatial = (spatial + 1) / 2;
-    }
+    x = gb.invertedResidual(x, cfg, graphFeatureIndex);
     switch (graphFeatureIndex) {
     case kFpnFeatureTap1:
       cg.output_1 = x;
@@ -1035,7 +1196,9 @@ ComputeGraph buildGraph(
   struct ggml_tensor* fpnCat34 = ggml_concat(ctx, cg.output_3, cg.output_4, 2);
   cg.output_4 = ggml_concat(ctx, fpnCat12, fpnCat34, 2);
   cg.output_4 = gb.probHead(cg.output_4);
-  // cg.output_4 = ggml_sigmoid(ctx, cg.output_4);
+  // Apply sigmoid on-device: a single fast Metal kernel over the 1024x1024 map
+  // replaces a ~1M-element cv::exp on the CPU after readback.
+  cg.output_4 = ggml_sigmoid(ctx, cg.output_4);
 
   ggml_set_name(cg.output_1, "output_1");
   ggml_set_name(cg.output_2, "output_2");

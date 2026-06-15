@@ -5,6 +5,9 @@
     "reference": "QVAC-19305/registry-tts-cpp-supertonic3",
     "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git"
   },
+  "overlay-ports": [
+    "ports"
+  ],
   "registries": [
     {
       "kind": "git",

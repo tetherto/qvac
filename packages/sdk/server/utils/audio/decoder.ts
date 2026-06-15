@@ -28,7 +28,7 @@ export async function decodeAudioToStream(
     await decoder.load();
 
     const audioStream = fs.createReadStream(inputPath);
-    const response = await decoder.run(audioStream);
+    const response = decoder.run(audioStream);
 
     const outputStream = new Readable({
       read() {},

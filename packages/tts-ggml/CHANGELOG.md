@@ -5,7 +5,92 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - 2026-06-05
+## [Unreleased]
+
+### Added
+
+- Internal RTF + streaming benchmark suite for the Chatterbox and Supertonic GGML engines (`test/benchmark/rtf-benchmark.test.js`, `test/benchmark/streaming-benchmark.test.js`, matrix runner, `scripts/perf-report/aggregate-tts-ggml-rtf.js`), runnable via the `Benchmark RTF (TTS GGML)` GitHub Actions workflow on the `qvac-*-gpu` self-hosted runners (CPU + Vulkan). CI-only; not shipped with the npm package.
+- Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
+- RTF benchmark reports now surface the desktop GPU hardware name (QVAC-20499). `test/benchmark/rtf-benchmark.test.js` drives the shared performance reporter's `detectDevice()` (via `bare-subprocess`: nvidia-smi / vulkaninfo / system_profiler) to populate `device.gpu` / `device.cpu` in the canonical report and `labels.gpuModel` in the per-config JSON; `scripts/perf-report/aggregate-tts-ggml-rtf.js` renders a `GPU Model` column. Mobile leaves `device.gpu` null (device name is the proxy). CI-only.
+
+## [0.3.0] - 2026-06-11
+
+### Added
+
+- **Supertonic GPU support (re-land of QVAC-19255, reverted in 0.2.2).**
+  Caller GPU intent (`useGPU` / `nGpuLayers`) is honored again for the
+  Supertonic engine on GPU-capable hosts (Metal on Apple, Vulkan/CUDA on
+  desktop), matching Chatterbox. The `SupertonicModel::validateConfig` /
+  `index.js` "CPU only today" rejection is removed; the cross-field conflict
+  check (`useGPU=true` + `nGpuLayers=0`, or vice versa) is preserved.
+
+### Changed
+
+- Consume `tts-cpp` `2026-06-05` via a package-local overlay port pinned at
+  `qvac-ext-lib-whisper.cpp@f7d4d6c` (the QVAC-19254 sched + cpu_backend
+  follow-up). `f7d4d6c` reroutes the direct `ggml_backend_is_cpu` /
+  `ggml_get_type_traits_cpu` calls that made `2026-06-05` fail to `dlopen` on
+  Android (the 0.2.1 bootstrap crash), so the addon loads cleanly while still
+  shipping the Supertonic GPU optimisations.
+
+### Notes
+
+- **Android stays CPU-only for Supertonic.** The `#ifdef __ANDROID__`
+  force-off in `SupertonicModel::loadLocked` is kept, so `useGPU=true` on
+  Android transparently falls back to CPU: Adreno Vulkan/OpenCL `ggml` graph
+  compute still aborts (same family as the parakeet Adreno crash). The GPU
+  smoke test skips Supertonic on Android accordingly.
+- The `ports/tts-cpp` overlay and the `overlay-ports` entry in
+  `vcpkg-configuration.json` are **interim**: drop them and bump
+  `vcpkg.json`'s `tts-cpp` pin once `f7d4d6c` (or a successor) is published to
+  `qvac-registry-vcpkg`.
+
+## [0.2.2] - 2026-06-09
+
+### Fixed
+
+- **Android: revert the `tts-cpp` `2026-06-05` bump (introduced in 0.2.1)
+  that crashed the addon at `dlopen` during bootstrap, taking down every
+  Android e2e run.** `tts-cpp` `2026-06-05` pins upstream
+  `qvac-ext-lib-whisper.cpp@128dae42` (the QVAC-19254 "sched + cpu_backend
+  refactor"), which added direct `ggml_backend_is_cpu` /
+  `ggml_get_type_traits_cpu` calls inside the statically-linked `tts-cpp`
+  library. On Android the shared `ggml-speech` port builds the CPU backend
+  as runtime-`dlopen`'d per-microarch MODULE `.so` variants
+  (`GGML_CPU_ALL_VARIANTS=ON` + `GGML_BACKEND_DL=ON`; no static CPU
+  archive), so those two symbols are left `UND` in
+  `libqvac__tts-ggml.*.so`'s dynamic symbol table with no `DT_NEEDED` able
+  to resolve them — the CPU variant libraries are only `dlopen`'d lazily
+  inside Engine construction, long after Bare loads the addon. Bare's
+  resolver therefore fails to register the addon
+  (`ADDON_NOT_FOUND: linked:libqvac__tts-ggml.*.so` / `dlopen failed`) and
+  the unhandled rejection aborts the process (SIGABRT) ~1 s into
+  bootstrap. iOS and desktop (Linux/macOS/Windows) statically link the CPU
+  backend and were never affected. Pin `tts-cpp` back to `2026-06-03#1`
+  (the last-known-good revision, the one 0.2.0 shipped) so the Android
+  addon loads cleanly again.
+
+### Reverted
+
+- Reverts the 0.2.1 Supertonic GPU enablement (QVAC-19255, #2473) in full:
+  the `tts-cpp` pin, the `SupertonicModel.cpp` / `index.js` `useGPU` /
+  `nGpuLayers` gate removals, the flipped C++ unit tests and
+  `gpu-smoke.test.js` integration test, and the README / `index.d.ts` /
+  examples docs. With `tts-cpp` back at `2026-06-03#1` Supertonic is
+  CPU-only again, so the rejection gates and the CPU-only contract are
+  restored to keep the package internally consistent. The Supertonic GPU
+  work should re-land once the Android CPU-backend linkage is fixed
+  upstream (QVAC-19254 follow-up against `tts-cpp` / `ggml-speech`, e.g.
+  by statically linking `ggml-cpu` into the addon on Android the way
+  desktop/iOS already do).
+
+## [0.2.1] - 2026-06-05 — superseded by 0.2.2
+
+> **Broken on Android.** The `tts-cpp` `2026-06-05` dependency this release
+> introduced crashes the addon at load time (`dlopen` failure → SIGABRT)
+> on Android ARM64; iOS and desktop are unaffected. Reverted in 0.2.2 (see
+> above). The entry below describes what 0.2.1 attempted and is retained
+> for history.
 
 ### Added
 

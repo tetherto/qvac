@@ -246,14 +246,17 @@ WeightsBundle loadWeights(
     std::vector<std::string>& outLabels);
 
 /// Builds the forward compute graph for MobileNetV3-Large using the weights
-/// bundle. The returned ComputeGraph holds its own ggml_context (graph only,
-/// not weights) and a pre-allocated input/output buffer on `backends`.
+/// bundle, for an input canvas of `inputW` x `inputH` (each must be a multiple
+/// of 32; not necessarily square). The returned ComputeGraph holds its own
+/// ggml_context (graph only, not weights) and a pre-allocated input/output
+/// buffer on `backends`.
 ///
 /// The graph expects the input tensor to be set via
 /// `ggml_backend_tensor_set(graph.input, fp32WhcnBuffer, ...)` before each
 /// `ggml_backend_graph_compute` call.
-ComputeGraph
-buildGraph(const WeightsBundle& weights, std::vector<ggml_backend_t>& backends);
+ComputeGraph buildGraph(
+    const WeightsBundle& weights, std::vector<ggml_backend_t>& backends,
+    int inputW, int inputH);
 
 } // namespace qvac_lib_infer_ggml_classification::graph
 
