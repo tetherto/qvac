@@ -18,6 +18,7 @@
       "runAndroidVulkanTest",
       "runBackendDeviceTest",
       "runBatchedRecognizerTest",
+      "runBiasBroadcastTest",
       "runCanvasSizeTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
@@ -47,6 +48,7 @@
     "regularB": [
       "runBackendDeviceTest",
       "runBatchedRecognizerTest",
+      "runBiasBroadcastTest",
       "runCanvasSizeTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
