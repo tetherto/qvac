@@ -426,7 +426,7 @@ export async function processBranchCleanup ({ github, context, core, env = proce
   core.info(`Computed ${candidates.size} deletion candidate(s)`)
 
   // Load ledger + acks from the tracking issue.
-  let issue = await findOrCreateIssue(github, owner, repo, '', false)
+  const issue = await findOrCreateIssue(github, owner, repo, '', false)
   const ledger = parseLedger(issue?.body)
   let acks = { keep: new Set(), deleteNow: new Set() }
   if (issue) {
@@ -495,7 +495,7 @@ export async function processBranchCleanup ({ github, context, core, env = proce
 
   const hasState = Object.keys(newPending).length > 0 || deleted.length > 0 || exempt.size > 0 || reprieved.length > 0
   if (!issue && hasState) {
-    issue = await findOrCreateIssue(github, owner, repo, body, true)
+    await findOrCreateIssue(github, owner, repo, body, true)
   } else if (issue) {
     await github.rest.issues.update({ owner, repo, issue_number: issue.number, body })
     const summary = buildRunComment(sections, cfg)
