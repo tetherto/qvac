@@ -1,6 +1,10 @@
 #pragma once
+#include <any>
 #include <functional>
 #include <memory>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
@@ -10,6 +14,8 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "addon/JsBatchIds.hpp"
+#include "addon/PayloadHandler.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 
@@ -17,9 +23,25 @@ namespace qvac_lib_inference_addon_llama {
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 
+/// JS event-name baked into batch payloads; must match `addon.js`
+/// (`rawData.type === 'batch_output'`). Namespace-scope with linkage is
+/// required to use it as a `const char*` template arg in `PayloadHandler`.
+inline constexpr char kBatchOutputTypeName[] = "batch_output";
+
+inline LlamaModel*
+tryGetLlamaModel(qvac_lib_inference_addon_cpp::AddonCpp& addonCpp) {
+  return dynamic_cast<LlamaModel*>(&addonCpp.model.get());
+}
+
 inline LlamaModel*
 getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
-  return static_cast<LlamaModel*>(&instance.addonCpp->model.get());
+  using namespace qvac_lib_inference_addon_cpp;
+  auto* llamaModel = tryGetLlamaModel(*instance.addonCpp);
+  if (llamaModel == nullptr) {
+    throw StatusError(
+        general_error::InternalError, "Model is not a LlamaModel");
+  }
+  return llamaModel;
 }
 
 inline std::function<void(const std::string&)>
@@ -180,6 +202,34 @@ struct JsFinetuneTerminalOutputHandler
             }) {}
 };
 
+/// Handler for streamed batch tokens. Reuses the per-sequence payload
+/// (see `PayloadHandler`), writing only `output` per token and releasing
+/// it on `finished`.
+struct JsBatchTokenOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          BatchTokenOutput> {
+  JsBatchTokenOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            BatchTokenOutput>(
+            [this](const BatchTokenOutput& evt) -> js_value_t* {
+              if (evt.payloadHandle == nullptr) {
+                return js::Undefined::create(this->env_);
+              }
+              if (evt.finished) {
+                PayloadHandler::release(this->env_, evt.payloadHandle);
+                return js::Undefined::create(this->env_);
+              }
+              // Reuse the pre-allocated payload; only `output` changes.
+              js::Object payload =
+                  PayloadHandler::resolve(this->env_, evt.payloadHandle);
+              payload.setProperty(
+                  this->env_,
+                  "output",
+                  js::String::create(this->env_, evt.output));
+              return payload;
+            }) {}
+};
+
 inline LlamaFinetuningParams
 parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   LlamaFinetuningParams params;
@@ -270,44 +320,90 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
           .value_or(false);
   return params;
 }
-inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+
+inline void parseGenerationParams(
+    js_env_t* env, js::Object& inputObj, LlamaModel::Prompt& prompt) {
   using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
 
-  JsArgsParser args(env, info);
+  auto configObj =
+      inputObj.getOptionalProperty<js::Object>(env, "generationParams");
+  if (!configObj.has_value()) {
+    return;
+  }
 
-  unique_ptr<model::IModel> model = make_unique<LlamaModel>(
-      args.getMapEntry(1, "path"),
-      args.getMapEntry(1, "projectionPath"),
-      args.getSubmap(1, "config"));
+  auto readNum = [&](const char* key, auto& out) {
+    auto value = configObj->getOptionalPropertyAs<js::Number, double>(env, key);
+    if (value.has_value()) {
+      out =
+          static_cast<typename std::decay_t<decltype(out)>::value_type>(*value);
+    }
+  };
+  GenerationParams& overrides = prompt.generationParams;
+  readNum("temp", overrides.temp);
+  readNum("top_p", overrides.top_p);
+  readNum("top_k", overrides.top_k);
+  readNum("predict", overrides.n_predict);
+  readNum("seed", overrides.seed);
+  readNum("frequency_penalty", overrides.frequency_penalty);
+  readNum("presence_penalty", overrides.presence_penalty);
+  readNum("repeat_penalty", overrides.repeat_penalty);
 
-  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
-  outHandlers.add(make_shared<JsFinetuneProgressOutputHandler>());
-  outHandlers.add(make_shared<JsFinetuneTerminalOutputHandler>());
-  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env,
-      args.get(0, "jsHandle"),
-      args.getFunction(2, "outputCallback"),
-      std::move(outHandlers));
+  auto grammarStr =
+      configObj->getOptionalPropertyAs<js::String, std::string>(env, "grammar");
+  if (grammarStr.has_value() && !grammarStr->empty()) {
+    overrides.grammar = std::move(*grammarStr);
+  }
 
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-  return JsInterface::createInstance(env, std::move(addon));
+  auto jsonSchemaStr =
+      configObj->getOptionalPropertyAs<js::String, std::string>(
+          env, "json_schema");
+  if (jsonSchemaStr.has_value() && !jsonSchemaStr->empty()) {
+    overrides.json_schema = std::move(*jsonSchemaStr);
+  }
+
+  if (overrides.grammar && overrides.json_schema) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "generationParams.grammar and generationParams.json_schema are "
+        "mutually exclusive");
+  }
+
+  auto reasoningBudget = configObj->getOptionalPropertyAs<js::Number, double>(
+      env, "reasoning_budget");
+  if (reasoningBudget.has_value()) {
+    // Exact compare (0 and -1 are representable doubles) so fractional
+    // inputs like 0.5 are rejected, not silently truncated.
+    if (*reasoningBudget != 0 && *reasoningBudget != -1) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "generationParams.reasoning_budget must be -1 (unrestricted) "
+          "or 0 (disabled)");
+    }
+    overrides.reasoning_budget = static_cast<int>(*reasoningBudget);
+  }
 }
-JSCATCH
 
-inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
+inline std::vector<std::pair<std::string, js::Object>>
+parseInputArray(js_env_t* env, js::Array inputsArray) {
+  std::vector<std::pair<std::string, js::Object>> inputs;
+  const uint32_t inputCount = inputsArray.size(env);
+  inputs.reserve(inputCount);
+  for (uint32_t i = 0; i < inputCount; ++i) {
+    auto inputObj = inputsArray.get<js::Object>(env, i);
+    auto type =
+        inputObj.getProperty<js::String>(env, "type").as<std::string>(env);
+    inputs.emplace_back(std::move(type), inputObj);
+  }
+  return inputs;
+}
+
+inline LlamaModel::Prompt parsePromptInputs(
+    js_env_t* env, std::vector<std::pair<std::string, js::Object>>& inputs,
+    std::function<void(const std::string&)>&& outputCallback) {
   using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-  vector<pair<string, js::Object>> inputs = JsInterface::getInputsArray(args);
 
   LlamaModel::Prompt prompt;
-  prompt.outputCallback = [&](const string& tokenOut) {
-    instance.addonCpp->outputQueue->queueResult(any(tokenOut));
-  };
+  prompt.outputCallback = std::move(outputCallback);
 
   auto parseText = [&](js::Object& inputObj) {
     if (!prompt.input.empty()) {
@@ -320,68 +416,10 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     prompt.prefill =
         inputObj.getOptionalPropertyAs<js::Boolean, bool>(env, "prefill")
             .value_or(false);
-
-    auto configObj =
-        inputObj.getOptionalProperty<js::Object>(env, "generationParams");
-    if (configObj.has_value()) {
-      auto readNum = [&](const char* key, auto& out) {
-        auto v = configObj->getOptionalPropertyAs<js::Number, double>(env, key);
-        if (v.has_value()) {
-          out = static_cast<std::decay_t<decltype(out)>>(*v);
-        }
-      };
-      GenerationParams& ov = prompt.generationParams;
-      readNum("temp", ov.temp);
-      readNum("top_p", ov.top_p);
-      readNum("top_k", ov.top_k);
-      readNum("predict", ov.n_predict);
-      readNum("seed", ov.seed);
-      readNum("frequency_penalty", ov.frequency_penalty);
-      readNum("presence_penalty", ov.presence_penalty);
-      readNum("repeat_penalty", ov.repeat_penalty);
-
-      auto grammarStr =
-          configObj->getOptionalPropertyAs<js::String, std::string>(
-              env, "grammar");
-      if (grammarStr.has_value() && !grammarStr->empty()) {
-        ov.grammar = std::move(*grammarStr);
-      }
-
-      auto jsonSchemaStr =
-          configObj->getOptionalPropertyAs<js::String, std::string>(
-              env, "json_schema");
-      if (jsonSchemaStr.has_value() && !jsonSchemaStr->empty()) {
-        ov.json_schema = std::move(*jsonSchemaStr);
-      }
-
-      if (ov.grammar && ov.json_schema) {
-        throw StatusError(
-            general_error::InvalidArgument,
-            "generationParams.grammar and generationParams.json_schema are "
-            "mutually exclusive");
-      }
-
-      auto reasoningBudget =
-          configObj->getOptionalPropertyAs<js::Number, double>(
-              env, "reasoning_budget");
-      if (reasoningBudget.has_value()) {
-        // Validate against the exact double values (0 and -1 are exactly
-        // representable in IEEE-754), so fractional inputs like 0.5 or -1.1
-        // are rejected instead of being silently truncated.
-        if (*reasoningBudget != 0 && *reasoningBudget != -1) {
-          throw StatusError(
-              general_error::InvalidArgument,
-              "generationParams.reasoning_budget must be -1 (unrestricted) "
-              "or 0 (disabled)");
-        }
-        ov.reasoning_budget = static_cast<int>(*reasoningBudget);
-      }
-    }
-
+    parseGenerationParams(env, inputObj, prompt);
     prompt.cacheKey =
         inputObj.getOptionalPropertyAs<js::String, std::string>(env, "cacheKey")
             .value_or("");
-
     prompt.saveCacheToDisk =
         inputObj
             .getOptionalPropertyAs<js::Boolean, bool>(env, "saveCacheToDisk")
@@ -413,6 +451,124 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "At least one of text or media input is required");
   }
 
+  return prompt;
+}
+
+inline std::vector<LlamaModel::Prompt> parseBatchInputs(
+    js_env_t* env, qvac_lib_inference_addon_cpp::AddonJs& instance,
+    js::Array batchArray, JsBatchIds& batchIds) {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  vector<LlamaModel::Prompt> prompts;
+  const uint32_t batchSize = batchArray.size(env);
+  if (batchSize == 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "Batch input must be a non-empty array");
+  }
+  prompts.reserve(batchSize);
+
+  for (uint32_t i = 0; i < batchSize; ++i) {
+    auto item = batchArray.get<js::Object>(env, i);
+    const string& id = batchIds.resolveAndTrack(env, item);
+    auto messages = item.getProperty<js::Array>(env, "messages");
+    auto inputs = parseInputArray(env, messages);
+
+    auto queue = instance.addonCpp->outputQueue;
+    // Owning handle: when every copy of `outputCallback` is dropped (slot
+    // finished, cancelled, errored or scheduler torn down), the deleter
+    // fires and enqueues a `finished` event so the JS handler runs
+    // `PayloadHandler::release` on the JS thread.
+    shared_ptr<js_ref_t> handle(
+        PayloadHandler::allocate<kBatchOutputTypeName>(env, id),
+        [queue](js_ref_t* h) {
+          BatchTokenOutput evt;
+          evt.payloadHandle = h;
+          evt.finished = true;
+          queue->queueResult(any(std::move(evt)));
+        });
+    auto outputCallback = [handle = std::move(handle),
+                           queue](const string& tokenOut) {
+      BatchTokenOutput evt;
+      evt.payloadHandle = handle.get();
+      evt.output = tokenOut;
+      queue->queueResult(any(std::move(evt)));
+    };
+    LlamaModel::Prompt prompt =
+        parsePromptInputs(env, inputs, std::move(outputCallback));
+    prompts.push_back(std::move(prompt));
+  }
+
+  return prompts;
+}
+
+inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  unique_ptr<model::IModel> model = make_unique<LlamaModel>(
+      args.getMapEntry(1, "path"),
+      args.getMapEntry(1, "projectionPath"),
+      args.getSubmap(1, "config"));
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
+  outHandlers.add(make_shared<out_handl::JsStringArrayOutputHandler>());
+  outHandlers.add(make_shared<JsFinetuneProgressOutputHandler>());
+  outHandlers.add(make_shared<JsFinetuneTerminalOutputHandler>());
+  outHandlers.add(make_shared<JsBatchTokenOutputHandler>());
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto inputsArray = js::Array{env, args.get(1, "inputsArray")};
+  const bool isBatch = inputsArray.size(env) > 0 &&
+                       inputsArray.get<js::Object>(env, 0)
+                           .getOptionalProperty<js::Array>(env, "messages")
+                           .has_value();
+  if (isBatch) {
+    // Reject before admission: otherwise processPromptBatch throws the same
+    // error on the worker thread, surfaced as an async rejection.
+    if (!getLlamaModel(instance)->supportsBatching()) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "Batch run() requires the model loaded with parallel >= 2 "
+          "(continuous batching, text-only model with n_seq_max > 1)");
+    }
+    // Static to recycle vector capacity across calls; safe only while
+    // admissions stay serialized (one batch in flight). Demote to a local
+    // if that changes.
+    static JsBatchIds batchIds;
+    batchIds.reset(inputsArray.size(env));
+    auto prompts = parseBatchInputs(env, instance, inputsArray, batchIds);
+    js_value_t* acceptedJs = instance.runJob(any(std::move(prompts)));
+
+    js::Object result = js::Object::create(env);
+    result.setProperty(env, "accepted", acceptedJs);
+    result.setProperty(env, "ids", batchIds.toJsArray(env));
+    return result;
+  }
+
+  vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);
+  LlamaModel::Prompt prompt =
+      parsePromptInputs(env, inputs, makeQueueOutputCallback(instance));
+
   return instance.runJob(any(std::move(prompt)));
 }
 JSCATCH
@@ -433,7 +589,7 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   // an in-flight cancel and trip a destroyed-mutex UAF in JobRunner.
   auto addonCppRef = instance.addonCpp;
   return js::JsAsyncTask::run(env, [addonCppRef, savePauseCheckpoint]() {
-    auto* llamaModel = static_cast<LlamaModel*>(&addonCppRef->model.get());
+    auto* llamaModel = tryGetLlamaModel(*addonCppRef);
     if (llamaModel && llamaModel->finetuner().isFinetuneRunning() &&
         llamaModel->finetuner().requestPause(savePauseCheckpoint)) {
       llamaModel->finetuner().waitUntilFinetuningPauseComplete();
@@ -450,13 +606,6 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = getLlamaModel(instance);
-  if (llamaModel == nullptr) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "Model not available or not a LlamaModel");
-  }
 
   auto paramsOpt = args.tryGetObject<LlamaFinetuningParams>(
       1, "finetuningParams", [](js_env_t* e, js::Object& jsObj) {
