@@ -192,12 +192,8 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: packages/vla-ggml
-          repo_name: "vla"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"
 
   # Tag the published version (no GitHub Release; SDK-only releases policy)
   create-tag:
