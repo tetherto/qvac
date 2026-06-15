@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -44,6 +44,7 @@
   "files": [
     "binding.js",
     "index.js",
+    "batchHandler.js",
     "addon.js",
     "addonLogging.js",
     "addonLogging.d.ts",
