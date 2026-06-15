@@ -227,20 +227,6 @@ jobs:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.PKG_DIR }}
 
-  publish-release:
-    needs: [publish-npm]
-    if: |
-      !cancelled() &&
-      needs.publish-npm.result == 'success' &&
-      needs.publish-npm.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release-translation-nmtcpp.yml
-    with:
-      published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/translation-nmtcpp"
-
   post-build-gate:
     name: Post-Build Gate
     runs-on: ubuntu-latest

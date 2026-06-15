@@ -271,22 +271,6 @@ jobs:
             echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
 
-  publish-release:
-    needs: [publish-npm]
-    if: |
-      !cancelled() &&
-      needs.publish-npm.result == 'success' &&
-      needs.publish-npm.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release.yml
-    with:
-      repo_name: "bci-whispercpp"
-      release_name: "QVAC BCI Whispercpp Addon"
-      published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/bci-whispercpp"
-
   post-build-gate:
     name: Post-Build Gate
     runs-on: ubuntu-latest

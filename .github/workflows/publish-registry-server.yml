@@ -324,19 +324,6 @@ jobs:
     steps:
       - run: echo "Schema publish completed or skipped."
 
-  publish-schema-release:
-    needs: [publish-schema-npm]
-    if: needs.publish-schema-npm.result == 'success' && needs.publish-schema-npm.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release.yml
-    with:
-      repo_name: "registry-server"
-      release_name: "QVAC Registry Server"
-      published_version: ${{ needs.publish-schema-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/registry-server/shared"
-
   lint-and-test:
     needs:
       - authorize
@@ -500,16 +487,3 @@ jobs:
         with:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.PKG_DIR }}/client
-
-  publish-client-release:
-    needs: [publish-client-npm]
-    if: needs.publish-client-npm.result == 'success' && needs.publish-client-npm.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release.yml
-    with:
-      repo_name: "registry-client"
-      release_name: "QVAC Registry Client"
-      published_version: ${{ needs.publish-client-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/registry-server/client"

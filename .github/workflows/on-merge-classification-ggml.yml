@@ -234,19 +234,3 @@ jobs:
         with:
           tag: ${{ inputs.npm_tag || 'latest' }}
           workdir: "packages/classification-ggml"
-
-  publish-release:
-    needs: [publish-release-npm]
-    if: |
-      !cancelled() &&
-      needs.publish-release-npm.result == 'success' &&
-      needs.publish-release-npm.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release.yml
-    with:
-      repo_name: "classification-ggml"
-      release_name: "QVAC GGML Image Classification Lib"
-      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/classification-ggml"
