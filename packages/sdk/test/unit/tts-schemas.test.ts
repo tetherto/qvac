@@ -4,7 +4,10 @@ import {
   ttsResponseSchema,
   textToSpeechStreamResponseSchema,
   ttsConfigSchema,
+  ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
+  TTS_CHATTERBOX_LANGUAGES,
+  TTS_SUPERTONIC_LANGUAGES,
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
 } from "@/schemas/text-to-speech";
 
@@ -24,6 +27,54 @@ test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
     voice: "F1",
   });
   t.is(r.success, true);
+});
+
+test("TTS_CHATTERBOX_LANGUAGES: exposes all 18 supported languages", (t) => {
+  t.is(TTS_CHATTERBOX_LANGUAGES.length, 18);
+  const expected = [
+    "en", "es", "fr", "de", "it", "pt", "nl", "pl", "tr",
+    "sv", "da", "fi", "no", "el", "ms", "sw", "ar", "ko",
+  ];
+  t.alike([...TTS_CHATTERBOX_LANGUAGES], expected);
+});
+
+test("ttsChatterboxRuntimeConfigSchema: accepts all 18 chatterbox languages", (t) => {
+  for (const language of TTS_CHATTERBOX_LANGUAGES) {
+    const r = ttsChatterboxRuntimeConfigSchema.safeParse({
+      ttsEngine: "chatterbox",
+      language,
+    });
+    t.is(r.success, true, `chatterbox should accept ${language}`);
+  }
+});
+
+test("ttsSupertonicRuntimeConfigSchema: only accepts its language subset", (t) => {
+  t.alike([...TTS_SUPERTONIC_LANGUAGES], ["en", "es", "fr", "pt", "ko"]);
+  for (const language of TTS_SUPERTONIC_LANGUAGES) {
+    const r = ttsSupertonicRuntimeConfigSchema.safeParse({
+      ttsEngine: "supertonic",
+      language,
+    });
+    t.is(r.success, true, `supertonic should accept ${language}`);
+  }
+});
+
+test("ttsSupertonicRuntimeConfigSchema: rejects chatterbox-only languages", (t) => {
+  // 'de' is supported by chatterbox but not supertonic.
+  const r = ttsSupertonicRuntimeConfigSchema.safeParse({
+    ttsEngine: "supertonic",
+    language: "de",
+  });
+  t.is(r.success, false, "supertonic must reject 'de'");
+});
+
+test("ttsConfigSchema: accepts a chatterbox-only language for chatterbox", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "tr",
+    s3genModelSrc: "s3:///example/s3gen.gguf",
+  });
+  t.is(r.success, true, "chatterbox load config accepts 'tr'");
 });
 
 test("ttsSupertonicRuntimeConfigSchema: strips removed ttsSupertonicMultilingual", (t) => {
