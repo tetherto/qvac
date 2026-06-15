@@ -55,7 +55,7 @@
     "@fastify/multipart": "^9.0.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
-    "@qvac/sdk": "^0.12.0",
+    "@qvac/sdk": "^0.13.1",
     "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",
     "fastify": "^5.0.0",
