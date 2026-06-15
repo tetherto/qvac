@@ -25,6 +25,11 @@ on:
         required: false
         default: true
         type: boolean
+      run_mobile:
+        description: "Run mobile benchmark (Android + iOS via Device Farm)"
+        required: false
+        default: true
+        type: boolean
       models:
         description: "Comma-separated model ids to limit the sweep to (e.g. 'embeddingGemma' for a quick plumbing check). Empty = all manifest models."
         required: false
@@ -89,11 +94,78 @@ jobs:
           ref="${INPUT_REF:-$REF_NAME}"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
+  # Fast fail-first gate (~30s, no prebuild): the mobile benchmark shards are
+  # generated from test/integration/_benchmark-matrix.js and not committed, so
+  # the committed integration.auto.cjs and this workflow's test_groups must stay
+  # in lockstep with the matrix. If they have drifted, fail now rather than after
+  # the mobile prebuild.
+  verify-shards:
+    needs:
+      - context
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout matrix + generated artifacts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/embed-llamacpp/scripts/generate-benchmark-shards.js
+            packages/embed-llamacpp/test/integration/_benchmark-matrix.js
+            packages/embed-llamacpp/benchmarks/performance/models.manifest.json
+            packages/embed-llamacpp/test/mobile/integration.auto.cjs
+            .github/workflows/benchmark-perf-embed-llamacpp.yml
+          sparse-checkout-cone-mode: false
+      - name: Verify benchmark matrix is in sync
+        working-directory: packages/embed-llamacpp
+        run: node scripts/generate-benchmark-shards.js --check
+
+  # Records, into a run-meta.json artifact, the exact addon version this run
+  # benchmarks (from the checked-out package.json) AND the mobile shard list it
+  # targets (from the checked-out matrix). The summarize step reads both from
+  # this artifact, so a stamped run is never mislabelled and its mobile coverage
+  # is scored against its OWN matrix even when re-rendered after the matrix grows.
+  stamp-version:
+    needs:
+      - context
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && !inputs.summarize_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout package.json + benchmark matrix
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/embed-llamacpp/package.json
+            packages/embed-llamacpp/test/integration/_benchmark-matrix.js
+            packages/embed-llamacpp/benchmarks/performance/models.manifest.json
+          sparse-checkout-cone-mode: false
+      - name: Write run-meta.json
+        shell: bash
+        run: |
+          mkdir -p run-meta
+          node -e "const pkg=require('./packages/embed-llamacpp/package.json');const m=require('./packages/embed-llamacpp/test/integration/_benchmark-matrix.js');require('fs').writeFileSync('run-meta/run-meta.json',JSON.stringify({addonVersion:'@qvac/embed-llamacpp@'+pkg.version,expectedShards:m.matrix().map(m.mobileShardKey)})+'\n')"
+          cat run-meta/run-meta.json
+      - name: Upload run-meta
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: embed-benchmark-run-meta-${{ github.run_number }}
+          path: run-meta/
+          retention-days: 90
+
   prebuild:
     needs:
       - context
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && !inputs.summarize_only
+    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_desktop || inputs.run_mobile) && !inputs.summarize_only
     permissions:
       contents: write
       packages: write
@@ -213,14 +285,56 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
-  # Renders the desktop sweep artifact into one markdown report + an HTML chart
-  # artifact. Runs after the benchmark, or standalone when summarize_only=true
-  # (set artifact_run_id to re-render a previous run).
+  # Mobile is sharded one batch per model (manifest order), each batch its own
+  # reused-workflow call so its weights download once and its quant shards run
+  # together. Embedding is prefill-only/fast, so a model's shards fit one Device
+  # Farm session — no fine per-config split. Batches run sequentially
+  # (max-parallel: 1) to avoid pool contention; each gets a distinct
+  # artifact_suffix so its perf-report doesn't collide, and summarize aggregates
+  # them. The benchmark shards are deliberately absent from test-groups.json, so
+  # the test_groups override here is the only path that runs them.
+  mobile-benchmark:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+      - verify-shards
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - model: embeddinggemma
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80","grep":"runBenchmarkPerfEmbeddinggemmaQ80Test"},{"name":"BenchmarkPerfEmbeddinggemmaQ40","grep":"runBenchmarkPerfEmbeddinggemmaQ40Test"}]'
+          - model: qwen3-embedding-06b
+            groups: '[{"name":"BenchmarkPerfQwen3Embedding06bQ80","grep":"runBenchmarkPerfQwen3Embedding06bQ80Test"},{"name":"BenchmarkPerfQwen3Embedding06bF16","grep":"runBenchmarkPerfQwen3Embedding06bF16Test"}]'
+          - model: qwen3-embedding-4b-gguf
+            groups: '[{"name":"BenchmarkPerfQwen3Embedding4bGgufQ80","grep":"runBenchmarkPerfQwen3Embedding4bGgufQ80Test"},{"name":"BenchmarkPerfQwen3Embedding4bGgufQ4KM","grep":"runBenchmarkPerfQwen3Embedding4bGgufQ4KMTest"},{"name":"BenchmarkPerfQwen3Embedding4bGgufF16","grep":"runBenchmarkPerfQwen3Embedding4bGgufF16Test"}]'
+    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      job_timeout_minutes: 180
+      test_groups: ${{ matrix.groups }}
+      artifact_suffix: ${{ matrix.model }}-
+
+  # Renders the desktop sweep + mobile perf-report artifacts into one markdown
+  # report + an HTML chart artifact. Runs after the benchmarks, or standalone
+  # when summarize_only=true (set artifact_run_id to re-render a previous run).
   summarize:
     needs:
       - context
       - label-gate
+      - stamp-version
       - desktop-benchmark
+      - mobile-benchmark
     if: needs.label-gate.outputs.authorised == 'true' && always() && needs.context.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -235,6 +349,7 @@ jobs:
             packages/embed-llamacpp/benchmarks/performance/render-report.js
             packages/embed-llamacpp/benchmarks/performance/_sweep-grid.js
             packages/embed-llamacpp/benchmarks/performance/models.manifest.json
+            packages/embed-llamacpp/test/integration/_benchmark-matrix.js
             packages/embed-llamacpp/package.json
 
       - name: Setup Node.js
@@ -253,6 +368,26 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: embed-param-sweep-desktop-*
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Download mobile perf-report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-llamacpp-embed-*
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+          path: combined-reports
+        continue-on-error: true
+
+      # run-meta.json (addon version + the mobile shard list this run targeted),
+      # authoritative over the checked-out package.json/matrix on a re-render.
+      - name: Download run-meta
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: embed-benchmark-run-meta-*
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
           github-token: ${{ github.token }}
           path: combined-reports
