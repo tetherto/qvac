@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Logger } from "@/logging";
 import {
   llmConfigBaseSchema,
   embedConfigBaseSchema,
@@ -35,6 +36,7 @@ import {
   classificationModelTypeSchema,
   ModelType,
   ModelTypeAliases,
+  normalizeModelType,
   type CanonicalModelType,
   type ModelTypeInput,
 } from "./model-types";
@@ -51,7 +53,6 @@ const builtInModelTypes = new Set([
 export function isBuiltInModelType(modelType: unknown): boolean {
   return typeof modelType === "string" && builtInModelTypes.has(modelType);
 }
-import type { Logger } from "@/logging";
 import { reloadConfigRequestSchema } from "./reload-config";
 
 const loadModelCommonFields = {
@@ -67,6 +68,42 @@ const loadModelRequestCommonFields = {
   withProgress: z.boolean().optional(),
   requestId: z.string().min(1).optional(),
 };
+
+const topLevelLoadModelOptionKeys = new Set([
+  ...Object.keys(loadModelRequestCommonFields),
+  "modelType",
+  "modelConfig",
+]);
+
+const llmModelConfigKeys = new Set(
+  Object.keys(llmConfigBaseSchema.shape).filter(
+    (key) => !topLevelLoadModelOptionKeys.has(key),
+  ),
+);
+
+const misplacedLoadModelConfigGuard = z.unknown().superRefine((value, ctx) => {
+  const keys = getMisplacedLlmConfigKeys(value);
+  if (keys.length === 0) return;
+
+  ctx.addIssue({
+    code: "custom",
+    message:
+      `Model config field "${keys[0]}" must be passed inside modelConfig. ` +
+      `Did you mean ${keys.map((key) => `modelConfig.${key}`).join(", ")}?`,
+  });
+});
+
+function getMisplacedLlmConfigKeys(value: unknown): string[] {
+  if (!isRecord(value) || typeof value["modelType"] !== "string") return [];
+  if (normalizeModelType(value["modelType"]) !== ModelType.llamacppCompletion) {
+    return [];
+  }
+  return Object.keys(value).filter((key) => llmModelConfigKeys.has(key));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
@@ -409,7 +446,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
 ]);
 
 export const loadModelOptionsToRequestSchema =
-  loadModelOptionsToRequestBaseSchema;
+  misplacedLoadModelConfigGuard.pipe(loadModelOptionsToRequestBaseSchema);
 
 const commonModelConfigSchema = z.object({
   type: z.literal("loadModel"),

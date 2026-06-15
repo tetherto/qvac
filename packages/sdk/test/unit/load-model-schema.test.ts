@@ -1,5 +1,8 @@
 import test from "brittle";
-import { loadModelSrcRequestSchema } from "@/schemas/load-model";
+import {
+  loadModelOptionsToRequestSchema,
+  loadModelSrcRequestSchema,
+} from "@/schemas/load-model";
 import { ModelType } from "@/schemas";
 
 test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
@@ -13,6 +16,22 @@ test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
 
   const result = loadModelSrcRequestSchema.safeParse(invalidRequest);
   t.is(result.success, false);
+});
+
+test("loadModelOptionsToRequestSchema: points misplaced LLM config fields to modelConfig", (t) => {
+  try {
+    loadModelOptionsToRequestSchema.parse({
+      modelSrc: "model.gguf",
+      modelType: "llm",
+      ctx_size: 2048,
+    });
+    t.fail("expected misplaced ctx_size to fail validation");
+  } catch (error) {
+    t.ok(error instanceof Error);
+    t.ok(
+      error instanceof Error && error.message.includes("modelConfig.ctx_size"),
+    );
+  }
 });
 
 test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", (t) => {
