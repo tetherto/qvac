@@ -459,8 +459,7 @@ function generateMarkdownReport (aggregated, opts) {
     { key: 'model_load_ms', unit: 'ms', round: true, label: 'Mean Load (ms)' },
     { key: 'generation_ms', unit: 'ms', round: true, label: 'Mean Gen (ms)' },
     { key: 'total_steps', unit: '', round: true, label: 'Steps' },
-    { key: 'steps_per_second', unit: '', round: false, label: 'Mean Steps/sec' },
-    { key: 'megapixels_per_second', unit: '', round: false, label: 'Mean MP/sec' }
+    { key: 'steps_per_second', unit: '', round: false, label: 'Mean Steps/sec' }
   ]
 
   const scenarioMap = aggregated.scenarios || {}
