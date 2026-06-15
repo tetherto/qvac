@@ -1,6 +1,8 @@
 declare module "bare-runtime/spawn" {
   export interface SpawnOptions {
     args?: string[];
+    platform?: string;
+    arch?: string;
     stdio?: string[];
   }
 

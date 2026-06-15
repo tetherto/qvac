@@ -28,6 +28,48 @@ export const allModels = [
     endpointCategory: "image",
   } as const,
   {
+    name: "WAN2_1_I2V_14B_Q4_K_M",
+    src: `registry://hf/city96/Wan2.1-I2V-14B-480P-gguf/resolve/b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03/wan2.1-i2v-14b-480p-Q4_K_M.gguf`,
+    registryPath:
+      "city96/Wan2.1-I2V-14B-480P-gguf/resolve/b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03/wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+    registrySource: "hf",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1717352,
+    blobBlockLength: 173053,
+    blobByteOffset: 112542474225,
+    modelId: "wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+    addon: "diffusion",
+    expectedSize: 11341184384,
+    sha256Checksum:
+      "d91f7139acadb42ea05cdf97b311e5099f714f11fbe4d90916500e2f53cbba82",
+    engine: "sdcpp-generation",
+    quantization: "Q4_K_M",
+    params: "14B",
+    endpointCategory: "image",
+  } as const,
+  {
+    name: "WAN2_1_I2V_14B_Q4_K_M_1",
+    src: `registry://hf/city96/Wan2.1-I2V-14B-720P-gguf/resolve/ea36d5421cc5f5c57e50067a432a8b2c16dd0dae/wan2.1-i2v-14b-720p-Q4_K_M.gguf`,
+    registryPath:
+      "city96/Wan2.1-I2V-14B-720P-gguf/resolve/ea36d5421cc5f5c57e50067a432a8b2c16dd0dae/wan2.1-i2v-14b-720p-Q4_K_M.gguf",
+    registrySource: "hf",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1890405,
+    blobBlockLength: 173053,
+    blobByteOffset: 123883658609,
+    modelId: "wan2.1-i2v-14b-720p-Q4_K_M.gguf",
+    addon: "diffusion",
+    expectedSize: 11341184384,
+    sha256Checksum:
+      "ffecd91e4b636d8e3e43f3fa388218158ba447109547bde777c6d67ef4fe42a4",
+    engine: "sdcpp-generation",
+    quantization: "Q4_K_M",
+    params: "14B",
+    endpointCategory: "image",
+  } as const,
+  {
     name: "WAN2_1_T2V_14B_Q8_0",
     src: `registry://hf/city96/Wan2.1-T2V-14B-gguf/resolve/511cbce9f475a6ca0269be901d23b125f44f5c0d/wan2.1-t2v-14b-Q8_0.gguf`,
     registryPath:
@@ -46,6 +88,27 @@ export const allModels = [
     engine: "sdcpp-generation",
     quantization: "Q8_0",
     params: "14B",
+    endpointCategory: "image",
+  } as const,
+  {
+    name: "CLIP_VISION_H",
+    src: `registry://hf/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/clip_vision/clip_vision_h.safetensors`,
+    registryPath:
+      "Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/clip_vision/clip_vision_h.safetensors",
+    registrySource: "hf",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 2063458,
+    blobBlockLength: 19291,
+    blobByteOffset: 135224842993,
+    modelId: "clip_vision_h.safetensors",
+    addon: "diffusion",
+    expectedSize: 1264219396,
+    sha256Checksum:
+      "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161",
+    engine: "sdcpp-generation",
+    quantization: "",
+    params: "",
     endpointCategory: "image",
   } as const,
   {
@@ -862,6 +925,27 @@ export const allModels = [
     endpointCategory: "chat",
   } as const,
   {
+    name: "MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0",
+    src: `registry://hf/ggml-org/gemma-4-E2B-it-GGUF/resolve/a1dac71d3ab220618f5a7573a52acdc4baf3ae3b/mmproj-gemma-4-E2B-it-Q8_0.gguf`,
+    registryPath:
+      "ggml-org/gemma-4-E2B-it-GGUF/resolve/a1dac71d3ab220618f5a7573a52acdc4baf3ae3b/mmproj-gemma-4-E2B-it-Q8_0.gguf",
+    registrySource: "hf",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 2082749,
+    blobBlockLength: 8505,
+    blobByteOffset: 136489062389,
+    modelId: "mmproj-gemma-4-E2B-it-Q8_0.gguf",
+    addon: "llm",
+    expectedSize: 557367776,
+    sha256Checksum:
+      "8a82e0fd831bb7cb5c8898b86393eb14042986b950a60e1034bf21d061aac8a8",
+    engine: "llamacpp-completion",
+    quantization: "q8_0",
+    params: "2B",
+    endpointCategory: "chat",
+  } as const,
+  {
     name: "MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16",
     src: `registry://hf/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf`,
     registryPath:
@@ -1027,6 +1111,27 @@ export const allModels = [
     engine: "llamacpp-completion",
     quantization: "Q4_K_M",
     params: "4B",
+    endpointCategory: "chat",
+  } as const,
+  {
+    name: "MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0",
+    src: `registry://hf/mradermacher/Qwen3.5-0.8B-GGUF/resolve/9d48fdbc0d8f133716da87ec1d904e5d2c7175a6/Qwen3.5-0.8B.mmproj-Q8_0.gguf`,
+    registryPath:
+      "mradermacher/Qwen3.5-0.8B-GGUF/resolve/9d48fdbc0d8f133716da87ec1d904e5d2c7175a6/Qwen3.5-0.8B.mmproj-Q8_0.gguf",
+    registrySource: "hf",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 2091254,
+    blobBlockLength: 1769,
+    blobByteOffset: 137046430165,
+    modelId: "Qwen3.5-0.8B.mmproj-Q8_0.gguf",
+    addon: "llm",
+    expectedSize: 115923680,
+    sha256Checksum:
+      "5a6b15da0f483b9e320a5b86b787ad1831953dfaa706e2c5d91de830ea70d784",
+    engine: "llamacpp-completion",
+    quantization: "q8_0",
+    params: "0.8B",
     endpointCategory: "chat",
   } as const,
   {
@@ -2218,6 +2323,27 @@ export const allModels = [
       "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
     engine: "llamacpp-completion",
     quantization: "q4_k_m",
+    params: "0.8B",
+    endpointCategory: "chat",
+  } as const,
+  {
+    name: "QWEN3_5_0_8B_MULTIMODAL_Q6_K",
+    src: `registry://hf/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q6_K.gguf`,
+    registryPath:
+      "unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q6_K.gguf",
+    registrySource: "hf",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1621918,
+    blobBlockLength: 9751,
+    blobByteOffset: 106288450129,
+    modelId: "Qwen3.5-0.8B-Q6_K.gguf",
+    addon: "llm",
+    expectedSize: 639029504,
+    sha256Checksum:
+      "8408c5c222111cec253682b49eece2a02ed641ded68490001ec4ee160e71098e",
+    engine: "llamacpp-completion",
+    quantization: "q6_k",
     params: "0.8B",
     endpointCategory: "chat",
   } as const,
@@ -19295,6 +19421,69 @@ export const allModels = [
     endpointCategory: "transcription",
   } as const,
   {
+    name: "PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q4_0_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1613496,
+    blobBlockLength: 1131,
+    blobByteOffset: 105736572977,
+    modelId: "parakeet-eou-120m-v1.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 74110976,
+    sha256Checksum:
+      "a1fb4ab2a6dd8a931e67d08b24e6e277e5163d26abb495fe730a23385964fc36",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "120M",
+    endpointCategory: "transcription",
+  } as const,
+  {
+    name: "PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q4_0_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1614627,
+    blobBlockLength: 6085,
+    blobByteOffset: 105810683953,
+    modelId: "parakeet-tdt-0.6b-v3.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 398735040,
+    sha256Checksum:
+      "e29d2749b0d38d827f9649c410a075894a329409f750287b8e7dfb1c6e2e7b5e",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "0.6B",
+    endpointCategory: "transcription",
+  } as const,
+  {
+    name: "PARAKEET_TDT_Q4_0_1",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1620712,
+    blobBlockLength: 1206,
+    blobByteOffset: 106209418993,
+    modelId: "sortformer-4spk-v1.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 79031136,
+    sha256Checksum:
+      "f1f9f6215ee535b2d07e26e398ced16d2d598a330a33d75297d1fafa65a4075f",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "123M",
+    endpointCategory: "transcription",
+  } as const,
+  {
     name: "PARAKEET_TDT_DECODER_INT8",
     src: `registry://s3/qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/decoder_joint-model.onnx`,
     registryPath:
@@ -20564,6 +20753,174 @@ export const allModels = [
       "bcbfad4019e582a78df01d624f67ef8abc5399625935169b4cd620ea4a82074d",
     engine: "tts-ggml",
     quantization: "q8_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q4_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1680515,
+    blobBlockLength: 12031,
+    blobByteOffset: 110128449169,
+    modelId: "chatterbox-s3gen-mtl-q4_0.gguf",
+    addon: "tts",
+    expectedSize: 788432672,
+    sha256Checksum:
+      "44496b0fc6e9d1650d2977e2f352b849a0edf1c7f39034e3db60c0e9deea966e",
+    engine: "tts-ggml",
+    quantization: "q4_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q5_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q5_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1692546,
+    blobBlockLength: 12180,
+    blobByteOffset: 110916881841,
+    modelId: "chatterbox-s3gen-mtl-q5_0.gguf",
+    addon: "tts",
+    expectedSize: 798178080,
+    sha256Checksum:
+      "0746515994551c597d9118000265e7322c3fe18ce95ea3e05b2f113d3cefbc5b",
+    engine: "tts-ggml",
+    quantization: "q5_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q8_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1704726,
+    blobBlockLength: 12626,
+    blobByteOffset: 111715059921,
+    modelId: "chatterbox-s3gen-mtl-q8_0.gguf",
+    addon: "tts",
+    expectedSize: 827414304,
+    sha256Checksum:
+      "894f342725c253cbaf556bbb17ff6a7c71d8590bfa4dbd3dfca9e569b5182e33",
+    engine: "tts-ggml",
+    quantization: "q8_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_S3GEN_EN_CHATTERBOX_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q4_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1643601,
+    blobBlockLength: 12050,
+    blobByteOffset: 107709394641,
+    modelId: "chatterbox-s3gen-q4_0.gguf",
+    addon: "tts",
+    expectedSize: 789672256,
+    sha256Checksum:
+      "110609b15169a7c3d1110e2b39d23bc87596799fbd1920a42ff6e30241ca9768",
+    engine: "tts-ggml",
+    quantization: "q4_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_S3GEN_EN_CHATTERBOX_Q5_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q5_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q5_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1655651,
+    blobBlockLength: 12203,
+    blobByteOffset: 108499066897,
+    modelId: "chatterbox-s3gen-q5_0.gguf",
+    addon: "tts",
+    expectedSize: 799679808,
+    sha256Checksum:
+      "46a09ca4817d640c9d9465d1215f038baa6e6a35b479c0c187742b511595f2e0",
+    engine: "tts-ggml",
+    quantization: "q5_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_S3GEN_EN_CHATTERBOX_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q8_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1667854,
+    blobBlockLength: 12661,
+    blobByteOffset: 109298746705,
+    modelId: "chatterbox-s3gen-q8_0.gguf",
+    addon: "tts",
+    expectedSize: 829702464,
+    sha256Checksum:
+      "09038488320deb4091c895c8f589cbd6708ca7d445ba78fb2b5eefb14301073b",
+    engine: "tts-ggml",
+    quantization: "q8_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-mtl-q5_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-mtl-q5_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1637347,
+    blobBlockLength: 6254,
+    blobByteOffset: 107299574673,
+    modelId: "chatterbox-t3-mtl-q5_0.gguf",
+    addon: "tts",
+    expectedSize: 409819968,
+    sha256Checksum:
+      "af78a11a288f925282e87af82ee85193b5333b651acbf1e4bfbcde6eb9e3048e",
+    engine: "tts-ggml",
+    quantization: "q5_0",
+    params: "",
+    endpointCategory: "speech",
+  } as const,
+  {
+    name: "TTS_T3_TURBO_EN_CHATTERBOX_Q5_0",
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-turbo-q5_0.gguf`,
+    registryPath:
+      "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-t3-turbo-q5_0.gguf",
+    registrySource: "s3",
+    blobCoreKey:
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blobBlockOffset: 1631669,
+    blobBlockLength: 5678,
+    blobByteOffset: 106927479633,
+    modelId: "chatterbox-t3-turbo-q5_0.gguf",
+    addon: "tts",
+    expectedSize: 372095040,
+    sha256Checksum:
+      "d8af075c394496a57b443cc15c7ae9126e56625e11d7a7167ecf2fc52cb09fb9",
+    engine: "tts-ggml",
+    quantization: "q5_0",
     params: "",
     endpointCategory: "speech",
   } as const,
@@ -23988,592 +24345,623 @@ export const allModels = [
 ] as const;
 
 export const FLUX_2_KLEIN_4B_VAE: ModelConstant<"image"> = allModels[0];
-export const WAN2_1_T2V_14B_Q8_0: ModelConstant<"image"> = allModels[1];
-export const WAN2_1_T2V_1_3B_FP16: ModelConstant<"image"> = allModels[2];
-export const UMT5_XXL_FP16: ModelConstant<"image"> = allModels[3];
+export const WAN2_1_I2V_14B_Q4_K_M: ModelConstant<"image"> = allModels[1];
+export const WAN2_1_I2V_14B_Q4_K_M_1: ModelConstant<"image"> = allModels[2];
+export const WAN2_1_T2V_14B_Q8_0: ModelConstant<"image"> = allModels[3];
+export const CLIP_VISION_H: ModelConstant<"image"> = allModels[4];
+export const WAN2_1_T2V_1_3B_FP16: ModelConstant<"image"> = allModels[5];
+export const UMT5_XXL_FP16: ModelConstant<"image"> = allModels[6];
 export const WAN_2_1_COMFYUI_REPACKAGED_VAE: ModelConstant<"image"> =
-  allModels[4];
-export const SD_V2_1_1B_Q4_0: ModelConstant<"image"> = allModels[5];
-export const SD_V2_1_1B_Q8_0: ModelConstant<"image"> = allModels[6];
-export const SDXL_BASE_1_0_3B_Q4_0: ModelConstant<"image"> = allModels[7];
-export const SDXL_BASE_1_0_3B_Q8_0: ModelConstant<"image"> = allModels[8];
-export const REALESRGAN_X4PLUS_ANIME_6B: ModelConstant<"image"> = allModels[9];
-export const REALESRGAN_X4PLUS: ModelConstant<"image"> = allModels[10];
-export const REALESRNET_X4PLUS: ModelConstant<"image"> = allModels[11];
-export const FLUX_2_KLEIN_4B_Q4_0: ModelConstant<"image"> = allModels[12];
-export const FLUX_2_KLEIN_4B_Q4_K_M: ModelConstant<"image"> = allModels[13];
-export const FLUX_2_KLEIN_4B_Q6_K: ModelConstant<"image"> = allModels[14];
-export const FLUX_2_KLEIN_4B_Q8_0: ModelConstant<"image"> = allModels[15];
-export const QWEN3_4B_Q4_K_M: ModelConstant<"image"> = allModels[16];
-export const GTE_LARGE_FP16: ModelConstant<"embedding"> = allModels[17];
+  allModels[7];
+export const SD_V2_1_1B_Q4_0: ModelConstant<"image"> = allModels[8];
+export const SD_V2_1_1B_Q8_0: ModelConstant<"image"> = allModels[9];
+export const SDXL_BASE_1_0_3B_Q4_0: ModelConstant<"image"> = allModels[10];
+export const SDXL_BASE_1_0_3B_Q8_0: ModelConstant<"image"> = allModels[11];
+export const REALESRGAN_X4PLUS_ANIME_6B: ModelConstant<"image"> = allModels[12];
+export const REALESRGAN_X4PLUS: ModelConstant<"image"> = allModels[13];
+export const REALESRNET_X4PLUS: ModelConstant<"image"> = allModels[14];
+export const FLUX_2_KLEIN_4B_Q4_0: ModelConstant<"image"> = allModels[15];
+export const FLUX_2_KLEIN_4B_Q4_K_M: ModelConstant<"image"> = allModels[16];
+export const FLUX_2_KLEIN_4B_Q6_K: ModelConstant<"image"> = allModels[17];
+export const FLUX_2_KLEIN_4B_Q8_0: ModelConstant<"image"> = allModels[18];
+export const QWEN3_4B_Q4_K_M: ModelConstant<"image"> = allModels[19];
+export const GTE_LARGE_FP16: ModelConstant<"embedding"> = allModels[20];
 export const GTE_LARGE_335M_FP16_SHARD: ModelConstant<"embedding"> =
-  allModels[18];
-export const GTE_LARGE_335M_FP16_TENSORS: ModelConstant<"embedding"> =
-  allModels[19];
-export const EMBEDDINGGEMMA_300M_BF16: ModelConstant<"embedding"> =
-  allModels[20];
-export const EMBEDDINGGEMMA_300M_F32: ModelConstant<"embedding"> =
   allModels[21];
-export const EMBEDDINGGEMMA_300M_Q4_0: ModelConstant<"embedding"> =
+export const GTE_LARGE_335M_FP16_TENSORS: ModelConstant<"embedding"> =
   allModels[22];
-export const EMBEDDINGGEMMA_300M_Q8_0: ModelConstant<"embedding"> =
+export const EMBEDDINGGEMMA_300M_BF16: ModelConstant<"embedding"> =
   allModels[23];
-export const GEMMA4_31B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
+export const EMBEDDINGGEMMA_300M_F32: ModelConstant<"embedding"> =
   allModels[24];
-export const GEMMA4_31B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[25];
-export const MMPROJ_GEMMA4_31B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+export const EMBEDDINGGEMMA_300M_Q4_0: ModelConstant<"embedding"> =
+  allModels[25];
+export const EMBEDDINGGEMMA_300M_Q8_0: ModelConstant<"embedding"> =
   allModels[26];
-export const MMPROJ_GEMMA4_31B_MULTIMODAL_F16: ModelConstant<"chat"> =
+export const GEMMA4_31B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
   allModels[27];
-export const GEMMA4_2B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> = allModels[28];
-export const GEMMA4_2B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[29];
-export const MMPROJ_GEMMA4_2B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+export const GEMMA4_31B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[28];
+export const MMPROJ_GEMMA4_31B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+  allModels[29];
+export const MMPROJ_GEMMA4_31B_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[30];
+export const GEMMA4_2B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> = allModels[31];
+export const GEMMA4_2B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[32];
+export const MMPROJ_GEMMA4_2B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+  allModels[33];
 export const MMPROJ_GEMMA4_2B_MULTIMODAL_F16: ModelConstant<"chat"> =
-  allModels[31];
-export const GEMMA4_4B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> = allModels[32];
-export const GEMMA4_4B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[33];
-export const MMPROJ_GEMMA4_4B_MULTIMODAL_BF16: ModelConstant<"chat"> =
   allModels[34];
+export const GEMMA4_4B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> = allModels[35];
+export const GEMMA4_4B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[36];
+export const MMPROJ_GEMMA4_4B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+  allModels[37];
 export const MMPROJ_GEMMA4_4B_MULTIMODAL_F16: ModelConstant<"chat"> =
-  allModels[35];
-export const SALAMANDRATA_2B_INST_Q4: ModelConstant<"chat"> = allModels[36];
-export const SALAMANDRATA_2B_INST_Q8: ModelConstant<"chat"> = allModels[37];
-export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[38];
-export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
-  allModels[39];
-export const SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<"chat"> =
-  allModels[40];
-export const SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
+export const SALAMANDRATA_2B_INST_Q4: ModelConstant<"chat"> = allModels[39];
+export const SALAMANDRATA_2B_INST_Q8: ModelConstant<"chat"> = allModels[40];
+export const MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
   allModels[41];
-export const SMOLLM2_360M_INST_Q8: ModelConstant<"chat"> = allModels[42];
-export const LASER_DOLPHIN_2X7B_INST_Q2_K: ModelConstant<"chat"> =
+export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<"chat"> =
+  allModels[42];
+export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
   allModels[43];
-export const LLAMA_TOOL_CALLING_1B_INST_Q4_K: ModelConstant<"chat"> =
+export const SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[44];
-export const AFRICAN_4B_TRANSLATION_Q4_K_M: ModelConstant<"chat"> =
+export const SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
   allModels[45];
-export const OCR_0_6B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> = allModels[46];
-export const MMPROJ_OCR_0_6B_MULTIMODAL_F16: ModelConstant<"chat"> =
+export const SMOLLM2_360M_INST_Q8: ModelConstant<"chat"> = allModels[46];
+export const LASER_DOLPHIN_2X7B_INST_Q2_K: ModelConstant<"chat"> =
   allModels[47];
-export const BITNET_B1_58_3B_INST_TQ2_0: ModelConstant<"chat"> = allModels[48];
-export const BITNET_0_7B_INST_TQ2_0: ModelConstant<"chat"> = allModels[49];
-export const BITNET_1B_INST_TQ2_0: ModelConstant<"chat"> = allModels[50];
-export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD: ModelConstant<"chat"> =
-  allModels[51];
-export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS: ModelConstant<"chat"> =
+export const LLAMA_TOOL_CALLING_1B_INST_Q4_K: ModelConstant<"chat"> =
+  allModels[48];
+export const AFRICAN_4B_TRANSLATION_Q4_K_M: ModelConstant<"chat"> =
+  allModels[49];
+export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
+  allModels[50];
+export const OCR_0_6B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> = allModels[51];
+export const MMPROJ_OCR_0_6B_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[52];
-export const GPT_OSS_120B_INST_Q4_K_M_SHARD: ModelConstant<"chat"> =
-  allModels[53];
-export const GPT_OSS_120B_INST_Q4_K_M_TENSORS: ModelConstant<"chat"> =
-  allModels[54];
-export const LLAMA_3_2_1B_INST_Q4_0_SHARD: ModelConstant<"chat"> =
-  allModels[55];
-export const LLAMA_3_2_1B_INST_Q4_0_TENSORS: ModelConstant<"chat"> =
+export const BITNET_B1_58_3B_INST_TQ2_0: ModelConstant<"chat"> = allModels[53];
+export const BITNET_0_7B_INST_TQ2_0: ModelConstant<"chat"> = allModels[54];
+export const BITNET_1B_INST_TQ2_0: ModelConstant<"chat"> = allModels[55];
+export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD: ModelConstant<"chat"> =
   allModels[56];
-export const MEDGEMMA_4B_IT_Q4_1_SHARD: ModelConstant<"chat"> = allModels[57];
-export const MEDGEMMA_4B_IT_Q4_1_TENSORS: ModelConstant<"chat"> = allModels[58];
-export const MEDGEMMA_4B_IT_Q8_0_SHARD: ModelConstant<"chat"> = allModels[59];
-export const QWEN3_1_7B_INST_Q4_SHARD: ModelConstant<"chat"> = allModels[60];
-export const QWEN3_1_7B_INST_Q4_TENSORS: ModelConstant<"chat"> = allModels[61];
-export const QWEN3_4B_INST_Q4_K_M: ModelConstant<"chat"> = allModels[62];
-export const QWEN3_4B_INST_Q4_SHARD: ModelConstant<"chat"> = allModels[63];
-export const QWEN3_4B_INST_Q4_TENSORS: ModelConstant<"chat"> = allModels[64];
+export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS: ModelConstant<"chat"> =
+  allModels[57];
+export const GPT_OSS_120B_INST_Q4_K_M_SHARD: ModelConstant<"chat"> =
+  allModels[58];
+export const GPT_OSS_120B_INST_Q4_K_M_TENSORS: ModelConstant<"chat"> =
+  allModels[59];
+export const LLAMA_3_2_1B_INST_Q4_0_SHARD: ModelConstant<"chat"> =
+  allModels[60];
+export const LLAMA_3_2_1B_INST_Q4_0_TENSORS: ModelConstant<"chat"> =
+  allModels[61];
+export const MEDGEMMA_4B_IT_Q4_1_SHARD: ModelConstant<"chat"> = allModels[62];
+export const MEDGEMMA_4B_IT_Q4_1_TENSORS: ModelConstant<"chat"> = allModels[63];
+export const MEDGEMMA_4B_IT_Q8_0_SHARD: ModelConstant<"chat"> = allModels[64];
+export const QWEN3_1_7B_INST_Q4_SHARD: ModelConstant<"chat"> = allModels[65];
+export const QWEN3_1_7B_INST_Q4_TENSORS: ModelConstant<"chat"> = allModels[66];
+export const QWEN3_4B_INST_Q4_K_M: ModelConstant<"chat"> = allModels[67];
+export const QWEN3_4B_INST_Q4_SHARD: ModelConstant<"chat"> = allModels[68];
+export const QWEN3_4B_INST_Q4_TENSORS: ModelConstant<"chat"> = allModels[69];
 export const SALAMANDRATA_2B_INST_Q4_SHARD: ModelConstant<"chat"> =
-  allModels[65];
+  allModels[70];
 export const SALAMANDRATA_2B_INST_Q4_TENSORS: ModelConstant<"chat"> =
-  allModels[66];
+  allModels[71];
 export const SALAMANDRATA_2B_INST_Q8_SHARD: ModelConstant<"chat"> =
-  allModels[67];
-export const QWEN3_8B_INST_Q4_K_M: ModelConstant<"chat"> = allModels[68];
+  allModels[72];
+export const QWEN3_8B_INST_Q4_K_M: ModelConstant<"chat"> = allModels[73];
 export const MMPROJ_QWEN3VL_2B_MULTIMODAL_Q4_K: ModelConstant<"chat"> =
-  allModels[69];
-export const QWEN3VL_2B_MULTIMODAL_Q4_K: ModelConstant<"chat"> = allModels[70];
-export const GPT_OSS_20B_INST_Q4_K_M: ModelConstant<"chat"> = allModels[71];
-export const LLAMA_3_2_1B_INST_Q4_0: ModelConstant<"chat"> = allModels[72];
-export const MEDGEMMA_4B_IT_Q4_1: ModelConstant<"chat"> = allModels[73];
-export const MEDGEMMA_4B_IT_Q8_0: ModelConstant<"chat"> = allModels[74];
-export const QWEN3_600M_INST_Q4: ModelConstant<"chat"> = allModels[75];
-export const QWEN3_1_7B_INST_Q4: ModelConstant<"chat"> = allModels[76];
+  allModels[74];
+export const QWEN3VL_2B_MULTIMODAL_Q4_K: ModelConstant<"chat"> = allModels[75];
+export const GPT_OSS_20B_INST_Q4_K_M: ModelConstant<"chat"> = allModels[76];
+export const LLAMA_3_2_1B_INST_Q4_0: ModelConstant<"chat"> = allModels[77];
+export const MEDGEMMA_4B_IT_Q4_1: ModelConstant<"chat"> = allModels[78];
+export const MEDGEMMA_4B_IT_Q8_0: ModelConstant<"chat"> = allModels[79];
+export const QWEN3_600M_INST_Q4: ModelConstant<"chat"> = allModels[80];
+export const QWEN3_1_7B_INST_Q4: ModelConstant<"chat"> = allModels[81];
 export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_BF16: ModelConstant<"chat"> =
-  allModels[77];
-export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_F16: ModelConstant<"chat"> =
-  allModels[78];
-export const QWEN3_5_0_8B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
-  allModels[79];
-export const QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
-  allModels[80];
-export const MMPROJ_QWEN3_5_2B_MULTIMODAL_BF16: ModelConstant<"chat"> =
-  allModels[81];
-export const MMPROJ_QWEN3_5_2B_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[82];
-export const QWEN3_5_2B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
+export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[83];
-export const QWEN3_5_2B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[84];
-export const MMPROJ_QWEN3_5_4B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+export const QWEN3_5_0_8B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
+  allModels[84];
+export const QWEN3_5_0_8B_MULTIMODAL_Q6_K: ModelConstant<"chat"> =
   allModels[85];
-export const MMPROJ_QWEN3_5_4B_MULTIMODAL_F16: ModelConstant<"chat"> =
+export const QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<"chat"> =
   allModels[86];
-export const QWEN3_5_4B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
+export const MMPROJ_QWEN3_5_2B_MULTIMODAL_BF16: ModelConstant<"chat"> =
   allModels[87];
-export const QWEN3_5_4B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[88];
-export const MMPROJ_QWEN3_5_9B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+export const MMPROJ_QWEN3_5_2B_MULTIMODAL_F16: ModelConstant<"chat"> =
+  allModels[88];
+export const QWEN3_5_2B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
   allModels[89];
-export const MMPROJ_QWEN3_5_9B_MULTIMODAL_F16: ModelConstant<"chat"> =
-  allModels[90];
-export const QWEN3_5_9B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
+export const QWEN3_5_2B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[90];
+export const MMPROJ_QWEN3_5_4B_MULTIMODAL_BF16: ModelConstant<"chat"> =
   allModels[91];
-export const QWEN3_5_9B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[92];
-export const MMPROJ_QWEN3_6_27B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+export const MMPROJ_QWEN3_5_4B_MULTIMODAL_F16: ModelConstant<"chat"> =
+  allModels[92];
+export const QWEN3_5_4B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
   allModels[93];
-export const MMPROJ_QWEN3_6_27B_MULTIMODAL_F16: ModelConstant<"chat"> =
-  allModels[94];
-export const QWEN3_6_27B_MULTIMODAL_Q4_K_XL: ModelConstant<"chat"> =
+export const QWEN3_5_4B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[94];
+export const MMPROJ_QWEN3_5_9B_MULTIMODAL_BF16: ModelConstant<"chat"> =
   allModels[95];
-export const QWEN3_6_27B_MULTIMODAL_Q6_K_XL: ModelConstant<"chat"> =
+export const MMPROJ_QWEN3_5_9B_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[96];
-export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+export const QWEN3_5_9B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
   allModels[97];
-export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16: ModelConstant<"chat"> =
-  allModels[98];
-export const QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
+export const QWEN3_5_9B_MULTIMODAL_Q6_K: ModelConstant<"chat"> = allModels[98];
+export const MMPROJ_QWEN3_6_27B_MULTIMODAL_BF16: ModelConstant<"chat"> =
   allModels[99];
-export const QWEN3_6_35B_A3B_MULTIMODAL_Q6_K_XL: ModelConstant<"chat"> =
+export const MMPROJ_QWEN3_6_27B_MULTIMODAL_F16: ModelConstant<"chat"> =
   allModels[100];
-export const BERGAMOT_AR_EN: ModelConstant<"translation"> = allModels[103];
-export const BERGAMOT_AZ_EN: ModelConstant<"translation"> = allModels[107];
-export const BERGAMOT_BE_EN: ModelConstant<"translation"> = allModels[111];
-export const BERGAMOT_BG_EN: ModelConstant<"translation"> = allModels[115];
-export const BERGAMOT_BN_EN: ModelConstant<"translation"> = allModels[119];
-export const BERGAMOT_BS_EN: ModelConstant<"translation"> = allModels[123];
-export const BERGAMOT_CA_EN: ModelConstant<"translation"> = allModels[127];
-export const BERGAMOT_CS_EN: ModelConstant<"translation"> = allModels[131];
-export const BERGAMOT_DA_EN: ModelConstant<"translation"> = allModels[135];
-export const BERGAMOT_DE_EN: ModelConstant<"translation"> = allModels[139];
-export const BERGAMOT_EL_EN: ModelConstant<"translation"> = allModels[143];
-export const BERGAMOT_EN_AR: ModelConstant<"translation"> = allModels[147];
-export const BERGAMOT_EN_AZ: ModelConstant<"translation"> = allModels[151];
-export const BERGAMOT_EN_BG: ModelConstant<"translation"> = allModels[155];
-export const BERGAMOT_EN_BN: ModelConstant<"translation"> = allModels[159];
-export const BERGAMOT_EN_BS: ModelConstant<"translation"> = allModels[163];
-export const BERGAMOT_EN_CA: ModelConstant<"translation"> = allModels[167];
-export const BERGAMOT_EN_CS: ModelConstant<"translation"> = allModels[171];
-export const BERGAMOT_EN_DA: ModelConstant<"translation"> = allModels[175];
-export const BERGAMOT_EN_DE: ModelConstant<"translation"> = allModels[179];
-export const BERGAMOT_EN_EL: ModelConstant<"translation"> = allModels[183];
-export const BERGAMOT_EN_ES: ModelConstant<"translation"> = allModels[187];
-export const BERGAMOT_EN_ET: ModelConstant<"translation"> = allModels[191];
-export const BERGAMOT_EN_FA: ModelConstant<"translation"> = allModels[195];
-export const BERGAMOT_EN_FI: ModelConstant<"translation"> = allModels[199];
-export const BERGAMOT_EN_FR: ModelConstant<"translation"> = allModels[203];
-export const BERGAMOT_EN_GU: ModelConstant<"translation"> = allModels[207];
-export const BERGAMOT_EN_HE: ModelConstant<"translation"> = allModels[211];
-export const BERGAMOT_EN_HI: ModelConstant<"translation"> = allModels[215];
-export const BERGAMOT_EN_HR: ModelConstant<"translation"> = allModels[219];
-export const BERGAMOT_EN_HU: ModelConstant<"translation"> = allModels[223];
-export const BERGAMOT_EN_ID: ModelConstant<"translation"> = allModels[227];
-export const BERGAMOT_EN_IS: ModelConstant<"translation"> = allModels[231];
-export const BERGAMOT_EN_IT: ModelConstant<"translation"> = allModels[235];
-export const BERGAMOT_EN_JA: ModelConstant<"translation"> = allModels[239];
-export const BERGAMOT_EN_KN: ModelConstant<"translation"> = allModels[244];
-export const BERGAMOT_EN_KO: ModelConstant<"translation"> = allModels[248];
-export const BERGAMOT_EN_LT: ModelConstant<"translation"> = allModels[253];
-export const BERGAMOT_EN_LV: ModelConstant<"translation"> = allModels[257];
-export const BERGAMOT_EN_ML: ModelConstant<"translation"> = allModels[261];
-export const BERGAMOT_EN_MS: ModelConstant<"translation"> = allModels[265];
-export const BERGAMOT_EN_NB: ModelConstant<"translation"> = allModels[269];
-export const BERGAMOT_EN_NL: ModelConstant<"translation"> = allModels[273];
-export const BERGAMOT_EN_NO: ModelConstant<"translation"> = allModels[277];
-export const BERGAMOT_EN_PL: ModelConstant<"translation"> = allModels[281];
-export const BERGAMOT_EN_PT: ModelConstant<"translation"> = allModels[285];
-export const BERGAMOT_EN_RO: ModelConstant<"translation"> = allModels[289];
-export const BERGAMOT_EN_RU: ModelConstant<"translation"> = allModels[293];
-export const BERGAMOT_EN_SK: ModelConstant<"translation"> = allModels[297];
-export const BERGAMOT_EN_SL: ModelConstant<"translation"> = allModels[301];
-export const BERGAMOT_EN_SQ: ModelConstant<"translation"> = allModels[305];
-export const BERGAMOT_EN_SR: ModelConstant<"translation"> = allModels[309];
-export const BERGAMOT_EN_SV: ModelConstant<"translation"> = allModels[313];
-export const BERGAMOT_EN_TA: ModelConstant<"translation"> = allModels[317];
-export const BERGAMOT_EN_TE: ModelConstant<"translation"> = allModels[321];
-export const BERGAMOT_EN_TH: ModelConstant<"translation"> = allModels[325];
-export const BERGAMOT_EN_TR: ModelConstant<"translation"> = allModels[329];
-export const BERGAMOT_EN_UK: ModelConstant<"translation"> = allModels[333];
-export const BERGAMOT_EN_VI: ModelConstant<"translation"> = allModels[337];
-export const BERGAMOT_EN_ZH: ModelConstant<"translation"> = allModels[341];
-export const BERGAMOT_ES_EN: ModelConstant<"translation"> = allModels[346];
-export const BERGAMOT_ET_EN: ModelConstant<"translation"> = allModels[350];
-export const BERGAMOT_FA_EN: ModelConstant<"translation"> = allModels[354];
-export const BERGAMOT_FI_EN: ModelConstant<"translation"> = allModels[358];
-export const BERGAMOT_FR_EN: ModelConstant<"translation"> = allModels[362];
-export const BERGAMOT_GU_EN: ModelConstant<"translation"> = allModels[366];
-export const BERGAMOT: ModelConstant<"translation"> = allModels[370];
-export const BERGAMOT_HE_EN: ModelConstant<"translation"> = allModels[374];
-export const BERGAMOT_HI_EN: ModelConstant<"translation"> = allModels[378];
-export const BERGAMOT_HR_EN: ModelConstant<"translation"> = allModels[382];
-export const BERGAMOT_HU_EN: ModelConstant<"translation"> = allModels[386];
-export const BERGAMOT_ID_EN: ModelConstant<"translation"> = allModels[390];
-export const BERGAMOT_IS_EN: ModelConstant<"translation"> = allModels[394];
-export const BERGAMOT_IT_EN: ModelConstant<"translation"> = allModels[398];
-export const BERGAMOT_JA_EN: ModelConstant<"translation"> = allModels[402];
-export const BERGAMOT_KN_EN: ModelConstant<"translation"> = allModels[406];
-export const BERGAMOT_KO_EN: ModelConstant<"translation"> = allModels[410];
-export const BERGAMOT_LT_EN: ModelConstant<"translation"> = allModels[414];
-export const BERGAMOT_LV_EN: ModelConstant<"translation"> = allModels[418];
-export const BERGAMOT_ML_EN: ModelConstant<"translation"> = allModels[422];
-export const BERGAMOT_MS_EN: ModelConstant<"translation"> = allModels[426];
-export const BERGAMOT_MT_EN: ModelConstant<"translation"> = allModels[430];
-export const BERGAMOT_NB_EN: ModelConstant<"translation"> = allModels[434];
-export const BERGAMOT_NL_EN: ModelConstant<"translation"> = allModels[438];
-export const BERGAMOT_NN_EN: ModelConstant<"translation"> = allModels[442];
-export const BERGAMOT_NO_EN: ModelConstant<"translation"> = allModels[446];
-export const BERGAMOT_PL_EN: ModelConstant<"translation"> = allModels[450];
-export const BERGAMOT_PT_EN: ModelConstant<"translation"> = allModels[454];
-export const BERGAMOT_RO_EN: ModelConstant<"translation"> = allModels[458];
-export const BERGAMOT_RU_EN: ModelConstant<"translation"> = allModels[462];
-export const BERGAMOT_SK_EN: ModelConstant<"translation"> = allModels[466];
-export const BERGAMOT_SL_EN: ModelConstant<"translation"> = allModels[470];
-export const BERGAMOT_SQ_EN: ModelConstant<"translation"> = allModels[474];
-export const BERGAMOT_SR_EN: ModelConstant<"translation"> = allModels[478];
-export const BERGAMOT_SV_EN: ModelConstant<"translation"> = allModels[482];
-export const BERGAMOT_TA_EN: ModelConstant<"translation"> = allModels[486];
-export const BERGAMOT_TE_EN: ModelConstant<"translation"> = allModels[490];
-export const BERGAMOT_TH_EN: ModelConstant<"translation"> = allModels[494];
-export const BERGAMOT_TR_EN: ModelConstant<"translation"> = allModels[498];
-export const BERGAMOT_UK_EN: ModelConstant<"translation"> = allModels[502];
-export const BERGAMOT_VI_EN: ModelConstant<"translation"> = allModels[506];
-export const BERGAMOT_ZH_EN: ModelConstant<"translation"> = allModels[510];
+export const QWEN3_6_27B_MULTIMODAL_Q4_K_XL: ModelConstant<"chat"> =
+  allModels[101];
+export const QWEN3_6_27B_MULTIMODAL_Q6_K_XL: ModelConstant<"chat"> =
+  allModels[102];
+export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_BF16: ModelConstant<"chat"> =
+  allModels[103];
+export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16: ModelConstant<"chat"> =
+  allModels[104];
+export const QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M: ModelConstant<"chat"> =
+  allModels[105];
+export const QWEN3_6_35B_A3B_MULTIMODAL_Q6_K_XL: ModelConstant<"chat"> =
+  allModels[106];
+export const BERGAMOT_AR_EN: ModelConstant<"translation"> = allModels[109];
+export const BERGAMOT_AZ_EN: ModelConstant<"translation"> = allModels[113];
+export const BERGAMOT_BE_EN: ModelConstant<"translation"> = allModels[117];
+export const BERGAMOT_BG_EN: ModelConstant<"translation"> = allModels[121];
+export const BERGAMOT_BN_EN: ModelConstant<"translation"> = allModels[125];
+export const BERGAMOT_BS_EN: ModelConstant<"translation"> = allModels[129];
+export const BERGAMOT_CA_EN: ModelConstant<"translation"> = allModels[133];
+export const BERGAMOT_CS_EN: ModelConstant<"translation"> = allModels[137];
+export const BERGAMOT_DA_EN: ModelConstant<"translation"> = allModels[141];
+export const BERGAMOT_DE_EN: ModelConstant<"translation"> = allModels[145];
+export const BERGAMOT_EL_EN: ModelConstant<"translation"> = allModels[149];
+export const BERGAMOT_EN_AR: ModelConstant<"translation"> = allModels[153];
+export const BERGAMOT_EN_AZ: ModelConstant<"translation"> = allModels[157];
+export const BERGAMOT_EN_BG: ModelConstant<"translation"> = allModels[161];
+export const BERGAMOT_EN_BN: ModelConstant<"translation"> = allModels[165];
+export const BERGAMOT_EN_BS: ModelConstant<"translation"> = allModels[169];
+export const BERGAMOT_EN_CA: ModelConstant<"translation"> = allModels[173];
+export const BERGAMOT_EN_CS: ModelConstant<"translation"> = allModels[177];
+export const BERGAMOT_EN_DA: ModelConstant<"translation"> = allModels[181];
+export const BERGAMOT_EN_DE: ModelConstant<"translation"> = allModels[185];
+export const BERGAMOT_EN_EL: ModelConstant<"translation"> = allModels[189];
+export const BERGAMOT_EN_ES: ModelConstant<"translation"> = allModels[193];
+export const BERGAMOT_EN_ET: ModelConstant<"translation"> = allModels[197];
+export const BERGAMOT_EN_FA: ModelConstant<"translation"> = allModels[201];
+export const BERGAMOT_EN_FI: ModelConstant<"translation"> = allModels[205];
+export const BERGAMOT_EN_FR: ModelConstant<"translation"> = allModels[209];
+export const BERGAMOT_EN_GU: ModelConstant<"translation"> = allModels[213];
+export const BERGAMOT_EN_HE: ModelConstant<"translation"> = allModels[217];
+export const BERGAMOT_EN_HI: ModelConstant<"translation"> = allModels[221];
+export const BERGAMOT_EN_HR: ModelConstant<"translation"> = allModels[225];
+export const BERGAMOT_EN_HU: ModelConstant<"translation"> = allModels[229];
+export const BERGAMOT_EN_ID: ModelConstant<"translation"> = allModels[233];
+export const BERGAMOT_EN_IS: ModelConstant<"translation"> = allModels[237];
+export const BERGAMOT_EN_IT: ModelConstant<"translation"> = allModels[241];
+export const BERGAMOT_EN_JA: ModelConstant<"translation"> = allModels[245];
+export const BERGAMOT_EN_KN: ModelConstant<"translation"> = allModels[250];
+export const BERGAMOT_EN_KO: ModelConstant<"translation"> = allModels[254];
+export const BERGAMOT_EN_LT: ModelConstant<"translation"> = allModels[259];
+export const BERGAMOT_EN_LV: ModelConstant<"translation"> = allModels[263];
+export const BERGAMOT_EN_ML: ModelConstant<"translation"> = allModels[267];
+export const BERGAMOT_EN_MS: ModelConstant<"translation"> = allModels[271];
+export const BERGAMOT_EN_NB: ModelConstant<"translation"> = allModels[275];
+export const BERGAMOT_EN_NL: ModelConstant<"translation"> = allModels[279];
+export const BERGAMOT_EN_NO: ModelConstant<"translation"> = allModels[283];
+export const BERGAMOT_EN_PL: ModelConstant<"translation"> = allModels[287];
+export const BERGAMOT_EN_PT: ModelConstant<"translation"> = allModels[291];
+export const BERGAMOT_EN_RO: ModelConstant<"translation"> = allModels[295];
+export const BERGAMOT_EN_RU: ModelConstant<"translation"> = allModels[299];
+export const BERGAMOT_EN_SK: ModelConstant<"translation"> = allModels[303];
+export const BERGAMOT_EN_SL: ModelConstant<"translation"> = allModels[307];
+export const BERGAMOT_EN_SQ: ModelConstant<"translation"> = allModels[311];
+export const BERGAMOT_EN_SR: ModelConstant<"translation"> = allModels[315];
+export const BERGAMOT_EN_SV: ModelConstant<"translation"> = allModels[319];
+export const BERGAMOT_EN_TA: ModelConstant<"translation"> = allModels[323];
+export const BERGAMOT_EN_TE: ModelConstant<"translation"> = allModels[327];
+export const BERGAMOT_EN_TH: ModelConstant<"translation"> = allModels[331];
+export const BERGAMOT_EN_TR: ModelConstant<"translation"> = allModels[335];
+export const BERGAMOT_EN_UK: ModelConstant<"translation"> = allModels[339];
+export const BERGAMOT_EN_VI: ModelConstant<"translation"> = allModels[343];
+export const BERGAMOT_EN_ZH: ModelConstant<"translation"> = allModels[347];
+export const BERGAMOT_ES_EN: ModelConstant<"translation"> = allModels[352];
+export const BERGAMOT_ET_EN: ModelConstant<"translation"> = allModels[356];
+export const BERGAMOT_FA_EN: ModelConstant<"translation"> = allModels[360];
+export const BERGAMOT_FI_EN: ModelConstant<"translation"> = allModels[364];
+export const BERGAMOT_FR_EN: ModelConstant<"translation"> = allModels[368];
+export const BERGAMOT_GU_EN: ModelConstant<"translation"> = allModels[372];
+export const BERGAMOT: ModelConstant<"translation"> = allModels[376];
+export const BERGAMOT_HE_EN: ModelConstant<"translation"> = allModels[380];
+export const BERGAMOT_HI_EN: ModelConstant<"translation"> = allModels[384];
+export const BERGAMOT_HR_EN: ModelConstant<"translation"> = allModels[388];
+export const BERGAMOT_HU_EN: ModelConstant<"translation"> = allModels[392];
+export const BERGAMOT_ID_EN: ModelConstant<"translation"> = allModels[396];
+export const BERGAMOT_IS_EN: ModelConstant<"translation"> = allModels[400];
+export const BERGAMOT_IT_EN: ModelConstant<"translation"> = allModels[404];
+export const BERGAMOT_JA_EN: ModelConstant<"translation"> = allModels[408];
+export const BERGAMOT_KN_EN: ModelConstant<"translation"> = allModels[412];
+export const BERGAMOT_KO_EN: ModelConstant<"translation"> = allModels[416];
+export const BERGAMOT_LT_EN: ModelConstant<"translation"> = allModels[420];
+export const BERGAMOT_LV_EN: ModelConstant<"translation"> = allModels[424];
+export const BERGAMOT_ML_EN: ModelConstant<"translation"> = allModels[428];
+export const BERGAMOT_MS_EN: ModelConstant<"translation"> = allModels[432];
+export const BERGAMOT_MT_EN: ModelConstant<"translation"> = allModels[436];
+export const BERGAMOT_NB_EN: ModelConstant<"translation"> = allModels[440];
+export const BERGAMOT_NL_EN: ModelConstant<"translation"> = allModels[444];
+export const BERGAMOT_NN_EN: ModelConstant<"translation"> = allModels[448];
+export const BERGAMOT_NO_EN: ModelConstant<"translation"> = allModels[452];
+export const BERGAMOT_PL_EN: ModelConstant<"translation"> = allModels[456];
+export const BERGAMOT_PT_EN: ModelConstant<"translation"> = allModels[460];
+export const BERGAMOT_RO_EN: ModelConstant<"translation"> = allModels[464];
+export const BERGAMOT_RU_EN: ModelConstant<"translation"> = allModels[468];
+export const BERGAMOT_SK_EN: ModelConstant<"translation"> = allModels[472];
+export const BERGAMOT_SL_EN: ModelConstant<"translation"> = allModels[476];
+export const BERGAMOT_SQ_EN: ModelConstant<"translation"> = allModels[480];
+export const BERGAMOT_SR_EN: ModelConstant<"translation"> = allModels[484];
+export const BERGAMOT_SV_EN: ModelConstant<"translation"> = allModels[488];
+export const BERGAMOT_TA_EN: ModelConstant<"translation"> = allModels[492];
+export const BERGAMOT_TE_EN: ModelConstant<"translation"> = allModels[496];
+export const BERGAMOT_TH_EN: ModelConstant<"translation"> = allModels[500];
+export const BERGAMOT_TR_EN: ModelConstant<"translation"> = allModels[504];
+export const BERGAMOT_UK_EN: ModelConstant<"translation"> = allModels[508];
+export const BERGAMOT_VI_EN: ModelConstant<"translation"> = allModels[512];
+export const BERGAMOT_ZH_EN: ModelConstant<"translation"> = allModels[516];
 export const MARIAN_EN_HI_INDIC_1B_F16: ModelConstant<"translation"> =
-  allModels[512];
-export const MARIAN_EN_HI_INDIC_200M_F16: ModelConstant<"translation"> =
-  allModels[513];
-export const MARIAN_HI_EN_INDIC_1B_F16: ModelConstant<"translation"> =
-  allModels[514];
-export const MARIAN_HI_EN_INDIC_200M_F16: ModelConstant<"translation"> =
-  allModels[515];
-export const MARIAN_HI_HI_INDIC_1B_F16: ModelConstant<"translation"> =
-  allModels[516];
-export const MARIAN_HI_HI_INDIC_320M_F16: ModelConstant<"translation"> =
-  allModels[517];
-export const MARIAN_EN_HI_INDIC_1B_Q4_0: ModelConstant<"translation"> =
   allModels[518];
-export const MARIAN_EN_HI_INDIC_200M_Q4_0: ModelConstant<"translation"> =
+export const MARIAN_EN_HI_INDIC_200M_F16: ModelConstant<"translation"> =
   allModels[519];
-export const MARIAN_HI_EN_INDIC_1B_Q4_0: ModelConstant<"translation"> =
+export const MARIAN_HI_EN_INDIC_1B_F16: ModelConstant<"translation"> =
   allModels[520];
-export const MARIAN_HI_EN_INDIC_200M_Q4_0: ModelConstant<"translation"> =
+export const MARIAN_HI_EN_INDIC_200M_F16: ModelConstant<"translation"> =
   allModels[521];
-export const MARIAN_HI_HI_INDIC_1B_Q4_0: ModelConstant<"translation"> =
+export const MARIAN_HI_HI_INDIC_1B_F16: ModelConstant<"translation"> =
   allModels[522];
-export const MARIAN_HI_HI_INDIC_320M_Q4_0: ModelConstant<"translation"> =
+export const MARIAN_HI_HI_INDIC_320M_F16: ModelConstant<"translation"> =
   allModels[523];
-export const OCR_CRAFT_DETECTOR: ModelConstant<"ocr"> = allModels[524];
-export const OCR_LATIN_RECOGNIZER: ModelConstant<"ocr"> = allModels[525];
-export const OCR_ARABIC_RECOGNIZER: ModelConstant<"ocr"> = allModels[526];
-export const OCR_BENGALI_RECOGNIZER: ModelConstant<"ocr"> = allModels[527];
-export const OCR_CYRILLIC_RECOGNIZER: ModelConstant<"ocr"> = allModels[528];
-export const OCR_DEVANAGARI_RECOGNIZER: ModelConstant<"ocr"> = allModels[529];
-export const OCR_JAPANESE_RECOGNIZER: ModelConstant<"ocr"> = allModels[530];
-export const OCR_KANNADA_RECOGNIZER: ModelConstant<"ocr"> = allModels[531];
-export const OCR_KOREAN_RECOGNIZER: ModelConstant<"ocr"> = allModels[532];
-export const OCR_LATIN_RECOGNIZER_1: ModelConstant<"ocr"> = allModels[533];
-export const OCR_TAMIL_RECOGNIZER: ModelConstant<"ocr"> = allModels[534];
-export const OCR_TELUGU_RECOGNIZER: ModelConstant<"ocr"> = allModels[535];
-export const OCR_THAI_RECOGNIZER: ModelConstant<"ocr"> = allModels[536];
-export const OCR_ZH_SIM_RECOGNIZER: ModelConstant<"ocr"> = allModels[537];
-export const OCR_ZH_TRA_RECOGNIZER: ModelConstant<"ocr"> = allModels[538];
+export const MARIAN_EN_HI_INDIC_1B_Q4_0: ModelConstant<"translation"> =
+  allModels[524];
+export const MARIAN_EN_HI_INDIC_200M_Q4_0: ModelConstant<"translation"> =
+  allModels[525];
+export const MARIAN_HI_EN_INDIC_1B_Q4_0: ModelConstant<"translation"> =
+  allModels[526];
+export const MARIAN_HI_EN_INDIC_200M_Q4_0: ModelConstant<"translation"> =
+  allModels[527];
+export const MARIAN_HI_HI_INDIC_1B_Q4_0: ModelConstant<"translation"> =
+  allModels[528];
+export const MARIAN_HI_HI_INDIC_320M_Q4_0: ModelConstant<"translation"> =
+  allModels[529];
+export const OCR_CRAFT_DETECTOR: ModelConstant<"ocr"> = allModels[530];
+export const OCR_LATIN_RECOGNIZER: ModelConstant<"ocr"> = allModels[531];
+export const OCR_ARABIC_RECOGNIZER: ModelConstant<"ocr"> = allModels[532];
+export const OCR_BENGALI_RECOGNIZER: ModelConstant<"ocr"> = allModels[533];
+export const OCR_CYRILLIC_RECOGNIZER: ModelConstant<"ocr"> = allModels[534];
+export const OCR_DEVANAGARI_RECOGNIZER: ModelConstant<"ocr"> = allModels[535];
+export const OCR_JAPANESE_RECOGNIZER: ModelConstant<"ocr"> = allModels[536];
+export const OCR_KANNADA_RECOGNIZER: ModelConstant<"ocr"> = allModels[537];
+export const OCR_KOREAN_RECOGNIZER: ModelConstant<"ocr"> = allModels[538];
+export const OCR_LATIN_RECOGNIZER_1: ModelConstant<"ocr"> = allModels[539];
+export const OCR_TAMIL_RECOGNIZER: ModelConstant<"ocr"> = allModels[540];
+export const OCR_TELUGU_RECOGNIZER: ModelConstant<"ocr"> = allModels[541];
+export const OCR_THAI_RECOGNIZER: ModelConstant<"ocr"> = allModels[542];
+export const OCR_ZH_SIM_RECOGNIZER: ModelConstant<"ocr"> = allModels[543];
+export const OCR_ZH_TRA_RECOGNIZER: ModelConstant<"ocr"> = allModels[544];
 export const OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL: ModelConstant<"ocr"> =
-  allModels[539];
-export const OCR_DETECTOR_DB_MOBILENET_V3_LARGE: ModelConstant<"ocr"> =
-  allModels[540];
-export const OCR_DETECTOR_DB_RESNET50: ModelConstant<"ocr"> = allModels[541];
-export const OCR_RECOGNIZER_PARSEQ: ModelConstant<"ocr"> = allModels[542];
-export const PARAKEET_EOU_DECODER_FP32: ModelConstant<"transcription"> =
-  allModels[543];
-export const PARAKEET_EOU_ENCODER_FP32: ModelConstant<"transcription"> =
-  allModels[544];
-export const PARAKEET_EOU_TOKENIZER: ModelConstant<"transcription"> =
   allModels[545];
-export const PARAKEET_SORTFORMER_FP32: ModelConstant<"transcription"> =
+export const OCR_DETECTOR_DB_MOBILENET_V3_LARGE: ModelConstant<"ocr"> =
   allModels[546];
-export const PARAKEET_TDT_DECODER_FP32: ModelConstant<"transcription"> =
-  allModels[547];
-export const PARAKEET_TDT_ENCODER_FP32: ModelConstant<"transcription"> =
-  allModels[548];
-export const PARAKEET_TDT_PREPROCESSOR_FP32: ModelConstant<"transcription"> =
+export const OCR_DETECTOR_DB_RESNET50: ModelConstant<"ocr"> = allModels[547];
+export const OCR_RECOGNIZER_PARSEQ: ModelConstant<"ocr"> = allModels[548];
+export const PARAKEET_EOU_DECODER_FP32: ModelConstant<"transcription"> =
+  allModels[549];
+export const PARAKEET_EOU_ENCODER_FP32: ModelConstant<"transcription"> =
   allModels[550];
-export const PARAKEET_TDT_VOCAB: ModelConstant<"transcription"> =
+export const PARAKEET_EOU_TOKENIZER: ModelConstant<"transcription"> =
   allModels[551];
-export const PARAKEET_CTC_FP32: ModelConstant<"transcription"> = allModels[552];
-export const PARAKEET_CTC_TOKENIZER: ModelConstant<"transcription"> =
+export const PARAKEET_SORTFORMER_FP32: ModelConstant<"transcription"> =
+  allModels[552];
+export const PARAKEET_TDT_DECODER_FP32: ModelConstant<"transcription"> =
+  allModels[553];
+export const PARAKEET_TDT_ENCODER_FP32: ModelConstant<"transcription"> =
   allModels[554];
-export const PARAKEET_TDT_PARAKEET_CTC_0_6B_Q8_0_Q8_0: ModelConstant<"transcription"> =
-  allModels[555];
-export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q8_0_Q8_0: ModelConstant<"transcription"> =
+export const PARAKEET_TDT_PREPROCESSOR_FP32: ModelConstant<"transcription"> =
   allModels[556];
-export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q8_0_Q8_0: ModelConstant<"transcription"> =
+export const PARAKEET_TDT_VOCAB: ModelConstant<"transcription"> =
   allModels[557];
-export const PARAKEET_TDT_Q8_0: ModelConstant<"transcription"> = allModels[558];
-export const PARAKEET_TDT_F16: ModelConstant<"transcription"> = allModels[559];
-export const PARAKEET_TDT_Q4_0: ModelConstant<"transcription"> = allModels[560];
-export const PARAKEET_TDT_Q8_0_1: ModelConstant<"transcription"> =
+export const PARAKEET_CTC_FP32: ModelConstant<"transcription"> = allModels[558];
+export const PARAKEET_CTC_TOKENIZER: ModelConstant<"transcription"> =
+  allModels[560];
+export const PARAKEET_TDT_PARAKEET_CTC_0_6B_Q8_0_Q8_0: ModelConstant<"transcription"> =
   allModels[561];
-export const PARAKEET_TDT_DECODER_INT8: ModelConstant<"transcription"> =
+export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q8_0_Q8_0: ModelConstant<"transcription"> =
   allModels[562];
-export const PARAKEET_TDT_ENCODER_INT8: ModelConstant<"transcription"> =
+export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q8_0_Q8_0: ModelConstant<"transcription"> =
   allModels[563];
-export const PARAKEET_TDT_PREPROCESSOR_INT8: ModelConstant<"transcription"> =
-  allModels[564];
-export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32: ModelConstant<"speech"> =
-  allModels[565];
-export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32: ModelConstant<"speech"> =
+export const PARAKEET_TDT_Q8_0: ModelConstant<"transcription"> = allModels[564];
+export const PARAKEET_TDT_F16: ModelConstant<"transcription"> = allModels[565];
+export const PARAKEET_TDT_Q4_0: ModelConstant<"transcription"> = allModels[566];
+export const PARAKEET_TDT_Q8_0_1: ModelConstant<"transcription"> =
   allModels[567];
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16: ModelConstant<"speech"> =
+export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q4_0_Q4_0: ModelConstant<"transcription"> =
+  allModels[568];
+export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q4_0_Q4_0: ModelConstant<"transcription"> =
   allModels[569];
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4: ModelConstant<"speech"> =
+export const PARAKEET_TDT_Q4_0_1: ModelConstant<"transcription"> =
+  allModels[570];
+export const PARAKEET_TDT_DECODER_INT8: ModelConstant<"transcription"> =
   allModels[571];
-export const TTS_EN_ES_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
+export const PARAKEET_TDT_ENCODER_INT8: ModelConstant<"transcription"> =
+  allModels[572];
+export const PARAKEET_TDT_PREPROCESSOR_INT8: ModelConstant<"transcription"> =
   allModels[573];
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32: ModelConstant<"speech"> =
-  allModels[575];
-export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32: ModelConstant<"speech"> =
-  allModels[577];
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX: ModelConstant<"speech"> =
-  allModels[579];
-export const TTS_LATENT_DENOISER_SUPERTONIC_FP32: ModelConstant<"speech"> =
+export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32: ModelConstant<"speech"> =
+  allModels[574];
+export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32: ModelConstant<"speech"> =
+  allModels[576];
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16: ModelConstant<"speech"> =
+  allModels[578];
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4: ModelConstant<"speech"> =
   allModels[580];
-export const TTS_TEXT_ENCODER_SUPERTONIC_FP32: ModelConstant<"speech"> =
+export const TTS_EN_ES_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
   allModels[582];
-export const TTS_VOICE_DECODER_SUPERTONIC_FP32: ModelConstant<"speech"> =
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32: ModelConstant<"speech"> =
   allModels[584];
-export const TTS_TOKENIZER_SUPERTONIC: ModelConstant<"speech"> = allModels[586];
-export const TTS_VOICE_STYLE_SUPERTONIC: ModelConstant<"speech"> =
-  allModels[587];
-export const TTS_VOICE_STYLE_SUPERTONIC_1: ModelConstant<"speech"> =
+export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32: ModelConstant<"speech"> =
+  allModels[586];
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX: ModelConstant<"speech"> =
   allModels[588];
-export const TTS_VOICE_STYLE_SUPERTONIC_2: ModelConstant<"speech"> =
+export const TTS_LATENT_DENOISER_SUPERTONIC_FP32: ModelConstant<"speech"> =
   allModels[589];
-export const TTS_VOICE_STYLE_SUPERTONIC_3: ModelConstant<"speech"> =
-  allModels[590];
-export const TTS_VOICE_STYLE_SUPERTONIC_4: ModelConstant<"speech"> =
+export const TTS_TEXT_ENCODER_SUPERTONIC_FP32: ModelConstant<"speech"> =
   allModels[591];
-export const TTS_VOICE_STYLE_SUPERTONIC_5: ModelConstant<"speech"> =
-  allModels[592];
-export const TTS_VOICE_STYLE_SUPERTONIC_6: ModelConstant<"speech"> =
+export const TTS_VOICE_DECODER_SUPERTONIC_FP32: ModelConstant<"speech"> =
   allModels[593];
-export const TTS_VOICE_STYLE_SUPERTONIC_7: ModelConstant<"speech"> =
-  allModels[594];
-export const TTS_VOICE_STYLE_SUPERTONIC_8: ModelConstant<"speech"> =
-  allModels[595];
-export const TTS_VOICE_STYLE_SUPERTONIC_9: ModelConstant<"speech"> =
+export const TTS_TOKENIZER_SUPERTONIC: ModelConstant<"speech"> = allModels[595];
+export const TTS_VOICE_STYLE_SUPERTONIC: ModelConstant<"speech"> =
   allModels[596];
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_1: ModelConstant<"speech"> =
   allModels[597];
-export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<"speech"> = allModels[598];
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_2: ModelConstant<"speech"> =
+  allModels[598];
+export const TTS_VOICE_STYLE_SUPERTONIC_3: ModelConstant<"speech"> =
   allModels[599];
-export const TTS_T3_TURBO_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_4: ModelConstant<"speech"> =
   allModels[600];
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_5: ModelConstant<"speech"> =
   allModels[601];
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_6: ModelConstant<"speech"> =
   allModels[602];
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_7: ModelConstant<"speech"> =
   allModels[603];
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_8: ModelConstant<"speech"> =
   allModels[604];
-export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<"speech"> = allModels[605];
-export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<"speech"> = allModels[606];
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<"speech"> =
-  allModels[607];
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<"speech"> =
+export const TTS_VOICE_STYLE_SUPERTONIC_9: ModelConstant<"speech"> =
+  allModels[605];
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<"speech"> =
+  allModels[606];
+export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<"speech"> = allModels[607];
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<"speech"> =
   allModels[608];
-export const TTS_DENOISER_LAVASR_FP32: ModelConstant<"speech"> = allModels[609];
-export const TTS_ENHANCER_BACKBONE_LAVASR_FP32: ModelConstant<"speech"> =
+export const TTS_T3_TURBO_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
+  allModels[609];
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<"speech"> =
   allModels[610];
-export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32: ModelConstant<"speech"> =
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<"speech"> =
+  allModels[611];
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0: ModelConstant<"speech"> =
   allModels[612];
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0: ModelConstant<"speech"> =
+  allModels[613];
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<"speech"> =
   allModels[614];
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4: ModelConstant<"speech"> =
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<"speech"> =
+  allModels[615];
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<"speech"> =
   allModels[616];
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
+export const TTS_S3GEN_EN_CHATTERBOX_Q4_0: ModelConstant<"speech"> =
+  allModels[617];
+export const TTS_S3GEN_EN_CHATTERBOX_Q5_0: ModelConstant<"speech"> =
   allModels[618];
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED: ModelConstant<"speech"> =
+export const TTS_S3GEN_EN_CHATTERBOX_Q8_0: ModelConstant<"speech"> =
+  allModels[619];
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<"speech"> =
   allModels[620];
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32: ModelConstant<"speech"> =
-  allModels[622];
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0: ModelConstant<"speech"> =
+  allModels[621];
+export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<"speech"> = allModels[622];
+export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<"speech"> = allModels[623];
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<"speech"> =
   allModels[624];
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<"speech"> =
+  allModels[625];
+export const TTS_DENOISER_LAVASR_FP32: ModelConstant<"speech"> = allModels[626];
+export const TTS_ENHANCER_BACKBONE_LAVASR_FP32: ModelConstant<"speech"> =
+  allModels[627];
+export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32: ModelConstant<"speech"> =
+  allModels[629];
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
+  allModels[631];
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4: ModelConstant<"speech"> =
+  allModels[633];
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
+  allModels[635];
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED: ModelConstant<"speech"> =
+  allModels[637];
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32: ModelConstant<"speech"> =
+  allModels[639];
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
+  allModels[641];
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4: ModelConstant<"speech"> =
-  allModels[626];
+  allModels[643];
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
-  allModels[628];
+  allModels[645];
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED: ModelConstant<"speech"> =
-  allModels[630];
+  allModels[647];
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32: ModelConstant<"speech"> =
-  allModels[632];
+  allModels[649];
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
-  allModels[634];
+  allModels[651];
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4: ModelConstant<"speech"> =
-  allModels[636];
+  allModels[653];
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
-  allModels[638];
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED: ModelConstant<"speech"> =
-  allModels[640];
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32: ModelConstant<"speech"> =
-  allModels[642];
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
-  allModels[644];
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4: ModelConstant<"speech"> =
-  allModels[646];
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
-  allModels[648];
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED: ModelConstant<"speech"> =
-  allModels[650];
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32: ModelConstant<"speech"> =
-  allModels[652];
-export const TTS_TOKENIZER_EN_CHATTERBOX: ModelConstant<"speech"> =
-  allModels[654];
-export const TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[655];
-export const TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32: ModelConstant<"speech"> =
-  allModels[656];
-export const TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE: ModelConstant<"speech"> =
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED: ModelConstant<"speech"> =
   allModels[657];
-export const TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32: ModelConstant<"speech"> =
-  allModels[658];
-export const TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32: ModelConstant<"speech"> =
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32: ModelConstant<"speech"> =
   allModels[659];
-export const TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32: ModelConstant<"speech"> =
-  allModels[660];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE: ModelConstant<"speech"> =
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16: ModelConstant<"speech"> =
   allModels[661];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1: ModelConstant<"speech"> =
-  allModels[662];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2: ModelConstant<"speech"> =
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4: ModelConstant<"speech"> =
   allModels[663];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3: ModelConstant<"speech"> =
-  allModels[664];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4: ModelConstant<"speech"> =
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16: ModelConstant<"speech"> =
   allModels[665];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5: ModelConstant<"speech"> =
-  allModels[666];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6: ModelConstant<"speech"> =
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED: ModelConstant<"speech"> =
   allModels[667];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7: ModelConstant<"speech"> =
-  allModels[668];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8: ModelConstant<"speech"> =
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32: ModelConstant<"speech"> =
   allModels[669];
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9: ModelConstant<"speech"> =
-  allModels[670];
-export const TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32: ModelConstant<"speech"> =
+export const TTS_TOKENIZER_EN_CHATTERBOX: ModelConstant<"speech"> =
   allModels[671];
-export const TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[672];
-export const TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[673];
-export const TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE: ModelConstant<"speech"> =
   allModels[674];
-export const TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[675];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[676];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[677];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE: ModelConstant<"speech"> =
   allModels[678];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1: ModelConstant<"speech"> =
   allModels[679];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2: ModelConstant<"speech"> =
   allModels[680];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3: ModelConstant<"speech"> =
   allModels[681];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4: ModelConstant<"speech"> =
   allModels[682];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5: ModelConstant<"speech"> =
   allModels[683];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6: ModelConstant<"speech"> =
   allModels[684];
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9: ModelConstant<"speech"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7: ModelConstant<"speech"> =
   allModels[685];
-export const WHISPER_BASE_Q8_0: ModelConstant<"transcription"> = allModels[686];
-export const WHISPER_BASE_Q0F16: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8: ModelConstant<"speech"> =
+  allModels[686];
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9: ModelConstant<"speech"> =
   allModels[687];
-export const WHISPER_EN_BASE_Q8_0: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[688];
-export const WHISPER_EN_BASE_Q0F16: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[689];
-export const WHISPER_LARGE_V3_TURBO: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE: ModelConstant<"speech"> =
   allModels[690];
-export const WHISPER_SMALL_Q8_0: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE: ModelConstant<"speech"> =
   allModels[691];
-export const WHISPER_SMALL_Q0F16: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32: ModelConstant<"speech"> =
   allModels[692];
-export const WHISPER_EN_SMALL_Q8_0: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE: ModelConstant<"speech"> =
   allModels[693];
-export const WHISPER_EN_SMALL_Q0F16: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1: ModelConstant<"speech"> =
   allModels[694];
-export const WHISPER_TINY_Q8_0: ModelConstant<"transcription"> = allModels[695];
-export const WHISPER_TINY: ModelConstant<"transcription"> = allModels[696];
-export const WHISPER_EN_TINY_Q8_0: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2: ModelConstant<"speech"> =
+  allModels[695];
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3: ModelConstant<"speech"> =
+  allModels[696];
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4: ModelConstant<"speech"> =
   allModels[697];
-export const WHISPER_EN_TINY_Q0F16: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5: ModelConstant<"speech"> =
   allModels[698];
-export const VAD_SILERO_5_1_2: ModelConstant<"transcription"> = allModels[699];
-export const WHISPER_FRENCH_BASE_F16: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6: ModelConstant<"speech"> =
+  allModels[699];
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7: ModelConstant<"speech"> =
   allModels[700];
-export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8: ModelConstant<"speech"> =
   allModels[701];
-export const WHISPER_FRENCH_TINY_F16: ModelConstant<"transcription"> =
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9: ModelConstant<"speech"> =
   allModels[702];
-export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<"transcription"> =
-  allModels[703];
-export const WHISPER_GERMAN_BASE_F16: ModelConstant<"transcription"> =
+export const WHISPER_BASE_Q8_0: ModelConstant<"transcription"> = allModels[703];
+export const WHISPER_BASE_Q0F16: ModelConstant<"transcription"> =
   allModels[704];
-export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_EN_BASE_Q8_0: ModelConstant<"transcription"> =
   allModels[705];
-export const WHISPER_GERMAN_TINY_F16: ModelConstant<"transcription"> =
+export const WHISPER_EN_BASE_Q0F16: ModelConstant<"transcription"> =
   allModels[706];
-export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_LARGE_V3_TURBO: ModelConstant<"transcription"> =
   allModels[707];
-export const WHISPER_ITALIAN_BASE_F16: ModelConstant<"transcription"> =
+export const WHISPER_SMALL_Q8_0: ModelConstant<"transcription"> =
   allModels[708];
-export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_SMALL_Q0F16: ModelConstant<"transcription"> =
   allModels[709];
-export const WHISPER_ITALIAN_TINY_F16: ModelConstant<"transcription"> =
+export const WHISPER_EN_SMALL_Q8_0: ModelConstant<"transcription"> =
   allModels[710];
-export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_EN_SMALL_Q0F16: ModelConstant<"transcription"> =
   allModels[711];
-export const WHISPER_JAPANESE_BASE_F16: ModelConstant<"transcription"> =
-  allModels[712];
-export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<"transcription"> =
-  allModels[713];
-export const WHISPER_JAPANESE_TINY_F16: ModelConstant<"transcription"> =
+export const WHISPER_TINY_Q8_0: ModelConstant<"transcription"> = allModels[712];
+export const WHISPER_TINY: ModelConstant<"transcription"> = allModels[713];
+export const WHISPER_EN_TINY_Q8_0: ModelConstant<"transcription"> =
   allModels[714];
-export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_EN_TINY_Q0F16: ModelConstant<"transcription"> =
   allModels[715];
-export const WHISPER_NORWEGIAN_TINY: ModelConstant<"transcription"> =
-  allModels[716];
-export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<"transcription"> =
+export const VAD_SILERO_5_1_2: ModelConstant<"transcription"> = allModels[716];
+export const WHISPER_FRENCH_BASE_F16: ModelConstant<"transcription"> =
   allModels[717];
-export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<"transcription"> =
   allModels[718];
-export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<"transcription"> =
+export const WHISPER_FRENCH_TINY_F16: ModelConstant<"transcription"> =
   allModels[719];
-export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<"transcription"> =
   allModels[720];
-export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<"transcription"> =
+export const WHISPER_GERMAN_BASE_F16: ModelConstant<"transcription"> =
   allModels[721];
-export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<"transcription"> =
   allModels[722];
-export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<"transcription"> =
+export const WHISPER_GERMAN_TINY_F16: ModelConstant<"transcription"> =
   allModels[723];
-export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<"transcription"> =
   allModels[724];
-export const WHISPER_SPANISH_TINY_F16: ModelConstant<"transcription"> =
+export const WHISPER_ITALIAN_BASE_F16: ModelConstant<"transcription"> =
   allModels[725];
-export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<"transcription"> =
+export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<"transcription"> =
   allModels[726];
-export const WHISPER_Q8_0: ModelConstant<"transcription"> = allModels[727];
-export const WHISPER_Q8_0_1: ModelConstant<"transcription"> = allModels[728];
+export const WHISPER_ITALIAN_TINY_F16: ModelConstant<"transcription"> =
+  allModels[727];
+export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<"transcription"> =
+  allModels[728];
+export const WHISPER_JAPANESE_BASE_F16: ModelConstant<"transcription"> =
+  allModels[729];
+export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<"transcription"> =
+  allModels[730];
+export const WHISPER_JAPANESE_TINY_F16: ModelConstant<"transcription"> =
+  allModels[731];
+export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<"transcription"> =
+  allModels[732];
+export const WHISPER_NORWEGIAN_TINY: ModelConstant<"transcription"> =
+  allModels[733];
+export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<"transcription"> =
+  allModels[734];
+export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<"transcription"> =
+  allModels[735];
+export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<"transcription"> =
+  allModels[736];
+export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<"transcription"> =
+  allModels[737];
+export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<"transcription"> =
+  allModels[738];
+export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<"transcription"> =
+  allModels[739];
+export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<"transcription"> =
+  allModels[740];
+export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<"transcription"> =
+  allModels[741];
+export const WHISPER_SPANISH_TINY_F16: ModelConstant<"transcription"> =
+  allModels[742];
+export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<"transcription"> =
+  allModels[743];
+export const WHISPER_Q8_0: ModelConstant<"transcription"> = allModels[744];
+export const WHISPER_Q8_0_1: ModelConstant<"transcription"> = allModels[745];

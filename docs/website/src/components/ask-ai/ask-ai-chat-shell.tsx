@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { cn } from '@/lib/cn';
+import { AskAIShortcutHint } from './ask-ai-button';
 import { AskAIChatMessages } from './ask-ai-chat-messages';
 import { useAskAI } from './ask-ai-provider';
 import type { AskAIContextSnippet } from './types';
@@ -67,6 +68,16 @@ export function AskAIChatShell() {
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isPageBottom, setIsPageBottom] = useState(false);
+  // Whether the closed bar's input currently has focus. Drives the
+  // trailing-button morph (idle ✕ dismiss <-> active ↑ send).
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  // Session dismissal of the closed bar. Plain in-memory state on
+  // purpose: it survives client-side navigation (the shell lives in
+  // the persistent `(docs)` layout, so it never remounts between docs
+  // pages) but resets on a full page reload — exactly the "closed for
+  // the session, comes back on hard reload" behaviour we want. Do NOT
+  // persist this to storage or reloads would no longer restore the bar.
+  const [dismissed, setDismissed] = useState(false);
 
   const isModalOpen = askAI.modalState !== 'closed';
   const isExpanded = askAI.modalState === 'expanded';
@@ -136,7 +147,16 @@ export function AskAIChatShell() {
   // mid-open animation.
   // -------------------------------------------------------------
   useEffect(() => {
-    if (askAI.modalState === 'closed') return;
+    if (askAI.modalState === 'closed') {
+      // When the modal closes, actively drop focus from the input.
+      // Closing via Esc (or any path that leaves focus on the field)
+      // would otherwise keep `isInputFocused` true, pinning the
+      // trailing control on the active ↑ send state forever. Resetting
+      // here returns the closed bar to its idle ✕ dismiss state.
+      inputRef.current?.blur();
+      setIsInputFocused(false);
+      return;
+    }
     // requestAnimationFrame so the transition has started and the
     // input is interactable.
     const id = requestAnimationFrame(() =>
@@ -176,11 +196,26 @@ export function AskAIChatShell() {
     [askAI, chat],
   );
 
-  // The bar is hidden when the modal is open OR when the user has
-  // scrolled to the page bottom. We don't unmount the container in
-  // either case - the input must remain in the DOM so React can
-  // preserve its focus across the transition.
-  const barChromeHidden = isModalOpen || isPageBottom;
+  // The bar is hidden when the modal is open, when the user has
+  // scrolled to the page bottom, OR when it has been dismissed for the
+  // session. We don't unmount the container in any case - the input
+  // must remain in the DOM so React can preserve its focus across the
+  // transition, AND so the modal can still open from other triggers
+  // (⌘I, top-nav button, code-block "Ask AI", deep links) even after
+  // the closed bar was dismissed. Dismiss therefore only suppresses
+  // the *closed* bar; opening the modal always reveals the shell.
+  const barChromeHidden = isModalOpen || isPageBottom || dismissed;
+
+  // The trailing ✕ "dismiss" control replaces the send arrow only in
+  // the idle closed bar: not while the modal is open, not while a
+  // response is streaming, not while the field is focused, and not
+  // while there's a draft to send. Otherwise the slot stays a send /
+  // stop button (keep-arrow-with-draft was the chosen behaviour).
+  const showDismiss =
+    !isModalOpen &&
+    !chat.isStreaming &&
+    !isInputFocused &&
+    chat.input.trim().length === 0;
 
   return (
     <>
@@ -219,7 +254,26 @@ export function AskAIChatShell() {
         // grabbing focus while invisible.
         inert={!isModalOpen && barChromeHidden ? true : undefined}
         className={cn(
-          'fixed flex flex-col overflow-hidden rounded-2xl border bg-fd-popover text-fd-popover-foreground shadow-2xl',
+          'fixed flex flex-col rounded-2xl border text-fd-popover-foreground',
+          // Panel chrome (surface + outline + float shadow) is applied
+          // ONLY when the modal is open. When closed, the wrapper is
+          // fully transparent so the single visible element is the
+          // inner input pill below — the surrounding box becomes an
+          // invisible structural container that exists purely to drive
+          // the height (unroll) animation while the pill stays static.
+          // The chrome fades in alongside the unroll (see the
+          // background-color / border-color / box-shadow entries in the
+          // transition list below). Border WIDTH stays constant (1px)
+          // across states — only its color toggles — so there's no
+          // layout shift when the surface appears.
+          isModalOpen
+            ? 'border-fd-border bg-fd-popover shadow-2xl'
+            : 'border-transparent bg-transparent shadow-none',
+          // Clip the growing content to the rounded panel while open.
+          // When closed, stay `overflow-visible` so the pill's float
+          // shadow can extend past the (transparent) wrapper instead of
+          // being cropped by it.
+          isModalOpen ? 'overflow-hidden' : 'overflow-visible',
           // Stacking: when the modal is OPEN we sit above everything
           // (`z-50`), including the Fumadocs notebook mobile drawer
           // (which uses `z-40`). When the modal is CLOSED — i.e. only
@@ -228,7 +282,7 @@ export function AskAIChatShell() {
           // render on top of us; otherwise the bar covers the social
           // icons at the end of the menu.
           isModalOpen ? 'z-50' : 'z-30',
-          'transition-[height,inset,opacity,transform] duration-300 ease-out',
+          'transition-[height,inset,opacity,transform,background-color,border-color,box-shadow] duration-300 ease-out',
           // Geometry per state. Width is the same in `closed` and
           // `open` (the bar and modal align edge-to-edge - that's
           // the "bottom bar same width as modal" rule). `expanded`
@@ -236,16 +290,32 @@ export function AskAIChatShell() {
           isExpanded
             ? 'inset-4 h-auto w-auto translate-x-0'
             : cn(
-                'left-1/2 -translate-x-1/2',
+                // Span exactly the docs central column by pinning the
+                // bar/modal to that track's left and right edges. The
+                // insets are computed in global.css (see
+                // `--qvac-askai-left` / `--qvac-askai-right`); width then
+                // follows from them, so it always matches the column with
+                // no overflow risk.
+                'left-[var(--qvac-askai-left)]',
+                'right-[var(--qvac-askai-right)]',
                 'bottom-3 sm:bottom-4',
-                'w-[calc(100%-1rem)] sm:w-[min(100%-1.5rem,var(--fd-page-width,900px))]',
                 askAI.modalState === 'open'
-                  ? 'h-[min(85vh,720px)] max-md:h-[calc(100vh-1rem)] max-md:inset-x-2 max-md:bottom-2 max-md:top-2 max-md:w-auto'
+                  ? // Desktop: bottom-anchored panel capped at 85% of
+                    // the DYNAMIC viewport (`dvh`) so mobile browser
+                    // chrome never clips it. Mobile (`max-md`): pin all
+                    // four edges with explicit insets and let the
+                    // height fill the gap (`h-auto`).
+                    // With `interactiveWidget: resizes-content` the
+                    // layout viewport shrinks when the keyboard opens,
+                    // so `bottom-2` rides above it instead of being
+                    // hidden behind it.
+                    'h-[min(85dvh,720px)] max-md:inset-x-2 max-md:top-2 max-md:bottom-2 max-md:h-auto'
                   : 'h-14',
               ),
-          // Fade-out for page bottom (closed state only). The modal
-          // open path always has full opacity.
-          !isModalOpen && isPageBottom
+          // Fade-out for page bottom or session dismissal (closed state
+          // only). The modal open path always has full opacity, so the
+          // assistant can still be summoned from other triggers.
+          !isModalOpen && (isPageBottom || dismissed)
             ? 'pointer-events-none translate-y-4 opacity-0'
             : '',
         )}
@@ -346,14 +416,25 @@ export function AskAIChatShell() {
             'mt-auto flex flex-none items-center gap-2 px-3 py-2.5',
             // When modal is open we add a top border so the input
             // visually separates from the messages above. When
-            // closed there's nothing above, so no border.
-            isModalOpen ? 'border-t border-fd-border' : '',
+            // closed there's nothing above, so no border. On mobile
+            // the open modal reaches near the viewport edge, so pad
+            // the bottom by the iOS home-indicator safe area (never
+            // less than the default py) to keep the input tappable.
+            isModalOpen
+              ? 'border-t border-fd-border max-md:pb-[max(0.625rem,env(safe-area-inset-bottom))]'
+              : '',
           )}
         >
           <div
             className={cn(
               'flex flex-1 items-center gap-2 rounded-full border border-fd-border bg-fd-background px-3 py-1.5',
-              'transition-colors focus-within:border-fd-ring focus-within:ring-1 focus-within:ring-fd-ring',
+              'transition-[border-color,box-shadow] focus-within:border-fd-ring focus-within:ring-1 focus-within:ring-fd-ring',
+              // The pill carries the floating shadow ONLY when the panel
+              // chrome is hidden (closed bar), so the bottom bar still
+              // reads as a floating element on its own. Once the modal
+              // opens, the pill sits on the panel surface, so the shadow
+              // is dropped to avoid a shadow-on-shadow look.
+              !isModalOpen ? 'shadow-lg' : 'shadow-none',
             )}
           >
             <Sparkles
@@ -365,12 +446,26 @@ export function AskAIChatShell() {
               type="text"
               value={chat.input}
               onChange={(event) => chat.setInput(event.target.value)}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
               placeholder={isModalOpen ? 'Ask a follow-up…' : 'Ask AI a question…'}
               aria-label="Ask the AI assistant"
               className="min-w-0 flex-1 bg-transparent text-sm text-fd-popover-foreground placeholder:text-fd-muted-foreground focus:outline-none"
               disabled={chat.isStreaming}
             />
+            {/* `⌘ I` hint, trailing inside the pill like a search bar's
+                shortcut chip. Only meaningful as a trigger affordance,
+                so it's shown solely in the closed bar (the hotkey is
+                still wired globally in AskAIProvider). The chip itself
+                is desktop-only (`hidden md:inline-flex`). */}
+            {!isModalOpen ? <AskAIShortcutHint className="shrink-0" /> : null}
           </div>
+          {/* Trailing control — a single slot with three states:
+               1. streaming  → ◼ stop
+               2. idle bar    → ✕ dismiss (closed, blurred, empty draft)
+               3. otherwise   → ↑ send
+              The ✕ is a muted/secondary control so it doesn't read as a
+              primary action; ↑ keeps the filled-primary CTA styling. */}
           {chat.isStreaming ? (
             <button
               type="button"
@@ -379,6 +474,16 @@ export function AskAIChatShell() {
               className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-fd-border bg-fd-secondary text-fd-secondary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
             >
               <span aria-hidden="true" className="size-2.5 rounded-sm bg-current" />
+            </button>
+          ) : showDismiss ? (
+            <button
+              type="button"
+              onClick={() => setDismissed(true)}
+              aria-label="Dismiss the assistant bar for this session"
+              title="Dismiss for this session"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+            >
+              <X className="size-4" aria-hidden="true" />
             </button>
           ) : (
             <button

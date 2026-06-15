@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -24,6 +24,9 @@
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:integration": "brittle-bare test/integration/**/*.test.js",
+    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
+    "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
+    "test:benchmark:streaming": "brittle-bare test/benchmark/streaming-benchmark.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target tts_ggml_tests && bare-make install",

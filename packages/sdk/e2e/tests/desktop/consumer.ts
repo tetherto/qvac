@@ -42,6 +42,7 @@ import {
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED,
 } from "@qvac/sdk";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { collectTestDeps } from "../shared/collect-test-deps.js";
@@ -82,7 +83,9 @@ import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
 import { DesktopCancellationExecutor } from "./executors/cancellation-executor.js";
 
-const resources = new ResourceManager();
+const resources = new ResourceManager({
+  downloadTarget: "desktop",
+});
 const isMacosCi = process.platform === "darwin" && process.env["GITHUB_ACTIONS"] === "true";
 
 resources.define("llm", {
@@ -449,16 +452,31 @@ resources.define("upscaler-cpu", {
   },
 });
 
+function readJsonConfig(configPath: string) {
+  return JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+}
+
 // Exercises registryDownloadMaxRetries + registryStreamTimeoutMs end-to-end (see config-tests.ts).
 function ensureDesktopE2EConfig() {
-  if (!process.env["QVAC_CONFIG_PATH"]) {
-    process.env["QVAC_CONFIG_PATH"] = path.resolve(
-      process.cwd(),
-      "fixtures/qvac.config.e2e.json",
+  const fixturePath = path.resolve(process.cwd(), "fixtures/qvac.config.e2e.json");
+  const existingPath = process.env["QVAC_CONFIG_PATH"];
+  const fixtureConfig = readJsonConfig(fixturePath);
+  const existingConfig = existingPath ? readJsonConfig(existingPath) : {};
+  const mergedConfig = {
+    ...fixtureConfig,
+    ...existingConfig,
+  };
+  const generatedPath = path.resolve(process.cwd(), "qvac.config.e2e.generated.json");
+
+  fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`);
+  process.env["QVAC_CONFIG_PATH"] = generatedPath;
+
+  if (existingPath) {
+    console.log(
+      `📦 Desktop e2e config merged ${fixturePath} with ${existingPath}; using ${generatedPath}`,
     );
-    console.log(`📦 Desktop e2e config set to ${process.env["QVAC_CONFIG_PATH"]}`);
   } else {
-    console.log(`📦 Desktop e2e config: QVAC_CONFIG_PATH already set to ${process.env["QVAC_CONFIG_PATH"]}, skipping`);
+    console.log(`📦 Desktop e2e config set to ${generatedPath}`);
   }
 }
 

@@ -119,5 +119,5 @@ test('Supertonic MTL: voice + language together survive ttsParams round-trip', (
   t.is(params.steps, 6)
   t.is(params.speed, 1.1)
   t.is(params.seed, 13)
-  t.is(params.useGPU, false, 'supertonic stays CPU-only on the JS side')
+  t.is(params.useGPU, false, 'useGPU follows config.useGPU (false here)')
 })

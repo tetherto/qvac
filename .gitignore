@@ -1,4 +1,5 @@
 .githuman
+.DS_Store
 .env
 .npmrc
 .vscode
