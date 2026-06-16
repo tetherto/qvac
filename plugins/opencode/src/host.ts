@@ -44,6 +44,7 @@ const SHIM = process.env['QVAC_SHIM'] !== 'false'
 const READY_TIMEOUT_MS = Number(process.env['QVAC_READY_TIMEOUT_MS'] ?? 1_800_000)
 const DEBUG = process.env['QVAC_DEBUG'] === 'true' || process.env['QVAC_DEBUG'] === '1'
 const LOG_FILE = process.env['QVAC_HOST_LOG']
+let inferenceTail: Promise<void> = Promise.resolve()
 
 function toFile (msg: string): void {
   if (LOG_FILE === undefined) return
@@ -113,6 +114,24 @@ function buildForwardHeaders (req: IncomingMessage, bodyLength: number): Record<
   return headers
 }
 
+function isInferenceRequest (req: IncomingMessage): boolean {
+  return req.method === 'POST' && (req.url ?? '').includes('/chat/completions')
+}
+
+async function runSerializedInference (work: () => Promise<void>): Promise<void> {
+  const previous = inferenceTail
+  let release!: () => void
+  inferenceTail = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await previous.catch(() => {})
+  try {
+    await work()
+  } finally {
+    release()
+  }
+}
+
 function emitSSELine (line: string, split: ReturnType<typeof makeThinkSplitter>, res: ServerResponse): void {
   if (line.startsWith('data:')) {
     const payload = line.slice(5).trim()
@@ -170,6 +189,48 @@ function pipeResponse (upstreamRes: IncomingMessage, res: ServerResponse, reqSta
   })
 }
 
+async function forwardToUpstream (
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: Buffer,
+  reqStart: number,
+  upstream: Upstream
+): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const proxyReq = httpRequest(
+      {
+        hostname: upstream.hostname,
+        port: upstream.port,
+        path: req.url,
+        method: req.method,
+        headers: buildForwardHeaders(req, body.length)
+      },
+      (proxyRes) => {
+        trace(`<- ${proxyRes.statusCode ?? '?'} headers=${((Date.now() - reqStart) / 1000).toFixed(1)}s`)
+        proxyRes.on('end', resolve)
+        proxyRes.on('close', resolve)
+        proxyRes.on('error', resolve)
+        pipeResponse(proxyRes, res, reqStart)
+      }
+    )
+    proxyReq.on('error', (err) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: { message: `qvac serve proxy error: ${String(err)}` } }))
+      } else {
+        res.destroy()
+      }
+      resolve()
+    })
+    res.on('close', () => {
+      proxyReq.destroy()
+      resolve()
+    })
+    if (body.length > 0) proxyReq.write(body)
+    proxyReq.end()
+  })
+}
+
 function startProxy (getUpstream: () => Upstream | undefined, whenUpstream: Promise<void>): Promise<number> {
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     res.on('error', () => {})
@@ -220,30 +281,12 @@ async function handleRequest (
     return
   }
 
-  const proxyReq = httpRequest(
-    {
-      hostname: upstream.hostname,
-      port: upstream.port,
-      path: req.url,
-      method: req.method,
-      headers: buildForwardHeaders(req, body.length)
-    },
-    (proxyRes) => {
-      trace(`<- ${proxyRes.statusCode ?? '?'} headers=${((Date.now() - reqStart) / 1000).toFixed(1)}s`)
-      pipeResponse(proxyRes, res, reqStart)
-    }
-  )
-  proxyReq.on('error', (err) => {
-    if (!res.headersSent) {
-      res.writeHead(502, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: { message: `qvac serve proxy error: ${String(err)}` } }))
-    } else {
-      res.destroy()
-    }
-  })
-  res.on('close', () => proxyReq.destroy())
-  if (body.length > 0) proxyReq.write(body)
-  proxyReq.end()
+  if (isInferenceRequest(req)) {
+    await runSerializedInference(() => forwardToUpstream(req, res, body, reqStart, upstream))
+    return
+  }
+
+  await forwardToUpstream(req, res, body, reqStart, upstream)
 }
 
 async function main (): Promise<void> {

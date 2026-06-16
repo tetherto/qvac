@@ -39,7 +39,8 @@ function resolveRuntime (options: ResolvedOptions): string {
 
 // Spawn the host and resolve once it prints `QVAC_LISTENING {…}` — which it does
 // as soon as its proxy is up, before the (possibly slow) model download. Host
-// milestones and other stdout lines are mirrored onto OpenCode's stderr.
+// milestones stay hidden by default so they do not corrupt OpenCode's TUI; enable
+// `debug` / `QVAC_DEBUG=1` to mirror them onto stderr.
 function spawnHost (options: ResolvedOptions, projectDir: string): Promise<{ child: ReturnType<typeof spawn>, listening: HostListening }> {
   const hostPath = join(dirname(fileURLToPath(import.meta.url)), 'host.js')
   const runtime = resolveRuntime(options)
@@ -80,7 +81,7 @@ function spawnHost (options: ResolvedOptions, projectDir: string): Promise<{ chi
         resolve({ child, listening: info })
         return
       }
-      process.stderr.write(`[qvac] ${line}\n`)
+      if (options.debug) process.stderr.write(`[qvac] ${line}\n`)
     })
     child.on('exit', (code) => {
       if (settled) return

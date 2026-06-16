@@ -52,8 +52,10 @@
     "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
   },
   "dependencies": {
-    "@qvac/ai-sdk-provider": "^0.2.0",
-    "@qvac/cli": "^0.6.0"
+    "@ai-sdk/openai-compatible": "^2.0.49",
+    "@qvac/ai-sdk-provider": "^0.2.1",
+    "@qvac/cli": "^0.6.0",
+    "ai": "^6.0.202"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.16.0",
