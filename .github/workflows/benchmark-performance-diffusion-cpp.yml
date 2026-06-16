@@ -3,10 +3,6 @@ name: Benchmark Performance (Diffusion CPP)
 on:
   workflow_dispatch:
     inputs:
-      repository:
-        description: "Repository to benchmark"
-        required: false
-        type: string
       ref:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
@@ -68,14 +64,12 @@ jobs:
       - id: ctx
         shell: bash
         env:
-          INPUT_REPO: ${{ inputs.repository }}
           INPUT_REF: ${{ inputs.ref }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          repo="${INPUT_REPO:-$REPO}"
           ref="${INPUT_REF:-$REF_NAME}"
-          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "repository=$REPO" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
   prebuild:
