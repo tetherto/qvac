@@ -721,6 +721,11 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
+  } else if (needsOutputCapture) {
+    callback = [&](const std::string& token) {
+      oss << token;
+      prompt.outputCallback(token);
+    };
   }
 
   if (!state_->llmContext_->generateResponse(callback)) {
