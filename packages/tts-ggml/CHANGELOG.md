@@ -21,6 +21,10 @@ This release updates `@qvac/tts-ggml` to depend on `@qvac/infer-base` `^0.6.0`, 
 
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
 
+## Pull Requests
+
+- [#2636](https://github.com/tetherto/qvac/pull/2636) - bump @qvac/infer-base to ^0.6.0 for tts-ggml
+
 ## [0.3.0] - 2026-06-11
 
 ### Added
