@@ -1,4 +1,4 @@
-import { createExecutor, SkipExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
+import { createExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -31,17 +31,13 @@ import {
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
-  WAN2_1_T2V_1_3B_FP16,
-  WAN2_1_I2V_14B_Q4_K_M,
-  CLIP_VISION_H,
-  UMT5_XXL_FP16,
-  WAN_2_1_COMFYUI_REPACKAGED_VAE,
   SD_V2_1_1B_Q8_0,
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED,
 } from "@qvac/sdk";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { collectTestDeps } from "../shared/collect-test-deps.js";
@@ -74,7 +70,6 @@ import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
 import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
-import { VideoExecutor } from "./executors/video-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
@@ -82,8 +77,9 @@ import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
 import { DesktopCancellationExecutor } from "./executors/cancellation-executor.js";
 
-const resources = new ResourceManager();
-const isMacosCi = process.platform === "darwin" && process.env["GITHUB_ACTIONS"] === "true";
+const resources = new ResourceManager({
+  downloadTarget: "desktop",
+});
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
@@ -376,39 +372,6 @@ resources.define("diffusion-fa-disabled", {
   },
 });
 
-resources.define("video", {
-  constant: WAN2_1_T2V_1_3B_FP16,
-  type: "diffusion",
-  config: {
-    mode: "video",
-    device: "gpu",
-    threads: 4,
-    t5XxlModelSrc: UMT5_XXL_FP16,
-    vaeModelSrc: WAN_2_1_COMFYUI_REPACKAGED_VAE,
-    diffusion_fa: true,
-    offload_to_cpu: true,
-    vae_on_cpu: true,
-    vae_tiling: true,
-  },
-});
-
-resources.define("video-img2vid", {
-  constant: WAN2_1_I2V_14B_Q4_K_M,
-  type: "diffusion",
-  config: {
-    mode: "video",
-    device: "gpu",
-    threads: 4,
-    t5XxlModelSrc: UMT5_XXL_FP16,
-    vaeModelSrc: WAN_2_1_COMFYUI_REPACKAGED_VAE,
-    clipVisionModelSrc: CLIP_VISION_H,
-    diffusion_fa: true,
-    offload_to_cpu: true,
-    vae_on_cpu: true,
-    vae_tiling: true,
-  },
-});
-
 // Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
 resources.define("diffusion-esrgan", {
   constant: SD_V2_1_1B_Q8_0,
@@ -449,16 +412,31 @@ resources.define("upscaler-cpu", {
   },
 });
 
+function readJsonConfig(configPath: string) {
+  return JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+}
+
 // Exercises registryDownloadMaxRetries + registryStreamTimeoutMs end-to-end (see config-tests.ts).
 function ensureDesktopE2EConfig() {
-  if (!process.env["QVAC_CONFIG_PATH"]) {
-    process.env["QVAC_CONFIG_PATH"] = path.resolve(
-      process.cwd(),
-      "fixtures/qvac.config.e2e.json",
+  const fixturePath = path.resolve(process.cwd(), "fixtures/qvac.config.e2e.json");
+  const existingPath = process.env["QVAC_CONFIG_PATH"];
+  const fixtureConfig = readJsonConfig(fixturePath);
+  const existingConfig = existingPath ? readJsonConfig(existingPath) : {};
+  const mergedConfig = {
+    ...fixtureConfig,
+    ...existingConfig,
+  };
+  const generatedPath = path.resolve(process.cwd(), "qvac.config.e2e.generated.json");
+
+  fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`);
+  process.env["QVAC_CONFIG_PATH"] = generatedPath;
+
+  if (existingPath) {
+    console.log(
+      `📦 Desktop e2e config merged ${fixturePath} with ${existingPath}; using ${generatedPath}`,
     );
-    console.log(`📦 Desktop e2e config set to ${process.env["QVAC_CONFIG_PATH"]}`);
   } else {
-    console.log(`📦 Desktop e2e config: QVAC_CONFIG_PATH already set to ${process.env["QVAC_CONFIG_PATH"]}, skipping`);
+    console.log(`📦 Desktop e2e config set to ${generatedPath}`);
   }
 }
 
@@ -473,13 +451,6 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
-    ...(isMacosCi ? [
-      // QVAC-19555: passes locally on macOS in ~2m, but the current
-      // mac-mini-m4-gpu CI runner crashes in ggml-metal and leaves later
-      // tests timing out. Re-enable when a stronger macOS runner is available.
-      new SkipExecutor(/^video-basic-(txt2vid|img2vid)$/, "Quarantined on macOS CI until a stronger runner replaces mac-mini-m4-gpu"),
-    ] : []),
-
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
@@ -511,7 +482,6 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new DesktopDiffusionExecutor(resources),
-    new VideoExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),

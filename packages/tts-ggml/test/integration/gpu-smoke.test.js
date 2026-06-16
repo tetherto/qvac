@@ -31,6 +31,7 @@ const test = require('brittle')
 const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
+const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -122,6 +123,21 @@ function assertCpuBackend (t, engineTag, stats) {
   t.is(id, 0, `${engineTag}: useGPU:false must resolve to backendId=0 (CPU), got ${name}`)
 }
 
+// Records a perf row for a smoke run. Passes stats.backendDevice so
+// recordTtsStats tags the row CPU/GPU from the backend the engine actually
+// resolved to (0=CPU, 1=GPU) rather than what was requested — so a relaxed
+// GPU→CPU fallback is reported honestly. recordTtsStats also derives RTF from
+// wall time + audio duration when the addon doesn't report a positive
+// realTimeFactor.
+function recordSmoke (t, label, result, wallMs) {
+  const st = (result && result.data && result.data.stats) || {}
+  t.comment(recordTtsStats(
+    label,
+    { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || (result && result.data && result.data.durationMs), totalSamples: st.totalSamples, backendDevice: st.backendDevice },
+    { wallMs, sampleCount: result && result.data && result.data.sampleCount, model: label }
+  ))
+}
+
 test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
   if (platform === 'android') {
     t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes')
@@ -150,15 +166,18 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     useGPU: true
   })
   try {
+    const t0 = Date.now()
     const result = await runChatterboxTTS(
       model,
       { text: 'GPU smoke check.' },
       { minSamples: 5000 }
     )
+    const wallMs = Date.now() - t0
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox/GPU produced audio')
     assertGpuBackend(t, 'Chatterbox', result.data.stats)
+    recordSmoke(t, 'chatterbox gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }
@@ -193,15 +212,18 @@ test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     useGPU: true
   })
   try {
+    const t0 = Date.now()
     const result = await runSupertonicTTS(
       model,
       { text: 'GPU smoke check.' },
       { minSamples: 5000 }
     )
+    const wallMs = Date.now() - t0
     console.log(result.output)
     t.ok(result.passed, 'Supertonic/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Supertonic/GPU produced audio')
     assertGpuBackend(t, 'Supertonic', result.data.stats)
+    recordSmoke(t, 'supertonic gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }
@@ -239,15 +261,18 @@ test('Chatterbox CPU smoke - useGPU=false must run on the CPU backend', { timeou
     useGPU: false
   })
   try {
+    const t0 = Date.now()
     const result = await runChatterboxTTS(
       model,
       { text: 'CPU smoke check.' },
       { minSamples: 5000 }
     )
+    const wallMs = Date.now() - t0
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox/CPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox/CPU produced audio')
     assertCpuBackend(t, 'Chatterbox', result.data.stats)
+    recordSmoke(t, 'chatterbox cpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }
@@ -273,15 +298,18 @@ test('Supertonic CPU smoke - useGPU=false must run on the CPU backend', { timeou
     useGPU: false
   })
   try {
+    const t0 = Date.now()
     const result = await runSupertonicTTS(
       model,
       { text: 'CPU smoke check.' },
       { minSamples: 5000 }
     )
+    const wallMs = Date.now() - t0
     console.log(result.output)
     t.ok(result.passed, 'Supertonic/CPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Supertonic/CPU produced audio')
     assertCpuBackend(t, 'Supertonic', result.data.stats)
+    recordSmoke(t, 'supertonic cpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }

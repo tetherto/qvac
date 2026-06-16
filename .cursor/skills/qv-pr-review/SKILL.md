@@ -113,6 +113,7 @@ Copy this checklist and track progress:
 - [ ] 4. Read applicable cursor rules for the touched paths
 - [ ] 5. Validate PR title + body against the discovered format rules
 - [ ] 6. Review: CI + general + security + rules — classify findings by severity
+- [ ] 6b. Apply SDK plugin checklist (only if PR touches plugin paths)
 - [ ] 7a. Print risk overview in chat (high + medium + material lows)
 - [ ] 7b. Ask user which findings to include as inline comments (high+medium pre-selected, lows opt-in)
 - [ ] 8. Assemble inline comments + write payload (only the user-confirmed set)
@@ -249,6 +250,18 @@ Apply the review philosophy. Classify every finding as **High**, **Medium**, or 
 
 When verifying a suspected bug, attempt to construct a concrete reproduction (input → code path → observed behavior). If you cannot, classify it Medium at most and say so.
 
+### 6b. SDK plugin integration checklist (conditional)
+
+If the PR touches SDK plugin paths, also run the SDK plugin integration checklist. Trigger when any touched path (`files[].path` in `/tmp/pr-<num>.json`) matches:
+
+- `packages/sdk/server/bare/plugins/**`
+- `packages/sdk/schemas/plugin.ts` or `packages/sdk/schemas/load-model.ts`
+- a new `packages/sdk/schemas/*-config.ts`
+- `packages/sdk/server/worker.ts`
+- `packages/sdk/commands/bundle/**`
+
+If no path matches, skip this step entirely — no checklist output. When it triggers, read [`references/sdk-plugin-checklist.md`](./references/sdk-plugin-checklist.md) and follow its "How to apply" and "Output integration" sections. Real blocking gaps are classified by severity here in step 6 and flow into the normal inline-comment selection (step 7b); the cross-cutting summary renders as the `### SDK plugin checklist` block in the step 7a overview.
+
 ### 7a. Print risk overview in chat (BEFORE assembling comments)
 
 Print the overview below directly in chat. This is for the user — nothing is posted yet. After printing, pause for the selection step (7b). If the user pushes back on a finding, drop it before continuing.
@@ -313,6 +326,9 @@ Format:
 
 ### Verified (no action)
 <optional: short bullets for things you specifically checked and cleared, only if the reviewer might otherwise wonder>
+
+### SDK plugin checklist
+<only when step 6b triggered AND has gaps — omit entirely otherwise. Format per references/sdk-plugin-checklist.md "Output integration".>
 
 ---
 
@@ -432,6 +448,7 @@ https://github.com/tetherto/qvac/pull/<num>#pullrequestreview-<review_id>
 
 ## References
 
+- SDK plugin integration checklist (conditional, step 6b): [`references/sdk-plugin-checklist.md`](./references/sdk-plugin-checklist.md)
 - Per-pod team metadata + ownedPaths: `.github/teams/<pod>.json`
 - Per-pod cursor rules: `.cursor/rules/<pod>/`
 - PR templates: `.github/PULL_REQUEST_TEMPLATE/`

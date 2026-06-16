@@ -6,9 +6,12 @@ schemaType: HowTo
 
 ## Overview
 
-Video generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"` with `modelConfig.mode: "video"`. Then call `video()`, selecting the generation `mode`:
-- `txt2vid`: animate a scene from a text `prompt`.
-- `img2vid`: animate a first-frame `init_image` (a `Uint8Array`) guided by a motion `prompt`, with an optional denoise `strength` in `[0, 1]`. Load the model with `modelConfig.clipVisionModelSrc` set.
+Video generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"` with `modelConfig.mode: "video"`. Then call `video()` with a `mode` and `prompt`.
+
+Two generation modes are supported:
+
+- **`txt2vid`** — generate a video from a text prompt alone.
+- **`img2vid`** — animate a still image. Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) and optionally `strength` (0–1) to control how much the output diverges from the first frame. Requires a model loaded with `clipVisionModelSrc` (OpenCLIP ViT-H/14).
 
 `video()` returns `{ progressStream, outputs, stats }`. `outputs` resolves to one or more generated videos as `Uint8Array` buffers (AVI). Use `progressStream` to track generation step-by-step.
 
@@ -35,12 +38,12 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 Supported model families and their file layouts:
 
-- **WAN 2.1 T2V**: split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + VAE (via `vaeModelSrc`). Available constants: `WAN2_1_T2V_1_3B_FP16`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
-- **WAN 2.1 I2V** (for `img2vid`): split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + VAE (via `vaeModelSrc`) + CLIP vision encoder (via `clipVisionModelSrc`). Available constants: `WAN2_1_I2V_14B_Q4_K_M` (with its companion shard `WAN2_1_I2V_14B_Q4_K_M_1`), `CLIP_VISION_H`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
+- **WAN 2.1 T2V** (txt2vid): split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + VAE (via `vaeModelSrc`). Available constants: `WAN2_1_T2V_1_3B_FP16`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
+- **WAN 2.1 I2V** (img2vid): same split layout as T2V, plus an OpenCLIP ViT-H/14 vision encoder (via `clipVisionModelSrc`). Available constants: `WAN2_1_I2V_14B_Q4_K_M`, `CLIP_VISION_H`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
-## Example
+## Examples
 
 ### Text-to-video (WAN 2.1)
 
