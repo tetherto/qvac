@@ -31,5 +31,9 @@
     "package": "ai-sdk-provider",
     "path": "packages/ai-sdk-provider",
     "pkg_manager": "bun"
+  },
+  {
+    "package": "opencode-plugin",
+    "path": "plugins/opencode"
   }
 ]
