@@ -85,6 +85,15 @@ function mean (values) {
   return nums.reduce((sum, value) => sum + value, 0) / nums.length
 }
 
+// Population standard deviation, matching the desktop benchmark's stats().
+function stddev (values) {
+  const nums = values.filter(value => Number.isFinite(value))
+  if (nums.length === 0) return NaN
+  const avg = nums.reduce((sum, value) => sum + value, 0) / nums.length
+  const variance = nums.reduce((sum, value) => sum + (value - avg) ** 2, 0) / nums.length
+  return Math.sqrt(variance)
+}
+
 function normalizeBackend (platformName, useGPU, backendHint) {
   const hint = String(backendHint || '').toLowerCase()
   if (hint && hint !== 'mobile-accelerated' && hint !== 'gpu') return hint
@@ -150,7 +159,9 @@ function normalizeDesktopRecord (report, sourceFile) {
     quant,
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
+    version: report.addonVersion || '',
     meanRtf: Number(rtf.mean),
+    stddev: Number(rtf.stddev),
     p50: Number(rtf.p50),
     p95: Number(rtf.p95),
     wallMs: Number(wallMs.mean),
@@ -175,7 +186,9 @@ function normalizeManualRecord (record, sourceFile) {
     quant: record.quant || quantFromName(record.dirName) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    version: record.version || '',
     meanRtf: Number(record.meanRtf),
+    stddev: Number(record.stddev),
     p50: Number(record.p50),
     p95: Number(record.p95),
     wallMs: Number(record.wallMs),
@@ -255,7 +268,9 @@ function normalizeMobileRecords (report, sourceFile) {
       quant: values.quant || '',
       gpu: values.provider,
       backend: normalizeBackend(platformFamily, useGPU),
+      version: report.addonVersion || '',
       meanRtf: mean(values.rtf),
+      stddev: stddev(values.rtf),
       p50: percentile(values.rtf, 50),
       p95: percentile(values.rtf, 95),
       wallMs: mean(values.wallMs),
@@ -371,11 +386,34 @@ function buildCoverage (records) {
       .filter(Boolean)
   )
 
+  const versions = Array.from(new Set(
+    records.map(record => record.version).filter(Boolean)
+  )).sort()
+
   return {
     rowCount: records.length,
+    addonVersions: versions,
     gpuBackendsCovered: Array.from(gpuCoverage).sort(),
     missingBackends: SUPPORTED_GPU_BACKENDS.filter(backend => !gpuCoverage.has(backend))
   }
+}
+
+// Fastest config per device (lowest mean RTF). Mirrors the LLM suite's
+// "best configuration per device" block; for an ASR addon "best" means the
+// lowest real-time factor (fastest relative to audio length).
+function buildBestPerDevice (records) {
+  const byDevice = new Map()
+  for (const record of records) {
+    if (!Number.isFinite(record.meanRtf)) continue
+    const key = `${record.source}|${record.device}`
+    const existing = byDevice.get(key)
+    if (!existing || record.meanRtf < existing.meanRtf) {
+      byDevice.set(key, record)
+    }
+  }
+  return [...byDevice.values()].sort((left, right) => {
+    return `${left.source}|${left.device}`.localeCompare(`${right.source}|${right.device}`)
+  })
 }
 
 function renderMarkdown (records) {
@@ -384,12 +422,25 @@ function renderMarkdown (records) {
 
   lines.push('## Parakeet Performance Findings')
   lines.push('')
-  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | Mean RTF | P50 | P95 | Mean Wall (ms) | Notes |')
-  lines.push('|--------|--------|----------|-------|-------|-----|---------|----------|-----|-----|----------------|-------|')
+  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Notes |')
+  lines.push('|--------|--------|----------|-------|-------|-----|---------|----------|----------|-----|-----|----------------|-------|')
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+    )
+  }
+
+  lines.push('')
+  lines.push('### Best configuration per device')
+  lines.push('')
+  lines.push('Lowest mean RTF per device (fastest relative to audio length).')
+  lines.push('')
+  lines.push('| Source | Device | Model | Quant | GPU | Backend | Mean RTF | ± Stddev |')
+  lines.push('|--------|--------|-------|-------|-----|---------|----------|----------|')
+  for (const record of buildBestPerDevice(records)) {
+    lines.push(
+      `| ${record.source} | ${record.device} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} |`
     )
   }
 
@@ -397,6 +448,7 @@ function renderMarkdown (records) {
   lines.push('### Coverage')
   lines.push('')
   lines.push(`- Rows aggregated: ${coverage.rowCount}`)
+  lines.push(`- Addon version(s): ${coverage.addonVersions.join(', ') || 'unknown'}`)
   lines.push(`- GPU backends covered: ${coverage.gpuBackendsCovered.join(', ') || 'none'}`)
   lines.push(`- GPU backends still missing: ${coverage.missingBackends.join(', ') || 'none'}`)
 
@@ -415,10 +467,24 @@ function renderHtml (records) {
       record.gpu,
       record.backend,
       formatNumber(record.meanRtf),
+      formatNumber(record.stddev),
       formatNumber(record.p50),
       formatNumber(record.p95),
       formatMaybeInteger(record.wallMs),
       record.notes || ''
+    ].map(value => `<td>${escapeHtml(value)}</td>`).join('')
+  }).map(cells => `<tr>${cells}</tr>`).join('\n')
+
+  const bestRows = buildBestPerDevice(records).map(record => {
+    return [
+      record.source,
+      record.device,
+      record.model,
+      record.quant || '-',
+      record.gpu,
+      record.backend,
+      formatNumber(record.meanRtf),
+      formatNumber(record.stddev)
     ].map(value => `<td>${escapeHtml(value)}</td>`).join('')
   }).map(cells => `<tr>${cells}</tr>`).join('\n')
 
@@ -453,6 +519,7 @@ function renderHtml (records) {
     '        <th>GPU</th>',
     '        <th>Backend</th>',
     '        <th>Mean RTF</th>',
+    '        <th>± Stddev</th>',
     '        <th>P50</th>',
     '        <th>P95</th>',
     '        <th>Mean Wall (ms)</th>',
@@ -463,9 +530,29 @@ function renderHtml (records) {
     rows,
     '    </tbody>',
     '  </table>',
+    '  <h2>Best configuration per device</h2>',
+    '  <p>Lowest mean RTF per device (fastest relative to audio length).</p>',
+    '  <table>',
+    '    <thead>',
+    '      <tr>',
+    '        <th>Source</th>',
+    '        <th>Device</th>',
+    '        <th>Model</th>',
+    '        <th>Quant</th>',
+    '        <th>GPU</th>',
+    '        <th>Backend</th>',
+    '        <th>Mean RTF</th>',
+    '        <th>± Stddev</th>',
+    '      </tr>',
+    '    </thead>',
+    '    <tbody>',
+    bestRows,
+    '    </tbody>',
+    '  </table>',
     '  <h2>Coverage</h2>',
     '  <ul>',
     `    <li>Rows aggregated: <code>${escapeHtml(String(coverage.rowCount))}</code></li>`,
+    `    <li>Addon version(s): <code>${escapeHtml(coverage.addonVersions.join(', ') || 'unknown')}</code></li>`,
     `    <li>GPU backends covered: <code>${escapeHtml(coverage.gpuBackendsCovered.join(', ') || 'none')}</code></li>`,
     `    <li>GPU backends still missing: <code>${escapeHtml(coverage.missingBackends.join(', ') || 'none')}</code></li>`,
     '  </ul>',

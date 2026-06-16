@@ -176,6 +176,19 @@ function getTimeMs () {
   return sec * 1000 + nsec / 1e6
 }
 
+// Addon version stamped into every artifact so the consolidated report can
+// label which build produced the numbers (matches the version-stamping the
+// LLM benchmark suite does). Read from package.json via bare-fs because bare
+// does not support require()-ing JSON.
+function getAddonVersion () {
+  try {
+    const pkgPath = path.resolve(__dirname, '../../package.json')
+    return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || ''
+  } catch (_) {
+    return ''
+  }
+}
+
 function percentile (sorted, p) {
   const idx = (p / 100) * (sorted.length - 1)
   const lo = Math.floor(idx)
@@ -402,6 +415,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       platformName,
       arch: archName || '',
       isMobile,
+      addonVersion: getAddonVersion(),
       model: {
         type: benchmarkSettings.modelType,
         quant: benchmarkSettings.resolvedQuant,
@@ -456,6 +470,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       platform,
       platformName,
       arch: archName || '',
+      addonVersion: getAddonVersion(),
       modelType: benchmarkSettings.modelType,
       quant: benchmarkSettings.resolvedQuant,
       useGPU: benchmarkSettings.useGPU,
