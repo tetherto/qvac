@@ -173,7 +173,14 @@ jobs:
           hash-files-glob: .github/workflows/integration-test-transcription-parakeet.yml
           enable-cross-os: 'false'
 
-      - name: Download Parakeet GGUFs from QVAC registry (q8_0)
+      # Stage both quantisations the RTF benchmark matrix sweeps:
+      #   q8_0 (2026-05-11 prefix) — desktop default, best WER per byte.
+      #   q4_0 (2026-05-27 prefix) — the mobile-shippable quant, benchmarked
+      #     on desktop too so the perf report can compare quants side by side.
+      # The recursive --include grabs whichever q4_0 builds the registry
+      # publishes (tdt / eou / sortformer today); a model type without a
+      # published q4_0 is simply absent and its matrix entry no-ops.
+      - name: Download Parakeet GGUFs from QVAC registry (q8_0 + q4_0)
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
@@ -182,6 +189,8 @@ jobs:
           mkdir -p models
           aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/ models/ \
             --recursive --exclude "*" --include "*.q8_0.gguf"
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/ models/ \
+            --recursive --exclude "*" --include "*.q4_0.gguf"
           aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf models/
           ls -lh models/
 
@@ -221,10 +230,14 @@ jobs:
           GITHUB_WORKFLOW: ${{ github.workflow }}
         run: |
           set -euo pipefail
+          # Quant sweep: q8_0 for all four model types; q4_0 for the three
+          # types the registry publishes a q4_0 build for (tdt / eou /
+          # sortformer — there is no ctc q4_0). CPU-only runners run the CPU
+          # legs; GPU runners additionally run the Vulkan GPU legs.
           if [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","useGPU":false},{"modelType":"ctc","useGPU":false},{"modelType":"eou","useGPU":false},{"modelType":"sortformer","useGPU":false}]'
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false}]'
           else
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","useGPU":false},{"modelType":"ctc","useGPU":false},{"modelType":"eou","useGPU":false},{"modelType":"sortformer","useGPU":false},{"modelType":"tdt","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","useGPU":true,"backendHint":"vulkan"}]'
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false},{"modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]'
           fi
           node scripts/run-rtf-benchmark-matrix.js
 
@@ -241,7 +254,14 @@ jobs:
           set -euo pipefail
           results_dir="benchmarks/results"
           mkdir -p "$results_dir"
-          rtf_count=$(find "$results_dir" -maxdepth 1 -type f -name 'rtf-benchmark-*.json' | wc -l)
+          # Count via a bash glob rather than `find`: on the Windows runner
+          # `find` resolves to C:\Windows\System32\find.exe (a text-search
+          # tool), which rejects the POSIX args and exits 2 — failing the step
+          # under `set -o pipefail` even though the artifacts exist. nullglob
+          # makes the array empty (not a literal pattern) when nothing matches.
+          shopt -s nullglob
+          rtf_files=("$results_dir"/rtf-benchmark-*.json)
+          rtf_count=${#rtf_files[@]}
           echo "rtf-benchmark-*.json produced: $rtf_count"
           ls -la "$results_dir" || true
           if [ "$rtf_count" -eq 0 ]; then
