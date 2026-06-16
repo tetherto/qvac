@@ -1,0 +1,54 @@
+{
+  "name": "@qvac/ci",
+  "version": "0.1.0",
+  "description": "CI utilities for the QVAC monorepo",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./main.js",
+  "bin": {
+    "qvac-ci": "./main.js"
+  },
+  "keywords": [
+    "tether",
+    "ci",
+    "qvac"
+  ],
+  "files": [
+    "main.js",
+    "lib/**/*",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:unit": "brittle-node test/unit/*.test.js test/unit/**/*.test.js",
+    "test": "npm run test:unit",
+    "audit": "npm audit --audit-level=high"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-ci"
+  },
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-ci#readme",
+  "dependencies": {
+    "@octokit/auth-app": "^8.2.0",
+    "@octokit/rest": "^22.0.1",
+    "paparam": "^1.10.1"
+  },
+  "devDependencies": {
+    "brittle": "^3.10.1",
+    "standard": "17.1.0"
+  }
+}

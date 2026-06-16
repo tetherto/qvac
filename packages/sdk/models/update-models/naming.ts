@@ -139,6 +139,8 @@ function generateBaseName(input: BaseNameInput): string {
   switch (addon) {
     case "whisper":
       return generateWhisperName(input);
+    case "bci":
+      return generateBciName(input);
     case "vad":
       return generateVadName(input);
     case "nmt":
@@ -213,6 +215,15 @@ function generateWhisperName({
   if (fileQuant) nameParts.push(fileQuant);
 
   return `WHISPER_${nameParts.map(cleanPart).join("_")}`;
+}
+
+function generateBciName({ filename, quantization }: BaseNameInput): string {
+  // Strip the engine/format prefix and a leading "BCI" token so role names
+  // like "bci-embedder.bin" / "ggml-bci-windowed.bin" become EMBEDDER /
+  // WINDOWED before we re-prefix with BCI_.
+  const role = cleanPart(filename.replace(/\.\w+$/, "")).replace(/^BCI_?/, "");
+  const nameParts = [role, quantization].filter((p) => p && p !== "");
+  return `BCI_${nameParts.map(cleanPart).join("_")}`;
 }
 
 function generateVadName({

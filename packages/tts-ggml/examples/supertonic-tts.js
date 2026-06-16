@@ -29,11 +29,11 @@
  * ONNX bundle into a single .gguf via
  * scripts/convert-supertonic2-to-gguf.py --arch supertonic.
  *
- * NOTE: Supertonic gained GPU support in tts-cpp@2026-06-05 (QVAC-18605
- * Vulkan/Metal optimisations + QVAC-19254 Adreno OpenCL sched). Pass
- * useGPU=true on GPU-capable hosts to engage Metal / Vulkan / CUDA /
- * Adreno-OpenCL via the tts-cpp init_gpu_backend tier policy; this
- * example keeps useGPU=false so it runs identically everywhere.
+ * NOTE: Supertonic supports GPU on capable hosts (Metal on Apple,
+ * Vulkan/CUDA on desktop) via tts-cpp@2026-06-05; opt in with
+ * config: { useGPU: true }.  On Android it is forced to CPU at the engine
+ * boundary (Adreno Vulkan/OpenCL is not yet stable).  This example keeps
+ * useGPU=false so it runs identically everywhere.
  */
 
 const fs = require('bare-fs')

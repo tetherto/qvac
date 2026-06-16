@@ -105,8 +105,7 @@ const ZOD_PATH_TO_CODE: Record<string, string> = {
   voice: 'missing_voice',
   mask: 'mask_not_supported',
   size: 'invalid_size',
-  seconds: 'invalid_seconds',
-  input_reference: 'unsupported_param'
+  seconds: 'invalid_seconds'
 }
 
 function headFromInstancePath (instancePath: string | undefined): string {

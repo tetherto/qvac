@@ -173,6 +173,67 @@ test("groupCompanionSets: bergamot model without companions gets no set", (t) =>
   t.absent(result[0]!.isCompanionOnly);
 });
 
+// --- BCI companion detection ---
+
+test("groupCompanionSets: bci windowed + embedder (2-file set)", (t) => {
+  const dir = "qvac_models_compiled/bci-whispercpp/2026-05-07/";
+  const windowed = makeModel({
+    registryPath: `${dir}ggml-bci-windowed.bin`,
+    registrySource: "s3",
+    addon: "bci",
+    engine: "bci-whispercpp-transcription",
+  });
+  const embedder = makeModel({
+    registryPath: `${dir}bci-embedder.bin`,
+    registrySource: "s3",
+    addon: "bci",
+    engine: "bci-whispercpp-transcription",
+  });
+
+  const result = groupCompanionSets([windowed, embedder]);
+
+  t.ok(result[0]!.companionSet, "primary has companionSet");
+  t.is(result[0]!.companionSet!.primaryKey, "modelPath");
+  t.is(result[0]!.companionSet!.files.length, 2);
+  t.is(result[0]!.companionSet!.files[0]!.primary, true);
+  t.is(result[0]!.companionSet!.files[0]!.key, "modelPath");
+  t.is(result[0]!.companionSet!.files[0]!.targetName, "ggml-bci-windowed.bin");
+  t.is(result[0]!.companionSet!.files[1]!.key, "embedderPath");
+  t.is(result[0]!.companionSet!.files[1]!.targetName, "bci-embedder.bin");
+  t.absent(result[0]!.isCompanionOnly);
+  t.is(result[1]!.isCompanionOnly, true);
+});
+
+test("groupCompanionSets: bci windowed without embedder gets no set", (t) => {
+  const windowed = makeModel({
+    registryPath:
+      "qvac_models_compiled/bci-whispercpp/2026-05-07/ggml-bci-windowed.bin",
+    registrySource: "s3",
+  });
+
+  const result = groupCompanionSets([windowed]);
+
+  t.absent(result[0]!.companionSet);
+  t.absent(result[0]!.isCompanionOnly);
+});
+
+test("groupCompanionSets: bci cross-source not paired", (t) => {
+  const dir = "qvac_models_compiled/bci-whispercpp/2026-05-07/";
+  const windowed = makeModel({
+    registryPath: `${dir}ggml-bci-windowed.bin`,
+    registrySource: "s3",
+  });
+  const embedder = makeModel({
+    registryPath: `${dir}bci-embedder.bin`,
+    registrySource: "github",
+  });
+
+  const result = groupCompanionSets([windowed, embedder]);
+
+  t.absent(result[0]!.companionSet);
+  t.absent(result[1]!.isCompanionOnly);
+});
+
 test("groupCompanionSets: bergamot cross-source not paired", (t) => {
   const dir = "bergamot/bergamot-enfr/2025-01-01/";
   const model = makeModel({

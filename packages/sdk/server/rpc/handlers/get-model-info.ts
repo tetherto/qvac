@@ -52,6 +52,7 @@ export async function handleGetModelInfo(
         ? await handleCompanionSetModel(
             catalogEntry.companionSet,
             catalogEntry.registryPath,
+            catalogEntry.addon,
           )
         : await handleSingleFileModel(
             catalogEntry.registryPath,
@@ -141,6 +142,7 @@ async function handleShardedModel(
 async function handleCompanionSetModel(
   companionSet: NonNullable<RegistryItem["companionSet"]>,
   primaryRegistryPath: string,
+  addon: RegistryItem["addon"],
 ): Promise<CacheStatusResult> {
   const { setKey, primaryKey, files } = companionSet;
   const baseCache = getModelsCacheDir();
@@ -172,7 +174,7 @@ async function handleCompanionSetModel(
       fileEntries, legacyPaths, primaryKey,
     );
     if (legacyResult.isCached) return legacyResult;
-  } else {
+  } else if (addon === "nmt") {
     // Legacy flat-cache compatibility for Bergamot-style companion sets.
     // This is valid only for families whose runtime still works with explicit
     // per-file absolute paths; it is not a generic rule for all companion sets.

@@ -8,7 +8,9 @@
   },
   {
     "package": "cli",
-    "path": "packages/cli"
+    "path": "packages/cli",
+    "sdk_sources": ["workspace"],
+    "sdk_sources_release": ["workspace", "published"]
   },
   {
     "package": "rag",
@@ -17,7 +19,8 @@
   },
   {
     "package": "logging",
-    "path": "packages/logging"
+    "path": "packages/logging",
+    "needs_bare": true
   },
   {
     "package": "error",

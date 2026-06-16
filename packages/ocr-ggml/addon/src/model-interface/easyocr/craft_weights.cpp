@@ -10,6 +10,7 @@
 #include "ggml-backend.h"
 #include "ggml.h"
 #include "gguf_loader.hpp"
+#include "kernel_precision.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // BatchNorm fold loops iterate over raw tensor byte buffers with pointer
@@ -133,6 +134,11 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     return;
   }
 
+  // Resolve the backend-aware 1x1-conv strategy once, here at load time
+  // (mirrors the F16 kernel decision below): mul_mat on GPU, conv_2d on CPU,
+  // overridable via OCR_GGML_CONV1X1_{MULMAT,CONV2D}.
+  conv1x1_mulmat_ = ocr_conv1x1_mulmat_use(backend);
+
   // --- Step 1: declare every destination tensor in our own ctx --------------
   // We need 2 tensors per conv (W + b) and a small headroom margin.
   ggml_init_params ctx_params{
@@ -146,6 +152,14 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     err_ = "ggml_init failed for weights ctx";
     return;
   }
+
+  // Conv kernel storage type (F16 on fast-F16 backends, else F32; the env
+  // overrides force one way); bias always stays F32.
+  const ggml_type kernel_type =
+      ocr_kernels_use_f16(
+          backend, "OCR_GGML_CRAFT_KERNEL_F32", "OCR_GGML_CRAFT_KERNEL_F16")
+          ? GGML_TYPE_F16
+          : GGML_TYPE_F32;
 
   for (const auto& d : kConvInventory) {
     auto* w_src = loader.get_tensor(std::string(d.conv) + ".weight");
@@ -162,7 +176,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     const int64_t ic = w_src->ne[2];
     const int64_t oc = w_src->ne[3];
 
-    auto* w_dst = ggml_new_tensor_4d(ctx_, GGML_TYPE_F32, kw, kh, ic, oc);
+    auto* w_dst = ggml_new_tensor_4d(ctx_, kernel_type, kw, kh, ic, oc);
     ggml_set_name(w_dst, (std::string(d.conv) + ".W").c_str());
     w_[d.conv] = w_dst;
 
@@ -270,8 +284,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
       }
     }
 
-    ggml_backend_tensor_set(
-        w_[conv_path], w_folded.data(), 0, ggml_nbytes(w_[conv_path]));
+    ocr_upload_kernel(w_[conv_path], w_folded);
     ggml_backend_tensor_set(
         b_[conv_path], b_folded.data(), 0, ggml_nbytes(b_[conv_path]));
   }
