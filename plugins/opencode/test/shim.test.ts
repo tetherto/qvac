@@ -46,7 +46,6 @@ test('think splitter routes inner text to reasoning and strips tags', () => {
 
 test('think splitter handles a tag split across chunk boundaries', () => {
   const split = makeThinkSplitter()
-  // The `<think>` open tag is fed across three chunks.
   const a = split('before <thi')
   assert.equal(a.content, 'before ')
   assert.equal(a.reasoning, '')
@@ -56,6 +55,22 @@ test('think splitter handles a tag split across chunk boundaries', () => {
   const c = split(' more</think>tail')
   assert.equal(c.reasoning, ' more')
   assert.equal(c.content, 'tail')
+})
+
+test('think splitter flushes a final partial tag as content', () => {
+  const split = makeThinkSplitter()
+  const out = split('answer <thi')
+  assert.equal(out.content, 'answer ')
+  assert.equal(out.reasoning, '')
+  assert.deepEqual(split.flush(), { content: '<thi', reasoning: '' })
+})
+
+test('think splitter flushes unfinished reasoning at stream end', () => {
+  const split = makeThinkSplitter()
+  const out = split('<think>reasoning')
+  assert.equal(out.content, '')
+  assert.equal(out.reasoning, 'reasoning')
+  assert.deepEqual(split.flush(), { content: '', reasoning: '' })
 })
 
 test('transformSSEChunk emits a reasoning chunk then a content chunk', () => {

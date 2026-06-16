@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { InvalidOptionError } from '../src/errors.ts'
+import { resolveManagedServeHostConfig } from '../src/managed-serve-config.ts'
 import {
   DEFAULT_OPTIONS,
   hostEnv,
@@ -86,4 +87,27 @@ test('hostEnv carries the resolved model-loading subset as strings', () => {
   assert.equal(env['QVAC_CTX_SIZE'], '32768')
   assert.equal(env['QVAC_TOOLS'], 'true')
   assert.equal(env['QVAC_SHIM'], 'false')
+})
+
+test('resolveManagedServeHostConfig is derived from the host env', () => {
+  const config = resolveManagedServeHostConfig({
+    QVAC_MODEL: 'qwen3.5-4b',
+    QVAC_CTX_SIZE: '8192',
+    QVAC_REASONING_BUDGET: '0',
+    QVAC_TOOLS: 'false',
+    QVAC_SHIM: 'false',
+    QVAC_DEBUG: '1',
+    QVAC_READY_TIMEOUT_MS: '1234',
+    QVAC_UPSTREAM_TIMEOUT_MS: '5678',
+    QVAC_HOST_LOG: '/tmp/qvac-host.log'
+  })
+  assert.equal(config.modelId, 'qwen3.5-4b')
+  assert.equal(config.ctxSize, 8192)
+  assert.equal(config.reasoningBudget, 0)
+  assert.equal(config.tools, false)
+  assert.equal(config.openAICompatTransforms, false)
+  assert.equal(config.debug, true)
+  assert.equal(config.readyTimeoutMs, 1234)
+  assert.equal(config.upstreamTimeoutMs, 5678)
+  assert.equal(config.logFile, '/tmp/qvac-host.log')
 })

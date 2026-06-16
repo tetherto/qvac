@@ -42,7 +42,7 @@ function resolveRuntime (options: ResolvedOptions): string {
 // milestones stay hidden by default so they do not corrupt OpenCode's TUI; enable
 // `debug` / `QVAC_DEBUG=1` to mirror them onto stderr.
 function spawnHost (options: ResolvedOptions, projectDir: string): Promise<{ child: ReturnType<typeof spawn>, listening: HostListening }> {
-  const hostPath = join(dirname(fileURLToPath(import.meta.url)), 'host.js')
+  const hostPath = join(dirname(fileURLToPath(import.meta.url)), 'managed-serve-host.js')
   const runtime = resolveRuntime(options)
 
   let child: ReturnType<typeof spawn>
@@ -131,8 +131,7 @@ function injectProvider (cfg: Config, listening: HostListening, options: Resolve
   // opencode.json, so it never leaks into other projects.
   if (options.setDefaultModel) {
     const id = `qvac/${listening.modelId}`
-    cfg.model = id
-    // Preserve an explicit user small_model; otherwise keep titles local.
+    cfg.model ??= id
     cfg.small_model ??= id
   }
 }

@@ -71,7 +71,10 @@ export interface SplitResult {
   readonly reasoning: string
 }
 
-export type ThinkSplitter = (input: string) => SplitResult
+export interface ThinkSplitter {
+  (input: string): SplitResult
+  flush: () => SplitResult
+}
 
 // Stateful splitter: feed it successive content deltas and it returns the
 // portion that is answer `content` vs. reasoning (text inside `<think>` tags,
@@ -79,7 +82,7 @@ export type ThinkSplitter = (input: string) => SplitResult
 export function makeThinkSplitter (): ThinkSplitter {
   let inThink = false
   let carry = ''
-  return function split (input: string): SplitResult {
+  const split = function split (input: string): SplitResult {
     let text = carry + input
     carry = ''
     let content = ''
@@ -113,6 +116,12 @@ export function makeThinkSplitter (): ThinkSplitter {
     }
     return { content, reasoning }
   }
+  split.flush = (): SplitResult => {
+    const text = carry
+    carry = ''
+    return inThink ? { content: '', reasoning: text } : { content: text, reasoning: '' }
+  }
+  return split
 }
 
 interface SSEDelta {
