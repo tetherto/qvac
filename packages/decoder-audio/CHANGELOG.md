@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+This release updates `@qvac/decoder-audio` to depend on `@qvac/infer-base` `^0.6.0`, keeping the decoder aligned with the current inference base used across the addon packages. There are no changes to `FFmpegDecoder`'s public API or behavior.
+
+## Changed
+
+### Updated `@qvac/infer-base` to `^0.6.0`
+
+The runtime dependency on `@qvac/infer-base` has been bumped from `^0.4.0` to `^0.6.0` so the decoder tracks the latest inference base shared across the inference addons.
+
 ## [0.5.0]
 
 This release slims the runtime dependency tree of `@qvac/decoder-audio`. Packages that were never required at runtime have been removed or moved to dev dependencies, so consumers no longer pull them into their install trees. There are no changes to `FFmpegDecoder`'s public API or behavior.
