@@ -13,6 +13,10 @@ This release updates `@qvac/transcription-whispercpp` to depend on `@qvac/infer-
 
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
 
+## Pull Requests
+
+- [#2638](https://github.com/tetherto/qvac/pull/2638) - bump @qvac/infer-base to ^0.6.0 for transcription-whispercpp
+
 ## [0.9.0]
 
 ### Added
