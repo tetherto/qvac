@@ -211,9 +211,6 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Install bare runtime
-        run: npm install -g --force bare
-
       - name: Install addon dependencies
         working-directory: packages/embed-llamacpp
         run: npm install
@@ -263,7 +260,7 @@ jobs:
         run: |
           ARGS=(--addon-source local --repeats "${REPEATS:-5}")
           if [ -n "${MODELS:-}" ]; then ARGS+=(--models "$MODELS"); fi
-          bare ./embed-parameter-sweep.js "${ARGS[@]}"
+          npx --yes bare ./embed-parameter-sweep.js "${ARGS[@]}"
 
       # Stamp the desktop device name (incl. detected GPU) into the results so
       # the renderer shows it even on a later summarize-only re-render, when this
