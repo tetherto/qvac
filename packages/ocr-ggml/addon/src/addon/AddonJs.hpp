@@ -123,11 +123,11 @@ getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
   return path.as<std::string>(env);
 }
 
-// Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal'). Default keeps
-// CPU inference; 'vulkan' (Linux/Windows/Android) and 'metal' (Apple) request a
-// matching GPU with transparent CPU fallback (see OcrBackendSelection).
-// Extracted from createInstance to keep that factory's cognitive complexity
-// under the clang-tidy threshold.
+// Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal' | 'opencl').
+// Default keeps CPU inference; 'vulkan' (Linux/Windows/Android), 'metal'
+// (Apple) and 'opencl' (Android/Adreno) request a matching GPU with transparent
+// CPU fallback (see OcrBackendSelection). Extracted from createInstance to keep
+// that factory's cognitive complexity under the clang-tidy threshold.
 void applyBackendDevice(
     js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
     OcrConfig& config) {
@@ -142,12 +142,14 @@ void applyBackendDevice(
     config.backendDevice = BackendDevice::VULKAN;
   } else if (backendDevice == "metal") {
     config.backendDevice = BackendDevice::METAL;
+  } else if (backendDevice == "opencl") {
+    config.backendDevice = BackendDevice::OPENCL;
   } else if (backendDevice == "cpu") {
     config.backendDevice = BackendDevice::CPU;
   } else {
     throw StatusError{
         general_error::InvalidArgument,
-        "backendDevice must be 'cpu', 'vulkan', or 'metal'"};
+        "backendDevice must be 'cpu', 'vulkan', 'metal', or 'opencl'"};
   }
 }
 

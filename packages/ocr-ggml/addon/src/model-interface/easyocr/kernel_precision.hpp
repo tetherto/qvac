@@ -93,6 +93,69 @@ inline bool ocr_kernels_use_f16(
   return ocr_kernels_default_f16(backend);
 }
 
+// Backend-aware default for routing 1x1 (pointwise) convs through ggml_mul_mat
+// instead of ggml_conv_2d's im2col -> GEMM. A 1x1 stride-1 conv is a per-pixel
+// linear map over channels (a plain matmul); the mul_mat rewrite skips the
+// im2col lowering and the materialised lowered buffer. Measured on ocr-ggml CI
+// (EasyOCR basic_test, within-run conv_2d vs mul_mat A/B):
+//
+//   backend / device                     mul_mat vs conv_2d  -> default
+//   -----------------------------------  ------------------  ----------
+//   NVIDIA Vulkan GPU                    ~ -19% tot / -43% det  mul_mat
+//   Apple Metal GPU                      ~ -10% tot / -13% det  mul_mat
+//   Mali Vulkan GPU (Pixel)              ~ neutral (-1% det)    mul_mat
+//   x86 CPU                              ~ neutral (-1%)        conv_2d
+//   Apple-Silicon CPU                    ~ +7% SLOWER           conv_2d
+//   non-Apple ARM CPU (linux-arm64)      ~ flat / +1%           conv_2d
+//
+// So mul_mat is the default on GPU/accelerator devices (where avoiding im2col
+// pays off, or is at worst neutral as on Mali — output verified identical on
+// CPU/Vulkan/Metal) and conv_2d on every CPU (where the two paths move similar
+// memory and mul_mat's extra permute/cont can regress).
+//
+// The ONE exclusion is Adreno on **Vulkan**: its Vulkan compute is numerically
+// fragile (cos-sim ~0.73 vs reference; a regularB test regressed on a Galaxy
+// S25 Ultra / Adreno when mul_mat ran there), and OcrBackendSelection already
+// auto-skips Adreno Vulkan to CPU. The exclusion is keyed on the backend *API*,
+// not the chip, so a future Adreno-OpenCL backend (QVAC-19798) is NOT blocked
+// and can adopt mul_mat once validated. The env overrides below take
+// precedence.
+inline bool ocr_conv1x1_mulmat_default(ggml_backend_t backend) {
+  ggml_backend_dev_t dev =
+      (backend != nullptr) ? ggml_backend_get_device(backend) : nullptr;
+  if (dev == nullptr) {
+    return false; // unknown device -> conservative conv_2d
+  }
+  if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+    return false; // CPU: mul_mat is neutral-to-slower -> conv_2d
+  }
+  // GPU / accelerator: mul_mat everywhere except Adreno's broken Vulkan path.
+  // Key on the API (not the chip) so Adreno-OpenCL is not caught by this guard.
+  if (ocr_desc_contains(ggml_backend_dev_description(dev), "adreno")) {
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const char* api = (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
+    if (api == nullptr || ocr_desc_contains(api, "vulkan")) {
+      return false; // Adreno Vulkan (or unknown API) -> conservative conv_2d
+    }
+  }
+  return true;
+}
+
+// Resolve whether to use the 1x1 mul_mat path for `backend`. Env overrides take
+// precedence over the backend-aware default: OCR_GGML_CONV1X1_CONV2D=1 forces
+// the im2col conv_2d path, OCR_GGML_CONV1X1_MULMAT=1 forces mul_mat (conv_2d
+// wins if both are set). Resolved once at model-load time (mirrors the F16
+// kernel decision) and stored on the weights object.
+inline bool ocr_conv1x1_mulmat_use(ggml_backend_t backend) {
+  if (ocr_env_is_one("OCR_GGML_CONV1X1_CONV2D")) {
+    return false;
+  }
+  if (ocr_env_is_one("OCR_GGML_CONV1X1_MULMAT")) {
+    return true;
+  }
+  return ocr_conv1x1_mulmat_default(backend);
+}
+
 // Upload a BatchNorm-folded F32 conv kernel into its (already-declared)
 // destination tensor. When `w_dst` is F16, convert the F32 data first so
 // ggml_conv_2d takes the F16 fast path (mirrors the doctr

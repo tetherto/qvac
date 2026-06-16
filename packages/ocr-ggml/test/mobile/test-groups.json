@@ -15,16 +15,19 @@
       "runFullOcrSuiteTest"
     ],
     "regularB": [
+      "runAndroidOpenclTest",
       "runAndroidVulkanTest",
       "runBackendDeviceTest",
       "runBatchedRecognizerTest",
       "runBiasBroadcastTest",
       "runCanvasSizeTest",
+      "runConv1x1MulmatTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
       "runLargeImagesTest",
       "runLifecycleTest",
       "runOcrBasicTest",
+      "runOpenclBackendTest",
       "runParamValidationTest",
       "runPipelineTest",
       "runRunInternalOrderingTest"
@@ -50,11 +53,13 @@
       "runBatchedRecognizerTest",
       "runBiasBroadcastTest",
       "runCanvasSizeTest",
+      "runConv1x1MulmatTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
       "runLargeImagesTest",
       "runLifecycleTest",
       "runOcrBasicTest",
+      "runOpenclBackendTest",
       "runParamValidationTest",
       "runPipelineTest",
       "runRunInternalOrderingTest"
