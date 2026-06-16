@@ -315,7 +315,7 @@ The following OpenAI parameters are forwarded to the model on each request:
 | `seed` | `seed` | Random seed for deterministic output |
 | `frequency_penalty` | `frequency_penalty` | Penalize frequent tokens |
 | `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
-| `reasoning_budget` | `reasoning_budget` | Enable / disable reasoning for hybrid-thinking models (boolean) |
+| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not accept a numeric token budget. |
 
 #### Structured output (`response_format`)
 
@@ -1165,10 +1165,12 @@ Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
 | HTTP | `error.code` | When |
 | --- | --- | --- |
 | 400 | `missing_prompt` / `missing_model` | Required field absent. |
-| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 8. |
+| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 16. |
 | 400 | `invalid_seconds` | `seconds` is not a positive-integer string. |
-| 400 | `unsupported_param` | `input_reference` (image-to-video) was sent. |
+| 400 | `invalid_input_reference` | `input_reference` was sent but the image could not be resolved (malformed data URI, invalid base64, unknown `file_id`, fetch failure, or larger than 100 MB). |
+| 400 | `invalid_strength` | `strength` is not a number in `[0, 1]`. |
 | 400 | `invalid_model_type` | Alias is not a `video` model. |
+| 404 | `model_not_found` | `model` alias is not declared under `serve.models`. |
 | 404 | `video_not_found` | Unknown job id. |
 | 409 | `video_not_ready` | `/content` requested before the job is `completed` (response carries `Retry-After`). |
 | 409 | `video_failed` | Generation failed. |
