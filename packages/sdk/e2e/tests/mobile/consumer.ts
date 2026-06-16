@@ -64,6 +64,7 @@ import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { MobileCancellationExecutor } from "./executors/cancellation-executor.js";
 
 const resources = new ResourceManager({
+  downloadTarget: "mobile",
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
   // kernel to actually release pages / reclaim mmap regions — without
   // it, the next test's load arrives while the previous model's RSS is
@@ -364,10 +365,6 @@ export const executor = createExecutor({
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
-    new SkipExecutor(
-      /^video-/,
-      "Video mode works on mobile but SDK-shipped Wan models are too large to load on-device; mobile apps should pass a `delegate` to loadModel(...), desktop covers local-load coverage",
-    ),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)"),
     new SkipExecutor(/^vla-pi05-/, "π₀.₅ q_aggressive GGUF (3.9 GB) exceeds the iOS jetsam ~3 GB per-process limit (OOM) and is deferred on Android Device Farm until a CDN-fronted mirror exists; SmolVLA covers mobile VLA, desktop covers pi05"),
     new SkipExecutor(

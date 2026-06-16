@@ -198,6 +198,7 @@ jobs:
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
           max-wait-time-seconds: '10800'
 
       - name: Cancel Device Farm runs on workflow cancellation
