@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3]
+
+This release updates `@qvac/tts-onnx` to depend on `@qvac/infer-base` `^0.6.0`, keeping the addon aligned with the current inference base shared across the inference packages. There are no functional or API changes.
+
+### Changed
+
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
+
 ## [0.9.2] - 2026-06-09
 
 ### Added
