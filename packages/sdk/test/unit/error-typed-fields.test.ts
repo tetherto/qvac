@@ -14,7 +14,7 @@ test("createErrorResponse: RequestRejectedByPolicyError carries its named fields
     "rid-1",
     "completion",
     "model-1",
-    "oneAtATimePerModel",
+    "queue full",
   );
   const response = createErrorResponse(err);
 
@@ -28,7 +28,7 @@ test("createErrorResponse: RequestRejectedByPolicyError carries its named fields
     requestId: "rid-1",
     kind: "completion",
     modelId: "model-1",
-    reason: "oneAtATimePerModel",
+    reason: "queue full",
   });
 });
 

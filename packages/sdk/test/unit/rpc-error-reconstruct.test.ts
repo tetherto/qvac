@@ -14,7 +14,7 @@ test("reconstructError: RequestRejectedByPolicyError round-trips via name + type
     "rid-1",
     "completion",
     "model-1",
-    "oneAtATimePerModel",
+    "queue full",
   );
   const envelope = createErrorResponse(original);
 
@@ -29,7 +29,7 @@ test("reconstructError: RequestRejectedByPolicyError round-trips via name + type
   t.is(r.requestId, "rid-1");
   t.is(r.kind, "completion");
   t.is(r.modelId, "model-1");
-  t.is(r.reason, "oneAtATimePerModel");
+  t.is(r.reason, "queue full");
   t.is(r.code, 52420);
   t.ok(r instanceof Error, "reconstructed must still satisfy instanceof Error");
 });
@@ -158,7 +158,7 @@ test("reconstructError: remote stack/timestamp attach onto the reconstructed ins
     "rid-4",
     "embeddings",
     "model-2",
-    "oneAtATimePerModel",
+    "queue full",
   );
   const envelope = createErrorResponse(original);
 

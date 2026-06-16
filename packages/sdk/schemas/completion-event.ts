@@ -13,6 +13,7 @@ export const completionStatsSchema = z.object({
   cacheTokens: z.number().optional(),
   promptTokens: z.number().optional(),
   generatedTokens: z.number().optional(),
+  avgConcurrentSeq: z.number().optional(),
   backendDevice: z.enum(["cpu", "gpu"]).optional(),
 });
 

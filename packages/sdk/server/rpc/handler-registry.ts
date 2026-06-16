@@ -1,4 +1,5 @@
 import { type Request } from "@/schemas";
+import { handleBatchCompletionStream } from "@/server/rpc/handlers/batch-completion-stream";
 import { handleCompletionStream } from "@/server/rpc/handlers/completion-stream";
 import { handleDownloadAsset } from "@/server/rpc/handlers/download-asset";
 import { handleLoadModel } from "@/server/rpc/handlers/load-model";
@@ -156,6 +157,11 @@ export const registry: Record<string, HandlerEntry> = {
     handler: handleCompletionStream,
     delegatedHandler: handleCompletionStreamDelegated,
     isDelegated: isModelDelegated,
+  },
+
+  batchCompletionStream: {
+    type: "stream",
+    handler: handleBatchCompletionStream,
   },
 
   // Handlers with progress support

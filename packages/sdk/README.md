@@ -76,6 +76,86 @@ catch (error) {
 node quickstart.js
 ```
 
+## Batch completion
+
+Continuous batching submits multiple prompts to a loaded LLM in one call so the
+llama.cpp addon can decode active sequences together. Load the model with
+`modelConfig.parallel >= 2`, then call `batchCompletion()` with per-prompt
+histories:
+
+```ts
+import {
+  batchCompletion,
+  loadModel,
+  LLAMA_3_2_1B_INST_Q4_0,
+} from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  modelType: "llm",
+  modelConfig: {
+    ctx_size: 4096,
+    parallel: 4,
+  },
+});
+
+const run = batchCompletion({
+  modelId,
+  prompts: [
+    {
+      id: "a",
+      history: [{ role: "user", content: "Reply with only APPLE." }],
+      generationParams: { temp: 0, predict: 16 },
+    },
+    {
+      id: "b",
+      history: [{ role: "user", content: "Reply with only BANANA." }],
+      generationParams: { temp: 0, predict: 16 },
+    },
+  ],
+});
+
+for await (const { id, event } of run.events) {
+  if (event.type === "contentDelta") {
+    process.stdout.write(`[${id}] ${event.text}`);
+  }
+}
+
+const results = await run.results;
+const stats = await run.stats;
+```
+
+`run.results` resolves in prompt order. `run.ids` exposes the addon-assigned ids
+and `run.byId(id)` gives per-prompt events and final aggregation.
+
+`run.results` is **all-or-nothing**: if any single prompt fails (e.g. a context
+overflow) or is cancelled, the promise rejects with that first error and the
+already-completed prompts are not returned through it. To recover partial
+results, use `run.byId(id).final` — each successful prompt's `final` still
+resolves even when a sibling prompt fails:
+
+```ts
+const run = batchCompletion({ modelId, prompts });
+
+const settled = await Promise.allSettled(
+  (await run.ids).map((id) => run.byId(id).final),
+);
+
+for (const [index, outcome] of settled.entries()) {
+  if (outcome.status === "fulfilled") {
+    console.log(`prompt ${index} ->`, outcome.value.contentText);
+  } else {
+    console.warn(`prompt ${index} failed:`, outcome.reason);
+  }
+}
+```
+
+Stats are **batch-level**: the addon aggregates decode metrics (e.g.
+`avgConcurrentSeq`, total prompt/generated tokens) across the whole batch rather
+than per prompt, so they surface once on `run.stats` (a `CompletionStats`, or
+`undefined` if the addon reported none). Per-prompt `final.stats` is intentionally
+left undefined — there is no per-prompt breakdown to report.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:

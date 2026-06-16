@@ -91,7 +91,9 @@ interface ChatHistory {
 // addon types in `@qvac/llm-llamacpp@0.17.1`+ already include this field;
 // the explicit `&` here keeps typing correct against `^0.16.0` until the
 // dep bump propagates and is harmless once it has.
-type CompletionGenerationParams = GenerationParams & { json_schema?: string };
+export type CompletionGenerationParams = GenerationParams & {
+  json_schema?: string;
+};
 
 type CompletionRunOptions = Pick<
   RunOptions,
@@ -183,7 +185,7 @@ function runModel(
   return run(prompt, opts);
 }
 
-function transformMessages(
+export function transformMessages(
   messages: Array<
     | {
         role: string;
