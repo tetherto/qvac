@@ -15,6 +15,10 @@ This release updates `@qvac/decoder-audio` to depend on `@qvac/infer-base` `^0.6
 
 The runtime dependency on `@qvac/infer-base` has been bumped from `^0.4.0` to `^0.6.0` so the decoder tracks the latest inference base shared across the inference addons.
 
+## Pull Requests
+
+- [#2634](https://github.com/tetherto/qvac/pull/2634) - bump @qvac/infer-base to ^0.6.0 for decoder-audio
+
 ## [0.5.0]
 
 This release slims the runtime dependency tree of `@qvac/decoder-audio`. Packages that were never required at runtime have been removed or moved to dev dependencies, so consumers no longer pull them into their install trees. There are no changes to `FFmpegDecoder`'s public API or behavior.
