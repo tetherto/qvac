@@ -19,7 +19,8 @@
   },
   {
     "package": "logging",
-    "path": "packages/logging"
+    "path": "packages/logging",
+    "needs_bare": true
   },
   {
     "package": "error",
