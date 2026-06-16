@@ -74,7 +74,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/transcription-parakeet#readme",
   "devDependencies": {
-    "@qvac/decoder-audio": "^0.3.3",
+    "@qvac/decoder-audio": "^0.5.0",
     "@qvac/registry-client": "^0.4.0",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^6.0.0",
