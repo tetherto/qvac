@@ -25,6 +25,10 @@ This release updates `@qvac/transcription-parakeet` to depend on `@qvac/infer-ba
 
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
 
+## Pull Requests
+
+- [#2637](https://github.com/tetherto/qvac/pull/2637) - bump @qvac/infer-base to ^0.6.0 for transcription-parakeet
+
 ## [0.7.2]
 
 This release fixes Android Parakeet stability on devices where Vulkan or OpenCL backend discovery can abort the process before CPU inference starts. Android Parakeet already forces CPU inference while GPU support is disabled, so the prebuild packaging now matches that runtime policy by staging only CPU ggml backend modules.
