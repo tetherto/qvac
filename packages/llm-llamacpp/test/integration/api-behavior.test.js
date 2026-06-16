@@ -207,7 +207,7 @@ safeTest('unloaded | run: run after unload throws a clean error', { timeout: 600
     await collectResponse(resp)
     t.fail('expected run() after unload to throw or reject')
   } catch (err) {
-    t.ok(err, 'run() after unload threw an error')
+    t.ok(err instanceof Error, 'run() after unload threw a valid Error (not an undefined rejection)')
     t.comment('Error message: ' + (err && err.message))
     t.pass('unloaded model rejects run() without crashing')
   }

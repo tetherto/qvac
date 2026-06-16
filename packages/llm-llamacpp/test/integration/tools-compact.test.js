@@ -576,12 +576,17 @@ safeTest('[tools-compact] prefill with tools persists cache and loads on fresh m
 // Verify functional tool-call behavior, longer sessions, and resilience.
 // ===========================================================================
 
-function parseToolCalls (output) {
+function parseToolCalls (output, t) {
   const re = /<tool_call>([\s\S]*?)<\/tool_call>/g
   const calls = []
   let m
   while ((m = re.exec(output)) !== null) {
-    try { calls.push(JSON.parse(m[1].trim())) } catch (_) {}
+    const raw = m[1].trim()
+    try {
+      calls.push(JSON.parse(raw))
+    } catch (err) {
+      if (t) t.fail(`tool_call block contains malformed JSON: ${err.message}\n  raw: ${raw.slice(0, 200)}`)
+    }
   }
   return calls
 }
@@ -602,7 +607,7 @@ safeTest('[tools-compact] output contains tool_call block when tools are provide
     'output should contain a tool_call block when a clear tool-triggering prompt is given'
   )
 
-  const calls = parseToolCalls(r.output)
+  const calls = parseToolCalls(r.output, t)
   if (calls.length > 0) {
     const declared = [TOOL_A.name]
     t.ok(typeof calls[0].name === 'string' && calls[0].name.length > 0, 'tool_call has a non-empty name')
@@ -631,7 +636,7 @@ safeTest('[tools-compact] tool_call references current tool after swap', { timeo
   ], opts)
   t.ok(r2.output.length > 0, 'turn 2 produces output after tool swap')
 
-  const calls2 = parseToolCalls(r2.output)
+  const calls2 = parseToolCalls(r2.output, t)
   if (calls2.length > 0) {
     t.ok(calls2[0].name !== 'getWeather', 'turn 2 should not call old tool (getWeather) after swap')
     if (calls2[0].name === TOOL_B.name) {
