@@ -4,6 +4,18 @@
 
 ---
 
+## [0.2.2]
+
+Release Date: 2026-06-16
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.2.2
+
+### Fixed
+
+- Allow managed-mode installs with either the `@qvac/cli` `0.6.x` or `0.7.x` line as the optional CLI peer, so strict package managers can resolve the provider while CLI 0.7 brings in the newer SDK runtime.
+
+---
+
 ## [0.2.1]
 
 Release Date: 2026-06-15
