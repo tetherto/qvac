@@ -34,7 +34,7 @@ inputs:
     default: "30"
   max_deletions_per_run:
     description: "Hard cap on deletions in a single run"
-    default: "50"
+    default: "10"
 
 runs:
   using: composite

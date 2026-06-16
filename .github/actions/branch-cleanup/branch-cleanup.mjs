@@ -34,7 +34,7 @@ function readConfig (env) {
     featureInactivityDays: toInt(env.FEATURE_INACTIVITY_DAYS, 60),
     tmpInactivityDays: toInt(env.TMP_INACTIVITY_DAYS, 60),
     adhocInactivityDays: toInt(env.ADHOC_INACTIVITY_DAYS, 30),
-    maxDeletionsPerRun: toInt(env.MAX_DELETIONS_PER_RUN, 50),
+    maxDeletionsPerRun: toInt(env.MAX_DELETIONS_PER_RUN, 10),
     timestampsFile: env.BRANCH_TIMESTAMPS_FILE || ''
   }
 }

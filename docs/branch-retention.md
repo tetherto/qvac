@@ -230,7 +230,30 @@ jobs:
 | `feature_inactivity_days` | `60` | `feature-*` inactivity threshold. |
 | `tmp_inactivity_days` | `60` | `tmp-*` inactivity threshold. |
 | `adhoc_inactivity_days` | `30` | ad-hoc branch inactivity threshold. |
-| `max_deletions_per_run` | `50` | Hard cap on deletions in a single run. |
+| `max_deletions_per_run` | `10` | Hard cap on deletions in a single run. |
+
+---
+
+## Supply chain & versioning
+
+This is a **deliberate single mutable supply chain** anchored on `tetherto/qvac`:
+
+- Consuming repos call the reusable workflow `@main`, and the reusable workflow in turn
+  references the composite action `@main`. There is intentionally **no SHA pin** on the
+  inner action.
+- The rationale: `tetherto/qvac` is the single source of truth for the cleanup logic, and
+  every change to it is gated by this repo's **branch protection + PR review** (TIER1
+  approvals). That review gate — not a per-consumer pin — is the control point. A
+  SHA-pinned inner action would not change the consumer's exposure either, because the
+  consumer already floats on the reusable workflow `@main`.
+- The trade-off, made consciously: a merge to `tetherto/qvac` `main` immediately changes
+  the branch-deletion logic running in every consuming repo. This is acceptable because
+  (a) the logic is reviewed here before it can land, (b) the destructive surface is
+  bounded by the safelist, the ~7-day grace ledger, the `max_deletions_per_run` cap, and
+  dry-run/report-only fallbacks, and (c) deleted release branches are recoverable from
+  their tags.
+- A repo that wants an immutable pin instead can call the reusable workflow at a SHA/tag
+  (`...@<sha>`); it then opts out of automatic logic updates and owns bumping the ref.
 
 ---
 

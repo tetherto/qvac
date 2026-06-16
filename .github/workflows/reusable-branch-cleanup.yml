@@ -50,7 +50,7 @@ on:
       max_deletions_per_run:
         description: "Hard cap on deletions in a single run"
         type: number
-        default: 50
+        default: 10
 
 permissions:
   contents: read
@@ -71,6 +71,11 @@ jobs:
           fetch-depth: 1
 
       - name: Run branch cleanup
+        # Intentionally referenced @main rather than a SHA: tetherto/qvac is the single
+        # source of truth for the cleanup logic, and changes to it are gated by this repo's
+        # branch protection + PR review (TIER1 approvals). Consuming repos also call this
+        # reusable workflow @main, so the supply chain is a deliberate single mutable line
+        # anchored on tetherto/qvac main. See docs/branch-retention.md "Supply chain & versioning".
         uses: tetherto/qvac/.github/actions/branch-cleanup@main
         with:
           dry_run: ${{ inputs.dry_run }}
