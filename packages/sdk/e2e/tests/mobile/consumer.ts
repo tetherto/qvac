@@ -64,6 +64,7 @@ import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { MobileCancellationExecutor } from "./executors/cancellation-executor.js";
 
 const resources = new ResourceManager({
+  downloadTarget: "mobile",
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
   // kernel to actually release pages / reclaim mmap regions — without
   // it, the next test's load arrives while the previous model's RSS is

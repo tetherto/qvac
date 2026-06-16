@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+This release slims the runtime dependency tree of `@qvac/decoder-audio`. Packages that were never required at runtime have been removed or moved to dev dependencies, so consumers no longer pull them into their install trees. There are no changes to `FFmpegDecoder`'s public API or behavior.
+
+## Changed
+
+### Leaner runtime dependencies
+
+The runtime `dependencies` are now limited to what `FFmpegDecoder` actually loads at runtime: `@qvac/error`, `@qvac/infer-base`, `@qvac/logging`, and `bare-ffmpeg`. The `bare-fs`, `bare-path`, and `bare-process` modules were only used by the test suite, so they have been moved to `devDependencies` — at runtime these are provided by the Bare host. Consumers that previously inherited these as transitive runtime dependencies of `@qvac/decoder-audio` will no longer do so.
+
+### Removed unused dependencies
+
+`bare-assert` and `bare-channel` were declared as runtime dependencies but were not used anywhere in the package, and have been dropped entirely.
+
+## Pull Requests
+
+- [#2159](https://github.com/tetherto/qvac/pull/2159) - remove dead deps and move dev ones to dev
+
 ## [0.4.0]
 
 This is a `[bc]` release that aligns `@qvac/decoder-audio` with the new addon shape used by the rest of the inference packages (NMT, Whisper, OCR, etc.). `FFmpegDecoder` no longer extends `BaseInference`, and the run lifecycle is now driven by `createJobHandler` from `@qvac/infer-base`.

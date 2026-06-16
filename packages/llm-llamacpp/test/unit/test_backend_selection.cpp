@@ -597,11 +597,7 @@ TEST_F(BackendSelectionTest, Qwen35_Adreno_KeepsGPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
   MockModelMetaData qwen35Meta(false, "qwen35");
   expectChosenWithMetadata(
-      mockBackend,
-      BackendType::GPU,
-      BackendType::GPU,
-      "gpuopencl",
-      qwen35Meta);
+      mockBackend, BackendType::GPU, BackendType::GPU, "gpuopencl", qwen35Meta);
 }
 
 // Adreno 800+ with bitnet TQ, only OpenCL available (no Vulkan): falls to CPU

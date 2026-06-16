@@ -1,7 +1,7 @@
-// Regression tests for the stale cancel flag bug in JobRunner (addon-cpp v1.1.2).
-// cancel() calls modelCancel_->cancel() unconditionally when job_.has_value(),
-// even for queued (not-yet-processing) jobs. This sets the model's stop flag
-// without it ever being consumed, poisoning the *next* job.
+// Regression tests for the stale cancel flag bug in JobRunner (addon-cpp
+// v1.1.2). cancel() calls modelCancel_->cancel() unconditionally when
+// job_.has_value(), even for queued (not-yet-processing) jobs. This sets the
+// model's stop flag without it ever being consumed, poisoning the *next* job.
 
 #include <any>
 #include <atomic>
@@ -11,7 +11,6 @@
 #include <thread>
 
 #include <gtest/gtest.h>
-
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
 #include <inference-addon-cpp/addon/AddonCpp.hpp>
@@ -76,8 +75,7 @@ TestHarness createTestAddon(std::chrono::milliseconds workDuration) {
       std::make_shared<out_handl::CppQueuedOutputHandler<std::string>>();
   out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>> handlers;
   handlers.add(outHandler);
-  auto callback =
-      std::make_unique<OutputCallBackCpp>(std::move(handlers));
+  auto callback = std::make_unique<OutputCallBackCpp>(std::move(handlers));
 
   auto addon =
       std::make_unique<AddonCpp>(std::move(callback), std::move(model));
@@ -152,8 +150,7 @@ TEST_F(CancelStaleFlagTest, RepeatedCancelThenRun_NeverPoisons) {
     addon->cancelJob();
     std::this_thread::sleep_for(std::chrono::milliseconds{80});
 
-    ASSERT_TRUE(
-        addon->runJob(std::string("follow-up-" + std::to_string(i))));
+    ASSERT_TRUE(addon->runJob(std::string("follow-up-" + std::to_string(i))));
     std::this_thread::sleep_for(std::chrono::milliseconds{200});
 
     EXPECT_FALSE(modelPtr->wasLastRunAborted())
