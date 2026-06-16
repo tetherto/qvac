@@ -40,8 +40,7 @@ const MODEL_NAME = CATALOG_ENTRY?.name ?? REQUESTED_MODEL
 const CTX_SIZE = Number(process.env['QVAC_CTX_SIZE'] ?? 32768)
 const REASONING_BUDGET = Number(process.env['QVAC_REASONING_BUDGET'] ?? -1)
 const TOOLS = process.env['QVAC_TOOLS'] !== 'false'
-// Adapts OpenAI-compatible traffic to current qvac serve gaps:
-// array-of-parts message content and inline <think> reasoning text.
+// Covers content flattening and <think> reasoning splitting.
 const OPENAI_COMPAT_TRANSFORMS = process.env['QVAC_SHIM'] !== 'false'
 const READY_TIMEOUT_MS = Number(process.env['QVAC_READY_TIMEOUT_MS'] ?? 1_800_000)
 const DEBUG = process.env['QVAC_DEBUG'] === 'true' || process.env['QVAC_DEBUG'] === '1'

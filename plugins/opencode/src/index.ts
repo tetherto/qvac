@@ -132,8 +132,7 @@ function injectProvider (cfg: Config, listening: HostListening, options: Resolve
   if (options.setDefaultModel) {
     const id = `qvac/${listening.modelId}`
     cfg.model = id
-    // OpenCode uses small_model for title and summary requests. Keep the
-    // zero-config path local, but do not override a user-selected small model.
+    // Preserve an explicit user small_model; otherwise keep titles local.
     cfg.small_model ??= id
   }
 }
