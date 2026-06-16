@@ -81,17 +81,17 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
     "qvac": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "QVAC (local)",
-      "options": { "baseURL": "http://localhost:11434/v1" },
+      "options": { "baseURL": "http://localhost:11434/v1", "apiKey": "qvac" },
       "models": {
         "qwen3-8b-chat": {
           "name": "Qwen3 8B (chat)",
           "tool_call": true,
-          "limit": { "context": 16384 },
+          "limit": { "context": 16384, "output": 4096 },
           "modalities": { "input": ["text"], "output": ["text"] }
         },
         "qwen3-8b-title": {
           "name": "Qwen3 8B (title)",
-          "limit": { "context": 16384 },
+          "limit": { "context": 16384, "output": 4096 },
           "modalities": { "input": ["text"], "output": ["text"] }
         }
       }
@@ -104,7 +104,9 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
 
 For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker.
 
-Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly; and `modalities` declares the input/output types the model accepts. Note that text is currently the only supported modality.
+Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly; `limit.output` is **required** by current OpenCode for every custom model entry; and `modalities` declares the input/output types the model accepts. Note that text is currently the only supported modality.
+
+The `apiKey: "qvac"` value in `options` is sent as the `Authorization` header. The server does not validate it, but some OpenAI-shaped clients refuse to send a request without a non-empty key, so setting any value avoids that edge case.
 
 For details on configuring a custom provider in OpenCode, see [OpenCode docs › Custom providers](https://opencode.ai/docs/providers/#custom-provider).
 
