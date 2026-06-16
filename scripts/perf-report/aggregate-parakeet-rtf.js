@@ -109,6 +109,13 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
+// Quantisation token from a GGUF file name (e.g. `q8_0`, `q4_0`, `f16`).
+// Used as a fallback when a record predates the explicit `model.quant` field.
+function quantFromName (name) {
+  const match = String(name || '').match(/\.(q8_0|q4_0|f16)\.gguf$/i)
+  return match ? match[1].toLowerCase() : ''
+}
+
 function escapeHtml (value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -131,12 +138,16 @@ function normalizeDesktopRecord (report, sourceFile) {
   const backend = normalizeBackend(platformName, useGPU, report.labels && report.labels.backend)
   const label = report.labels && (report.labels.device || report.labels.runner || report.labels.label)
 
+  const quant = (report.model && report.model.quant) ||
+    quantFromName(report.model && report.model.dirName) || ''
+
   return {
     source: 'desktop-ci',
     device: label || report.platform || 'unknown',
     platform: report.platform || 'unknown',
     platformFamily: platformName || 'unknown',
     model: report.model && report.model.type ? report.model.type : 'unknown',
+    quant,
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
     meanRtf: Number(rtf.mean),
@@ -161,6 +172,7 @@ function normalizeManualRecord (record, sourceFile) {
     platform: record.platform || 'unknown',
     platformFamily: platformFamily || 'unknown',
     model: record.model || record.modelType || 'unknown',
+    quant: record.quant || quantFromName(record.dirName) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
     meanRtf: Number(record.meanRtf),
@@ -240,6 +252,7 @@ function normalizeMobileRecords (report, sourceFile) {
       platform: device.platform || 'unknown',
       platformFamily: platformFamily || 'unknown',
       model: values.modelType,
+      quant: values.quant || '',
       gpu: values.provider,
       backend: normalizeBackend(platformFamily, useGPU),
       meanRtf: mean(values.rtf),
@@ -305,6 +318,7 @@ function dedupeRecords (records) {
       record.platform,
       record.platformFamily,
       record.model,
+      record.quant,
       record.gpu,
       record.backend,
       record.device
@@ -335,12 +349,14 @@ function sortRecords (records) {
       left.source,
       left.platform,
       left.model,
+      left.quant,
       left.gpu,
       left.device
     ].join('|').localeCompare([
       right.source,
       right.platform,
       right.model,
+      right.quant,
       right.gpu,
       right.device
     ].join('|'))
@@ -368,12 +384,12 @@ function renderMarkdown (records) {
 
   lines.push('## Parakeet Performance Findings')
   lines.push('')
-  lines.push('| Source | Device | Platform | Model | GPU | Backend | Mean RTF | P50 | P95 | Mean Wall (ms) | Notes |')
-  lines.push('|--------|--------|----------|-------|-----|---------|----------|-----|-----|----------------|-------|')
+  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | Mean RTF | P50 | P95 | Mean Wall (ms) | Notes |')
+  lines.push('|--------|--------|----------|-------|-------|-----|---------|----------|-----|-----|----------------|-------|')
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
     )
   }
 
@@ -395,6 +411,7 @@ function renderHtml (records) {
       record.device,
       record.platform,
       record.model,
+      record.quant || '-',
       record.gpu,
       record.backend,
       formatNumber(record.meanRtf),
@@ -432,6 +449,7 @@ function renderHtml (records) {
     '        <th>Device</th>',
     '        <th>Platform</th>',
     '        <th>Model</th>',
+    '        <th>Quant</th>',
     '        <th>GPU</th>',
     '        <th>Backend</th>',
     '        <th>Mean RTF</th>',
