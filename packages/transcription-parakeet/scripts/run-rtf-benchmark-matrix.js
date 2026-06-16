@@ -47,7 +47,8 @@ function normalizeBoolean (value) {
 
 function buildLabel (entry, index) {
   if (entry.label) return String(entry.label)
-  return `${index + 1}-${entry.modelType}-${normalizeBoolean(entry.useGPU) ? 'gpu' : 'cpu'}`
+  const quantPart = entry.quant ? `-${entry.quant}` : ''
+  return `${index + 1}-${entry.modelType}${quantPart}-${normalizeBoolean(entry.useGPU) ? 'gpu' : 'cpu'}`
 }
 
 function runBenchmarkEntry (pkgDir, entry, index) {
@@ -55,6 +56,7 @@ function runBenchmarkEntry (pkgDir, entry, index) {
   const env = {
     ...process.env,
     QVAC_PARAKEET_BENCHMARK_MODEL_TYPE: String(entry.modelType || 'tdt'),
+    QVAC_PARAKEET_BENCHMARK_QUANT: entry.quant ? String(entry.quant) : (process.env.QVAC_PARAKEET_BENCHMARK_QUANT || ''),
     QVAC_PARAKEET_BENCHMARK_USE_GPU: normalizeBoolean(entry.useGPU) ? 'true' : 'false',
     QVAC_PARAKEET_BENCHMARK_LABEL: label,
     QVAC_PARAKEET_BENCHMARK_BACKEND: entry.backendHint ? String(entry.backendHint) : (process.env.QVAC_PARAKEET_BENCHMARK_BACKEND || ''),
@@ -79,6 +81,7 @@ function runBenchmarkEntry (pkgDir, entry, index) {
   console.log('='.repeat(70))
   console.log(`Running benchmark entry ${index + 1}`)
   console.log(`  modelType:  ${env.QVAC_PARAKEET_BENCHMARK_MODEL_TYPE}`)
+  console.log(`  quant:      ${env.QVAC_PARAKEET_BENCHMARK_QUANT || 'default'}`)
   console.log(`  useGPU:     ${env.QVAC_PARAKEET_BENCHMARK_USE_GPU}`)
   console.log(`  backend:    ${env.QVAC_PARAKEET_BENCHMARK_BACKEND || 'default'}`)
   console.log(`  label:      ${env.QVAC_PARAKEET_BENCHMARK_LABEL}`)
