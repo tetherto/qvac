@@ -7,6 +7,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-12
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.1` (adds the direct Metal `CONV_2D_DW` depthwise-convolution kernel).
+
+## Pull Requests
+
+- [#2536](https://github.com/tetherto/qvac/pull/2536) - feat[api]: DocTR depthwise convs via direct Metal CONV_2D_DW kernel
+
+## [0.3.1] - 2026-06-06
+
+### Changed
+
+- Pinned to the Fabric revision used by the M-RoPE/iM-RoPE sliding-context work.
+
+## Pull Requests
+
+- [#2438](https://github.com/tetherto/qvac/pull/2438) - feat[notask]: add M-RoPE sliding context support
+
 ## [0.3.0] - 2026-06-02
 
 ### Changed

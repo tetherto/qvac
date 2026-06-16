@@ -243,8 +243,12 @@ const std::unordered_map<std::string, HandlerFunction<whisper_full_params>>
            }
 
            if (language == "auto") {
+             // A null language triggers whisper.cpp's built-in auto-detection,
+             // which then proceeds to transcribe. detect_language must stay
+             // false here: setting it true makes whisper_full return
+             // immediately after detecting the language, emitting no segments.
              params.language = nullptr;
-             params.detect_language = true;
+             params.detect_language = false;
              return;
            }
 

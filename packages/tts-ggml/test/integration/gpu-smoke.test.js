@@ -165,11 +165,15 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
 })
 
 test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  // QVAC-19255: Supertonic gained Vulkan/Metal/Adreno-OpenCL support
-  // in tts-cpp@2026-06-05 (QVAC-18605 rounds 1-13 + QVAC-19254 sched).
-  // This test mirrors the Chatterbox GPU smoke above: useGPU=true on
-  // a GPU-capable platform must resolve to a real GPU backend, not
-  // silently fall back to CPU.
+  // QVAC-19255 re-land: Supertonic GPU (Metal on Apple, Vulkan/CUDA on desktop)
+  // is consumed via tts-cpp@2026-06-05 (f7d4d6c overlay). Android (Adreno) is
+  // intentionally kept CPU-only at the engine boundary
+  // (SupertonicModel::loadLocked) because Adreno Vulkan/OpenCL ggml graph
+  // compute still aborts, so skip the GPU assertion there (mirrors Chatterbox).
+  if (platform === 'android') {
+    t.pass('Android: Supertonic GPU disabled at engine boundary pending Adreno Vulkan/OpenCL ggml fixes')
+    return
+  }
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
 

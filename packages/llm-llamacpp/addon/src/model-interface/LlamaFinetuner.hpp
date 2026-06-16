@@ -57,7 +57,7 @@ public:
       ProgressCallback progressCallback = nullptr);
 
   bool isFinetuneRunning() const;
-  bool requestPause();
+  bool requestPause(bool savePauseCheckpoint = true);
   void clearPauseRequest();
 
   /// Block until the training thread has completed the finetuning pause path.

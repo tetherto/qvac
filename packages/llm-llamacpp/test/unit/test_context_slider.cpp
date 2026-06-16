@@ -12,11 +12,18 @@
 #include "model-interface/ToolsCompactController.hpp"
 
 namespace {
+constexpr llama_seq_id kSeqId = 7;
+
 struct SeqRmCall {
   llama_seq_id seqId = 0;
   llama_pos startPos = 0;
   llama_pos endPos = 0;
 };
+
+bool operator==(const SeqRmCall& lhs, const SeqRmCall& rhs) {
+  return lhs.seqId == rhs.seqId && lhs.startPos == rhs.startPos &&
+         lhs.endPos == rhs.endPos;
+}
 
 struct SeqAddCall {
   llama_seq_id seqId = 0;
@@ -36,11 +43,19 @@ public:
     return fakeMemory_;
   }
 
-  void seqRm(
+  bool seqRm(
       ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const override {
     EXPECT_EQ(mem, fakeMemory_);
     seqRmCalls_.push_back({seqId, startPos, endPos});
+
+    if (seqRmFailure_ && seqRmFailure_->seqId == seqId &&
+        seqRmFailure_->startPos == startPos &&
+        seqRmFailure_->endPos == endPos) {
+      return false;
+    }
+
+    return true;
   }
 
   void seqAdd(
@@ -53,6 +68,7 @@ public:
   int memoryCalls() const { return memoryCalls_; }
   const std::vector<SeqRmCall>& seqRmCalls() const { return seqRmCalls_; }
   const std::vector<SeqAddCall>& seqAddCalls() const { return seqAddCalls_; }
+  void failSeqRmFor(SeqRmCall call) { seqRmFailure_ = call; }
 
 private:
   llama_pos ctxSize_;
@@ -61,6 +77,7 @@ private:
   mutable int memoryCalls_ = 0;
   mutable std::vector<SeqRmCall> seqRmCalls_;
   mutable std::vector<SeqAddCall> seqAddCalls_;
+  std::optional<SeqRmCall> seqRmFailure_;
 };
 } // namespace
 
@@ -72,6 +89,7 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_EnoughRoom) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/100,
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/50,
@@ -93,6 +111,7 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/300,
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/180,
@@ -106,15 +125,79 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
 
   ASSERT_EQ(ops.memoryCalls(), 1);
   ASSERT_EQ(ops.seqRmCalls().size(), 1u);
-  EXPECT_EQ(ops.seqRmCalls()[0].seqId, 0);
+  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
   EXPECT_EQ(ops.seqRmCalls()[0].endPos, 150);
 
   ASSERT_EQ(ops.seqAddCalls().size(), 1u);
-  EXPECT_EQ(ops.seqAddCalls()[0].seqId, 0);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 150);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 300);
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -100);
+}
+
+TEST_F(ContextSliderTest, PrefillSlideReturnsMemoryFailureWhenSeqRmFails) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+  ops.failSeqRmFor({kSeqId, 50, 150});
+
+  ContextSlideOutcome outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*nPast=*/300,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/180,
+      /*nDiscarded=*/100,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::MemoryOperationFailed);
+  EXPECT_EQ(outcome.newNPast, 300);
+  EXPECT_EQ(outcome.discarded, 0);
+
+  ASSERT_EQ(ops.memoryCalls(), 1);
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 150}));
+  EXPECT_TRUE(ops.seqAddCalls().empty());
+}
+
+// Batch mode partitions the KV pool into per-slot caps (ctx / n_parallel)
+// that are far smaller than the whole-context size. A cached prompt can fit
+// the full context yet overflow its slot; the slide must trigger against the
+// per-sequence cap so n_discarded can free room before the scheduler rejects
+// the prompt. Regression for PR #2327 review r3344885390.
+TEST_F(ContextSliderTest, PrefillSlidesAgainstPerSeqCapBelowFullCtx) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/8192);
+
+  // nPast + append = 2100: over the per-seq cap (2048) but well under the
+  // full context (8192). Sliding against the full ctx would do nothing.
+  ContextSlideOutcome outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*nPast=*/1900,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/200,
+      /*nDiscarded=*/512,
+      controller,
+      ops,
+      /*effectiveCtx=*/2048);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.newNPast, 1388);
+  EXPECT_EQ(outcome.discarded, 512);
+
+  ASSERT_EQ(ops.memoryCalls(), 1);
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
+  EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
+  EXPECT_EQ(ops.seqRmCalls()[0].endPos, 562);
+
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 562);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 1900);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -512);
 }
 
 TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
@@ -127,6 +210,7 @@ TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/120,
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/200,
@@ -141,9 +225,105 @@ TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
 
   ASSERT_EQ(ops.memoryCalls(), 1);
   ASSERT_EQ(ops.seqRmCalls().size(), 1u);
-  EXPECT_EQ(ops.seqRmCalls()[0].seqId, 0);
+  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
   EXPECT_EQ(ops.seqRmCalls()[0].endPos, 120);
+  EXPECT_TRUE(ops.seqAddCalls().empty());
+}
+
+TEST_F(ContextSliderTest, PrefillFullWipePreservesTailWhenExactWipeFails) {
+  ToolsCompactController controller(ToolsCompactProfile{});
+  FakeLlamaContextOps ops(/*ctxSize=*/300);
+
+  controller.onTokenize(120, 50);
+  controller.onEvalComplete(120, 120);
+  ops.failSeqRmFor({kSeqId, 50, 120});
+
+  ContextSlideOutcome outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*nPast=*/120,
+      /*firstMsgTokens=*/50,
+      /*nTokensToAppend=*/200,
+      /*nDiscarded=*/100,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::FullWipe);
+  EXPECT_EQ(outcome.newNPast, 51);
+  EXPECT_EQ(outcome.discarded, 69);
+  EXPECT_EQ(controller.anchor(), -1);
+
+  ASSERT_EQ(ops.memoryCalls(), 1);
+  ASSERT_EQ(ops.seqRmCalls().size(), 2u);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 120}));
+  EXPECT_EQ(ops.seqRmCalls()[1], (SeqRmCall{kSeqId, 50, 119}));
+
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 119);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 120);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -69);
+}
+
+TEST_F(ContextSliderTest, PrefillFullWipeWhenPartialSlideCannotFit) {
+  ToolsCompactController controller(ToolsCompactProfile{});
+  FakeLlamaContextOps ops(/*ctxSize=*/512);
+
+  controller.onTokenize(474, 25);
+  controller.onEvalComplete(474, 474);
+  ops.failSeqRmFor({kSeqId, 25, 474});
+
+  ContextSlideOutcome outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*nPast=*/474,
+      /*firstMsgTokens=*/25,
+      /*nTokensToAppend=*/308,
+      /*nDiscarded=*/512,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::FullWipe);
+  EXPECT_EQ(outcome.newNPast, 26);
+  EXPECT_EQ(outcome.discarded, 448);
+  EXPECT_EQ(controller.anchor(), -1);
+
+  ASSERT_EQ(ops.memoryCalls(), 1);
+  ASSERT_EQ(ops.seqRmCalls().size(), 2u);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 25, 474}));
+  EXPECT_EQ(ops.seqRmCalls()[1], (SeqRmCall{kSeqId, 25, 473}));
+
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 473);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 474);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -448);
+}
+
+TEST_F(ContextSliderTest, PrefillFullWipeRespectsDiscardBudget) {
+  ToolsCompactController controller(ToolsCompactProfile{});
+  FakeLlamaContextOps ops(/*ctxSize=*/512);
+
+  controller.onTokenize(474, 25);
+  controller.onEvalComplete(474, 474);
+
+  ContextSlideOutcome outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*nPast=*/474,
+      /*firstMsgTokens=*/25,
+      /*nTokensToAppend=*/308,
+      /*nDiscarded=*/256,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Overflow);
+  EXPECT_EQ(outcome.newNPast, 474);
+  EXPECT_EQ(outcome.discarded, 0);
+  EXPECT_EQ(controller.anchor(), 25);
+  EXPECT_EQ(ops.memoryCalls(), 0);
+  EXPECT_TRUE(ops.seqRmCalls().empty());
   EXPECT_TRUE(ops.seqAddCalls().empty());
 }
 
@@ -153,6 +333,7 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_Overflow) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/75,
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/200,
@@ -174,6 +355,7 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_EnoughRoom) {
 
   ContextSlideOutcome outcome = trySlideGeneration(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/499,
       /*firstMsgTokens=*/50,
       /*nDiscarded=*/120,
@@ -194,6 +376,7 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
 
   ContextSlideOutcome outcome = trySlideGeneration(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/400,
       /*firstMsgTokens=*/50,
       /*nDiscarded=*/120,
@@ -206,12 +389,12 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
 
   ASSERT_EQ(ops.memoryCalls(), 1);
   ASSERT_EQ(ops.seqRmCalls().size(), 1u);
-  EXPECT_EQ(ops.seqRmCalls()[0].seqId, 0);
+  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
   EXPECT_EQ(ops.seqRmCalls()[0].endPos, 170);
 
   ASSERT_EQ(ops.seqAddCalls().size(), 1u);
-  EXPECT_EQ(ops.seqAddCalls()[0].seqId, 0);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 170);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 400);
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -120);
@@ -223,6 +406,7 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
 
   ContextSlideOutcome outcome = trySlideGeneration(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/500,
       /*firstMsgTokens=*/50,
       /*nDiscarded=*/0,
@@ -248,6 +432,7 @@ TEST_F(ContextSliderTest, GenerationToolsCompactClampsDiscardToAnchorWindow) {
 
   ContextSlideOutcome outcome = trySlideGeneration(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/140,
       firstMsgTokens,
       /*nDiscarded=*/120,
@@ -261,9 +446,11 @@ TEST_F(ContextSliderTest, GenerationToolsCompactClampsDiscardToAnchorWindow) {
 
   ASSERT_EQ(ops.memoryCalls(), 1);
   ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
   EXPECT_EQ(ops.seqRmCalls()[0].endPos, 80);
   ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 80);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 140);
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -30);
@@ -283,6 +470,7 @@ TEST_F(
 
   ContextSlideOutcome outcome = trySlideGeneration(
       /*lctx=*/nullptr,
+      kSeqId,
       /*nPast=*/120,
       firstMsgTokens,
       /*nDiscarded=*/40,
@@ -296,9 +484,11 @@ TEST_F(
 
   ASSERT_EQ(ops.memoryCalls(), 1);
   ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
   EXPECT_EQ(ops.seqRmCalls()[0].endPos, 90);
   ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 90);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 120);
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -40);

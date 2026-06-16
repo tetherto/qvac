@@ -9,8 +9,8 @@
 #include <unordered_map>
 
 #include <gtest/gtest.h>
-#include <llama.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"

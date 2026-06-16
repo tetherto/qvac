@@ -63,6 +63,20 @@ declare interface ONNXTTSFiles {
    * if `voiceStyle` is not set.
    */
   voicesDir?: string
+  /**
+   * Chatterbox `ja` only: directory containing the MeCab IPAdic dictionary
+   * (char.bin, dicrc, matrix.bin, mecabrc, sys.dic, unk.dic).
+   * **Required** when `config.language === 'ja'`. No dictionary is bundled
+   * with the npm package; stage the compiled IPAdic dictionary from the QVAC
+   * model registry (S3). Ignored for non-Japanese languages and Supertonic.
+   * Alias: `mecabDictDir`.
+   */
+  mecabDictPath?: string
+
+  /**
+   * Alias of `mecabDictPath`.
+   */
+  mecabDictDir?: string
   tokenizerPath?: string
   speechEncoderPath?: string
   embedTokensPath?: string

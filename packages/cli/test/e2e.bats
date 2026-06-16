@@ -63,6 +63,11 @@ setup_file() {
         "model": "WHISPER_EN_TINY_Q8_0",
         "type": "whispercpp-audio-translation",
         "preload": true
+      },
+      "test-video": {
+        "src": "placeholder",
+        "type": "sdcpp-video",
+        "preload": false
       }
     }
   }
@@ -191,7 +196,7 @@ json_post_capture() {
 @test "chat: blocking completion returns valid response" {
   local body
   body=$(json_post "/v1/chat/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello and nothing else.\"}],\"max_tokens\":16}")
+    "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello and nothing else.\"}],\"max_tokens\":512}")
 
   echo "${body}" | jq -e '.id | startswith("chatcmpl-")' >/dev/null
   echo "${body}" | jq -e '.object == "chat.completion"' >/dev/null
@@ -212,13 +217,34 @@ json_post_capture() {
   echo "${body}" | jq -e '.choices[0].message.content | length > 0' >/dev/null
 }
 
+@test "chat: finish_reason=length when max_tokens exceeded (blocking)" {
+  local body
+  body=$(json_post "/v1/chat/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Count from 1 to 100.\"}],\"max_tokens\":1}")
+
+  echo "${body}" | jq -e '.choices[0].finish_reason == "length"' >/dev/null
+  echo "${body}" | jq -e '.usage.completion_tokens == 1' >/dev/null
+}
+
+@test "chat: finish_reason=length when max_tokens exceeded (streaming)" {
+  local raw
+  raw=$(curl -sN "${BASE}/v1/chat/completions" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Count from 1 to 100.\"}],\"stream\":true,\"max_tokens\":1}")
+
+  local last_chunk
+  last_chunk=$(echo "${raw}" | grep "^data: {" | tail -1 | sed 's/^data: //')
+  echo "${last_chunk}" | jq -e '.choices[0].finish_reason == "length"' >/dev/null
+  echo "${last_chunk}" | jq -e '.usage.completion_tokens == 1' >/dev/null
+}
+
 # ── Chat completions (streaming / SSE) ───────────────────────────────
 
 @test "chat: SSE stream returns valid chunks" {
   local raw
   raw=$(curl -sN "${BASE}/v1/chat/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hi.\"}],\"stream\":true,\"max_tokens\":16}")
+    -d "{\"model\":\"${LLM_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hi.\"}],\"stream\":true,\"max_tokens\":512}")
 
   echo "${raw}" | grep -q "data: \[DONE\]"
 
@@ -485,7 +511,7 @@ TXT
 @test "responses: streaming returns response.completed and stub header" {
   curl -sN -D "${FILE_TMPDIR}/resp.hdr" -o "${FILE_TMPDIR}/resp.body" "${BASE}/v1/responses" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Say hi.\",\"stream\":true,\"max_output_tokens\":24}"
+    -d "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Say hi.\",\"stream\":true,\"max_output_tokens\":512}"
   grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/resp.hdr"
   grep -q 'response.created' "${FILE_TMPDIR}/resp.body"
   grep -q 'response.completed' "${FILE_TMPDIR}/resp.body"
@@ -584,7 +610,7 @@ TXT
 @test "legacy completions: blocking returns text_completion shape" {
   local body
   body=$(json_post "/v1/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":16}")
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":4096}")
 
   echo "${body}" | jq -e '.id | startswith("cmpl-")' >/dev/null
   echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
@@ -611,7 +637,7 @@ TXT
 @test "legacy completions: multi-prompt blocking returns N choices with matching indices" {
   local body
   body=$(json_post "/v1/completions" \
-    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"Reply with the word \\\"alpha\\\".\",\"Reply with the word \\\"beta\\\".\"],\"max_tokens\":8}")
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"Reply with the word \\\"alpha\\\".\",\"Reply with the word \\\"beta\\\".\"],\"max_tokens\":512}")
 
   echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
   echo "${body}" | jq -e '.choices | length == 2' >/dev/null
@@ -650,7 +676,7 @@ TXT
   local raw
   raw=$(curl -sN "${BASE}/v1/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hi.\",\"stream\":true,\"max_tokens\":16}")
+    -d "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hi.\",\"stream\":true,\"max_tokens\":512}")
 
   echo "${raw}" | grep -q "data: \[DONE\]"
 
@@ -709,6 +735,54 @@ TXT
   local body
   body=$(json_post "/v1/responses" "{\"model\":\"${EMBED_ALIAS}\",\"input\":\"hello\"}")
   assert_error "${body}" "invalid_model_type"
+}
+
+# ── Videos (HTTP-layer only; model not loaded) ───────────────────────
+# test-video has preload:false so all requests that pass schema validation
+# reach requireModel and get 503 model_not_ready without GPU inference.
+
+VIDEO_ALIAS="test-video"
+# 1×1 transparent PNG, base64-encoded — minimal valid image for data URI tests.
+TINY_PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+@test "videos: JSON txt2vid reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"a bird flies\"}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: JSON img2vid with data URI reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":\"data:image/png;base64,${TINY_PNG_B64}\"}}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: JSON img2vid with HTTP URL reaches model check (returns 503 model_not_ready)" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"subject turns\",\"input_reference\":{\"image_url\":\"http://127.0.0.1:${E2E_PORT}/v1/models\"}}")
+  assert_error "${body}" "model_not_ready"
+}
+
+@test "videos: input_reference with wrong shape returns 400 invalid_request" {
+  local body
+  body=$(json_post "/v1/videos" \
+    "{\"model\":\"${VIDEO_ALIAS}\",\"prompt\":\"p\",\"input_reference\":{\"not_image_url\":\"x\"}}")
+  assert_error "${body}" "invalid_request"
+}
+
+@test "videos: multipart POST with input_reference file reaches model check (503 model_not_ready)" {
+  local tmpimg
+  tmpimg=$(mktemp /tmp/tiny-ref-XXXXXX.png)
+  printf '%s' "${TINY_PNG_B64}" | base64 --decode > "${tmpimg}"
+  local body
+  body=$(curl -s -X POST "${BASE}/v1/videos" \
+    --form "model=${VIDEO_ALIAS}" \
+    --form "prompt=subject turns" \
+    --form "input_reference=@${tmpimg}")
+  rm -f "${tmpimg}"
+  assert_error "${body}" "model_not_ready"
 }
 
 # ── Model lifecycle ───────────────────────────────────────────────────

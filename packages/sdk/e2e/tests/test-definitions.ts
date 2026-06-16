@@ -24,6 +24,7 @@ import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
 import { parakeetStreamTests } from "./parakeet-stream-tests.js";
+import { bciTests } from "./bci-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
@@ -36,6 +37,7 @@ import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
 import { multiGpuTests } from "./multi-gpu-tests.js";
 import { cancellationTests } from "./cancellation-tests.js";
+import { vlaTests } from "./vla-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -200,6 +202,9 @@ export const tests = [
   // Transcription tests
   ...transcriptionTests,
 
+  // BCI (neural-signal) transcription tests
+  ...bciTests,
+
   // transcribeStream VAD + endOfTurn event tests
   ...transcribeStreamEventsTests,
 
@@ -295,6 +300,11 @@ export const tests = [
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
+
+  // VLA (SmolVLA + π₀.₅) — runs on desktop; mobile skips via SkipExecutor
+  // (see mobile/consumer.ts) because the GGUFs are too large for the
+  // Device Farm infra (see note there).
+  ...vlaTests,
 
   // Additional model tests
   modelSwitchLlm,
