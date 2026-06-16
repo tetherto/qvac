@@ -40,7 +40,7 @@ const MODEL_NAME = CATALOG_ENTRY?.name ?? REQUESTED_MODEL
 const CTX_SIZE = Number(process.env['QVAC_CTX_SIZE'] ?? 32768)
 const REASONING_BUDGET = Number(process.env['QVAC_REASONING_BUDGET'] ?? -1)
 const TOOLS = process.env['QVAC_TOOLS'] !== 'false'
-const SHIM = process.env['QVAC_SHIM'] !== 'false'
+const COMPAT_TRANSFORMS = process.env['QVAC_SHIM'] !== 'false'
 const READY_TIMEOUT_MS = Number(process.env['QVAC_READY_TIMEOUT_MS'] ?? 1_800_000)
 const DEBUG = process.env['QVAC_DEBUG'] === 'true' || process.env['QVAC_DEBUG'] === '1'
 const LOG_FILE = process.env['QVAC_HOST_LOG']
@@ -164,7 +164,7 @@ function pipeResponse (upstreamRes: IncomingMessage, res: ServerResponse, reqSta
   res.writeHead(upstreamRes.statusCode ?? 502, outHeaders)
 
   const isSSE = (upstreamRes.headers['content-type'] ?? '').includes('text/event-stream')
-  if (!SHIM || !isSSE) {
+  if (!COMPAT_TRANSFORMS || !isSSE) {
     upstreamRes.on('end', () => trace(`done total=${((Date.now() - reqStart) / 1000).toFixed(1)}s`))
     upstreamRes.pipe(res)
     return
@@ -261,7 +261,7 @@ async function handleRequest (
 ): Promise<void> {
   let body = rawBody
   const contentType = req.headers['content-type'] ?? ''
-  if (SHIM && contentType.includes('application/json') && body.length > 0) {
+  if (COMPAT_TRANSFORMS && contentType.includes('application/json') && body.length > 0) {
     try {
       const parsed = flattenMessages(JSON.parse(body.toString('utf8')) as ChatCompletionBody)
       body = Buffer.from(JSON.stringify(parsed))
