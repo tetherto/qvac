@@ -17,6 +17,7 @@
 
 #include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
+#include "ContinuousBatchScheduler.hpp"
 #include "LlamaFinetuner.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
@@ -33,6 +34,8 @@
 #include "inference-addon-cpp/RuntimeStats.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::model;
+
+namespace batching = qvac_lib_inference_addon_llama::batching;
 
 struct FinetuneConfigOverrides {
   bool active{false};
@@ -120,6 +123,20 @@ public:
   std::any process(const std::any& input) final;
   std::string processPrompt(const Prompt& prompt);
 
+  /// Run several prompts in parallel via the continuous-batching session
+  /// and return their generated texts in input order. Each output entry
+  /// matches the prompt at the same index. Throws when batching is
+  /// unsupported (multimodal context) or any prompt is rejected by the
+  /// session (oversize, empty, or capacity exhausted with no room to
+  /// queue). Output streaming via `Prompt::outputCallback` is honoured
+  /// per-slot.
+  std::vector<std::string>
+  processPromptBatch(const std::vector<Prompt>& prompts);
+
+  /// @brief True when the model was loaded with continuous batching active
+  /// (text-only context with `n_seq_max > 1`, i.e. `parallel >= 2`).
+  [[nodiscard]] bool supportsBatching() const;
+
   /**
    * The Reset method.
    */
@@ -176,12 +193,27 @@ public:
   LlamaFinetuner& finetuner() { return finetuner_; }
   const LlamaFinetuner& finetuner() const { return finetuner_; }
 
+  /// For unit tests only: access the internal batch scheduler so tests can
+  /// inject a decode stub via setDecodeFuncForTesting(). Returns null when
+  /// batching is not active (n_parallel < 2 or multimodal model).
+  batching::ContinuousBatchScheduler* batchSchedulerForTesting();
+
 private:
   friend class LlamaFinetuner;
 
   // Impl without mutexes
   std::string processPromptImpl(const Prompt& prompt);
+  std::vector<std::string>
+  processPromptBatchImpl(const std::vector<Prompt>& prompts);
   void cancelImpl() const;
+
+  /// Build the JS-facing `RuntimeStats` from the scheduler's live stats
+  /// (single source of truth across all in-flight / queued batch work).
+  /// Caller must hold `stateMtx_` shared.
+  qvac_lib_inference_addon_cpp::RuntimeStats batchRuntimeStatsLocked() const;
+  /// Build the JS-facing `RuntimeStats` from `llama_perf_context` for
+  /// single-prompt runs. Caller must hold `stateMtx_` shared.
+  qvac_lib_inference_addon_cpp::RuntimeStats singleRuntimeStatsLocked() const;
 
   struct ReloadableState {
     ReloadableState(
@@ -211,12 +243,35 @@ private:
     // Destroyed before backendsHandle_ to avoid use-after-free
     std::unique_ptr<LlmContext> llmContext_;
 
+    /// Set when llama_n_seq_max > 1, null otherwise.
+    std::unique_ptr<batching::ContinuousBatchScheduler> batchScheduler_;
+
     // configuration values parsed from configFilemap
     llama_pos configuredNDiscarded_ = 0;
     std::optional<CacheManager> cacheManager_;
 
-    bool lastRunWasPrefill_ = false;
+    /// Mode flags for the most recent `processPrompt*` call, used by
+    /// `runtimeStats()` to dispatch between the single-prompt and batch
+    /// stat sources. The numbers themselves are NOT cached here: the
+    /// scheduler is the single source of truth for batch stats (it
+    /// already accumulates across every concurrent `processBatch` caller
+    /// in the same idle epoch), and `llama_perf_context` is the source
+    /// for single-prompt stats. Per-run reset is a single value-assign
+    /// (`lastRun_ = {}`).
+    struct LastRunInfo {
+      bool wasPrefill = false;
+      bool wasBatch = false;
+    };
+    LastRunInfo lastRun_;
   };
+
+  /// Continuous-batching gate. Active when the model is text-only and the
+  /// user opted into multi-sequence decoding via `n_parallel >= 2`
+  /// (which llama.cpp maps directly to `n_seq_max`).
+  static bool isMultiBatchActivated(ReloadableState& state);
+
+  static std::unique_ptr<batching::ContinuousBatchScheduler>
+  initBatchScheduler(ReloadableState& state);
 
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
@@ -276,6 +331,16 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
+
+  /// In-flight run counters per execution engine, used by cancelImpl() to
+  /// route a cancel to the engine actually running work. Lock-free on
+  /// purpose: cancel() can arrive on the scheduler's worker thread from a
+  /// streaming callback that holds the scheduler mutex, so routing must not
+  /// take any scheduler lock. Routing also isolates cancel state per
+  /// engine — an unconditional broadcast left a stale stop flag on the idle
+  /// engine that silently cancelled its next, unrelated run.
+  mutable std::atomic<unsigned> activeSingleJobs_{0};
+  mutable std::atomic<unsigned> activeBatchJobs_{0};
   int64_t runtimeBackendDevice_ = 0;
 
   bool isBitnetModel() const;

@@ -9,9 +9,9 @@
 
 #include <gtest/gtest.h>
 
-#include "model-interface/ModelMetadata.hpp"
 #include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
+#include "model-interface/ModelMetadata.hpp"
 
 namespace test_common {
 

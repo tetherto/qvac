@@ -924,3 +924,64 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
   auto stats = model->runtimeStats();
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), 0.0);
 }
+
+TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  // Set up parallel > 1 to activate the batch scheduler.
+  config_files["parallel"] = "4";
+  config_files["ctx_size"] = "512"; // Keep small for faster tests
+  config_files["n_predict"] = "10";
+  config_files["temp"] = "0";
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::string cacheFile = "test_stale_residency.bin";
+  if (fs::exists(cacheFile)) {
+    fs::remove(cacheFile);
+  }
+
+  // 1. Seed the cache file using the single-prompt path.
+  std::string singlePrompt =
+      R"([{"role": "user", "content": "The sky is blue. What color is the sky?"}])";
+  std::string response1 =
+      processPromptWithCacheOptions(model, singlePrompt, cacheFile, true);
+  ASSERT_FALSE(response1.empty());
+  ASSERT_TRUE(fs::exists(cacheFile));
+
+  // 2. Submit a batch prompt. The scheduler's first slot will occupy seq 0,
+  // execute, and upon completion clear seq 0's KV cells.
+  LlamaModel::Prompt batchPrompt;
+  batchPrompt.input = R"([{"role": "user", "content": "Count from 1 to 3."}])";
+  auto batchOutputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(batchPrompt)});
+  ASSERT_EQ(batchOutputs.size(), 1u);
+  ASSERT_FALSE(batchOutputs[0].empty());
+
+  // 3. Run a subsequent single-prompt with the same cache file.
+  // The CacheManager must detect that seq 0 was wiped (or simply invalidate its
+  // state) and force a reload from disk, leading to a valid completion.
+  std::string response2 = processPromptWithCacheOptions(
+      model,
+      R"([{"role": "user", "content": "What color did I say the sky was?"}])",
+      cacheFile,
+      false);
+
+  // Clean up cache file.
+  if (fs::exists(cacheFile)) {
+    fs::remove(cacheFile);
+  }
+
+  // Assert response is valid and correctly remembers the context from the
+  // loaded cache.
+  EXPECT_FALSE(response2.empty())
+      << "STALE CACHE RESIDENCY BUG: CacheManager believed the cache was "
+         "resident in seq 0 "
+         "even though the batch scheduler occupied and wiped seq 0. "
+         "processPrompt returned empty output.";
+}

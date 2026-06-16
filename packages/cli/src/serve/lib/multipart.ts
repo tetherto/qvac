@@ -1,4 +1,4 @@
-import type { preValidationAsyncHookHandler } from 'fastify'
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify'
 import { HttpError } from './http-error.js'
 
 export interface ParsedFile {
@@ -8,12 +8,7 @@ export interface ParsedFile {
   buffer: Buffer
 }
 
-export const multipartToBody: preValidationAsyncHookHandler = async function multipartToBody (req) {
-  const contentType = req.headers['content-type'] ?? ''
-  if (!contentType.includes('multipart/form-data')) {
-    throw new HttpError(400, 'invalid_content_type', 'Content-Type must be multipart/form-data.')
-  }
-
+async function parseMultipart (req: FastifyRequest): Promise<void> {
   const fields: Record<string, string | Buffer> = {}
   const files: ParsedFile[] = []
 
@@ -49,3 +44,18 @@ export const multipartToBody: preValidationAsyncHookHandler = async function mul
   req.body = fields
   req.multipartFiles = files
 }
+
+export const multipartToBody: preValidationAsyncHookHandler = async function multipartToBody (req) {
+  const contentType = req.headers['content-type'] ?? ''
+  if (!contentType.includes('multipart/form-data')) {
+    throw new HttpError(400, 'invalid_content_type', 'Content-Type must be multipart/form-data.')
+  }
+  await parseMultipart(req)
+}
+
+export const multipartToBodyOptional: preValidationAsyncHookHandler =
+  async function multipartToBodyOptional (req) {
+    const contentType = req.headers['content-type'] ?? ''
+    if (!contentType.includes('multipart/form-data')) return
+    await parseMultipart(req)
+  }

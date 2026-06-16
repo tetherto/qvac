@@ -3,13 +3,11 @@ description: |
   Phase 6 of the mobile integration test pipeline.
 
   Always runs, even on monitor failure (so crashes get full forensic data).
-  Refreshes AWS credentials, downloads CUSTOMER_ARTIFACT + LOG artifacts
-  from each Device Farm job, extracts bare_console.log from
-  Customer_Artifacts.zip, parses any [PERF_REPORT_START]/END marker block
-  out of Logcat/console logs, and uploads three artifact bundles:
+  Refreshes AWS credentials, downloads only the essential artifacts from
+  Device Farm (Customer_Artifacts.zip + Logcat), extracts bare_console.log,
+  test-results.json, logcat_full.txt, and perf markers, then uploads:
     - console-logs-<addon>-<platform>
     - perf-report-<addon>-<platform> (only when enables-perf=true)
-    - devicefarm-logs-<addon>-<platform>
 
 inputs:
   platform:
@@ -76,6 +74,9 @@ runs:
           [ -n "$_arn" ] && RUN_ARNS+=("$_arn")
         done < <(echo "$RUN_ARNS_JSON" | jq -r '.[]')
 
+        # QVAC-19368: only download Customer Artifacts + Logcat. Skip TCP dump
+        # (up to 624MB), screenshots, videos, XML, install logs — nobody uses
+        # them and they dominated the download time.
         download_artifact() {
           local dest_dir="$1" art_json
           art_json=$(echo "$2" | base64 -d)
@@ -87,6 +88,13 @@ runs:
           if [ "$PLATFORM" = "Android" ] && [ "$ext" = "mp4" ]; then
             return
           fi
+          # Filter: only Customer Artifacts (bare_console, test-results, perf,
+          # logcat_full) and Logcat (C++ logs). Device Farm names the zip
+          # "Customer Artifacts" (with space).
+          case "$name" in
+            *Customer*Artifact*|*Logcat*|*logcat*) ;;
+            *) return ;;
+          esac
           local safe_name
           safe_name=$(echo "$name" | tr ' /' '__' | tr -cd '[:alnum:]_.-')
           curl -fsSL --max-time 300 -o "${dest_dir}/${safe_name}.${ext}" "$url" || true
@@ -110,12 +118,14 @@ runs:
             mkdir -p "$JOB_DIR"
             echo "  Device: $DEVICE_NAME"
 
-            # Suite-level artifacts (Customer_Artifacts.zip, TESTSPEC_OUTPUT,
-            # Logcat, DEVICE_LOG, etc.) live at the suite level in the Device
-            # Farm hierarchy. Querying only at job level misses them.
             SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
             for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
               SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+
+              case "$SUITE_NAME" in
+                "Setup Test"|"Teardown Test") continue ;;
+              esac
+
               SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
               SUITE_DIR="${JOB_DIR}/${SAFE_SUITE}"
               mkdir -p "$SUITE_DIR"
@@ -131,7 +141,6 @@ runs:
               done
             done
 
-            # Job-level FILE artifacts (e.g. video, screenshots not tied to a suite).
             JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
             for ART in $(echo "$JOB_ARTIFACTS" | jq -r '.artifacts[] | @base64'); do
               download_artifact "$JOB_DIR" "$ART"
@@ -190,6 +199,218 @@ runs:
         echo "Console logs extracted to $CONSOLE_DIR:"
         find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || true
 
+    # QVAC-19368: parse individual test() results from brittle's TAP output
+    # in the bare console / logcat logs, consolidate into a JSON with both
+    # runner-function-level and per-test() detail, and write a summary table
+    # to the GitHub Step Summary.
+    - name: Build test-case results summary
+      id: results_summary
+      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        ADDON_NAME: ${{ inputs.addon-npm-name }}
+      run: |
+        CONSOLE_DIR="console-logs/${PLATFORM}"
+        OUT_JSON="${CONSOLE_DIR}/test-case-details.json"
+
+        python3 - "$CONSOLE_DIR" "$OUT_JSON" "$PLATFORM" "$ADDON_NAME" <<'PY'
+        import sys, json, glob, os, re
+
+        console_dir, out_json, platform, addon = sys.argv[1:5]
+
+        def normalize_test_name(name):
+            """Collapse dynamic values so the same logical test merges across devices.
+            e.g. 'CacheTokens (53) > 0' and 'CacheTokens (55) > 0' both become
+            'CacheTokens (N) > 0'."""
+            # Replace parenthesized integers: (53) -> (N)
+            name = re.sub(r'\(\d+\)', '(N)', name)
+            # Replace standalone large numbers that look like token counts: 538 -> N
+            name = re.sub(r'\b\d{2,}\b', 'N', name)
+            # Truncate at assertion detail (variable model output in the name)
+            for marker in ['. Found ', '. Full output', ': "', ", got "]:
+                idx = name.find(marker)
+                if idx > 0:
+                    name = name[:idx]
+                    break
+            return name.strip()
+
+        def escape_md(text):
+            """Escape characters that break markdown table cells."""
+            text = text.replace('|', '\\|')
+            text = text.replace('<', '&lt;').replace('>', '&gt;')
+            text = text.replace('`', "'")
+            return text
+
+        def device_label(filename):
+            """Extract a readable device name from the artifact filename."""
+            base = os.path.basename(filename).rsplit('.', 1)[0]
+            # Match device names: stop before the log-type suffix (bare_console,
+            # test-results, logcat_full, appium, Logcat, etc.)
+            m = re.search(
+                r'((?:Apple|Google|Samsung)[_ ][\w ]+?)(?:_(?:bare_console|test-results|logcat_full|appium|Logcat))',
+                base)
+            if not m:
+                return None
+            return m.group(1).replace('_', ' ').strip()
+
+        def parse_tap_from_file(filepath):
+            """Parse brittle TAP lines from a logcat_full.txt or bare_console.log."""
+            tests = []
+            seen = set()
+            try:
+                with open(filepath, 'r', errors='replace') as fh:
+                    for line in fh:
+                        # Match TAP lines: "ok N - name" or "not ok N - name"
+                        # In logcat: "... I bare    : ok 1 - name # time = 123ms"
+                        # In bare_console.log: "ok 1 - name # time = 123ms"
+                        m = re.search(r'(?:I bare\s*:\s*)?((?:not )?ok) (\d+) - (.+)', line)
+                        if not m:
+                            continue
+                        passed = m.group(1) == 'ok'
+                        num = int(m.group(2))
+                        rest = m.group(3).strip()
+                        # Parse name, timing, skip
+                        name = rest.rstrip("'\"")  # strip ReactNativeJS quote wrapper
+                        time_ms = None
+                        status = 'passed' if passed else 'failed'
+                        if '# SKIP' in name:
+                            status = 'skipped'
+                            name = name.split('# SKIP')[0].strip()
+                        elif '# time =' in name:
+                            tp = re.search(r'# time = ([\d.]+)ms', name)
+                            if tp:
+                                time_ms = round(float(tp.group(1)))
+                            name = name.split('# time')[0].strip()
+                        elif not passed:
+                            # "not ok N - name: error message"
+                            parts = name.split(':', 1)
+                            name = parts[0].strip()
+                        name = normalize_test_name(name)
+                        # Deduplicate on normalized name (not num+name) so perf
+                        # iterations and ReactNativeJS echoes don't inflate counts.
+                        if name in seen:
+                            continue
+                        seen.add(name)
+                        tests.append({
+                            'num': num, 'name': name,
+                            'status': status, 'timeMs': time_ms
+                        })
+            except Exception as e:
+                print(f"  WARNING: failed to parse {filepath}: {e}")
+            return tests
+
+        # ── Collect runner-function-level results from test-results.json ──
+        runner_rows = {}
+        devices = set()
+        for f in sorted(glob.glob(os.path.join(console_dir, '*_test-results.json'))):
+            dev = device_label(f)
+            if not dev:
+                continue
+            devices.add(dev)
+            try:
+                d = json.load(open(f))
+            except Exception:
+                continue
+            for t in d.get('tests', []):
+                title = t.get('title', '?')
+                status = t.get('status', 'unknown')
+                dur = t.get('duration', 0) or 0
+                if status == 'passed' and dur < 500:
+                    status = 'skipped'
+                runner_rows.setdefault(title, {})[dev] = {
+                    'status': status, 'durationMs': dur
+                }
+
+        # ── Collect individual test() cases from TAP output ──
+        tap_rows = {}
+        for f in sorted(
+            glob.glob(os.path.join(console_dir, '*_logcat_full.txt')) +
+            glob.glob(os.path.join(console_dir, '*_bare_console.log'))
+        ):
+            dev = device_label(f)
+            if not dev:
+                continue
+            devices.add(dev)
+            tests = parse_tap_from_file(f)
+            for t in tests:
+                existing = tap_rows.get(t['name'], {}).get(dev)
+                if existing is None:
+                    tap_rows.setdefault(t['name'], {})[dev] = {
+                        'status': t['status'],
+                        'timeMs': t['timeMs']
+                    }
+
+        devices = sorted(devices)
+        summary = {
+            'addon': addon, 'platform': platform,
+            'devices': devices,
+            'runners': [
+                {'runner': title, 'results': runner_rows[title]}
+                for title in sorted(runner_rows)
+            ],
+            'testCases': [
+                {'test': name, 'results': tap_rows[name]}
+                for name in sorted(tap_rows)
+            ]
+        }
+
+        with open(out_json, 'w') as fh:
+            json.dump(summary, fh, indent=2)
+
+        runner_count = len(runner_rows)
+        case_count = len(tap_rows)
+        print(f"Wrote {out_json}: {runner_count} runners, {case_count} test cases, {len(devices)} devices")
+
+        # ── GitHub Step Summary ──
+        sm = os.environ.get('GITHUB_STEP_SUMMARY')
+        if not sm:
+            sys.exit(0)
+        icon = {'passed': '✅', 'failed': '❌', 'skipped': '⏭️'}
+        with open(sm, 'a') as fh:
+            # Runner-level summary (compact)
+            if runner_rows:
+                fh.write(f"\n### {addon} — {platform} runners\n\n")
+                fh.write('| Runner | ' + ' | '.join(devices) + ' |\n')
+                fh.write('| --- | ' + ' | '.join(['---'] * len(devices)) + ' |\n')
+                for title in sorted(runner_rows):
+                    cells = []
+                    for dv in devices:
+                        r = runner_rows[title].get(dv)
+                        if not r:
+                            cells.append('–')
+                        else:
+                            ic = icon.get(r['status'], '–')
+                            dur = f" {r['durationMs']//1000}s" if r['status'] not in ('skipped',) and r['durationMs'] else ''
+                            cells.append(f"{ic}{dur}")
+                    fh.write(f"| {escape_md(title)} | " + ' | '.join(cells) + ' |\n')
+                fh.write('\n')
+
+            # Individual test() cases (the real detail)
+            if tap_rows:
+                fh.write(f"\n<details><summary>{addon} — {platform} test cases ({case_count} tests)</summary>\n\n")
+                fh.write('| # | Test | ' + ' | '.join(devices) + ' |\n')
+                fh.write('| --- | --- | ' + ' | '.join(['---'] * len(devices)) + ' |\n')
+                for i, name in enumerate(sorted(tap_rows), 1):
+                    cells = []
+                    for dv in devices:
+                        r = tap_rows[name].get(dv)
+                        if not r:
+                            cells.append('–')
+                        else:
+                            ic = icon.get(r['status'], '–')
+                            t = f" {r['timeMs']//1000}s" if r.get('timeMs') and r['status'] != 'skipped' else ''
+                            cells.append(f"{ic}{t}")
+                    fh.write(f"| {i} | {escape_md(name)} | " + ' | '.join(cells) + ' |\n')
+                fh.write('\n</details>\n\n')
+        PY
+
+        if [ -f "$OUT_JSON" ]; then
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Upload console logs
       id: upload_console_log
       if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
@@ -199,6 +420,22 @@ runs:
         path: console-logs/
         retention-days: 30
         if-no-files-found: ignore
+
+    # QVAC-19368: link the uploaded console-logs artifact (which contains
+    # test-results-summary.json) from the run summary so reviewers can open it
+    # without digging through the Device Farm console.
+    - name: Link test-results artifact in summary
+      if: always() && steps.results_summary.outputs.found == 'true' && steps.upload_console_log.outputs.artifact-url != ''
+      shell: bash
+      env:
+        ARTIFACT_URL: ${{ steps.upload_console_log.outputs.artifact-url }}
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        {
+          echo ""
+          echo "📦 [${PLATFORM} test-results-summary.json + console logs]($ARTIFACT_URL)"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Extract perf report (if enabled)
       id: extract_perf
@@ -266,11 +503,7 @@ runs:
         retention-days: 30
         if-no-files-found: ignore
 
-    - name: Upload full Device Farm logs
-      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
-      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
-      with:
-        name: devicefarm-logs-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
-        path: devicefarm-logs/
-        retention-days: 30
-        if-no-files-found: ignore
+    # QVAC-19368: removed the full devicefarm-logs upload (screenshots, XML,
+    # install logs, etc.) per team agreement — only console-logs and
+    # perf-report artifacts are needed. The raw Device Farm artifacts can
+    # still be accessed via the AWS console links in the monitor output.

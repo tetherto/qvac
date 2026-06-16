@@ -28,11 +28,13 @@ enum class PipelineMode : std::uint8_t {
 };
 
 // Selects which ggml backend device the inference steps run on. `CPU` is the
-// always-available default; `VULKAN` (Linux/Windows/Android) and `METAL`
-// (Apple) opt in to GPU execution when a matching device is present, otherwise
-// the steps fall back to CPU (see `OcrBackendSelection`). Mirrors the opt-in
-// GPU pattern in `vla_backend_selection`.
-enum class BackendDevice : std::uint8_t { CPU, VULKAN, METAL };
+// always-available default; `VULKAN` (Linux/Windows/Android), `METAL` (Apple)
+// and `OPENCL` (Android/Adreno) opt in to GPU execution when a matching device
+// is present, otherwise the steps fall back to CPU (see `OcrBackendSelection`).
+// Mirrors the opt-in GPU pattern in `vla_backend_selection`. OPENCL is the
+// preferred GPU path on Qualcomm Adreno, whose Vulkan compute path is
+// numerically broken and therefore guarded off on the auto Vulkan path.
+enum class BackendDevice : std::uint8_t { CPU, VULKAN, METAL, OPENCL };
 
 // Mirrors @qvac/ocr-onnx's PipelineInput so the JS side can interchangeably
 // drive both addons. Either pass an encoded JPEG/PNG byte buffer (set

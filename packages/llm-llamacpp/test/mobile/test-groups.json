@@ -1,16 +1,16 @@
 {
   "ios": {
-    "heavy1": ["runFinetuningPauseResumeTest"],
-    "heavy2": ["runToolCallingTest"],
-    "heavy3": ["runImageElephantTest"],
-    "heavy4": ["runOcrLightonTest"],
-    "heavy5": ["runReasoningTest"],
-    "heavy6": ["runSlidingContextTest"],
-    "heavy7": ["runImageFruitPlateTest"],
-    "heavy8": ["runImageHighResAuroraTest"],
-    "heavy9": ["runGemma4Test"],
-    "heavy10": ["runOcrPaddleTest"],
-    "heavy11": ["runQuantizedKvcacheTest"],
+    "finetuning": ["runFinetuningPauseResumeTest"],
+    "toolCalling": ["runToolCallingTest"],
+    "imageElephant": ["runImageElephantTest"],
+    "ocrLighton": ["runOcrLightonTest"],
+    "reasoning": ["runReasoningTest"],
+    "slidingContext": ["runSlidingContextTest"],
+    "imageFruitPlate": ["runImageFruitPlateTest"],
+    "imageAurora": ["runImageHighResAuroraTest"],
+    "gemma": ["runGemma4Test"],
+    "ocrPaddle": ["runOcrPaddleTest"],
+    "quantizedKvcache": ["runQuantizedKvcacheTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -41,36 +41,42 @@
     ]
   },
   "android": {
-    "groupA": [
-      "runApiBehaviorTest",
+    "toolCalling": [
+      "runToolCallingTest"
+    ],
+    "gemma": [
+      "runGemma4Test"
+    ],
+    "cacheStateMachine": [
+      "runCacheStateMachineTest"
+    ],
+    "funcShardA": [
+      "runFinetuningPauseResumeTest",
+      "runSlidingContextTest",
+      "runTurboquantTest",
       "runBitnetTest",
       "runConfigParametersTest",
-      "runFinetuningPauseResumeTest",
+      "runQuantizedKvcacheTest",
+      "runOcrLightonTest",
+      "runMultiGpuTest"
+    ],
+    "funcShardB": [
+      "runOcrPaddleTest",
+      "runToolsCompactTest",
+      "runImageElephantTest",
+      "runGrammarTest"
+    ],
+    "funcShardC": [
       "runGenerationParamsTest",
-      "runGrammarTest",
       "runMropeSlidingContextTest",
       "runMultiInstanceTest",
-      "runQuantizedKvcacheTest",
       "runQwen35Test",
       "runReasoningTest",
-      "runToolsCompactTest",
-      "runTurboquantTest"
-    ],
-    "groupB": [
-      "runCacheStateMachineTest",
-      "runGemma4Test",
+      "runUtf8OutputTest",
+      "runApiBehaviorTest",
+      "runImageHighResAuroraTest",
       "runModelLoadingTest",
-      "runMultiGpuTest",
-      "runOcrLightonTest",
-      "runOcrPaddleTest",
-      "runSlidingContextTest",
-      "runToolCallingTest",
-      "runUtf8OutputTest"
-    ],
-    "groupImagesPerf": [
-      "runImageElephantTest",
-      "runImageFruitPlateTest",
-      "runImageHighResAuroraTest"
+      "runImageFruitPlateTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
