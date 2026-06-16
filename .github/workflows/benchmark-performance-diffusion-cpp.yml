@@ -188,13 +188,16 @@ jobs:
       - name: Add summary
         if: always()
         shell: bash
+        env:
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
         run: |
           set +e
           MD_FILE="benchmark-artifacts/diffusion-cpp-performance-findings.md"
           {
             echo "## Diffusion CPP Benchmark Report"
             echo ""
-            echo "> \`QVAC_PERF_RUNS=${{ inputs.qvac_perf_runs }}\`, \`QVAC_PERF_WARMUP_RUNS=${{ inputs.qvac_perf_warmup_runs }}\`."
+            echo "> \`QVAC_PERF_RUNS=${QVAC_PERF_RUNS}\`, \`QVAC_PERF_WARMUP_RUNS=${QVAC_PERF_WARMUP_RUNS}\`."
             echo ""
             if [ -f "$MD_FILE" ]; then
               cat "$MD_FILE"
@@ -205,7 +208,7 @@ jobs:
 
       - name: Upload consolidated benchmark report
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: diffusion-cpp-performance-findings
           path: |
