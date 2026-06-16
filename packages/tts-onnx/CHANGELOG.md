@@ -15,6 +15,10 @@ This release updates `@qvac/tts-onnx` to depend on `@qvac/infer-base` `^0.6.0`, 
 
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
 
+## Pull Requests
+
+- [#2635](https://github.com/tetherto/qvac/pull/2635) - bump @qvac/infer-base to ^0.6.0 for tts-onnx
+
 ## [0.9.2] - 2026-06-09
 
 ### Added
