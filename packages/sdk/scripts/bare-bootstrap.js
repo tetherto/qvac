@@ -8,8 +8,8 @@
  */
 
 import Module from "bare-module";
-import process from "process";
-import path from "path";
+import process from "bare-process";
+import path from "bare-path";
 import fs from "bare-fs";
 import { pathToFileURL } from "bare-url";
 
@@ -45,6 +45,23 @@ if (!process.stdout.write) {
 // Load import maps from bare-imports.json
 const bareImportsPath = path.join(process.cwd(), "bare-imports.json");
 const bareImports = JSON.parse(fs.readFileSync(bareImportsPath, "utf-8"));
+
+// Bare runs in-process with no spawned worker, so nothing auto-registers
+// plugins like Node/Expo do. Load the worker entry to register the built-in
+// set; initializeWorkerCore is idempotent, so the example's getRPC() is fine.
+const workerEntry = path.resolve(process.cwd(), "dist/server/worker.js");
+if (fs.existsSync(workerEntry)) {
+  Module.load(pathToFileURL(workerEntry), null, {
+    imports: bareImports,
+    conditions: ["bare", "import"],
+  });
+} else {
+  console.warn(
+    `[bare-bootstrap] default worker entry not found at ${workerEntry}; ` +
+      "examples that make SDK calls will fail to register plugins. " +
+      "Run `bun run build` first.",
+  );
+}
 
 const absolutePath = path.resolve(process.cwd(), targetScript);
 const scriptUrl = pathToFileURL(absolutePath);
