@@ -31,12 +31,12 @@ on:
         default: true
         type: boolean
       models:
-        description: "Comma-separated model ids to limit the sweep to (e.g. 'embeddingGemma' for a quick plumbing check). Empty = all manifest models."
+        description: "DESKTOP sweep only: comma-separated model ids to limit the desktop sweep to (e.g. 'embeddingGemma' for a quick plumbing check; pair with run_mobile=false). Does NOT narrow the mobile matrix, which always runs its full (model x quant) shard set. Empty = all manifest models."
         required: false
         default: ""
         type: string
       repeats:
-        description: "Measured repetitions per config (default 5). Set 1 for a fast validation run."
+        description: "DESKTOP sweep only: measured repetitions per desktop config (default 5; set 1 for a fast validation run). Mobile repeats are fixed at 3 in the on-device runner and are not affected by this input."
         required: false
         default: "5"
         type: string
@@ -97,8 +97,8 @@ jobs:
   # Fast fail-first gate (~30s, no prebuild): the mobile benchmark shards are
   # generated from test/integration/_benchmark-matrix.js and not committed, so
   # the committed integration.auto.cjs and this workflow's test_groups must stay
-  # in lockstep with the matrix. If they have drifted, fail now rather than after
-  # the mobile prebuild.
+  # in lockstep with the matrix. prebuild depends on this job, so a drift fails
+  # the run in ~30s instead of after the expensive prebuild.
   verify-shards:
     needs:
       - context
@@ -165,7 +165,12 @@ jobs:
     needs:
       - context
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_desktop || inputs.run_mobile) && !inputs.summarize_only
+      - verify-shards
+    # verify-shards is a gate so a shard drift fails before this expensive build.
+    # It is skipped on a desktop-only run (run_mobile false), so !cancelled() +
+    # the explicit result check let that case through rather than a skipped gate
+    # skipping the build.
+    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_desktop || inputs.run_mobile) && !inputs.summarize_only && !cancelled() && needs.verify-shards.result != 'failure'
     permissions:
       contents: write
       packages: write
