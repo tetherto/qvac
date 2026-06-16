@@ -232,6 +232,15 @@ function mobileModelType (result) {
   return match ? match[1] : 'tdt'
 }
 
+// Quantisation token from the mobile test label (e.g. `[q4_0]`), stamped by
+// mobile-perf-runner.js. Falls back to '' when the label predates the quant
+// tag (older artifacts) so dedupe/sort still produce a single mobile row.
+function mobileQuant (result) {
+  const testName = String(result.test || '').toLowerCase()
+  const match = testName.match(/\[(q8_0|q4_0|f16)\]/)
+  return match ? match[1] : ''
+}
+
 function normalizeMobileRecords (report, sourceFile) {
   const byModelAndProvider = new Map()
   const device = report.device || {}
@@ -241,11 +250,13 @@ function normalizeMobileRecords (report, sourceFile) {
   for (const result of report.results || []) {
     const provider = mobileExecutionProvider(result)
     const modelType = mobileModelType(result)
+    const quant = mobileQuant(result)
     const metrics = result.metrics || {}
-    const key = `${modelType}|${provider}`
+    const key = `${modelType}|${quant}|${provider}`
     if (!byModelAndProvider.has(key)) {
       byModelAndProvider.set(key, {
         modelType,
+        quant,
         provider,
         rtf: [],
         wallMs: []
