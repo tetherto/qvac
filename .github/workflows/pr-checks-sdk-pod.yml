@@ -184,65 +184,12 @@ jobs:
             fi
           }
 
-          # Validates the SDK tarball installs cleanly for end consumers:
-          #   1. zero peer-dependency warnings on install
-          #   2. shared P2P packages resolve to a single copy
-          #   3. import('@qvac/sdk') resolves from a vanilla install
-          # Runs in a subshell so its directory changes do not leak.
+          # Validates the SDK tarball installs cleanly for end consumers.
+          # See packages/sdk/scripts/consumer-install-check.mjs for the
+          # vanilla install, dependency-tree, import, and runtime smoke checks.
           consumer_install_check() (
             set -eo pipefail
-            cd "$WS/packages/sdk"
-
-            # Pack the tarball produced by the preceding build step.
-            bun pm pack --destination dist/
-            tarball=$(ls dist/qvac-sdk-*.tgz | head -n1)
-            test -n "$tarball" || { echo "::error::No SDK tarball found after pack"; exit 1; }
-            tarball_abs="$(pwd)/$tarball"
-
-            check_consumer() {
-              local consumer="$1" label="$2"
-              cd "$consumer"
-
-              if grep -Eq "ERESOLVE|npm warn peer" install.log; then
-                echo "::error title=Peer dependency drift (${label})::SDK consumer install surfaced peer warnings"
-                grep -E "ERESOLVE|npm warn peer" install.log || true
-                return 1
-              fi
-              echo "::notice::[${label}] 0 peer warnings"
-
-              local f=0 tree copies
-              for pkg in corestore hyperswarm hyperdrive hyperdb hyperblobs hyperdht; do
-                tree=$(npm ls "$pkg" --all 2>&1)
-                copies=$(printf '%s\n' "$tree" | grep -E "[─ ]${pkg}@" | grep -vc "deduped" || true)
-                if [ "$copies" != "1" ]; then
-                  echo "::error::[${label}] ${pkg} resolved to ${copies} copies (expected 1)"
-                  printf '%s\n' "$tree"
-                  f=1
-                else
-                  echo "  ok  [${label}] ${pkg} = 1 copy"
-                fi
-              done
-              [ "$f" = "0" ] || return 1
-              echo "::notice::[${label}] Single-copy invariant holds for shared P2P packages"
-
-              node -e "import('@qvac/sdk').then(m => { if (Object.keys(m).length < 50) { console.error('FAIL: too few exports'); process.exit(1); } console.log('[${label}] import ok:', Object.keys(m).length, 'exports'); }).catch(e => { console.error('[${label}] FAIL:', e.message); process.exit(1); })"
-            }
-
-            # Scenario 1: default install (plug-n-play) - all optionalDependencies present.
-            consumer_default=$(mktemp -d)
-            cd "$consumer_default"
-            npm init -y > /dev/null
-            npm pkg set type=module > /dev/null
-            npm install --no-fund --no-audit --ignore-scripts --loglevel=info "$tarball_abs" 2>&1 | tee install.log
-            check_consumer "$consumer_default" "default"
-
-            # Scenario 2: lean backend install (--omit=optional) - no optionalDependencies.
-            consumer_lean=$(mktemp -d)
-            cd "$consumer_lean"
-            npm init -y > /dev/null
-            npm pkg set type=module > /dev/null
-            npm install --no-fund --no-audit --ignore-scripts --omit=optional --loglevel=info "$tarball_abs" 2>&1 | tee install.log
-            check_consumer "$consumer_lean" "lean (--omit=optional)"
+            node "$WS/packages/sdk/scripts/consumer-install-check.mjs"
           )
 
           # Install the Bare runtime once if any changed package needs it.
