@@ -13,11 +13,10 @@
 //
 // All four tiers are pulled from the QVAC model registry: fp16 / fp32 from the
 // 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants from the
-// 2026-06-15 build (QVAC-20686).  When a tier can't be fetched (offline, or the
-// @qvac/registry-client devDependency is missing) the corresponding test
-// self-skips with a hint (it can also be provisioned offline via
-// `npm run setup-supertonic3-models`) rather than failing, so the suite stays
-// green on every runner.
+// 2026-06-15 build (QVAC-20686).  Every tier is published, so a fetch failure
+// is a real error and the corresponding test FAILS (it no longer self-skips):
+// CI stages all four tiers via `download-models:registry`, and offline runs can
+// provision them with `npm run setup-supertonic3-models`.
 
 const os = require('bare-os')
 const path = require('bare-path')
@@ -37,7 +36,7 @@ function getBaseDir () {
 const SAMPLE_RATE = 44100
 
 // Tiers to sweep.  All four are fetched from the registry (fp16/fp32 @
-// 2026-06-10, q8_0/q4_0 @ 2026-06-15); a tier that can't be fetched self-skips.
+// 2026-06-10, q8_0/q4_0 @ 2026-06-15); a tier that can't be fetched fails.
 const QUANTS = ['f16', 'f32', 'q8_0', 'q4_0']
 
 // Existing (inherited from Supertonic 2) + new v3-only languages.  The new
@@ -76,8 +75,11 @@ for (const quant of QUANTS) {
       quant
     })
     if (!download.success) {
-      t.pass(`skipped: supertonic3-${quant}.gguf unavailable ` +
-        '(registry fetch failed, or not provisioned locally)')
+      t.fail(`supertonic3-${quant}.gguf could not be fetched ` +
+        '(registry fetch failed, or not provisioned locally). ' +
+        'All four tiers are published on the QVAC registry; a fetch failure ' +
+        'is a real error. For offline runs provision with ' +
+        '`npm run setup-supertonic3-models`.')
       return
     }
 

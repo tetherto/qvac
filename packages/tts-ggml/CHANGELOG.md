@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
 - RTF benchmark reports now surface the desktop GPU hardware name (QVAC-20499). `test/benchmark/rtf-benchmark.test.js` drives the shared performance reporter's `detectDevice()` (via `bare-subprocess`: nvidia-smi / vulkaninfo / system_profiler) to populate `device.gpu` / `device.cpu` in the canonical report and `labels.gpuModel` in the per-config JSON; `scripts/perf-report/aggregate-tts-ggml-rtf.js` renders a `GPU Model` column. Mobile leaves `device.gpu` null (device name is the proxy). CI-only.
 
+## [0.3.1] - 2026-06-16
+
+### Added
+
+- **Supertonic 3 (31-language) support (QVAC-19305).** Brings the v3 Supertonic
+  model to the addon: `index.js` recognises the Supertonic 3 GGUFs in the
+  `modelDir` auto-detect / path-resolve paths (the v3 GGUFs are published per
+  quant tier with the quant in the filename, e.g. `supertonic3-f16.gguf` /
+  `supertonic3-q8_0.gguf`, so the lookup matches any `supertonic3[-<quant>].gguf`).
+  The v3 model/inference code lands in `tts-cpp` (`qvac-ext-lib-whisper.cpp` PR
+  #42, `master` @ `24eeb028`); `vcpkg.json` bumps the `tts-cpp` pin to
+  `2026-06-12`.
+- **Supertonic 3 GGUF tooling.** `convert-supertonic2-to-gguf.py --arch
+  supertonic3` (text-encoder ConvNeXt dilations + vector-estimator CFG
+  numerical-parity fixes; pipeline parity < 2e-4 across en/ko/es/pt/fr) and
+  `requantize-gguf.py` q8_0 / q4_0 block-quant support (ConvNeXt pointwise convs
+  squeezed to 2-D and re-expanded at load via `supertonic.pwconv_squeezed`,
+  fixing the old q4_0 SIGBUS). `scripts/setup-supertonic3-models.sh` +
+  `setup-supertonic3-models` npm script for reproducible offline provisioning.
+- **Registry-hosted Supertonic 3 models.** All four tiers are published on the
+  QVAC model registry (f16 / f32 @ `2026-06-10`, QVAC-20568; q8_0 / q4_0 @
+  `2026-06-15`, QVAC-20686). `download-tts-ggml-models.js` +
+  `test/utils/downloadModel.js` fetch every tier from S3 (per-tier build dates);
+  local provisioning is now an offline-only fallback.
+- **Supertonic 3 integration tests** (`test/integration/supertonic3-quant.test.js`):
+  sweep f16 / f32 / q8_0 / q4_0 across the five inherited (en/ko/es/pt/fr) plus
+  the new v3-only (de/it/nl) languages; assert load + run + 44.1 kHz output. A
+  tier that can't be fetched fails the run (every tier is published on the
+  registry). Mobile integration auto-test wiring added.
+
 ## [0.3.0] - 2026-06-11
 
 ### Added
