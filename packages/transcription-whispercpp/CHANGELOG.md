@@ -5,17 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.2]
-
-This release updates `@qvac/transcription-whispercpp` to depend on `@qvac/infer-base` `^0.6.0`, keeping the addon aligned with the current inference base shared across the inference packages. There are no functional or API changes.
+## [Unreleased]
 
 ### Changed
 
-- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
-
-## Pull Requests
-
-- [#2638](https://github.com/tetherto/qvac/pull/2638) - bump @qvac/infer-base to ^0.6.0 for transcription-whispercpp
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2638](https://github.com/tetherto/qvac/pull/2638)).
 
 ## [0.9.0]
 
