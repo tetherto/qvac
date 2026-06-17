@@ -28,5 +28,6 @@ temp/
 !assets/**
 *.png
 test/model/
+test/results/
 test/integration/all.js
 test/unit/all.js
