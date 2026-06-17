@@ -5,7 +5,7 @@
   "addon": true,
   "scripts": {
     "build": "bare-make generate && bare-make build && bare-make install",
-    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "build:pack": "node ../../tools/ci/qvac-package-deps.mjs validate && pnpm pack --pack-destination dist",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "lint": "standard --ignore \"addon/**\"",
     "lint:fix": "standard --ignore \"addon/**\" --fix",
@@ -56,20 +56,20 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml#readme",
   "devDependencies": {
-    "@types/node": "^24.2.1",
-    "bare-url": "^2.1.6",
-    "brittle": "^3.16.5",
-    "cmake-bare": "^1.7.5",
-    "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.0.0",
-    "typescript": "^5.9.2"
+    "@types/node": "catalog:",
+    "bare-url": "catalog:",
+    "brittle": "catalog:",
+    "cmake-bare": "catalog:",
+    "cmake-vcpkg": "catalog:",
+    "standard": "catalog:",
+    "typescript": "catalog:"
   },
   "dependencies": {
     "@qvac/infer-base": "workspace:*",
     "@qvac/logging": "workspace:*",
-    "bare-env": "^3.0.0",
-    "bare-fs": "^4.5.1",
-    "bare-path": "^3.0.0"
+    "bare-env": "catalog:",
+    "bare-fs": "catalog:",
+    "bare-path": "catalog:"
   },
   "engines": {
     "bare": ">=1.24.0"

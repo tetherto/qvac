@@ -6,7 +6,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const packageJsonPath = resolve(process.cwd(), 'package.json')
+const packageDir = process.argv[2] ? resolve(process.argv[2]) : process.cwd()
+const packageJsonPath = resolve(packageDir, 'package.json')
 const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
 
 const sections = [pkg.dependencies, pkg.devDependencies].filter(Boolean)

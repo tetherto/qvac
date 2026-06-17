@@ -21,18 +21,39 @@ generate/build/install) is expressed as **Nx targets** in
 
 ```text
 qvac/
-├── package.json              # private root; nx devDependency
-├── pnpm-workspace.yaml       # workspace members (expand per migration)
+├── package.json              # qvac.packages manifest + nx devDependency
+├── pnpm-workspace.yaml       # workspace members + catalog (version pins)
 ├── pnpm-lock.yaml
 ├── nx.json
-├── tools/ci/                 # shared CI scripts invoked by Nx
+├── tools/ci/
+│   ├── qvac-package-deps.mjs # sync/validate deps from root manifest
+│   └── check-package-deps.mjs
 └── packages/
     ├── classification-ggml/
     │   ├── project.json      # Nx targets
-    │   └── package.json      # workspace:* deps on infer-base, logging
+    │   └── package.json      # synced from root qvac.packages (do not edit deps by hand)
     ├── infer-base/
     └── logging/
 ```
+
+## Root dependency manifest
+
+Runtime and dev dependency **lists** live in root `package.json` under
+`qvac.packages["@qvac/classification-ggml"]`. Version pins for external
+packages live in `pnpm-workspace.yaml` → `catalog:` (referenced as `"catalog:"`
+in the manifest).
+
+After editing the root manifest:
+
+```bash
+pnpm sync:deps          # copy deps into packages/classification-ggml/package.json
+pnpm validate:deps      # CI gate — fail if package.json drifted
+```
+
+`pnpm pack` (via `pnpm nx run classification-ggml:pack`) produces a tarball
+containing **only** the files listed in the package `files` field. Workspace
+siblings (`infer-base`, `logging`) are **not** bundled — they appear as
+semver/`workspace:`-resolved dependencies in the packed `package.json`.
 
 ## Nx targets (classification-ggml)
 
@@ -98,8 +119,10 @@ instead of `npm install` + bare-make in the package directory.
 ## Migrating another package
 
 1. Add the package (and its in-repo deps) to `pnpm-workspace.yaml`.
-2. Switch `package.json` dependencies to `workspace:*` where applicable.
-3. Add `packages/<pkg>/project.json` mirroring existing `scripts` as Nx targets.
+2. Add a `qvac.packages["@qvac/<name>"]` entry in root `package.json` (dependencies + devDependencies).
+3. Add external version pins to `pnpm-workspace.yaml` → `catalog:`.
+4. Run `pnpm sync:deps` and commit the synced `packages/<pkg>/package.json`.
+5. Add `packages/<pkg>/project.json` mirroring existing `scripts` as Nx targets.
 4. Extend `on-pr-<pkg>.yml` path filters for workspace root files.
 5. Replace `npm install` / `npm run` steps with `setup-pnpm-workspace` + `nx-run`.
 6. Pass `nx-project: <pkg>` to `sanity-checks` and `reusable-prebuilds` when ready.

@@ -88,8 +88,29 @@
     "ci-check-deps": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "packages/classification-ggml",
-        "command": "node ../../tools/ci/check-package-deps.mjs"
+        "commands": [
+          "node tools/ci/qvac-package-deps.mjs validate",
+          "node tools/ci/check-package-deps.mjs packages/classification-ggml"
+        ],
+        "parallel": false
+      }
+    },
+    "sync-deps": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/ci/qvac-package-deps.mjs sync"
+      }
+    },
+    "pack": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["sync-deps"],
+      "options": {
+        "commands": [
+          "node tools/ci/qvac-package-deps.mjs validate",
+          "mkdir -p packages/classification-ggml/dist",
+          "pnpm -C packages/classification-ggml pack --pack-destination dist"
+        ],
+        "parallel": false
       }
     },
     "ci-lint-and-unit": {

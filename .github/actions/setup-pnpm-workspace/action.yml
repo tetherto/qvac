@@ -52,6 +52,11 @@ runs:
         restore-keys: |
           pnpm-${{ runner.os }}-
 
+    - name: Validate workspace package manifests
+      shell: bash
+      working-directory: ${{ inputs.workspace-root }}
+      run: node tools/ci/qvac-package-deps.mjs validate
+
     - name: Configure .npmrc
       shell: bash
       working-directory: ${{ inputs.workspace-root }}

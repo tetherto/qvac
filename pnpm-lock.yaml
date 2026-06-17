@@ -4,6 +4,39 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@types/node':
+      specifier: ^24.2.1
+      version: 24.13.2
+    bare-env:
+      specifier: ^3.0.0
+      version: 3.0.0
+    bare-fs:
+      specifier: ^4.5.1
+      version: 4.7.2
+    bare-path:
+      specifier: ^3.0.0
+      version: 3.0.1
+    bare-url:
+      specifier: ^2.1.6
+      version: 2.4.5
+    brittle:
+      specifier: ^3.16.5
+      version: 3.19.1
+    cmake-bare:
+      specifier: ^1.7.5
+      version: 1.8.0
+    cmake-vcpkg:
+      specifier: ^1.1.0
+      version: 1.2.0
+    standard:
+      specifier: ^17.0.0
+      version: 17.1.2
+    typescript:
+      specifier: ^5.9.2
+      version: 5.9.3
+
 importers:
 
   .:
@@ -21,35 +54,35 @@ importers:
         specifier: workspace:*
         version: link:../logging
       bare-env:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.0.0
       bare-fs:
-        specifier: ^4.5.1
+        specifier: 'catalog:'
         version: 4.7.2
       bare-path:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.0.1
     devDependencies:
       '@types/node':
-        specifier: ^24.2.1
+        specifier: 'catalog:'
         version: 24.13.2
       bare-url:
-        specifier: ^2.1.6
+        specifier: 'catalog:'
         version: 2.4.5
       brittle:
-        specifier: ^3.16.5
+        specifier: 'catalog:'
         version: 3.19.1(bare-events@2.9.1)(bare-pipe@4.2.2)(bare-tcp@2.5.1(bare-pipe@4.2.2))
       cmake-bare:
-        specifier: ^1.7.5
+        specifier: 'catalog:'
         version: 1.8.0
       cmake-vcpkg:
-        specifier: ^1.1.0
+        specifier: 'catalog:'
         version: 1.2.0
       standard:
-        specifier: ^17.0.0
+        specifier: 'catalog:'
         version: 17.1.2
       typescript:
-        specifier: ^5.9.2
+        specifier: 'catalog:'
         version: 5.9.3
 
   packages/infer-base:

@@ -5,9 +5,34 @@
   "license": "Apache-2.0",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "nx": "nx"
+    "nx": "nx",
+    "sync:deps": "node tools/ci/qvac-package-deps.mjs sync",
+    "validate:deps": "node tools/ci/qvac-package-deps.mjs validate"
   },
   "devDependencies": {
     "nx": "20.8.1"
+  },
+  "qvac": {
+    "packages": {
+      "@qvac/classification-ggml": {
+        "path": "packages/classification-ggml",
+        "dependencies": {
+          "@qvac/infer-base": "workspace:*",
+          "@qvac/logging": "workspace:*",
+          "bare-env": "catalog:",
+          "bare-fs": "catalog:",
+          "bare-path": "catalog:"
+        },
+        "devDependencies": {
+          "@types/node": "catalog:",
+          "bare-url": "catalog:",
+          "brittle": "catalog:",
+          "cmake-bare": "catalog:",
+          "cmake-vcpkg": "catalog:",
+          "standard": "catalog:",
+          "typescript": "catalog:"
+        }
+      }
+    }
   }
 }
