@@ -12,6 +12,7 @@ interface BatchCompletionTestParams {
   stream?: boolean;
   resourceKey?: string;
   toolDialect?: Parameters<typeof batchCompletion>[0]["toolDialect"];
+  expectedById?: Record<string, string[]>;
   expectedToolCall?: {
     id: string;
     name: string;
@@ -104,6 +105,10 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
         );
       }
 
+      if (params.expectedById) {
+        return this.validateExpectedById(results, params.expectedById);
+      }
+
       const output = results
         .map((result) => `${result.id}:${result.final.contentText}`)
         .join("\n");
@@ -176,6 +181,47 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
     return {
       passed: true,
       output: `Tool call ${expected.name} routed to ${expected.id}`,
+    };
+  }
+
+  private validateExpectedById(
+    results: Awaited<ReturnType<typeof batchCompletion>["results"]>,
+    expectedById: Record<string, string[]>,
+  ): TestResult {
+    const resultsById = new Map(
+      results.map((result) => [result.id, result.final.contentText]),
+    );
+    const missing: string[] = [];
+
+    for (const [id, expectedStrings] of Object.entries(expectedById)) {
+      const text = resultsById.get(id);
+      if (text === undefined) {
+        missing.push(`${id}:<missing result>`);
+        continue;
+      }
+
+      for (const expected of expectedStrings) {
+        if (!text.includes(expected)) {
+          missing.push(`${id}:${expected}`);
+        }
+      }
+    }
+
+    if (missing.length > 0) {
+      const output = results
+        .map((result) => `${result.id}:${result.final.contentText}`)
+        .join("\n");
+      return {
+        passed: false,
+        output: `Missing per-id strings: ${missing.join(", ")}. Got: ${output}`,
+      };
+    }
+
+    return {
+      passed: true,
+      output: results
+        .map((result) => `${result.id}:${result.final.contentText}`)
+        .join("\n"),
     };
   }
 }

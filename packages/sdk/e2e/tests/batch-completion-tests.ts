@@ -28,6 +28,7 @@ interface BatchCompletionTestParams {
   stream?: boolean;
   resourceKey?: string;
   toolDialect?: ToolDialect;
+  expectedById?: Record<string, string[]>;
   expectedToolCall?: {
     id: string;
     name: string;
@@ -66,21 +67,25 @@ export const batchCompletionBasic = createBatchCompletionTest(
   {
     prompts: [
       {
-        id: "apple",
-        history: [{ role: "user", content: "Reply with only the word APPLE." }],
-        generationParams: deterministic,
-      },
-      {
-        id: "banana",
+        id: "first",
         history: [
           { role: "user", content: "Reply with only the word BANANA." },
         ],
         generationParams: deterministic,
       },
+      {
+        id: "second",
+        history: [{ role: "user", content: "Reply with only the word ORANGE." }],
+        generationParams: deterministic,
+      },
     ],
     stream: false,
+    expectedById: {
+      first: ["BANANA"],
+      second: ["ORANGE"],
+    },
   },
-  { validation: "contains-all", contains: ["APPLE", "BANANA"] },
+  { validation: "contains-all", contains: ["BANANA", "ORANGE"] },
 );
 
 export const batchCompletionStreaming = createBatchCompletionTest(
@@ -88,29 +93,33 @@ export const batchCompletionStreaming = createBatchCompletionTest(
   {
     prompts: [
       {
-        id: "four",
+        id: "stream-first",
         history: [
           {
             role: "user",
-            content: "What is 2+2? Answer with only the number.",
+            content: "Reply with only the word BANANA.",
           },
         ],
         generationParams: deterministic,
       },
       {
-        id: "six",
+        id: "stream-second",
         history: [
           {
             role: "user",
-            content: "What is 3+3? Answer with only the number.",
+            content: "Reply with only the word ORANGE.",
           },
         ],
         generationParams: deterministic,
       },
     ],
     stream: true,
+    expectedById: {
+      "stream-first": ["BANANA"],
+      "stream-second": ["ORANGE"],
+    },
   },
-  { validation: "contains-all", contains: ["4", "6"] },
+  { validation: "contains-all", contains: ["BANANA", "ORANGE"] },
 );
 
 export const batchCompletionEmptyRejected = createBatchCompletionTest(
