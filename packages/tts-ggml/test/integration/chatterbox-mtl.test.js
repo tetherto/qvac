@@ -17,6 +17,7 @@ const TTSGgml = require('@qvac/tts-ggml')
 const { runTTS } = require('../utils/runTTS')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxMtlModels } = require('../utils/downloadModel')
+const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -87,17 +88,26 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt with shared engi
       if (i > 0) {
         await model.reload({ language: lang })
       }
+      const t0 = Date.now()
       const result = await runTTS(
         model,
         { text },
         { minSamples: 5000, maxSamples: 5000000, minDurationMs: 200, maxDurationMs: 300000 },
         { sampleRate: SAMPLE_RATE, engineTag: 'Chatterbox MTL' }
       )
+      const wallMs = Date.now() - t0
       console.log('    ' + result.output)
 
       t.ok(result.passed, `MTL ${lang} run passes expectations`)
       t.ok(result.data.sampleCount > 0, `MTL ${lang} produced audio`)
       t.is(result.data.reportedSampleRate || SAMPLE_RATE, SAMPLE_RATE, `MTL ${lang} reports 24 kHz`)
+
+      const st = result.data?.stats || {}
+      t.comment(recordTtsStats(
+        `chatterbox mtl ${lang}`,
+        { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
+        { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox-mtl', output: text }
+      ))
     }
   } finally {
     try { await model.unload() } catch (_e) {}

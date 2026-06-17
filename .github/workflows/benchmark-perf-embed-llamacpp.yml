@@ -1,0 +1,449 @@
+name: Benchmark Performance — Embed Parameter Sweep
+
+# Manually-triggered embed performance benchmark (no sweep inputs — the matrix is
+# in the scripts). Embedding is prefill-only (a single forward pass, no decode),
+# so the headline metric is prefill throughput (ppTPS) alongside per-embedding
+# latency, embeddings/sec, and cosine-similarity vs an in-run baseline.
+#
+# Desktop: bare benchmarks/performance/embed-parameter-sweep.js on the self-hosted
+#          Linux GPU runner (downloads the prebuild artifacts the integration
+#          tests consume rather than compiling on the runner).
+# Mobile:  added in a follow-up once the sharded mobile scaffolding lands.
+#
+# To change what runs, edit:
+#   models.manifest.json (models) + embed-parameter-sweep.config.js (sweep dims)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch/tag/SHA of the benchmark code+addon to build and run. Defaults to the branch this workflow is launched from."
+        required: false
+        type: string
+      run_desktop:
+        description: "Run desktop benchmark (Linux GPU)"
+        required: false
+        default: true
+        type: boolean
+      run_mobile:
+        description: "Run mobile benchmark (Android + iOS via Device Farm)"
+        required: false
+        default: true
+        type: boolean
+      models:
+        description: "DESKTOP sweep only: comma-separated model ids to limit the desktop sweep to (e.g. 'embeddingGemma' for a quick plumbing check; pair with run_mobile=false). Does NOT narrow the mobile matrix, which always runs its full (model x quant) shard set. Empty = all manifest models."
+        required: false
+        default: ""
+        type: string
+      repeats:
+        description: "DESKTOP sweep only: measured repetitions per desktop config (default 5; set 1 for a fast validation run). Mobile repeats are fixed at 3 in the on-device runner and are not affected by this input."
+        required: false
+        default: "5"
+        type: string
+      summarize_only:
+        description: "Summarize a PREVIOUS run only: re-render its report, skip the benchmark. Requires 'artifact_run_id' below."
+        required: false
+        default: false
+        type: boolean
+      artifact_run_id:
+        description: "Previous run ID to summarize (the number in that run's URL). Only used when 'summarize_only' is checked."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          # Dispatch-only workflow: label-gate treats workflow_dispatch as a
+          # trusted event and authorises without any API call, so the default
+          # GITHUB_TOKEN suffices — no PAT needed.
+          github-token: ${{ github.token }}
+
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  # Fast fail-first gate (~30s, no prebuild): the mobile benchmark shards are
+  # generated from test/integration/_benchmark-matrix.js and not committed, so
+  # the committed integration.auto.cjs and this workflow's test_groups must stay
+  # in lockstep with the matrix. prebuild depends on this job, so a drift fails
+  # the run in ~30s instead of after the expensive prebuild.
+  verify-shards:
+    needs:
+      - context
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout matrix + generated artifacts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/embed-llamacpp/scripts/generate-benchmark-shards.js
+            packages/embed-llamacpp/test/integration/_benchmark-matrix.js
+            packages/embed-llamacpp/benchmarks/performance/models.manifest.json
+            packages/embed-llamacpp/test/mobile/integration.auto.cjs
+            .github/workflows/benchmark-perf-embed-llamacpp.yml
+          sparse-checkout-cone-mode: false
+      - name: Verify benchmark matrix is in sync
+        working-directory: packages/embed-llamacpp
+        run: node scripts/generate-benchmark-shards.js --check
+
+  # Records, into a run-meta.json artifact, the exact addon version this run
+  # benchmarks (from the checked-out package.json) AND the mobile shard list it
+  # targets (from the checked-out matrix). The summarize step reads both from
+  # this artifact, so a stamped run is never mislabelled and its mobile coverage
+  # is scored against its OWN matrix even when re-rendered after the matrix grows.
+  stamp-version:
+    needs:
+      - context
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && !inputs.summarize_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout package.json + benchmark matrix
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/embed-llamacpp/package.json
+            packages/embed-llamacpp/test/integration/_benchmark-matrix.js
+            packages/embed-llamacpp/benchmarks/performance/models.manifest.json
+          sparse-checkout-cone-mode: false
+      - name: Write run-meta.json
+        shell: bash
+        run: |
+          mkdir -p run-meta
+          node -e "const pkg=require('./packages/embed-llamacpp/package.json');const m=require('./packages/embed-llamacpp/test/integration/_benchmark-matrix.js');require('fs').writeFileSync('run-meta/run-meta.json',JSON.stringify({addonVersion:'@qvac/embed-llamacpp@'+pkg.version,expectedShards:m.matrix().map(m.mobileShardKey)})+'\n')"
+          cat run-meta/run-meta.json
+      - name: Upload run-meta
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: embed-benchmark-run-meta-${{ github.run_number }}
+          path: run-meta/
+          retention-days: 90
+
+  prebuild:
+    needs:
+      - context
+      - label-gate
+      - verify-shards
+    # verify-shards is a gate so a shard drift fails before this expensive build.
+    # It is skipped on a desktop-only run (run_mobile false), so !cancelled() +
+    # the explicit result check let that case through rather than a skipped gate
+    # skipping the build.
+    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_desktop || inputs.run_mobile) && !inputs.summarize_only && !cancelled() && needs.verify-shards.result != 'failure'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  desktop-benchmark:
+    needs:
+      - context
+      - label-gate
+      - prebuild
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && !inputs.summarize_only
+    name: Desktop Parameter Sweep
+    runs-on: qvac-ubuntu2204-x64-gpu
+    timeout-minutes: 360
+
+    steps:
+      # Self-hosted runners are persistent, so the workspace must be wiped
+      # between runs (skipped on the rare github-hosted fallback).
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.context.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install addon dependencies
+        working-directory: packages/embed-llamacpp
+        run: npm install
+
+      # Run the exact linux-x64 binary the prebuild job built (the same artifacts
+      # the integration tests consume) instead of compiling on the runner, so the
+      # benchmark needs no build toolchain and matches what ships.
+      - name: Download prebuilds (from artifacts)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/prebuilds-staging
+          merge-multiple: true
+
+      - name: Move prebuilds into the addon
+        shell: bash
+        run: |
+          mkdir -p packages/embed-llamacpp/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* packages/embed-llamacpp/prebuilds/
+          ls -la packages/embed-llamacpp/prebuilds/
+
+      - name: Detect GPU
+        id: gpu
+        shell: bash
+        run: |
+          gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr -d '\r' || echo "GPU")
+          echo "name=$gpu_name" >> "$GITHUB_OUTPUT"
+
+      - name: Install benchmark dependencies
+        working-directory: packages/embed-llamacpp/benchmarks/performance
+        run: npm install
+
+      - name: Download models
+        working-directory: packages/embed-llamacpp/benchmarks/performance
+        # Models are public (unsloth embeddinggemma + Qwen3-Embedding GGUFs).
+        env:
+          MODELS: ${{ inputs.models }}
+        run: |
+          ARGS=(--target addon)
+          if [ -n "${MODELS:-}" ]; then ARGS+=(--models "$MODELS"); fi
+          node ./prepare-models.js "${ARGS[@]}"
+
+      - name: Run parameter sweep
+        working-directory: packages/embed-llamacpp/benchmarks/performance
+        env:
+          MODELS: ${{ inputs.models }}
+          REPEATS: ${{ inputs.repeats }}
+        run: |
+          ARGS=(--addon-source local --repeats "${REPEATS:-5}")
+          if [ -n "${MODELS:-}" ]; then ARGS+=(--models "$MODELS"); fi
+          npx --yes bare ./embed-parameter-sweep.js "${ARGS[@]}"
+
+      # Stamp the desktop device name (incl. detected GPU) into the results so
+      # the renderer shows it even on a later summarize-only re-render, when this
+      # job didn't run.
+      - name: Stamp desktop device
+        if: always()
+        shell: bash
+        env:
+          GPU_NAME: ${{ steps.gpu.outputs.name }}
+        run: |
+          mkdir -p packages/embed-llamacpp/benchmarks/performance/results/parameter-sweep
+          printf '{"device":"Desktop (%s)"}\n' "$GPU_NAME" \
+            > packages/embed-llamacpp/benchmarks/performance/results/parameter-sweep/desktop-meta.json
+          cat packages/embed-llamacpp/benchmarks/performance/results/parameter-sweep/desktop-meta.json
+
+      # The run summary is rendered by the summarize job; this job just uploads
+      # the raw sweep results.
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: embed-param-sweep-desktop-${{ github.run_number }}
+          path: packages/embed-llamacpp/benchmarks/performance/results/parameter-sweep/
+          retention-days: 90
+          if-no-files-found: ignore
+
+  # Mobile is sharded one batch per model (manifest order), each batch its own
+  # reused-workflow call so its weights download once and its quant shards run
+  # together. Embedding is prefill-only/fast, so a model's shards fit one Device
+  # Farm session — no fine per-config split. Batches run sequentially
+  # (max-parallel: 1) to avoid pool contention; each gets a distinct
+  # artifact_suffix so its perf-report doesn't collide, and summarize aggregates
+  # them. The benchmark shards are deliberately absent from test-groups.json, so
+  # the test_groups override here is the only path that runs them.
+  mobile-benchmark:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+      - verify-shards
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - model: embeddinggemma
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80","grep":"runBenchmarkPerfEmbeddinggemmaQ80Test"},{"name":"BenchmarkPerfEmbeddinggemmaQ40","grep":"runBenchmarkPerfEmbeddinggemmaQ40Test"}]'
+          - model: qwen3-embedding-06b
+            groups: '[{"name":"BenchmarkPerfQwen3Embedding06bQ80","grep":"runBenchmarkPerfQwen3Embedding06bQ80Test"},{"name":"BenchmarkPerfQwen3Embedding06bF16","grep":"runBenchmarkPerfQwen3Embedding06bF16Test"}]'
+          - model: qwen3-embedding-4b-gguf
+            groups: '[{"name":"BenchmarkPerfQwen3Embedding4bGgufQ80","grep":"runBenchmarkPerfQwen3Embedding4bGgufQ80Test"},{"name":"BenchmarkPerfQwen3Embedding4bGgufQ4KM","grep":"runBenchmarkPerfQwen3Embedding4bGgufQ4KMTest"},{"name":"BenchmarkPerfQwen3Embedding4bGgufF16","grep":"runBenchmarkPerfQwen3Embedding4bGgufF16Test"}]'
+    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      job_timeout_minutes: 180
+      test_groups: ${{ matrix.groups }}
+      artifact_suffix: ${{ matrix.model }}-
+
+  # Renders the desktop sweep + mobile perf-report artifacts into one markdown
+  # report + an HTML chart artifact. Runs after the benchmarks, or standalone
+  # when summarize_only=true (set artifact_run_id to re-render a previous run).
+  summarize:
+    needs:
+      - context
+      - label-gate
+      - stamp-version
+      - desktop-benchmark
+      - mobile-benchmark
+    if: needs.label-gate.outputs.authorised == 'true' && always() && needs.context.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout aggregator
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.context.outputs.ref }}
+          sparse-checkout: |
+            packages/embed-llamacpp/benchmarks/performance/render-report.js
+            packages/embed-llamacpp/benchmarks/performance/_sweep-grid.js
+            packages/embed-llamacpp/benchmarks/performance/models.manifest.json
+            packages/embed-llamacpp/test/integration/_benchmark-matrix.js
+            packages/embed-llamacpp/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Get addon version
+        id: addon_ver
+        shell: bash
+        run: |
+          ver=$(node -e "process.stdout.write(require('./packages/embed-llamacpp/package.json').version)" 2>/dev/null || true)
+          echo "version=${ver:+@qvac/embed-llamacpp@$ver}" >> "$GITHUB_OUTPUT"
+
+      - name: Download desktop sweep artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: embed-param-sweep-desktop-*
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Download mobile perf-report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-llamacpp-embed-*
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+          path: combined-reports
+        continue-on-error: true
+
+      # run-meta.json (addon version + the mobile shard list this run targeted),
+      # authoritative over the checked-out package.json/matrix on a re-render.
+      - name: Download run-meta
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: embed-benchmark-run-meta-*
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Render benchmark report
+        shell: bash
+        env:
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
+          ADDON_VERSION: ${{ steps.addon_ver.outputs.version }}
+        run: |
+          if ! find combined-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+            echo "::error::No benchmark reports found for run $ARTIFACT_RUN_ID. Nothing to render."
+            exit 1
+          fi
+          mkdir -p benchmark-artifacts
+
+          # Build args as an array so the GPU device name (e.g. "Desktop (NVIDIA
+          # RTX 4000 SFF Ada Generation)") survives intact. The desktop device
+          # name comes from the stamped desktop-meta.json inside the sweep
+          # artifact, so it's correct on re-renders too.
+          ARGS=(--dir combined-reports --output benchmark-artifacts/embed-benchmark-findings.md --html benchmark-artifacts/embed-benchmark-charts.html --charts-url "__CHARTS_URL__")
+          if [ -n "$ADDON_VERSION" ]; then
+            ARGS+=(--addon-version "$ADDON_VERSION")
+          fi
+
+          node packages/embed-llamacpp/benchmarks/performance/render-report.js "${ARGS[@]}"
+
+      # Upload first so the artifact's download URL is known, then substitute it
+      # into the report's chart-download link before writing the run summary.
+      # Falls back to the run page URL if the upload didn't yield a URL.
+      - name: Upload consolidated report
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: embed-benchmark-findings-${{ github.run_number }}
+          path: benchmark-artifacts/
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Add to run summary
+        if: always()
+        shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          MD_FILE="benchmark-artifacts/embed-benchmark-findings.md"
+          if [ -f "$MD_FILE" ]; then
+            url="$ARTIFACT_URL"
+            if [ -z "$url" ]; then url="$RUN_URL"; fi
+            sed "s|__CHARTS_URL__|$url|g" "$MD_FILE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No consolidated benchmark report available." >> "$GITHUB_STEP_SUMMARY"
+          fi
