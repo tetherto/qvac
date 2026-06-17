@@ -19,6 +19,7 @@ import {
   InvalidResponseError,
   StreamEndedError,
 } from "@/utils/errors-client";
+import { parseClientInput } from "@/client/parse-input";
 
 export interface FinetuneHandle {
   progressStream: AsyncGenerator<FinetuneProgress>;
@@ -41,14 +42,14 @@ function isFinetuneReplyParams(
 
 function createFinetuneReplyRequest(params: FinetuneReplyParams) {
   if (params.operation === "getState") {
-    const getStateParams = finetuneGetStateParamsSchema.parse(params);
-    return finetuneGetStateRequestSchema.parse({
+    const getStateParams = parseClientInput(finetuneGetStateParamsSchema, params);
+    return parseClientInput(finetuneGetStateRequestSchema, {
       type: "finetune",
       ...getStateParams,
     });
   }
 
-  return finetuneStopRequestSchema.parse({
+  return parseClientInput(finetuneStopRequestSchema, {
     type: "finetune",
     modelId: params.modelId,
     operation: params.operation,
@@ -172,7 +173,7 @@ export function finetune(
     return resultPromise;
   }
 
-  const runParams = finetuneRunParamsSchema.parse(params);
+  const runParams = parseClientInput(finetuneRunParamsSchema, params);
 
   let resultResolver: (value: FinetuneResult) => void = () => { };
   let resultRejecter: (error: unknown) => void = () => { };
@@ -191,7 +192,7 @@ export function finetune(
   const processResponses = async () => {
     try {
       let sawTerminalResponse = false;
-      const request = finetuneRunRequestSchema.parse({
+      const request = parseClientInput(finetuneRunRequestSchema, {
         type: "finetune",
         ...runParams,
         withProgress: true,

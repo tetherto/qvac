@@ -10,6 +10,7 @@ import {
   InvalidResponseError,
 } from "@/utils/errors-client";
 import { decoratePromise } from "@/utils/decorate-promise";
+import { parseClientInput } from "@/client/parse-input";
 import { generateClientRequestId } from "@/client/api/client-request-id";
 
 export type DownloadAssetOptions = BaseDownloadAssetOptions;
@@ -72,7 +73,7 @@ async function runDownloadAsset(
   requestId: string,
   rpcOptions?: RPCOptions,
 ): Promise<string> {
-  const request = downloadAssetOptionsToRequestSchema.parse({
+  const request = parseClientInput(downloadAssetOptionsToRequestSchema, {
     ...options,
     requestId,
   });
