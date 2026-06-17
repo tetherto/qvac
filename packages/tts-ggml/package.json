@@ -40,7 +40,6 @@
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-models": "bash scripts/convert-models.sh",
     "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh",
-    "setup-supertonic3-models": "bash scripts/setup-supertonic3-models.sh",
     "download-models:registry": "node scripts/download-tts-ggml-models.js"
   },
   "files": [

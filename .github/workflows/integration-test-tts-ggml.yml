@@ -191,12 +191,7 @@ jobs:
         with:
           package: tts-ggml
           paths: packages/tts-ggml/models
-          # Invalidate the cache when either the registry download list OR the
-          # local Supertonic 3 provisioning script changes, so a re-pin of the
-          # v3 source / quant tiers re-stages the GGUFs.
-          hash-files-glob: |
-            packages/tts-ggml/scripts/download-tts-ggml-models.js
-            packages/tts-ggml/scripts/setup-supertonic3-models.sh
+          hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
           enable-cross-os: 'true'
 
       - name: Download GGUF models from registry

@@ -432,10 +432,9 @@ const SIZE_CHATTERBOX_S3GEN_F16 = { minSize: 500_000_000, maxSize: 2_000_000_000
 const SIZE_SUPERTONIC_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 // Supertonic 3 (31-language) tiers: q8_0 ~126 MB, q4_0 ~80 MB, f16 ~191 MB,
-// f32 ~398 MB.  f16 + f32 are published on the registry (QVAC-20568); the
-// block-quant tiers (q8_0 / q4_0) are still produced locally by
-// scripts/setup-supertonic3-models.sh until a follow-up upload.  One generous
-// band covers them all so the resolver accepts whichever tier got staged.
+// f32 ~398 MB.  All four are published on the QVAC model registry (f16 / f32 @
+// 2026-06-10, QVAC-20568; q8_0 / q4_0 @ 2026-06-15, QVAC-20686).  One generous
+// band covers them all so the resolver accepts whichever tier was fetched.
 const SIZE_SUPERTONIC3 = { minSize: 25_000_000, maxSize: 500_000_000 }
 
 const CHATTERBOX_GGUFS = [
@@ -806,8 +805,8 @@ async function ensureSupertonicMtlModel (options = {}) {
 // Supertonic 3 GGUF descriptor for a given quant tier.  The on-disk name
 // encodes the quant so q8_0 / q4_0 can coexist in one models/ dir (unlike v1/v2
 // which keep a single canonical filename and read the quant from metadata).
-// All four tiers are now published on the QVAC model registry: f16 / f32 under
-// the 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants under the
+// All four tiers are published on the QVAC model registry: f16 / f32 under the
+// 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants under the
 // 2026-06-15 build (QVAC-20686).  Each tier maps to its own S3 build date.
 const SUPERTONIC3_REGISTRY_DATES = {
   f16: REGISTRY_DATE_SUPERTONIC3,
@@ -835,12 +834,12 @@ function supertonic3Gguf (quant) {
  * directory the native addon can read, and return that path.
  *
  * All four tiers are published on the QVAC model registry (f16 / f32 via
- * QVAC-20568, q8_0 / q4_0 via QVAC-20686), so this helper falls back to a
- * registry fetch when the file isn't staged locally (mirroring the v1/v2
- * helpers).  If the fetch fails (offline, or the @qvac/registry-client
- * devDependency is missing) it returns `{ success: false }` with a hint —
- * including `npm run setup-supertonic3-models` for offline local provisioning —
- * letting the caller skip the test instead of hard-failing.
+ * QVAC-20568, q8_0 / q4_0 via QVAC-20686), so this helper resolves them from
+ * S3 only (mirroring the v1/v2 helpers): it reuses an already-staged copy when
+ * present, otherwise fetches from the registry.  If the fetch fails (offline,
+ * or the @qvac/registry-client devDependency is missing) it returns
+ * `{ success: false }` — every tier is published, so a fetch failure is a real
+ * error and the caller is expected to fail the test.
  *
  * @param {Object} [options]
  * @param {string} [options.targetDir] - dir to look in (default ./models).
@@ -876,18 +875,15 @@ async function ensureSupertonic3Model (options = {}) {
     if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
       return { success: true, path: path.join(requestedDir, gguf.name), targetDir: requestedDir, quant }
     }
-    console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) not found locally and registry fetch failed`)
+    console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) not staged and registry fetch failed`)
     console.log(' (network / registry unavailable, or the @qvac/registry-client devDependency is missing).')
     console.log(` Expected on the registry at: ${gguf.registryPath}`)
-    console.log(' For offline runs you can provision it locally with: npm run setup-supertonic3-models')
     return { success: false, path: null, targetDir: requestedDir, quant }
   }
 
-  // No registry mapping for this tier (unexpected) — local provisioning only.
-  console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) not found locally.  Provision it with:`)
-  console.log('   npm run setup-supertonic3-models')
-  console.log('   (downloads Supertone/supertonic-3 from Hugging Face, converts + requantizes locally)')
-  console.log(` and place under one of: ${candidateDirs.join(', ')}`)
+  // No registry mapping for this tier (unexpected) — every published tier has
+  // one, so this only triggers on an unknown quant string.
+  console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) has no registry mapping (unknown quant tier).`)
   return { success: false, path: null, targetDir: requestedDir, quant }
 }
 

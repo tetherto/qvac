@@ -11,12 +11,11 @@
 //   - the v3 language-conditioning path must accept both the inherited and the
 //     new language codes.
 //
-// All four tiers are pulled from the QVAC model registry: fp16 / fp32 from the
-// 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants from the
+// All four tiers are pulled from the QVAC model registry (S3): fp16 / fp32 from
+// the 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants from the
 // 2026-06-15 build (QVAC-20686).  Every tier is published, so a fetch failure
-// is a real error and the corresponding test FAILS (it no longer self-skips):
-// CI stages all four tiers via `download-models:registry`, and offline runs can
-// provision them with `npm run setup-supertonic3-models`.
+// is a real error and the corresponding test FAILS (it no longer self-skips).
+// CI stages all four tiers via `download-models:registry`.
 
 const os = require('bare-os')
 const path = require('bare-path')
@@ -75,11 +74,10 @@ for (const quant of QUANTS) {
       quant
     })
     if (!download.success) {
-      t.fail(`supertonic3-${quant}.gguf could not be fetched ` +
-        '(registry fetch failed, or not provisioned locally). ' +
-        'All four tiers are published on the QVAC registry; a fetch failure ' +
-        'is a real error. For offline runs provision with ' +
-        '`npm run setup-supertonic3-models`.')
+      t.fail(`supertonic3-${quant}.gguf could not be fetched from the registry. ` +
+        'All four tiers are published on the QVAC registry (S3); a fetch ' +
+        'failure is a real error (network / registry unavailable, or the ' +
+        '@qvac/registry-client devDependency is missing).')
       return
     }
 
