@@ -922,9 +922,54 @@ async function downloadFromRegistry (registryPath, registrySource, destPath, min
 // desktop prefers q8_0 (best WER per byte).
 function _preferredGgufFor (cfg) {
   if (isMobile && cfg.mobileFile && cfg.mobileRegistryPath) {
-    return { file: cfg.mobileFile, registryPath: cfg.mobileRegistryPath }
+    return { file: cfg.mobileFile, registryPath: cfg.mobileRegistryPath, quant: 'q4_0' }
   }
-  return { file: cfg.file, registryPath: cfg.registryPath }
+  return { file: cfg.file, registryPath: cfg.registryPath, quant: 'q8_0' }
+}
+
+// Resolves the GGUF for an explicitly requested quantisation. The benchmark
+// matrix uses this to sweep q8_0 vs q4_0 on the same device regardless of the
+// platform default. Returns `null` for an unknown / unpublished quant so the
+// caller can fall back to the platform-preferred file.
+//
+// MODEL_CONFIGS stores the q8_0 build under `file`/`registryPath` and the
+// q4_0 build under `mobileFile`/`mobileRegistryPath`; the streaming sortformer
+// additionally publishes f16 under the same prefix.
+function _ggufForQuant (cfg, quant) {
+  const q = String(quant || '').toLowerCase()
+  if (!q) return null
+
+  if (q === 'q8_0' && cfg.file && cfg.registryPath) {
+    return { file: cfg.file, registryPath: cfg.registryPath, quant: 'q8_0' }
+  }
+  if (q === 'q4_0' && cfg.mobileFile && cfg.mobileRegistryPath) {
+    return { file: cfg.mobileFile, registryPath: cfg.mobileRegistryPath, quant: 'q4_0' }
+  }
+
+  // Derive any other quant (e.g. f16) by swapping the quant token in the q8_0
+  // filename and reusing its registry prefix. Only resolves when both the
+  // filename and prefix are known.
+  if (cfg.file && cfg.registryPath) {
+    const file = cfg.file.replace(/\.(q8_0|q4_0|f16)\.gguf$/i, `.${q}.gguf`)
+    if (file !== cfg.file) {
+      const prefix = cfg.registryPath.slice(0, cfg.registryPath.lastIndexOf('/'))
+      return { file, registryPath: `${prefix}/${file}`, quant: q }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Quantisation of a GGUF, derived from its filename (e.g. `q8_0`, `q4_0`,
+ * `f16`). Returns '' when no recognised quant token is present.
+ * @param {string} ggufPathOrName - GGUF file path or basename
+ * @returns {string}
+ */
+function quantFromGgufName (ggufPathOrName) {
+  const base = path.basename(String(ggufPathOrName || ''))
+  const match = base.match(/\.(q8_0|q4_0|f16)\.gguf$/i)
+  return match ? match[1].toLowerCase() : ''
 }
 
 /**
@@ -952,9 +997,15 @@ function _preferredGgufFor (cfg) {
  *
  * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
  * @param {string} [override] - explicit GGUF path to use
+ * @param {Object} [options] - resolution options
+ * @param {string} [options.quant] - explicit quantisation to resolve
+ *   (e.g. 'q8_0', 'q4_0'). When set, ONLY that quant is resolved — the
+ *   "other quant" fallback is disabled so a benchmark sweep can't silently
+ *   measure the wrong file. When unset, the platform default is used
+ *   (q8_0 on desktop, q4_0 on mobile).
  * @returns {Promise<string|null>} GGUF file path, or null if unavailable
  */
-async function ensureGgufForType (modelType, override = null) {
+async function ensureGgufForType (modelType, override = null, options = {}) {
   const cfg = MODEL_CONFIGS[modelType]
   if (!cfg) return null
 
@@ -965,8 +1016,13 @@ async function ensureGgufForType (modelType, override = null) {
     return process.env[envKey]
   }
 
+  const requestedQuant = options && options.quant
+  const explicitTarget = requestedQuant ? _ggufForQuant(cfg, requestedQuant) : null
+  const preferred = explicitTarget || _preferredGgufFor(cfg)
+  // Only fall back to the sibling quant when no specific quant was requested.
+  const allowOtherQuant = !explicitTarget
+
   const { modelsDir, samplesDir } = getTestPaths()
-  const preferred = _preferredGgufFor(cfg)
   const cachePath = path.join(modelsDir, preferred.file)
 
   if (fs.existsSync(cachePath) &&
@@ -975,7 +1031,7 @@ async function ensureGgufForType (modelType, override = null) {
   }
 
   const otherFile = preferred.file === cfg.file ? cfg.mobileFile : cfg.file
-  if (otherFile) {
+  if (allowOtherQuant && otherFile) {
     const otherPath = path.join(modelsDir, otherFile)
     if (fs.existsSync(otherPath) &&
         fs.statSync(otherPath).size >= (cfg.minSize || 0)) {
@@ -984,7 +1040,7 @@ async function ensureGgufForType (modelType, override = null) {
   }
 
   if (isMobile && samplesDir) {
-    const candidates = [cfg.mobileFile, cfg.file].filter(Boolean)
+    const candidates = (allowOtherQuant ? [cfg.mobileFile, cfg.file] : [preferred.file]).filter(Boolean)
     for (const candidate of candidates) {
       const bundledPath = path.join(samplesDir, candidate)
       if (fs.existsSync(bundledPath) &&
@@ -996,7 +1052,7 @@ async function ensureGgufForType (modelType, override = null) {
 
   const externalDir = process.env && process.env.QVAC_TEST_GGUF_DIR
   if (externalDir) {
-    const candidates = [preferred.file, otherFile].filter(Boolean)
+    const candidates = (allowOtherQuant ? [preferred.file, otherFile] : [preferred.file]).filter(Boolean)
     for (const candidate of candidates) {
       const externalPath = path.join(externalDir, candidate)
       if (fs.existsSync(externalPath) &&
@@ -1116,6 +1172,7 @@ module.exports = {
   ensureModel,
   ensureModelForType,
   ensureGgufForType,
+  quantFromGgufName,
   loadGgufOrSkip,
   readFileChunked,
   getNamedPathsConfig,

@@ -260,6 +260,7 @@ resources.define("tts-chatterbox", {
   config: {
     ttsEngine: "chatterbox",
     language: "en",
+    useGPU: true,
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
     referenceAudioSrc: path.resolve(
       process.cwd(),
@@ -276,6 +277,7 @@ resources.define("tts-supertonic", {
     ttsEngine: "supertonic",
     language: "en",
     voice: "F1",
+    useGPU: true,
   },
 });
 
@@ -286,6 +288,7 @@ resources.define("tts-supertonic-multilingual", {
     ttsEngine: "supertonic",
     language: "es",
     voice: "F1",
+    useGPU: true,
   },
 });
 
