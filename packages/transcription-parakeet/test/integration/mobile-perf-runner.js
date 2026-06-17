@@ -12,7 +12,8 @@ const {
   loadGgufOrSkip,
   getNamedPathsConfig,
   isMobile,
-  recordParakeetStats
+  recordParakeetStats,
+  quantFromGgufName
 } = require('./helpers.js')
 
 const platform = detectPlatform()
@@ -74,7 +75,10 @@ async function runMobilePerfCase (t, opts) {
 
     const modelPath = await loadGgufOrSkip(t, modelType)
     if (!modelPath) return
+    const resolvedQuant = quantFromGgufName(modelPath) || 'q4_0'
+    const quantLabel = `[${resolvedQuant}]`
     console.log(` Model path: ${modelPath}`)
+    console.log(` Quant: ${resolvedQuant}`)
 
     const audioData = loadSampleAudio()
     if (!audioData) {
@@ -139,7 +143,7 @@ async function runMobilePerfCase (t, opts) {
         ? receivedStats[receivedStats.length - 1].stats
         : null
       if (jobStats) {
-        recordParakeetStats(`${modelLabel} ${epLabel} mobile-perf run ${run}`, jobStats, {
+        recordParakeetStats(`${modelLabel} ${quantLabel} ${epLabel} mobile-perf run ${run}`, jobStats, {
           wallMs: runTime,
           output: runText
         })

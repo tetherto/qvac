@@ -8,6 +8,16 @@ on:
         type: string
       repository:
         type: string
+      qvac_perf_runs:
+        description: "Number of measured perf iterations per test (default 3)"
+        type: string
+        required: false
+        default: '3'
+      qvac_perf_warmup_runs:
+        description: "Number of warmup iterations before perf measurement (default 0)"
+        type: string
+        required: false
+        default: '0'
 
   workflow_dispatch:
     inputs:
@@ -20,6 +30,16 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/diffusion-cpp@0.1.0)"
         type: string
         required: true
+      qvac_perf_runs:
+        description: "Number of measured perf iterations per test (default 3)"
+        type: string
+        required: false
+        default: '3'
+      qvac_perf_warmup_runs:
+        description: "Number of warmup iterations before perf measurement (default 0)"
+        type: string
+        required: false
+        default: '0'
 
 jobs:
   run-integration-tests:
@@ -298,6 +318,8 @@ jobs:
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs || '3' }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs || '0' }}
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
@@ -308,6 +330,29 @@ jobs:
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs || '3' }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs || '0' }}
+
+      - name: Generate HTML performance report
+        if: always() && !cancelled()
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          if [ -f test/results/performance-report.json ]; then
+            node ../../scripts/perf-report/aggregate.js --dir test/results || true
+          else
+            echo "No performance-report.json found — skipping aggregation"
+          fi
+        continue-on-error: true
+
+      - name: Upload performance report
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: perf-report-diffusion-cpp-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: ${{ env.WORKDIR }}/test/results/performance-report.json
+          if-no-files-found: ignore
+          retention-days: 90
 
       - name: List generated images
         if: always() && !cancelled()

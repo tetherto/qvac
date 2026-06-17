@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <variant>
 
-#include <llama.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 class ModelMetaData;
 
@@ -50,8 +50,7 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
-    std::optional<int>* outAdrenoVersion = nullptr,
-    bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
 
 /// @brief Choose the backend to use for the model based on GPU device and
 /// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
@@ -69,8 +68,7 @@ std::pair<BackendType, std::string> chooseBackend(
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion = nullptr,
-    bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
 
 /// @brief Count GPU devices available for multi-GPU split mode.
 /// Returns the number of discrete GPUs when any are present; otherwise

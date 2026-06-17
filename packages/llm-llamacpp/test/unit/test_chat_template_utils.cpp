@@ -82,9 +82,8 @@ TEST_F(
   ASSERT_TRUE(markerFromArch.has_value());
   EXPECT_EQ(markerFromArch.value(), "<tool_call>");
 
-  EXPECT_FALSE(
-      selectToolsCompactMarkerForModelMetadata(std::string("qwen35"))
-          .has_value());
+  EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(std::string("qwen35"))
+                   .has_value());
   EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(std::string("llama"))
                    .has_value());
   EXPECT_FALSE(

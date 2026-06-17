@@ -1,0 +1,66 @@
+{
+  "name": "@qvac/opencode-plugin",
+  "version": "0.1.0",
+  "description": "OpenCode plugin that runs a local, managed QVAC serve so `opencode` works against on-device models with no second terminal",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*",
+    "example/**/*",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "qvac",
+    "tether",
+    "opencode",
+    "plugin",
+    "local-ai",
+    "on-device",
+    "offline",
+    "coding-agent",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "plugins/opencode"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/plugins/opencode#readme",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "lint": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts",
+    "test:unit": "tsx --test test/*.test.ts",
+    "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.49",
+    "@qvac/ai-sdk-provider": "^0.2.1",
+    "@qvac/cli": "^0.6.0",
+    "ai": "^6.0.202"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.16.0",
+    "@types/node": "^24.2.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

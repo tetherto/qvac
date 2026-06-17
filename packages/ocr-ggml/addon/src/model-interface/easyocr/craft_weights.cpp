@@ -134,6 +134,11 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     return;
   }
 
+  // Resolve the backend-aware 1x1-conv strategy once, here at load time
+  // (mirrors the F16 kernel decision below): mul_mat on GPU, conv_2d on CPU,
+  // overridable via OCR_GGML_CONV1X1_{MULMAT,CONV2D}.
+  conv1x1_mulmat_ = ocr_conv1x1_mulmat_use(backend);
+
   // --- Step 1: declare every destination tensor in our own ctx --------------
   // We need 2 tensors per conv (W + b) and a small headroom margin.
   ggml_init_params ctx_params{

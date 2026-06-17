@@ -16,6 +16,7 @@ const {
   setupJsLogger,
   isPng
 } = require('./utils')
+const { recordPerformance } = require('./_perf-helper')
 
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
@@ -309,6 +310,12 @@ test('ESRGAN post-generation upscale — emits expected PNG dimensions', { timeo
         `generate-image--sd2-esrgan-${runCase.repeats}x-repeat.png`,
         images[0]
       )
+
+      t.comment(recordPerformance(
+        '[ESRGAN 4x post-gen upscale repeats=' + runCase.repeats + '] [' + (useCpu ? 'CPU' : 'GPU') + ']',
+        response.stats,
+        { scenario: 'upscale', model: 'RealESRGAN_x4plus_anime_6B' }
+      ))
     }
   } finally {
     await model.unload().catch(() => {})
@@ -364,6 +371,12 @@ test('ESRGAN standalone upscale — emits expected PNG dimensions', { timeout: t
         `generate-image--standalone-esrgan-${runCase.repeats}x-repeat.png`,
         images[0]
       )
+
+      t.comment(recordPerformance(
+        '[ESRGAN 4x standalone upscale repeats=' + runCase.repeats + '] [' + (useCpu ? 'CPU' : 'GPU') + ']',
+        response.stats,
+        { scenario: 'upscale', model: 'RealESRGAN_x4plus_anime_6B' }
+      ))
     }
   } finally {
     await upscaler.unload().catch(() => {})
