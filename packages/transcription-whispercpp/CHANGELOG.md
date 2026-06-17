@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2638](https://github.com/tetherto/qvac/pull/2638)).
 - `vcpkg.json` now selects `whisper-cpp[metal]` on **iOS** as well as
   macOS (QVAC-20687). The separate featureless `ios` dependency entry is
   merged into the `osx` entry as a single `"platform": "osx | ios"` block
