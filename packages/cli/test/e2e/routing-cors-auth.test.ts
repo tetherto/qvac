@@ -1,0 +1,75 @@
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+import { useServer } from './helpers/server.js'
+import { assertError } from './helpers/http.js'
+
+// Ported from cli.bats "Serve: routing".
+describe('serve: routing', () => {
+  const server = useServer({ cors: true })
+
+  it('GET /unknown returns 404', async () => {
+    const res = await server().inject({ method: 'GET', url: '/unknown' })
+    assert.equal(res.statusCode, 404)
+    assertError(res, 'not_found')
+  })
+
+  it('GET /v1/unknown returns 404', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/unknown' })
+    assert.equal(res.statusCode, 404)
+    assertError(res, 'not_found')
+  })
+})
+
+// Ported from cli.bats "Serve: CORS".
+describe('serve: CORS enabled', () => {
+  const server = useServer({ cors: true })
+
+  it('OPTIONS /v1/models returns 204 with CORS headers', async () => {
+    const res = await server().inject({ method: 'OPTIONS', url: '/v1/models' })
+    assert.equal(res.statusCode, 204)
+    assert.ok(res.headers['access-control-allow-origin'], 'expected access-control-allow-origin')
+    assert.match(String(res.headers['access-control-allow-methods']), /POST/)
+  })
+
+  it('CORS headers present on regular GET', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/models' })
+    assert.ok(res.headers['access-control-allow-origin'], 'expected access-control-allow-origin')
+  })
+})
+
+describe('serve: CORS disabled', () => {
+  const server = useServer({})
+
+  it('OPTIONS returns 204 without CORS headers', async () => {
+    const res = await server().inject({ method: 'OPTIONS', url: '/v1/models' })
+    assert.equal(res.statusCode, 204)
+    assert.equal(res.headers['access-control-allow-origin'], undefined)
+  })
+
+  it('regular GET has no CORS headers', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/models' })
+    assert.equal(res.headers['access-control-allow-origin'], undefined)
+  })
+})
+
+// Ported from cli.bats "Serve: auth".
+describe('serve: auth', () => {
+  const server = useServer({ apiKey: 'test-secret-key-12345' })
+
+  it('no key returns 401', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/models' })
+    assert.equal(res.statusCode, 401)
+    assertError(res, 'invalid_api_key')
+  })
+
+  it('wrong key returns 401', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/models', headers: { authorization: 'Bearer wrong-key' } })
+    assert.equal(res.statusCode, 401)
+    assertError(res, 'invalid_api_key')
+  })
+
+  it('correct key returns 200', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/models', headers: { authorization: 'Bearer test-secret-key-12345' } })
+    assert.equal(res.statusCode, 200)
+  })
+})
