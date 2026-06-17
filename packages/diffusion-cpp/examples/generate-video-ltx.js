@@ -40,8 +40,8 @@ const NEG_PROMPT = process.env.NEG_PROMPT ||
   'blurry, low quality, static, jittery, watermark, distorted audio'
 
 // Multiples of 32. 768x512 is a good 3:2 default for LTX-2.3.
-const WIDTH = parseInt(process.env.WIDTH || '768', 10)
-const HEIGHT = parseInt(process.env.HEIGHT || '512', 10)
+const WIDTH = parseInt(process.env.WIDTH || '512', 10)
+const HEIGHT = parseInt(process.env.HEIGHT || '320', 10)
 // Frame count must satisfy (8*k + 1), k >= 1, max 257.  @24 fps:
 //   25 frames  → 1.00 s     49 frames → 2.00 s     73 frames → 3.00 s
 //   97 frames  → 4.00 s    121 frames → 5.00 s    257 frames → 10.67 s (max)
@@ -49,7 +49,7 @@ const VIDEO_FRAMES = parseInt(process.env.FRAMES || '241', 10)
 const FPS = parseInt(process.env.FPS || '24', 10)
 // Distilled variants run in 4-8 steps with cfg ~1.0. For the full --dev model
 // use STEPS=20+ and CFG_SCALE=7.0.
-const STEPS = parseInt(process.env.STEPS || '20', 10)
+const STEPS = parseInt(process.env.STEPS || '10', 10)
 const CFG_SCALE = parseFloat(process.env.CFG_SCALE || '1.0')
 const SEED = parseInt(process.env.SEED || '42', 10)
 // Temporal tiling bounds peak VRAM during the video VAE decode at the cost of
@@ -93,7 +93,7 @@ async function main () {
       threads: 4,
       device: 'gpu',
       diffusion_fa: true,
-      offload_to_cpu: true,
+      offload_to_cpu: false,
       vae_tiling: true,
       // LTX video VAE convolutions go through the direct (im2col-free) path to
       // avoid the CPU im2col F16 assert; the audio VAE F32 conv path is handled
