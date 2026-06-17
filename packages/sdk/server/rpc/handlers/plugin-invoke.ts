@@ -20,6 +20,7 @@ import {
   ModelNotFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { formatZodError } from "@/utils/zod-error";
 
 const logger = getServerLogger();
 
@@ -71,20 +72,20 @@ export async function handlePluginInvoke(
 
     const parseResult = handlerDef.requestSchema.safeParse(params);
     if (!parseResult.success) {
-      const details = parseResult.error.issues
-        .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-        .join(", ");
-      throw new PluginRequestValidationFailedError(handlerName, details);
+      throw new PluginRequestValidationFailedError(
+        handlerName,
+        formatZodError(parseResult.error),
+      );
     }
 
     const result = await handlerDef.handler(parseResult.data);
 
     const responseParseResult = handlerDef.responseSchema.safeParse(result);
     if (!responseParseResult.success) {
-      const details = responseParseResult.error.issues
-        .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-        .join(", ");
-      throw new PluginResponseValidationFailedError(handlerName, details);
+      throw new PluginResponseValidationFailedError(
+        handlerName,
+        formatZodError(responseParseResult.error),
+      );
     }
 
     return {
@@ -118,10 +119,10 @@ export async function* handlePluginInvokeStream(
 
       const parseResult = handlerDef.requestSchema.safeParse(params);
       if (!parseResult.success) {
-        const details = parseResult.error.issues
-          .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-          .join(", ");
-        throw new PluginRequestValidationFailedError(handlerName, details);
+        throw new PluginRequestValidationFailedError(
+          handlerName,
+          formatZodError(parseResult.error),
+        );
       }
 
       const generator = handlerDef.handler(
@@ -131,10 +132,10 @@ export async function* handlePluginInvokeStream(
       for await (const chunk of generator) {
         const responseParseResult = handlerDef.responseSchema.safeParse(chunk);
         if (!responseParseResult.success) {
-          const details = responseParseResult.error.issues
-            .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-            .join(", ");
-          throw new PluginResponseValidationFailedError(handlerName, details);
+          throw new PluginResponseValidationFailedError(
+            handlerName,
+            formatZodError(responseParseResult.error),
+          );
         }
 
         yield {
