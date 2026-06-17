@@ -12,22 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped the `parakeet-cpp` `version>=` constraint to `2026-06-10` (whisper.cpp `1c75d6e9`), which refreshes the bundled `ggml-speech` to the current speech-branch tip `bec032cd`. The registry baseline is left unchanged. The `parakeet-cpp` C++ tree is unchanged since the previous `128dae42` pin, so this only moves `ggml-speech`; prebuilds and the desktop RTF benchmark now build against the latest speech stack (QVAC-20614).
 - Performance reports now surface the desktop GPU hardware name. `test/integration/helpers.js` injects `bare-subprocess` into the shared performance reporter's `configure()` so `_detectGpu()` can shell out to nvidia-smi / vulkaninfo / system_profiler and populate `device.gpu` (e.g. "NVIDIA RTX 4000 SFF Ada") on GPU desktop runners (QVAC-20499). Mobile (Device Farm) reports continue to leave `device.gpu` null — the device name is the proxy there.
 - RTF benchmark now reports GGML backends. `test/benchmark/rtf-benchmark.test.js` resolves the requested GPU backend family to the parakeet.cpp cascade (Metal on darwin/ios, Vulkan on linux/win32, Vulkan/OpenCL on android) instead of the stale ONNX names (coreml/nnapi/auto-gpu), and now captures the *actual* backend the engine ran on via `stats.backendId` / `stats.backendDevice` (`labels.activeBackend`, `summary.backendId`). `scripts/perf-report/aggregate-parakeet-rtf.js` GPU-backend coverage map updated to the GGML set (vulkan/metal/opencl/cuda).
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2637](https://github.com/tetherto/qvac/pull/2637)).
 
 ### Fixed
 
 - The desktop RTF benchmark now actually runs. `integration-test-transcription-parakeet.yml` gained the `run_rtf_benchmarks` input + an RTF benchmark step (per-`(modelType, useGPU)` matrix via `scripts/run-rtf-benchmark-matrix.js`, Vulkan on GPU runners) that `benchmark-performance-transcription-parakeet.yml` already expected but which did not exist, so the orchestrator previously passed an undefined input and produced no results. The matrix runner is now resilient (a single model-type/backend failure no longer sinks the whole leg), and the orchestrator's summarize no longer `merge-multiple`-clobbers same-platform runners. CI-only; not shipped with the npm package.
-
-## [0.7.3]
-
-This release updates `@qvac/transcription-parakeet` to depend on `@qvac/infer-base` `^0.6.0`, keeping the addon aligned with the current inference base shared across the inference packages. There are no functional or API changes.
-
-### Changed
-
-- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
-
-## Pull Requests
-
-- [#2637](https://github.com/tetherto/qvac/pull/2637) - bump @qvac/infer-base to ^0.6.0 for transcription-parakeet
 
 ## [0.7.2]
 
