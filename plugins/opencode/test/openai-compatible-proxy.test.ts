@@ -229,6 +229,35 @@ test('proxy handles think tags split across SSE chunks end to end', async () => 
   }
 })
 
+test('proxy converts malformed Qwen tool-call text into OpenAI tool_calls', async () => {
+  const upstreamServer = await startServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    res.write('data: {"choices":[{"delta":{"content":"<tool_call>\\n{\\"function=web"}}]}\n\n')
+    res.write('data: {"choices":[{"delta":{"content":"fetch\\",\\"arguments\\":{\\"url\\":\\"https://docs.opencode.ai\\",\\"format\\":\\"markdown\\"}}\\n</tool_call>"}}]}\n\n')
+    res.end('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+  })
+  const proxy = await startOpenAICompatibleProxy({
+    getUpstream: () => ({ hostname: '127.0.0.1', port: String(upstreamServer.port) }),
+    whenUpstream: Promise.resolve(),
+    openAICompatTransforms: true,
+    upstreamTimeoutMs: 1000,
+    logger
+  })
+  try {
+    const res = await postJson(proxy.port, '/v1/chat/completions', { messages: [] })
+    assert.equal(res.statusCode, 200)
+    assert.match(res.body, /"tool_calls":\[\{"index":0,"id":"call_/)
+    assert.match(res.body, /"name":"webfetch"/)
+    assert.match(res.body, /"arguments":"\{\\"url\\":\\"https:\/\/docs\.opencode\.ai\\",\\"format\\":\\"markdown\\"\}"/)
+    assert.match(res.body, /"finish_reason":"tool_calls"/)
+    assert.doesNotMatch(res.body, /<tool_call>/)
+    assert.match(res.body, /data: \[DONE\]/)
+  } finally {
+    await proxy.close()
+    await upstreamServer.close()
+  }
+})
+
 test('proxy returns 503 when the upstream is not available after startup', async () => {
   const proxy = await startOpenAICompatibleProxy({
     getUpstream: () => undefined,

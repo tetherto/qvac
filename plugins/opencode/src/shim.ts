@@ -124,6 +124,149 @@ export function makeThinkSplitter (): ThinkSplitter {
   return split
 }
 
+const TOOL_CALL_OPEN = '<tool_call>'
+const TOOL_CALL_CLOSE = '</tool_call>'
+
+export interface OpenAIToolCallDelta {
+  readonly index: number
+  readonly id: string
+  readonly type: 'function'
+  readonly function: {
+    readonly name: string
+    readonly arguments: string
+  }
+}
+
+export type ToolCallSegment =
+  | { readonly type: 'content', readonly text: string }
+  | { readonly type: 'tool_call', readonly toolCall: OpenAIToolCallDelta }
+
+export interface ToolCallSplitter {
+  (input: string): ToolCallSegment[]
+  flush: () => ToolCallSegment[]
+}
+
+function toolCallId (name: string, args: Record<string, unknown>, index: number): string {
+  const text = `${name}:${JSON.stringify(args)}`
+  let hash = 0
+  for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0
+  return `call_${Math.abs(hash).toString(36)}_${index}`
+}
+
+function repairFunctionEqualsJson (inner: string): string | undefined {
+  const match = /^\{\s*"function=([^"]+)"\s*,\s*"arguments"\s*:\s*([\s\S]+)\}\s*$/.exec(inner)
+  if (match === null) return undefined
+  return `{"name":${JSON.stringify(match[1])},"arguments":${match[2]}}`
+}
+
+function parseToolCallFrame (raw: string, index: number): OpenAIToolCallDelta | undefined {
+  let inner = raw.trim()
+  if (inner.startsWith(TOOL_CALL_OPEN)) inner = inner.slice(TOOL_CALL_OPEN.length)
+  if (inner.endsWith(TOOL_CALL_CLOSE)) inner = inner.slice(0, inner.length - TOOL_CALL_CLOSE.length)
+  inner = inner.trim()
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(inner)
+  } catch {
+    const repaired = repairFunctionEqualsJson(inner)
+    if (repaired === undefined) return undefined
+    try {
+      parsed = JSON.parse(repaired)
+    } catch {
+      return undefined
+    }
+  }
+
+  if (parsed === null || typeof parsed !== 'object') return undefined
+  const obj = parsed as { name?: unknown, function?: unknown, arguments?: unknown }
+  const name = typeof obj.name === 'string'
+    ? obj.name
+    : typeof obj.function === 'string'
+      ? obj.function
+      : undefined
+  if (name === undefined || obj.arguments === null || typeof obj.arguments !== 'object' || Array.isArray(obj.arguments)) {
+    return undefined
+  }
+
+  const args = obj.arguments as Record<string, unknown>
+  return {
+    index,
+    id: toolCallId(name, args, index),
+    type: 'function',
+    function: { name, arguments: JSON.stringify(args) }
+  }
+}
+
+export function makeToolCallSplitter (): ToolCallSplitter {
+  let inToolCall = false
+  let carry = ''
+  let frame = ''
+  let index = 0
+
+  const split = function split (input: string): ToolCallSegment[] {
+    let text = carry + input
+    carry = ''
+    const segments: ToolCallSegment[] = []
+
+    while (text.length > 0) {
+      if (inToolCall) {
+        const idx = text.indexOf(TOOL_CALL_CLOSE)
+        if (idx !== -1) {
+          frame += text.slice(0, idx + TOOL_CALL_CLOSE.length)
+          text = text.slice(idx + TOOL_CALL_CLOSE.length)
+          inToolCall = false
+          const parsed = parseToolCallFrame(frame, index)
+          if (parsed !== undefined) {
+            index += 1
+            segments.push({ type: 'tool_call', toolCall: parsed })
+          } else {
+            segments.push({ type: 'content', text: frame })
+          }
+          frame = ''
+          continue
+        }
+
+        const k = maxTagSuffix(text, TOOL_CALL_CLOSE)
+        frame += text.slice(0, text.length - k)
+        carry = text.slice(text.length - k)
+        break
+      }
+
+      const idx = text.indexOf(TOOL_CALL_OPEN)
+      if (idx !== -1) {
+        if (idx > 0) segments.push({ type: 'content', text: text.slice(0, idx) })
+        frame = TOOL_CALL_OPEN
+        text = text.slice(idx + TOOL_CALL_OPEN.length)
+        inToolCall = true
+        continue
+      }
+
+      const k = maxTagSuffix(text, TOOL_CALL_OPEN)
+      const content = text.slice(0, text.length - k)
+      if (content !== '') segments.push({ type: 'content', text: content })
+      carry = text.slice(text.length - k)
+      break
+    }
+
+    return segments
+  }
+
+  split.flush = (): ToolCallSegment[] => {
+    const suffix = carry
+    carry = ''
+    if (inToolCall) {
+      const raw = frame + suffix
+      frame = ''
+      inToolCall = false
+      return raw === '' ? [] : [{ type: 'content', text: raw }]
+    }
+    return suffix === '' ? [] : [{ type: 'content', text: suffix }]
+  }
+
+  return split
+}
+
 interface SSEDelta {
   content?: unknown
   [key: string]: unknown
@@ -140,24 +283,53 @@ export interface SSEChunk {
   [key: string]: unknown
 }
 
-// Turn one upstream SSE object into 0..2 objects: a `reasoning_content` chunk
-// for any `<think>` text and/or a `content` chunk for the rest. Chunks without
-// a string `content` delta (role-only, tool_calls, finish, usage) pass through.
-export function transformSSEChunk (chunk: SSEChunk, split: ThinkSplitter): SSEChunk[] {
+function pushContentChunks (
+  chunk: SSEChunk,
+  choice: SSEChoice,
+  deltaRest: SSEDelta,
+  text: string,
+  split: ThinkSplitter,
+  out: SSEChunk[]
+): void {
+  const { content, reasoning } = split(text)
+  if (reasoning !== '') {
+    out.push({ ...chunk, choices: [{ ...choice, delta: { reasoning_content: reasoning }, finish_reason: null }] })
+  }
+  const rest: SSEDelta = { ...deltaRest, content }
+  const hasOtherKeys = Object.keys(rest).some((k) => k !== 'content')
+  if (content !== '' || hasOtherKeys) {
+    out.push({ ...chunk, choices: [{ ...choice, delta: rest }] })
+  }
+}
+
+// Turn one upstream SSE object into OpenAI-compatible output: `reasoning_content`
+// for `<think>` text, `tool_calls` for repaired model-emitted tool frames, and
+// plain `content` for the rest. Chunks without a string content delta pass through.
+export function transformSSEChunk (chunk: SSEChunk, split: ThinkSplitter, toolSplit?: ToolCallSplitter): SSEChunk[] {
   const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined
   const delta = choice?.delta
   if (choice === undefined || delta === undefined || typeof delta.content !== 'string') {
     return [chunk]
   }
-  const { content, reasoning } = split(delta.content)
+
   const out: SSEChunk[] = []
-  if (reasoning !== '') {
-    out.push({ ...chunk, choices: [{ ...choice, delta: { reasoning_content: reasoning }, finish_reason: null }] })
+  if (toolSplit === undefined) {
+    const rest: SSEDelta = { ...delta }
+    delete rest.content
+    pushContentChunks(chunk, choice, rest, delta.content, split, out)
+    return out
   }
-  const rest: SSEDelta = { ...delta, content }
-  const hasOtherKeys = Object.keys(rest).some((k) => k !== 'content')
-  if (content !== '' || hasOtherKeys) {
-    out.push({ ...chunk, choices: [{ ...choice, delta: rest }] })
+
+  let rest: SSEDelta | undefined = { ...delta }
+  delete rest.content
+  for (const segment of toolSplit(delta.content)) {
+    if (segment.type === 'content') {
+      pushContentChunks(chunk, choice, rest ?? {}, segment.text, split, out)
+      rest = undefined
+      continue
+    }
+    out.push({ ...chunk, choices: [{ ...choice, delta: { tool_calls: [segment.toolCall] }, finish_reason: null }] })
+    rest = undefined
   }
   return out
 }

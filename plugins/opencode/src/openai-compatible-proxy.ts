@@ -3,11 +3,15 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import type { HostLogger } from './host-logger.js'
 import {
   flattenMessages,
+  makeToolCallSplitter,
   makeThinkSplitter,
   transformSSEChunk,
   type ChatCompletionBody,
+  type OpenAIToolCallDelta,
   type SSEChunk,
   type SplitResult,
+  type ToolCallSegment,
+  type ToolCallSplitter,
   type ThinkSplitter
 } from './shim.js'
 
@@ -30,6 +34,12 @@ export interface StartedOpenAICompatibleProxy {
 }
 
 type SerializedRunner = (work: () => Promise<void>) => Promise<void>
+
+interface TransformState {
+  readonly think: ThinkSplitter
+  readonly tools: ToolCallSplitter
+  emittedToolCalls: boolean
+}
 
 export function originOf (baseURL: string): Upstream {
   const u = new URL(baseURL)
@@ -79,11 +89,39 @@ function emitSplitResult (result: SplitResult, res: ServerResponse): void {
   }
 }
 
-function emitSSELine (line: string, split: ThinkSplitter, res: ServerResponse): void {
+function emitToolCallDelta (toolCall: OpenAIToolCallDelta, res: ServerResponse): void {
+  res.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [toolCall] }, finish_reason: null }] })}\n\n`)
+}
+
+function emitToolSegments (segments: ToolCallSegment[], state: TransformState, res: ServerResponse): void {
+  for (const segment of segments) {
+    if (segment.type === 'content') {
+      emitSplitResult(state.think(segment.text), res)
+      continue
+    }
+    state.emittedToolCalls = true
+    emitToolCallDelta(segment.toolCall, res)
+  }
+}
+
+function hasToolCallDelta (chunk: SSEChunk): boolean {
+  const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined
+  const delta = choice?.delta as { tool_calls?: unknown } | undefined
+  return Array.isArray(delta?.tool_calls) && delta.tool_calls.length > 0
+}
+
+function normalizeFinishReason (chunk: SSEChunk, state: TransformState): SSEChunk {
+  const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined
+  if (!state.emittedToolCalls || choice?.finish_reason !== 'stop') return chunk
+  return { ...chunk, choices: [{ ...choice, finish_reason: 'tool_calls' }] }
+}
+
+function emitSSELine (line: string, state: TransformState, res: ServerResponse): void {
   if (line.startsWith('data:')) {
     const payload = line.slice(5).trim()
     if (payload === '[DONE]') {
-      emitSplitResult(split.flush(), res)
+      emitToolSegments(state.tools.flush(), state, res)
+      emitSplitResult(state.think.flush(), res)
       res.write('data: [DONE]\n\n')
       return
     }
@@ -94,7 +132,11 @@ function emitSSELine (line: string, split: ThinkSplitter, res: ServerResponse): 
       res.write(`${line}\n`)
       return
     }
-    for (const out of transformSSEChunk(chunk, split)) res.write(`data: ${JSON.stringify(out)}\n\n`)
+    for (const transformed of transformSSEChunk(chunk, state.think, state.tools)) {
+      if (hasToolCallDelta(transformed)) state.emittedToolCalls = true
+      const out = normalizeFinishReason(transformed, state)
+      res.write(`data: ${JSON.stringify(out)}\n\n`)
+    }
   } else if (line !== '') {
     res.write(`${line}\n`)
   }
@@ -121,7 +163,11 @@ function pipeResponse (
     return
   }
 
-  const split = makeThinkSplitter()
+  const state: TransformState = {
+    think: makeThinkSplitter(),
+    tools: makeToolCallSplitter(),
+    emittedToolCalls: false
+  }
   let lineBuf = ''
   upstreamRes.setEncoding('utf8')
   upstreamRes.on('data', (str: string) => {
@@ -130,12 +176,13 @@ function pipeResponse (
     while ((nl = lineBuf.indexOf('\n')) !== -1) {
       const line = lineBuf.slice(0, nl)
       lineBuf = lineBuf.slice(nl + 1)
-      emitSSELine(line, split, res)
+      emitSSELine(line, state, res)
     }
   })
   upstreamRes.on('end', () => {
-    if (lineBuf !== '') emitSSELine(lineBuf, split, res)
-    emitSplitResult(split.flush(), res)
+    if (lineBuf !== '') emitSSELine(lineBuf, state, res)
+    emitToolSegments(state.tools.flush(), state, res)
+    emitSplitResult(state.think.flush(), res)
     res.end()
     options.logger.trace(`done total=${((Date.now() - reqStart) / 1000).toFixed(1)}s`)
   })
