@@ -126,13 +126,43 @@ const stats = await run.stats;
 ```
 
 `run.results` resolves in prompt order. `run.ids` exposes the addon-assigned ids
-and `run.byId(id)` gives per-prompt events and final aggregation.
+and `run.byId(id)` gives per-prompt events and final aggregation. Each prompt can
+also carry its own `tools` and `mcp` clients; handlers are attached only to tool
+calls produced by that prompt:
 
-`run.results` is **all-or-nothing**: if any single prompt fails (e.g. a context
-overflow) or is cancelled, the promise rejects with that first error and the
-already-completed prompts are not returned through it. To recover partial
-results, use `run.byId(id).final` — each successful prompt's `final` still
-resolves even when a sibling prompt fails:
+```ts
+import { z } from "zod";
+
+const run = batchCompletion({
+  modelId,
+  prompts: [
+    {
+      id: "weather",
+      history: [{ role: "user", content: "Get the weather for Tokyo." }],
+      tools: [
+        {
+          name: "get_weather",
+          description: "Get current weather for a city",
+          parameters: z.object({ city: z.string() }),
+          handler: async ({ city }) => ({
+            city: String(city),
+            forecast: "sunny",
+          }),
+        },
+      ],
+    },
+    {
+      id: "plain",
+      history: [{ role: "user", content: "Reply with only PLAIN." }],
+    },
+  ],
+});
+```
+
+`run.results` is **all-or-nothing** for stream-level failures: if the batch
+handler throws (e.g. a context overflow), the whole run rejects and per-prompt
+finals cannot be recovered. Graceful terminal events such as cancellation still
+settle each `run.byId(id).final` according to that id's terminal state:
 
 ```ts
 const run = batchCompletion({ modelId, prompts });

@@ -96,6 +96,12 @@ resources.define("llm-batch", {
   config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 },
 });
 
+resources.define("tools-batch", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, parallel: 2 },
+});
+
 resources.define("finetune-llm", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llamacpp-completion",

@@ -1,4 +1,5 @@
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { ToolDialect } from "@qvac/sdk";
 
 interface GenerationParams {
   temp?: number;
@@ -10,11 +11,29 @@ interface BatchPrompt {
   id?: string;
   history: Array<{ role: string; content: string }>;
   generationParams?: GenerationParams;
+  tools?: Array<{
+    type: "function";
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
+  }>;
 }
 
 interface BatchCompletionTestParams {
   prompts: BatchPrompt[];
   stream?: boolean;
+  resourceKey?: string;
+  toolDialect?: ToolDialect;
+  expectedToolCall?: {
+    id: string;
+    name: string;
+    argKeys?: string[];
+    noToolCallIds?: string[];
+  };
 }
 
 type BatchCompletionExpectation =
@@ -34,7 +53,7 @@ function createBatchCompletionTest(
     expectation,
     metadata: {
       category: "batch-completion",
-      dependency: "llm-batch",
+      dependency: params.resourceKey ?? "llm-batch",
       estimatedDurationMs,
     },
   };
@@ -71,14 +90,20 @@ export const batchCompletionStreaming = createBatchCompletionTest(
       {
         id: "four",
         history: [
-          { role: "user", content: "What is 2+2? Answer with only the number." },
+          {
+            role: "user",
+            content: "What is 2+2? Answer with only the number.",
+          },
         ],
         generationParams: deterministic,
       },
       {
         id: "six",
         history: [
-          { role: "user", content: "What is 3+3? Answer with only the number." },
+          {
+            role: "user",
+            content: "What is 3+3? Answer with only the number.",
+          },
         ],
         generationParams: deterministic,
       },
@@ -98,8 +123,57 @@ export const batchCompletionEmptyRejected = createBatchCompletionTest(
   2000,
 );
 
+export const batchCompletionToolCalling = createBatchCompletionTest(
+  "batch-completion-tool-calling",
+  {
+    resourceKey: "tools-batch",
+    prompts: [
+      {
+        id: "weather",
+        history: [
+          {
+            role: "user",
+            content:
+              "Use the available tool to get the weather for Tokyo. Return only the tool call.",
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            name: "get_weather",
+            description: "Get current weather for a city",
+            parameters: {
+              type: "object",
+              properties: {
+                city: { type: "string", description: "City name" },
+              },
+              required: ["city"],
+            },
+          },
+        ],
+        generationParams: { temp: 0, seed: 42, predict: 96 },
+      },
+      {
+        id: "plain",
+        history: [{ role: "user", content: "Reply with only the word PLAIN." }],
+        generationParams: deterministic,
+      },
+    ],
+    stream: false,
+    expectedToolCall: {
+      id: "weather",
+      name: "get_weather",
+      argKeys: ["city"],
+      noToolCallIds: ["plain"],
+    },
+  },
+  { validation: "type", expectedType: "string" },
+  20000,
+);
+
 export const batchCompletionTests = [
   batchCompletionBasic,
   batchCompletionStreaming,
   batchCompletionEmptyRejected,
+  batchCompletionToolCalling,
 ];

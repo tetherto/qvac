@@ -1,11 +1,14 @@
 import type { AbortSignal } from "bare-abort-controller";
 import type {
-  BatchPrompt,
+  BatchCompletionStreamPrompt,
   CompletionStats,
   ResponseFormat,
+  Tool,
 } from "@/schemas";
+import { TOOLS_MODE } from "@/schemas/tools";
 import {
   getModel,
+  getModelConfig,
   type AnyModel,
 } from "@/server/bare/registry/model-registry";
 import type { DisposableScope } from "@/server/bare/runtime/disposable-scope";
@@ -20,6 +23,10 @@ import {
   type CompletionGenerationParams,
 } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { normalizeCompletionStats } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stats";
+import {
+  appendToolsToHistory,
+  prependToolsToHistory,
+} from "@/server/utils/tool-integration";
 
 const logger = getServerLogger();
 
@@ -30,6 +37,12 @@ type AddonBatchOutputChunk = {
 
 type BatchCompletionRunOptions = {
   generationParams: CompletionGenerationParams;
+};
+
+type HistoryMessage = {
+  role: string;
+  content: string;
+  attachments?: { path: string }[] | undefined;
 };
 
 type AddonBatchPrompt = {
@@ -61,6 +74,11 @@ type BatchModelStreamResult = {
   stats?: CompletionStats;
 };
 
+type BatchPromptRenderOptions = {
+  toolsEnabled: boolean;
+  toolsMode?: string | undefined;
+};
+
 function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
   const run = model.run.bind(model) as unknown as (
     prompts: AddonBatchPrompt[],
@@ -84,14 +102,37 @@ function mergeGenerationParams(
   };
 }
 
-function buildBatchPrompt(prompt: BatchPrompt): AddonBatchPrompt {
+function renderPromptHistory(
+  prompt: BatchCompletionStreamPrompt,
+  options: BatchPromptRenderOptions,
+) {
+  const tools =
+    options.toolsEnabled && prompt.tools && prompt.tools.length > 0
+      ? prompt.tools
+      : undefined;
+  let historyWithTools: Array<HistoryMessage | Tool> = prompt.history;
+
+  if (tools) {
+    historyWithTools =
+      options.toolsMode === TOOLS_MODE.dynamic
+        ? appendToolsToHistory(prompt.history, tools)
+        : prependToolsToHistory(prompt.history, tools);
+  }
+
+  return transformMessages(historyWithTools);
+}
+
+function buildBatchPrompt(
+  prompt: BatchCompletionStreamPrompt,
+  options: BatchPromptRenderOptions,
+): AddonBatchPrompt {
   const mergedGenerationParams = mergeGenerationParams(
     prompt.generationParams,
     prompt.responseFormat,
   );
   return {
     ...(prompt.id !== undefined && { id: prompt.id }),
-    prompt: transformMessages(prompt.history),
+    prompt: renderPromptHistory(prompt, options),
     ...(mergedGenerationParams && {
       runOptions: { generationParams: mergedGenerationParams },
     }),
@@ -112,7 +153,7 @@ function isBatchOutputChunk(output: unknown): output is AddonBatchOutputChunk {
 export async function* batchCompletion(
   params: {
     modelId: string;
-    prompts: BatchPrompt[];
+    prompts: BatchCompletionStreamPrompt[];
   },
   opts: {
     signal: AbortSignal;
@@ -124,6 +165,11 @@ export async function* batchCompletion(
   const { signal, scope } = opts;
   const requestLogger = opts.logger ?? logger;
   const model = getModel(modelId);
+  const modelConfig = getModelConfig(modelId);
+  const renderOptions: BatchPromptRenderOptions = {
+    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true,
+    toolsMode: (modelConfig as { toolsMode?: string }).toolsMode,
+  };
 
   const onAbort = () => {
     const addon = model.addon;
@@ -141,7 +187,9 @@ export async function* batchCompletion(
     signal.removeEventListener("abort", onAbort);
   });
 
-  const addonPrompts = prompts.map(buildBatchPrompt);
+  const addonPrompts = prompts.map((prompt) =>
+    buildBatchPrompt(prompt, renderOptions),
+  );
   const modelStart = nowMs();
   const response = await runBatchModel(model, addonPrompts);
   const ids = response.ids;

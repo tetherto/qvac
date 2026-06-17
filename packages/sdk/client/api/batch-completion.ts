@@ -1,5 +1,6 @@
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
 import { generateClientRequestId } from "@/client/api/client-request-id";
+import { getClientLogger } from "@/logging";
 import {
   batchCompletionStreamResponseSchema,
   type BatchCompletionClientParams,
@@ -10,30 +11,62 @@ import {
   type CompletionEvent,
   type CompletionFinal,
   type CompletionStats,
+  type McpClientInput,
   type RPCOptions,
+  type Tool,
 } from "@/schemas";
 import { buildFinalFromEvents } from "@/utils/aggregate-events";
 import {
   CompletionFailedError,
   InferenceCancelledError,
 } from "@/utils/errors-server";
-import type { ToolHandlerMap } from "@/utils/tool-helpers";
+import { getMcpToolsWithHandlers } from "@/utils/mcp-adapter";
+import {
+  validateTools,
+  type ToolHandlerMap,
+  type ToolInput,
+} from "@/utils/tool-helpers";
+
+const logger = getClientLogger();
+
+type BatchPromptParams = Omit<
+  BatchCompletionClientParams["prompts"][number],
+  "tools"
+> & {
+  tools?: Tool[] | ToolInput[];
+  mcp?: McpClientInput[];
+};
 
 type BatchCompletionParams = Omit<
   BatchCompletionClientParams,
-  "requestId"
+  "prompts" | "requestId"
 > & {
+  prompts: BatchPromptParams[];
   rpcOptions?: RPCOptions;
 };
 
+type BatchCompletionStreamFactory = (
+  request: BatchCompletionStreamRequest,
+  options?: RPCOptions,
+) => AsyncGenerator<unknown>;
+
+type BatchCompletionSubRun = {
+  events: AsyncIterable<CompletionEvent>;
+  final: Promise<CompletionFinal>;
+};
+
 type PerIdState = {
-  eventQueue: CompletionEvent[];
   allEvents: CompletionEvent[];
   final: Promise<CompletionFinal>;
   finalResolver: (value: CompletionFinal) => void;
   finalRejecter: (error: unknown) => void;
-  eventResolve: (() => void) | null;
+  eventWaiters: Array<() => void>;
   done: boolean;
+};
+
+type ResolvedBatchPrompts = {
+  prompts: BatchCompletionStreamRequest["prompts"];
+  handlersById: Map<string, ToolHandlerMap>;
 };
 
 function createPerIdState(): PerIdState {
@@ -47,23 +80,80 @@ function createPerIdState(): PerIdState {
   final.catch(() => {});
 
   return {
-    eventQueue: [],
     allEvents: [],
     final,
     finalResolver,
     finalRejecter,
-    eventResolve: null,
+    eventWaiters: [],
     done: false,
   };
+}
+
+function addHandlers(target: ToolHandlerMap, source: ToolHandlerMap): void {
+  for (const [name, handler] of source) {
+    if (target.has(name)) {
+      logger.warn(`Duplicate tool handler for "${name}", overwriting`);
+    }
+    target.set(name, handler);
+  }
+}
+
+async function resolveBatchPrompts(
+  prompts: BatchPromptParams[],
+): Promise<ResolvedBatchPrompts> {
+  const resolvedPrompts: BatchCompletionStreamRequest["prompts"] = [];
+  const handlersById = new Map<string, ToolHandlerMap>();
+
+  for (const [index, prompt] of prompts.entries()) {
+    let allTools: Tool[] = [];
+    const handlers: ToolHandlerMap = new Map();
+
+    if (prompt.tools) {
+      const { tools, handlers: toolHandlers } = validateTools(prompt.tools);
+      allTools = tools;
+      addHandlers(handlers, toolHandlers);
+    }
+
+    if (prompt.mcp && prompt.mcp.length > 0) {
+      const { tools: mcpTools, handlers: mcpHandlers } =
+        await getMcpToolsWithHandlers(prompt.mcp);
+      allTools = [...mcpTools, ...allTools];
+      addHandlers(handlers, mcpHandlers);
+    }
+
+    const id = prompt.id ?? String(index);
+    handlersById.set(id, handlers);
+
+    resolvedPrompts.push({
+      ...(prompt.id !== undefined && { id: prompt.id }),
+      history: prompt.history,
+      ...(prompt.generationParams && {
+        generationParams: prompt.generationParams,
+      }),
+      ...(prompt.responseFormat && { responseFormat: prompt.responseFormat }),
+      ...(allTools.length > 0 && { tools: allTools }),
+    });
+  }
+
+  return { prompts: resolvedPrompts, handlersById };
 }
 
 export function batchCompletion(
   params: BatchCompletionParams,
 ): BatchCompletionRun {
+  return createBatchCompletionRun(params, streamRpc);
+}
+
+export function createBatchCompletionRun(
+  params: BatchCompletionParams,
+  streamFactory: BatchCompletionStreamFactory,
+): BatchCompletionRun {
   const requestId = generateClientRequestId();
   const states = new Map<string, PerIdState>();
+  const subStreams = new Map<string, BatchCompletionSubRun>();
   const eventQueue: BatchCompletionEvent[] = [];
-  const allHandlers: ToolHandlerMap = new Map();
+  let handlersById = new Map<string, ToolHandlerMap>();
+  const emptyHandlers: ToolHandlerMap = new Map();
 
   let eventResolve: (() => void) | null = null;
   let idsResolver: (value: string[]) => void = () => {};
@@ -75,6 +165,7 @@ export function batchCompletion(
   let idsResolved = false;
   let done = false;
   let streamError: Error | null = null;
+  let settledIds: Set<string> | null = null;
 
   const idsPromise = new Promise<string[]>((resolve, reject) => {
     idsResolver = resolve;
@@ -103,6 +194,19 @@ export function batchCompletion(
     if (!state) {
       state = createPerIdState();
       states.set(id, state);
+      if (done) {
+        if (streamError !== null) {
+          state.finalRejecter(streamError);
+          state.done = true;
+        } else if (settledIds?.has(id)) {
+          settleState(id, state);
+        } else {
+          state.finalRejecter(
+            new CompletionFailedError(`Unknown batch prompt id "${id}".`),
+          );
+          state.done = true;
+        }
+      }
     }
     return state;
   }
@@ -113,10 +217,8 @@ export function batchCompletion(
       eventResolve = null;
     }
     for (const state of states.values()) {
-      if (state.eventResolve) {
-        state.eventResolve();
-        state.eventResolve = null;
-      }
+      const waiters = state.eventWaiters.splice(0);
+      for (const resolve of waiters) resolve();
     }
   }
 
@@ -131,38 +233,66 @@ export function batchCompletion(
     idsRejecter(error);
     resultsRejecter(error);
     statsRejecter(error);
-    for (const state of states.values()) state.finalRejecter(error);
+    for (const state of states.values()) {
+      if (!state.done) state.finalRejecter(error);
+      state.done = true;
+    }
+  }
+
+  function settleState(id: string, state: PerIdState) {
+    if (state.done) return undefined;
+
+    const handlers = handlersById.get(id) ?? emptyHandlers;
+    const { final, error, cancelled } = buildFinalFromEvents(
+      state.allEvents,
+      handlers,
+    );
+
+    if (error) {
+      const err = new CompletionFailedError(error.message, error);
+      state.finalRejecter(err);
+      state.done = true;
+      return err;
+    }
+
+    if (cancelled) {
+      const err = new InferenceCancelledError(requestId, {
+        text: final.contentText,
+        toolCalls: final.toolCalls,
+        ...(final.stats && { stats: final.stats }),
+      });
+      state.finalRejecter(err);
+      state.done = true;
+      return err;
+    }
+
+    state.finalResolver(final);
+    state.done = true;
+    return { id, final };
   }
 
   function finishAll(ids: string[]) {
     const results: BatchCompletionResult[] = [];
     let firstError: unknown;
+    settledIds = new Set(ids);
 
     for (const id of ids) {
       const state = ensureState(id);
-      const { final, error, cancelled } = buildFinalFromEvents(
-        state.allEvents,
-        allHandlers,
-      );
-
-      if (error) {
-        const err = new CompletionFailedError(error.message);
-        state.finalRejecter(err);
-        firstError ??= err;
-      } else if (cancelled) {
-        const err = new InferenceCancelledError(requestId, {
-          text: final.contentText,
-          toolCalls: final.toolCalls,
-          ...(final.stats && { stats: final.stats }),
-        });
-        state.finalRejecter(err);
-        firstError ??= err;
-      } else {
-        state.finalResolver(final);
-        results.push({ id, final });
+      const outcome = settleState(id, state);
+      if (outcome instanceof Error) {
+        firstError ??= outcome;
+      } else if (outcome !== undefined) {
+        results.push(outcome);
       }
+    }
 
-      state.done = true;
+    for (const [id, state] of states) {
+      if (!settledIds.has(id) && !state.done) {
+        state.finalRejecter(
+          new CompletionFailedError(`Unknown batch prompt id "${id}".`),
+        );
+        state.done = true;
+      }
     }
 
     if (firstError !== undefined) {
@@ -170,14 +300,19 @@ export function batchCompletion(
     } else {
       resultsResolver(results);
     }
+
+    return firstError;
   }
 
   const processResponses = async () => {
     try {
+      const resolved = await resolveBatchPrompts(params.prompts);
+      handlersById = resolved.handlersById;
+
       const request: BatchCompletionStreamRequest = {
         type: "batchCompletionStream",
         modelId: params.modelId,
-        prompts: params.prompts,
+        prompts: resolved.prompts,
         stream: params.stream ?? true,
         captureThinking: params.captureThinking,
         emitRawDeltas: params.emitRawDeltas,
@@ -186,7 +321,7 @@ export function batchCompletion(
       };
 
       let orderedIds: string[] = [];
-      const responses: AsyncGenerator<unknown> = streamRpc(
+      const responses: AsyncGenerator<unknown> = streamFactory(
         request,
         params.rpcOptions,
       );
@@ -209,7 +344,6 @@ export function batchCompletion(
           for (const batchEvent of streamResponse.events) {
             const state = ensureState(batchEvent.id);
             state.allEvents.push(batchEvent.event);
-            state.eventQueue.push(batchEvent.event);
             eventQueue.push(batchEvent);
           }
 
@@ -220,13 +354,17 @@ export function batchCompletion(
               orderedIds =
                 orderedIds.length > 0
                   ? orderedIds
-                  : params.prompts.map((prompt, index) =>
-                      prompt.id ?? String(index),
+                  : params.prompts.map(
+                      (prompt, index) => prompt.id ?? String(index),
                     );
               resolveIds(orderedIds);
             }
-            statsResolver(streamResponse.stats);
-            finishAll(orderedIds);
+            const firstError = finishAll(orderedIds);
+            if (firstError !== undefined) {
+              statsRejecter(firstError);
+            } else {
+              statsResolver(streamResponse.stats);
+            }
             done = true;
             notifyWaiters();
           }
@@ -260,29 +398,42 @@ export function batchCompletion(
     }
   })();
 
-  function byId(id: string) {
+  function makeSubStream(id: string): BatchCompletionSubRun {
     const state = ensureState(id);
-    const idEvents = (async function* () {
-      while (true) {
-        if (state.eventQueue.length > 0) {
-          yield state.eventQueue.shift()!;
-        } else if (state.done || done) {
-          if (streamError !== null) {
-            throw streamError;
+    const events = {
+      async *[Symbol.asyncIterator]() {
+        let index = 0;
+        while (true) {
+          if (index < state.allEvents.length) {
+            yield state.allEvents[index]!;
+            index += 1;
+          } else if (state.done || done) {
+            if (streamError !== null) {
+              throw streamError;
+            }
+            break;
+          } else {
+            await new Promise<void>((resolve) => {
+              state.eventWaiters.push(resolve);
+            });
           }
-          break;
-        } else {
-          await new Promise<void>((resolve) => {
-            state.eventResolve = resolve;
-          });
         }
-      }
-    })();
+      },
+    };
 
     return {
-      events: idEvents,
+      events,
       final: state.final,
     };
+  }
+
+  function byId(id: string) {
+    let subStream = subStreams.get(id);
+    if (!subStream) {
+      subStream = makeSubStream(id);
+      subStreams.set(id, subStream);
+    }
+    return subStream;
   }
 
   return {

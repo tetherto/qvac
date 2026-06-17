@@ -13,6 +13,30 @@ const prompt = {
   responseFormat: { type: "text" as const },
 };
 
+const tool = {
+  type: "function" as const,
+  name: "get_weather",
+  description: "Get weather for a city",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      city: { type: "string" as const },
+    },
+    required: ["city"],
+  },
+};
+
+const mcp = {
+  client: {
+    listTools: async function () {
+      return { tools: [] };
+    },
+    callTool: async function () {
+      return {};
+    },
+  },
+};
+
 test("batchCompletionClientParamsSchema: accepts batch prompts", (t) => {
   const result = batchCompletionClientParamsSchema.safeParse({
     modelId: "llama",
@@ -53,6 +77,35 @@ test("batchCompletionClientParamsSchema: allows multiple prompts without ids", (
   t.is(result.success, true);
 });
 
+test("batchCompletionClientParamsSchema: accepts per-prompt tools and mcp", (t) => {
+  const result = batchCompletionClientParamsSchema.safeParse({
+    modelId: "llama",
+    prompts: [
+      {
+        ...prompt,
+        tools: [tool],
+        mcp: [mcp],
+      },
+    ],
+  });
+  t.is(result.success, true);
+});
+
+test("batchCompletionClientParamsSchema: rejects per-prompt tools with structured responseFormat", (t) => {
+  const result = batchCompletionClientParamsSchema.safeParse({
+    modelId: "llama",
+    prompts: [
+      {
+        id: "tool-json",
+        history: [{ role: "user", content: "Call the weather tool." }],
+        tools: [tool],
+        responseFormat: { type: "json_object" as const },
+      },
+    ],
+  });
+  t.is(result.success, false);
+});
+
 test("batchCompletionStreamRequestSchema: validates wire request", (t) => {
   const request = {
     type: "batchCompletionStream",
@@ -62,6 +115,22 @@ test("batchCompletionStreamRequestSchema: validates wire request", (t) => {
   };
   t.is(batchCompletionStreamRequestSchema.safeParse(request).success, true);
   t.is(requestSchema.safeParse(request).success, true);
+});
+
+test("batchCompletionStreamRequestSchema: accepts resolved tools and rejects client mcp", (t) => {
+  const accepted = {
+    type: "batchCompletionStream",
+    modelId: "llama",
+    prompts: [{ ...prompt, tools: [tool] }],
+    requestId: "req-tools",
+  };
+  const rejected = {
+    ...accepted,
+    prompts: [{ ...prompt, tools: [tool], mcp: [mcp] }],
+  };
+
+  t.is(batchCompletionStreamRequestSchema.safeParse(accepted).success, true);
+  t.is(batchCompletionStreamRequestSchema.safeParse(rejected).success, false);
 });
 
 test("batchCompletionStreamResponseSchema: validates id-tagged events with batch-level stats", (t) => {

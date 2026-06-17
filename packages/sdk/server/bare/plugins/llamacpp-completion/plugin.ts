@@ -20,6 +20,7 @@ import {
   type PluginCapabilities,
   type PluginModelResult,
   type ResolveContext,
+  type Tool,
   type ToolDialect,
   type LlmConfig,
   type LlmConfigInput,
@@ -35,10 +36,7 @@ import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
 import { detectToolDialect } from "@/server/utils/tool-integration";
-import {
-  getRequestRegistry,
-  withRequestContext,
-} from "@/server/bare/runtime";
+import { getRequestRegistry, withRequestContext } from "@/server/bare/runtime";
 import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 import { getServerLogger } from "@/logging";
 import { ContextOverflowError } from "@/utils/errors-server";
@@ -49,7 +47,6 @@ import {
 import { isAddonCancelledError } from "@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled";
 import { isMobile } from "@/server/bare/registry/runtime-context-registry";
 import { stripMultiGpuKeys } from "@/server/utils/multi-gpu-mobile";
-
 
 function createLlmModel(
   modelId: string,
@@ -96,13 +93,17 @@ function createBatchNormalizer(
     toolDialect?: ToolDialect | undefined;
   },
   dialect: ToolDialect,
+  tools: Tool[],
+  toolsActive: boolean,
 ) {
+  const capabilities: PluginCapabilities = {
+    toolCalling: toolsActive && tools.length > 0 ? "textParse" : "none",
+    thinkingFraming: request.captureThinking ? "thinkTags" : "none",
+  };
+
   return createCompletionNormalizer({
-    capabilities: {
-      toolCalling: "none",
-      thinkingFraming: request.captureThinking ? "thinkTags" : "none",
-    },
-    tools: [],
+    capabilities,
+    tools: toolsActive ? tools : [],
     captureThinking: request.captureThinking ?? false,
     emitRawDeltas: request.emitRawDeltas ?? false,
     toolDialect: request.toolDialect ?? dialect,
@@ -152,6 +153,14 @@ export const llmPlugin = definePlugin({
       handler: async function* (request) {
         const dialect =
           request.toolDialect ?? detectToolDialect(request.modelId);
+        const modelCfg = getModelConfig(request.modelId);
+        const toolsActive = (modelCfg as { tools?: boolean }).tools === true;
+        const toolsById = new Map(
+          request.prompts.map((prompt, index) => [
+            prompt.id ?? String(index),
+            prompt.tools ?? [],
+          ]),
+        );
         const normalizers = new Map<
           string,
           ReturnType<typeof createCompletionNormalizer>
@@ -162,7 +171,12 @@ export const llmPlugin = definePlugin({
         function getNormalizer(id: string) {
           let normalizer = normalizers.get(id);
           if (!normalizer) {
-            normalizer = createBatchNormalizer(request, dialect);
+            normalizer = createBatchNormalizer(
+              request,
+              dialect,
+              toolsById.get(id) ?? [],
+              toolsActive,
+            );
             normalizers.set(id, normalizer);
           }
           return normalizer;
@@ -214,10 +228,7 @@ export const llmPlugin = definePlugin({
               };
             } else {
               const { id, token } = result.value;
-              const events = wrapBatchEvents(
-                id,
-                getNormalizer(id).push(token),
-              );
+              const events = wrapBatchEvents(id, getNormalizer(id).push(token));
               if (request.stream ?? true) {
                 yield {
                   type: "batchCompletionStream" as const,
@@ -262,7 +273,7 @@ export const llmPlugin = definePlugin({
           }
 
           const finalEvents =
-            request.stream ?? true
+            (request.stream ?? true)
               ? terminalEvents
               : [...bufferedEvents, ...terminalEvents];
 
@@ -299,7 +310,9 @@ export const llmPlugin = definePlugin({
             const cancelledIds =
               ids.length > 0
                 ? ids
-                : request.prompts.map((prompt, index) => prompt.id ?? String(index));
+                : request.prompts.map(
+                    (prompt, index) => prompt.id ?? String(index),
+                  );
             const cancelledTerminals = cancelledIds.flatMap((id) =>
               wrapBatchEvents(
                 id,
@@ -311,7 +324,7 @@ export const llmPlugin = definePlugin({
               done: true,
               ids: cancelledIds,
               events:
-                request.stream ?? true
+                (request.stream ?? true)
                   ? cancelledTerminals
                   : [...bufferedEvents, ...cancelledTerminals],
             };
@@ -397,9 +410,13 @@ export const llmPlugin = definePlugin({
             modelId: request.modelId,
             kvCache: request.kvCache,
             ...(toolsActive && request.tools && { tools: request.tools }),
-            ...(request.generationParams && { generationParams: request.generationParams }),
+            ...(request.generationParams && {
+              generationParams: request.generationParams,
+            }),
             ...(toolsActive && { toolDialect: dialect }),
-            ...(request.responseFormat && { responseFormat: request.responseFormat }),
+            ...(request.responseFormat && {
+              responseFormat: request.responseFormat,
+            }),
           },
           { signal: ctx.signal, scope: ctx.scope, logger: requestLogger },
         );

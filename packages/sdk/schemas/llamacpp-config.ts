@@ -50,8 +50,9 @@ export const llmConfigBaseSchema = z.object({
   stop_sequences: z.array(z.string()).optional(),
   n_discarded: z.number().optional(),
   /**
-   * Concurrent sequence slots for continuous batching. Values >= 2 enable
-   * batched decoding in @qvac/llm-llamacpp.
+   * Concurrent sequence slots for continuous batching. Defaults to 1
+   * (sequential, batching disabled); values >= 2 enable batched decoding in
+   * @qvac/llm-llamacpp.
    */
   parallel: z.number().int().min(1).optional(),
   tools: z.boolean().optional(),
