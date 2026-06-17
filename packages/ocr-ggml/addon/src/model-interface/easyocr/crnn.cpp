@@ -255,10 +255,13 @@ ggml_tensor* bilstm_block_t(
   const std::string l = std::string(prefix) + ".linear";
   auto* W_lin = weights.w(l);               // ggml ne [2*hidden, hidden_out]
   auto* b_lin = weights.b(l);               // [hidden_out]
-  auto* y = ggml_mul_mat(ctx, W_lin, both); // ne [hidden_out, T]
+  auto* y = ggml_mul_mat(ctx, W_lin, both); // ne [hidden_out, T, N]
   {
+    // Add the [hidden_out] bias via ggml_add's implicit broadcast over the
+    // (T, N) axes — no materialised ggml_repeat copy (same semantics as the
+    // CRAFT conv-bias broadcast in QVAC-20533); numerically identical.
     auto* b_2d = ggml_reshape_2d(ctx, b_lin, b_lin->ne[0], 1);
-    y = ggml_add(ctx, y, ggml_repeat(ctx, b_2d, y));
+    y = ggml_add(ctx, y, b_2d);
   }
   return y;
 }
@@ -358,10 +361,12 @@ ggml_tensor* build_crnn_gen2(
   // ============== Prediction: Linear(256, 97) ===========================
   auto* W_pred = W.w("Prediction");            // ggml ne [256, 97]
   auto* b_pred = W.b("Prediction");            // [97]
-  auto* logits = ggml_mul_mat(ctx, W_pred, h); // ggml ne [97, T]
+  auto* logits = ggml_mul_mat(ctx, W_pred, h); // ggml ne [97, T, N]
   {
+    // Broadcast-add the [97] bias over the (T, N) axes (no ggml_repeat copy);
+    // numerically identical, mirrors the CRAFT bias broadcast (QVAC-20533).
     auto* b_2d = ggml_reshape_2d(ctx, b_pred, b_pred->ne[0], 1);
-    logits = ggml_add(ctx, logits, ggml_repeat(ctx, b_2d, logits));
+    logits = ggml_add(ctx, logits, b_2d);
   }
   tap(taps, crnn_taps::kLogits, logits);
   return logits;
