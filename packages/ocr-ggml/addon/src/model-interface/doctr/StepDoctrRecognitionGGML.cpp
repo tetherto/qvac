@@ -1327,7 +1327,8 @@ private:
       if (prefix.size() < 2 || prefix.substr(prefix.size() - 2) != ".1") {
         raise(
             "BN fold: unexpected BN tensor name " + prefix +
-            " (expected it to end in \".1\" so the conv weight can be located)");
+            " (expected it to end in \".1\" so the conv weight can be "
+            "located)");
       }
       const std::string convWeightName =
           prefix.substr(0, prefix.size() - 2) + ".0.weight";
@@ -1484,7 +1485,8 @@ private:
     ggml_set_input(graph.input);
 
     GraphBuilder gb{.ctx = ctx, .w = graph.weights};
-    // Direct regular convs by default on OpenCL (Adreno); env overrides for A/B.
+    // Direct regular convs by default on OpenCL (Adreno); env overrides for
+    // A/B.
     gb.useDirectConv = resolveDirectConv(
         "OCR_DOCTR_FUSED_CONV", backendIsOpenCl(graph.backend));
     struct ggml_tensor* x = gb.convBnAct(

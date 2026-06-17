@@ -240,9 +240,8 @@ struct GraphBuilder {
     // ggml_conv_2d_direct is ~2x SLOWER than im2col + mul_mat on Metal (the
     // matmul rides the tuned GEMM), but much faster than the im2col f16xf16
     // GEMV on Adreno — so the choice follows useDirectConv.
-    struct ggml_tensor* conv =
-        doctrConv2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1,
-                    useDirectConv);
+    struct ggml_tensor* conv = doctrConv2d(
+        ctx, kernelT, x, stride, stride, pad, pad, 1, 1, useDirectConv);
     // BN scale folded into the conv weights at load time; `.shift` carries the
     // combined (conv bias + BN shift) offset. One add instead of add+mul+add.
     conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
@@ -435,14 +434,21 @@ struct GraphBuilder {
         ctx, x, GGML_OP_POOL_AVG, poolW, poolH, poolW, poolH, 0, 0);
 
     struct ggml_tensor* fc1 = doctrConv2d(
-        ctx, t(sePrefix + ".fc1.weight"), pooled, 1, 1, 0, 0, 1, 1,
+        ctx,
+        t(sePrefix + ".fc1.weight"),
+        pooled,
+        1,
+        1,
+        0,
+        0,
+        1,
+        1,
         useDirectConv);
     fc1 = ggml_add(ctx, fc1, t(sePrefix + ".fc1.bias_br"));
     fc1 = ggml_relu(ctx, fc1);
 
-    struct ggml_tensor* fc2 =
-        doctrConv2d(ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1,
-                    useDirectConv);
+    struct ggml_tensor* fc2 = doctrConv2d(
+        ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1, useDirectConv);
     fc2 = ggml_add(ctx, fc2, t(sePrefix + ".fc2.bias_br"));
 
     // torchvision's SE uses hardsigmoid on the scale branch.
@@ -1173,8 +1179,8 @@ ComputeGraph buildGraph(
 
   GraphBuilder gb{.ctx = ctx, .w = weights.tensors};
   // Direct regular convs by default on OpenCL (Adreno); env overrides for A/B.
-  gb.useDirectConv = resolveDirectConv(
-      "OCR_DOCTR_FUSED_CONV", graphBackendIsOpenCl(backends));
+  gb.useDirectConv =
+      resolveDirectConv("OCR_DOCTR_FUSED_CONV", graphBackendIsOpenCl(backends));
 
   // Stem.
   struct ggml_tensor* x = gb.convBnAct(
