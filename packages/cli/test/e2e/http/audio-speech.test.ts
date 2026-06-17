@@ -1,8 +1,8 @@
 import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { useServer } from './helpers/server.js'
-import { assertError, JSON_HEADERS } from './helpers/http.js'
-import { probeFfmpegAvailable } from '../../src/serve/lib/video-transcode.js'
+import { useServer } from '../helpers/server.js'
+import { assertError, JSON_HEADERS } from '../helpers/http.js'
+import { probeFfmpegAvailable } from '../../../src/serve/lib/video-transcode.js'
 
 // Ported from cli.bats "Serve: speech (text-to-speech) validation".
 describe('serve: speech validation', () => {

@@ -1,8 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { useServer } from './helpers/server.js'
-import { assertError, multipart } from './helpers/http.js'
-import { tinyPng } from './helpers/fixtures.js'
+import { useServer } from '../helpers/server.js'
+import { assertError, multipart } from '../helpers/http.js'
+import { tinyPng } from '../helpers/fixtures.js'
 
 // Ported from cli.bats "Serve: files content-download endpoint".
 describe('serve: files content endpoint', () => {

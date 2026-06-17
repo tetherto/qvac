@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { useServer } from './helpers/server.js'
-import { assertError, multipart, JSON_HEADERS } from './helpers/http.js'
+import { useServer } from '../helpers/server.js'
+import { assertError, multipart, JSON_HEADERS } from '../helpers/http.js'
 
 // An empty file part with a filename — the bats `file=@/dev/null;filename=audio.wav`.
 const EMPTY_FILE = { name: 'file', filename: 'audio.wav', contentType: 'audio/wav', data: Buffer.alloc(0) }

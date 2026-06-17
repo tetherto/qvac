@@ -1,15 +1,15 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { useServer } from './helpers/server.js'
-import { assertError, JSON_HEADERS } from './helpers/http.js'
+import { useServer } from '../helpers/server.js'
+import { assertError, JSON_HEADERS } from '../helpers/http.js'
 
-// Ported from cli.bats "Serve: chat completions validation".
-describe('serve: chat completions validation', () => {
+// Ported from cli.bats "Serve: embeddings validation".
+describe('serve: embeddings validation', () => {
   const server = useServer({ cors: true })
 
   it('invalid JSON returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', headers: JSON_HEADERS, payload: '{not valid json}'
+      method: 'POST', url: '/v1/embeddings', headers: JSON_HEADERS, payload: '{{bad'
     })
     assert.equal(res.statusCode, 400)
     assertError(res, 'invalid_json')
@@ -17,23 +17,23 @@ describe('serve: chat completions validation', () => {
 
   it('missing model returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', payload: { messages: [{ role: 'user', content: 'hi' }] }
+      method: 'POST', url: '/v1/embeddings', payload: { input: 'hello' }
     })
     assert.equal(res.statusCode, 400)
     assertError(res, 'missing_model')
   })
 
-  it('missing messages returns 400', async () => {
+  it('missing input returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', payload: { model: 'test' }
+      method: 'POST', url: '/v1/embeddings', payload: { model: 'test' }
     })
     assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_messages')
+    assertError(res, 'missing_input')
   })
 
   it('unknown model returns 404', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', payload: { model: 'nonexistent', messages: [{ role: 'user', content: 'hi' }] }
+      method: 'POST', url: '/v1/embeddings', payload: { model: 'nonexistent', input: 'hello' }
     })
     assert.equal(res.statusCode, 404)
     assertError(res, 'model_not_found')

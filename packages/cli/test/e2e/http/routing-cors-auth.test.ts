@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { useServer } from './helpers/server.js'
-import { assertError } from './helpers/http.js'
+import { useServer } from '../helpers/server.js'
+import { assertError } from '../helpers/http.js'
 
 // Ported from cli.bats "Serve: routing".
 describe('serve: routing', () => {
