@@ -216,18 +216,16 @@ jobs:
           tag: ${{ needs.publish-logic.outputs.npm_tag }}
           workdir: packages/ai-sdk-provider
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "ai-sdk-provider"
-      release_name: "QVAC AI SDK Provider"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/ai-sdk-provider"
 
   publish-feature-gpr:
     needs:
