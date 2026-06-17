@@ -7,18 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.3]
-
-This release updates `@qvac/tts-onnx` to depend on `@qvac/infer-base` `^0.6.0`, keeping the addon aligned with the current inference base shared across the inference packages. There are no functional or API changes.
-
-### Changed
-
-- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
-
-## Pull Requests
-
-- [#2635](https://github.com/tetherto/qvac/pull/2635) - bump @qvac/infer-base to ^0.6.0 for tts-onnx
-
 ## [0.9.2] - 2026-06-09
 
 ### Added
@@ -38,6 +26,7 @@ This release updates `@qvac/tts-onnx` to depend on `@qvac/infer-base` `^0.6.0`, 
 - Refactor: text preprocessing moved from free functions in the `text_preprocess` namespace into a new `class ChatterboxTextPreprocessor` with RAII (`std::unique_ptr<mecab_t, MeCabDeleter>` for the MeCab tagger).
 - `ChatterboxEngine` now owns a single `ChatterboxTextPreprocessor` instead of separate Cangjie/MeCab members; `loadTextPreprocessor(tokenizerPath, mecabDictPath)` replaces the previous loader.
 - `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2635](https://github.com/tetherto/qvac/pull/2635)).
 
 ### Fixed
 
