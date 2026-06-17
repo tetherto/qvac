@@ -96,7 +96,7 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/onnx": "^0.15.0",
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/infer-base": "^0.6.0",
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",
     "bare-path": "^3.0.0"

@@ -64,13 +64,18 @@ export interface OcrGgmlParams {
    *   - `'metal'`: opt in to GPU inference on a Metal-capable device (Apple).
    *     The Metal backend is compiled into the addon, so no extra shared
    *     library is required.
+   *   - `'opencl'`: opt in to GPU inference on an OpenCL-capable device
+   *     (primarily Android/Adreno, where OpenCL is the sound GPU path).
+   *     Requires the `libggml-opencl` backend shared library to be present in
+   *     `backendsDir`.
    * When the requested GPU device is not present the pipeline transparently
    * falls back to CPU and records the reason (see
    * {@link BackendInfo.fallbackReason}).
    */
-  backendDevice?: 'cpu' | 'vulkan' | 'metal'
+  backendDevice?: 'cpu' | 'vulkan' | 'metal' | 'opencl'
   /**
-   * Explicit GPU device selection for `'vulkan'` / `'metal'`. 0-based index
+   * Explicit GPU device selection for `'vulkan'` / `'metal'` / `'opencl'`.
+   * 0-based index
    * into the GPU/iGPU devices that match the requested backend, in ggml
    * enumeration order (the resolved index is reported as
    * {@link BackendInfo.deviceIndex}).
@@ -90,7 +95,7 @@ export interface OcrGgmlParams {
  * {@link OcrGgml.getBackendInfo}.
  */
 export interface BackendInfo {
-  /** Requested device (`'cpu'` | `'vulkan'` | `'metal'`). */
+  /** Requested device (`'cpu'` | `'vulkan'` | `'metal'` | `'opencl'`). */
   requested: string
   /** Resolved device type (`'CPU'` | `'GPU'` | `'IGPU'` | `'ACCEL'`). */
   backendDevice: string

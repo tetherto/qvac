@@ -26,10 +26,24 @@ export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
+  /** Single-request admission: resolves `true` if accepted, `false` if busy. */
   runJob(data: AddonRunJobMessage[]): Promise<boolean>
+  /** Batch admission: resolves the accepted flag plus the assigned sequence ids. */
+  runJob(data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>
   cancel(): Promise<void>
   finetune?(params: FinetuneOptions): Promise<boolean>
   unload(): Promise<void>
+}
+
+export interface AddonBatchRunItem {
+  /** Optional caller-supplied id; the native binding auto-assigns one when omitted. */
+  id?: string
+  messages: AddonRunJobMessage[]
+}
+
+export interface AddonBatchRunResult {
+  accepted: boolean
+  ids: string[]
 }
 
 export interface LlamaConfig {
@@ -62,6 +76,13 @@ export interface LlamaConfig {
   openclCacheDir?: string
   /** Reasoning channel budget. `-1` (default) leaves the model's reasoning channel on; `0` disables it. */
   reasoning_budget?: -1 | 0 | '-1' | '0'
+  /**
+   * Number of concurrent sequence slots for continuous-batching (`--parallel` /
+   * `n_parallel` in llama.cpp). Values `>= 2` activate the continuous-batch
+   * scheduler so multiple `run()` calls are decoded together in a single
+   * forward pass. Default `1` (sequential, batching disabled).
+   */
+  parallel?: NumericLike
   [key: string]: string | number | boolean | string[] | undefined
 }
 
@@ -150,14 +171,44 @@ export interface RunOptions {
   saveCacheToDisk?: boolean
 }
 
+export interface BatchPrompt {
+  id?: string
+  prompt: (UserTextMessage | ChatFunctionDefinition)[]
+  runOptions?: RunOptions
+}
+
+export interface BatchOutputChunk {
+  id: string
+  chunk: string
+}
+
+export interface BatchResult {
+  id: string
+  output: string
+}
+
+export interface BatchResponse extends QvacResponse {
+  ids: string[]
+  on(event: 'output', cb: (chunk: BatchOutputChunk) => void): this
+  onUpdate(cb: (chunk: BatchOutputChunk) => void): this
+  await(): Promise<BatchResult[]>
+}
+
 export interface RuntimeStats {
   TTFT: number
   TPS: number
   ppTPS: number
+  /** Final cache tokens for single requests, or the sum across completed batch slots. */
   CacheTokens: number
   generatedTokens: number
   promptTokens: number
+  /** Context-window slides for single requests, or the sum across completed batch slots. */
   contextSlides: number
+  /**
+   * Average active sequences decoded together during the last request,
+   * including overlapping requests from other callers.
+   */
+  avgConcurrentSeq: number
   backendDevice: 'cpu' | 'gpu'
 }
 
@@ -283,6 +334,7 @@ export default class LlmLlamacpp {
 
   load(): Promise<void>
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
+  run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
   finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>
   cancel(): Promise<void>
   pause(): Promise<void>

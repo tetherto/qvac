@@ -609,6 +609,93 @@ struct GraphBuilder {
   }
 };
 
+// Order recognised text regions into human reading order: group regions into
+// text lines top-to-bottom, then order words left-to-right within each line.
+// The DocTR DB detector emits boxes in raw contour order (roughly reversed), so
+// without this pass the full-page text assembly is out of reading order and
+// order-sensitive metrics (CER/WER/ANLS) collapse.
+//
+// Ports python-doctr's DocumentBuilder._resolve_lines: walk boxes top-to-bottom
+// and start a new line whenever a box's y-centre departs from the running line
+// y-centre by more than half the median box height; each line is then sorted
+// left-to-right. A naive pairwise "same row if |dy| < thresh, else by y"
+// comparator is NOT a strict weak ordering (it is intransitive across boxes
+// that chain through the threshold), so std::sort scrambles word order on dense
+// or multi-line pages — explicit line clustering avoids that. y-centre / height
+// / left-edge are taken from min/max over all four corners so the result is
+// robust to polygon point ordering.
+void sortIntoReadingOrder(std::vector<InferredText>& items) {
+  const size_t count = items.size();
+  if (count < 2) {
+    return;
+  }
+
+  struct BoxMetric {
+    float yCenter;
+    float leftX;
+    size_t index;
+  };
+
+  std::vector<BoxMetric> metrics;
+  metrics.reserve(count);
+  std::vector<float> heights;
+  heights.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    const auto& p = items[i].boxCoordinates;
+    const auto [yLo, yHi] = std::minmax({p[0].y, p[1].y, p[2].y, p[3].y});
+    const float xLeft = std::min({p[0].x, p[1].x, p[2].x, p[3].x});
+    metrics.push_back({(yLo + yHi) / 2.0F, xLeft, i});
+    heights.push_back(yHi - yLo);
+  }
+
+  // Median box height (doctr uses np.median); the nth_element midpoint is a
+  // sufficient proxy for the line-break threshold.
+  std::nth_element(
+      heights.begin(),
+      heights.begin() + static_cast<std::ptrdiff_t>(heights.size() / 2),
+      heights.end());
+  float medianHeight = heights[heights.size() / 2];
+  if (medianHeight <= 0.0F) {
+    medianHeight = 1.0F;
+  }
+  const float lineBreak = medianHeight / 2.0F;
+
+  // Top-to-bottom, left-to-right tie-break so same-line boxes are contiguous.
+  std::ranges::sort(metrics, [](const BoxMetric& a, const BoxMetric& b) {
+    return a.yCenter != b.yCenter ? a.yCenter < b.yCenter : a.leftX < b.leftX;
+  });
+
+  // Cluster into lines on the running mean y-centre, matching _resolve_lines.
+  std::vector<std::vector<BoxMetric>> lines;
+  std::vector<BoxMetric> current{metrics[0]};
+  float yCenterSum = metrics[0].yCenter;
+  for (size_t k = 1; k < metrics.size(); ++k) {
+    const float lineMean = yCenterSum / static_cast<float>(current.size());
+    if (std::abs(metrics[k].yCenter - lineMean) >= lineBreak) {
+      lines.push_back(std::move(current));
+      current.clear();
+      yCenterSum = 0.0F;
+    }
+    yCenterSum += metrics[k].yCenter;
+    current.push_back(metrics[k]);
+  }
+  if (!current.empty()) {
+    lines.push_back(std::move(current));
+  }
+
+  std::vector<InferredText> ordered;
+  ordered.reserve(count);
+  for (auto& line : lines) {
+    std::ranges::sort(line, [](const BoxMetric& a, const BoxMetric& b) {
+      return a.leftX < b.leftX;
+    });
+    for (const auto& box : line) {
+      ordered.push_back(std::move(items[box.index]));
+    }
+  }
+  items = std::move(ordered);
+}
+
 } // namespace
 
 struct StepDoctrRecognitionGGML::Impl {
@@ -1672,6 +1759,10 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
         decoded[static_cast<size_t>(j)].first,
         decoded[static_cast<size_t>(j)].second);
   }
+
+  // Detection emits regions in raw contour order; reorder into reading order so
+  // the full-page text assembly (and order-sensitive metrics) line up.
+  sortIntoReadingOrder(results);
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,

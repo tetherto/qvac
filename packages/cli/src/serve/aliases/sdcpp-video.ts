@@ -16,6 +16,7 @@ export const SDCPP_VIDEO_TYPE = 'sdcpp-video'
 const NESTED_MODEL_SRC_KEYS = [
   'clipLModelSrc',
   'clipGModelSrc',
+  'clipVisionModelSrc',
   't5XxlModelSrc',
   'llmModelSrc',
   'vaeModelSrc',
