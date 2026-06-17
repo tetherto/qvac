@@ -63,6 +63,13 @@ public:
   // (backend-aware default + env overrides; see ocr_conv1x1_mulmat_use).
   [[nodiscard]] bool conv1x1_mulmat() const noexcept { return conv1x1_mulmat_; }
 
+  // Whether non-pointwise convs should run through ggml_conv_2d_direct rather
+  // than ggml_conv_2d (im2col). Resolved once at load time (backend-aware
+  // default + env overrides; see ocr_use_direct_conv). Default on for OpenCL.
+  [[nodiscard]] bool use_direct_conv() const noexcept {
+    return use_direct_conv_;
+  }
+
 private:
   void build_(const GgufLoader& loader, ggml_backend_t backend);
 
@@ -72,6 +79,7 @@ private:
   ::ggml_context* ctx_ = nullptr;
   ::ggml_backend_buffer_t buf_ = nullptr;
   bool conv1x1_mulmat_ = false;
+  bool use_direct_conv_ = false;
   std::string err_;
 };
 
