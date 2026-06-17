@@ -46,9 +46,13 @@ if (!process.stdout.write) {
 const bareImportsPath = path.join(process.cwd(), "bare-imports.json");
 const bareImports = JSON.parse(fs.readFileSync(bareImportsPath, "utf-8"));
 
-// Bare runs in-process with no spawned worker, so nothing auto-registers
-// plugins like Node/Expo do. Load the worker entry to register the built-in
-// set; initializeWorkerCore is idempotent, so the example's getRPC() is fine.
+// This harness only runs the bundled examples, which stay registration-free
+// so one file works on Node, Expo, and Bare. Bare runs in-process with no
+// spawned worker, so nothing auto-registers — load the default worker to
+// register the full built-in set. This is deliberately the @qvac/sdk "full
+// defaults" path, not a usage reference; explicit/selective assembly is
+// @qvac/bare-sdk's model. initializeWorkerCore is idempotent, so the example's
+// getRPC() is fine.
 const workerEntry = path.resolve(process.cwd(), "dist/server/worker.js");
 if (fs.existsSync(workerEntry)) {
   Module.load(pathToFileURL(workerEntry), null, {
