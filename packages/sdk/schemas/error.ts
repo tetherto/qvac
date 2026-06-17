@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { QvacErrorBase } from "@qvac/error";
+import { formatZodError } from "@/utils/zod-error";
 
 /**
  * Wire shape for errors thrown across the RPC boundary. The fields are
@@ -76,7 +77,12 @@ export function createErrorResponse(error: unknown): ErrorResponse {
     return response;
   }
 
-  const message = error instanceof Error ? error.message : String(error);
+  const message =
+    error instanceof z.ZodError
+      ? formatZodError(error)
+      : error instanceof Error
+        ? error.message
+        : String(error);
   const stack = error instanceof Error ? error.stack : undefined;
 
   return {
