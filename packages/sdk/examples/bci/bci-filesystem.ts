@@ -19,9 +19,9 @@ if (!args[0]) {
 const neuralFilePath = args[0];
 
 try {
-  console.log("🧠 Starting BCI transcription example...");
+  console.log("▸ Starting BCI transcription example...");
 
-  console.log("📥 Loading BCI model...");
+  console.log("▸ Loading BCI model...");
   const modelId = await loadModel({
     modelSrc: BCI_WINDOWED,
     modelConfig: {
@@ -36,21 +36,24 @@ try {
         day_idx: 1,
       },
     },
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`✅ BCI model loaded with ID: ${modelId}`);
+  console.log(`▸ BCI model loaded with ID: ${modelId}`);
 
-  console.log("🧠 Transcribing neural signal...");
+  console.log("▸ Transcribing neural signal...");
   const segments = await bciTranscribe({
     modelId,
     neuralData: neuralFilePath,
     metadata: true,
   });
 
-  console.log("📝 Transcription result:");
+  console.log("▸ Transcription result:");
   for (const segment of segments) {
     const start = (segment.startMs / 1000).toFixed(2);
     const end = (segment.endMs / 1000).toFixed(2);
@@ -59,17 +62,17 @@ try {
     );
   }
   console.log(
-    `\nFull transcript: ${segments
+    segments
       .map((s) => s.text)
       .join("")
-      .trim()}`,
+      .trim(),
   );
 
-  console.log("🧹 Unloading BCI model...");
+  console.log("▸ Unloading BCI model...");
   await unloadModel({ modelId });
-  console.log("✅ BCI model unloaded successfully");
+  console.log("▸ BCI model unloaded successfully");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

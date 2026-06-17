@@ -72,12 +72,16 @@ async function runToContent(
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    onProgress: (p) =>
-      process.stdout.write(`\rLoading: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`\nModel loaded: ${modelId}\n`);
+  console.log(`\n▸ Model loaded: ${modelId}\n`);
 
-  console.log("--- 1. responseFormat: text (baseline, free-form) ---");
+  console.log("▸ --- 1. responseFormat: text (baseline, free-form) ---");
   await runToContent(
     completion({
       modelId,
@@ -87,7 +91,7 @@ try {
     }),
   );
 
-  console.log("\n--- 2. responseFormat: json_object (any valid JSON) ---");
+  console.log("\n▸ --- 2. responseFormat: json_object (any valid JSON) ---");
   const jsonObjectOut = await runToContent(
     completion({
       modelId,
@@ -96,9 +100,9 @@ try {
       responseFormat: { type: "json_object" },
     }),
   );
-  console.log("parsed:", JSON.parse(jsonObjectOut.trim()));
+  console.log("▸ parsed:", JSON.parse(jsonObjectOut.trim()));
 
-  console.log("\n--- 3. responseFormat: json_schema (strict shape) ---");
+  console.log("\n▸ --- 3. responseFormat: json_schema (strict shape) ---");
   const jsonSchemaOut = await runToContent(
     completion({
       modelId,
@@ -120,9 +124,9 @@ try {
     age: number;
     occupation: string;
   };
-  console.log("parsed:", parsed);
+  console.log("▸ parsed:", parsed);
   console.log(
-    "schema-valid:",
+    "▸ schema-valid:",
     typeof parsed.name === "string" &&
       Number.isInteger(parsed.age) &&
       typeof parsed.occupation === "string" &&
@@ -131,6 +135,6 @@ try {
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
