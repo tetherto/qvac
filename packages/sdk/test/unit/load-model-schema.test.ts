@@ -34,6 +34,37 @@ test("loadModelOptionsToRequestSchema: points misplaced LLM config fields to mod
   }
 });
 
+test("loadModelOptionsToRequestSchema: points misplaced non-LLM config fields to modelConfig", (t) => {
+  const cases = [
+    {
+      input: {
+        modelSrc: "whisper.bin",
+        modelType: "whisper",
+        language: "en",
+      },
+      hint: "modelConfig.language",
+    },
+    {
+      input: {
+        modelSrc: "embed.gguf",
+        modelType: "embeddings",
+        batchSize: 512,
+      },
+      hint: "modelConfig.batchSize",
+    },
+  ];
+
+  for (const { input, hint } of cases) {
+    try {
+      loadModelOptionsToRequestSchema.parse(input);
+      t.fail(`expected misplaced ${hint} to fail validation`);
+    } catch (error) {
+      t.ok(error instanceof Error);
+      t.ok(error instanceof Error && error.message.includes(hint));
+    }
+  }
+});
+
 test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", (t) => {
   const validWhisperRequest = {
     type: "loadModel",

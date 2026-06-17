@@ -13,8 +13,13 @@ import {
 import type { parakeetConfigSchema } from "./transcription-config";
 import { bciConfigSchema } from "./bci-config";
 import { delegateSchema } from "./delegate";
-import { nmtConfigSchema } from "./translation-config";
-import { ttsConfigSchema } from "./text-to-speech";
+import { nmtConfigBaseSchema, nmtConfigSchema } from "./translation-config";
+import {
+  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+  ttsChatterboxLoadConfigSchema,
+  ttsConfigSchema,
+  ttsSupertonicLoadConfigSchema,
+} from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
@@ -75,14 +80,34 @@ const topLevelLoadModelOptionKeys = new Set([
   "modelConfig",
 ]);
 
-const llmModelConfigKeys = new Set(
-  Object.keys(llmConfigBaseSchema.shape).filter(
-    (key) => !topLevelLoadModelOptionKeys.has(key),
-  ),
-);
+type ShapeSchema = { shape: Record<string, unknown> };
+
+const modelConfigKeysByModelType = new Map<string, Set<string>>([
+  [ModelType.llamacppCompletion, configKeys(llmConfigBaseSchema)],
+  [ModelType.whispercppTranscription, configKeys(whisperConfigSchema)],
+  [ModelType.bciWhispercppTranscription, configKeys(bciConfigSchema)],
+  [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
+  [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
+  [
+    ModelType.nmtcppTranslation,
+    configKeys(...nmtConfigBaseSchema.options),
+  ],
+  [
+    ModelType.ttsGgml,
+    configKeys(
+      ttsChatterboxLoadConfigSchema,
+      ttsSupertonicLoadConfigSchema,
+      LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+    ),
+  ],
+  [ModelType.onnxOcr, configKeys(ocrConfigSchema)],
+  [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
+  [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
+  [ModelType.ggmlClassification, configKeys(classificationConfigSchema)],
+]);
 
 const misplacedLoadModelConfigGuard = z.unknown().superRefine((value, ctx) => {
-  const keys = getMisplacedLlmConfigKeys(value);
+  const keys = getMisplacedModelConfigKeys(value);
   if (keys.length === 0) return;
 
   ctx.addIssue({
@@ -93,12 +118,28 @@ const misplacedLoadModelConfigGuard = z.unknown().superRefine((value, ctx) => {
   });
 });
 
-function getMisplacedLlmConfigKeys(value: unknown): string[] {
+function configKeys(
+  ...sources: (ShapeSchema | readonly string[])[]
+): Set<string> {
+  const keys = sources.flatMap((source) =>
+    isStringArray(source) ? source : Object.keys(source.shape),
+  );
+  return new Set(keys.filter((key) => !topLevelLoadModelOptionKeys.has(key)));
+}
+
+function isStringArray(
+  source: ShapeSchema | readonly string[],
+): source is readonly string[] {
+  return Array.isArray(source);
+}
+
+function getMisplacedModelConfigKeys(value: unknown): string[] {
   if (!isRecord(value) || typeof value["modelType"] !== "string") return [];
-  if (normalizeModelType(value["modelType"]) !== ModelType.llamacppCompletion) {
-    return [];
-  }
-  return Object.keys(value).filter((key) => llmModelConfigKeys.has(key));
+  const configKeys = modelConfigKeysByModelType.get(
+    normalizeModelType(value["modelType"]),
+  );
+  if (!configKeys) return [];
+  return Object.keys(value).filter((key) => configKeys.has(key));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
