@@ -27,38 +27,36 @@
     ]
   },
   "android": {
-    "toolCalling": [
-      "runToolCallingTest"
-    ],
-    "gemma": [
-      "runGemma4Test"
-    ],
-    "cacheStateMachine": [
-      "runCacheStateMachineTest"
-    ],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
-      "runSlidingContextTest",
-      "runTurboquantTest",
-      "runBitnetTest",
       "runConfigParametersTest",
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
     ],
     "funcShardB": [
       "runToolsCompactTest",
-      "runGrammarTest"
+      "runSlidingContextTest"
     ],
     "funcShardC": [
-      "runGenerationParamsTest",
+      "runToolCallingTest",
       "runMropeSlidingContextTest",
+      "runReasoningTest",
+      "runGenerationParamsTest"
+    ],
+    "funcShardD": [
+      "runGemma4Test",
+      "runCacheStateMachineTest"
+    ],
+    "funcShardE": [
+      "runApiBehaviorTest",
       "runMultiInstanceTest",
       "runQwen35Test",
-      "runReasoningTest",
-      "runUtf8OutputTest",
-      "runApiBehaviorTest",
       "runModelLoadingTest",
-      "runImageFruitPlateTest"
+      "runImageFruitPlateTest",
+      "runGrammarTest",
+      "runTurboquantTest",
+      "runBitnetTest",
+      "runUtf8OutputTest"
     ]
   },
   "androidWeekly": {
