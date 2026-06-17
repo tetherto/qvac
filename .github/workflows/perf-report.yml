@@ -16,6 +16,7 @@ on:
           - vlm
           - onnx-tts
           - parakeet
+          - diffusion-cpp
       workflow_name:
         description: "Integration test workflow name to query"
         type: choice
@@ -29,6 +30,8 @@ on:
           - "Integration Tests (TTS)"
           - "Mobile Integration Tests (TTS)"
           - "Mobile Integration Tests (Parakeet)"
+          - "Integration Tests (Stable Diffusion)"
+          - "Mobile Integration Tests (Diffusion CPP)"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
@@ -184,6 +187,24 @@ jobs:
             --output reports/parakeet-mobile-performance.md \
             --output-json reports/parakeet-mobile-performance.json \
             --output-html reports/parakeet-mobile-performance.html || true
+
+          echo "=== Diffusion (Desktop) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon diffusion-cpp \
+            --workflow "Integration Tests (Stable Diffusion)" \
+            --runs 6 \
+            --output reports/diffusion-cpp-performance.md \
+            --output-json reports/diffusion-cpp-performance.json \
+            --output-html reports/diffusion-cpp-performance.html || true
+
+          echo "=== Diffusion (Mobile) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon diffusion-cpp \
+            --workflow "Mobile Integration Tests (Diffusion CPP)" \
+            --runs 6 \
+            --output reports/diffusion-cpp-mobile-performance.md \
+            --output-json reports/diffusion-cpp-mobile-performance.json \
+            --output-html reports/diffusion-cpp-mobile-performance.html || true
 
       # ─── Phase B: COMET quality scoring for NMT (weekly aggregate only) ───
       # Runs only on the Monday scheduled trigger, or on workflow_dispatch

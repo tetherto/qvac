@@ -1,0 +1,90 @@
+name: Reusable branch cleanup
+
+# Enforces docs/branch-retention.md. Flags stale branches into a tracking issue,
+# then deletes them after a grace period. Consumed by a thin caller workflow in
+# each qvac repo (see docs/branch-retention.md "Adopting this policy").
+#
+# The script-bearing logic lives in the .github/actions/branch-cleanup composite
+# action so it resolves cross-repo via org action sharing — no extra token or
+# cross-repo checkout is required in the consuming repo.
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        description: "Report only; do not delete branches"
+        type: boolean
+        default: false
+      single_package:
+        description: "true for single-package repos (release-<x.y.z> / v<x.y.z>)"
+        type: boolean
+        default: false
+      grace_period_days:
+        description: "Days a branch must stay flagged before deletion"
+        type: number
+        default: 7
+      keep_majors:
+        description: "Major release lines retained per package"
+        type: number
+        default: 2
+      keep_minors:
+        description: "Minor release lines retained per kept major"
+        type: number
+        default: 3
+      keep_patches:
+        description: "Patch release lines retained per kept minor"
+        type: number
+        default: 1
+      feature_inactivity_days:
+        description: "feature-* inactivity threshold (days)"
+        type: number
+        default: 60
+      tmp_inactivity_days:
+        description: "tmp-* inactivity threshold (days)"
+        type: number
+        default: 60
+      adhoc_inactivity_days:
+        description: "ad-hoc branch inactivity threshold (days)"
+        type: number
+        default: 30
+      max_deletions_per_run:
+        description: "Hard cap on deletions in a single run"
+        type: number
+        default: 10
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Checkout calling repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Run branch cleanup
+        # Intentionally referenced @main rather than a SHA: tetherto/qvac is the single
+        # source of truth for the cleanup logic, and changes to it are gated by this repo's
+        # branch protection + PR review (TIER1 approvals). Consuming repos also call this
+        # reusable workflow @main, so the supply chain is a deliberate single mutable line
+        # anchored on tetherto/qvac main. See docs/branch-retention.md "Supply chain & versioning".
+        uses: tetherto/qvac/.github/actions/branch-cleanup@main
+        with:
+          dry_run: ${{ inputs.dry_run }}
+          single_package: ${{ inputs.single_package }}
+          grace_period_days: ${{ inputs.grace_period_days }}
+          keep_majors: ${{ inputs.keep_majors }}
+          keep_minors: ${{ inputs.keep_minors }}
+          keep_patches: ${{ inputs.keep_patches }}
+          feature_inactivity_days: ${{ inputs.feature_inactivity_days }}
+          tmp_inactivity_days: ${{ inputs.tmp_inactivity_days }}
+          adhoc_inactivity_days: ${{ inputs.adhoc_inactivity_days }}
+          max_deletions_per_run: ${{ inputs.max_deletions_per_run }}

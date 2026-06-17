@@ -11,6 +11,16 @@ on:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
+      run_desktop:
+        description: "Run desktop (CPU/GPU) RTF benchmarks"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -90,11 +100,29 @@ jobs:
       run_integration_tests: false
       run_rtf_benchmarks: true
 
-    if: needs.label-gate.outputs.authorised == 'true'
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop
+  mobile-benchmarks:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile
   summarize:
     needs:
       - context
       - desktop-benchmarks
+      - mobile-benchmarks
       - label-gate
     if: needs.label-gate.outputs.authorised == 'true' && (always())
     runs-on: ubuntu-latest
@@ -118,6 +146,16 @@ jobs:
         with:
           pattern: rtf-results-*
           path: benchmark-artifacts/desktop
+
+      # Per-platform subdirectories: Android + iOS each upload a
+      # performance-report.json, so a flat merge would collide. The
+      # aggregator's walkFiles recurses and dedupes mobile rows on device.
+      - name: Download mobile benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          pattern: perf-report-parakeet-*
+          path: benchmark-artifacts/mobile
 
       - name: Generate consolidated benchmark report
         run: |
