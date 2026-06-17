@@ -223,18 +223,16 @@ jobs:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.WORKDIR }}
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "cli"
-      release_name: "QVAC cli Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/cli"
 
   publish-feature-gpr:
     needs:

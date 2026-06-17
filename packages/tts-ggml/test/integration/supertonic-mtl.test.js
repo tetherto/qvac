@@ -13,6 +13,7 @@ const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 const { runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureSupertonicMtlModel } = require('../utils/downloadModel')
+const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -60,16 +61,25 @@ test('Supertonic MTL TTS (ggml): synthesizes across es/fr/pt with shared engine'
       if (i > 0) {
         await model.reload({ language: lang })
       }
+      const t0 = Date.now()
       const result = await runSupertonicTTS(
         model,
         { text },
         { minSamples: 5000, maxSamples: 5000000, minDurationMs: 200, maxDurationMs: 300000 }
       )
+      const wallMs = Date.now() - t0
       console.log('    ' + result.output)
 
       t.ok(result.passed, `Supertonic MTL ${lang} run passes expectations`)
       t.ok(result.data.sampleCount > 0, `Supertonic MTL ${lang} produced audio`)
       t.is(result.data.reportedSampleRate || SAMPLE_RATE, SAMPLE_RATE, `Supertonic MTL ${lang} reports 44.1 kHz`)
+
+      const st = result.data?.stats || {}
+      t.comment(recordTtsStats(
+        `supertonic mtl ${lang}`,
+        { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
+        { wallMs, sampleCount: result.data?.sampleCount, model: 'supertonic-mtl', output: text }
+      ))
     }
   } finally {
     try { await model.unload() } catch (_e) {}

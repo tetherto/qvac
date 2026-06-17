@@ -28,8 +28,8 @@ class OcrGgml {
    * @param {number} [args.params.recognizerBatchSize]
    * @param {number} [args.params.nThreads] - 0=auto (physical cores), >0=explicit, <0=leave default
    * @param {string} [args.params.backendsDir] - override directory for ggml backend shared libs
-   * @param {'cpu'|'vulkan'|'metal'} [args.params.backendDevice='cpu'] - requested ggml backend device. `'vulkan'` (Linux/Windows/Android) and `'metal'` (Apple) opt in to GPU inference with transparent CPU fallback when no matching device is present.
-   * @param {number} [args.params.gpuDevice] - explicit 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`. Omit to prefer a discrete GPU (then integrated); out-of-range falls back to CPU. Ignored for `'cpu'`.
+   * @param {'cpu'|'vulkan'|'metal'|'opencl'} [args.params.backendDevice='cpu'] - requested ggml backend device. `'vulkan'` (Linux/Windows/Android), `'metal'` (Apple) and `'opencl'` (Android/Adreno) opt in to GPU inference with transparent CPU fallback when no matching device is present.
+   * @param {number} [args.params.gpuDevice] - explicit 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`/`'opencl'`. Omit to prefer a discrete GPU (then integrated); out-of-range falls back to CPU. Ignored for `'cpu'`.
    * @param {Object} [args.opts]
    * @param {boolean} [args.opts.stats] - emit timing stats on finish
    * @param {Object} [args.logger]

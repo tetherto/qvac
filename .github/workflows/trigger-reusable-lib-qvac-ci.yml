@@ -169,18 +169,16 @@ jobs:
       workdir: packages/qvac-ci
       caller_event_name: ${{ github.event_name }}
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "qvac-ci"
-      release_name: "QVAC CI Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-ci"
 
   publish-feature-gpr:
     needs:
