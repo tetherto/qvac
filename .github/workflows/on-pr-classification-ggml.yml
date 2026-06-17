@@ -14,7 +14,16 @@ on:
       - tmp-*
     paths:
       - "packages/classification-ggml/**"
+      - "packages/infer-base/**"
+      - "packages/logging/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "nx.json"
+      - "tools/ci/**"
       - ".github/workflows/*classification-ggml*.yml"
+      - ".github/actions/setup-pnpm-workspace/**"
+      - ".github/actions/nx-run/**"
   workflow_dispatch:
 
 permissions:
@@ -81,7 +90,16 @@ jobs:
           filters: |
             pkg:
               - "packages/classification-ggml/**"
+              - "packages/infer-base/**"
+              - "packages/logging/**"
+              - "pnpm-workspace.yaml"
+              - "pnpm-lock.yaml"
+              - "package.json"
+              - "nx.json"
+              - "tools/ci/**"
               - ".github/workflows/*classification-ggml*.yml"
+              - ".github/actions/setup-pnpm-workspace/**"
+              - ".github/actions/nx-run/**"
 
   sanity-checks:
     needs: [authorize, changes, label-gate]
@@ -100,25 +118,25 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/classification-ggml
+          nx-project: classification-ggml
 
   ts-checks:
     needs: [authorize, changes, sanity-checks]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PKG_DIR }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
         with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm install --ignore-scripts
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          ignore-scripts: "true"
+          install-bare: "false"
       - name: Type declaration check
-        run: npm run test:dts
+        uses: ./.github/actions/nx-run
+        with:
+          target: classification-ggml:test-dts
 
   cpp-lint:
     needs: [authorize, changes, sanity-checks, label-gate]

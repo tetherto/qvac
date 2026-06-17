@@ -1,0 +1,13 @@
+{
+  "name": "qvac",
+  "private": true,
+  "description": "QVAC monorepo workspace root (pnpm + Nx orchestration)",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "nx": "nx"
+  },
+  "devDependencies": {
+    "nx": "20.8.1"
+  }
+}

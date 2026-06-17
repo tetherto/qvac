@@ -20,6 +20,13 @@ inputs:
     required: false
     default: "."
     type: string
+  nx-project:
+    description: >-
+      When set, run lint/unit/deps checks via pnpm workspace + Nx instead of
+      npm in workdir (spearhead pattern for native addon packages).
+    required: false
+    default: ""
+    type: string
 
 runs:
   using: composite
@@ -68,6 +75,7 @@ runs:
       shell: bash
       id: check_dependencies
       continue-on-error: true
+      if: inputs.nx-project == ''
       working-directory: ${{ inputs.workdir }}
       run: |
         deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
@@ -76,9 +84,27 @@ runs:
           exit 1
         fi
 
+    - name: Setup pnpm workspace (Nx)
+      id: setup_pnpm_nx
+      if: inputs.nx-project != ''
+      uses: ./.github/actions/setup-pnpm-workspace
+      with:
+        pat-token: ${{ inputs.pat-token }}
+        npm-token: ${{ inputs.npm-token }}
+        install-bare: "true"
+        ignore-scripts: "false"
+
+    - name: Run dependency check via Nx
+      shell: bash
+      id: nx_check_dependencies
+      continue-on-error: true
+      if: inputs.nx-project != ''
+      run: pnpm nx run ${{ inputs.nx-project }}:ci-check-deps
+
     - name: Run lint & unit tests
       id: run_tests
       continue-on-error: true
+      if: inputs.nx-project == ''
       uses: ./.github/actions/run-lint-and-unit-tests
       with:
         gpr-token: ${{ inputs.secret-token }}
@@ -87,15 +113,22 @@ runs:
         registry-type: gpr
         workdir: ${{ inputs.workdir }}
 
+    - name: Run lint & unit tests (Nx)
+      id: run_tests_nx
+      continue-on-error: true
+      if: inputs.nx-project != ''
+      shell: bash
+      run: pnpm nx run ${{ inputs.nx-project }}:ci-lint-and-unit
+
     - name: Check for errors
       shell: bash
       run: |
         count=0
-        if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
+        if [ "${{ steps.run_tests.outcome }}" = "failure" ] || [ "${{ steps.run_tests_nx.outcome }}" = "failure" ]; then
           echo "::error::Step - Lint or unit tests failed"
           count=$((count + 1))
         fi
-        if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+        if [ "${{ steps.check_dependencies.outcome }}" = "failure" ] || [ "${{ steps.nx_check_dependencies.outcome }}" = "failure" ]; then
           echo "::error::Step - Check for disallowed dependencies failed"
           count=$((count + 1))
         fi

@@ -1,0 +1,89 @@
+name: Setup pnpm workspace
+description: >-
+  Enable pnpm via corepack, configure registries, install workspace
+  dependencies, and optionally install the global bare CLI. Used by
+  classification-ggml CI jobs that invoke Nx targets instead of per-package
+  npm install.
+
+inputs:
+  workspace-root:
+    description: Path to the pnpm workspace root (contains pnpm-workspace.yaml)
+    required: false
+    default: "."
+  npm-token:
+    description: Auth token for registry.npmjs.org (@qvac/*)
+    required: false
+  pat-token:
+    description: PAT for GitHub Packages (@tetherto/*) and git URL rewriting
+    required: false
+  install-bare:
+    description: Install bare globally after pnpm install
+    required: false
+    default: "true"
+  ignore-scripts:
+    description: Pass --ignore-scripts to pnpm install
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: "20"
+
+    - name: Enable pnpm
+      shell: bash
+      run: |
+        corepack enable
+        corepack prepare pnpm@9.15.4 --activate
+
+    - name: Restore pnpm cache
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      with:
+        path: |
+          ~/.local/share/pnpm/store
+          ${{ inputs.workspace-root }}/node_modules
+          ${{ inputs.workspace-root }}/packages/classification-ggml/node_modules
+          ${{ inputs.workspace-root }}/packages/infer-base/node_modules
+          ${{ inputs.workspace-root }}/packages/logging/node_modules
+        key: pnpm-${{ runner.os }}-${{ hashFiles(format('{0}/pnpm-lock.yaml', inputs.workspace-root), format('{0}/package.json', inputs.workspace-root), format('{0}/pnpm-workspace.yaml', inputs.workspace-root)) }}
+        restore-keys: |
+          pnpm-${{ runner.os }}-
+
+    - name: Configure .npmrc
+      shell: bash
+      working-directory: ${{ inputs.workspace-root }}
+      env:
+        NPM_TOKEN: ${{ inputs.npm-token }}
+        PAT_TOKEN: ${{ inputs.pat-token }}
+      run: |
+        : > .npmrc
+        echo "registry=https://registry.npmjs.org/" >> .npmrc
+        echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+        if [ -n "${NPM_TOKEN}" ]; then
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+        fi
+        if [ -n "${PAT_TOKEN}" ]; then
+          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+          git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+        fi
+
+    - name: Install workspace dependencies
+      shell: bash
+      working-directory: ${{ inputs.workspace-root }}
+      env:
+        IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}
+      run: |
+        FLAGS="--frozen-lockfile"
+        if [ "$IGNORE_SCRIPTS" = "true" ]; then
+          FLAGS="$FLAGS --ignore-scripts"
+        fi
+        pnpm install $FLAGS
+
+    - name: Install bare globally
+      if: inputs.install-bare == 'true'
+      shell: bash
+      run: npm install -g --force bare

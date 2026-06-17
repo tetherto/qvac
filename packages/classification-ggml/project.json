@@ -1,0 +1,106 @@
+{
+  "name": "classification-ggml",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/classification-ggml",
+  "projectType": "library",
+  "tags": ["scope:addon", "type:native", "pod:inference"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "lint"
+      }
+    },
+    "test-dts": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "test:dts"
+      }
+    },
+    "test-unit": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "test:unit"
+      },
+      "dependsOn": ["^lint"]
+    },
+    "test-integration": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "test:integration"
+      }
+    },
+    "test-mobile-validate": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "test:mobile:validate"
+      }
+    },
+    "test-cpp-build": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "test:cpp:build"
+      }
+    },
+    "test-cpp-run": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "test:cpp:run"
+      }
+    },
+    "test-cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "nx run classification-ggml:test-cpp-build",
+          "nx run classification-ggml:test-cpp-run"
+        ],
+        "parallel": false
+      }
+    },
+    "build": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "build"
+      }
+    },
+    "prebuild-generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/classification-ggml",
+        "command": "bare-make generate --platform ${NX_PLATFORM} --arch ${NX_ARCH} ${NX_FLAGS} ${DEFINES}"
+      }
+    },
+    "prebuild-build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/classification-ggml",
+        "command": "bare-make build"
+      }
+    },
+    "prebuild-install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/classification-ggml",
+        "command": "bare-make install"
+      }
+    },
+    "ci-check-deps": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/classification-ggml",
+        "command": "node ../../tools/ci/check-package-deps.mjs"
+      }
+    },
+    "ci-lint-and-unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "nx run classification-ggml:lint",
+          "nx run classification-ggml:test-unit"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}

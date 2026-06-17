@@ -79,6 +79,8 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/actions/setup-pnpm-workspace
+            .github/actions/nx-run
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
@@ -91,8 +93,19 @@ jobs:
           fetch-depth: 0
 
       - name: Validate mobile tests are up-to-date
-        working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
-        run: npm run test:mobile:validate || true
+        uses: ./.github/actions/setup-pnpm-workspace
+        with:
+          workspace-root: addon
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          install-bare: "false"
+          ignore-scripts: "true"
+
+      - name: Run mobile test validation
+        continue-on-error: true
+        uses: ./.github/actions/nx-run
+        with:
+          workspace-root: addon
+          target: classification-ggml:test-mobile-validate
 
       - name: Setup mobile test environment
         uses: ./.github/actions/run-mobile-integration-tests/setup

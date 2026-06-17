@@ -1,0 +1,4 @@
+packages:
+  - packages/classification-ggml
+  - packages/infer-base
+  - packages/logging

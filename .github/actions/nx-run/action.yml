@@ -1,0 +1,27 @@
+name: Run Nx target
+description: >-
+  Run a single Nx target for a workspace project. Expects setup-pnpm-workspace
+  to have run earlier in the job unless skip-install is true.
+
+inputs:
+  target:
+    description: "Nx target in project:target form (e.g. classification-ggml:lint)"
+    required: true
+  workspace-root:
+    description: Path to the pnpm workspace root
+    required: false
+    default: "."
+  skip-install:
+    description: When true, assume workspace is already installed
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Run Nx target
+      shell: bash
+      working-directory: ${{ inputs.workspace-root }}
+      env:
+        NX_TARGET: ${{ inputs.target }}
+      run: pnpm nx run "$NX_TARGET"

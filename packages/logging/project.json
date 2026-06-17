@@ -1,0 +1,15 @@
+{
+  "name": "logging",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/logging",
+  "projectType": "library",
+  "tags": ["scope:sdk-pod", "type:library"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-script",
+      "options": {
+        "script": "lint"
+      }
+    }
+  }
+}

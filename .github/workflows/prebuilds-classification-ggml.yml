@@ -47,4 +47,5 @@ jobs:
       # consumers (embed/llm/nmtcpp/ocr), which already set this. Without it the
       # linux-arm64 / android-arm64 prebuilds fail to find glslc.
       include-vulkan-sdk: true
+      nx-project: classification-ggml
     secrets: inherit

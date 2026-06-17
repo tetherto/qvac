@@ -94,6 +94,13 @@ on:
         type: boolean
         required: false
         default: false
+      nx-project:
+        description: >-
+          When set, install dependencies via pnpm workspace at repo root and
+          invoke Nx prebuild-* targets instead of npm + bare-make in workdir.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -251,9 +258,18 @@ jobs:
           brew install --quiet $BREW_PACKAGES
 
       - name: Install npm dependencies
+        if: ${{ inputs.nx-project == '' }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm install
+
+      - name: Setup pnpm workspace (Nx prebuild)
+        if: ${{ inputs.nx-project != '' }}
+        uses: ./.github/actions/setup-pnpm-workspace
+        with:
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          ignore-scripts: "false"
+          install-bare: "false"
 
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
@@ -290,9 +306,19 @@ jobs:
           echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
 
       - name: Run bare-make generate
+        if: ${{ inputs.nx-project == '' }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $DEFINES
+
+      - name: Run prebuild generate (Nx)
+        if: ${{ inputs.nx-project != '' }}
+        shell: bash
+        env:
+          NX_PLATFORM: ${{ matrix.platform }}
+          NX_ARCH: ${{ matrix.arch }}
+          NX_FLAGS: ${{ matrix.flags }}
+        run: pnpm nx run ${{ inputs.nx-project }}:prebuild-generate
 
       - name: Dump vcpkg build logs on failure
         if: failure()
@@ -311,14 +337,26 @@ jobs:
           fi
 
       - name: Run bare-make build
+        if: ${{ inputs.nx-project == '' }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: bare-make build
 
+      - name: Run prebuild build (Nx)
+        if: ${{ inputs.nx-project != '' }}
+        shell: bash
+        run: pnpm nx run ${{ inputs.nx-project }}:prebuild-build
+
       - name: Run bare-make install
+        if: ${{ inputs.nx-project == '' }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: bare-make install
+
+      - name: Run prebuild install (Nx)
+        if: ${{ inputs.nx-project != '' }}
+        shell: bash
+        run: pnpm nx run ${{ inputs.nx-project }}:prebuild-install
 
       - name: Strip static libraries (.a) from prebuilds (Linux / MacOS)
         if: matrix.os != 'windows-2025'

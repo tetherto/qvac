@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "defaultBase": "main",
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*"],
+    "production": [
+      "default",
+      "!{projectRoot}/test/**/*",
+      "!{projectRoot}/**/*.test.js"
+    ]
+  },
+  "targetDefaults": {
+    "lint": {
+      "cache": true,
+      "inputs": ["production", "^production"]
+    },
+    "test-dts": {
+      "cache": true,
+      "inputs": ["production", "^production"]
+    },
+    "test-unit": {
+      "cache": true,
+      "inputs": ["default", "^production"]
+    },
+    "test-integration": {
+      "cache": false
+    },
+    "test-cpp": {
+      "cache": false
+    },
+    "build": {
+      "cache": false
+    },
+    "prebuild-generate": {
+      "cache": false
+    },
+    "prebuild-build": {
+      "cache": false
+    },
+    "prebuild-install": {
+      "cache": false
+    }
+  },
+  "plugins": []
+}

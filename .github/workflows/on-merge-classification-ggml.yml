@@ -9,6 +9,13 @@ on:
       - tmp-*
     paths:
       - "packages/classification-ggml/**"
+      - "packages/infer-base/**"
+      - "packages/logging/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "nx.json"
+      - "tools/ci/**"
       - ".github/workflows/*classification-ggml*.yml"
   workflow_dispatch:
     inputs:
