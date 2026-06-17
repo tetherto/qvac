@@ -116,9 +116,24 @@ async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
 }
 
+async function runQwen35ImageElephantBaselinePerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageElephantBaselinePerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-elephant-baseline-perf.test.js', options)
+}
+
 async function runQwen35ImageElephantPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageElephantPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5-image-elephant-perf.test.js', options)
+}
+
+async function runQwen35ImageElephantSequentialPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageElephantSequentialPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-elephant-sequential-perf.test.js', options)
+}
+
+async function runQwen35ImageFruitPlateBaselinePerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageFruitPlateBaselinePerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-fruit-plate-baseline-perf.test.js', options)
 }
 
 async function runQwen35ImageFruitPlatePerfTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -126,9 +141,24 @@ async function runQwen35ImageFruitPlatePerfTest (options = {}) { // eslint-disab
   return runIntegrationModule('../integration/qwen3-5-image-fruit-plate-perf.test.js', options)
 }
 
+async function runQwen35ImageFruitPlateSequentialPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageFruitPlateSequentialPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-fruit-plate-sequential-perf.test.js', options)
+}
+
+async function runQwen35ImageHighResAuroraBaselinePerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraBaselinePerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-baseline-perf.test.js', options)
+}
+
 async function runQwen35ImageHighResAuroraPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-perf.test.js', options)
+}
+
+async function runQwen35ImageHighResAuroraSequentialPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraSequentialPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-sequential-perf.test.js', options)
 }
 
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars

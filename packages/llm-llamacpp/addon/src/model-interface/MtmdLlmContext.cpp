@@ -130,6 +130,7 @@ void MtmdLlmContext::initVisionContext() {
       params_.mmproj_backend.empty() ? nullptr : params_.mmproj_backend.c_str();
   mparams.print_timings = true;
   mparams.n_threads = params_.cpuparams.n_threads;
+  mparams.image_tile_mode = params_.image_tile_mode;
   ctxVision_.reset(mtmd_init_from_file(clipPath, modelCtx_.model, mparams));
   if (ctxVision_.get() == nullptr) {
     std::string errorMsg = string_format(

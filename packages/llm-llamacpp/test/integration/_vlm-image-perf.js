@@ -96,7 +96,7 @@ const GEMMA4_MODEL = {
 }
 
 const QWEN35_MODEL = {
-  perfLabel: 'qwen3.5-vl',
+  perfLabel: 'qwen3.5-vl-batched',
   llmModel: {
     modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
     downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
@@ -105,7 +105,37 @@ const QWEN35_MODEL = {
     modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
     downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
   },
-  extraConfig: {},
+  extraConfig: { 'image-tile-mode': '0' },
+  ctxFor: (imageCase) => imageCase.qwenCtxSize
+}
+
+const QWEN35_SEQUENTIAL_MODEL = {
+  perfLabel: 'qwen3.5-vl-sequential',
+  llmModel: {
+    modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
+    downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+  },
+  projModel: {
+    modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+    downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+  },
+  extraConfig: { 'image-tile-mode': '1' },
+  ctxFor: (imageCase) => imageCase.qwenCtxSize
+}
+
+// Baseline mode: replicates pre-PR (master) behaviour — whole image resized
+// via dyn_size, no tiling. Used to verify perf parity with master.
+const QWEN35_BASELINE_MODEL = {
+  perfLabel: 'qwen3.5-vl-baseline',
+  llmModel: {
+    modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
+    downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+  },
+  projModel: {
+    modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+    downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+  },
+  extraConfig: { 'image-tile-mode': 'baseline' },
   ctxFor: (imageCase) => imageCase.qwenCtxSize
 }
 
@@ -217,5 +247,7 @@ module.exports = {
   GEMMA4_MODEL,
   QWEN35_MODEL,
   skipHeavyImages,
+  QWEN35_SEQUENTIAL_MODEL,
+  QWEN35_BASELINE_MODEL,
   runVlmImagePerf
 }

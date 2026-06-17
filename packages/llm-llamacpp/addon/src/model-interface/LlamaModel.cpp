@@ -1019,6 +1019,32 @@ void LlamaModel::commonParamsParse(
     }
   }
 
+  // parse image-tile-mode (not in LLAMA_EXAMPLE_COMMON, must be handled
+  // manually)
+  for (const std::string &key : {"image-tile-mode", "image_tile_mode"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      const std::string &val = it->second;
+      if (val == "0" || val == "batched") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
+      } else if (val == "1" || val == "sequential") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_SEQUENTIAL;
+      } else if (val == "2" || val == "baseline") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BASELINE;
+      } else {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "%s: invalid image-tile-mode '%s', must be batched/0, "
+                "sequential/1, or baseline/2\n",
+                __func__, val.c_str()));
+      }
+      configFilemap.erase(it);
+      break;
+    }
+  }
+
   // parse custom nDiscarded from config (apply only if > 0)
   if (auto iter = configFilemap.find("n_discarded");
       iter != configFilemap.end()) {

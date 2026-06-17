@@ -38,6 +38,16 @@
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfQwen35Sequential": [
+      "runQwen35ImageElephantSequentialPerfTest",
+      "runQwen35ImageFruitPlateSequentialPerfTest",
+      "runQwen35ImageHighResAuroraSequentialPerfTest"
+    ],
+    "vlmPerfQwen35Baseline": [
+      "runQwen35ImageElephantBaselinePerfTest",
+      "runQwen35ImageFruitPlateBaselinePerfTest",
+      "runQwen35ImageHighResAuroraBaselinePerfTest"
     ]
   },
   "android": {
@@ -87,6 +97,16 @@
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfQwen35Sequential": [
+      "runQwen35ImageElephantSequentialPerfTest",
+      "runQwen35ImageFruitPlateSequentialPerfTest",
+      "runQwen35ImageHighResAuroraSequentialPerfTest"
+    ],
+    "vlmPerfQwen35Baseline": [
+      "runQwen35ImageElephantBaselinePerfTest",
+      "runQwen35ImageFruitPlateBaselinePerfTest",
+      "runQwen35ImageHighResAuroraBaselinePerfTest"
     ]
   }
 }
