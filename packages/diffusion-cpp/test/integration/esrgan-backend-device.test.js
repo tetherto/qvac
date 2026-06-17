@@ -9,6 +9,7 @@ const test = require('brittle')
 const binding = require('../../binding')
 const { EsrganUpscaler } = require('../../index')
 const { ensureModel, setupJsLogger } = require('./utils')
+const { recordPerformance } = require('./_perf-helper')
 
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const isAndroid = os.platform() === 'android'
@@ -115,6 +116,12 @@ test(
         expected,
         'native CPU path maps to stats'
       )
+
+      t.comment(recordPerformance('[ESRGAN 4x upscale 16x16] [CPU]', response.stats, {
+        scenario: 'upscale',
+        model: 'RealESRGAN_x4plus_anime_6B',
+        execution_provider: 'cpu'
+      }))
     } finally {
       await upscaler.unload().catch(() => {})
       try {
@@ -171,6 +178,12 @@ test(
           'or cpu when runtime falls back (e.g. GPU/OpenCL init failure); ' +
           'native policy hint=' + expected + ', actual=' + actual
       )
+
+      t.comment(recordPerformance('[ESRGAN 4x upscale 16x16] [' + (actual || 'GPU') + ']', response.stats, {
+        scenario: 'upscale',
+        model: 'RealESRGAN_x4plus_anime_6B',
+        execution_provider: actual || 'gpu'
+      }))
     } finally {
       await upscaler.unload().catch(() => {})
       try {

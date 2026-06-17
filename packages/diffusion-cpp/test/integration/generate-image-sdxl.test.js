@@ -12,6 +12,7 @@ const {
   isPng,
   safeTest
 } = require('./utils')
+const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
 
@@ -72,39 +73,58 @@ safeTest('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip
     console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
     t.ok(loadMs < 120000, `Model loaded within 120s (took ${(loadMs / 1000).toFixed(1)}s)`)
 
-    // ── Generate ──────────────────────────────────────────────────────────────
-    console.log('\n=== Generating image ===')
-    const tGen = Date.now()
+    // ── Generate (perf loop) ───────────────────────────────────────────────────
+    const totalIterations = WARMUP_RUNS + PERF_RUNS
+    for (let iteration = 0; iteration < totalIterations; iteration++) {
+      const isWarmup = iteration < WARMUP_RUNS
+      const runLabel = isWarmup ? `warmup ${iteration + 1}` : `run ${iteration - WARMUP_RUNS + 1}/${PERF_RUNS}`
+      console.log(`\n=== Generating image (${runLabel}) ===`)
+      const tGen = Date.now()
+      let ttfbMs = null
 
-    const response = await model.run({
-      prompt: 'a red fox in a snowy forest, photorealistic',
-      negative_prompt: 'blurry, low quality, watermark',
-      steps: 10,
-      width: 1024,
-      height: 1024,
-      cfg_scale: 6.5,
-      seed: 15
-    })
+      images.length = 0
+      progressTicks.length = 0
 
-    await response
-      .onUpdate((data) => {
-        if (data instanceof Uint8Array) {
-          images.push(data)
-        } else if (typeof data === 'string') {
-          try {
-            const tick = JSON.parse(data)
-            if ('step' in tick && 'total' in tick) {
-              progressTicks.push(tick)
-            }
-          } catch (_) {}
-        }
+      const response = await model.run({
+        prompt: 'a red fox in a snowy forest, photorealistic',
+        negative_prompt: 'blurry, low quality, watermark',
+        steps: 10,
+        width: 1024,
+        height: 1024,
+        cfg_scale: 6.5,
+        seed: 15 + iteration
       })
-      .await()
 
-    const genMs = Date.now() - tGen
-    console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
+      await response
+        .onUpdate((data) => {
+          if (ttfbMs === null) ttfbMs = Date.now() - tGen
+          if (data instanceof Uint8Array) {
+            images.push(data)
+          } else if (typeof data === 'string') {
+            try {
+              const tick = JSON.parse(data)
+              if ('step' in tick && 'total' in tick) {
+                progressTicks.push(tick)
+              }
+            } catch (_) {}
+          }
+        })
+        .await()
 
-    // ── Assertions ────────────────────────────────────────────────────────────
+      const genMs = Date.now() - tGen
+      console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
+
+      if (!isWarmup) {
+        t.comment(recordPerformance('[SDXL txt2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
+          scenario: 'txt2img',
+          model: 'stable-diffusion-xl-base-1.0-Q4_0',
+          execution_provider: useCpu ? 'cpu' : 'gpu',
+          ttfbMs
+        }))
+      }
+    }
+
+    // ── Assertions (on last iteration) ──────────────────────────────────────
     t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
     t.is(progressTicks[progressTicks.length - 1].total, 10, 'Final progress tick reports 10 total steps')
 
@@ -118,17 +138,6 @@ safeTest('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip
     const outPath = path.join(modelDir, 'generate-image--sdxl-txt2img-seed15.png')
     fs.writeFileSync(outPath, img)
     console.log(`\nSaved → ${outPath}`)
-
-    // ── Summary ───────────────────────────────────────────────────────────────
-    console.log('\n' + '='.repeat(60))
-    console.log('TEST SUMMARY')
-    console.log('='.repeat(60))
-    console.log(` Load time   : ${(loadMs / 1000).toFixed(1)}s`)
-    console.log(` Gen time    : ${(genMs / 1000).toFixed(1)}s`)
-    console.log(` Steps ticks : ${progressTicks.length}`)
-    console.log(` Image size  : ${img.length} bytes`)
-    console.log(' PNG valid   : true')
-    console.log('='.repeat(60))
   } finally {
     console.log('\n=== Cleanup ===')
     if (model) await model.unload().catch(() => {})

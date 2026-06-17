@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4]
+
+### Changed
+
+- Drop the unused `crypto-browserify` hard dependency. The package never imported it — `#crypto` resolves to `bare-crypto` (Bare) or `node:crypto` (Node), and the browser / React Native shim reads `globalThis.crypto`. Consumers needing Node-style `crypto.createHash` (e.g. HyperDB document hashing in a browser/RN runtime) should install `crypto-browserify` themselves and assign it to `globalThis.crypto`, as documented in the README.
+
 ## [0.6.3]
 
 ### Changed

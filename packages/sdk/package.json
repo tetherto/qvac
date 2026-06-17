@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.13.1",
+  "version": "0.13.3",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -208,7 +208,7 @@
   "dependencies": {
     "@qvac/bci-whispercpp": "^0.2.0",
     "@qvac/classification-ggml": "^0.3.1",
-    "@qvac/decoder-audio": "^0.4.0",
+    "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.11.2",
     "@qvac/embed-llamacpp": "^0.19.1",
     "@qvac/error": "^0.1.1",
@@ -216,7 +216,7 @@
     "@qvac/llm-llamacpp": "^0.24.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-onnx": "^0.6.0",
-    "@qvac/rag": "^0.6.2",
+    "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.0",
     "@qvac/transcription-parakeet": "^0.7.1",
     "@qvac/transcription-whispercpp": "^0.9.0",

@@ -4865,6 +4865,38 @@
     "link": "https://huggingface.co/supertone/supertonic-3"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 3 TTS (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic3",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/supertone/supertonic-3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 3 TTS (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic3",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/supertone/supertonic-3"
+  },
+  {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Supertonic tokenizer",

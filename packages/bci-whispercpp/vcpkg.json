@@ -23,11 +23,7 @@
     {
       "name": "whisper-cpp",
       "features": ["metal"],
-      "platform": "osx"
-    },
-    {
-      "name": "whisper-cpp",
-      "platform": "ios"
+      "platform": "osx | ios"
     }
   ],
   "features": {
