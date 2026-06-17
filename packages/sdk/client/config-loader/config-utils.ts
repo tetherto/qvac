@@ -1,5 +1,6 @@
 import { qvacConfigSchema, type QvacConfig } from "@/schemas";
 import { ConfigValidationFailedError } from "@/utils/errors-client";
+import { formatZodError } from "@/utils/zod-error";
 
 export type { QvacConfig };
 
@@ -7,10 +8,7 @@ export function validateConfig(config: unknown): QvacConfig {
   const result = qvacConfigSchema.safeParse(config);
 
   if (!result.success) {
-    const errors = result.error.issues
-      .map((e) => `${String(e.path.join("."))}:  ${e.message}`)
-      .join(", ");
-    throw new ConfigValidationFailedError(errors);
+    throw new ConfigValidationFailedError(formatZodError(result.error));
   }
 
   return result.data;
