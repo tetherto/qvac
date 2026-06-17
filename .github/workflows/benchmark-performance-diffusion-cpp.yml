@@ -1,0 +1,213 @@
+name: Benchmark Performance (Diffusion CPP)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+      qvac_perf_runs:
+        description: "QVAC_PERF_RUNS — counted iterations per perf test"
+        required: false
+        type: string
+        default: "3"
+      qvac_perf_warmup_runs:
+        description: "QVAC_PERF_WARMUP_RUNS — warmup iterations before measurement"
+        required: false
+        type: string
+        default: "1"
+      run_desktop:
+        description: "Run desktop matrix (Linux / macOS / Windows)"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile matrix (Android / iOS via Device Farm)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$REPO" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs:
+      - context
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  desktop-benchmarks:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-diffusion-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+
+  # Mobile runs a single iteration regardless of QVAC_PERF_RUNS because the
+  # slowest Device Farm device (Pixel 9 Pro, Vulkan) takes ~273s per SD2.1
+  # generation at 256x256 — multiple iterations would exceed the 20-minute
+  # per-test timeout. Single-shot is still useful for trend tracking; the
+  # cold-start / warm-up concern is accepted for now until Device Farm
+  # timeout can be extended or a faster test-only model is available.
+  mobile-benchmarks:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  summarize:
+    needs:
+      - context
+      - desktop-benchmarks
+      - mobile-benchmarks
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.context.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: |
+            scripts/perf-report
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Download all perf report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-diffusion-cpp-*-${{ github.run_number }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Generate consolidated benchmark report
+        run: |
+          if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
+            echo "No performance reports found."
+            exit 0
+          fi
+
+          mkdir -p benchmark-artifacts
+
+          node scripts/perf-report/aggregate.js \
+            --dir combined-reports \
+            --addon-type diffusion \
+            --device-details \
+            --output-html benchmark-artifacts/diffusion-cpp-performance-findings.html \
+            --output-json benchmark-artifacts/diffusion-cpp-performance-findings.json \
+            --output benchmark-artifacts/diffusion-cpp-performance-findings.md
+
+      - name: Add summary
+        if: always()
+        shell: bash
+        env:
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
+        run: |
+          set +e
+          MD_FILE="benchmark-artifacts/diffusion-cpp-performance-findings.md"
+          {
+            echo "## Diffusion CPP Benchmark Report"
+            echo ""
+            echo "> \`QVAC_PERF_RUNS=${QVAC_PERF_RUNS}\`, \`QVAC_PERF_WARMUP_RUNS=${QVAC_PERF_WARMUP_RUNS}\`."
+            echo ""
+            if [ -f "$MD_FILE" ]; then
+              cat "$MD_FILE"
+            else
+              echo "No combined performance report available."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated benchmark report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: diffusion-cpp-performance-findings
+          path: |
+            benchmark-artifacts/diffusion-cpp-performance-findings.md
+            benchmark-artifacts/diffusion-cpp-performance-findings.json
+            benchmark-artifacts/diffusion-cpp-performance-findings.html
+          retention-days: 30
+          if-no-files-found: ignore
