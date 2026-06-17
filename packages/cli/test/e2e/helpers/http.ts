@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify'
 
 export type InjectResponse = Awaited<ReturnType<FastifyInstance['inject']>>
 
+export const JSON_HEADERS = { 'content-type': 'application/json' }
+
 // Assert an OpenAI-style error envelope: { error: { code, message } }.
 // Replaces the bats `assert_error` jq helper.
 export function assertError (res: InjectResponse, expectedCode: string): void {
