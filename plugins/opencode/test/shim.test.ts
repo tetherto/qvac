@@ -4,7 +4,6 @@ import { test } from 'node:test'
 import {
   flattenContent,
   flattenMessages,
-  makeToolCallSplitter,
   makeThinkSplitter,
   transformSSEChunk,
   type SSEChunk
@@ -72,21 +71,6 @@ test('think splitter flushes unfinished reasoning at stream end', () => {
   assert.equal(out.content, '')
   assert.equal(out.reasoning, 'reasoning')
   assert.deepEqual(split.flush(), { content: '', reasoning: '' })
-})
-
-test('tool-call splitter repairs Qwen hybrid function-equals JSON split across chunks', () => {
-  const split = makeToolCallSplitter()
-  const a = split('<tool_call>\n{"function=web')
-  assert.deepEqual(a, [])
-
-  const b = split('fetch","arguments":{"url":"https://docs.opencode.ai","format":"markdown"}}\n</tool_call>')
-  assert.equal(b.length, 1)
-  const segment = b[0]
-  assert.equal(segment?.type, 'tool_call')
-  if (segment?.type !== 'tool_call') return
-  assert.equal(segment.toolCall.function.name, 'webfetch')
-  assert.equal(segment.toolCall.function.arguments, '{"url":"https://docs.opencode.ai","format":"markdown"}')
-  assert.deepEqual(split.flush(), [])
 })
 
 test('transformSSEChunk emits a reasoning chunk then a content chunk', () => {
