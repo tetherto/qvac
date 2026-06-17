@@ -1,4 +1,6 @@
-name: Integration Tests (GGML Classification)
+# Nx/pnpm parallel of integration-test-classification-ggml.yml — same matrix
+# and prebuild staging; tests via `pnpm nx run classification-ggml:test-integration`.
+name: Integration Tests (GGML Classification, Nx)
 
 on:
   workflow_dispatch:
@@ -31,11 +33,11 @@ env:
   PKG_DIR: packages/classification-ggml
 
 jobs:
-  run-integration-tests:
+  run-integration-tests-nx:
     timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests-nx
     permissions:
       contents: read
       packages: read
@@ -73,9 +75,12 @@ jobs:
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
-      - name: Install npm dependencies
-        working-directory: ${{ env.PKG_DIR }}
-        run: npm install --ignore-scripts
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
+        with:
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          ignore-scripts: "true"
+          install-bare: "true"
 
       - name: Download prebuild artifacts
         if: ${{ !inputs.prebuild_package }}
@@ -94,10 +99,6 @@ jobs:
           echo "Prebuilds moved from staging area"
           ls -la ${{ env.PKG_DIR }}/prebuilds/
 
-      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
-      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
-      # source path becomes invalid and the copy silently no-ops. Use
-      # PowerShell Copy-Item with native Windows paths.
       - name: Move prebuilds from staging to workspace (Windows)
         if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
         shell: powershell
@@ -173,21 +174,16 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
-      - name: Run JS integration tests
-        working-directory: ${{ env.PKG_DIR }}
+      - name: Run JS integration tests (Nx)
         env:
-          # Opt in to the C++ per-inference trace so CI logs contain
-          # raw logits / probs / sorted results for every classification.
-          # Invaluable for debugging platform-specific numerical issues
-          # (noise is bounded to a few lines per sample image).
           QVAC_CLASSIFICATION_TRACE: "1"
-        run: npm run test:integration
+        run: pnpm nx run classification-ggml:test-integration
 
       - name: Upload performance report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
         with:
-          name: classification-perf-report-${{ matrix.platform }}-${{ matrix.arch }}
+          name: classification-perf-report-nx-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ env.PKG_DIR }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 30

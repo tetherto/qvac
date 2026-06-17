@@ -6,7 +6,7 @@ on:
       - closed
     paths:
       - "packages/classification-ggml/**"
-      - ".github/workflows/*classification-ggml*.yml"
+      - ".github/workflows/on-pr-close-classification-ggml.yml"
   workflow_dispatch:
     inputs:
       version:

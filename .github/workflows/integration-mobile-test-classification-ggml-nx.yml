@@ -1,12 +1,6 @@
-name: Mobile Integration Tests (Classification GGML)
-
-# Migrated to .github/actions/run-mobile-integration-tests in
-# QVAC-18168 follow-up: rollout to remaining 9 mobile addons.
-#
-# Classification-GGML shares the LLM Device Farm project + pools.
-# Also realigns Android runner from ai-run-linux to
-# qvac-ubuntu2404-x64 to match the PR #2021 self-hosted strategy
-# every other consumer is on now.
+# Nx/pnpm parallel of integration-mobile-test-classification-ggml.yml.
+# Mobile validate step uses Nx; Device Farm pipeline unchanged.
+name: Mobile Integration Tests (Classification GGML, Nx)
 
 on:
   workflow_call:
@@ -43,8 +37,8 @@ on:
         default: "packages/classification-ggml"
 
 jobs:
-  build-and-test:
-    name: Build ${{ matrix.platform }} and Run E2E Tests
+  build-and-test-nx:
+    name: Build ${{ matrix.platform }} and Run E2E Tests (Nx)
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
@@ -79,6 +73,8 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/actions/setup-pnpm-workspace
+            .github/actions/nx-run
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
@@ -90,9 +86,20 @@ jobs:
           path: addon
           fetch-depth: 0
 
-      - name: Validate mobile tests are up-to-date
-        working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
-        run: npm run test:mobile:validate || true
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
+        with:
+          workspace-root: addon
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          install-bare: "false"
+          ignore-scripts: "true"
+
+      - name: Run mobile test validation (Nx)
+        continue-on-error: true
+        uses: ./.github/actions/nx-run
+        with:
+          workspace-root: addon
+          target: classification-ggml:test-mobile-validate
 
       - name: Setup mobile test environment
         uses: ./.github/actions/run-mobile-integration-tests/setup
@@ -103,12 +110,6 @@ jobs:
           prebuild-artifact-prefix: 'classification-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
-      # The shared composite handles prebuild fan-out, but classification-ggml
-      # also needs `weights/*.gguf` copied into `test/mobile/testAssets/<file>.gguf.bin`
-      # (plus `test/images/*` staged) so the React Native bundler packs them into
-      # the APK/IPA. Without this `resolveModelPath()` in test/integration/utils.js
-      # throws at runtime: "Mobile asset not found in global.assetPaths:
-      # mobilenetv3_3class_v3_fp16.gguf.bin". See scripts/copy-mobile-test-assets.js.
       - name: Copy mobile test assets (weights + images)
         working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
         run: npm run mobile:copy-prebuilds

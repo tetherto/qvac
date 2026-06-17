@@ -1,6 +1,7 @@
-# Production PR pipeline (npm). Kept alongside on-pr-classification-ggml-nx.yml
-# until branch protection and merge gates are switched to the Nx track.
-name: On PR Trigger (Classification-ggml)
+# Parallel Nx/pnpm PR pipeline for classification-ggml. Mirrors
+# on-pr-classification-ggml.yml job graph; delegates package work to *-nx.yml
+# reusable workflows and Nx targets. Does not replace the legacy merge gate.
+name: On PR Trigger (Classification-ggml, Nx)
 
 on:
   pull_request_target:
@@ -16,13 +17,17 @@ on:
       - tmp-*
     paths:
       - "packages/classification-ggml/**"
-      - ".github/workflows/on-pr-classification-ggml.yml"
-      - ".github/workflows/cpp-tests-classification.yml"
-      - ".github/workflows/integration-test-classification-ggml.yml"
-      - ".github/workflows/integration-mobile-test-classification-ggml.yml"
-      - ".github/workflows/prebuilds-classification-ggml.yml"
-      - ".github/workflows/reusable-prebuilds.yml"
-      - ".github/actions/sanity-checks/**"
+      - "packages/infer-base/**"
+      - "packages/logging/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "nx.json"
+      - "tools/ci/**"
+      - "packages/classification-ggml/project.json"
+      - ".github/workflows/*classification-ggml*-nx*.yml"
+      - ".github/actions/setup-pnpm-workspace/**"
+      - ".github/actions/nx-run/**"
   workflow_dispatch:
 
 permissions:
@@ -33,9 +38,10 @@ permissions:
 
 env:
   PKG_DIR: packages/classification-ggml
+  NX_PROJECT: classification-ggml
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: nx-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -89,15 +95,19 @@ jobs:
           filters: |
             pkg:
               - "packages/classification-ggml/**"
-              - ".github/workflows/on-pr-classification-ggml.yml"
-              - ".github/workflows/cpp-tests-classification.yml"
-              - ".github/workflows/integration-test-classification-ggml.yml"
-              - ".github/workflows/integration-mobile-test-classification-ggml.yml"
-              - ".github/workflows/prebuilds-classification-ggml.yml"
-              - ".github/workflows/reusable-prebuilds.yml"
-              - ".github/actions/sanity-checks/**"
+              - "packages/infer-base/**"
+              - "packages/logging/**"
+              - "pnpm-workspace.yaml"
+              - "pnpm-lock.yaml"
+              - "package.json"
+              - "nx.json"
+              - "tools/ci/**"
+              - "packages/classification-ggml/project.json"
+              - ".github/workflows/*classification-ggml*-nx*.yml"
+              - ".github/actions/setup-pnpm-workspace/**"
+              - ".github/actions/nx-run/**"
 
-  sanity-checks:
+  sanity-checks-nx:
     needs: [authorize, changes, label-gate]
     if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
@@ -107,35 +117,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Sanity checks
+      - name: Run Sanity checks (Nx)
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/classification-ggml
+          nx-project: classification-ggml
 
-  ts-checks:
-    needs: [authorize, changes, sanity-checks]
+  ts-checks-nx:
+    needs: [authorize, changes, sanity-checks-nx]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PKG_DIR }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
         with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm install --ignore-scripts
-      - name: Type declaration check
-        run: npm run test:dts
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          ignore-scripts: "true"
+          install-bare: "false"
+      - name: Type declaration check (Nx)
+        uses: ./.github/actions/nx-run
+        with:
+          target: classification-ggml:test-dts
 
   cpp-lint:
-    needs: [authorize, changes, sanity-checks, label-gate]
+    needs: [authorize, changes, sanity-checks-nx, label-gate]
     if: |
       always() &&
       !cancelled() &&
@@ -149,42 +159,42 @@ jobs:
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/classification-ggml
 
-  cpp-tests:
-    needs: [authorize, changes, sanity-checks, label-gate]
+  cpp-tests-nx:
+    needs: [authorize, changes, sanity-checks-nx, label-gate]
     if: |
       always() &&
       !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/cpp-tests-classification.yml
+    uses: ./.github/workflows/cpp-tests-classification-ggml-nx.yml
     secrets: inherit
     with:
       workdir: packages/classification-ggml
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
-  prebuild:
+  prebuild-nx:
     permissions:
       contents: write
       packages: write
       pull-requests: write
       id-token: write
-    needs: [authorize, changes, sanity-checks, label-gate]
+    needs: [authorize, changes, sanity-checks-nx, label-gate]
     if: |
       always() &&
       !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/prebuilds-classification-ggml.yml
+    uses: ./.github/workflows/prebuilds-classification-ggml-nx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
-  run-integration-tests:
-    needs: [authorize, changes, sanity-checks, prebuild, label-gate]
+  run-integration-tests-nx:
+    needs: [authorize, changes, sanity-checks-nx, prebuild-nx, label-gate]
     if: |
       always() &&
       !cancelled() &&
@@ -195,47 +205,47 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-classification-ggml.yml
+    uses: ./.github/workflows/integration-test-classification-ggml-nx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
-  run-mobile-integration-tests:
+  run-mobile-integration-tests-nx:
     permissions:
       contents: read
       packages: read
-      pull-requests: write # Allow commenting on PRs
+      pull-requests: write
       id-token: write
-    needs: [authorize, changes, sanity-checks, prebuild, label-gate]
+    needs: [authorize, changes, sanity-checks-nx, prebuild-nx, label-gate]
     if: |
       always() &&
       !cancelled() &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml
+    uses: ./.github/workflows/integration-mobile-test-classification-ggml-nx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
-  merge-guard:
+  merge-guard-nx:
     needs:
       [
         authorize,
         changes,
-        sanity-checks,
-        ts-checks,
+        sanity-checks-nx,
+        ts-checks-nx,
         cpp-lint,
-        cpp-tests,
-        prebuild,
-        run-integration-tests,
-        run-mobile-integration-tests,
+        cpp-tests-nx,
+        prebuild-nx,
+        run-integration-tests-nx,
+        run-mobile-integration-tests-nx,
       ]
     if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && needs.cpp-lint.result == 'success' && needs.cpp-tests.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      sanity-checks-status: ${{ needs.sanity-checks-nx.result == 'success' && needs.ts-checks-nx.result == 'success' && needs.cpp-lint.result == 'success' && needs.cpp-tests-nx.result == 'success' }}
+      build-status: ${{ needs.prebuild-nx.result == 'success' }}
+      integration-tests-status: ${{ (needs.run-integration-tests-nx.result == 'success' || needs.run-integration-tests-nx.result == 'skipped') && (needs.run-mobile-integration-tests-nx.result == 'success' || needs.run-mobile-integration-tests-nx.result == 'skipped') }}

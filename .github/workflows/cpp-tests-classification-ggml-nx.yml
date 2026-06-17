@@ -1,4 +1,6 @@
-name: CPP Tests (GGML Classification)
+# Nx/pnpm parallel of cpp-tests-classification.yml — same matrix and host
+# setup; test execution via `pnpm nx run classification-ggml:test-cpp-*`.
+name: CPP Tests (GGML Classification, Nx)
 
 on:
   workflow_dispatch:
@@ -28,7 +30,7 @@ permissions:
   contents: read
 
 jobs:
-  test-cpp:
+  test-cpp-nx:
     permissions:
       contents: read
       id-token: write
@@ -50,7 +52,7 @@ jobs:
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
+    name: cpp-tests-nx-${{ matrix.platform }}-${{ matrix.arch }}
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -104,14 +106,15 @@ jobs:
         if: ${{ matrix.platform == 'darwin' }}
         uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
 
-      - name: Install npm dependencies
-        working-directory: ${{ env.WORKDIR }}
-        run: npm install --ignore-scripts
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
+        with:
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          ignore-scripts: "true"
+          install-bare: "false"
 
-      - name: Build C++ tests
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run test:cpp:build
+      - name: Build C++ tests (Nx)
+        run: pnpm nx run classification-ggml:test-cpp-build
 
-      - name: Run C++ tests
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run test:cpp:run
+      - name: Run C++ tests (Nx)
+        run: pnpm nx run classification-ggml:test-cpp-run

@@ -1,3 +1,5 @@
+# Production merge + publish pipeline (npm). Publishing stays here until the
+# Nx track is promoted; see docs/ci/pnpm-nx-pattern.md#swapping-tracks.
 name: On Merge Trigger (Classification-ggml)
 
 on:
@@ -9,14 +11,11 @@ on:
       - tmp-*
     paths:
       - "packages/classification-ggml/**"
-      - "packages/infer-base/**"
-      - "packages/logging/**"
-      - "pnpm-workspace.yaml"
-      - "pnpm-lock.yaml"
-      - "package.json"
-      - "nx.json"
-      - "tools/ci/**"
-      - ".github/workflows/*classification-ggml*.yml"
+      - ".github/workflows/on-merge-classification-ggml.yml"
+      - ".github/workflows/integration-test-classification-ggml.yml"
+      - ".github/workflows/integration-mobile-test-classification-ggml.yml"
+      - ".github/workflows/prebuilds-classification-ggml.yml"
+      - ".github/workflows/reusable-prebuilds.yml"
   workflow_dispatch:
     inputs:
       tag:

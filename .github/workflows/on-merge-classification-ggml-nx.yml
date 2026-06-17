@@ -1,0 +1,119 @@
+# Parallel Nx/pnpm merge validation for classification-ggml. Mirrors the
+# prebuild + integration + mobile jobs from on-merge-classification-ggml.yml
+# but does not publish — publishing stays on the legacy merge workflow.
+name: On Merge Trigger (Classification-ggml, Nx)
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/classification-ggml/**"
+      - "packages/infer-base/**"
+      - "packages/logging/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "nx.json"
+      - "tools/ci/**"
+      - "packages/classification-ggml/project.json"
+      - ".github/workflows/*classification-ggml*-nx*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+jobs:
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+    steps:
+      - id: logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_main="false"
+          publish_release="false"
+          publish_feature="false"
+          publish_tmp="false"
+
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ]; then
+              publish_main="true"
+            elif [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            elif [[ "$ref_name" == feature-* ]]; then
+              publish_feature="true"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              publish_tmp="true"
+            fi
+          fi
+
+          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
+
+  prebuild-nx:
+    needs: publish-logic
+    if: |
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-classification-ggml-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      workdir: "packages/classification-ggml"
+
+  run-integration-tests-nx:
+    needs: [publish-logic, prebuild-nx]
+    if: |
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    uses: ./.github/workflows/integration-test-classification-ggml-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      workdir: "packages/classification-ggml"
+
+  mobile-integration-tests-nx:
+    needs: [publish-logic, prebuild-nx]
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    if: |
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    uses: ./.github/workflows/integration-mobile-test-classification-ggml-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}

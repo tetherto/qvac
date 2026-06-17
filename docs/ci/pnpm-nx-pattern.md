@@ -17,6 +17,47 @@ lint, unit tests, dts checks, cpp tests, integration tests, prebuild
 generate/build/install) is expressed as **Nx targets** in
 `packages/classification-ggml/project.json`.
 
+## Parallel CI tracks
+
+Two workflow families run in parallel for `classification-ggml`:
+
+| Track | PR orchestrator | Task workflows |
+|-------|-----------------|----------------|
+| **Legacy (npm)** | `on-pr-classification-ggml.yml` | `cpp-tests-classification.yml`, `prebuilds-classification-ggml.yml`, … |
+| **Nx (pnpm)** | `on-pr-classification-ggml-nx.yml` | `cpp-tests-classification-ggml-nx.yml`, `prebuilds-classification-ggml-nx.yml`, … |
+
+Legacy workflows use per-package `npm install` + `npm run`. Nx workflows use
+`setup-pnpm-workspace` + `pnpm nx run classification-ggml:<target>`. Job names
+in the Nx track are suffixed with `-nx` so both tracks appear distinctly in the
+GitHub checks UI.
+
+Merge publishing remains on the legacy `on-merge-classification-ggml.yml` path.
+`on-merge-classification-ggml-nx.yml` mirrors prebuild/integration/mobile via
+Nx for parity validation only.
+
+Legacy path filters list explicit workflow files (no `*-nx*` glob) so edits to
+the Nx track do not re-run the npm pipeline.
+
+## Swapping tracks
+
+When the Nx track is green and parity is acceptable:
+
+1. **Branch protection** — Require the `-nx` check names (e.g. `merge-guard-nx`,
+   `prebuild-nx`) instead of the legacy names; or require both during a
+   transition window.
+2. **Merge gate** — Point required status checks at `on-pr-classification-ggml-nx.yml`
+   jobs; keep legacy workflows enabled but unrequired for one release cycle if
+   desired.
+3. **Publish** — Move publish/release jobs from `on-merge-classification-ggml.yml`
+   into `on-merge-classification-ggml-nx.yml` (or rename `-nx` → production names
+   and retire the legacy files).
+4. **Retire legacy** — Delete or `workflow_dispatch`-only the npm orchestrators
+   and task workflows once Nx is sole required path.
+
+Until step 4, legacy workflows stay byte-compatible with pre-migration behavior:
+per-package `npm install`, `npm run`, and `bare-make` in `packages/classification-ggml/`.
+`reusable-prebuilds.yml` branches on optional `nx-project`; legacy callers omit it.
+
 ## Workspace layout
 
 ```text
@@ -112,9 +153,10 @@ per-package npm. Other packages omit the input until migrated.
 
 ### `reusable-prebuilds` + `nx-project`
 
-Pass `nx-project: classification-ggml` from `prebuilds-classification-ggml.yml`.
-When set, the reusable workflow installs via pnpm and calls Nx prebuild targets
-instead of `npm install` + bare-make in the package directory.
+Pass `nx-project: classification-ggml` from `prebuilds-classification-ggml-nx.yml`
+(not the legacy wrapper). When set, the reusable workflow installs via pnpm and
+calls Nx prebuild targets instead of `npm install` + bare-make in the package
+directory. Legacy `prebuilds-classification-ggml.yml` omits `nx-project`.
 
 ## Migrating another package
 
@@ -123,10 +165,10 @@ instead of `npm install` + bare-make in the package directory.
 3. Add external version pins to `pnpm-workspace.yaml` → `catalog:`.
 4. Run `pnpm sync:deps` and commit the synced `packages/<pkg>/package.json`.
 5. Add `packages/<pkg>/project.json` mirroring existing `scripts` as Nx targets.
-4. Extend `on-pr-<pkg>.yml` path filters for workspace root files.
-5. Replace `npm install` / `npm run` steps with `setup-pnpm-workspace` + `nx-run`.
-6. Pass `nx-project: <pkg>` to `sanity-checks` and `reusable-prebuilds` when ready.
-7. Run `pnpm install` at repo root and commit `pnpm-lock.yaml`.
+6. Add parallel `*-nx.yml` workflows; keep legacy npm workflows as the required
+   merge gate until swap (see [Swapping tracks](#swapping-tracks)).
+7. Extend `on-pr-<pkg>-nx.yml` path filters for workspace root files.
+8. Run `pnpm install` at repo root and commit `pnpm-lock.yaml`.
 
 Keep in GitHub Actions: runner matrices, OIDC, vcpkg/bare host setup, artifact
 upload, label gates, merge guards.
