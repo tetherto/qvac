@@ -13,18 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
 - RTF benchmark reports now surface the desktop GPU hardware name (QVAC-20499). `test/benchmark/rtf-benchmark.test.js` drives the shared performance reporter's `detectDevice()` (via `bare-subprocess`: nvidia-smi / vulkaninfo / system_profiler) to populate `device.gpu` / `device.cpu` in the canonical report and `labels.gpuModel` in the per-config JSON; `scripts/perf-report/aggregate-tts-ggml-rtf.js` renders a `GPU Model` column. Mobile leaves `device.gpu` null (device name is the proxy). CI-only.
 
-## [0.3.1]
-
-This release updates `@qvac/tts-ggml` to depend on `@qvac/infer-base` `^0.6.0`, keeping the addon aligned with the current inference base shared across the inference packages. There are no functional or API changes.
-
-### Changed
-
-- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0`.
-
-## Pull Requests
-
-- [#2636](https://github.com/tetherto/qvac/pull/2636) - bump @qvac/infer-base to ^0.6.0 for tts-ggml
-
 ## [0.3.0] - 2026-06-11
 
 ### Added
@@ -44,6 +32,7 @@ This release updates `@qvac/tts-ggml` to depend on `@qvac/infer-base` `^0.6.0`, 
   `ggml_get_type_traits_cpu` calls that made `2026-06-05` fail to `dlopen` on
   Android (the 0.2.1 bootstrap crash), so the addon loads cleanly while still
   shipping the Supertonic GPU optimisations.
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2636](https://github.com/tetherto/qvac/pull/2636)).
 
 ### Notes
 
