@@ -576,10 +576,21 @@ safeTest('[tools-compact] prefill with tools persists cache and loads on fresh m
 // Verify functional tool-call behavior, longer sessions, and resilience.
 // ===========================================================================
 
-// ---------------------------------------------------------------------------
-// WHY: Pitch DoD says "model picks correct tool after tool change". Verifies
-// the pipeline actually produces a tool_call — not just non-empty output.
-// ---------------------------------------------------------------------------
+function parseToolCalls (output, t) {
+  const re = /<tool_call>([\s\S]*?)<\/tool_call>/g
+  const calls = []
+  let m
+  while ((m = re.exec(output)) !== null) {
+    const raw = m[1].trim()
+    try {
+      calls.push(JSON.parse(raw))
+    } catch (err) {
+      if (t) t.fail(`tool_call block contains malformed JSON: ${err.message}\n  raw: ${raw.slice(0, 200)}`)
+    }
+  }
+  return calls
+}
+
 safeTest('[tools-compact] output contains tool_call block when tools are provided', { timeout: 600_000 }, async t => {
   const { model, logs } = await setupModel(t, { n_predict: '256' })
   if (!await ensureToolsSupportOrSkip(t, model, logs)) return
@@ -595,12 +606,18 @@ safeTest('[tools-compact] output contains tool_call block when tools are provide
     r.output.includes('<tool_call>') || r.output.includes('tool_call'),
     'output should contain a tool_call block when a clear tool-triggering prompt is given'
   )
+
+  const calls = parseToolCalls(r.output, t)
+  if (calls.length > 0) {
+    const declared = [TOOL_A.name]
+    t.ok(typeof calls[0].name === 'string' && calls[0].name.length > 0, 'tool_call has a non-empty name')
+    t.ok(declared.includes(calls[0].name), `tool_call name "${calls[0].name}" is a declared tool`)
+    if (calls[0].name === TOOL_A.name) {
+      t.ok(calls[0].arguments && 'city' in calls[0].arguments, 'tool_call has required argument key "city"')
+    }
+  }
 })
 
-// ---------------------------------------------------------------------------
-// WHY: After swapping from TOOL_A to TOOL_B, model should call the new tool,
-// not the old one. Catches stale tool tokens in KV cache.
-// ---------------------------------------------------------------------------
 safeTest('[tools-compact] tool_call references current tool after swap', { timeout: 600_000 }, async t => {
   const { model, dirPath, logs } = await setupModel(t, { n_predict: '256' })
   if (!await ensureToolsSupportOrSkip(t, model, logs)) return
@@ -619,7 +636,13 @@ safeTest('[tools-compact] tool_call references current tool after swap', { timeo
   ], opts)
   t.ok(r2.output.length > 0, 'turn 2 produces output after tool swap')
 
-  if (r2.output.includes('<tool_call>') || r2.output.includes('tool_call')) {
+  const calls2 = parseToolCalls(r2.output, t)
+  if (calls2.length > 0) {
+    t.ok(calls2[0].name !== 'getWeather', 'turn 2 should not call old tool (getWeather) after swap')
+    if (calls2[0].name === TOOL_B.name) {
+      t.ok(calls2[0].arguments && 'query' in calls2[0].arguments, 'tool_call has required argument key "query"')
+    }
+  } else if (r2.output.includes('<tool_call>') || r2.output.includes('tool_call')) {
     t.ok(
       !r2.output.includes('"getWeather"') && !r2.output.includes("'getWeather'"),
       'turn 2 should not reference old tool (getWeather) after swap'

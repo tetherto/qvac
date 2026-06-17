@@ -56,6 +56,24 @@ on:
         type: string
         required: false
         default: ""
+    # Additive outputs (QVAC weekend job): surface the monitor verdict so a
+    # caller can read real pass/fail past the job's `continue-on-error: true`.
+    # When a caller runs both platforms in one call the matrix overwrites these
+    # nondeterministically — single-platform callers (the weekend workflow uses
+    # `platforms:` to run one platform per call) get a well-defined value.
+    outputs:
+      test-result:
+        description: "Aggregate Device Farm verdict ('passed'/'failed')."
+        value: ${{ jobs.build-and-test.outputs.test-result }}
+      test-total:
+        description: "Total test cases executed."
+        value: ${{ jobs.build-and-test.outputs.test-total }}
+      test-passed:
+        description: "Test cases passed."
+        value: ${{ jobs.build-and-test.outputs.test-passed }}
+      test-failed:
+        description: "Test cases failed."
+        value: ${{ jobs.build-and-test.outputs.test-failed }}
   workflow_dispatch:
     inputs:
       ref:
@@ -91,6 +109,13 @@ jobs:
     environment: release
     timeout-minutes: 150
     continue-on-error: true
+    # Surfaced as workflow_call outputs above so schedule-driven callers can
+    # report a verdict (the job itself never fails — continue-on-error).
+    outputs:
+      test-result: ${{ steps.monitor.outputs.test-result }}
+      test-total: ${{ steps.monitor.outputs.test-total }}
+      test-passed: ${{ steps.monitor.outputs.test-passed }}
+      test-failed: ${{ steps.monitor.outputs.test-failed }}
     permissions:
       contents: read
       packages: read
