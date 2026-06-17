@@ -22,8 +22,9 @@ The first public release of `@qvac/opencode-plugin` — a turnkey [OpenCode](htt
 - **Layered configuration.** Options resolve from built-in defaults, a project `qvac.json`, the `opencode.json` plugin-tuple options, and `QVAC_*` environment variables (in increasing precedence): `model`, `ctxSize`, `reasoningBudget`, `tools`, `shim`, `runtime`, `readyTimeoutMs`, `setDefaultModel`, and `debug`.
 - **OpenAI-compatibility shim.** An in-process proxy bridges `@ai-sdk/openai-compatible` and QVAC serve: it flattens array `content` to the string form serve currently accepts, and re-routes inline `<think>…</think>` reasoning to `reasoning_content` so OpenCode renders a collapsed "Thought" block. Disable with `shim: false` / `QVAC_SHIM=0` once serve closes those gaps; the proxy itself remains (it is what lets startup return before the model loads).
 - **Examples.** Minimal and fully-annotated `opencode.json` examples for adding the plugin with and without options.
+- **Explicit static tools mode.** The managed serve config pins `toolsMode: "static"` so the OpenAI-compatible client surface is unambiguous across CLI versions (the invalid `"auto"` value leaves the serve with no loaded model).
 
 ### Requirements
 
-- [`@qvac/ai-sdk-provider@^0.2.1`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for managed mode.
-- [`@qvac/cli@^0.6.0`](https://www.npmjs.com/package/@qvac/cli) so the host can run `qvac serve` (resolved by the provider's managed mode).
+- [`@qvac/ai-sdk-provider@^0.2.2`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for managed mode.
+- [`@qvac/cli@^0.7.0`](https://www.npmjs.com/package/@qvac/cli) so the host can run `qvac serve` (resolved by the provider's managed mode).

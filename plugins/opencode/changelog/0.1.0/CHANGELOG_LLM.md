@@ -79,5 +79,5 @@ Both are stopgaps for serve gaps. Set `shim: false` (or `QVAC_SHIM=0`) to turn t
 
 ## Requirements
 
-- [`@qvac/ai-sdk-provider@^0.2.1`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for managed mode.
-- [`@qvac/cli@^0.6.0`](https://www.npmjs.com/package/@qvac/cli) so the host can run `qvac serve` (resolved by the provider's managed mode).
+- [`@qvac/ai-sdk-provider@^0.2.2`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for managed mode (its `^0.6.0 || ^0.7.0` CLI peer range is what unlocks CLI 0.7).
+- [`@qvac/cli@^0.7.0`](https://www.npmjs.com/package/@qvac/cli) so the host can run `qvac serve` (resolved by the provider's managed mode).
