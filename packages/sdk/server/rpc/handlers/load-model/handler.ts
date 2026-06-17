@@ -34,6 +34,7 @@ import {
   PluginNotFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { formatZodError } from "@/utils/zod-error";
 import { getPlugin } from "@/server/plugins";
 import {
   getRequestRegistry,
@@ -86,15 +87,9 @@ export async function handleLoadModel(
 
     const parseResult = plugin.loadConfigSchema.safeParse(resolvedModelConfig);
     if (!parseResult.success) {
-      const details = parseResult.error.issues
-        .map(
-          (i: { path: unknown[]; message: string }) =>
-            `${String(i.path.join("."))}: ${i.message}`,
-        )
-        .join(", ");
       throw new PluginLoadConfigValidationFailedError(
         canonicalModelType,
-        details,
+        formatZodError(parseResult.error),
       );
     }
     resolvedModelConfig = parseResult.data as Record<string, unknown>;

@@ -209,11 +209,21 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
 
+      # merge=true unions per-device performance-report.json payloads (Android
+      # pools can run more than one device). unzip-customer-artifacts=true is
+      # required for iOS: its [PERF_REPORT_START] markers print to
+      # bare_console.log, which on iOS Device Farm is wrapped inside
+      # Customer_Artifacts.zip; without unzipping, extract-from-log.js never
+      # scans it and the iOS perf report comes back empty (no step-summary
+      # table, no perf-report-parakeet-iOS-* artifact for the consolidated
+      # benchmark report).
       - name: Extract and report parakeet performance
         if: always() && !cancelled() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
         uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
           platform: ${{ matrix.platform }}
+          merge: 'true'
+          unzip-customer-artifacts: 'true'
           step-summary-title: 'Mobile Performance: parakeet (${{ matrix.platform }})'
           artifact-name: perf-report-parakeet-${{ matrix.platform }}-${{ github.run_number }}
 

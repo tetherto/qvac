@@ -129,7 +129,7 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
-          enables-perf: 'false'
+          enables-perf: 'true'
           after-hook-pulls: '[{"device_path":"tests/artifacts","artifact_name":"generated-images"}]'
 
       - name: Schedule Device Farm test run
@@ -166,9 +166,16 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           addon-npm-name: '@qvac/diffusion-cpp'
-          enables-perf: 'false'
+          enables-perf: 'true'
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Extract & upload addon perf report (Diffusion CPP)
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          artifact-name: perf-report-diffusion-cpp-${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

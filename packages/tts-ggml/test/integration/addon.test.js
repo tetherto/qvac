@@ -8,6 +8,7 @@ const fs = require('bare-fs')
 const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit, runChatterboxStreaming, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxModels, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
+const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -84,12 +85,21 @@ test('Chatterbox TTS (ggml): English synthesis + optional WER verification', { t
     const saveWav = !isMobile
     const wavPath = saveWav ? path.join(baseDir, 'test', 'output', `chatterbox-english-${i + 1}.wav`) : undefined
 
+    const t0 = Date.now()
     const result = await runner(model, { text, saveWav, wavOutputPath: wavPath }, expectation)
+    const wallMs = Date.now() - t0
     console.log(result.output)
 
     t.ok(result.passed, `English TTS ${i + 1} should pass expectations`)
     t.ok(result.data.sampleCount > 0, `English TTS ${i + 1} should produce audio samples`)
     t.is(result.data.reportedSampleRate, 24000, 'Sample rate should be native 24 kHz')
+
+    const st = result.data?.stats || {}
+    t.comment(recordTtsStats(
+      `chatterbox english ${i + 1}`,
+      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: result.data?.sampleCount, backendDevice: st.backendDevice },
+      { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox', output: text }
+    ))
 
     const wavBuffer = result.data?.wavBuffer ? Buffer.from(result.data.wavBuffer) : null
     werEntries.push({ text, lang: 'en', wavBuffer, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs })
