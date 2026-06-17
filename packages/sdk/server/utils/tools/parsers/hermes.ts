@@ -7,6 +7,25 @@ import {
 } from "@/server/utils/tools/shared";
 
 // Hermes-style: JSON payload wrapped in `<tool_call>...</tool_call>` tags
+function repairFunctionEqualsJson(candidate: string): string | undefined {
+  const match =
+    /^\{\s*"function=([^"]+)"\s*,\s*"arguments"\s*:\s*([\s\S]+)\}\s*$/.exec(
+      candidate,
+    );
+  if (!match) return undefined;
+  return `{"name":${JSON.stringify(match[1])},"arguments":${match[2]}}`;
+}
+
+function parseHermesJson(candidate: string): unknown {
+  try {
+    return JSON.parse(candidate);
+  } catch (err) {
+    const repaired = repairFunctionEqualsJson(candidate);
+    if (repaired === undefined) throw err;
+    return JSON.parse(repaired);
+  }
+}
+
 export function parseHermesFormat(text: string, tools: Tool[]): ParserResult {
   const toolCalls: ToolCall[] = [];
   const errors: ToolCallError[] = [];
@@ -32,7 +51,7 @@ export function parseHermesFormat(text: string, tools: Tool[]): ParserResult {
 
     let callItem: unknown;
     try {
-      callItem = JSON.parse(trimmedJson);
+      callItem = parseHermesJson(trimmedJson);
     } catch (error) {
       errors.push({
         code: "PARSE_ERROR",
@@ -96,7 +115,7 @@ function recoverIncompleteHermesFrame(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(candidate);
+    parsed = parseHermesJson(candidate);
   } catch {
     return { matched: false, toolCalls: [], errors: [] };
   }
