@@ -221,6 +221,7 @@ export {
   BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
+  RequestValidationFailedError,
 } from "./utils/errors-client";
 
 // Logging exports

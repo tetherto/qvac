@@ -11,6 +11,7 @@ const {
   setupJsLogger,
   safeTest
 } = require('./utils')
+const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
@@ -90,15 +91,39 @@ function saveGeneratedImages (modelDir, filenameSuffix, images) {
 
 safeTest('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
-  const response = await model.run(SHORT_PARAMS)
-  t.ok(response, 'run() returns a response')
-  t.ok(typeof response.onUpdate === 'function', 'response has onUpdate')
-  t.ok(typeof response.await === 'function', 'response has await')
+  const isMobileDevice = os.platform() === 'ios' || os.platform() === 'android'
 
-  const images = []
-  await response.onUpdate(data => {
-    if (data instanceof Uint8Array) images.push(data)
-  }).await()
+  // Mobile: single run (Pixel 9 Pro takes ~273s per generation — 3x would blow
+  // the 20-minute Device Farm timeout). Desktop: PERF_RUNS iterations.
+  const totalIterations = isMobileDevice ? 1 : (WARMUP_RUNS + PERF_RUNS)
+  let images = []
+  for (let iteration = 0; iteration < totalIterations; iteration++) {
+    const isWarmup = !isMobileDevice && iteration < WARMUP_RUNS
+    const tGen = Date.now()
+    let ttfbMs = null
+    const response = await model.run({ ...SHORT_PARAMS, seed: SHORT_PARAMS.seed + iteration })
+
+    if (iteration === 0) {
+      t.ok(response, 'run() returns a response')
+      t.ok(typeof response.onUpdate === 'function', 'response has onUpdate')
+      t.ok(typeof response.await === 'function', 'response has await')
+    }
+
+    images = []
+    await response.onUpdate(data => {
+      if (ttfbMs === null) ttfbMs = Date.now() - tGen
+      if (data instanceof Uint8Array) images.push(data)
+    }).await()
+
+    if (!isWarmup) {
+      t.comment(recordPerformance('[SD2.1 Q4_0 txt2img 256x256] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
+        scenario: 'txt2img',
+        model: 'stable-diffusion-v2-1-Q4_0',
+        execution_provider: useCpu ? 'cpu' : 'gpu',
+        ttfbMs
+      }))
+    }
+  }
 
   t.ok(images.length > 0, 'run produces at least one image')
   saveGeneratedImages(modelDir, 'idle-run', images)

@@ -192,15 +192,11 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: packages/vla-ggml
-          repo_name: "vla"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"
 
-  # Create GitHub release only for actual releases (after NPM publish)
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-npm]
     if: >-
       !cancelled() &&
@@ -208,10 +204,7 @@ jobs:
       needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "vla"
-      release_name: "QVAC Vla Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/vla-ggml"
