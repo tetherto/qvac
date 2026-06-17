@@ -1021,9 +1021,9 @@ void LlamaModel::commonParamsParse(
 
   // parse image-tile-mode (not in LLAMA_EXAMPLE_COMMON, must be handled
   // manually)
-  for (const std::string &key : {"image-tile-mode", "image_tile_mode"}) {
+  for (const std::string& key : {"image-tile-mode", "image_tile_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      const std::string &val = it->second;
+      const std::string& val = it->second;
       if (val == "0" || val == "batched") {
         params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
       } else if (val == "1" || val == "sequential") {
@@ -1038,7 +1038,8 @@ void LlamaModel::commonParamsParse(
             string_format(
                 "%s: invalid image-tile-mode '%s', must be batched/0, "
                 "sequential/1, or baseline/2\n",
-                __func__, val.c_str()));
+                __func__,
+                val.c_str()));
       }
       configFilemap.erase(it);
       break;
