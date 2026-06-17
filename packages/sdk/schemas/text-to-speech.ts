@@ -56,7 +56,7 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   useGPU: z.boolean().optional(),
 });
 
-export const ttsRuntimeConfigSchema = z.union([
+export const ttsRuntimeConfigSchema = z.discriminatedUnion("ttsEngine", [
   ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
 ]);
@@ -70,7 +70,7 @@ export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.ex
 
 export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema;
 
-export const ttsLoadConfigSchema = z.union([
+export const ttsLoadConfigSchema = z.discriminatedUnion("ttsEngine", [
   ttsChatterboxLoadConfigSchema,
   ttsSupertonicLoadConfigSchema,
 ]);
@@ -110,7 +110,7 @@ const legacyTtsOnnxFieldsShape =
 // `loadConfigSchema`. Permits deprecated ONNX field names so
 // `resolveConfig` can raise LegacyTtsModelDeprecatedError instead of a
 // generic Zod error; other unknown keys are still rejected by `.strict()`.
-export const ttsConfigSchema = z.union([
+export const ttsConfigSchema = z.discriminatedUnion("ttsEngine", [
   ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
   ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
 ]);

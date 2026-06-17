@@ -241,3 +241,62 @@ safeTest('run | run: second run() throws busy error', { timeout: 600_000 }, asyn
   t.ok(output.length > 0, 'first response completes with output')
   t.ok(!firstError, 'first response did not fail')
 })
+
+// Resource-release coverage (QVAC-18929): teardown while a job is in flight,
+// and use-after-unload. AddonJs.hpp documents a use-after-free risk on these
+// paths. Assertions are non-empty / type / clean-error only.
+
+// unload() mid-inference must not crash, and the model must be reusable after.
+safeTest('run | unload: unload during active inference does not crash, model reusable', { timeout: 600_000 }, async t => {
+  const { model } = await setupModel(t, { n_predict: '256' })
+
+  const response = await model.run(LONG_PROMPT)
+  // Drain in the background so the interrupted job's rejection doesn't abort
+  // the process; we only care that unload is safe while a job is live.
+  response.onError(() => {})
+  response.await().catch(() => {})
+
+  await model.unload()
+  t.pass('unload() during active inference completed without crashing')
+
+  await model.load()
+  const reuse = await model.run(BASE_PROMPT)
+  const output = await collectResponse(reuse)
+  t.ok(output.length > 0, 'model still generates after unload-during-inference + reload')
+})
+
+// run() after unload() must throw/reject cleanly, not segfault.
+safeTest('unloaded | run: run after unload throws a clean error', { timeout: 600_000 }, async t => {
+  const { model } = await setupModel(t)
+
+  const first = await model.run(BASE_PROMPT)
+  await collectResponse(first)
+  await model.unload()
+
+  try {
+    const resp = await model.run(BASE_PROMPT)
+    // Throwing on run() or failing the response both count, as long as it
+    // doesn't crash.
+    await collectResponse(resp)
+    t.fail('expected run() after unload to throw or reject')
+  } catch (err) {
+    t.ok(err instanceof Error, 'run() after unload threw a valid Error (not an undefined rejection)')
+    t.comment('Error message: ' + (err && err.message))
+    t.pass('unloaded model rejects run() without crashing')
+  }
+})
+
+// cancel() resolves async while the native job is still unwinding; an immediate
+// unload() must not race into a use-after-free.
+safeTest('run | cancel | unload: cancel then immediate unload does not crash', { timeout: 600_000 }, async t => {
+  const { model } = await setupModel(t, { n_predict: '256' })
+
+  const response = await model.run(LONG_PROMPT)
+  response.onError(() => {})
+  response.await().catch(() => {})
+
+  model.cancel().catch(() => {})
+  await model.unload()
+
+  t.pass('cancel() then immediate unload() did not crash')
+})

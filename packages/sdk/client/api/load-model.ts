@@ -9,8 +9,10 @@ import {
   type RPCOptions,
   type ModelDescriptor,
   type SdcppConfig,
-  loadModelOptionsToRequestSchema,
+  loadBuiltinToRequestSchema,
+  loadCustomPluginToRequestSchema,
   reloadConfigOptionsToRequestSchema,
+  isBuiltInModelType,
   isModelTypeAlias,
   normalizeModelType,
   inferModelTypeFromModelSrc,
@@ -23,6 +25,7 @@ import {
   InvalidResponseError,
 } from "@/utils/errors-client";
 import { assertModelSrcMatchesModelType } from "@/utils/load-model-validation";
+import { parseClientInput } from "@/client/parse-input";
 import { getClientLogger } from "@/logging";
 import { decoratePromise } from "@/utils/decorate-promise";
 import { generateClientRequestId } from "@/client/api/client-request-id";
@@ -305,8 +308,10 @@ async function runLoadModel(
   resolvedOptions = { ...resolvedOptions, requestId };
 
   const request = isReloadConfig
-    ? reloadConfigOptionsToRequestSchema.parse(resolvedOptions)
-    : loadModelOptionsToRequestSchema.parse(resolvedOptions);
+    ? parseClientInput(reloadConfigOptionsToRequestSchema, resolvedOptions)
+    : isBuiltInModelType(resolvedOptions["modelType"])
+      ? parseClientInput(loadBuiltinToRequestSchema, resolvedOptions)
+      : parseClientInput(loadCustomPluginToRequestSchema, resolvedOptions);
   const modelLogger = isReloadConfig
     ? undefined
     : (resolvedOptions["logger"] as LoadModelOptions["logger"]);

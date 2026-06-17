@@ -236,19 +236,17 @@ jobs:
             echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-npm]
     if: >-
       !cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "onnx-tts"
-      release_name: "QVAC TTS ONNX Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: packages/tts-onnx
 
   post-build-gate:
     name: Post-Build Gate

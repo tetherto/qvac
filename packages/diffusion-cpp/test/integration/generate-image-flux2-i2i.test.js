@@ -13,6 +13,7 @@ const {
   safeTest
 } = require('./utils')
 const { readImageDimensions } = require('../../addon')
+const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
 
@@ -112,45 +113,64 @@ safeTest('FLUX2-klein img2img — transforms an input image', { timeout: 1800000
     const initImage = fs.readFileSync(initImagePath)
     console.log(`\nLoaded init image: ${initImage.length} bytes`)
 
-    // ── Generate (img2img) ────────────────────────────────────────────────────
-    console.log('\n=== Generating image (img2img) ===')
-    console.log(`  Steps    : ${STEPS}`)
-    console.log(`  Guidance : ${GUIDANCE}`)
-    console.log(`  Seed     : ${SEED}`)
+    // ── Generate (perf loop) ───────────────────────────────────────────────────
+    const totalIterations = WARMUP_RUNS + PERF_RUNS
+    for (let iteration = 0; iteration < totalIterations; iteration++) {
+      const isWarmup = iteration < WARMUP_RUNS
+      const runLabel = isWarmup ? `warmup ${iteration + 1}` : `run ${iteration - WARMUP_RUNS + 1}/${PERF_RUNS}`
+      console.log(`\n=== Generating image (img2img ${runLabel}) ===`)
+      console.log(`  Steps    : ${STEPS}`)
+      console.log(`  Guidance : ${GUIDANCE}`)
+      console.log(`  Seed     : ${SEED + iteration}`)
 
-    const tGen = Date.now()
+      const tGen = Date.now()
+      let ttfbMs = null
 
-    const response = await model.run({
-      prompt: 'same person, color photograph, modern tech CEO of this version, wearing a gray zip up vest, black studio background',
-      negative_prompt: 'blurry, low quality, NSFW, distorted, different person, different face',
-      init_image: initImage,
-      cfg_scale: 1.0,
-      steps: STEPS,
-      guidance: GUIDANCE,
-      seed: SEED,
-      width: 624,
-      height: 624
-    })
+      images.length = 0
+      progressTicks.length = 0
 
-    await response
-      .onUpdate((data) => {
-        if (data instanceof Uint8Array) {
-          images.push(data)
-        } else if (typeof data === 'string') {
-          try {
-            const tick = JSON.parse(data)
-            if ('step' in tick && 'total' in tick) {
-              progressTicks.push(tick)
-            }
-          } catch (_) {}
-        }
+      const response = await model.run({
+        prompt: 'same person, color photograph, modern tech CEO of this version, wearing a gray zip up vest, black studio background',
+        negative_prompt: 'blurry, low quality, NSFW, distorted, different person, different face',
+        init_image: initImage,
+        cfg_scale: 1.0,
+        steps: STEPS,
+        guidance: GUIDANCE,
+        seed: SEED + iteration,
+        width: 624,
+        height: 624
       })
-      .await()
 
-    const genMs = Date.now() - tGen
-    console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
+      await response
+        .onUpdate((data) => {
+          if (ttfbMs === null) ttfbMs = Date.now() - tGen
+          if (data instanceof Uint8Array) {
+            images.push(data)
+          } else if (typeof data === 'string') {
+            try {
+              const tick = JSON.parse(data)
+              if ('step' in tick && 'total' in tick) {
+                progressTicks.push(tick)
+              }
+            } catch (_) {}
+          }
+        })
+        .await()
 
-    // ── Assertions ────────────────────────────────────────────────────────────
+      const genMs = Date.now() - tGen
+      console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
+
+      if (!isWarmup) {
+        t.comment(recordPerformance('[FLUX.2 klein img2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
+          scenario: 'img2img',
+          model: 'flux-2-klein-4b-Q8_0',
+          execution_provider: useCpu ? 'cpu' : 'gpu',
+          ttfbMs
+        }))
+      }
+    }
+
+    // ── Assertions (on last iteration) ──────────────────────────────────────
     t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
     t.is(progressTicks[progressTicks.length - 1].total, STEPS, `Final progress tick reports ${STEPS} total steps`)
 
@@ -165,21 +185,9 @@ safeTest('FLUX2-klein img2img — transforms an input image', { timeout: 1800000
     t.is(dims.width, 624, 'Output width matches requested 624')
     t.is(dims.height, 624, 'Output height matches requested 624')
 
-    // Saved to modelDir so mobile has write permission to the same path
     const outPath = path.join(modelDir, 'generate-image--flux2-i2i-seed42.png')
     fs.writeFileSync(outPath, img)
     console.log(`\nSaved → ${outPath}`)
-
-    // ── Summary ───────────────────────────────────────────────────────────────
-    console.log('\n' + '='.repeat(60))
-    console.log('TEST SUMMARY')
-    console.log('='.repeat(60))
-    console.log(` Load time   : ${(loadMs / 1000).toFixed(1)}s`)
-    console.log(` Gen time    : ${(genMs / 1000).toFixed(1)}s`)
-    console.log(` Steps ticks : ${progressTicks.length}`)
-    console.log(` Image size  : ${img.length} bytes`)
-    console.log(' PNG valid   : true')
-    console.log('='.repeat(60))
   } finally {
     console.log('\n=== Cleanup ===')
     if (model) await model.unload().catch(() => {})

@@ -8,7 +8,7 @@
   "dependencies": [
     {
       "name": "ggml-speech",
-      "version>=": "2026-06-04"
+      "version>=": "2026-06-15"
     },
     {
       "name": "vcpkg-cmake",
