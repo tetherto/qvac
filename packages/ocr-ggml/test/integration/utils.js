@@ -332,6 +332,39 @@ function findVulkanBackendLib (dir) {
 }
 
 /**
+ * Recursively search a directory for a ggml OpenCL backend shared library
+ * (`*ggml-opencl*.so/.dll/.dylib`). Returns the full path of the first match,
+ * or null when none is found (including when the directory does not exist).
+ * Mirrors {@link findVulkanBackendLib}; OpenCL primarily ships on Android.
+ * @param {string} dir - directory to search (typically {@link PREBUILDS_DIR})
+ * @returns {string|null}
+ */
+function findOpenCLBackendLib (dir) {
+  let entries
+  try {
+    entries = fs.readdirSync(dir)
+  } catch (_) {
+    return null
+  }
+  for (const name of entries) {
+    const full = path.join(dir, name)
+    let st
+    try {
+      st = fs.statSync(full)
+    } catch (_) {
+      continue
+    }
+    if (st.isDirectory()) {
+      const nested = findOpenCLBackendLib(full)
+      if (nested) return nested
+    } else if (/ggml-opencl/i.test(name) && /\.(so|dll|dylib)$/i.test(name)) {
+      return full
+    }
+  }
+  return null
+}
+
+/**
  * Resolves the ggml backend device for the integration suite.
  *
  * Precedence:
@@ -1003,6 +1036,7 @@ module.exports = {
   PERF_RUNS,
   PREBUILDS_DIR,
   findVulkanBackendLib,
+  findOpenCLBackendLib,
   getBackendDevice,
   createOcrGgml,
   setReportedGpuName,

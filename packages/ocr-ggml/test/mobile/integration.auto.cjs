@@ -11,6 +11,11 @@ require('./integration-runtime.cjs')
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
 
+async function runAndroidOpenclTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runAndroidOpenclTest')) return __FILTERED
+  return runIntegrationModule('../integration/android-opencl.test.js', options)
+}
+
 async function runAndroidVulkanTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runAndroidVulkanTest')) return __FILTERED
   return runIntegrationModule('../integration/android-vulkan.test.js', options)
@@ -114,6 +119,11 @@ async function runLifecycleTest (options = {}) { // eslint-disable-line no-unuse
 async function runOcrBasicTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOcrBasicTest')) return __FILTERED
   return runIntegrationModule('../integration/ocr-basic.test.js', options)
+}
+
+async function runOpenclBackendTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOpenclBackendTest')) return __FILTERED
+  return runIntegrationModule('../integration/opencl-backend.test.js', options)
 }
 
 async function runParamValidationTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup

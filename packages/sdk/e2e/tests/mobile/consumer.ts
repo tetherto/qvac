@@ -239,6 +239,7 @@ resources.define("tts-chatterbox", {
   config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
+    useGPU: true,
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
     referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
   }),
@@ -251,6 +252,7 @@ resources.define("tts-supertonic", {
     ttsEngine: "supertonic",
     language: "en",
     voice: "F1",
+    useGPU: true,
   },
 });
 
@@ -261,6 +263,7 @@ resources.define("tts-supertonic-multilingual", {
     ttsEngine: "supertonic",
     language: "es",
     voice: "F1",
+    useGPU: true,
   },
 });
 

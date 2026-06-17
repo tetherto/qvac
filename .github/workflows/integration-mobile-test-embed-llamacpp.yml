@@ -21,6 +21,21 @@ on:
         description: "Full NPM package spec to test (optional for workflow_call)"
         type: string
         required: false
+      test_groups:
+        description: "JSON array of {name,grep} overrides. When set, the run is a perf benchmark batch (perf collection + the benchmark shard set) instead of the auto-detected test-groups.json shards. Default empty preserves normal mobile-integration behaviour."
+        type: string
+        required: false
+        default: ""
+      job_timeout_minutes:
+        description: "Override the build-and-test job timeout (minutes). Default 120; raised by Benchmark Performance where a batch needs more headroom."
+        type: number
+        required: false
+        default: 120
+      artifact_suffix:
+        description: "Suffix appended to the perf-report artifact name (before the platform segment) so multiple benchmark batches in one run don't collide. Default empty keeps the existing name."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -39,7 +54,7 @@ jobs:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    timeout-minutes: ${{ inputs.job_timeout_minutes || 120 }}
     continue-on-error: true
     permissions:
       contents: read
@@ -95,6 +110,19 @@ jobs:
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
+      # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
+      # committed — they are generated from test/integration/_benchmark-matrix.js.
+      # Only a benchmark batch (test_groups set) needs them: regenerate after
+      # setup (which provisions Node) but before the bundle is built, then
+      # hard-fail if any are missing so the Device Farm app can't be built
+      # without them. Normal mobile runs (no test_groups) skip this.
+      - name: Generate benchmark shards
+        if: inputs.test_groups != ''
+        working-directory: addon/packages/embed-llamacpp
+        run: |
+          npm run generate:benchmark-shards
+          node scripts/generate-benchmark-shards.js --assert-shards
+
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
@@ -119,7 +147,10 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
-          enables-perf: 'false'
+          # Perf collection + the benchmark shard group only for a benchmark
+          # batch; normal mobile runs keep perf off and auto-detect test-groups.
+          enables-perf: ${{ inputs.test_groups != '' && 'true' || 'false' }}
+          test-groups: ${{ inputs.test_groups }}
 
       - name: Schedule Device Farm test run
         id: schedule
@@ -155,9 +186,22 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           addon-npm-name: '@qvac/embed-llamacpp'
-          enables-perf: 'false'
+          enables-perf: ${{ inputs.test_groups != '' && 'true' || 'false' }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      # Benchmark batches only: pull the per-device perf-report.json the on-device
+      # runner emitted out of the Device Farm customer artifacts and upload it
+      # under a batch-suffixed name so the Benchmark Performance summarize job can
+      # aggregate every batch. Normal mobile runs (no test_groups) skip this.
+      - name: Extract & upload addon perf report (embed)
+        if: always() && !cancelled() && inputs.test_groups != '' && steps.schedule.outputs.run-count != '0' && steps.schedule.outputs.run-count != ''
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          merge: 'true'
+          unzip-customer-artifacts: 'true'
+          artifact-name: perf-report-llamacpp-embed-${{ inputs.artifact_suffix }}${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

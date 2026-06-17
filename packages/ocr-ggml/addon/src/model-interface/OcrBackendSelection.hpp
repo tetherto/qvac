@@ -16,6 +16,11 @@
 //   - `BackendDevice::METAL` -> the first Metal-capable GPU device (backend
 //     name begins with "MTL"/"metal", case-insensitive; Apple only). Same
 //     CPU-fallback behaviour as Vulkan when no Metal device is present.
+//   - `BackendDevice::OPENCL` -> the first OpenCL-capable GPU device (backend
+//     name contains "opencl", case-insensitive; primarily Android/Adreno).
+//     Unlike Vulkan, Adreno devices are NOT skipped on the auto path: OpenCL is
+//     Adreno's sound compute path. Same CPU-fallback behaviour when no OpenCL
+//     device is present.
 //   - `BackendDevice::CPU` (default) -> the CPU device.
 //
 // The returned device is then handed to each step's `ggml_backend_dev_init`.
@@ -80,5 +85,10 @@ BackendSelection selectBackendDevice(
 // matches both the ggml device name ("MTL0"/"MTL1") and the "Metal" backend
 // registration name. Exposed for unit testing / reuse.
 [[nodiscard]] bool isMetalBackendName(std::string_view backendName);
+
+// True if the backend name contains "opencl" (case-insensitive) — matches both
+// the ggml OpenCL device name ("GPUOpenCL") and the "OpenCL" backend
+// registration name. Exposed for unit testing / reuse.
+[[nodiscard]] bool isOpenCLBackendName(std::string_view backendName);
 
 } // namespace qvac_lib_infer_ocr_ggml::ocr_backend_selection
