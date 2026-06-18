@@ -46,6 +46,11 @@ async function runConv1x1MulmatTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/conv1x1-mulmat.test.js', options)
 }
 
+async function runCrnnBiasBroadcastTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCrnnBiasBroadcastTest')) return __FILTERED
+  return runIntegrationModule('../integration/crnn-bias-broadcast.test.js', options)
+}
+
 async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrBasicTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-basic.test.js', options)
