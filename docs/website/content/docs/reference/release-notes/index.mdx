@@ -1,6 +1,6 @@
 ---
 title: SDK Release Notes — v0.13.x (latest)
-description: Lists all releases from v0.13.0 to v0.13.1.
+description: Lists all releases from v0.13.0 to v0.13.4.
 ---
 
 ## v0.13.0
@@ -177,6 +177,26 @@ WAN2_1_I2V_14B_Q4_K_M
 WAN2_1_I2V_14B_Q4_K_M_1
 ```
 
+## v0.13.4
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.4
+
+A patch release that hardens tool-call parsing for Qwen models used in agentic
+workflows.
+
+#### Bug Fixes
+
+##### Recover malformed Qwen tool-call frames
+
+Qwen3.5/3.6 can intermittently emit a malformed tool-call frame that fuses its
+XML and JSON tool templates, embedding the `function=<name>` token as a bare
+string key inside an otherwise JSON object. Previously the parser rejected that
+frame as invalid JSON, so no structured tool call was produced and callers saw
+the raw markup as assistant text. The parser now recognizes and repairs this
+specific shape, so the tool call is recovered and dispatched correctly.
+
 ## v0.13.1
 
 ### @qvac/sdk
@@ -190,3 +210,4 @@ Dependency-maintenance patch. No public API changes.
 - `@qvac/decoder-audio` → `^0.4.0`: removes the deprecated `@qvac/response` package (folded into `@qvac/infer-base`) from the dependency tree, eliminating its exact `bare-events 2.4.2` pin. `decoder-audio@0.4.0`'s `run()` returns `QvacResponse` synchronously; `server/utils/audio/decoder.ts` updated to not `await` it.
 - `@qvac/sdk` + `@qvac/bare-sdk` bumped in lockstep.
 - Validated by a clean install: no `@qvac/response`, no `bare-events@2.4.2`, no `bare-fetch@2.x`, no `decoder-audio@0.3.x` resolve in the tree.
+
