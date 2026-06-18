@@ -3,10 +3,9 @@ import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
 import { assertError, multipart, JSON_HEADERS } from '../helpers/http.js'
 
-// An empty file part with a filename — the bats `file=@/dev/null;filename=audio.wav`.
+// An empty file part with a filename: file present, contents empty.
 const EMPTY_FILE = { name: 'file', filename: 'audio.wav', contentType: 'audio/wav', data: Buffer.alloc(0) }
 
-// Ported from cli.bats "Serve: transcriptions validation".
 describe('serve: transcriptions validation', () => {
   const server = useServer({ cors: true })
 
@@ -59,7 +58,6 @@ describe('serve: transcriptions validation', () => {
   })
 })
 
-// Ported from cli.bats "Serve: translations validation".
 describe('serve: translations validation', () => {
   const server = useServer({ cors: true })
 

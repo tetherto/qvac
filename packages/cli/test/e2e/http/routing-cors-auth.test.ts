@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
 import { assertError } from '../helpers/http.js'
 
-// Ported from cli.bats "Serve: routing".
 describe('serve: routing', () => {
   const server = useServer({ cors: true })
 
@@ -20,7 +19,6 @@ describe('serve: routing', () => {
   })
 })
 
-// Ported from cli.bats "Serve: CORS".
 describe('serve: CORS enabled', () => {
   const server = useServer({ cors: true })
 
@@ -52,7 +50,6 @@ describe('serve: CORS disabled', () => {
   })
 })
 
-// Ported from cli.bats "Serve: auth".
 describe('serve: auth', () => {
   const server = useServer({ apiKey: 'test-secret-key-12345' })
 

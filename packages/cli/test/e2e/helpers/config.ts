@@ -5,7 +5,7 @@ import type { TestContext } from 'node:test'
 
 // A config with a single non-preloaded model. Enough to exercise every
 // validation path (routing, schema, auth, CORS, 404/400) without loading
-// anything — mirrors the `fake-transcribe` entry the bats cli suite uses.
+// anything.
 export const MODELLESS_CONFIG = {
   serve: {
     models: {
@@ -27,8 +27,8 @@ export async function writeConfigDir (t: TestContext, config: unknown): Promise<
   return dir
 }
 
-// Aliases and config mirroring e2e.bats setup_file (small real models that
-// load over P2P from the registry).
+// Small real models (LLM, embedding, Whisper) that load over P2P from the
+// registry, with stable aliases the real-model tests reference.
 export const E2E = {
   llm: 'test-llm',
   embed: 'test-embed',

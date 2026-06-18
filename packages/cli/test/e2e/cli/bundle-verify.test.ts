@@ -6,11 +6,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
 
-// New coverage (Phase 4): the real bundle pipeline end-to-end, run exactly like
-// `npx qvac` in a user project — `bundle sdk` resolves @qvac/sdk from the
-// project's node_modules (no internal flags), emits a worker bundle + addons
-// manifest, then `verify bundle` validates that produced bundle for the host.
-// The exhaustive option matrix lives in the SDK.
+// bundle sdk resolves @qvac/sdk from the project's node_modules and emits a
+// worker bundle + addons manifest; verify bundle then validates that bundle for
+// the host. The exhaustive option matrix lives in the SDK.
 const INSTALLED_SDK = fileURLToPath(new URL('../../../node_modules/@qvac/sdk', import.meta.url))
 const HOST = `${process.platform}-${process.arch}`
 
@@ -38,9 +36,8 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
 
     const verify = await runCli(['verify', 'bundle', '--addons-source', join(dir, 'qvac', 'worker.bundle.js'), '--host', HOST], { cwd: dir, timeoutMs: 120_000 })
     assert.equal(verify.code, 0, `verify bundle failed:\n${verify.output}`)
-    // verify consumed the produced bundle and validated prebuild presence for the
-    // host. "passed" when strict ABI ran; otherwise it reports the addons it
-    // checked with ABI skipped (Bare runtime version not auto-detected here).
+    // "passed" when strict ABI ran; otherwise it reports the addons it checked
+    // with ABI skipped (Bare runtime version not auto-detected on this host).
     assert.match(verify.output, /verification passed|ABI checks skipped for \d+ addons/)
   })
 })

@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
 import { assertError, JSON_HEADERS } from '../helpers/http.js'
 
-// Ported from cli.bats "Serve: embeddings validation".
 describe('serve: embeddings validation', () => {
   const server = useServer({ cors: true })
 

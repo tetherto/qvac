@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
 import { assertError } from '../helpers/http.js'
 
-// Ported from cli.bats "Serve: models endpoint".
 describe('serve: models endpoint', () => {
   const server = useServer({ cors: true })
 

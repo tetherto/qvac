@@ -1,4 +1,4 @@
-// Test fixtures, ported from the inline `node -e` generators in the bats suite.
+// Test fixtures for the e2e suite.
 
 // 1x1 transparent PNG, for multipart image tests.
 export function tinyPng (): Buffer {

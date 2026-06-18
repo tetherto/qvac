@@ -4,7 +4,6 @@ import { useServer } from '../helpers/server.js'
 import { assertError, JSON_HEADERS } from '../helpers/http.js'
 import { probeFfmpegAvailable } from '../../../src/serve/lib/video-transcode.js'
 
-// Ported from cli.bats "Serve: speech (text-to-speech) validation".
 describe('serve: speech validation', () => {
   const server = useServer({ cors: true })
 
@@ -79,7 +78,6 @@ describe('serve: speech auth', () => {
   })
 })
 
-// Ported from cli.bats audio discovery endpoints.
 describe('serve: audio discovery', () => {
   const server = useServer({ cors: true })
 

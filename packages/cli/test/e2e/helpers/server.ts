@@ -41,9 +41,9 @@ export async function createServer (t: TestContext, opts: CreateServerOptions = 
   return app
 }
 
-// Build one shared server for a describe block (mirrors the bats setup_file
-// model of a server per config variant). Wires before/after on the enclosing
-// suite and returns a getter for use inside `it` bodies.
+// Build one shared server per describe block (one server per config variant).
+// Wires before/after on the enclosing suite and returns a getter for use inside
+// `it` bodies.
 export function useServer (opts: CreateServerOptions = {}): () => FastifyInstance {
   let app: FastifyInstance | undefined
   let dir: string | undefined
@@ -63,8 +63,8 @@ export function useServer (opts: CreateServerOptions = {}): () => FastifyInstanc
 }
 
 // Like useServer, but preloads real models in-process (build + ready +
-// preloadModels, no listen — mirrors startServer minus the socket and the
-// close-with-grace signal handlers, which would interfere with the runner).
+// preloadModels). No listen and no close-with-grace signal handlers — those
+// would interfere with the test runner.
 // One shared server per file, since model loads are expensive and node:test
 // isolates files into separate processes.
 export function useModelServer (config: unknown): () => FastifyInstance {

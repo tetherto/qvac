@@ -7,9 +7,8 @@ import { join } from 'node:path'
 import type { TestContext } from 'node:test'
 import { runCli } from '../helpers/cli.js'
 
-// New coverage: `verify deps` real diff. The bats suite only hit validation
-// paths; this drives the actual lockfile-at-ref read → native classification →
-// diff → exit-code pipeline (native = a package.json with `addon: true`).
+// Drives the lockfile-at-ref read → native classification → diff → exit-code
+// pipeline. A package is "native" when its package.json has addon: true.
 function git (cwd: string, args: string[]): void {
   execFileSync('git', args, { cwd, stdio: 'pipe' })
 }

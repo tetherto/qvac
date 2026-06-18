@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
 import { assertError, JSON_HEADERS } from '../helpers/http.js'
 
-// Ported from cli.bats "Serve: chat completions validation".
 describe('serve: chat completions validation', () => {
   const server = useServer({ cors: true })
 

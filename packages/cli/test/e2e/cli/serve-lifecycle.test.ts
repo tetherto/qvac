@@ -30,9 +30,8 @@ describe('serve: lifecycle (spawned binary)', () => {
     assert.ok(code === 0 || signal === 'SIGTERM', `expected clean shutdown, got code=${code} signal=${signal}`)
   })
 
-  // Parity with bats "responses: startup log documents volatile store" — the
-  // real server must log the volatile-store banner at startup (the in-process
-  // suite only checks the banner string, not that it is emitted).
+  // The real server logs the volatile-store banner at startup (the in-process
+  // suite checks the banner string but not that it is actually emitted).
   it('logs the volatile responses-store banner at startup', async (t) => {
     const dir = await writeConfigDir(t, MODELLESS_CONFIG)
     const srv = await startCliServer(t, [], { cwd: dir })

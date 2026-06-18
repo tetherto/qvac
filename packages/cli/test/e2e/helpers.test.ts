@@ -4,9 +4,8 @@ import Fastify from 'fastify'
 import { initSSE, sendSSE, endSSE } from '../../src/serve/lib/sse.js'
 import { collectSSE, multipart, assertError } from './helpers/http.js'
 
-// Harness self-tests. The SSE case also pins the Phase-0 finding that
-// app.inject captures hijacked reply.raw writes (the mechanism every
-// streaming route uses), so streaming tests can stay in-process.
+// Harness self-tests. The SSE case confirms app.inject captures hijacked
+// reply.raw writes, so streaming routes can be tested in-process.
 describe('e2e harness helpers', () => {
   it('collectSSE parses hijacked reply.raw SSE captured by app.inject', { timeout: 5000 }, async () => {
     const app = Fastify({ logger: false })

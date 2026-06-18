@@ -4,8 +4,7 @@ import { useServer } from '../helpers/server.js'
 import { assertError, multipart, JSON_HEADERS } from '../helpers/http.js'
 import { tinyPng } from '../helpers/fixtures.js'
 
-// Ported from cli.bats "Serve: images generations validation (JSON)".
-// Image routes resolve the model BEFORE per-param checks, so unknown models
+// Image routes resolve the model before per-param checks, so unknown models
 // surface model_not_found (404) rather than the per-param error.
 describe('serve: images generations validation', () => {
   const server = useServer({ cors: true })
@@ -33,7 +32,6 @@ describe('serve: images generations validation', () => {
   }
 })
 
-// Ported from cli.bats "Serve: images edits validation (multipart)".
 describe('serve: images edits validation', () => {
   const server = useServer({ cors: true })
   const image = (): { name: string, filename: string, contentType: string, data: Buffer } =>
@@ -83,7 +81,6 @@ describe('serve: images edits validation', () => {
   }
 })
 
-// Ported from cli.bats images on the publicBaseUrl-enabled server.
 describe('serve: images on publicBaseUrl server', () => {
   const server = useServer({ publicBaseUrl: 'http://127.0.0.1:19923' })
 

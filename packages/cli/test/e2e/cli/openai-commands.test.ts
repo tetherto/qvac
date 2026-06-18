@@ -5,9 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
 
-// New coverage: `qvac openai spec` was previously only unit-tested, never
-// invoked through the real binary. (`openai coverage` needs network / a cached
-// spec, so it stays unit-tested.)
+// openai coverage is omitted — it needs network or a cached OpenAPI spec.
 describe('cli: openai spec', () => {
   it('emits a valid OpenAPI JSON document to stdout', async () => {
     const r = await runCli(['openai', 'spec'])

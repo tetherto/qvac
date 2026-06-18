@@ -12,7 +12,6 @@ async function tmpProject (t: TestContext): Promise<string> {
   return dir
 }
 
-// Ported from cli.bats version/help, verify, doctor, and config-error tests.
 describe('cli: version & help', () => {
   it('--version prints semver', async () => {
     const r = await runCli(['--version'])

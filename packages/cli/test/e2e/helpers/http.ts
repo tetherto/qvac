@@ -6,7 +6,6 @@ export type InjectResponse = Awaited<ReturnType<FastifyInstance['inject']>>
 export const JSON_HEADERS = { 'content-type': 'application/json' }
 
 // Assert an OpenAI-style error envelope: { error: { code, message } }.
-// Replaces the bats `assert_error` jq helper.
 export function assertError (res: InjectResponse, expectedCode: string): void {
   const body = res.json() as { error?: { code?: string, message?: unknown } }
   assert.equal(body?.error?.code, expectedCode, `expected error.code=${expectedCode}, got body=${res.payload}`)
@@ -21,7 +20,7 @@ export interface MultipartField {
   data?: Buffer
 }
 
-// Build a multipart/form-data body for app.inject (replaces `curl -F`).
+// Build a multipart/form-data body for app.inject.
 // Returns the payload buffer and the matching content-type header.
 export function multipart (fields: MultipartField[]): { payload: Buffer, headers: Record<string, string> } {
   const boundary = '----qvacE2EFormBoundary'

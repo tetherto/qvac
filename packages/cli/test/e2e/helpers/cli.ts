@@ -8,13 +8,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { before, after, type TestContext } from 'node:test'
 
-// The built binary the bats suite runs as `node dist/index.js`.
+// The built CLI entrypoint, run as `node dist/index.js`.
 export const CLI_BIN = fileURLToPath(new URL('../../../dist/index.js', import.meta.url))
 
 export interface CliResult {
   stdout: string
   stderr: string
-  // stdout + stderr combined, matching the bats `run` `$output`.
+  // stdout + stderr combined.
   output: string
   code: number | null
 }
@@ -61,8 +61,7 @@ export interface SpawnedServer {
 }
 
 // Spawn `serve openai` on a real port, wait until it answers over the socket,
-// and register teardown. This is the black-box / real-transport counterpart to
-// the in-process app.inject harness.
+// and register teardown.
 export async function startCliServer (
   t: TestContext,
   args: string[],
@@ -100,8 +99,8 @@ export async function startCliServer (
 }
 
 // Describe-scoped spawned server sharing one process across a suite's tests.
-// Used for real-socket fidelity tests (incremental streaming, client-cancel)
-// that need a real model and a real transport. Returns a getter for baseUrl.
+// For real-socket fidelity tests (incremental streaming, client-cancel) that
+// need a real model and a real transport. Returns a getter for baseUrl.
 export function useSpawnedServer (config: unknown, args: string[] = [], readyTimeoutMs = 120_000): () => string {
   let proc: ChildProcess | undefined
   let baseUrl: string | undefined
