@@ -1233,20 +1233,6 @@ void LlamaModel::commonParamsParse(
     }
   }
 
-  for (const std::string& key : {"spec-type", "spec_type"}) {
-    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
-      const auto requested = split(iter->second, ',');
-      if (std::find(requested.begin(), requested.end(), "draft-mtp") !=
-          requested.end()) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            "spec-type=draft-mtp is not supported");
-      }
-    }
-  }
-
   // transform json config into the format required by llama.cpp
   for (auto& keyValuePair : configFilemap) {
     configVector.push_back(std::string("--") + keyValuePair.first);
@@ -1352,10 +1338,6 @@ void LlamaModel::commonParamsParse(
 
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
-
-  postprocess_cpu_params(params.speculative.draft.cpuparams, &params.cpuparams);
-  postprocess_cpu_params(
-      params.speculative.draft.cpuparams_batch, &params.cpuparams_batch);
 
   if (!params.kv_overrides.empty()) {
     params.kv_overrides.emplace_back();
