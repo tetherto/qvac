@@ -214,6 +214,8 @@ export async function close(): Promise<void> {
       }
       rpcInstance = null;
       rpcPromise = null;
+      workletInstance = null;
+      workletInitialized = false;
       return;
     }
 
