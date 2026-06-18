@@ -16,6 +16,14 @@ on:
     paths:
       - "packages/registry-server/**"
   workflow_dispatch:
+    inputs:
+      deploy_mode:
+        description: "Manual-run deploy mode: dry-run (preflight only) or live. sync-staging runs only for live."
+        type: choice
+        options:
+          - dry-run
+          - live
+        default: dry-run
 
 env:
   PKG_DIR: packages/registry-server
@@ -23,6 +31,15 @@ env:
 
 permissions:
   contents: read
+
+# Serialize deploy-capable runs (push / workflow_dispatch) under one fixed group
+# so two runs can never roll the staging cluster at the same time — max-parallel
+# only serializes nodes within a single run. PR-validation runs stay grouped
+# per-ref so different PRs still run in parallel. Never cancel an in-flight
+# deploy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request_target' && github.ref || 'deploy' }}
+  cancel-in-progress: false
 
 jobs:
   label-gate:
@@ -204,14 +221,124 @@ jobs:
         shell: bash
         run: npm install && npm run lint && npm run test:unit
 
+  # Resolve the deploy targets into opaque matrix indices. The instance list is a
+  # repository SECRET (secrets.REGISTRY_STAGING_INSTANCES — a JSON array of
+  # {name,zone}) so node names/zones never appear in public logs, and the matrix
+  # uses bare indices so they never appear in job names either. Fails loudly if
+  # unset so a misconfiguration blocks the deploy rather than silently skipping.
+  resolve-deploy-targets:
+    needs: [authorize, detect-changes, label-gate]
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      indices: ${{ steps.targets.outputs.indices }}
+    steps:
+      - name: Resolve staging target count
+        id: targets
+        shell: bash
+        env:
+          INSTANCES_JSON: ${{ secrets.REGISTRY_STAGING_INSTANCES }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INSTANCES_JSON:-}" ]; then
+            echo "::error::secrets.REGISTRY_STAGING_INSTANCES is not set (JSON array of {name,zone})"
+            exit 1
+          fi
+          if ! printf '%s' "$INSTANCES_JSON" | jq -e 'type == "array" and length > 0 and all(.[]; has("name") and has("zone"))' >/dev/null; then
+            echo "::error::secrets.REGISTRY_STAGING_INSTANCES must be a non-empty JSON array of {name,zone}"
+            exit 1
+          fi
+          # Emit opaque indices only — never node names/zones (public logs).
+          echo "indices=$(printf '%s' "$INSTANCES_JSON" | jq -c '[range(length)]')" >> "$GITHUB_OUTPUT"
+
+  # Deploy code + data (incl. licenses) to every staging node BEFORE sync runs,
+  # so whichever indexer the sync RPC reaches already knows any new license.
+  # Nodes are rolled one at a time (max-parallel: 1, fail-fast) to preserve
+  # Autobase quorum; each node must report indexer status before the next.
+  deploy-staging:
+    needs:
+      - detect-changes
+      - validate-json
+      - test
+      - label-gate
+      - resolve-deploy-targets
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') && (needs.validate-json.result == 'success' || needs.validate-json.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.resolve-deploy-targets.result == 'success')
+    runs-on: qvac-ubuntu2204-x64
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        index: ${{ fromJSON(needs.resolve-deploy-targets.outputs.indices || '[]') }}
+    steps:
+      # FIRST step: register every infra identifier as a log mask BEFORE any
+      # other step can echo it (checkout paths, gcloud output, remote-script
+      # logs). Node name/zone come from the secret instance list (indexed by the
+      # opaque matrix index); project/repo-path/run-as-user are secrets too. This
+      # keeps the public Actions log free of staging topology.
+      - name: Mask infra identifiers & resolve target
+        id: tgt
+        shell: bash
+        env:
+          INSTANCES_JSON: ${{ secrets.REGISTRY_STAGING_INSTANCES }}
+          PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+          RUN_AS_USER: ${{ secrets.REGISTRY_NODE_RUN_AS_USER }}
+          IDX: ${{ matrix.index }}
+        run: |
+          set -euo pipefail
+          name="$(printf '%s' "$INSTANCES_JSON" | jq -r ".[$IDX].name")"
+          zone="$(printf '%s' "$INSTANCES_JSON" | jq -r ".[$IDX].zone")"
+          user="${RUN_AS_USER:?REGISTRY_NODE_RUN_AS_USER secret is not set}"
+          for v in "$name" "$zone" "$user" "$(hostname)" "$(whoami)" "${RUNNER_NAME:-}"; do
+            [ -n "$v" ] && echo "::add-mask::$v"
+          done
+          [ -n "${PROJECT:-}" ] && echo "::add-mask::${name}.c.${PROJECT}.internal"
+          {
+            echo "name=$name"
+            echo "zone=$zone"
+            echo "user=$user"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Deploy (node index ${{ matrix.index }})
+        uses: ./.github/actions/deploy-registry-server
+        with:
+          instance: ${{ steps.tgt.outputs.name }}
+          zone: ${{ steps.tgt.outputs.zone }}
+          project: ${{ secrets.GCP_PROJECT_ID }}
+          workload-identity-provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service-account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          repo-path: ${{ secrets.REGISTRY_NODE_REPO_PATH }}
+          run-as-user: ${{ steps.tgt.outputs.user }}
+          deploy-sha: ${{ github.sha }}
+          mode: ${{ github.event.inputs.deploy_mode || 'live' }}
+
   sync-staging:
     needs:
       - detect-changes
       - validate-json
       - test
       - label-gate
+      - deploy-staging
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.models_changed == 'true' && needs.validate-json.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped'))
+      needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.models_changed == 'true' && needs.validate-json.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.deploy-staging.result == 'success' && (github.event.inputs.deploy_mode == '' || github.event.inputs.deploy_mode == 'live'))
     runs-on: ubuntu-latest
     environment: release
     env:
