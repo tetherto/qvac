@@ -26,3 +26,35 @@ export async function writeConfigDir (t: TestContext, config: unknown): Promise<
   t.after(async () => { await rm(dir, { recursive: true, force: true }) })
   return dir
 }
+
+// Aliases and config mirroring e2e.bats setup_file (small real models that
+// load over P2P from the registry).
+export const E2E = {
+  llm: 'test-llm',
+  embed: 'test-embed',
+  whisper: 'test-whisper',
+  whisperTranslate: 'test-whisper-translate',
+  video: 'test-video'
+} as const
+
+export const MODEL_CONFIG = {
+  serve: {
+    models: {
+      'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctx_size: 2048 } },
+      'test-embed': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: true },
+      'test-whisper': { model: 'WHISPER_EN_TINY_Q8_0', preload: true },
+      'test-whisper-translate': { model: 'WHISPER_EN_TINY_Q8_0', type: 'whispercpp-audio-translation', preload: true },
+      'test-video': { src: 'placeholder', type: 'sdcpp-video', preload: false }
+    }
+  }
+} as const
+
+// Just the LLM — for the spawned-server streaming/cancel fidelity tests, to
+// avoid reloading the full set in a second process.
+export const LLM_ONLY_CONFIG = {
+  serve: {
+    models: {
+      'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctx_size: 2048 } }
+    }
+  }
+} as const

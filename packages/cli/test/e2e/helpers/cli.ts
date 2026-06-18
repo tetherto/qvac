@@ -3,7 +3,10 @@ import { fileURLToPath } from 'node:url'
 import { once } from 'node:events'
 import { createServer, type AddressInfo } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
-import type { TestContext } from 'node:test'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { before, after, type TestContext } from 'node:test'
 
 // The built binary the bats suite runs as `node dist/index.js`.
 export const CLI_BIN = fileURLToPath(new URL('../../../dist/index.js', import.meta.url))
@@ -53,6 +56,8 @@ export interface SpawnedServer {
   baseUrl: string
   proc: ChildProcess
   stop: () => Promise<void>
+  // Combined stdout+stderr captured so far (for asserting startup logs).
+  output: () => string
 }
 
 // Spawn `serve openai` on a real port, wait until it answers over the socket,
@@ -69,8 +74,9 @@ export async function startCliServer (
     ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
     env: process.env
   })
-  let stderr = ''
-  proc.stderr.on('data', (d) => { stderr += String(d) })
+  let captured = ''
+  proc.stdout.on('data', (d) => { captured += String(d) })
+  proc.stderr.on('data', (d) => { captured += String(d) })
 
   const stop = async (): Promise<void> => {
     if (proc.exitCode === null && proc.signalCode === null) {
@@ -82,13 +88,48 @@ export async function startCliServer (
 
   const deadline = Date.now() + (opts.readyTimeoutMs ?? 15_000)
   while (Date.now() < deadline) {
-    if (proc.exitCode !== null) throw new Error(`serve exited early (code ${proc.exitCode}):\n${stderr}`)
+    if (proc.exitCode !== null) throw new Error(`serve exited early (code ${proc.exitCode}):\n${captured}`)
     try {
       await fetch(`${baseUrl}/v1/models`)
-      return { port, baseUrl, proc, stop }
+      return { port, baseUrl, proc, stop, output: () => captured }
     } catch {
       await sleep(150)
     }
   }
-  throw new Error(`serve did not become ready within timeout:\n${stderr}`)
+  throw new Error(`serve did not become ready within timeout:\n${captured}`)
+}
+
+// Describe-scoped spawned server sharing one process across a suite's tests.
+// Used for real-socket fidelity tests (incremental streaming, client-cancel)
+// that need a real model and a real transport. Returns a getter for baseUrl.
+export function useSpawnedServer (config: unknown, args: string[] = [], readyTimeoutMs = 120_000): () => string {
+  let proc: ChildProcess | undefined
+  let baseUrl: string | undefined
+  let dir: string | undefined
+  before(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'qvac-cli-spawn-'))
+    await writeFile(join(dir, 'qvac.config.json'), JSON.stringify(config))
+    const port = await getFreePort()
+    baseUrl = `http://127.0.0.1:${port}`
+    proc = spawn(process.execPath, [CLI_BIN, 'serve', 'openai', '-p', String(port)].concat(args), { cwd: dir, env: process.env })
+    let stderr = ''
+    proc.stderr?.on('data', (d) => { stderr += String(d) })
+    const deadline = Date.now() + readyTimeoutMs
+    while (Date.now() < deadline) {
+      if (proc.exitCode !== null) throw new Error(`serve exited early (code ${proc.exitCode}):\n${stderr}`)
+      try { await fetch(`${baseUrl}/v1/models`); return } catch { await sleep(200) }
+    }
+    throw new Error(`spawned serve not ready within timeout:\n${stderr}`)
+  })
+  after(async () => {
+    if (proc !== undefined && proc.exitCode === null) {
+      proc.kill('SIGTERM')
+      await once(proc, 'close').catch(() => {})
+    }
+    if (dir !== undefined) await rm(dir, { recursive: true, force: true })
+  })
+  return () => {
+    if (baseUrl === undefined) throw new Error('useSpawnedServer: not started (called outside a test?)')
+    return baseUrl
+  }
 }

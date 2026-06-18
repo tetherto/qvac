@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { startCliServer } from '../helpers/cli.js'
 import { writeConfigDir, MODELLESS_CONFIG } from '../helpers/config.js'
 
@@ -27,5 +28,16 @@ describe('serve: lifecycle (spawned binary)', () => {
     srv.proc.kill('SIGTERM')
     const [code, signal] = await once(srv.proc, 'close') as [number | null, string | null]
     assert.ok(code === 0 || signal === 'SIGTERM', `expected clean shutdown, got code=${code} signal=${signal}`)
+  })
+
+  // Parity with bats "responses: startup log documents volatile store" — the
+  // real server must log the volatile-store banner at startup (the in-process
+  // suite only checks the banner string, not that it is emitted).
+  it('logs the volatile responses-store banner at startup', async (t) => {
+    const dir = await writeConfigDir(t, MODELLESS_CONFIG)
+    const srv = await startCliServer(t, [], { cwd: dir })
+    const deadline = Date.now() + 5000
+    while (!/responses: in-memory only/.test(srv.output()) && Date.now() < deadline) await sleep(50)
+    assert.match(srv.output(), /responses: in-memory only/)
   })
 })
