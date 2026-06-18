@@ -28,7 +28,7 @@ The following tools have been verified to work as drop-in replacements by pointi
 
 ## Configure the HTTP server
 
-The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. And because coding agents fire concurrent requests, you should declare two chat aliases with equal context (see [Concurrent requests collide on a single model instance](#concurrent-requests-collide-on-a-single-model-instance)):
+The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. For example:
 
 ```json title="qvac.config.json"
 {
@@ -42,14 +42,6 @@ The only QVAC-specific setting for connecting an AI tool is the `serve.models` b
           "reasoning_budget": 0,
           "tools": true
         }
-      },
-      "qwen3-8b-title": {
-        "model": "QWEN3_8B_INST_Q4_K_M",
-        "preload": true,
-        "config": {
-          "ctx_size": 16384,
-          "reasoning_budget": 0
-        }
       }
     }
   }
@@ -62,13 +54,12 @@ See [HTTP server](/cli/http-server) for how to install it, run it, and the other
 
 ## Configure the tool
 
-On the tool side, register QVAC as a custom OpenAI-compatible provider. The exact file and fields differ per tool, but every setup needs the same three things:
+On the tool side, register QVAC as a custom OpenAI-compatible provider. The exact file and fields differ per tool, but every setup needs:
 
 - **Base URL** pointing at the running server (`http://localhost:11434/v1` by default).
 - **Model name(s)** that match the aliases declared in `serve.models`.
-- **API key** — the server does not validate it, but some clients refuse to send a request without an `Authorization` header, so set any non-empty value when required.
 
-Consult your tool's documentation for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The OpenCode recipe below is a concrete example of this pattern.
+Consult your tool's docs for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The OpenCode recipe below is a concrete example of this pattern.
 
 ### OpenCode
 
@@ -88,27 +79,20 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
           "tool_call": true,
           "limit": { "context": 16384, "output": 4096 },
           "modalities": { "input": ["text"], "output": ["text"] }
-        },
-        "qwen3-8b-title": {
-          "name": "Qwen3 8B (title)",
-          "limit": { "context": 16384, "output": 4096 },
-          "modalities": { "input": ["text"], "output": ["text"] }
         }
       }
     }
   },
   "model":       "qvac/qwen3-8b-chat",
-  "small_model": "qvac/qwen3-8b-title"
+  "small_model": "qvac/qwen3-8b-chat"
 }
 ```
 
-For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker.
-
-Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly; `limit.output` is **required** by current OpenCode for every custom model entry; and `modalities` declares the input/output types the model accepts. Note that text is currently the only supported modality.
-
-The `apiKey: "qvac"` value in `options` is sent as the `Authorization` header. The server does not validate it, but some OpenAI-shaped clients refuse to send a request without a non-empty key, so setting any value avoids that edge case.
-
-For details on configuring a custom provider in OpenCode, see [OpenCode docs › Custom providers](https://opencode.ai/docs/providers/#custom-provider).
+- Each key under `models` **must** match an alias declared in `serve.models`, as shown in the `qvac.config.json` example above.
+- `limit.context` must match that alias's `ctx_size` so that OpenCode tracks the remaining context correctly.
+- If you set `limit.context`, you must also set `limit.output`, because OpenCode's schema requires both fields whenever a `limit` block is present.
+- `modalities` declares the input/output types the model accepts. Text is currently the only supported modality. See [Caveats › Text is the only supported modality](#text-is-the-only-supported-modality) for details.
+- You should pass `options.apiKey` even if your QVAC server doesn't require one (use a dummy value in the latter case). See [Caveats › Authentication](#authentication) for details.
 
 ## Caveats
 
@@ -116,27 +100,50 @@ The following behaviors are not configured the same way (or at all) on either si
 
 ### Text is the only supported modality
 
-The chat endpoint currently accepts and returns text only. Non-text content parts (images, audio, etc.) are dropped before reaching the model, so keep `modalities` set to `{ "input": ["text"], "output": ["text"] }` for every model. Declaring `"image"` (or any other modality) would let the tool send inputs that QVAC silently discards — the model never sees them.
+The chat endpoint currently accepts and returns text only. Non-text content parts (images, audio, etc.) are dropped before reaching the model, so keep `modalities` set to `{ "input": ["text"], "output": ["text"] }` for every model. Declaring `"image"` (or any other modality) would let the tool send inputs that the HTTP server silently discards.
 
 ### `@qvac/sdk` must be resolvable next to the CLI running `qvac serve`
 
 If `qvac` is launched from a global install that cannot resolve `@qvac/sdk`, the serve config loader builds an **empty** model-constant registry and rejects every valid constant with `serve.models.<alias>: unknown model constant "QWEN3_8B_INST_Q4_K_M"`. Run `qvac serve` from a project where `@qvac/cli` and `@qvac/sdk` are installed together (or otherwise make `@qvac/sdk` resolvable from the CLI).
 
-### Concurrent requests collide on a single model instance
+### Same-model requests are queued
 
-The underlying `llm-llamacpp` addon serializes inference per native model context and rejects concurrent requests rather than queuing them. The server log shows `Cannot set new job: a job is already set or being processed`; clients see `500 An internal error occurred`.
+Coding agents routinely fire concurrent requests — typically a main chat completion plus a title, summary, or compaction call. The server queues same-model completion requests per loaded model context, so an agent can point both its chat and utility calls at a single serve alias.
 
-Coding agents routinely fire concurrent requests — typically a main chat completion plus a "title generation" call for the conversation panel. _To get parallel inference you need two different model files loaded under two aliases_. The `qvac.config.json` above does exactly this: two `QWEN3_8B_INST_Q4_K_M` aliases (`qwen3-8b-chat` and `qwen3-8b-title`) loaded independently, then mapped to OpenCode's chat and utility model slots via `model` / `small_model`.
+If you want those utility calls running in parallel, declare a second model key under `serve.models` (it can point at the same model file, loaded as its own context) and point `small_model` at it. For example:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "qwen3-8b-chat": {
+        "model": "QWEN3_8B_INST_Q4_K_M",
+        "preload": true,
+        "config": { "ctx_size": 16384, "reasoning_budget": 0, "tools": true }
+      },
+      "qwen3-8b-utility": {
+        "model": "QWEN3_8B_INST_Q4_K_M",
+        "preload": true,
+        "config": { "ctx_size": 16384, "reasoning_budget": 0 }
+      }
+    }
+  }
+}
+```
 
 ### `ctx_size` defaults to 1024 — too small for agents
 
 The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat) or you'll see context fills and truncated responses well before the model misbehaves.
 
-OpenCode routes tool-heavy work to the `small_model` too, not just lightweight title generation, so a 4k secondary model overflows quickly. Give the secondary model **equal context** to the main one (both `16384` above) rather than a smaller title-only budget.
-
 ### `reasoning_budget: 0` to suppress `<think>` blocks
 
 Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoning_budget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
+
+### Authentication
+
+In the default setup shown in the `qvac.config.json` above, the server **does not** authenticate requests. Even so, OpenCode and many other AI tools still require you to set an API key.
+
+If you started the HTTP server with an API key configured, set this value in your AI tool's config to match. See [HTTP server › Authentication](/cli/http-server#authentication) for details.
 
 ### Local-model capability is the real ceiling
 
