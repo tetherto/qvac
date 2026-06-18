@@ -1,6 +1,8 @@
 # Changelog
 
-<!-- release-guard CI validation test (do not merge) -->
+## [0.7.0]
+
+- Image-to-video generation and audio encoding for the OpenAI-compatible HTTP server.
 
 # QVAC CLI v0.7.0 Release Notes
 
