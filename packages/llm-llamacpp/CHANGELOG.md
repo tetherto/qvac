@@ -1,4 +1,14 @@
 # Changelog
+## [0.27.0] - 2026-06-18
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.2` (adds the OpenCL DocTR ops — `CONV_2D_DW`, `POOL_2D`, `HARDSWISH`, `HARDSIGMOID` — for the Adreno OpenCL backend; no behavioral change for this package).
+
+## Pull Requests
+
+- [#2617](https://github.com/tetherto/qvac/pull/2617) - feat[api]: DocTR Adreno OpenCL — direct regular conv (~0.72s on S25) + qvac-fabric 8828.1.2
+
 ## [0.26.0] - 2026-06-15
 
 ### Added

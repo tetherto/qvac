@@ -4,6 +4,24 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-18
+
+### Added
+- **DocTR now runs end-to-end on Qualcomm Adreno GPUs via the OpenCL backend.**
+  The detection and recognition graphs use a backend-aware direct convolution
+  path (`ggml_conv_2d_direct`) on OpenCL, replacing the `im2col` f16×f16 GEMV
+  that dominated runtime on Adreno — detection drops from ~1.35 s to ~0.5–0.85 s
+  at identical accuracy (12/12 clinical-chemistry keywords; ~0.72 s warm total on
+  a Galaxy S25 / Adreno 830). Other backends keep the `im2col` path (faster on
+  Metal); the choice is resolved automatically from the compute backend, with
+  the `OCR_DOCTR_FUSED_CONV` env var as an override for A/B testing.
+
+### Changed
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.2`,
+  which ships the OpenCL kernels DocTR needs to run end-to-end on Adreno instead
+  of aborting on an unsupported op: `CONV_2D_DW`, `POOL_2D`, `HARDSWISH`, and
+  `HARDSIGMOID`.
+
 ## [0.2.2] - 2026-06-15
 
 ### Changed

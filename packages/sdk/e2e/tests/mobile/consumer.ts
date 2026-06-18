@@ -128,10 +128,22 @@ resources.define("ocr", {
   config: { langList: ["en"] },
 });
 
+async function resolveClassificationWeightsPath() {
+  // @ts-ignore - Metro turns the bundled GGUF file into an asset module.
+  // This path is relative to dist/tests/mobile/consumer.js after tsc.
+  const assetModule = require("../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf");
+  return await resolveBundledAssetUri(assetModule);
+}
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
-// so no registry constant / pre-download is required.
+// so no registry constant / pre-download is required. On mobile the weight
+// file must still be resolved as a Metro asset and passed explicitly because
+// the Bare worker bundle does not expose package data files at __dirname.
 resources.define("classification", {
   type: "classification",
+  config: async () => ({
+    modelPath: await resolveClassificationWeightsPath(),
+  }),
 });
 
 resources.define("sharded-embeddings", {
