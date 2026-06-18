@@ -15,7 +15,6 @@
 #include "addon/LlmErrors.hpp"
 #include "common/common.h"
 #include "common/log.h"
-#include "common/speculative.h"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -137,45 +136,6 @@ void TextLlmContext::initializeCommonState() {
         "[TextLlm] %s: failed to initialize sampling subsystem\n", __func__);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
-  }
-
-  const bool wantMtpDraft = std::find(
-                                params_.speculative.types.begin(),
-                                params_.speculative.types.end(),
-                                COMMON_SPECULATIVE_TYPE_DRAFT_MTP) !=
-                            params_.speculative.types.end();
-  if (wantMtpDraft) {
-    try {
-      auto cparamsMtp = common_context_params_to_llama(params_);
-      cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
-      cparamsMtp.type_k = params_.speculative.draft.cache_type_k;
-      cparamsMtp.type_v = params_.speculative.draft.cache_type_v;
-      cparamsMtp.n_rs_seq = 0;
-      ctxDraft_.reset(llama_init_from_model(modelCtx_.model, cparamsMtp));
-      if (!ctxDraft_) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[TextLlm] MTP draft context could not be created for this "
-            "model; spec-type=draft-mtp will be inert\n");
-      } else {
-        params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
-        params_.speculative.draft.ctx_dft = ctxDraft_.get();
-        spec_.reset(common_speculative_init(
-            params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
-        QLOG_IF(
-            Priority::INFO,
-            "[TextLlm] MTP draft context + common_speculative initialized\n");
-      }
-    } catch (const std::exception& e) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[TextLlm] MTP draft setup failed (%s); continuing without "
-              "speculative decoding\n",
-              e.what()));
-      ctxDraft_.reset();
-      spec_.reset();
-    }
   }
 
   if (!llama_model_has_encoder(modelCtx_.model) &&
@@ -460,7 +420,7 @@ bool TextLlmContext::evalMessageWithTools(
       textBatch->logits[textBatch->n_tokens - 1] = static_cast<int8_t>(true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
-    int ret = decodeAndSpecProcess(*textBatch);
+    int ret = llama_decode(modelCtx_.lctx, *textBatch);
     if (ret != 0) {
       std::string errorMsg = string_format(
           "[TextLlm] %s: failed to decode input tokens\n", __func__);
@@ -642,7 +602,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
       nPast_++,
       {seqId_},
       true);
-  if (decodeAndSpecProcess(*batch) != 0) {
+  if (llama_decode(modelCtx_.lctx, *batch) != 0) {
     const char* errorMsg = "[TextLlm] failed to decode EOT token\n";
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
@@ -651,12 +611,6 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
 
 bool TextLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
-
-  if (spec_ && !specBeganGenerate_) {
-    common_speculative_begin(spec_.get(), seqId_, {});
-    specBeganGenerate_ = true;
-  }
-  pendingSampled_ = LLAMA_TOKEN_NULL;
 
   LlamaBatch batch(1, 0, 1); // batch for next token generation
   unsigned generatedAfterAccept = 0;
@@ -711,7 +665,7 @@ bool TextLlmContext::generateResponse(
     common_batch_add(*batch, step.token, nPast_++, {seqId_}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
-    if (decodeAndSpecProcess(*batch) != 0) {
+    if (llama_decode(modelCtx_.lctx, *batch) != 0) {
       const char* errorMsg = "[TextLlm] failed to decode next token\n";
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
@@ -918,9 +872,6 @@ bool TextLlmContext::loadCache(
   if (auto* mem = llama_get_memory(modelCtx_.lctx); mem != nullptr) {
     llama_memory_seq_rm(mem, seqId_, nPast_, -1);
   }
-  if (spec_) {
-    common_speculative_print_stats(spec_.get());
-  }
   return true;
 }
 
@@ -1032,24 +983,6 @@ llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
   return tokensToRemove;
 }
 
-int TextLlmContext::decodeAndSpecProcess(const llama_batch& batch) {
-  const int ret = llama_decode(modelCtx_.lctx, batch);
-  if (ret != 0) {
-    return ret;
-  }
-  if (spec_) {
-    if (!common_speculative_process(spec_.get(), batch)) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[TextLlm] common_speculative_process failed; disabling spec for "
-          "the rest of this model lifetime\n");
-      spec_.reset();
-      ctxDraft_.reset();
-    }
-  }
-  return ret;
-}
-
 bool TextLlmContext::handleQwen3ReasoningEOS(
     llama_token& tokenId, std::string& tokenStr, llama_batch& batch,
     llama_pos& nPast,
@@ -1080,7 +1013,7 @@ bool TextLlmContext::handleQwen3ReasoningEOS(
   // Decode closing tag
   common_batch_clear(batch);
   common_batch_add(batch, tokenId, nPast++, {seqId_}, true);
-  if (decodeAndSpecProcess(batch) != 0) {
+  if (llama_decode(modelCtx_.lctx, batch) != 0) {
     QLOG_IF(
         Priority::ERROR,
         "[TextLlm] Failed to decode closing tag during replacement\n");
@@ -1093,7 +1026,7 @@ bool TextLlmContext::handleQwen3ReasoningEOS(
       common_batch_add(
           batch, reasoningState_.cached_newline_token, nPast++, {seqId_}, true);
 
-      if (decodeAndSpecProcess(batch) != 0) {
+      if (llama_decode(modelCtx_.lctx, batch) != 0) {
         QLOG_IF(
             Priority::ERROR,
             "[TextLlm] Failed to decode newline token during forced "

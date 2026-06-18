@@ -2,7 +2,6 @@
 
 #include <atomic>
 
-#include <llama-cpp.h>
 #include <llama.h>
 
 #include "../utils/ChatTemplateUtils.hpp"
@@ -12,7 +11,6 @@
 #include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
-#include "common/speculative.h"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Concrete text-only LLM context. Implements both the legacy
@@ -250,11 +248,6 @@ private:
   llama_pos applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
-  // Wraps llama_decode(lctx_, batch). When MTP/speculative is active, also
-  // feeds the batch into common_speculative_process so the draft context's
-  // KV cache tracks the target's on every prefill ubatch + generation step.
-  int decodeAndSpecProcess(const llama_batch& batch);
-
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
@@ -301,25 +294,6 @@ private:
   // getLastChatParser / getLastGenerationPrompt).
   std::string lastChatParser_;
   std::string lastGenerationPrompt_;
-
-  // Speculative decoding state for MTP. If non-null, the draft context and spec struct are live
-  // and common_speculative_process is called on every decode.
-  llama_context_ptr      ctxDraft_;
-  common_speculative_ptr spec_;
-  // common_speculative_begin must run once before the first decode of each
-  // generation; this flag de-duplicates across multi-turn calls.
-  bool specBeganGenerate_ = false;
-  // common_speculative_get_draft_params requires a non-null .prompt; the MTP
-  // impl never reads its contents (only id_last/n_past/n_max), but the wrapper
-  // dereferences ->size() for logging.
-  std::vector<llama_token> specDummyPrompt_;
-  // Sampled-but-not-yet-consumed token from the previous iteration's
-  // sample_and_accept_n (the "extra" id past the last accepted draft).
-  // LLAMA_TOKEN_NULL means: sample fresh next iter.
-  llama_token pendingSampled_ = LLAMA_TOKEN_NULL;
-  // Snapshot of ctxDraft_'s partial sequence state (SWA + recurrent) taken
-  // right before common_speculative_draft AR-decodes onto ctx_dft.
-  std::vector<uint8_t> specCkptDft_;
 
   std::atomic<bool> stopGeneration_ = false;
 };

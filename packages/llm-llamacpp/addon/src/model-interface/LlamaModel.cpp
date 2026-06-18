@@ -19,7 +19,6 @@
 #include <common/chat.h>
 #include <common/common.h>
 #include <common/log.h>
-#include <common/speculative.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 #ifdef __APPLE__
@@ -1309,11 +1308,15 @@ void LlamaModel::commonParamsParse(
 
   for (const std::string& key : {"spec-type", "spec_type"}) {
     if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
-      auto types = common_speculative_types_from_names(
-          split(iter->second, ','));
-      params.speculative.types.insert(
-          params.speculative.types.end(), types.begin(), types.end());
-      configFilemap.erase(iter);
+      const auto requested = split(iter->second, ',');
+      if (std::find(requested.begin(), requested.end(), "draft-mtp") !=
+          requested.end()) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            "spec-type=draft-mtp is not supported");
+      }
     }
   }
 

@@ -8,7 +8,6 @@
     "gemma": ["runGemma4Test"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
     "continuousBatching": ["runContinuousBatchingTest"],
-    "mtp": ["runMtpTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -29,6 +28,7 @@
     ]
   },
   "android": {
+    "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
       "runConfigParametersTest",
