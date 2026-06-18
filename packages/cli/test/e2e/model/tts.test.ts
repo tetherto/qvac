@@ -4,12 +4,10 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { useModelServer } from './helpers/server.js'
+import { useModelServer } from '../helpers/server.js'
 
-// Ported from e2e-local.bats. Runs in the CI suite: native discovery + wav/pcm
-// need only the TTS model (downloaded like the other e2e models). The encoded
-// formats (mp3/opus/aac/flac) shell out to ffmpeg, so they auto-skip where
-// ffmpeg/ffprobe aren't on PATH (e.g. CI) and run where they are (local).
+// The encoded formats (mp3/opus/aac/flac) shell out to ffmpeg/ffprobe, so they
+// skip where those aren't on PATH and run where they are.
 const TTS_CONFIG = {
   serve: {
     models: {

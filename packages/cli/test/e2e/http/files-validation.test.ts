@@ -4,7 +4,6 @@ import { useServer } from '../helpers/server.js'
 import { assertError, multipart } from '../helpers/http.js'
 import { tinyPng } from '../helpers/fixtures.js'
 
-// Ported from cli.bats "Serve: files content-download endpoint".
 describe('serve: files content endpoint', () => {
   const server = useServer({ cors: true })
 
@@ -44,8 +43,18 @@ describe('serve: files content endpoint', () => {
   })
 })
 
-// New coverage: GET /v1/files (list) and GET /v1/files/:id (metadata) — both
-// model-free; the bats suite only covered upload + :id/content.
+describe('serve: files empty list', () => {
+  const server = useServer({ cors: true })
+
+  it('GET /v1/files returns an empty list initially', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/files' })
+    assert.equal(res.statusCode, 200)
+    const body = res.json() as { object: string, data: unknown[] }
+    assert.equal(body.object, 'list')
+    assert.deepEqual(body.data, [])
+  })
+})
+
 describe('serve: files list + metadata', () => {
   const server = useServer({ cors: true })
 
@@ -56,14 +65,6 @@ describe('serve: files list + metadata', () => {
     })
     return (res.json() as { id: string }).id
   }
-
-  it('GET /v1/files returns an empty list initially', async () => {
-    const res = await server().inject({ method: 'GET', url: '/v1/files' })
-    assert.equal(res.statusCode, 200)
-    const body = res.json() as { object: string, data: unknown[], has_more?: boolean }
-    assert.equal(body.object, 'list')
-    assert.deepEqual(body.data, [])
-  })
 
   it('GET /v1/files lists an uploaded file', async () => {
     const id = await upload()

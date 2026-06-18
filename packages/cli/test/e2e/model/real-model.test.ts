@@ -5,9 +5,8 @@ import { assertError, multipart, collectSSE } from '../helpers/http.js'
 import { MODEL_CONFIG, E2E } from '../helpers/config.js'
 import { silenceWav, tinyPng, textFile } from '../helpers/fixtures.js'
 
-// Real-model port of e2e.bats. One shared in-process server preloads the small
-// models (Qwen3-600M, EmbeddingGemma-300M, Whisper-tiny ×2) over P2P; test-video
-// stays preload:false so video requests reach the model check (503).
+// One shared in-process server preloads the small models (LLM, embedding,
+// Whisper ×2). test-video stays preload:false so its requests reach the model check.
 const server = useModelServer(MODEL_CONFIG)
 
 function post (url: string, payload: unknown) {
@@ -93,7 +92,6 @@ describe('chat completions (streaming)', () => {
   })
 })
 
-// New coverage (Phase 4): chat tools + structured-output contract.
 describe('chat completions (tools / structured output)', () => {
   it('rejects response_format combined with tools (invalid_response_format)', async () => {
     const res = await post('/v1/chat/completions', {
@@ -122,9 +120,8 @@ describe('chat completions (tools / structured output)', () => {
   })
 })
 
-// New coverage: image_url chat content (feature e41cef73f). The three rejection
-// branches are pure CLI parsing — no multimodal model needed, just a chat model
-// so the request reaches prepare().
+// The rejection branches are request parsing — no multimodal model needed, just
+// a resolvable chat model so the request reaches prepare().
 describe('chat completions (image_url content)', () => {
   function withImage (url: string): Record<string, unknown> {
     return { model: E2E.llm, messages: [{ role: 'user', content: [{ type: 'text', text: 'describe' }, { type: 'image_url', image_url: { url } }] }] }
@@ -149,7 +146,6 @@ describe('chat completions (image_url content)', () => {
   })
 })
 
-// New coverage (Phase 4): transcription prompt param.
 describe('transcriptions (prompt param)', () => {
   it('accepts a prompt and returns JSON with text', async () => {
     const res = await server().inject({
@@ -186,7 +182,7 @@ describe('embeddings', () => {
   })
 })
 
-// Either non-JSON, or (if JSON) a bare string — the bats response_format=text check.
+// response_format=text returns either a non-JSON body or a bare JSON string.
 function assertPlainText (payload: string): void {
   let parsed: unknown
   let threw = false
@@ -412,9 +408,7 @@ describe('legacy completions', () => {
   })
 
   it('multi-prompt blocking returns N choices with matching indices', async () => {
-    // Generous max_tokens (as the single-prompt blocking case uses) so the reasoning
-    // model finishes naturally — keeps parity with bats's finish_reason=='stop'
-    // without broadening the assertion.
+    // Generous max_tokens so the reasoning model finishes naturally (stop, not length).
     const body = (await post('/v1/completions', { model: E2E.llm, prompt: ['Reply with the word "alpha".', 'Reply with the word "beta".'], max_tokens: 4096 })).json() as any
     assert.equal(body.object, 'text_completion')
     assert.equal(body.choices.length, 2)
@@ -495,23 +489,5 @@ describe('videos (HTTP layer only; test-video preload:false)', () => {
   it('multipart POST with input_reference file reaches model check (503 model_not_ready)', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/videos', ...multipart([{ name: 'model', value: E2E.video }, { name: 'prompt', value: 'subject turns' }, { name: 'input_reference', filename: 'ref.png', contentType: 'image/png', data: tinyPng() }]) })
     assertError(res, 'model_not_ready')
-  })
-})
-
-// Runs last: unloading models mutates the shared server.
-describe('model lifecycle', () => {
-  it('DELETE /v1/models/:id unloads model', async () => {
-    const d1 = (await server().inject({ method: 'DELETE', url: `/v1/models/${E2E.whisperTranslate}` })).json() as any
-    assert.equal(d1.id, E2E.whisperTranslate)
-    assert.equal(d1.deleted, true)
-
-    const d2 = (await server().inject({ method: 'DELETE', url: `/v1/models/${E2E.whisper}` })).json() as any
-    assert.equal(d2.id, E2E.whisper)
-    assert.equal(d2.deleted, true)
-
-    const list = (await get('/v1/models')).json() as { data: Array<{ id: string }> }
-    assert.equal(list.data.length, 2)
-    const ids = list.data.map((m) => m.id)
-    assert.ok(!ids.includes(E2E.whisper) && !ids.includes(E2E.whisperTranslate))
   })
 })

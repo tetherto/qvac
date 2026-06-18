@@ -1,9 +1,8 @@
 # CLI end-to-end tests (`node:test`)
 
 End-to-end tests for `@qvac/cli`, run with the Node built-in test runner via `tsx`.
-This suite is the JS counterpart to the BATS suites (`test/cli.bats`, `test/e2e.bats`,
-`test/e2e-local.bats`); it reproduces their coverage and adds more. During the
-migration both run side-by-side in CI; BATS is removed once parity holds.
+They cover the CLI commands and the served HTTP API — both in-process (Fastify
+`app.inject`) and as a black-box spawned binary.
 
 ## Run
 
@@ -13,8 +12,7 @@ npm run test:e2e:js:coverage   # + node:test built-in coverage, scoped to src/
 ```
 
 `dist` must be built first for the spawned-binary tests (`npm run build`). CI's
-build step handles this; the scripts deliberately don't re-build (no redundant
-build prefixes).
+build step handles this; the test scripts don't re-build.
 
 ## Two ways to drive the CLI — and when to use each
 
@@ -58,31 +56,36 @@ test/e2e/
   helpers/            config · server (in-process) · cli (spawned) · http · fixtures
   smoke.test.ts       harness smoke
   helpers.test.ts     harness self-tests (incl. SSE-via-inject)
-  http/               /v1/* route tests
-    *-validation.test.ts, models, routing-cors-auth, audio-*   in-process, modelless
-    real-model.test.ts        in-process, loads LLM/embed/whisper
-    streaming-transport.test.ts  spawned server, real-socket streaming + cancel
-  tts.test.ts         spawned-config TTS (loads the TTS model); encoded formats ffmpeg-gated
-  cli/                commands + lifecycle (spawned binary)
+  http/               /v1/* route tests, in-process & modelless
+    *-validation.test.ts, models, routing-cors-auth, audio-*
+  cli/                commands, serve lifecycle & flag behavior (spawned binary)
+  model/              everything that loads a real model — runs serially (see below)
+    real-model.test.ts            in-process: LLM / embed / whisper
+    model-lifecycle.test.ts       in-process: model unload
+    streaming-transport.test.ts   spawned server: real-socket streaming + cancel
+    tts.test.ts                   spawned config: TTS; encoded formats ffmpeg-gated
 ```
 
-## Concurrency — why the suite runs serially
+## Concurrency
 
-The scripts pass `--test-concurrency=1`, so test **files** run one at a time
-(node:test otherwise runs files in parallel processes). This mirrors BATS's serial
-execution and is required because three files load real models:
+Test files run in parallel by default (node:test spawns a process per file). Only
+the model-loading files need serializing, so `test:e2e:js` runs in two passes:
 
-- `http/real-model.test.ts`, `tts.test.ts`, `http/streaming-transport.test.ts`.
+1. **Parallel** — `http/`, `cli/`, and the root smoke/harness tests. Modelless
+   validation, command, and spawned-binary tests with no shared state: each builds
+   its own in-process server or spawns its own process on a free port, in its own
+   temp dir. Safe to run concurrently.
+2. **Serial** (`--test-concurrency=1`) — everything under `model/`. Running these
+   concurrently would (a) race on the shared model cache in `~/.qvac` (cold on
+   every CI run) and (b) load several models + SDK workers at once, risking memory
+   pressure.
 
-Running those concurrently risks (a) **model-cache races** — two files downloading
-the same blob into `~/.qvac/models` at once (cold cache, e.g. every CI run), and
-(b) **memory pressure** from several models + SDK Bare workers loaded at once.
+Within a file, node:test runs tests in definition order, but no test depends on
+another's side effects — the destructive model-unload test has its own server, as
+does the files empty-list check — so any file can also be run on its own.
 
-Everything else — the modelless in-process route tests and the no-model spawned
-command tests — is parallel-safe. If suite wall-time ever becomes a problem, split
-into two runs (default-concurrency for the parallel-safe files, `--test-concurrency=1`
-for the model files), or pre-warm the model cache before a parallel run. Until then,
-global serial keeps it simple and safe.
+`test:e2e:js:coverage` runs the whole suite in a single serial pass so the
+built-in coverage report aggregates across every file.
 
 ## ffmpeg
 
@@ -105,4 +108,4 @@ accepted trade-off for keeping zero coverage deps.
   if it needs inference). Reuse `assertError`, `multipart`, `collectSSE`, fixtures.
 - Exercising a command, an exit code, a real socket, or streaming-over-the-wire →
   spawned (`runCli` / `startCliServer` / `useSpawnedServer`).
-- If it loads a model, it's bound by the serial requirement above.
+- If it loads a model, put it under `model/` so it runs in the serial pass.
