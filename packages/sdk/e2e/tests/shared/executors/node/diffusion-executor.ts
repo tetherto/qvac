@@ -3,7 +3,7 @@ import * as path from "node:path";
 import {
   DiffusionExecutor as SharedDiffusionExecutor,
   type DiffusionParams,
-} from "../../shared/executors/diffusion-executor.js";
+} from "../diffusion-executor.js";
 
 function readImageBytes(name: string): Uint8Array {
   const fileName = name.split("/").pop()!;
@@ -11,7 +11,7 @@ function readImageBytes(name: string): Uint8Array {
   return new Uint8Array(fs.readFileSync(filePath));
 }
 
-export class DesktopDiffusionExecutor extends SharedDiffusionExecutor {
+export class NodeDiffusionExecutor extends SharedDiffusionExecutor {
   // Resolve string filenames declared in test params to bytes via Node fs.
   protected override async resolveParams(
     p: DiffusionParams,

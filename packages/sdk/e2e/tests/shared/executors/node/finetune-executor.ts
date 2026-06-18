@@ -13,8 +13,8 @@ import {
 } from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
-import { finetuneTests } from "../../finetune-tests.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
+import { finetuneTests } from "../../../finetune-tests.js";
 
 const FINETUNE_DEPENDENCY = "finetune-llm";
 

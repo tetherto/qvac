@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { TestResult } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
 import {
   runParakeetStreamHappy,
   runParakeetStreamMetadataRejected,
@@ -9,8 +9,8 @@ import {
   runParakeetStreamDestroyMidUtterance,
   runParakeetStreamIteratorThrow,
   type ParakeetStreamParams,
-} from "../../shared/parakeet-stream-runner.js";
-import { parakeetStreamTests } from "../../parakeet-stream-tests.js";
+} from "../../parakeet-stream-runner.js";
+import { parakeetStreamTests } from "../../../parakeet-stream-tests.js";
 
 interface BaseParams extends ParakeetStreamParams {
   audioFileName: string;
