@@ -18,11 +18,11 @@ struct SupertonicConfig {
   /**
    * Tri-state GPU intent (mirrors ChatterboxConfig::useGpu):
    *   - std::nullopt: unspecified, let the engine use its library default.
-   *   - true:         if nGpuLayers unset, maps to nGpuLayers=99.
-   *                   Note: SupertonicModel::validateConfig still rejects
-   *                   any GPU intent today because the Supertonic
-   *                   engine is CPU-only ("CPU only today" — see
-   *                   tts-cpp include/tts-cpp/supertonic/engine.h).
+   *   - true:         if nGpuLayers unset, maps to nGpuLayers=99. Honored on
+   *                   GPU-capable hosts (Metal on Apple, Vulkan/CUDA on
+   *                   desktop). On Android it is forced back to CPU in
+   *                   SupertonicModel::loadLocked() because Adreno
+   *                   OpenCL/Vulkan ggml graph compute is not yet stable.
    *   - false:        if nGpuLayers unset, forces nGpuLayers=0 (CPU).
    *
    * Conflicts with nGpuLayers (true + 0, or false + !=0) are rejected

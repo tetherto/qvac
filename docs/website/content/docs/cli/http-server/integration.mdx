@@ -1,7 +1,7 @@
 ---
-title: Integrate with the OpenAI-compatible API
+title: Integrate with the OpenAI-compatible server
 description: Use the npm package @qvac/ai-sdk-provider to create a client for the HTTP server.
-schemaType: TechArticle
+schemaType: HowTo
 tocMaxDepth: 3
 ---
 
@@ -11,6 +11,10 @@ The npm package `@qvac/ai-sdk-provider` is a thin wrapper around [@ai-sdk/openai
 
 _At the moment, its main advantage is providing introspection of the models supported by QVAC for each API operation._ In addition, it provides branded exports, automatic configuration, and a discoverable handle for the [models.dev](https://models.dev) catalog, allowing QVAC to appear in `/connect` for [OpenCode](https://opencode.ai) and other catalog consumers.
 
+<Callout type="info">
+This page is for building a new client. If you want to connect an existing OpenAI-compatible tool (OpenCode, Cline, Aider, Continue, Roo) to the server, see [Connect with the OpenAI-compatible API](/cli/http-server/connection).
+</Callout>
+
 ## Installation
 
 Install the package along with its peer dependencies:
@@ -19,9 +23,14 @@ Install the package along with its peer dependencies:
 npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible
 ```
 
-## Basic usage
+## Usage
 
-Create a provider instance and use it to request AI inference:
+* **Existing server:** create a provider instance and point it to an already running QVAC HTTP server by passing `baseURL`.
+* **Managed server:** let `@qvac/ai-sdk-provider` start and manage a QVAC HTTP server instance for you.
+
+### Existing server
+
+Create a provider instance and pass `baseURL` to connect it to an existing HTTP server instance; then send an inference request:
 
 ```js
 import { createQvac } from '@qvac/ai-sdk-provider'
@@ -52,13 +61,9 @@ qvac.textEmbeddingModel('embed-gemma') // text embeddings
 qvac.imageModel('flux-schnell')        // image generation
 ```
 
-## Managed mode (auto-spawn the server)
+### Managed server
 
-<Callout type="info" title="Unreleased — lands in @qvac/ai-sdk-provider 0.2.0.">
-The behaviour below is on `main` but not yet in the published `0.1.0`. The default (external) mode shown above is unchanged.
-</Callout>
-
-The example above is **external mode**: you run `qvac serve openai` yourself and pass its `baseURL`. **Managed mode** instead lets the provider synthesize an ephemeral config from a model list and bring up `qvac serve` for you. In this mode `createQvac` is asynchronous and returns a `Promise<ManagedQvacProvider>`:
+Create a provider instance with the models and configuration you want to use. The provider uses them to start and manage an HTTP server instance for you. In this mode `createQvac` is asynchronous and returns a `Promise<ManagedQvacProvider>`:
 
 ```ts
 import { createQvac } from '@qvac/ai-sdk-provider'
@@ -75,81 +80,11 @@ for await (const chunk of textStream) process.stdout.write(chunk)
 // Leaving the `await using` scope detaches this process from the serve.
 ```
 
-The spawned serve is **shared** across processes (keyed by model set + per-model config + host + binary + pinned port) and owned by a detached supervisor that idle-reaps it once no consumer process remains for `serveIdleTimeout` (default 5 minutes). `provider.baseURL` / `provider.port` / `provider.pid` expose the live serve coordinates. Requires the optional `@qvac/cli` peer dependency.
-
-Managed mode needs the `@qvac/cli` peer dependency installed, and (because liveness is tracked by the process that called `createQvac`, not by HTTP traffic) a tool that connects directly to `baseURL` only keeps the serve warm while that resolving process stays alive — see the package [README](https://github.com/tetherto/qvac/tree/main/packages/ai-sdk-provider#using-with-coding-agents) for the wrapper pattern and the full option/lifecycle reference.
-
-## Using with coding agents
-
-The HTTP server's primary use case is integrating local AI with coding agents (e.g., OpenCode, Cline, Aider, Continue, and Roo). Although the API is OpenAI-compatible, _the following behaviors require explicit configuration for this use case._
-
-### Concurrent requests collide on a single model instance
-
-The underlying `llm-llamacpp` addon serializes inference per native model context and rejects concurrent requests rather than queuing them. The server log `shows Cannot set new job: a job is already set or being processed`; clients see `500 An internal error occurred`.
-
-Coding agents routinely fire concurrent requests — typically a main chat completion plus a "title generation" call for the conversation panel. _To get parallel inference you need two different model files loaded under two aliases_. For example:
-
-```json
-// qvac.config.json — agent-friendly setup
-{
-  "serve": {
-    "models": {
-      "qwen3-8b-chat": {
-        "model": "QWEN3_8B_INST_Q4_K_M",
-        "preload": true,
-        "config": {
-          "ctx_size": 16384,
-          "reasoning_budget": 0
-        }
-      },
-      "qwen3-1_7b-title": {
-        "model": "QWEN3_1_7B_INST_Q4",
-        "preload": true,
-        "config": {
-          "ctx_size": 4096,
-          "reasoning_budget": 0
-        }
-      }
-    }
-  }
-}
-```
-
-Then map the two aliases to your harness's chat and utility model slots. For example, for OpenCode:
-
-```json
-// opencode.json
-{
-  "model":       "qvac/qwen3-8b-chat",
-  "small_model": "qvac/qwen3-1_7b-title"
-}
-```
-
-### `ctx_size` defaults to 1024 — too small for agents
-
-The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat, `4096` is enough for title generation) or you'll see context fills and truncated responses well before the model misbehaves.
-
-### `reasoning_budget: 0` to suppress `<think>` blocks
-
-Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoning_budget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
-
-### Local-model capability is the real ceiling
-
-Your local-model choice decides whether an agent actually works. Empirical findings from this HTTP server with OpenCode testing:
-
-- **Q4-quantized 4B/8B Qwen3-Instruct** can hold a conversation but won't reliably *invoke* tools. The model will say "let me search the docs" without emitting a tool call, then fabricate an answer.
-- **Cloud Qwen3.5-9B** (full precision, e.g. via OpenRouter) calls tools aggressively but still hallucinates content from tool results.
-- Reliable local tool use generally needs $\geq$ **14B parameters and coder/agent post-training** (e.g. `GPT_OSS_20B_INST_Q4_K_M` from the catalog, future Qwen3-Coder variants). Plain Instruct tunes at 4–8B sizes are not reliable agent backends.
+The spawned server is **shared and reused** across processes that request the same model set, and shuts down automatically once no consumer remains for `serveIdleTimeout` (default 5 minutes). `provider.baseURL` / `provider.port` / `provider.pid` expose the live server coordinates. Managed mode requires the optional `@qvac/cli` peer dependency.
 
 <Callout type="info">
-
-This is an industry-wide reality for local AI, not something specific to QVAC. Calibrate user expectations accordingly when documenting QVAC integrations for downstream harnesses.
-
+Liveness is tracked by the process that called `createQvac`, not by HTTP traffic. A tool that connects directly to `baseURL` only keeps the server warm while that resolving process stays alive.
 </Callout>
-
-### API key
-
-The default `apiKey` is the literal string `'qvac'`. The HTTP server does not validate the key; the value matters only because some OpenAI-shaped HTTP clients refuse to issue a request without an `Authorization` header.
 
 ## Model metadata
 

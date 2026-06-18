@@ -5,6 +5,8 @@ import { handleUnloadModel } from "./unload-model";
 import { handleEmbed } from "./embed";
 import { handleTranscribe } from "./transcribe";
 import { handleTranscribeStream } from "./transcribe-stream";
+import { handleBciTranscribe } from "./bci-transcribe";
+import { handleBciTranscribeStream } from "./bci-transcribe-stream";
 import { provideHandler } from "./provideHandler";
 import { stopProvideHandler } from "./stopProvideHandler";
 import { handleTranslate } from "./translate";
@@ -42,6 +44,8 @@ export const handlers = {
   embed: handleEmbed,
   transcribe: handleTranscribe,
   transcribeStream: handleTranscribeStream,
+  bciTranscribe: handleBciTranscribe,
+  bciTranscribeStream: handleBciTranscribeStream,
   provide: provideHandler,
   stopProvide: stopProvideHandler,
   translate: handleTranslate,

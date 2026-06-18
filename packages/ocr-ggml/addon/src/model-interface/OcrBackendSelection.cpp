@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <ggml-backend.h>
+#include <ggml.h>
 
 // Uses the package logging shim (see easyocr/pipeline/qlog.hpp). The shim is a
 // no-op on desktop builds, so the authoritative, programmatically observable
@@ -35,9 +36,10 @@ std::string toLower(std::string_view value) {
 // description reads e.g. "Adreno (TM) 830"). Adreno's Vulkan compute path is
 // numerically broken: vla-ggml measured cos-sim ~0.73 vs reference on Adreno
 // 830 (Galaxy S25 Ultra) while every other Vulkan/Metal target sits >0.999.
-// It does not crash — it silently produces wrong results — so auto-selection
-// must avoid it and fall back to CPU. (Adreno's OpenCL path is fine, but
-// ocr-ggml does not wire OpenCL today.)
+// It does not crash — it silently produces wrong results — so the auto Vulkan
+// path must avoid it and fall back to CPU. Adreno's OpenCL path is sound and is
+// the preferred GPU path there, so `BackendDevice::OPENCL` does NOT reject
+// Adreno (see `selectBackendDevice`).
 bool isAdrenoDescription(std::string_view description) {
   return toLower(description).find("adreno") != std::string::npos;
 }
@@ -229,12 +231,78 @@ bool isMetalBackendName(std::string_view backendName) {
   return lower.rfind("mtl", 0) == 0 || lower.rfind("metal", 0) == 0;
 }
 
+bool isOpenCLBackendName(std::string_view backendName) {
+  // ggml's OpenCL backend registers as "OpenCL" and names devices "GPUOpenCL";
+  // a substring match (like Vulkan) catches both the device name and the
+  // backend-registration name, case-insensitively.
+  return toLower(backendName).find("opencl") != std::string::npos;
+}
+
 namespace {
 
-// Resolve a GPU-backed request (Vulkan or Metal). On success fills `sel` with
-// the matched device (including its ggml index and description) and returns
-// true; otherwise records a CPU-fallback reason and returns false (the caller
-// then resolves the CPU device).
+// Probe whether `dev` can actually run the ops every OCR graph needs. ggml
+// hard-aborts (GGML_ASSERT in the backend) when a compute graph contains an op
+// the selected backend does not implement — so a GPU backend that cannot run a
+// required op must be rejected here, in favour of CPU, rather than crashing at
+// inference time (QVAC-19798: ggml's OpenCL backend lacks POOL_2D and aborts on
+// the CRAFT detector).
+//
+// POOL_2D is a reliable representative probe: it is used by every OCR graph
+// (EasyOCR CRAFT max-pools, CRNN max/avg-pools, DocTR DBNet / recognizer SE
+// avg-pools) and is exactly the op ggml's OpenCL backend is missing, while the
+// full-featured Vulkan/Metal backends support it. The probe op mirrors the
+// production call in `easyocr/craft.cpp` (`maxpool_2x2`) so a device that runs
+// OCR for real is never falsely rejected.
+bool deviceSupportsRequiredOcrOps(ggml_backend_dev_t dev) {
+  if (dev == nullptr) {
+    return false;
+  }
+  // Small no_alloc scratch context: we only build op metadata to query backend
+  // support, never allocate tensor data. Room for a handful of tensors.
+  constexpr size_t kProbeTensors = 4;
+  // Arbitrary small NCHW probe shape; only the op + tensor types matter for
+  // `ggml_backend_dev_supports_op`, not the extents.
+  constexpr int64_t kProbeW = 16;
+  constexpr int64_t kProbeH = 16;
+  constexpr int64_t kProbeC = 8;
+  constexpr int64_t kProbeN = 1;
+  // 2x2 stride-2 max pool — mirrors `easyocr/craft.cpp` maxpool_2x2.
+  constexpr int kPoolKernel = 2;
+  constexpr int kPoolStride = 2;
+  const struct ggml_init_params params{
+      /*.mem_size   =*/ggml_tensor_overhead() * kProbeTensors,
+      /*.mem_buffer =*/nullptr,
+      /*.no_alloc   =*/true,
+  };
+  ggml_context* ctx = ggml_init(params);
+  if (ctx == nullptr) {
+    return false;
+  }
+  bool supported = false;
+  ggml_tensor* input = ggml_new_tensor_4d(
+      ctx, GGML_TYPE_F32, kProbeW, kProbeH, kProbeC, kProbeN);
+  if (input != nullptr) {
+    ggml_tensor* pooled = ggml_pool_2d(
+        ctx,
+        input,
+        GGML_OP_POOL_MAX,
+        kPoolKernel,
+        kPoolKernel,
+        kPoolStride,
+        kPoolStride,
+        0.0F,
+        0.0F);
+    supported =
+        (pooled != nullptr) && ggml_backend_dev_supports_op(dev, pooled);
+  }
+  ggml_free(ctx);
+  return supported;
+}
+
+// Resolve a GPU-backed request (Vulkan, Metal or OpenCL). On success fills
+// `sel` with the matched device (including its ggml index and description) and
+// returns true; otherwise records a CPU-fallback reason and returns false (the
+// caller then resolves the CPU device).
 //
 // `gpuDevice` selects the Nth matching device (0-based); when unset, a discrete
 // GPU is preferred over an integrated one.
@@ -297,6 +365,22 @@ bool trySelectGpu(
   }
 
   const MatchingDevice& md = candidates[*chosen];
+
+  // Guard against backends that match the request but cannot run the OCR ops
+  // (e.g. ggml's OpenCL backend selects on Adreno but lacks POOL_2D and would
+  // GGML_ABORT at inference). Reject here and fall back to CPU with a clear
+  // reason instead of crashing. Full-featured Vulkan/Metal devices pass.
+  if (!deviceSupportsRequiredOcrOps(md.dev)) {
+    sel.fallbackReason =
+        std::string(label) + " backend '" +
+        (!md.name.empty() ? md.name : std::string(label)) + "' (" +
+        md.description +
+        ") does not implement the OCR vision ops (e.g. POOL_2D); falling back "
+        "to CPU";
+    QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
+    return false;
+  }
+
   sel.device = md.dev;
   sel.backendName = !md.name.empty() ? md.name : std::string(label);
   sel.backendDevice = deviceTypeName(md.type);
@@ -327,6 +411,14 @@ selectBackendDevice(BackendDevice requested, std::optional<int> gpuDevice) {
     sel.requested = "metal";
     // Metal is Apple-only; no Adreno devices to guard against.
     if (trySelectGpu(sel, "Metal", isMetalBackendName, gpuDevice, false)) {
+      return sel;
+    }
+    break;
+  case BackendDevice::OPENCL:
+    sel.requested = "opencl";
+    // rejectAdreno = false: OpenCL is Adreno's sound compute path (the inverse
+    // of the Vulkan guard), so Adreno OpenCL devices are selected as-is.
+    if (trySelectGpu(sel, "OpenCL", isOpenCLBackendName, gpuDevice, false)) {
       return sel;
     }
     break;

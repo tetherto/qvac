@@ -28,6 +28,7 @@ import {
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
   AFRICAN_4B_TRANSLATION_Q4_K_M,
+  SMOLVLA_LIBERO_VISION_Q8,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { collectTestDeps } from "../shared/collect-test-deps.js";
@@ -51,6 +52,7 @@ import { MobileParakeetStreamExecutor } from "./executors/parakeet-stream-execut
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
+import { VlaExecutor } from "../shared/executors/vla-executor.js";
 import { MobileClassificationExecutor } from "./executors/classification-executor.js";
 import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
@@ -62,6 +64,7 @@ import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { MobileCancellationExecutor } from "./executors/cancellation-executor.js";
 
 const resources = new ResourceManager({
+  downloadTarget: "mobile",
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
   // kernel to actually release pages / reclaim mmap regions — without
   // it, the next test's load arrives while the previous model's RSS is
@@ -125,10 +128,22 @@ resources.define("ocr", {
   config: { langList: ["en"] },
 });
 
+async function resolveClassificationWeightsPath() {
+  // @ts-ignore - Metro turns the bundled GGUF file into an asset module.
+  // This path is relative to dist/tests/mobile/consumer.js after tsc.
+  const assetModule = require("../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf");
+  return await resolveBundledAssetUri(assetModule);
+}
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
-// so no registry constant / pre-download is required.
+// so no registry constant / pre-download is required. On mobile the weight
+// file must still be resolved as a Metro asset and passed explicitly because
+// the Bare worker bundle does not expose package data files at __dirname.
 resources.define("classification", {
   type: "classification",
+  config: async () => ({
+    modelPath: await resolveClassificationWeightsPath(),
+  }),
 });
 
 resources.define("sharded-embeddings", {
@@ -236,6 +251,7 @@ resources.define("tts-chatterbox", {
   config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
+    useGPU: true,
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
     referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
   }),
@@ -248,6 +264,7 @@ resources.define("tts-supertonic", {
     ttsEngine: "supertonic",
     language: "en",
     voice: "F1",
+    useGPU: true,
   },
 });
 
@@ -258,6 +275,7 @@ resources.define("tts-supertonic-multilingual", {
     ttsEngine: "supertonic",
     language: "es",
     voice: "F1",
+    useGPU: true,
   },
 });
 
@@ -293,6 +311,18 @@ resources.define("vision", {
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   },
 });
+
+resources.define("vla", {
+  constant: SMOLVLA_LIBERO_VISION_Q8,
+  type: "vla",
+  config: { backend: "cpu" },
+});
+// NOTE: no "vla-pi05" resource on mobile by design — the pi05 q_aggressive
+// GGUF is 3.9 GB, which exceeds the iOS jetsam per-process limit (~3 GB →
+// OOM kill) and is deferred on Android Device Farm until a CDN-fronted
+// mirror exists. The pi05 e2e tests are skipped on mobile (see below);
+// defining the resource here would make `downloadAllOnce` pre-fetch the
+// 3.9 GB model even though the tests never run. Desktop covers pi05.
 
 function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
@@ -350,15 +380,13 @@ export const executor = createExecutor({
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
-    new SkipExecutor(
-      /^video-/,
-      "Video mode works on mobile but SDK-shipped Wan models are too large to load on-device; mobile apps should pass a `delegate` to loadModel(...), desktop covers local-load coverage",
-    ),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)"),
+    new SkipExecutor(/^vla-pi05-/, "π₀.₅ q_aggressive GGUF (3.9 GB) exceeds the iOS jetsam ~3 GB per-process limit (OOM) and is deferred on Android Device Farm until a CDN-fronted mirror exists; SmolVLA covers mobile VLA, desktop covers pi05"),
     new SkipExecutor(
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
+    new SkipExecutor(/^bci-/, "BCI addon tests are desktop-only until mobile support is enabled"),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -369,6 +397,12 @@ export const executor = createExecutor({
       "lifecycle-rapid-toggle",
       "lifecycle-suspend-during-inference",
     ], "suspend() hangs the runner on mobile"),
+    ...(Platform.OS === "android" ? [
+      skipTests([
+        "parakeet-stream-eou",
+        "parakeet-stream-iterator-throw",
+      ], "Parakeet streaming EOU/iterator recovery is flaky on Android"),
+    ] : []),
     ...(Platform.OS === "ios" ? [
       // QVAC-19557: Chatterbox TTS variants OOM on iOS Device Farm under the current memory budget.
       new SkipExecutor(/^tts-chatterbox-/, "Chatterbox TTS is flaky on iOS under Device Farm memory pressure (OOM)"),
@@ -405,6 +439,7 @@ export const executor = createExecutor({
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new MobileOcrExecutor(resources),
+    new VlaExecutor(resources),
     new MobileClassificationExecutor(resources),
     new MobileTtsExecutor(resources),
     new MobileConfigReloadExecutor(resources),

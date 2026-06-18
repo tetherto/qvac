@@ -115,15 +115,15 @@ export const qvacConfigSchema = z.object({
 
   /**
    * Global log level for all SDK loggers.
-   * Options: "error", "warn", "info", "debug"
+   * Options: "error", "warn", "info", "debug", "off".
    * Defaults to "info".
    */
   loggerLevel: logLevelSchema.optional(),
 
   /**
-   * Enable or disable console output for SDK loggers.
-   * When false, logs are only sent to streams/transports, not printed to console.
-   * Defaults to true.
+   * Print SDK logs to the console.
+   * When false, logs still reach streams and transports but are not printed.
+   * Defaults to false; set to true to see SDK logs on the console.
    */
   loggerConsoleOutput: z.boolean().optional(),
 

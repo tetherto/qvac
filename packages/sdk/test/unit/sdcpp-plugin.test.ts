@@ -839,7 +839,7 @@ test("loadModelOptionsBaseSchema: accepts diffusion with alias", (t) => {
 test("loadModelOptionsBaseSchema: rejects diffusion with unknown config key (strict)", (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
     modelSrc: "model.safetensors",
-    modelType: "diffusion",
+    modelType: "sdcpp-generation",
     modelConfig: { device: "gpu", notAField: true },
   });
   t.is(result.success, false);
@@ -848,7 +848,7 @@ test("loadModelOptionsBaseSchema: rejects diffusion with unknown config key (str
 test("loadModelOptionsBaseSchema: accepts diffusion with mode: 'upscale' (standalone ESRGAN)", (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
     modelSrc: "RealESRGAN_x4plus_anime_6B.pth",
-    modelType: "diffusion",
+    modelType: "sdcpp-generation",
     modelConfig: {
       mode: "upscale",
       upscaler: { tile_size: 128 },

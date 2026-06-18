@@ -398,6 +398,18 @@ export class BareImportsMapNotFoundError extends QvacErrorBase {
   }
 }
 
+export class BareRuntimeBinaryNotFoundError extends QvacErrorBase {
+  constructor(platform: string, arch: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND,
+        [platform, arch],
+        cause,
+      ),
+    );
+  }
+}
+
 export class ConfigFileNotFoundError extends QvacErrorBase {
   constructor(searchPaths: string, cause?: unknown) {
     super(
@@ -439,6 +451,18 @@ export class ConfigValidationFailedError extends QvacErrorBase {
     super(
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.CONFIG_VALIDATION_FAILED,
+        [errors],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RequestValidationFailedError extends QvacErrorBase {
+  constructor(errors: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED,
         [errors],
         cause,
       ),

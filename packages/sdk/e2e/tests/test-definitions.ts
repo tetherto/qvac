@@ -16,6 +16,7 @@ import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
 import { ocrTests } from "./ocr-tests.js";
+import { classificationTests } from "./classification-tests.js";
 import { ttsTests } from "./tts-tests.js";
 import { configReloadTests } from "./config-reload-tests.js";
 import { loggingTests } from "./logging-tests.js";
@@ -24,11 +25,11 @@ import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
 import { parakeetStreamTests } from "./parakeet-stream-tests.js";
+import { bciTests } from "./bci-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
-import { videoTests } from "./video-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
 import { lifecycleTests } from "./lifecycle-tests.js";
 import { configTests } from "./config-tests.js";
@@ -36,6 +37,7 @@ import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
 import { multiGpuTests } from "./multi-gpu-tests.js";
 import { cancellationTests } from "./cancellation-tests.js";
+import { vlaTests } from "./vla-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -200,6 +202,9 @@ export const tests = [
   // Transcription tests
   ...transcriptionTests,
 
+  // BCI (neural-signal) transcription tests
+  ...bciTests,
+
   // transcribeStream VAD + endOfTurn event tests
   ...transcribeStreamEventsTests,
 
@@ -248,6 +253,9 @@ export const tests = [
   // OCR tests
   ...ocrTests,
 
+  // Classification tests
+  ...classificationTests,
+
   // TTS tests
   ...ttsTests,
 
@@ -268,9 +276,6 @@ export const tests = [
 
   // Diffusion tests
   ...diffusionTests,
-
-  // Video generation tests
-  ...videoTests,
 
   // Delegated inference tests (P2P)
   ...delegatedInferenceTests,
@@ -295,6 +300,11 @@ export const tests = [
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
+
+  // VLA (SmolVLA + π₀.₅) — runs on desktop; mobile skips via SkipExecutor
+  // (see mobile/consumer.ts) because the GGUFs are too large for the
+  // Device Farm infra (see note there).
+  ...vlaTests,
 
   // Additional model tests
   modelSwitchLlm,

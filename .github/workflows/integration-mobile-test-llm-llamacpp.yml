@@ -2,7 +2,7 @@ name: Mobile Integration Tests (LLM)
 
 # Migrated to .github/actions/run-mobile-integration-tests in QVAC-18168.
 #
-# LLM uses sharded scheduling: 2 Android groups + 10 iOS groups, each
+# LLM uses sharded scheduling: 8 Android groups + 15 iOS groups, each
 # scheduled as its own Device Farm run against the LLM device pool. The
 # group definitions live in the addon at test/mobile/test-groups.json so
 # adding/moving a test changes the shard composition without editing this
@@ -56,6 +56,24 @@ on:
         type: string
         required: false
         default: ""
+    # Additive outputs (QVAC weekend job): surface the monitor verdict so a
+    # caller can read real pass/fail past the job's `continue-on-error: true`.
+    # When a caller runs both platforms in one call the matrix overwrites these
+    # nondeterministically — single-platform callers (the weekend workflow uses
+    # `platforms:` to run one platform per call) get a well-defined value.
+    outputs:
+      test-result:
+        description: "Aggregate Device Farm verdict ('passed'/'failed')."
+        value: ${{ jobs.build-and-test.outputs.test-result }}
+      test-total:
+        description: "Total test cases executed."
+        value: ${{ jobs.build-and-test.outputs.test-total }}
+      test-passed:
+        description: "Test cases passed."
+        value: ${{ jobs.build-and-test.outputs.test-passed }}
+      test-failed:
+        description: "Test cases failed."
+        value: ${{ jobs.build-and-test.outputs.test-failed }}
   workflow_dispatch:
     inputs:
       ref:
@@ -89,8 +107,15 @@ jobs:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    timeout-minutes: 150
     continue-on-error: true
+    # Surfaced as workflow_call outputs above so schedule-driven callers can
+    # report a verdict (the job itself never fails — continue-on-error).
+    outputs:
+      test-result: ${{ steps.monitor.outputs.test-result }}
+      test-total: ${{ steps.monitor.outputs.test-total }}
+      test-passed: ${{ steps.monitor.outputs.test-passed }}
+      test-failed: ${{ steps.monitor.outputs.test-failed }}
     permissions:
       contents: read
       packages: read
@@ -231,6 +256,7 @@ jobs:
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
 
       - name: Cancel Device Farm runs on workflow cancellation
         if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'

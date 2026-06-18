@@ -238,7 +238,8 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
     const originalModelId = this.resources.getModelId(dep);
     if (originalModelId) {
-      await unloadModel({ modelId: originalModelId });
+      // Keep RPC open during reload to avoid loggingStream race on mobile.
+      await unloadModel({ modelId: originalModelId, autoClose: false });
       this.resources.unregister(originalModelId);
     }
 

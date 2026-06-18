@@ -175,10 +175,11 @@ const config = {
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
 | tools_compact      | `"true"` or `"false"`                       | `"false"`                    | Compact tool tokens from KV cache between turns ([details](./docs/tools-compact.md)) |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
-| n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
+| n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context. In batch mode the sliding window is the per-sequence slot (`n_ctx / n_parallel`), so `n_discarded` is clamped to that per-slot window, not the full context; a value `>=` the slot cap is clamped and logs a warning |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 | split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
+| parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
 
 
 #### IGPU/GPU  selection logic:
@@ -238,6 +239,45 @@ try {
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
+#### Batch inference
+
+Load the model with `parallel >= 2`, then pass an array of prompts. Each chunk arrives tagged with the id of the sequence that produced it; `await()` returns results in input order.
+
+```javascript
+const model = new LlmLlamacpp({
+  files: { model: ['/path/to/model.gguf'] },
+  config: { device: 'gpu', gpu_layers: '99', ctx_size: '8192', parallel: '4' }
+})
+await model.load()
+
+const prompts = [
+  [{ role: 'user', content: 'Name a fruit.' }],
+  [{ role: 'user', content: 'Name a country.' }],
+  [{ role: 'user', content: 'Name a color.' }]
+]
+
+const response = await model.run(prompts)
+
+// Stream tokens as they arrive, tagged by sequence id
+response.onUpdate(({ id, chunk }) => {
+  process.stdout.write(`[${id}] ${chunk}`)
+})
+
+// Ordered results once all sequences finish
+const results = await response.await()
+// Prompts passed as plain Message[] arrays get auto-minted ids: batch-1, batch-2, batch-3
+// results: [ { id: 'batch-1', output: 'Apple' }, { id: 'batch-2', output: 'France' }, { id: 'batch-3', output: 'Blue' } ]
+```
+
+Pass `BatchPrompt` objects to supply a caller-assigned id or per-prompt `runOptions`:
+
+```javascript
+const response = await model.run([
+  { id: 'fruit',   prompt: [{ role: 'user', content: 'Name a fruit.' }] },
+  { id: 'country', prompt: [{ role: 'user', content: 'Name a country.' }], runOptions: { generationParams: { temp: 0.2 } } }
+])
+```
+
 ### 7. Release Resources
 
 Unload the model when finished:
@@ -263,6 +303,15 @@ The following table describes the expected behavior of `run` and `cancel` depend
 
 When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
 - `"Cannot set new job: a job is already set or being processed"`
+
+#### Cancelling a batch
+
+When more prompts are submitted in one batch than the configured `parallel` slots, the overflow prompts wait in an internal queue until a slot frees up. `cancel` treats the two groups differently, mirroring how cancelling a single request behaves:
+
+- **In-flight prompts** (already decoding in a slot) are cancelled gracefully: they keep whatever they generated so far and the call resolves normally — no error.
+- **Queued prompts** (still waiting, never admitted to a slot) had no chance to run and produced nothing. These are surfaced as an error rather than silent empty results: the batch call rejects with a `Cancelled` `StatusError`.
+
+So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts.
 
 
 ## Fine-tuning

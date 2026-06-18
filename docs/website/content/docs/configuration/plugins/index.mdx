@@ -22,6 +22,8 @@ All the built-in plugins you can select, along with the AI tasks that depend on 
 | Embeddings | `@qvac/sdk/llamacpp-embedding/plugin` | [Text embeddings](/ai-capabilities/text-embeddings); [RAG](/ai-capabilities/rag) |
 | ASR with customized Whisper engine | `@qvac/sdk/whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription) |
 | ASR with Parakeet | `@qvac/sdk/parakeet-transcription/plugin` | [Transcription](/ai-capabilities/transcription) |
+| BCI transcription | `@qvac/sdk/bci-whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription#bci-neural-signal-transcription) |
+| BCI transcription | `@qvac/sdk/bci-whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription#bci-neural-signal-transcription) |
 | NMT | `@qvac/sdk/nmtcpp-translation/plugin` | [Translation](/ai-capabilities/translation) |
 | TTS | `@qvac/sdk/onnx-tts/plugin` | [Text-to-Speech](/ai-capabilities/text-to-speech) |
 | OCR | `@qvac/sdk/onnx-ocr/plugin` | [OCR](/ai-capabilities/ocr) |
@@ -71,6 +73,7 @@ Only the selected plugins are included in your bundle, significantly reducing yo
 **Tips:**
 - You **do not need** the CLI (`@qvac/cli`) to bundle the SDK. See [Notes](#notes) to learn how to do it programmatically via `@qvac/sdk/commands`.
 - See [QVAC CLI](/cli) to learn how to install and use it.
+- When developing an Electron app, you can bundle the SDK during packaging via Electron Forge. See [Tutorials → Electron → Step 4: package for distribution](/tutorials/electron#step-4-package-for-distribution).
 </Callout>
 
 ## Custom plugins
@@ -154,6 +157,25 @@ for await (const char of echoStream({ modelId, message: "Streaming test!" })) {
 
 await unloadModel({ modelId });
 ```
+
+## Runtime registration on Bare
+
+The `plugins` array in `qvac.config.*` is **bundle-time** configuration — it controls which addons get packed into your worker. That is separate from **runtime registration**, which determines the plugins live in the worker process when an SDK call runs.
+
+On Node.js and Expo the SDK spawns a worker that auto-registers the full built-in set, so you never register manually. **Bare runs in-process with no spawned worker**, so nothing auto-registers — register the plugins you use before the first SDK call:
+
+```js
+import { plugins } from "@qvac/bare-sdk";
+import { llmPlugin } from "@qvac/bare-sdk/llamacpp-completion/plugin";
+
+const sdk = plugins([llmPlugin]); // or registerPlugin(llmPlugin) from "@qvac/bare-sdk/plugins"
+```
+
+Calls made before any plugin is registered raise `WorkerPluginsNotRegisteredError`.
+
+<Callout type="info">
+For direct Bare usage we recommend [`@qvac/bare-sdk`](https://github.com/tetherto/qvac/tree/main/packages/bare-sdk) — the slim distribution built for explicit assembly. `@qvac/sdk` also runs on Bare; import the same plugins from `@qvac/sdk/<capability>/plugin` instead.
+</Callout>
 
 ## Notes
 

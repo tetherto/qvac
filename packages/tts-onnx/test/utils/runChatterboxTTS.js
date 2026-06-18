@@ -67,7 +67,8 @@ async function loadChatterboxTTS (params = {}) {
       speechEncoder: speechEncoderPath,
       embedTokens: embedTokensPath,
       conditionalDecoder: conditionalDecoderPath,
-      languageModel: languageModelPath
+      languageModel: languageModelPath,
+      mecabDictPath: params.mecabDictPath
     },
     engine: 'chatterbox',
     referenceAudio,

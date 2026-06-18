@@ -27,16 +27,17 @@ const {
   detectPlatform,
   setupJsLogger,
   getTestPaths,
-  ensureModel,
-  ensureModelForType,
+  ensureGgufForType,
+  quantFromGgufName,
   isMobile
 } = require('../integration/helpers.js')
 
 const platform = detectPlatform()
-const { modelPath: defaultModelPath, samplesDir } = getTestPaths()
+const { samplesDir } = getTestPaths()
 
 const SAMPLE_RATE = 16000
 const VALID_MODEL_TYPES = ['tdt', 'ctc', 'eou', 'sortformer']
+const VALID_QUANTS = ['q8_0', 'q4_0', 'f16']
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 const RESULT_MARKER = 'QVAC_RTF_REPORT::'
 
@@ -73,8 +74,17 @@ function getBenchmarkSettings () {
   const deviceLabel = process.env.QVAC_PARAKEET_BENCHMARK_DEVICE || ''
   const runnerLabel = process.env.QVAC_PARAKEET_BENCHMARK_RUNNER || ''
 
+  // Quantisation to benchmark. Empty => platform default (q8_0 desktop,
+  // q4_0 mobile). The matrix runner sets this per entry so a single device
+  // can sweep q8_0 vs q4_0.
+  const requestedQuant = (process.env.QVAC_PARAKEET_BENCHMARK_QUANT || '').toLowerCase()
+  if (requestedQuant && !VALID_QUANTS.includes(requestedQuant)) {
+    throw new Error(`Invalid benchmark quant: ${requestedQuant} (expected one of ${VALID_QUANTS.join(', ')})`)
+  }
+
   return {
     modelType: requestedModelType,
+    quant: requestedQuant,
     maxThreads: getEnvInteger('QVAC_PARAKEET_BENCHMARK_THREADS', 4),
     numWarmup: getEnvInteger('QVAC_PARAKEET_BENCHMARK_WARMUP_RUNS', 1),
     numRuns: getEnvInteger('QVAC_PARAKEET_BENCHMARK_RUNS', isMobile ? 3 : 5),
@@ -88,14 +98,14 @@ function getBenchmarkSettings () {
 }
 
 async function resolveModelPath (benchmarkSettings) {
-  if (benchmarkSettings.modelType === 'tdt') {
-    await ensureModel(defaultModelPath)
-    return defaultModelPath
-  }
-
-  const modelPath = await ensureModelForType(benchmarkSettings.modelType)
+  const modelPath = await ensureGgufForType(
+    benchmarkSettings.modelType,
+    null,
+    benchmarkSettings.quant ? { quant: benchmarkSettings.quant } : {}
+  )
   if (!modelPath) {
-    throw new Error(`Unable to resolve model for type: ${benchmarkSettings.modelType}`)
+    const quantHint = benchmarkSettings.quant ? ` (quant: ${benchmarkSettings.quant})` : ''
+    throw new Error(`Unable to resolve model for type: ${benchmarkSettings.modelType}${quantHint}`)
   }
 
   return modelPath
@@ -110,23 +120,49 @@ function getUpperBound (benchmarkSettings) {
   return null
 }
 
+// parakeet.cpp (ggml) GPU backend cascade, per test/integration/gpu-smoke.test.js:
+//   - darwin / ios:   Metal
+//   - linux / win32:  Vulkan
+//   - android:        Vulkan (Adreno: OpenCL fallback)
+// (The previous coreml/nnapi/auto-gpu names were ONNX-era and never matched
+// the GGML runtime, which reports the real backend via stats.backendId.)
 function getRequestedBackendFamily (platformName, useGPU, backendHint) {
   if (backendHint) return backendHint
   if (!useGPU) return 'cpu'
-  if (platformName === 'darwin' || platformName === 'ios') return 'coreml-requested'
-  if (platformName === 'android') return 'nnapi-requested'
-  if (platformName === 'win32') return 'auto-gpu-requested'
-  if (platformName === 'linux') return 'auto-gpu-requested'
-  return 'gpu-requested'
+  if (platformName === 'darwin' || platformName === 'ios') return 'metal'
+  if (platformName === 'android') return 'vulkan'
+  if (platformName === 'win32' || platformName === 'linux') return 'vulkan'
+  return 'gpu'
+}
+
+// Maps stats.backendId (surfaced by ParakeetModel::runtimeStats() after
+// Engine::backend_name()) to the GGML backend family that actually ran.
+function backendIdToName (id) {
+  switch (id) {
+    case 0: return 'cpu'
+    case 1: return 'metal'
+    case 2: return 'cuda'
+    case 3: return 'vulkan'
+    case 4: return 'opencl'
+    case 99: return 'other-gpu'
+    default: return ''
+  }
 }
 
 function getArtifactFileName (benchmarkSettings) {
   const parts = [
     'rtf-benchmark',
     platform,
-    benchmarkSettings.modelType,
-    benchmarkSettings.useGPU ? 'gpu' : 'cpu'
+    benchmarkSettings.modelType
   ]
+
+  // Quant goes between model type and device so multi-quant sweeps on the
+  // same runner don't clobber each other's artifacts.
+  if (benchmarkSettings.resolvedQuant) {
+    parts.push(benchmarkSettings.resolvedQuant)
+  }
+
+  parts.push(benchmarkSettings.useGPU ? 'gpu' : 'cpu')
 
   if (benchmarkSettings.label) {
     parts.push(benchmarkSettings.label)
@@ -138,6 +174,19 @@ function getArtifactFileName (benchmarkSettings) {
 function getTimeMs () {
   const [sec, nsec] = process.hrtime()
   return sec * 1000 + nsec / 1e6
+}
+
+// Addon version stamped into every artifact so the consolidated report can
+// label which build produced the numbers (matches the version-stamping the
+// LLM benchmark suite does). Read from package.json via bare-fs because bare
+// does not support require()-ing JSON.
+function getAddonVersion () {
+  try {
+    const pkgPath = path.resolve(__dirname, '../../package.json')
+    return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || ''
+  } catch (_) {
+    return ''
+  }
 }
 
 function percentile (sorted, p) {
@@ -168,6 +217,9 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
   const loggerBinding = setupJsLogger(binding)
   const benchmarkSettings = getBenchmarkSettings()
   const modelPath = await resolveModelPath(benchmarkSettings)
+  // Resolve the actual quant from the staged file name; this is the source of
+  // truth (the requested quant may have been empty => platform default).
+  benchmarkSettings.resolvedQuant = quantFromGgufName(modelPath) || benchmarkSettings.quant || ''
   const upperBound = getUpperBound(benchmarkSettings)
   const [platformName, archName] = platform.split('-')
 
@@ -177,6 +229,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
   console.log(`  Platform:       ${platform}`)
   console.log(`  Model path:     ${modelPath}`)
   console.log(`  Model type:     ${benchmarkSettings.modelType}`)
+  console.log(`  Quant:          ${benchmarkSettings.resolvedQuant || 'default'}`)
   console.log(`  GPU requested:  ${benchmarkSettings.useGPU}`)
   if (benchmarkSettings.backendHint) console.log(`  Backend hint:   ${benchmarkSettings.backendHint}`)
   if (benchmarkSettings.deviceLabel) console.log(`  Device label:   ${benchmarkSettings.deviceLabel}`)
@@ -205,6 +258,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
   console.log(`  Audio duration: ${audioDurationSec.toFixed(2)}s\n`)
 
   const allResults = []
+  let observedBackendId = null
   const model = new TranscriptionParakeet({
     files: { model: modelPath },
     config: {
@@ -257,10 +311,18 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         continue
       }
 
+      // The GGML addon (parakeet.cpp) does not populate realTimeFactor in its
+      // runtimeStats — it reports `0` (and only raw, cumulative counters for
+      // audioDurationMs / totalTokens / totalTimeSec). So derive RTF from the
+      // measured per-call wall time and the known audio duration instead, and
+      // only prefer the addon value when a future build reports a positive one.
+      const statsRtf = jobStats.realTimeFactor || 0
+      const derivedRtf = audioDurationSec > 0 ? (wallMs / 1000) / audioDurationSec : 0
       const run = {
         iteration: i + 1,
         wallMs,
-        rtf: jobStats.realTimeFactor || 0,
+        rtf: statsRtf > 0 ? statsRtf : derivedRtf,
+        rtfSource: statsRtf > 0 ? 'addon' : 'wall',
         requestedModelType: benchmarkSettings.modelType,
         requestedUseGPU: benchmarkSettings.useGPU,
         totalTimeSec: jobStats.totalTime || 0,
@@ -273,8 +335,12 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         melSpecMs: jobStats.melSpecMs || 0,
         encoderMs: jobStats.encoderMs || 0,
         decoderMs: jobStats.decoderMs || 0,
-        totalWallMs: jobStats.totalWallMs || 0
+        totalWallMs: jobStats.totalWallMs || 0,
+        backendDevice: typeof jobStats.backendDevice === 'number' ? jobStats.backendDevice : null,
+        backendId: typeof jobStats.backendId === 'number' ? jobStats.backendId : null
       }
+
+      if (run.backendId !== null) observedBackendId = run.backendId
 
       allResults.push(run)
 
@@ -349,8 +415,10 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       platformName,
       arch: archName || '',
       isMobile,
+      addonVersion: getAddonVersion(),
       model: {
         type: benchmarkSettings.modelType,
+        quant: benchmarkSettings.resolvedQuant,
         path: modelPath,
         dirName: path.basename(modelPath)
       },
@@ -358,6 +426,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         runner: benchmarkSettings.runnerLabel,
         device: benchmarkSettings.deviceLabel,
         backend: getRequestedBackendFamily(platformName, benchmarkSettings.useGPU, benchmarkSettings.backendHint),
+        activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
         requestedBackend: benchmarkSettings.useGPU ? 'gpu' : 'cpu',
         label: benchmarkSettings.label
       },
@@ -375,6 +444,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       },
       requested: {
         modelType: benchmarkSettings.modelType,
+        quant: benchmarkSettings.quant,
         useGPU: benchmarkSettings.useGPU,
         backendHint: benchmarkSettings.backendHint,
         deviceLabel: benchmarkSettings.deviceLabel,
@@ -388,7 +458,9 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         wallMs: wallStats,
         tokensPerSecond: tpsStats,
         encoderMs: encoderStats,
-        decoderMs: decoderStats
+        decoderMs: decoderStats,
+        backendId: observedBackendId,
+        activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : ''
       },
       runs: allResults
     }
@@ -398,9 +470,12 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       platform,
       platformName,
       arch: archName || '',
+      addonVersion: getAddonVersion(),
       modelType: benchmarkSettings.modelType,
+      quant: benchmarkSettings.resolvedQuant,
       useGPU: benchmarkSettings.useGPU,
       backendHint: getRequestedBackendFamily(platformName, benchmarkSettings.useGPU, benchmarkSettings.backendHint),
+      activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
       deviceLabel: benchmarkSettings.deviceLabel,
       runnerLabel: benchmarkSettings.runnerLabel,
       summary: report.summary

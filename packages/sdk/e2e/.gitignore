@@ -1,6 +1,7 @@
 build/
 .qvac-cache/
 qvac.config.json
+qvac.config.e2e.generated.json
 .env
 .env.bak-*
 rag-hyperdb/
