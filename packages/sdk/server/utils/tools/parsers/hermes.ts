@@ -6,6 +6,30 @@ import {
   type ParserResult,
 } from "@/server/utils/tools/shared";
 
+// Qwen3.5/3.6 can fuse its two tool templates into one frame, embedding the
+// XML `<function=NAME>` token as a bare string key inside the JSON envelope:
+//   {"function=NAME","arguments":{...}}  (invalid JSON, not parseable as-is)
+// Rewrite only that exact shape to a canonical `{"name":NAME,"arguments":...}`
+// frame. Kept deliberately narrow so well-formed JSON frames are never touched.
+function repairFunctionEqualsJson(candidate: string): string | undefined {
+  const match =
+    /^\{\s*"function=([^"]+)"\s*,\s*"arguments"\s*:\s*([\s\S]+)\}\s*$/.exec(
+      candidate,
+    );
+  if (!match) return undefined;
+  return `{"name":${JSON.stringify(match[1])},"arguments":${match[2]}}`;
+}
+
+function parseHermesJson(candidate: string): unknown {
+  try {
+    return JSON.parse(candidate);
+  } catch (err) {
+    const repaired = repairFunctionEqualsJson(candidate);
+    if (repaired === undefined) throw err;
+    return JSON.parse(repaired);
+  }
+}
+
 // Hermes-style: JSON payload wrapped in `<tool_call>...</tool_call>` tags
 export function parseHermesFormat(text: string, tools: Tool[]): ParserResult {
   const toolCalls: ToolCall[] = [];
@@ -32,7 +56,7 @@ export function parseHermesFormat(text: string, tools: Tool[]): ParserResult {
 
     let callItem: unknown;
     try {
-      callItem = JSON.parse(trimmedJson);
+      callItem = parseHermesJson(trimmedJson);
     } catch (error) {
       errors.push({
         code: "PARSE_ERROR",
@@ -96,7 +120,7 @@ function recoverIncompleteHermesFrame(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(candidate);
+    parsed = parseHermesJson(candidate);
   } catch {
     return { matched: false, toolCalls: [], errors: [] };
   }

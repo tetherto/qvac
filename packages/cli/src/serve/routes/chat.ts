@@ -1,3 +1,4 @@
+import { unlink } from 'node:fs/promises'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
@@ -10,9 +11,10 @@ import {
   chatCompletionsBody,
   CHAT_UNSUPPORTED_PARAMS,
   toSdkChatArgs,
+  writeChatImages,
   type SdkChatArgs
 } from '../schemas/chat.js'
-import { InvalidResponseFormatError } from '../schemas/common.js'
+import { InvalidResponseFormatError, UnsupportedImageContentError } from '../schemas/common.js'
 import { sdkToolCallsToOpenai, sdkToolCallsToOpenaiDeltas } from '../adapters/openai/tool-calls.js'
 
 interface PreparedRequest extends SdkChatArgs {
@@ -27,6 +29,9 @@ function prepare (req: FastifyRequest, body: Parameters<typeof toSdkChatArgs>[0]
   } catch (err) {
     if (err instanceof InvalidResponseFormatError) {
       throw new HttpError(400, 'invalid_response_format', err.message)
+    }
+    if (err instanceof UnsupportedImageContentError) {
+      throw new HttpError(400, 'unsupported_image_content', err.message)
     }
     throw err
   }
@@ -99,90 +104,100 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 }
 
 async function runBlocking (req: FastifyRequest, reply: FastifyReply, p: PreparedRequest): Promise<void> {
-  const result = completion({
-    modelId: p.sdkModelId,
-    history: p.history,
-    stream: false,
-    ...(p.tools !== undefined ? { tools: p.tools } : {}),
-    ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
-    ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
-  })
-  req.bindCancel(result.requestId)
+  const { history, tmpPaths } = await writeChatImages(p.history)
+  try {
+    const result = completion({
+      modelId: p.sdkModelId,
+      history,
+      stream: false,
+      ...(p.tools !== undefined ? { tools: p.tools } : {}),
+      ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
+      ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
+    })
+    req.bindCancel(result.requestId)
 
-  const { text, toolCalls, completionTokens, finishReason } = await drainCompletion(result)
+    const { text, toolCalls, completionTokens, finishReason } = await drainCompletion(result)
 
-  const hasToolCalls = toolCalls.length > 0
-  const message: Record<string, unknown> = {
-    role: 'assistant',
-    content: hasToolCalls ? null : (text || null)
-  }
-  if (hasToolCalls) {
-    message['tool_calls'] = sdkToolCallsToOpenai(toolCalls)
-  }
-
-  req.server.qvac.logger.info(`  completion done tokens=${completionTokens} finish=${finishReason}`)
-
-  reply.send({
-    id: `chatcmpl-${randomId()}`,
-    object: 'chat.completion',
-    created: Math.floor(Date.now() / 1000),
-    model: p.modelAlias,
-    choices: [{ index: 0, message, finish_reason: finishReason }],
-    usage: {
-      prompt_tokens: 0,
-      completion_tokens: completionTokens,
-      total_tokens: completionTokens
+    const hasToolCalls = toolCalls.length > 0
+    const message: Record<string, unknown> = {
+      role: 'assistant',
+      content: hasToolCalls ? null : (text || null)
     }
-  })
+    if (hasToolCalls) {
+      message['tool_calls'] = sdkToolCallsToOpenai(toolCalls)
+    }
+
+    req.server.qvac.logger.info(`  completion done tokens=${completionTokens} finish=${finishReason}`)
+
+    reply.send({
+      id: `chatcmpl-${randomId()}`,
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model: p.modelAlias,
+      choices: [{ index: 0, message, finish_reason: finishReason }],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: completionTokens,
+        total_tokens: completionTokens
+      }
+    })
+  } finally {
+    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
+  }
 }
 
 async function runStreaming (req: FastifyRequest, reply: FastifyReply, p: PreparedRequest): Promise<void> {
-  const result = completion({
-    modelId: p.sdkModelId,
-    history: p.history,
-    stream: true,
-    ...(p.tools !== undefined ? { tools: p.tools } : {}),
-    ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
-    ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
-  })
-  req.bindCancel(result.requestId)
+  const { history, tmpPaths } = await writeChatImages(p.history)
+  try {
+    const result = completion({
+      modelId: p.sdkModelId,
+      history,
+      stream: true,
+      ...(p.tools !== undefined ? { tools: p.tools } : {}),
+      ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
+      ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
+    })
+    req.bindCancel(result.requestId)
 
-  initSSE(reply)
-  const raw = reply.raw
+    initSSE(reply)
+    const raw = reply.raw
 
-  const id = `chatcmpl-${randomId()}`
-  const created = Math.floor(Date.now() / 1000)
+    const id = `chatcmpl-${randomId()}`
+    const created = Math.floor(Date.now() / 1000)
 
-  const chunk = (delta: Record<string, unknown>, finishReason: string | null, extra?: Record<string, unknown>): Record<string, unknown> => ({
-    id,
-    object: 'chat.completion.chunk',
-    created,
-    model: p.modelAlias,
-    choices: [{ index: 0, delta, finish_reason: finishReason }],
-    ...extra
-  })
+    const chunk = (delta: Record<string, unknown>, finishReason: string | null, extra?: Record<string, unknown>): Record<string, unknown> => ({
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model: p.modelAlias,
+      choices: [{ index: 0, delta, finish_reason: finishReason }],
+      ...extra
+    })
 
-  sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
+    sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
-  const { toolCalls, completionTokens, finishReason } = await drainCompletion(
-    result,
-    (token) => sendSSE(raw, chunk({ content: token }, null))
-  )
-  const hasToolCalls = toolCalls.length > 0
+    const { toolCalls, completionTokens, finishReason } = await drainCompletion(
+      result,
+      (token) => sendSSE(raw, chunk({ content: token }, null))
+    )
+    const hasToolCalls = toolCalls.length > 0
 
-  req.server.qvac.logger.info(`  streaming done tokens=${completionTokens} finish=${finishReason}`)
+    req.server.qvac.logger.info(`  streaming done tokens=${completionTokens} finish=${finishReason}`)
 
-  if (hasToolCalls) {
-    const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls)
-    sendSSE(raw, chunk({ tool_calls: openaiToolCalls }, null))
-    sendSSE(raw, chunk({}, 'tool_calls'))
-  } else {
-    sendSSE(raw, chunk({}, finishReason, {
-      usage: { prompt_tokens: 0, completion_tokens: completionTokens, total_tokens: completionTokens }
-    }))
+    if (hasToolCalls) {
+      const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls)
+      sendSSE(raw, chunk({ tool_calls: openaiToolCalls }, null))
+      sendSSE(raw, chunk({}, 'tool_calls'))
+    } else {
+      sendSSE(raw, chunk({}, finishReason, {
+        usage: { prompt_tokens: 0, completion_tokens: completionTokens, total_tokens: completionTokens }
+      }))
+    }
+
+    endSSE(raw)
+  } finally {
+    await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
   }
-
-  endSSE(raw)
 }
 
 export default plugin
