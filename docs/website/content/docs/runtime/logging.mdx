@@ -47,9 +47,14 @@ It works for all model types (LLM, Whisper, NMT, Embeddings) and provides valuab
 
 ## Configuration
 
-To configure global logging (level and console output), use a config file (`qvac.config.json`, `qvac.config.js`, or `qvac.config.ts`) and set:
-- `loggerLevel`: `"error" | "warn" | "info" | "debug"`
-- `loggerConsoleOutput`: `boolean`
+The SDK's own server and client logs are silent on the console by default. They
+are still delivered to `loggingStream()` and custom transports, so you opt in to
+seeing them.
+
+To configure global logging, use a config file (`qvac.config.json`,
+`qvac.config.js`, or `qvac.config.ts`) and set:
+- `loggerConsoleOutput`: `boolean` — print the SDK's own logs to the console. Defaults to `false`; set to `true` to see them.
+- `loggerLevel`: `"error" | "warn" | "info" | "debug" | "off"` — minimum level for SDK loggers. Defaults to `"info"`; use `"off"` to suppress streams and transports too.
 
 ## Example
 
