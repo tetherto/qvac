@@ -8,6 +8,11 @@ const { QVACRegistryClient } = require('@qvac/registry-client')
 const REGISTRY_SOURCE = 's3'
 const REGISTRY_DATE_F16 = '2026-05-08'
 const REGISTRY_DATE_Q4_0 = '2026-05-18'
+// Supertonic 3: fp16 + fp32 GGUFs published under the 2026-06-10 build
+// (QVAC-20568); the block-quant q8_0 / q4_0 tiers under the 2026-06-15 build
+// (QVAC-20686).
+const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10'
+const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
 
 const GROUPS = {
@@ -41,6 +46,27 @@ const GROUPS = {
     {
       name: 'supertonic2.gguf',
       registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_Q4_0}/supertonic2-q4_0.gguf`
+    }
+  ],
+  // Supertonic 3 keeps the quant-tagged on-disk names (supertonic3-<tier>.gguf)
+  // because the integration test resolves a specific tier by path; tts-cpp
+  // reads the quant from GGUF metadata, not the filename.
+  supertonic3: [
+    {
+      name: 'supertonic3-f16.gguf',
+      registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_SUPERTONIC3}/supertonic3-f16.gguf`
+    },
+    {
+      name: 'supertonic3-f32.gguf',
+      registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_SUPERTONIC3}/supertonic3-f32.gguf`
+    },
+    {
+      name: 'supertonic3-q8_0.gguf',
+      registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_SUPERTONIC3_QUANT}/supertonic3-q8_0.gguf`
+    },
+    {
+      name: 'supertonic3-q4_0.gguf',
+      registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_SUPERTONIC3_QUANT}/supertonic3-q4_0.gguf`
     }
   ]
 }

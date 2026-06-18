@@ -22,7 +22,8 @@ export function getClientLogger(options?: LoggerOptions): Logger {
     }
   }
 
-  const logger = getLogger(CLIENT_NAMESPACE, options);
+  // The SDK's own logs stay off the console unless the caller opts in.
+  const logger = getLogger(CLIENT_NAMESPACE, { enableConsole: false, ...options });
 
   if (!options) {
     setCachedClientLogger(logger);

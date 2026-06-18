@@ -338,7 +338,7 @@ test("loadModelOptionsBaseSchema: accepts vla alias", (t) => {
 test("loadModelOptionsBaseSchema: rejects vla config with unknown key (strict)", (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
     modelSrc: "smolvla.gguf",
-    modelType: "vla",
+    modelType: "ggml-vla",
     modelConfig: { backend: "cpu", unknownKey: true },
   });
   t.is(result.success, false);

@@ -419,6 +419,8 @@ async function ensureWhisperModel (targetPath = null) {
 const REGISTRY_SOURCE = 's3'
 const REGISTRY_DATE_F16 = '2026-05-08' // chatterbox-s3gen* (no quant variant yet)
 const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
+const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32 (QVAC-20568)
+const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0 (QVAC-20686)
 
 // Size bands.  Both bounds are enforced (see `hasAllGgufsIn` below) so a
 // stale f16 cache from a previous test run gets rejected and re-fetched
@@ -429,6 +431,11 @@ const SIZE_CHATTERBOX_T3_Q4_0 = { minSize: 100_000_000, maxSize: 500_000_000 }
 const SIZE_CHATTERBOX_S3GEN_F16 = { minSize: 500_000_000, maxSize: 2_000_000_000 }
 const SIZE_SUPERTONIC_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
+// Supertonic 3 (31-language) tiers: q8_0 ~126 MB, q4_0 ~80 MB, f16 ~191 MB,
+// f32 ~398 MB.  All four are published on the QVAC model registry (f16 / f32 @
+// 2026-06-10, QVAC-20568; q8_0 / q4_0 @ 2026-06-15, QVAC-20686).  One generous
+// band covers them all so the resolver accepts whichever tier was fetched.
+const SIZE_SUPERTONIC3 = { minSize: 25_000_000, maxSize: 500_000_000 }
 
 const CHATTERBOX_GGUFS = [
   {
@@ -795,6 +802,91 @@ async function ensureSupertonicMtlModel (options = {}) {
   return { success: false, path: null, targetDir: requestedDir }
 }
 
+// Supertonic 3 GGUF descriptor for a given quant tier.  The on-disk name
+// encodes the quant so q8_0 / q4_0 can coexist in one models/ dir (unlike v1/v2
+// which keep a single canonical filename and read the quant from metadata).
+// All four tiers are published on the QVAC model registry: f16 / f32 under the
+// 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants under the
+// 2026-06-15 build (QVAC-20686).  Each tier maps to its own S3 build date.
+const SUPERTONIC3_REGISTRY_DATES = {
+  f16: REGISTRY_DATE_SUPERTONIC3,
+  f32: REGISTRY_DATE_SUPERTONIC3,
+  q8_0: REGISTRY_DATE_SUPERTONIC3_QUANT,
+  q4_0: REGISTRY_DATE_SUPERTONIC3_QUANT
+}
+
+function supertonic3Gguf (quant) {
+  const gguf = {
+    name: `supertonic3-${quant}.gguf`,
+    ...SIZE_SUPERTONIC3
+  }
+  const date = SUPERTONIC3_REGISTRY_DATES[quant]
+  if (date) {
+    gguf.registryPath =
+      `qvac_models_compiled/ggml/supertonic/${date}/supertonic3-${quant}.gguf`
+    gguf.registrySource = REGISTRY_SOURCE
+  }
+  return gguf
+}
+
+/**
+ * Ensure a Supertonic 3 GGUF for the requested quant tier is staged in a
+ * directory the native addon can read, and return that path.
+ *
+ * All four tiers are published on the QVAC model registry (f16 / f32 via
+ * QVAC-20568, q8_0 / q4_0 via QVAC-20686), so this helper resolves them from
+ * S3 only (mirroring the v1/v2 helpers): it reuses an already-staged copy when
+ * present, otherwise fetches from the registry.  If the fetch fails (offline,
+ * or the @qvac/registry-client devDependency is missing) it returns
+ * `{ success: false }` — every tier is published, so a fetch failure is a real
+ * error and the caller is expected to fail the test.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - dir to look in (default ./models).
+ * @param {string} [options.quant] - quant tier: 'q8_0' | 'q4_0' | 'f16' | 'f32'.
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string, quant: string }>}
+ */
+async function ensureSupertonic3Model (options = {}) {
+  const quant = options.quant || 'q8_0'
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  const gguf = supertonic3Gguf(quant)
+  console.log(`Ensuring Supertonic 3 GGUF (${quant}) (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, [gguf])) {
+      console.log(` ✓ using Supertonic 3 ${quant} GGUF at ${dir}`)
+      return { success: true, path: path.join(dir, gguf.name), targetDir: dir, quant }
+    }
+  }
+
+  // All tiers are on the registry — fetch into the (writable) requestedDir.
+  if (gguf.registryPath) {
+    if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
+      return { success: true, path: path.join(requestedDir, gguf.name), targetDir: requestedDir, quant }
+    }
+    console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) not staged and registry fetch failed`)
+    console.log(' (network / registry unavailable, or the @qvac/registry-client devDependency is missing).')
+    console.log(` Expected on the registry at: ${gguf.registryPath}`)
+    return { success: false, path: null, targetDir: requestedDir, quant }
+  }
+
+  // No registry mapping for this tier (unexpected) — every published tier has
+  // one, so this only triggers on an unknown quant string.
+  console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) has no registry mapping (unknown quant tier).`)
+  return { success: false, path: null, targetDir: requestedDir, quant }
+}
+
 /**
  * Ensure the compiled MeCab/IPAdic dictionary is staged in a directory
  * the native addon can read, and return that directory.  Mirrors the
@@ -852,5 +944,6 @@ module.exports = {
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
+  ensureSupertonic3Model,
   ensureMecabDict
 }
