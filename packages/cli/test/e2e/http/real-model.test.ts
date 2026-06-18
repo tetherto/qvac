@@ -412,17 +412,18 @@ describe('legacy completions', () => {
   })
 
   it('multi-prompt blocking returns N choices with matching indices', async () => {
-    const body = (await post('/v1/completions', { model: E2E.llm, prompt: ['Reply with the word "alpha".', 'Reply with the word "beta".'], max_tokens: 512 })).json() as any
+    // Generous max_tokens (as the single-prompt blocking case uses) so the reasoning
+    // model finishes naturally — keeps parity with bats's finish_reason=='stop'
+    // without broadening the assertion.
+    const body = (await post('/v1/completions', { model: E2E.llm, prompt: ['Reply with the word "alpha".', 'Reply with the word "beta".'], max_tokens: 4096 })).json() as any
     assert.equal(body.object, 'text_completion')
     assert.equal(body.choices.length, 2)
     assert.equal(body.choices[0].index, 0)
     assert.equal(body.choices[1].index, 1)
     assert.ok(body.choices[0].text.length > 0)
     assert.ok(body.choices[1].text.length > 0)
-    // The tiny reasoning model may exhaust max_tokens before a natural stop, so
-    // accept either terminal reason — the fan-out (N choices/indices) is the point.
-    assert.ok(['stop', 'length'].includes(body.choices[0].finish_reason))
-    assert.ok(['stop', 'length'].includes(body.choices[1].finish_reason))
+    assert.equal(body.choices[0].finish_reason, 'stop')
+    assert.equal(body.choices[1].finish_reason, 'stop')
   })
 
   it('multi-prompt with stream:true returns 400 unsupported_streaming', async () => {
