@@ -323,6 +323,18 @@ broadcast — an escape hatch to recover without a code change if a backend's
 broadcast-add ever misbehaves (read once at graph-build time; only the exact
 value `1` enables it). It does not affect the DocTR pipeline.
 
+### CRNN recognizer bias broadcast (`OCR_GGML_CRNN_BIAS_REPEAT`)
+
+The EasyOCR **recognizer** applies the same broadcast to its sequence biases:
+the BiLSTM `Linear` and the final `Prediction` add their `[F]` bias via
+`ggml_add`'s implicit broadcast over the `(T, N)` axes, instead of materialising
+a full `[F, T, N]` `ggml_repeat` copy. Numerically identical to the legacy path.
+
+Set `OCR_GGML_CRNN_BIAS_REPEAT=1` to fall back to the legacy `ggml_repeat`
+broadcast — the recognizer-side counterpart of `OCR_GGML_CRAFT_BIAS_REPEAT`
+(read once at graph-build time; only the exact value `1` enables it). It does
+not affect the DocTR pipeline.
+
 ### `run(input)` shape
 
 ```ts

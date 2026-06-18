@@ -21,7 +21,7 @@ test("operation metrics: loadModel extracts gauges and tags", (t) => {
     "profile-1",
     100,
     500,
-    { modelType: "llm" },
+    { modelType: "llamacpp-completion" },
     {
       __profilingMeta: {
         sourceType: "registry",
@@ -37,7 +37,7 @@ test("operation metrics: loadModel extracts gauges and tags", (t) => {
   );
 
   t.ok(event, "event is built");
-  t.alike(event!.tags, { modelType: "llm", sourceType: "registry" });
+  t.alike(event!.tags, { modelType: "llamacpp-completion", sourceType: "registry" });
   t.is(event!.gauges?.downloadTime, 220);
   t.is(event!.gauges?.totalBytesDownloaded, 4096);
   t.is(event!.gauges?.downloadSpeedBps, 18618);
@@ -51,7 +51,7 @@ test("operation metrics: omits unavailable gauges (no fabrication)", (t) => {
     "profile-2",
     100,
     90,
-    { modelType: "llm" },
+    { modelType: "llamacpp-completion" },
     {
       __profilingMeta: {
         sourceType: "filesystem",
@@ -83,7 +83,7 @@ test("transport: operation event survives injection/extraction round-trip", (t) 
     ms: 500,
     profileId: "round-trip-test",
     gauges: { totalLoadTime: 500, downloadTime: 200 },
-    tags: { modelType: "llm", sourceType: "registry", cacheHit: "true" },
+    tags: { modelType: "llamacpp-completion", sourceType: "registry", cacheHit: "true" },
   };
 
   const baseJson = '{"type":"loadModel","success":true}';
@@ -99,7 +99,7 @@ test("transport: operation event survives injection/extraction round-trip", (t) 
   t.is(extracted!.operation!.profileId, "round-trip-test");
   t.alike(extracted!.operation!.gauges, { totalLoadTime: 500, downloadTime: 200 });
   t.alike(extracted!.operation!.tags, {
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     sourceType: "registry",
     cacheHit: "true",
   });

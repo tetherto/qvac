@@ -53,6 +53,23 @@ const result = await sdk.translate({
 | `@qvac/bare-sdk/ggml-vla/plugin`                 | `@qvac/vla-ggml`                 |
 
 
+## Connection lifecycle
+
+`unloadModel` does not close the SDK's connections. The swarm, registry client, and corestore stay up so long-lived workers survive a routine unload across load/unload cycles. Close explicitly when you're done:
+
+```js
+import { close } from "@qvac/bare-sdk";
+
+await unloadModel({ modelId });
+await close(); // tear down swarm + registry client so the process can exit
+```
+
+Or opt into auto-close on the final unload:
+
+```js
+await unloadModel({ modelId, autoClose: true });
+```
+
 ## Relationship to `@qvac/sdk`
 
 `@qvac/bare-sdk` is built by copying compiled output from `@qvac/sdk`. The two packages share the same source, version, and release branch; the only differences are package metadata (slim dependency profile, no default worker entry, explicit assembly API).

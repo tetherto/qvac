@@ -63,6 +63,14 @@ function buildFileContents (files) {
   return `${lines.join('\n')}\n`
 }
 
+// A platform's OS family is its name without the optional `Weekly` suffix, so
+// `iosWeekly` belongs to the `ios` family. Coverage is validated per family
+// (the union of its regular + weekly splits), letting the weekend-only suite
+// hold a disjoint subset of tests rather than duplicating the daily ones.
+function platformFamily (platform) {
+  return platform.replace(/Weekly$/, '')
+}
+
 function validateGroups (functionNames) {
   if (!fs.existsSync(groupsFile)) {
     console.warn('[warn] test-groups.json not found — skipping split validation')
@@ -70,24 +78,35 @@ function validateGroups (functionNames) {
   }
   const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
   const nameSet = new Set(functionNames)
+
+  const coveredByFamily = new Map()
   for (const [platform, splits] of Object.entries(groups)) {
-    const covered = new Set(Object.values(splits).flat())
+    const family = platformFamily(platform)
+    const covered = coveredByFamily.get(family) ?? new Set()
+    for (const name of Object.values(splits).flat()) {
+      covered.add(name)
+    }
+    coveredByFamily.set(family, covered)
+  }
+
+  for (const [family, covered] of coveredByFamily) {
     const missing = functionNames.filter(n => !covered.has(n))
     const extra = [...covered].filter(n => !nameSet.has(n))
     if (missing.length) {
       throw new Error(
-        '[' + platform + '] Tests not assigned to any group in test-groups.json:\n  ' +
-        missing.join('\n  ') + '\nAdd them to a group in test/mobile/test-groups.json.'
+        '[' + family + '] Tests not assigned to any group in test-groups.json:\n  ' +
+        missing.join('\n  ') +
+        `\nAdd them to a ${family} or ${family}Weekly group in test/mobile/test-groups.json.`
       )
     }
     if (extra.length) {
       throw new Error(
-        '[' + platform + '] test-groups.json references non-existent tests:\n  ' +
+        '[' + family + '] test-groups.json references non-existent tests:\n  ' +
         extra.join('\n  ') + '\nRemove them or check for typos.'
       )
     }
   }
-  console.log('Group coverage validated — all tests assigned for every platform.')
+  console.log('Group coverage validated — all tests assigned for every OS family.')
 }
 
 function main () {
