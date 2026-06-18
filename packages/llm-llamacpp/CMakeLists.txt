@@ -39,7 +39,7 @@ find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 # Required to call llama.cpp's `json_schema_to_grammar()` for per-request
 # JSON-Schema → GBNF conversion. The function signature lives in libcommon
-# (linked via `llama::common`) but takes a `nlohmann::ordered_json`, so we
+# (linked via `llama::llama-common`) but takes a `nlohmann::ordered_json`, so we
 # need the full nlohmann headers, not just the forward decl shipped with
 # `llama/common/json-schema-to-grammar.h`.
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -113,7 +113,7 @@ endif()
     ${inference-addon-llama}
     PRIVATE
       llama::llama
-      llama::common
+      llama::llama-common
       llama::mtmd
       nlohmann_json::nlohmann_json
       unofficial::concurrentqueue::concurrentqueue
@@ -163,7 +163,7 @@ if(BUILD_CLI)
     cli_tool
           PRIVATE
           llama::llama
-          llama::common
+          llama::llama-common
           llama::mtmd
           nlohmann_json::nlohmann_json
           unofficial::concurrentqueue::concurrentqueue
