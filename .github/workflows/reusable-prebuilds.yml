@@ -318,7 +318,8 @@ jobs:
           NX_PLATFORM: ${{ matrix.platform }}
           NX_ARCH: ${{ matrix.arch }}
           NX_FLAGS: ${{ matrix.flags }}
-        run: pnpm nx run ${{ inputs.nx-project }}:prebuild-generate
+          NX_PROJECT: ${{ inputs.nx-project }}
+        run: pnpm nx run "$NX_PROJECT":prebuild-generate
 
       - name: Dump vcpkg build logs on failure
         if: failure()
@@ -345,7 +346,9 @@ jobs:
       - name: Run prebuild build (Nx)
         if: ${{ inputs.nx-project != '' }}
         shell: bash
-        run: pnpm nx run ${{ inputs.nx-project }}:prebuild-build
+        env:
+          NX_PROJECT: ${{ inputs.nx-project }}
+        run: pnpm nx run "$NX_PROJECT":prebuild-build
 
       - name: Run bare-make install
         if: ${{ inputs.nx-project == '' }}
@@ -356,7 +359,9 @@ jobs:
       - name: Run prebuild install (Nx)
         if: ${{ inputs.nx-project != '' }}
         shell: bash
-        run: pnpm nx run ${{ inputs.nx-project }}:prebuild-install
+        env:
+          NX_PROJECT: ${{ inputs.nx-project }}
+        run: pnpm nx run "$NX_PROJECT":prebuild-install
 
       - name: Strip static libraries (.a) from prebuilds (Linux / MacOS)
         if: matrix.os != 'windows-2025'

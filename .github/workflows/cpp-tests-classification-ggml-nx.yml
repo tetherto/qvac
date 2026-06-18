@@ -52,6 +52,7 @@ jobs:
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
+    timeout-minutes: 60
     name: cpp-tests-nx-${{ matrix.platform }}-${{ matrix.arch }}
 
     env:

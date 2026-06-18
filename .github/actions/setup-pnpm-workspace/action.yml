@@ -39,9 +39,11 @@ runs:
         corepack enable
         corepack prepare pnpm@9.15.4 --activate
 
+    # Fork PRs may only restore cache (github-actions.mdc — no cache writes from fork code).
     - name: Restore pnpm cache
       uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
+        lookup-only: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && github.event.pull_request.head.repo.full_name != github.repository }}
         path: |
           ~/.local/share/pnpm/store
           ${{ inputs.workspace-root }}/node_modules

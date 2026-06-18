@@ -36,6 +36,9 @@ on:
         required: false
         default: "packages/classification-ggml"
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test-nx:
     name: Build ${{ matrix.platform }} and Run E2E Tests (Nx)
@@ -60,10 +63,18 @@ jobs:
             runner: macos-14
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        env:
+          DISPATCH_PACKAGE: ${{ github.event.inputs.package }}
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
+          if [[ ! "$DISPATCH_PACKAGE" =~ ^@qvac/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* is allowed."
             exit 1
           fi

@@ -50,8 +50,9 @@ runs:
         PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         PR_FORK_URL: ${{ github.event.pull_request.head.repo.clone_url }}
         PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        REPOSITORY: ${{ github.repository }}
       run: |
-        git remote set-url origin https://github.com/${{ github.repository }}.git
+        git remote set-url origin "https://github.com/${REPOSITORY}.git"
         git fetch origin +refs/heads/*:refs/remotes/origin/*
         git fetch origin "$PR_BASE_REF:refs/remotes/origin/$PR_BASE_REF"
         git fetch origin "$PR_HEAD_REF:refs/pr/head" || git fetch "$PR_FORK_URL" "$PR_HEAD_REF:refs/pr/head"
@@ -63,9 +64,10 @@ runs:
         github.event_name == 'pull_request_target' ||
         github.event_name == 'pull_request'
       continue-on-error: true
+      env:
+        TARGET_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: |
-        TARGET_SHA=${{ github.event.pull_request.base.sha }}
-        PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
         if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
           echo "::error title=PR is not up to date::This PR is not up to date with target branch"
           echo "ℹ️  Suggestion: Consider rebasing or merging the latest changes from the target branch"
@@ -99,7 +101,9 @@ runs:
       id: nx_check_dependencies
       continue-on-error: true
       if: inputs.nx-project != ''
-      run: pnpm nx run ${{ inputs.nx-project }}:ci-check-deps
+      env:
+        NX_PROJECT: ${{ inputs.nx-project }}
+      run: pnpm nx run "$NX_PROJECT":ci-check-deps
 
     - name: Run lint & unit tests
       id: run_tests
@@ -118,7 +122,9 @@ runs:
       continue-on-error: true
       if: inputs.nx-project != ''
       shell: bash
-      run: pnpm nx run ${{ inputs.nx-project }}:ci-lint-and-unit
+      env:
+        NX_PROJECT: ${{ inputs.nx-project }}
+      run: pnpm nx run "$NX_PROJECT":ci-lint-and-unit
 
     - name: Check for errors
       shell: bash

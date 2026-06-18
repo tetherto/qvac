@@ -29,6 +29,9 @@ on:
         type: string
         required: false
 
+permissions:
+  contents: read
+
 env:
   PKG_DIR: packages/classification-ggml
 
@@ -113,12 +116,13 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
-          PACKAGE="${{ inputs.prebuild_package }}"
-          echo "Downloading $PACKAGE from npm..."
+          echo "Downloading $PREBUILD_PACKAGE from npm..."
 
-          if ! npm pack "$PACKAGE" --ignore-scripts; then
-            echo "ERROR: Failed to download $PACKAGE from npm"
+          if ! npm pack "$PREBUILD_PACKAGE" --ignore-scripts; then
+            echo "ERROR: Failed to download $PREBUILD_PACKAGE from npm"
             echo "Please check that the package exists"
             exit 1
           fi
@@ -141,13 +145,14 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
         shell: powershell
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
-          $PACKAGE = "${{ inputs.prebuild_package }}"
-          echo "Downloading $PACKAGE from npm..."
+          echo "Downloading $env:PREBUILD_PACKAGE from npm..."
 
-          npm pack $PACKAGE --ignore-scripts
+          npm pack $env:PREBUILD_PACKAGE --ignore-scripts
           if ($LASTEXITCODE -ne 0) {
-            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "ERROR: Failed to download $env:PREBUILD_PACKAGE from npm"
             echo "Please check that the package exists"
             exit 1
           }
