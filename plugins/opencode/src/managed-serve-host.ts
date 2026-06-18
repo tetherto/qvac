@@ -44,7 +44,7 @@ async function main (): Promise<void> {
     models: [
       {
         name: config.modelId,
-        config: { ctx_size: config.ctxSize, reasoning_budget: config.reasoningBudget, tools: config.tools },
+        config: { ctx_size: config.ctxSize, reasoning_budget: config.reasoningBudget, tools: config.tools, toolsMode: 'static' },
         default: true
       }
     ],
