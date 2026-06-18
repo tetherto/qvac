@@ -179,17 +179,6 @@ export const modelLoadMissingTypeStringSrc: TestDefinition = {
   },
 };
 
-export const modelLoadNmt: TestDefinition = {
-  testId: "model-load-nmt",
-  params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 90000,
-  },
-};
-
 export const modelLifecycleNmt: TestDefinition = {
   testId: "model-lifecycle-nmt",
   params: { text: "Hello, how are you today?" },
@@ -329,7 +318,6 @@ export const tests = [
   modelLoadInferredType,
   modelLoadMissingTypeStringSrc,
 
-  // NMT model lifecycle tests
-  modelLoadNmt,
+  // NMT model lifecycle test
   modelLifecycleNmt,
 ];

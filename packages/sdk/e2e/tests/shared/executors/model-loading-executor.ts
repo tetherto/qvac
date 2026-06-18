@@ -21,7 +21,6 @@ import {
   modelReloadAfterError,
   modelLoadInferredType,
   modelLoadMissingTypeStringSrc,
-  modelLoadNmt,
   modelLifecycleNmt,
 } from "../../test-definitions.js";
 
@@ -37,7 +36,6 @@ const modelLoadTests = [
   modelReloadAfterError,
   modelLoadInferredType,
   modelLoadMissingTypeStringSrc,
-  modelLoadNmt,
   modelLifecycleNmt,
 ] as const;
 
@@ -59,7 +57,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     [modelLoadInferredType.testId]: this.loadInferredType.bind(this),
     [modelLoadMissingTypeStringSrc.testId]:
       this.loadMissingTypeStringSrc.bind(this),
-    [modelLoadNmt.testId]: this.loadNmt.bind(this),
     [modelLifecycleNmt.testId]: this.lifecycleNmt.bind(this),
   };
 
@@ -256,19 +253,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
         error instanceof Error ? error.message : JSON.stringify(error);
       return ValidationHelpers.validate(errorMsg, expectation);
     }
-  }
-
-  async loadNmt(
-    params: typeof modelLoadNmt.params,
-    expectation: typeof modelLoadNmt.expectation,
-  ): Promise<TestResult> {
-    const modelId = await loadModel({
-      modelSrc: BERGAMOT_EN_FR,
-      modelType: "nmt",
-      modelConfig: { engine: "Bergamot", from: "en", to: "fr" },
-    });
-    this.resources.register("bergamot-en-fr", modelId);
-    return ValidationHelpers.validate(modelId, expectation);
   }
 
   async lifecycleNmt(
