@@ -51,6 +51,11 @@ async function runCrnnBiasBroadcastTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/crnn-bias-broadcast.test.js', options)
 }
 
+async function runDirectConvTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDirectConvTest')) return __FILTERED
+  return runIntegrationModule('../integration/direct-conv.test.js', options)
+}
+
 async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrBasicTest')) return __FILTERED
   return runIntegrationModule('../integration/doctr-basic.test.js', options)
