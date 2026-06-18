@@ -41,22 +41,57 @@ bool bias_use_repeat() {
   return ggml_add(ctx, x, b4);
 }
 
+// True for a pointwise (1x1) conv with unit stride/dilation and no padding —
+// the only case where the mul_mat rewrite is exactly equivalent to conv_2d.
+bool is_pointwise_conv(
+    const ::ggml_tensor* kernel, int s0, int s1, int p0, int p1, int d0,
+    int d1) {
+  return kernel->ne[0] == 1 && kernel->ne[1] == 1 && s0 == 1 && s1 == 1 &&
+         p0 == 0 && p1 == 0 && d0 == 1 && d1 == 1;
+}
+
+// 1x1 convolution as a matmul. x [W,H,IC,N], kernel [1,1,IC,OC] -> [W,H,OC,N].
+// Channels are moved to dim 0 (mul_mat contracts dim 0), the spatial+batch dims
+// ride along as the matmul's column/batch axes, and the result is permuted back
+// to ggml's [W,H,C,N] layout. Works with F16 kernels (mul_mat upcasts).
+::ggml_tensor*
+pointwise_conv(::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel) {
+  const int64_t w = x->ne[0];
+  const int64_t h = x->ne[1];
+  const int64_t ic = x->ne[2];
+  const int64_t n = x->ne[3];
+  const int64_t oc = kernel->ne[3];
+  auto* k2 = ggml_reshape_2d(ctx, kernel, ic, oc);             // [IC, OC]
+  auto* xt = ggml_cont(ctx, ggml_permute(ctx, x, 1, 2, 0, 3)); // [IC, W, H, N]
+  auto* x2 = ggml_reshape_3d(ctx, xt, ic, w * h, n);           // [IC, W*H, N]
+  auto* y = ggml_mul_mat(ctx, k2, x2);                         // [OC, W*H, N]
+  auto* y4 = ggml_reshape_4d(ctx, y, oc, w, h, n);             // [OC, W, H, N]
+  return ggml_cont(ctx, ggml_permute(ctx, y4, 2, 0, 1, 3));    // [W, H, OC, N]
+}
+
 } // namespace
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 ::ggml_tensor* conv_2d_bias(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
-    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1) {
+    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1,
+    bool conv1x1_mulmat) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
-  auto* y = ggml_conv_2d(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
+  auto* y =
+      (conv1x1_mulmat && is_pointwise_conv(kernel, s0, s1, p0, p1, d0, d1))
+          ? pointwise_conv(ctx, x, kernel)
+          : ggml_conv_2d(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
   return add_channel_bias(ctx, y, bias);
 }
 
 ::ggml_tensor* conv_2d_bias_relu(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
-    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1) {
+    ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1,
+    bool conv1x1_mulmat) {
   return ggml_relu(
-      ctx, conv_2d_bias(ctx, x, kernel, bias, s0, s1, p0, p1, d0, d1));
+      ctx,
+      conv_2d_bias(
+          ctx, x, kernel, bias, s0, s1, p0, p1, d0, d1, conv1x1_mulmat));
 }
 
 ::ggml_tensor* bilinear_to(

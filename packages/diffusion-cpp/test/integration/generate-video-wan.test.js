@@ -27,6 +27,7 @@ const test = require('brittle')
 const binding = require('../../binding')
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const { detectPlatform, setupJsLogger, ensureModelPath } = require('./utils')
+const { recordPerformance } = require('./_perf-helper')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const isDarwin = os.platform() === 'darwin'
@@ -212,6 +213,7 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
     })
 
     let avi = null
+    let ttfbMs = null
     const progressTicks = []
     const stringDataPayloads = []
 
@@ -242,6 +244,7 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
 
       await response
         .onUpdate((data) => {
+          if (ttfbMs === null) ttfbMs = Date.now() - tGen
           if (data instanceof Uint8Array) {
             avi = data
           } else if (typeof data === 'string') {
@@ -258,6 +261,17 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
 
       const genMs = Date.now() - tGen
       console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
+
+      t.comment(recordPerformance(
+        '[Wan 2.1 txt2vid] [GPU]',
+        response.stats,
+        {
+          scenario: 'txt2vid',
+          model: 'wan2.1_t2v_1.3B_fp16',
+          execution_provider: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
+          ttfbMs
+        }
+      ))
 
       // ── Progress assertions ─────────────────────────────────────────────
       // Wan generation is multi-phase (text encode, denoise loop, VAE
@@ -394,6 +408,7 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
     })
 
     let avi = null
+    let ttfbMs = null
     const progressTicks = []
 
     try {
@@ -422,6 +437,7 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
 
       await response
         .onUpdate((data) => {
+          if (ttfbMs === null) ttfbMs = Date.now() - tGen
           if (data instanceof Uint8Array) {
             avi = data
           } else if (typeof data === 'string') {
@@ -437,6 +453,17 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
 
       const genMs = Date.now() - tGen
       console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
+
+      t.comment(recordPerformance(
+        '[Wan 2.1 img2vid] [GPU]',
+        response.stats,
+        {
+          scenario: 'img2vid',
+          model: 'wan2.1-i2v-14b-480p-Q4_K_M',
+          execution_provider: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
+          ttfbMs
+        }
+      ))
 
       // ── Progress assertions ─────────────────────────────────────────────
       t.ok(progressTicks.length > 0,
