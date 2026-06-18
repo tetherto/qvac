@@ -1,6 +1,5 @@
 'use strict'
 
-const Base = require('@qvac/dl-base')
 const path = require('bare-path')
 const { Readable } = require('bare-stream')
 
@@ -15,7 +14,17 @@ const files = {
   'ggml-silero-v5.1.2.bin': Buffer.from('binary file ggml-silero-v5.1.2.bin')
 }
 
-class FakeDL extends Base {
+// Standalone loader mock. Intentionally does not depend on @qvac/dl-* so the
+// dl- packages can be deprecated and removed from the monorepo.
+class FakeDL {
+  constructor (opts = {}) {
+    this.opts = opts
+  }
+
+  async ready () { }
+
+  async close () { }
+
   async list (path) {
     return Object.keys(files)
   }
