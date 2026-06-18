@@ -32,6 +32,8 @@ export {
   getModelInfo,
   getLoadedModelInfo,
   loggingStream,
+  subscribeServerLogs,
+  type ServerLogHandler,
   ocr,
   invokePlugin,
   invokePluginStream,
@@ -225,7 +227,7 @@ export {
 } from "./utils/errors-client";
 
 // Logging exports
-export { getLogger, SDK_LOG_ID } from "./logging";
+export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from "./logging";
 export type { Logger, LogTransport, LoggerOptions } from "./logging";
 
 // Profiler exports

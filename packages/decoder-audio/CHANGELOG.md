@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2634](https://github.com/tetherto/qvac/pull/2634)).
+
 ## [0.5.0]
 
 This release slims the runtime dependency tree of `@qvac/decoder-audio`. Packages that were never required at runtime have been removed or moved to dev dependencies, so consumers no longer pull them into their install trees. There are no changes to `FFmpegDecoder`'s public API or behavior.
