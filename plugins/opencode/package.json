@@ -53,8 +53,8 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.49",
-    "@qvac/ai-sdk-provider": "^0.2.1",
-    "@qvac/cli": "^0.6.0",
+    "@qvac/ai-sdk-provider": "^0.2.2",
+    "@qvac/cli": "^0.7.0",
     "ai": "^6.0.202"
   },
   "devDependencies": {

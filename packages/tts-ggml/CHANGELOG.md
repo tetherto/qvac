@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ggml_get_type_traits_cpu` calls that made `2026-06-05` fail to `dlopen` on
   Android (the 0.2.1 bootstrap crash), so the addon loads cleanly while still
   shipping the Supertonic GPU optimisations.
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2636](https://github.com/tetherto/qvac/pull/2636)).
 
 ### Notes
 

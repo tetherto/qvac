@@ -4,6 +4,7 @@ export { completion } from "./completion-stream";
 export { deleteCache } from "./delete-cache";
 export { unloadModel } from "./unload-model";
 export { loggingStream } from "./logging-stream";
+export { subscribeServerLogs, type ServerLogHandler } from "./subscribe-logs";
 export { heartbeat } from "./heartbeat";
 export { transcribe, transcribeStream } from "./transcribe";
 export { bciTranscribe, bciTranscribeStream } from "./bci-transcribe";
