@@ -186,8 +186,6 @@ export function getLoggingStreamStats() {
 }
 
 export function clearAllLoggingStreams() {
-  const count = loggingStreams.size;
-
   for (const timeout of bufferingTimeouts.values()) {
     clearTimeout(timeout);
   }
@@ -196,8 +194,4 @@ export function clearAllLoggingStreams() {
   logBuffer.clear();
   modelsWithBuffering.clear();
   bufferingTimeouts.clear();
-
-  if (count > 0) {
-    console.log(`🧹 Cleared logging streams for ${count} ID(s)`); // fallback (avoid recursion)
-  }
 }

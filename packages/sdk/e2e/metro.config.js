@@ -7,7 +7,7 @@ const config = getDefaultConfig(__dirname);
 config.resolver = config.resolver || {};
 
 
-const extraAssetExts = ['ogg', 'wma', 'aac', 'm4a', 'wav', 'mp3', 'txt', 'jsonl'];
+const extraAssetExts = ['ogg', 'wma', 'aac', 'm4a', 'wav', 'mp3', 'txt', 'jsonl', 'gguf'];
 config.resolver.assetExts = Array.from(
     new Set([...(config.resolver.assetExts || []), ...extraAssetExts])
 );
