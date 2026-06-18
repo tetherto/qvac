@@ -22,7 +22,7 @@
       "options": {
         "script": "test:unit"
       },
-      "dependsOn": ["^lint"]
+      "dependsOn": ["lint"]
     },
     "test-integration": {
       "executor": "nx:run-script",

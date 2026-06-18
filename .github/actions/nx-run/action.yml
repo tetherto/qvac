@@ -11,10 +11,6 @@ inputs:
     description: Path to the pnpm workspace root
     required: false
     default: "."
-  skip-install:
-    description: When true, assume workspace is already installed
-    required: false
-    default: "true"
 
 runs:
   using: composite
