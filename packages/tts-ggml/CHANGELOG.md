@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
 - RTF benchmark reports now surface the desktop GPU hardware name (QVAC-20499). `test/benchmark/rtf-benchmark.test.js` drives the shared performance reporter's `detectDevice()` (via `bare-subprocess`: nvidia-smi / vulkaninfo / system_profiler) to populate `device.gpu` / `device.cpu` in the canonical report and `labels.gpuModel` in the per-config JSON; `scripts/perf-report/aggregate-tts-ggml-rtf.js` renders a `GPU Model` column. Mobile leaves `device.gpu` null (device name is the proxy). CI-only.
 
-## [0.3.1] - 2026-06-17
+## [0.3.0] - 2026-06-11
 
 ### Added
 
@@ -41,19 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the new v3-only (de/it/nl) languages; assert load + run + 44.1 kHz output. A
   tier that can't be fetched fails the run (every tier is published on the
   registry). Mobile integration auto-test wiring added.
-
-### Changed
-
-- Resolve `tts-cpp` entirely from the official `tetherto/qvac-registry-vcpkg`
-  registry: drop the package-local `ports/tts-cpp` overlay (and the
-  `overlay-ports` entry in `vcpkg-configuration.json`) that 0.3.0 shipped as an
-  interim measure, and bump the `default-registry` baseline to `e55f10fb`
-  (`tts-cpp` `2026-06-12`, `ggml-speech` `2026-06-15`). The baseline preserves
-  the `ggml-speech` Metal residency-set teardown fix that the overlay previously
-  pinned (#2645).
-
-### Added
-
 - **Supertonic GPU support (re-land of QVAC-19255, reverted in 0.2.2).**
   Caller GPU intent (`useGPU` / `nGpuLayers`) is honored again for the
   Supertonic engine on GPU-capable hosts (Metal on Apple, Vulkan/CUDA on
@@ -63,12 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Consume `tts-cpp` `2026-06-05` via a package-local overlay port pinned at
-  `qvac-ext-lib-whisper.cpp@f7d4d6c` (the QVAC-19254 sched + cpu_backend
-  follow-up). `f7d4d6c` reroutes the direct `ggml_backend_is_cpu` /
-  `ggml_get_type_traits_cpu` calls that made `2026-06-05` fail to `dlopen` on
-  Android (the 0.2.1 bootstrap crash), so the addon loads cleanly while still
-  shipping the Supertonic GPU optimisations.
+- Resolve `tts-cpp` entirely from the official `tetherto/qvac-registry-vcpkg`
+  registry: drop the package-local `ports/tts-cpp` overlay (and the
+  `overlay-ports` entry in `vcpkg-configuration.json`) used during development
+  as an interim measure, and bump the `default-registry` baseline to `e55f10fb`
+  (`tts-cpp` `2026-06-12`, `ggml-speech` `2026-06-15`). The baseline preserves
+  the `ggml-speech` Metal residency-set teardown fix that the overlay previously
+  pinned (#2645).
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2636](https://github.com/tetherto/qvac/pull/2636)).
 
 ### Notes
@@ -78,10 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Android transparently falls back to CPU: Adreno Vulkan/OpenCL `ggml` graph
   compute still aborts (same family as the parakeet Adreno crash). The GPU
   smoke test skips Supertonic on Android accordingly.
-- The `ports/tts-cpp` overlay and the `overlay-ports` entry in
-  `vcpkg-configuration.json` are **interim**: drop them and bump
-  `vcpkg.json`'s `tts-cpp` pin once `f7d4d6c` (or a successor) is published to
-  `qvac-registry-vcpkg`.
 
 ## [0.2.2] - 2026-06-09
 
