@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- release-guard CI validation test (do not merge) -->
+
 # QVAC CLI v0.7.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.7.0
