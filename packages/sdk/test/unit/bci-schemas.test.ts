@@ -311,7 +311,7 @@ test("loadModelOptionsToRequestSchema: resolves the 'bci' alias to the canonical
 
 test("loadModelOptionsToRequestSchema: rejects unknown modelConfig keys for BCI (strict)", (t) => {
   const result = loadModelOptionsToRequestSchema.safeParse({
-    modelType: "bci",
+    modelType: "bci-whispercpp-transcription",
     modelSrc: "ggml-bci-windowed.bin",
     modelConfig: { notABciField: true },
   });
