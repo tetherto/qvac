@@ -42,6 +42,10 @@ async function runSupertonicTest (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/supertonic.test.js', options)
 }
 
+async function runSupertonic3QuantTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/supertonic3-quant.test.js', options)
+}
+
 module.exports = {
   runAddonTest,
   runChatterboxJaMecabTest,
@@ -51,5 +55,6 @@ module.exports = {
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,
-  runSupertonicTest
+  runSupertonicTest,
+  runSupertonic3QuantTest
 }
