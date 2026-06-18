@@ -392,8 +392,10 @@ describe('legacy completions', () => {
     assert.equal(body.choices[1].index, 1)
     assert.ok(body.choices[0].text.length > 0)
     assert.ok(body.choices[1].text.length > 0)
-    assert.equal(body.choices[0].finish_reason, 'stop')
-    assert.equal(body.choices[1].finish_reason, 'stop')
+    // The tiny reasoning model may exhaust max_tokens before a natural stop, so
+    // accept either terminal reason — the fan-out (N choices/indices) is the point.
+    assert.ok(['stop', 'length'].includes(body.choices[0].finish_reason))
+    assert.ok(['stop', 'length'].includes(body.choices[1].finish_reason))
   })
 
   it('multi-prompt with stream:true returns 400 unsupported_streaming', async () => {
