@@ -712,17 +712,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  // The streamed output must be captured into `oss` whenever any
-  // post-generation pass needs to inspect the full assistant text.
-  const bool needsOutputCapture = state_->toolsCompact_->enabled();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
-  } else if (needsOutputCapture) {
-    callback = [&](const std::string& token) {
-      oss << token;
-      prompt.outputCallback(token);
-    };
   }
 
   if (!state_->llmContext_->generateResponse(callback)) {
@@ -736,26 +728,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     out = oss.str();
   }
 
-  // Post-generation tools trim decision via controller
-  std::string ossStr;
-  if (needsOutputCapture && prompt.outputCallback) {
-    // Only materialize a second copy when output streamed via callback.
-    ossStr = oss.str();
-  }
-  const std::string& outputToCheck =
-      needsOutputCapture ? (prompt.outputCallback ? ossStr : out) : out;
-  auto decision = state_->toolsCompact_->onGenerationComplete(
-      outputToCheck,
-      state_->llmContext_->getNPast(),
-      state_->llmContext_->getFirstMsgTokens());
-  if (decision.trim) {
-    state_->llmContext_->removeLastNTokens(decision.tokensToRemoveFromTail);
-    if (decision.clampFirstMsgTokensToNPast &&
-        state_->llmContext_->getFirstMsgTokens() >
-            state_->llmContext_->getNPast()) {
-      state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
-    }
-  }
   maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
 
   if (resolved.shouldResetAfterInference) {
