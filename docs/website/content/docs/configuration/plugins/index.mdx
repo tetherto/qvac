@@ -158,6 +158,25 @@ for await (const char of echoStream({ modelId, message: "Streaming test!" })) {
 await unloadModel({ modelId });
 ```
 
+## Runtime registration on Bare
+
+The `plugins` array in `qvac.config.*` is **bundle-time** configuration — it controls which addons get packed into your worker. That is separate from **runtime registration**, which determines the plugins live in the worker process when an SDK call runs.
+
+On Node.js and Expo the SDK spawns a worker that auto-registers the full built-in set, so you never register manually. **Bare runs in-process with no spawned worker**, so nothing auto-registers — register the plugins you use before the first SDK call:
+
+```js
+import { plugins } from "@qvac/bare-sdk";
+import { llmPlugin } from "@qvac/bare-sdk/llamacpp-completion/plugin";
+
+const sdk = plugins([llmPlugin]); // or registerPlugin(llmPlugin) from "@qvac/bare-sdk/plugins"
+```
+
+Calls made before any plugin is registered raise `WorkerPluginsNotRegisteredError`.
+
+<Callout type="info">
+For direct Bare usage we recommend [`@qvac/bare-sdk`](https://github.com/tetherto/qvac/tree/main/packages/bare-sdk) — the slim distribution built for explicit assembly. `@qvac/sdk` also runs on Bare; import the same plugins from `@qvac/sdk/<capability>/plugin` instead.
+</Callout>
+
 ## Notes
 
 * In `qvac.config.*`, if `plugins` is omitted or set to an empty array, the SDK bundles all built-in plugins. If `plugins` is set, it bundles only the listed plugins.

@@ -16,7 +16,7 @@ See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.i
 
 For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.qvac.tether.io/llms-full.txt) as the consolidated plaintext documentation export.
 
-> **Assembling a custom worker on Bare?** See [`@qvac/bare-sdk`](../bare-sdk/README.md) — the same SDK surface with no built-in plugin addons, designed for consumers wiring their own worker entry (Pear apps, bare-expo apps, direct Bare scripts).
+> **Running on Bare directly?** `@qvac/sdk` runs on Bare, but you must register the plugins you use explicitly before the first SDK call (Node and Expo do this automatically). For direct Bare usage we recommend [`@qvac/bare-sdk`](../bare-sdk/README.md) — the same SDK surface with no built-in plugin addons, designed for consumers wiring their own worker entry (Pear apps, bare-expo apps, direct Bare scripts).
 
 ## Supported environments and installation
 
@@ -46,7 +46,6 @@ try {
     // Load a model into memory
     const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
         onProgress: (progress) => {
             console.log(progress);
         },
