@@ -38,7 +38,7 @@ try {
   console.log("Loading Wan 2.1 I2V model (diffusion + UMT5-XXL + VAE + CLIP vision)...");
   const modelId = await loadModel({
     modelSrc: diffusionModelSrc,
-    modelType: "diffusion",
+    modelType: "sdcpp-generation",
     modelConfig: {
       mode: "video",
       device: "gpu",
