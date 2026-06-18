@@ -82,8 +82,8 @@ TEST(SupertonicValidate, NonexistentNoiseNpyRejected) {
 
 TEST(SupertonicValidate, UseGpuTrueAcceptedAtConstruction) {
   // GPU intent is now honored for Supertonic on GPU-capable hosts (Metal on
-  // Apple, Vulkan/CUDA on desktop); Android is forced back to CPU at load
-  // (loadLocked). Construction must NOT reject useGpu=true -- the GGUF parse
+  // Apple, Vulkan/CUDA on desktop, and Android via tts-cpp's per-vendor
+  // allowlist). Construction must NOT reject useGpu=true -- the GGUF parse
   // is deferred to load(), so a bare stub config validates cleanly.
   auto cfg = minimallyValidStubConfig();
   cfg.useGpu = true;

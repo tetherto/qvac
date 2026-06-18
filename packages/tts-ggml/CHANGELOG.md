@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Android GPU for Supertonic + Chatterbox (QVAC-20557).** Remove the `#ifdef __ANDROID__`
+  guards in `SupertonicModel`/`ChatterboxModel` that forced `useGPU=false`; `useGPU` now flows
+  to `tts-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which picks the GPU backend per
+  its per-vendor allowlist — Supertonic on Adreno (OpenCL) / Xclipse + Mali (Vulkan); Chatterbox
+  on Adreno/Xclipse, with Mali declined by policy (`allow_arm_mali=false`) and surfaced via the
+  new `gpuUnsupported` runtime stat. The `default-registry` baseline advances to `6fe4e2b` so the
+  new version resolves. Android gpu-smoke skips dropped (Supertonic strict; Chatterbox accepts a
+  flagged Mali→CPU fallback).
 - Internal RTF + streaming benchmark suite for the Chatterbox and Supertonic GGML engines (`test/benchmark/rtf-benchmark.test.js`, `test/benchmark/streaming-benchmark.test.js`, matrix runner, `scripts/perf-report/aggregate-tts-ggml-rtf.js`), runnable via the `Benchmark RTF (TTS GGML)` GitHub Actions workflow on the `qvac-*-gpu` self-hosted runners (CPU + Vulkan). CI-only; not shipped with the npm package.
 - Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
 - RTF benchmark reports now surface the desktop GPU hardware name (QVAC-20499). `test/benchmark/rtf-benchmark.test.js` drives the shared performance reporter's `detectDevice()` (via `bare-subprocess`: nvidia-smi / vulkaninfo / system_profiler) to populate `device.gpu` / `device.cpu` in the canonical report and `labels.gpuModel` in the per-config JSON; `scripts/perf-report/aggregate-tts-ggml-rtf.js` renders a `GPU Model` column. Mobile leaves `device.gpu` null (device name is the proxy). CI-only.
