@@ -122,6 +122,33 @@ describe('chat completions (tools / structured output)', () => {
   })
 })
 
+// New coverage: image_url chat content (feature e41cef73f). The three rejection
+// branches are pure CLI parsing — no multimodal model needed, just a chat model
+// so the request reaches prepare().
+describe('chat completions (image_url content)', () => {
+  function withImage (url: string): Record<string, unknown> {
+    return { model: E2E.llm, messages: [{ role: 'user', content: [{ type: 'text', text: 'describe' }, { type: 'image_url', image_url: { url } }] }] }
+  }
+
+  it('rejects a remote (non-data) image_url', async () => {
+    const res = await post('/v1/chat/completions', withImage('http://example.invalid/x.png'))
+    assert.equal(res.statusCode, 400)
+    assertError(res, 'unsupported_image_content')
+  })
+
+  it('rejects an unsupported image type', async () => {
+    const res = await post('/v1/chat/completions', withImage('data:image/gif;base64,R0lGODlhAQABAAAAACw='))
+    assert.equal(res.statusCode, 400)
+    assertError(res, 'unsupported_image_content')
+  })
+
+  it('rejects corrupt/mislabeled base64', async () => {
+    const res = await post('/v1/chat/completions', withImage('data:image/png;base64,bm90LWEtcG5n'))
+    assert.equal(res.statusCode, 400)
+    assertError(res, 'unsupported_image_content')
+  })
+})
+
 // New coverage (Phase 4): transcription prompt param.
 describe('transcriptions (prompt param)', () => {
   it('accepts a prompt and returns JSON with text', async () => {
