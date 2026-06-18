@@ -458,6 +458,18 @@ export class ConfigValidationFailedError extends QvacErrorBase {
   }
 }
 
+export class RequestValidationFailedError extends QvacErrorBase {
+  constructor(errors: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED,
+        [errors],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Operation Errors (Client-side wrappers for server operations) ==============
 // These are used by client API to throw errors based on server responses
 // They reference server error codes but are thrown on client side

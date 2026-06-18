@@ -1,0 +1,192 @@
+name: Weekend Mobile Tests (LLM)
+
+# Weekend-only mobile suite for @qvac/llm-llamacpp.
+#
+# The heavier / slower mobile tests are kept OFF the per-PR path (see
+# packages/llm-llamacpp/test/mobile/test-groups.json) and run here once a
+# week instead. The per-PR auto-detector only reads the `android` / `ios`
+# keys of test-groups.json, so the weekend tests live under the sibling
+# `androidWeekly` / `iosWeekly` keys — invisible to PRs, consumed only by
+# this workflow via the reusable workflow's `test_groups` override.
+#
+# What runs weekly: both OCR tests, the Elephant + HighResAurora image
+# functional tests, and the full vlmPerf{Gemma4,Qwen35} perf groups — on
+# both Android and iOS Device Farm pools.
+#
+# Reporting: every run writes the usual pass/fail tables to the run's
+# Summary page (via the monitor step inside the reusable workflow) and the
+# `report` job opens a GitHub issue with the per-platform verdict + a link
+# back to the run.
+
+on:
+  schedule:
+    # Sundays 06:00 UTC — off-peak so AWS Device Farm capacity is free.
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      platforms:
+        description: "Which pools to run (cheap single-platform test runs)"
+        type: choice
+        required: false
+        default: both
+        options:
+          - both
+          - Android
+          - iOS
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+  id-token: write
+  issues: write
+
+concurrency:
+  group: weekend-mobile-llm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Build the per-platform `[{name,grep}]` override arrays from the
+  # androidWeekly / iosWeekly sections of test-groups.json. Doing it here (a
+  # cheap hosted job) keeps the weekly shard composition data-driven: editing
+  # test-groups.json changes what runs without touching this workflow.
+  prep:
+    name: Resolve weekend shards
+    runs-on: ubuntu-latest
+    outputs:
+      android_groups: ${{ steps.groups.outputs.android }}
+      ios_groups: ${{ steps.groups.outputs.ios }}
+    steps:
+      - name: Checkout test-groups.json
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          sparse-checkout: |
+            packages/llm-llamacpp/test/mobile/test-groups.json
+          sparse-checkout-cone-mode: false
+
+      - name: Build per-platform override arrays
+        id: groups
+        run: |
+          set -euo pipefail
+          GROUPS_FILE="packages/llm-llamacpp/test/mobile/test-groups.json"
+          to_specs() {
+            jq -c --arg k "$1" '
+              if (.[$k] // null) | type == "object" then
+                .[$k] | to_entries | map({ name: .key, grep: (.value | join("|")) })
+              else [] end
+            ' "$GROUPS_FILE"
+          }
+          ANDROID="$(to_specs androidWeekly)"
+          IOS="$(to_specs iosWeekly)"
+          echo "Android weekend groups: $ANDROID"
+          echo "iOS weekend groups: $IOS"
+          if [ "$ANDROID" = "[]" ] && [ "$IOS" = "[]" ]; then
+            echo "::error::No androidWeekly/iosWeekly groups found in $GROUPS_FILE"
+            exit 1
+          fi
+          echo "android=$ANDROID" >> "$GITHUB_OUTPUT"
+          echo "ios=$IOS" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Android weekend suite
+    needs: prep
+    # On schedule, `inputs.platforms` is empty → run both. Dispatch can narrow it.
+    if: needs.prep.outputs.android_groups != '[]' && (inputs.platforms == '' || inputs.platforms == 'both' || inputs.platforms == 'Android')
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ github.event.inputs.ref || github.ref }}
+      platforms: Android
+      test_groups: ${{ needs.prep.outputs.android_groups }}
+
+  ios:
+    name: iOS weekend suite
+    needs: prep
+    if: needs.prep.outputs.ios_groups != '[]' && (inputs.platforms == '' || inputs.platforms == 'both' || inputs.platforms == 'iOS')
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ github.event.inputs.ref || github.ref }}
+      platforms: iOS
+      test_groups: ${{ needs.prep.outputs.ios_groups }}
+
+  report:
+    name: Open weekly report issue
+    needs: [android, ios]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Compose and file report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Reusable-workflow outputs (empty if a platform job was skipped).
+          A_RESULT: ${{ needs.android.outputs.test-result }}
+          A_TOTAL: ${{ needs.android.outputs.test-total }}
+          A_PASSED: ${{ needs.android.outputs.test-passed }}
+          A_FAILED: ${{ needs.android.outputs.test-failed }}
+          I_RESULT: ${{ needs.ios.outputs.test-result }}
+          I_TOTAL: ${{ needs.ios.outputs.test-total }}
+          I_PASSED: ${{ needs.ios.outputs.test-passed }}
+          I_FAILED: ${{ needs.ios.outputs.test-failed }}
+        run: |
+          set -euo pipefail
+
+          row() {
+            # $1 platform label, $2 result, $3 total, $4 passed, $5 failed
+            local result="${2:-}"
+            local emoji="⚠️"
+            local label="no run"
+            case "$result" in
+              PASSED|passed) emoji="✅"; label="passed" ;;
+              FAILED|failed) emoji="❌"; label="failed" ;;
+            esac
+            echo "| $1 | $emoji $label | ${3:-–} | ${4:-–} | ${5:-–} |"
+          }
+
+          DATE_UTC="$(date -u +%Y-%m-%d)"
+          OVERALL="✅ all passed"
+          if [ "${A_RESULT:-}" = "FAILED" ] || [ "${A_RESULT:-}" = "failed" ] \
+             || [ "${I_RESULT:-}" = "FAILED" ] || [ "${I_RESULT:-}" = "failed" ]; then
+            OVERALL="❌ failures detected"
+          elif [ -z "${A_RESULT:-}" ] && [ -z "${I_RESULT:-}" ]; then
+            OVERALL="⚠️ no results (jobs skipped or errored)"
+          fi
+
+          BODY_FILE="$RUNNER_TEMP/report.md"
+          {
+            echo "Automated weekend mobile run for **@qvac/llm-llamacpp**."
+            echo ""
+            echo "**Overall: $OVERALL**"
+            echo ""
+            echo "| Platform | Result | Total | Passed | Failed |"
+            echo "| --- | --- | --- | --- | --- |"
+            row "Android" "$A_RESULT" "$A_TOTAL" "$A_PASSED" "$A_FAILED"
+            row "iOS" "$I_RESULT" "$I_TOTAL" "$I_PASSED" "$I_FAILED"
+            echo ""
+            echo "Full per-test tables and Device Farm run links are on the [workflow run summary]($RUN_URL)."
+            echo ""
+            echo "Weekly coverage: OCR (LightOn + Paddle), Elephant + HighResAurora image functional, and vlmPerf{Gemma4,Qwen35}."
+          } > "$BODY_FILE"
+
+          # Idempotent label so the report issues are filterable.
+          gh label create weekly-mobile-report \
+            --repo "$REPO" \
+            --color 1d76db \
+            --description "Automated weekend mobile test reports" 2>/dev/null || true
+
+          gh issue create \
+            --repo "$REPO" \
+            --title "Weekend Mobile Tests (LLM) — $DATE_UTC" \
+            --label weekly-mobile-report \
+            --body-file "$BODY_FILE"
