@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Android GPU for Parakeet (QVAC-20556).** Remove the `#ifdef __ANDROID__`
+  guard in `ParakeetModel::load` that forced `useGPU=false`; `useGPU` now flows
+  to `parakeet-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which runs
+  the encoder on the GPU and selects the backend per its Adreno-tier / vendor
+  policy — Adreno 700+ on OpenCL (TDT decode routed to the host so the missing
+  `ARGMAX` kernel can't abort), Mali / Xclipse on Vulkan, with unsupported
+  tiers/vendors routed to CPU and surfaced via the new `gpuUnsupported` runtime
+  stat (`index.d.ts` `RuntimeStats.gpuUnsupported`). `CMakeLists.txt` now stages
+  the Vulkan/OpenCL MODULE `.so`s in the Android prebuild (reverses the [0.7.2]
+  CPU-only packaging), and the `default-registry` baseline advances to `6fe4e2b`
+  so the new version resolves. The Android gpu-smoke skips are dropped (GPU
+  asserted on Adreno/Mali; a policy CPU fallback flagged via `gpuUnsupported` is
+  accepted).
+
 ### Changed
 
 - Bumped the `parakeet-cpp` `version>=` constraint to `2026-06-10` (whisper.cpp `1c75d6e9`), which refreshes the bundled `ggml-speech` to the current speech-branch tip `bec032cd`. The registry baseline is left unchanged. The `parakeet-cpp` C++ tree is unchanged since the previous `128dae42` pin, so this only moves `ggml-speech`; prebuilds and the desktop RTF benchmark now build against the latest speech stack (QVAC-20614).

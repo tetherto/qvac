@@ -290,6 +290,7 @@ private:
   //   0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
   int                                  backend_device_ = 0;
   int                                  backend_id_     = 0;
+  int                                  backend_gpu_unsupported_ = 0;
   std::string                          backend_name_   = "CPU";
 
   // ── Token / sentinel constants ─────────────────────────────────────────

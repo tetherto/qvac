@@ -221,18 +221,6 @@ void ParakeetModel::cleanupTempFile_() {
 void ParakeetModel::load() {
   if (is_loaded_) return;
 
-  // Force useGPU to false in Android until Vulkan and OpenCL are stabilized
-#ifdef __ANDROID__
-  if (cfg_.useGPU) {
-    QLOG(
-        logger::Priority::WARNING,
-        "Parakeet: useGPU=true is currently ignored on Android "
-        "(GPU backends disabled at engine boundary pending Vulkan/Mali "
-        "and OpenCL/Adreno driver fixes); falling back to CPU.");
-    cfg_.useGPU = false;
-  }
-#endif
-
   QLOG(logger::Priority::INFO,
        "Loading Parakeet GGUF (modelType hint: " +
            std::to_string(static_cast<int>(cfg_.modelType)) + ")");
@@ -325,13 +313,14 @@ void ParakeetModel::load() {
         engine_->backend_device() == parakeet::BackendDevice::GPU ? 1 : 0;
     backend_name_   = engine_->backend_name();
     backend_id_     = backendIdFromName(backend_name_);
+    backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
 
     QLOG(logger::Priority::INFO,
          std::string("Parakeet engine loaded; model_type=") + detected +
          " backend=" + backend_name_ +
          " (device=" + (backend_device_ == 1 ? "GPU" : "CPU") +
          ", id=" + std::to_string(backend_id_) + ")");
-    if (cfg_.useGPU && backend_device_ != 1) {
+    if (cfg_.useGPU && backend_device_ != 1 && !backend_gpu_unsupported_) {
       QLOG(logger::Priority::WARNING,
            "Parakeet: useGPU=true was requested but the active backend is CPU. "
            "The platform's GPU backend either isn't compiled in or refused to "
@@ -1070,6 +1059,7 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   // side reads them from runtimeStats() (a.k.a. response.stats).
   stats.emplace_back("backendDevice",       static_cast<int64_t>(backend_device_));
   stats.emplace_back("backendId",           static_cast<int64_t>(backend_id_));
+  stats.emplace_back("gpuUnsupported",      static_cast<int64_t>(backend_gpu_unsupported_));
 
   // audioDurationMs derived from samples / sample_rate
   const double sr = sample_rate_ > 0

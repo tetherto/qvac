@@ -375,6 +375,13 @@ declare namespace TranscriptionParakeet {
     backendDevice: number
     /** {@link BackendId} integer code. */
     backendId: number
+    /**
+     * 1 when a GPU was present but the engine routed to CPU because the GPU
+     * mis-computes the models (e.g. Mali Vulkan) or the vendor/tier is declined
+     * by policy; 0 otherwise. A CPU `backendDevice` with `gpuUnsupported === 1`
+     * is expected, not a regression.
+     */
+    gpuUnsupported: number
   }
 
   /**
