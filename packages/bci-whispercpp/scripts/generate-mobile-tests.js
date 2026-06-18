@@ -2,8 +2,8 @@
 'use strict'
 
 // Prepares everything mobile integration tests need:
-//   1. Runs scripts/download-models.sh to fetch model + fixture binaries
-//      from the GitHub release (requires GH_TOKEN).
+//   1. Runs scripts/download-models.js to fetch model binaries from the
+//      QVAC registry and fixture binaries from the release asset.
 //   2. Copies model files (models/*.bin) into test/mobile/testAssets/.
 //   3. Copies fixtures (test/fixtures/manifest.json + *.bin) into the same.
 //   4. Regenerates test/mobile/integration.auto.cjs from
@@ -29,7 +29,7 @@ const INTEGRATION_DIR = path.join(PACKAGE_DIR, 'test', 'integration')
 const MOBILE_DIR = path.join(PACKAGE_DIR, 'test', 'mobile')
 const TEST_ASSETS_DIR = path.join(MOBILE_DIR, 'testAssets')
 const AUTO_FILE = path.join(MOBILE_DIR, 'integration.auto.cjs')
-const DOWNLOAD_SCRIPT = path.join(PACKAGE_DIR, 'scripts', 'download-models.sh')
+const DOWNLOAD_SCRIPT = path.join(PACKAGE_DIR, 'scripts', 'download-models.js')
 
 const args = new Set(process.argv.slice(2))
 const FORCE = args.has('--force')
@@ -63,12 +63,12 @@ function runDownloadScript () {
     throw new Error(`Download script not found: ${DOWNLOAD_SCRIPT}`)
   }
   console.log(`[generate-mobile-tests] Running ${path.relative(PACKAGE_DIR, DOWNLOAD_SCRIPT)} ...`)
-  const result = spawnSync('bash', [DOWNLOAD_SCRIPT], {
+  const result = spawnSync('node', [DOWNLOAD_SCRIPT], {
     cwd: PACKAGE_DIR,
     stdio: 'inherit'
   })
   if (result.status !== 0) {
-    throw new Error(`download-models.sh exited with status ${result.status}`)
+    throw new Error(`download-models.js exited with status ${result.status}`)
   }
 }
 
@@ -77,7 +77,7 @@ function copyAssets () {
 
   const modelFiles = listBins(MODELS_DIR)
   if (modelFiles.length === 0) {
-    throw new Error(`No model .bin files found in ${MODELS_DIR}. Run download-models.sh first.`)
+    throw new Error(`No model .bin files found in ${MODELS_DIR}. Run download-models.js first.`)
   }
 
   for (const file of modelFiles) {
@@ -88,7 +88,7 @@ function copyAssets () {
   }
 
   if (!fs.existsSync(FIXTURES_DIR)) {
-    throw new Error(`Fixtures directory not found: ${FIXTURES_DIR}. Run download-models.sh first.`)
+    throw new Error(`Fixtures directory not found: ${FIXTURES_DIR}. Run download-models.js first.`)
   }
 
   const fixtureEntries = fs.readdirSync(FIXTURES_DIR)
