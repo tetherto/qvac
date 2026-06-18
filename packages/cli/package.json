@@ -46,7 +46,7 @@
     "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats",
     "test:e2e:local": "npm run build && bats test/e2e-local.bats",
     "test:e2e:js": "tsx --test 'test/e2e/**/*.test.ts'",
-    "test:e2e:js:coverage": "tsx --test --experimental-test-coverage --test-coverage-exclude='**/node_modules/**' --test-coverage-exclude='**/test/**' 'test/e2e/**/*.test.ts'",
+    "test:e2e:js:coverage": "tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-exclude='**/test/**' 'test/e2e/**/*.test.ts'",
     "dev:link": "npm install ../sdk",
     "dev:unlink": "node scripts/dev-unlink.cjs",
     "sdk-source:workspace": "node scripts/preinstall-build-local-sdk.cjs && npm install ../sdk"
