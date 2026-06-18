@@ -54,7 +54,7 @@ void applyGenerationOverridesToSampling(
     LOG_WRN(
         "%s: both generationParams.grammar and generationParams.json_schema "
         "were provided; ignoring `grammar` and applying `json_schema` "
-        "(the JS and AddonJs paths reject this combination - this branch "
+        "(the JS and AddonJs paths reject this combination — this branch "
         "exists only for direct C++ callers).\n",
         __func__);
   }
@@ -86,7 +86,7 @@ std::function<void()> applyGenerationParamsToContext(
 
   // Apply overrides to *local copies* first. Only commit them onto the
   // live `params` and `smpl` after both the json_schema parse/convert and
-  // `common_sampler_init` have succeeded - otherwise a partially applied
+  // `common_sampler_init` have succeeded — otherwise a partially applied
   // override (e.g. temp/seed already written, then json_schema throws)
   // would leak into subsequent requests because no restore lambda gets
   // returned to the caller's `ScopeGuard`.
@@ -98,7 +98,7 @@ std::function<void()> applyGenerationParamsToContext(
   applyGenerationOverridesToSampling(nextSampling, nextPredict, overrides);
 
   // `common_sampler_init` returns nullptr on bad inputs (most commonly an
-  // invalid GBNF grammar - `json_schema` is converted to GBNF above and
+  // invalid GBNF grammar — `json_schema` is converted to GBNF above and
   // can in principle produce a grammar that the sampler rejects). Build
   // the new sampler before touching live state so a failure here also
   // leaves `params` / `smpl` intact.

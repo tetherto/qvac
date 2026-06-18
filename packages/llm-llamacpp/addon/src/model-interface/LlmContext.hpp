@@ -31,7 +31,7 @@ struct GenerationParams {
   std::optional<std::string> grammar;
   // JSON-Schema applied per request. Converted to GBNF via llama.cpp's
   // `json_schema_to_grammar()` and applied identically to `grammar`.
-  // Mutually exclusive with `grammar` - the JS wrapper rejects requests
+  // Mutually exclusive with `grammar` — the JS wrapper rejects requests
   // that set both. Mirrors the load-time `--json-schema` flag.
   std::optional<std::string> json_schema;
   // Reasoning channel budget override. `-1` keeps reasoning unrestricted, `0`
