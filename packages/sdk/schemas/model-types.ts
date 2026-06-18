@@ -72,12 +72,11 @@ const canonicalValuesSet = new Set<string>(Object.values(ModelType));
  *
  * @example
  * ```typescript
- * // Using alias (backward compatible)
- * loadModel({ modelSrc: "...", modelType: MODEL_TYPES.nmt });
- * // MODEL_TYPES.nmt resolves to "nmtcpp-translation"
- *
- * // Using canonical name directly
+ * // Preferred: canonical name
  * loadModel({ modelSrc: "...", modelType: MODEL_TYPES.nmtcppTranslation });
+ *
+ * // Deprecated: alias (still resolves to "nmtcpp-translation")
+ * loadModel({ modelSrc: "...", modelType: MODEL_TYPES.nmt });
  * ```
  */
 export const PUBLIC_MODEL_TYPES = {
