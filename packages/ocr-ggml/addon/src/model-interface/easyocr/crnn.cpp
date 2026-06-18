@@ -1,6 +1,8 @@
 #include "crnn.hpp"
 
 #include <cassert>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -38,6 +40,33 @@ void tap(
   }
 }
 
+// Escape hatch (OCR_GGML_CRNN_BIAS_REPEAT=1): fall back to the legacy
+// ggml_repeat broadcast for the recognizer's BiLSTM-linear / Prediction bias.
+// The default adds the [F] bias via ggml_add's implicit broadcast over the
+// (T, N) axes (ggml_can_repeat), which the CPU/Vulkan/Metal kernels implement —
+// numerically identical to the repeat path while saving a materialised
+// [F, T, N] buffer + an op per add. Mirrors the CRAFT conv-bias broadcast
+// (OCR_GGML_CRAFT_BIAS_REPEAT, QVAC-20533). The lever exists only to recover
+// without a code change if some backend's broadcast-add ever misbehaves. Read
+// via getenv at graph-build time (not a hot path) so a single-process test can
+// toggle it.
+bool crnn_bias_use_repeat() {
+  const char* v = std::getenv("OCR_GGML_CRNN_BIAS_REPEAT");
+  return v != nullptr && std::strcmp(v, "1") == 0;
+}
+
+// Add a per-feature bias [F] to a [F, T, N] sequence tensor. By default we rely
+// on ggml_add's implicit broadcast (no ggml_repeat); the escape-hatch env
+// forces the legacy materialised-repeat path.
+ggml_tensor*
+add_seq_bias(ggml_context* ctx, ggml_tensor* y, ggml_tensor* bias) {
+  auto* b_2d = ggml_reshape_2d(ctx, bias, bias->ne[0], 1);
+  if (crnn_bias_use_repeat()) {
+    return ggml_add(ctx, y, ggml_repeat(ctx, b_2d, y));
+  }
+  return ggml_add(ctx, y, b_2d);
+}
+
 // Conv with the (folded) bias added back via channel-wise broadcast.
 template <class W>
 ggml_tensor* conv_bias_t(
@@ -54,7 +83,8 @@ ggml_tensor* conv_bias_t(
       /*p1=*/p,
       /*d0=*/1,
       /*d1=*/1,
-      /*conv1x1_mulmat=*/weights.conv1x1_mulmat());
+      /*conv1x1_mulmat=*/weights.conv1x1_mulmat(),
+      /*use_direct_conv=*/weights.use_direct_conv());
 }
 
 template <class W>
@@ -255,11 +285,8 @@ ggml_tensor* bilstm_block_t(
   const std::string l = std::string(prefix) + ".linear";
   auto* W_lin = weights.w(l);               // ggml ne [2*hidden, hidden_out]
   auto* b_lin = weights.b(l);               // [hidden_out]
-  auto* y = ggml_mul_mat(ctx, W_lin, both); // ne [hidden_out, T]
-  {
-    auto* b_2d = ggml_reshape_2d(ctx, b_lin, b_lin->ne[0], 1);
-    y = ggml_add(ctx, y, ggml_repeat(ctx, b_2d, y));
-  }
+  auto* y = ggml_mul_mat(ctx, W_lin, both); // ne [hidden_out, T, N]
+  y = add_seq_bias(ctx, y, b_lin);
   return y;
 }
 
@@ -358,11 +385,8 @@ ggml_tensor* build_crnn_gen2(
   // ============== Prediction: Linear(256, 97) ===========================
   auto* W_pred = W.w("Prediction");            // ggml ne [256, 97]
   auto* b_pred = W.b("Prediction");            // [97]
-  auto* logits = ggml_mul_mat(ctx, W_pred, h); // ggml ne [97, T]
-  {
-    auto* b_2d = ggml_reshape_2d(ctx, b_pred, b_pred->ne[0], 1);
-    logits = ggml_add(ctx, logits, ggml_repeat(ctx, b_2d, logits));
-  }
+  auto* logits = ggml_mul_mat(ctx, W_pred, h); // ggml ne [97, T, N]
+  logits = add_seq_bias(ctx, logits, b_pred);
   tap(taps, crnn_taps::kLogits, logits);
   return logits;
 }

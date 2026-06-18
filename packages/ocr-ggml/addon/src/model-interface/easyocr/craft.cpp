@@ -45,7 +45,18 @@ void tap(
     ::ggml_context* ctx, const CraftWeights& W, ::ggml_tensor* x,
     const char* path, int s, int p, int d) {
   return ops::conv_2d_bias_relu(
-      ctx, x, W.w(path), W.b(path), s, s, p, p, d, d, W.conv1x1_mulmat());
+      ctx,
+      x,
+      W.w(path),
+      W.b(path),
+      s,
+      s,
+      p,
+      p,
+      d,
+      d,
+      W.conv1x1_mulmat(),
+      W.use_direct_conv());
 }
 
 // Apply a Conv (no activation, no BN) — used in slice5 and conv_cls.
@@ -53,7 +64,18 @@ void tap(
     ::ggml_context* ctx, const CraftWeights& W, ::ggml_tensor* x,
     const char* path, int s, int p, int d) {
   return ops::conv_2d_bias(
-      ctx, x, W.w(path), W.b(path), s, s, p, p, d, d, W.conv1x1_mulmat());
+      ctx,
+      x,
+      W.w(path),
+      W.b(path),
+      s,
+      s,
+      p,
+      p,
+      d,
+      d,
+      W.conv1x1_mulmat(),
+      W.use_direct_conv());
 }
 
 // CRAFT's `double_conv(in, mid, out)`:
@@ -103,7 +125,8 @@ cat_channels(::ggml_context* ctx, ::ggml_tensor* a, ::ggml_tensor* b) {
       1,
       1,
       1,
-      W.conv1x1_mulmat());
+      W.conv1x1_mulmat(),
+      W.use_direct_conv());
   auto* sources_4 = h; // h_relu2_2 in PyTorch (post-BN, pre-ReLU)
   tap(taps, craft_taps::kBasenetSlice1, sources_4);
 
@@ -122,7 +145,8 @@ cat_channels(::ggml_context* ctx, ::ggml_tensor* a, ::ggml_tensor* b) {
       1,
       1,
       1,
-      W.conv1x1_mulmat());
+      W.conv1x1_mulmat(),
+      W.use_direct_conv());
   auto* sources_3 = h; // h_relu3_2
   tap(taps, craft_taps::kBasenetSlice2, sources_3);
 
@@ -142,7 +166,8 @@ cat_channels(::ggml_context* ctx, ::ggml_tensor* a, ::ggml_tensor* b) {
       1,
       1,
       1,
-      W.conv1x1_mulmat());
+      W.conv1x1_mulmat(),
+      W.use_direct_conv());
   auto* sources_2 = h; // h_relu4_3
   tap(taps, craft_taps::kBasenetSlice3, sources_2);
 
@@ -162,7 +187,8 @@ cat_channels(::ggml_context* ctx, ::ggml_tensor* a, ::ggml_tensor* b) {
       1,
       1,
       1,
-      W.conv1x1_mulmat());
+      W.conv1x1_mulmat(),
+      W.use_direct_conv());
   auto* sources_1 = h; // h_relu5_3
   tap(taps, craft_taps::kBasenetSlice4, sources_1);
 
