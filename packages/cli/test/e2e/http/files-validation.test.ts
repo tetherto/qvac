@@ -43,3 +43,51 @@ describe('serve: files content endpoint', () => {
     assert.ok(maxAge > 0 && maxAge <= 3600, `max-age out of range: ${maxAge}`)
   })
 })
+
+// New coverage: GET /v1/files (list) and GET /v1/files/:id (metadata) — both
+// model-free; the bats suite only covered upload + :id/content.
+describe('serve: files list + metadata', () => {
+  const server = useServer({ cors: true })
+
+  async function upload (): Promise<string> {
+    const res = await server().inject({
+      method: 'POST', url: '/v1/files',
+      ...multipart([{ name: 'file', filename: 'tiny.png', contentType: 'image/png', data: tinyPng() }, { name: 'purpose', value: 'image_generation' }])
+    })
+    return (res.json() as { id: string }).id
+  }
+
+  it('GET /v1/files returns an empty list initially', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/files' })
+    assert.equal(res.statusCode, 200)
+    const body = res.json() as { object: string, data: unknown[], has_more?: boolean }
+    assert.equal(body.object, 'list')
+    assert.deepEqual(body.data, [])
+  })
+
+  it('GET /v1/files lists an uploaded file', async () => {
+    const id = await upload()
+    const body = (await server().inject({ method: 'GET', url: '/v1/files' })).json() as { object: string, data: Array<{ id: string }> }
+    assert.equal(body.object, 'list')
+    assert.ok(body.data.some((f) => f.id === id))
+  })
+
+  it('GET /v1/files/:id returns file metadata', async () => {
+    const id = await upload()
+    const res = await server().inject({ method: 'GET', url: `/v1/files/${id}` })
+    assert.equal(res.statusCode, 200)
+    const f = res.json() as { id: string, object: string, bytes: number, created_at: number, filename: string, purpose: string, status: string }
+    assert.equal(f.id, id)
+    assert.equal(f.object, 'file')
+    assert.equal(typeof f.bytes, 'number')
+    assert.equal(typeof f.created_at, 'number')
+    assert.equal(f.purpose, 'image_generation')
+    assert.equal(f.status, 'uploaded')
+  })
+
+  it('GET /v1/files/:id returns 404 for unknown id', async () => {
+    const res = await server().inject({ method: 'GET', url: '/v1/files/file-nope' })
+    assert.equal(res.statusCode, 404)
+    assertError(res, 'file_not_found')
+  })
+})
