@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bare-sdk",
-  "version": "0.13.3",
+  "version": "0.13.4",
   "license": "Apache-2.0",
   "description": "Bare-targeted slim assembly of the QVAC SDK. Consumers install only the addon packages they need and register plugins explicitly. No addon dependencies pulled in by default.",
   "repository": {

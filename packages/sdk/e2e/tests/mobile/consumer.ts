@@ -128,10 +128,22 @@ resources.define("ocr", {
   config: { langList: ["en"] },
 });
 
+async function resolveClassificationWeightsPath() {
+  // @ts-ignore - Metro turns the bundled GGUF file into an asset module.
+  // This path is relative to dist/tests/mobile/consumer.js after tsc.
+  const assetModule = require("../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf");
+  return await resolveBundledAssetUri(assetModule);
+}
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
-// so no registry constant / pre-download is required.
+// so no registry constant / pre-download is required. On mobile the weight
+// file must still be resolved as a Metro asset and passed explicitly because
+// the Bare worker bundle does not expose package data files at __dirname.
 resources.define("classification", {
   type: "classification",
+  config: async () => ({
+    modelPath: await resolveClassificationWeightsPath(),
+  }),
 });
 
 resources.define("sharded-embeddings", {
@@ -239,6 +251,7 @@ resources.define("tts-chatterbox", {
   config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
+    useGPU: true,
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
     referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
   }),
@@ -251,6 +264,7 @@ resources.define("tts-supertonic", {
     ttsEngine: "supertonic",
     language: "en",
     voice: "F1",
+    useGPU: true,
   },
 });
 
@@ -261,6 +275,7 @@ resources.define("tts-supertonic-multilingual", {
     ttsEngine: "supertonic",
     language: "es",
     voice: "F1",
+    useGPU: true,
   },
 });
 
@@ -365,10 +380,6 @@ export const executor = createExecutor({
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
-    new SkipExecutor(
-      /^video-/,
-      "Video mode works on mobile but SDK-shipped Wan models are too large to load on-device; mobile apps should pass a `delegate` to loadModel(...), desktop covers local-load coverage",
-    ),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)"),
     new SkipExecutor(/^vla-pi05-/, "π₀.₅ q_aggressive GGUF (3.9 GB) exceeds the iOS jetsam ~3 GB per-process limit (OOM) and is deferred on Android Device Farm until a CDN-fronted mirror exists; SmolVLA covers mobile VLA, desktop covers pi05"),
     new SkipExecutor(

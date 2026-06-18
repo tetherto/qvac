@@ -16,7 +16,12 @@ import {
   createDuplexSession,
   getWorkerLifeSignal,
 } from "#rpc";
-import { WorkerCrashedError } from "@/utils/errors-client";
+import {
+  WorkerCrashedError,
+  RequestValidationFailedError,
+} from "@/utils/errors-client";
+import { formatZodError } from "@/utils/zod-error";
+import { z } from "zod";
 import {
   nowMs,
   shouldProfile,
@@ -48,6 +53,47 @@ let firstConnectionPending = true;
 function getNextCommandId() {
   commandCounter = (commandCounter + 1) % Number.MAX_SAFE_INTEGER;
   return commandCounter;
+}
+
+// On a failed request parse, re-validate against the single `requestSchema`
+// member that owns the request's `type` so the error names the actual field
+// rather than reporting a generic union failure. `loadModel` (a nested union
+// with no top-level `type` literal) is already validated field-level in
+// `client/api/load-model.ts`, so it falls back to the union error here.
+interface RequestMemberIntrospect {
+  shape?: { type?: { value?: unknown } };
+  options?: RequestMemberIntrospect[];
+}
+
+function memberDiscriminator(option: RequestMemberIntrospect): string | undefined {
+  const direct = option.shape?.type?.value;
+  if (typeof direct === "string") return direct;
+  const nested = option.options?.[0]?.shape?.type?.value;
+  return typeof nested === "string" ? nested : undefined;
+}
+
+function pinpointRequestError(request: unknown, fallback: z.ZodError): z.ZodError {
+  const type = (request as { type?: unknown } | null)?.type;
+  if (typeof type !== "string") return fallback;
+  for (const option of requestSchema.options) {
+    if (memberDiscriminator(option as RequestMemberIntrospect) !== type) continue;
+    const result = (option as z.ZodType).safeParse(request);
+    return result.success ? fallback : result.error;
+  }
+  return fallback;
+}
+
+function parseRequest<T extends Request>(request: T): Request {
+  try {
+    return requestSchema.parse(request);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new RequestValidationFailedError(
+        formatZodError(pinpointRequestError(request, error)),
+      );
+    }
+    throw error;
+  }
 }
 
 // Race in-flight reply/stream pulls against the worker-life signal —
@@ -234,7 +280,7 @@ async function sendBase<T extends Request>(
   options?: RPCOptions,
   signalDisable: boolean = false,
 ): Promise<Response> {
-  const parsedRequest = requestSchema.parse(request);
+  const parsedRequest = parseRequest(request);
   const req = rpc.request(getNextCommandId());
   logger.debug("RPC Client sending:", summarizeRequest(request));
   const payloadObj = signalDisable
@@ -272,7 +318,7 @@ async function sendProfiled<T extends Request>(
 
   try {
     const zodStart = nowMs();
-    const parsedRequest = requestSchema.parse(request);
+    const parsedRequest = parseRequest(request);
     timings.requestZodValidationMs = nowMs() - zodStart;
 
     const req = rpc.request(getNextCommandId());
@@ -352,7 +398,7 @@ async function* streamBase<T extends Request>(
   options: RPCOptions = {},
   signalDisable: boolean = false,
 ): AsyncGenerator<Response> {
-  const parsedRequest = requestSchema.parse(request);
+  const parsedRequest = parseRequest(request);
   const req = rpc.request(getNextCommandId());
   logger.debug("RPC Client streaming:", summarizeRequest(request));
   const payloadObj = signalDisable
@@ -409,7 +455,7 @@ async function* streamProfiled<T extends Request>(
 
   try {
     const zodStart = nowMs();
-    const parsedRequest = requestSchema.parse(request);
+    const parsedRequest = parseRequest(request);
     timings.requestZodValidationMs = nowMs() - zodStart;
 
     const req = rpc.request(getNextCommandId());
@@ -523,7 +569,7 @@ async function duplexBase<T extends Request>(
   signalDisable: boolean,
   timeout?: number,
 ): Promise<DuplexSession> {
-  const parsedRequest = requestSchema.parse(request);
+  const parsedRequest = parseRequest(request);
   logger.debug("RPC Client duplex:", summarizeRequest(request));
 
   const payloadObj = signalDisable
@@ -554,7 +600,7 @@ async function duplexProfiled<T extends Request>(
 
   try {
     const zodStart = nowMs();
-    const parsedRequest = requestSchema.parse(request);
+    const parsedRequest = parseRequest(request);
     timings.requestZodValidationMs = nowMs() - zodStart;
 
     logger.debug("RPC Client duplex:", summarizeRequest(request));

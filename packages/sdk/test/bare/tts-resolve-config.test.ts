@@ -22,7 +22,7 @@ test(
       await ttsPlugin.resolveConfig!(legacyConfig, {
         resolveModelPath: async () => "",
         modelSrc: "s3:///legacy/model",
-        modelType: "tts",
+        modelType: "tts-ggml",
       });
       t.ok(false, "expected LegacyTtsModelDeprecatedError");
     } catch (err) {
