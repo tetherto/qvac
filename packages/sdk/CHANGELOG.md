@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.13.4]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.4
+
+A patch release that adds two developer-experience APIs — a single subscription
+for all server logs and friendlier input-validation errors — and hardens
+tool-call parsing for Qwen models used in agentic workflows.
+
+## New APIs
+
+### Subscribe to all server logs at once
+
+You can now capture every server-side log through one subscription instead of
+wiring up a `loggingStream()` per model or request. `subscribeServerLogs`
+delivers each log entry (level, namespace, message) to a single handler and
+returns an unsubscribe function.
+
+```typescript
+import { subscribeServerLogs } from "@qvac/sdk";
+
+const unsubscribe = subscribeServerLogs((log) => {
+  console.log(`[${log.level}] [${log.namespace}] ${log.message}`);
+});
+
+// later
+unsubscribe();
+```
+
+### Field-level validation errors for user input
+
+Invalid request input now surfaces as a `RequestValidationFailedError` with a
+clear, field-level message pointing at the exact key and location that failed,
+instead of an opaque rejection. This makes it much faster to spot typos and
+unsupported options in calls like `loadModel`.
+
+```typescript
+import { loadModel, RequestValidationFailedError, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+
+try {
+  await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { dtx_size: 4096 } });
+} catch (err) {
+  if (err instanceof RequestValidationFailedError) {
+    console.error(err.message);
+    // Invalid request:
+    // ✖ Unrecognized key: "dtx_size"
+    //   → at modelConfig
+  }
+}
+```
+
+## Bug Fixes
+
+### Recover malformed Qwen tool-call frames
+
+Qwen3.5/3.6 can intermittently emit a malformed tool-call frame that fuses its
+XML and JSON tool templates, embedding the `function=<name>` token as a bare
+string key inside an otherwise JSON object. Previously the parser rejected that
+frame as invalid JSON, so no structured tool call was produced and callers saw
+the raw markup as assistant text. The parser now recognizes and repairs this
+specific shape, so the tool call is recovered and dispatched correctly.
+
 ## [0.13.3]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.3
@@ -58,15 +119,15 @@ per-platform prebuilds at install time. Both packages remain available in
 
 The bundled `@qvac/rag` dependency is updated to `^0.6.4`.
 
-## [0.13.1]
+## [0.13.1] (LLM)
 
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.1
+Dependency-maintenance patch. No public API changes.
 
-Dependency-maintenance patch. `@qvac/sdk` and `@qvac/bare-sdk` adopt `bare-fetch` 3.x and `@qvac/decoder-audio` 0.4.x, and move dev-only `bare-subprocess` to 6.x. This removes the deprecated `@qvac/response` and its exact `bare-events 2.4.2` pin from the dependency tree.
-
-## Maintenance
-
-Bump `bare-fetch` to `^3.0.1` (public fetch API unchanged) and dev `bare-subprocess` to `^6.1.0`. Bump `@qvac/decoder-audio` to `^0.4.0` (drops deprecated `@qvac/response`); `decoder-audio@0.4.0` returns its `QvacResponse` synchronously, so `server/utils/audio/decoder.ts` no longer `await`s `decoder.run()`. `@qvac/sdk`/`@qvac/bare-sdk` bumped in lockstep.
+- `bare-fetch` → `^3.0.1` (transitive-only major; fetch API unchanged; only 3.0.1 header validation, all SDK headers are RFC-valid).
+- dev `bare-subprocess` → `^6.1.0` (not shipped to consumers).
+- `@qvac/decoder-audio` → `^0.4.0`: removes the deprecated `@qvac/response` package (folded into `@qvac/infer-base`) from the dependency tree, eliminating its exact `bare-events 2.4.2` pin. `decoder-audio@0.4.0`'s `run()` returns `QvacResponse` synchronously; `server/utils/audio/decoder.ts` updated to not `await` it.
+- `@qvac/sdk` + `@qvac/bare-sdk` bumped in lockstep.
+- Validated by a clean install: no `@qvac/response`, no `bare-events@2.4.2`, no `bare-fetch@2.x`, no `decoder-audio@0.3.x` resolve in the tree.
 
 ## [0.13.0]
 
