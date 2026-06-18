@@ -183,8 +183,8 @@ signal transcription addon powered by a BCI-patched fork of whisper.cpp.
   frames, truncation handling, invalid-config rejection, and range validation.
 - `scripts/convert-model.py` to convert a BrainWhisperer checkpoint into the
   GGML model + embedder binary pair consumed at runtime.
-- `scripts/download-models.js` to fetch the reference model from the QVAC
-  registry and test fixtures from the `bci-test-assets-v0.1.0` release.
+- `scripts/download-models.sh` to fetch the reference model and test fixtures
+  from the `bci-test-assets-v0.1.0` GitHub release.
 
 ### Streaming Transcription API
 
