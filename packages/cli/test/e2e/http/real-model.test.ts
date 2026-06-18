@@ -93,6 +93,48 @@ describe('chat completions (streaming)', () => {
   })
 })
 
+// New coverage (Phase 4): chat tools + structured-output contract.
+describe('chat completions (tools / structured output)', () => {
+  it('rejects response_format combined with tools (invalid_response_format)', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'hi' }],
+      response_format: { type: 'json_object' },
+      tools: [{ type: 'function', function: { name: 'f', parameters: { type: 'object', properties: {} } } }]
+    })
+    assert.equal(res.statusCode, 400)
+    assertError(res, 'invalid_response_format')
+  })
+
+  it('accepts a function tool and returns a valid completion', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'What is the weather in Paris?' }],
+      max_tokens: 64,
+      tools: [{ type: 'function', function: { name: 'get_weather', description: 'Get weather', parameters: { type: 'object', properties: { city: { type: 'string' } } } } }]
+    })
+    assert.equal(res.statusCode, 200)
+    const body = res.json() as any
+    assert.equal(body.object, 'chat.completion')
+    assert.equal(body.choices.length, 1)
+    assert.ok(body.choices[0].message)
+    assert.ok(['stop', 'tool_calls', 'length'].includes(body.choices[0].finish_reason))
+  })
+})
+
+// New coverage (Phase 4): transcription prompt param.
+describe('transcriptions (prompt param)', () => {
+  it('accepts a prompt and returns JSON with text', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/v1/audio/transcriptions',
+      ...multipart([{ name: 'model', value: E2E.whisper }, { name: 'prompt', value: 'a greeting' }, wavField])
+    })
+    assert.equal(res.statusCode, 200)
+    assert.equal(typeof (res.json() as { text: unknown }).text, 'string')
+  })
+})
+
 describe('embeddings', () => {
   it('single input returns vector', async () => {
     const res = await post('/v1/embeddings', { model: E2E.embed, input: 'Hello world' })
