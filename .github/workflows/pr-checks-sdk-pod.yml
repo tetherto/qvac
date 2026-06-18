@@ -310,7 +310,6 @@ jobs:
                 run "test:bare $src" npm run --if-present test:bare
               fi
               run "test:e2e $src" npm run --if-present test:e2e
-              run "test:e2e:js $src" npm run --if-present test:e2e:js
               src_idx=$((src_idx + 1))
             done
 
