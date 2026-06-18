@@ -68,17 +68,17 @@ test/e2e/
 
 ## Concurrency
 
-Test files run in parallel by default (node:test spawns a process per file). Only
-the model-loading files need serializing, so `test:e2e:js` runs in two passes:
+Test files run in parallel by default (node:test spawns a process per file). The
+modelless validation, command, and spawned-binary tests have no shared state —
+each builds its own in-process server or spawns its own process on a free port in
+its own temp dir — so they run in parallel, as the first pass of `test:e2e:js`.
 
-1. **Parallel** — `http/`, `cli/`, and the root smoke/harness tests. Modelless
-   validation, command, and spawned-binary tests with no shared state: each builds
-   its own in-process server or spawns its own process on a free port, in its own
-   temp dir. Safe to run concurrently.
-2. **Serial** (`--test-concurrency=1`) — everything under `model/`. Running these
-   concurrently would (a) race on the shared model cache in `~/.qvac` (cold on
-   every CI run) and (b) load several models + SDK workers at once, risking memory
-   pressure.
+The model-loading files (`model/`) run as a second, serial pass
+(`--test-concurrency=1`) as a precaution. Run in parallel they *may* contend on
+the shared model cache in `~/.qvac` (cold on every CI run) or load several models
++ SDK workers at once; neither has been shown to actually break, so they're
+serialized rather than risk flaky CI. If parallel model loads turn out to be
+safe, the two passes can be merged into one.
 
 Within a file, node:test runs tests in definition order, but no test depends on
 another's side effects — the destructive model-unload test has its own server, as
