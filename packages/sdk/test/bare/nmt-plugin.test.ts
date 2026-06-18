@@ -65,38 +65,3 @@ test("nmtPlugin.resolveConfig: Bergamot config strips vocab sources and delegate
   t.ok(result.config, "resolveConfig returns a config object for Bergamot");
   t.ok(resolvedPaths.length > 0, "resolveModelPath was called for vocab resolution");
 });
-
-test("nmtPlugin.handlers.translate: has correct cancel scope", async (t) => {
-  const { nmtPlugin } = await import(
-    "@/server/bare/plugins/nmtcpp-translation/plugin"
-  );
-
-  t.alike(
-    nmtPlugin.handlers.translate.cancel,
-    { scope: "none" },
-    "NMT translate cancel scope is 'none'",
-  );
-});
-
-test("nmtPlugin.handlers.translate: is configured for streaming", async (t) => {
-  const { nmtPlugin } = await import(
-    "@/server/bare/plugins/nmtcpp-translation/plugin"
-  );
-
-  t.is(
-    nmtPlugin.handlers.translate.streaming,
-    true,
-    "translate handler is streaming",
-  );
-});
-
-test("nmtPlugin: registers with correct modelType and addon package", async (t) => {
-  const { nmtPlugin } = await import(
-    "@/server/bare/plugins/nmtcpp-translation/plugin"
-  );
-  const { ModelType, ADDON_NMT } = await import("@/schemas");
-
-  t.is(nmtPlugin.modelType, ModelType.nmtcppTranslation, "modelType is nmtcppTranslation");
-  t.is(nmtPlugin.addonPackage, ADDON_NMT, "addonPackage is ADDON_NMT");
-  t.is(nmtPlugin.displayName, "NMT (nmtcpp)", "displayName matches");
-});

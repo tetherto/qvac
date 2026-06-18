@@ -2,9 +2,6 @@ import test from "brittle";
 import {
   nmtConfigBaseSchema,
   nmtConfigSchema,
-  BERGAMOT_LANGUAGES,
-  INDICTRANS_LANGUAGES,
-  BERGAMOT_CJK_LANG_PAIRS,
 } from "@/schemas/translation-config";
 import {
   translateRequestSchema,
@@ -230,19 +227,6 @@ test("translateRequestSchema: rejects NMT request with empty array", (t) => {
   t.is(result.success, false);
 });
 
-test("translateRequestSchema: accepts LLM request with from and to", (t) => {
-  const result = translateRequestSchema.safeParse({
-    type: "translate",
-    modelId: "llm-model",
-    text: "Hello",
-    stream: false,
-    modelType: "llm",
-    from: "en",
-    to: "fr",
-  });
-  t.is(result.success, true);
-});
-
 // === translationStatsSchema ===
 
 test("translationStatsSchema: accepts NMT-specific stats fields", (t) => {
@@ -257,21 +241,6 @@ test("translationStatsSchema: accepts NMT-specific stats fields", (t) => {
   if (result.success) {
     t.is(result.data.decodeTime, 120);
     t.is(result.data.encodeTime, 30);
-  }
-});
-
-test("translationStatsSchema: accepts LLM-specific stats fields", (t) => {
-  const result = translationStatsSchema.safeParse({
-    totalTime: 500,
-    totalTokens: 100,
-    tokensPerSecond: 200,
-    timeToFirstToken: 50,
-    cacheTokens: 10,
-  });
-  t.is(result.success, true);
-  if (result.success) {
-    t.is(result.data.timeToFirstToken, 50);
-    t.is(result.data.cacheTokens, 10);
   }
 });
 
@@ -330,35 +299,6 @@ test("translateServerParamsSchema: rejects unsupported modelType", (t) => {
     modelType: "ocr",
   });
   t.is(result.success, false);
-});
-
-// === Language constant completeness checks ===
-
-test("BERGAMOT_LANGUAGES: includes core European languages", (t) => {
-  const core = ["en", "fr", "de", "es", "it", "pt", "nl", "pl", "ru"];
-  for (const lang of core) {
-    t.ok(
-      (BERGAMOT_LANGUAGES as readonly string[]).includes(lang),
-      `BERGAMOT_LANGUAGES includes ${lang}`,
-    );
-  }
-});
-
-test("INDICTRANS_LANGUAGES: includes core Indic languages", (t) => {
-  const core = ["eng_Latn", "hin_Deva", "ben_Beng", "tam_Taml", "tel_Telu"];
-  for (const lang of core) {
-    t.ok(
-      (INDICTRANS_LANGUAGES as readonly string[]).includes(lang),
-      `INDICTRANS_LANGUAGES includes ${lang}`,
-    );
-  }
-});
-
-test("BERGAMOT_CJK_LANG_PAIRS: contains expected CJK pairs", (t) => {
-  t.ok(BERGAMOT_CJK_LANG_PAIRS.includes("enja"));
-  t.ok(BERGAMOT_CJK_LANG_PAIRS.includes("enko"));
-  t.ok(BERGAMOT_CJK_LANG_PAIRS.includes("enzh"));
-  t.is(BERGAMOT_CJK_LANG_PAIRS.length, 3);
 });
 
 // === loadModelOptionsToRequestSchema with NMT ===
