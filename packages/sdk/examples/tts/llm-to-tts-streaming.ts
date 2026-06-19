@@ -70,18 +70,22 @@ function appendPcmSamples(target: number[], chunk: number[]) {
 }
 
 try {
-  console.log(`Loading LLM from registry: ${LLAMA_3_2_1B_INST_Q4_0.name}`);
+  console.log(`▸ Loading LLM from registry: ${LLAMA_3_2_1B_INST_Q4_0.name}`);
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
       ctx_size: 2048,
     },
-    onProgress: (progress: ModelProgressUpdate) =>
-      console.log(`LLM load: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p: ModelProgressUpdate) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`LLM ready: ${llmModelId}`);
+  console.log(`▸ LLM ready: ${llmModelId}`);
 
-  console.log("Loading Supertonic TTS (registry)…");
+  console.log("▸ Loading Supertonic TTS (registry)…");
   const ttsModelId = await loadModel({
     modelSrc: TTS_EN_SUPERTONIC_Q8_0,
     modelConfig: {
@@ -91,14 +95,19 @@ try {
       ttsSpeed: 1.05,
       ttsNumInferenceSteps: 10,
     },
-    onProgress: (progress: ModelProgressUpdate) =>
-      console.log(`TTS load: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p: ModelProgressUpdate) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`TTS ready: ${ttsModelId}`);
+  console.log(`▸ TTS ready: ${ttsModelId}`);
 
   const prompt = "What is a constellation?";
 
-  console.log(`\nUser: ${prompt}\nAssistant (streaming):`);
+  console.log(`▸ User: ${prompt}`);
+  console.log("▸ Assistant (streaming):");
 
   const result = completion({
     modelId: llmModelId,
@@ -127,7 +136,7 @@ try {
             ? m.sentenceChunk.replace(/\s+/g, " ").trim().slice(0, 72)
             : "";
         console.log(
-          `\n[TTS phrase ${phraseIndex}] ${m.buffer.length} samples${preview ? ` — "${preview}${preview.length >= 72 ? "..." : ""}"` : ""}`,
+          `\n▸ [TTS phrase ${phraseIndex}] ${m.buffer.length} samples${preview ? ` — "${preview}${preview.length >= 72 ? "..." : ""}"` : ""}`,
         );
         await playPcmInt16Chunk(m.buffer, SUPERTONIC_SAMPLE_RATE);
       }
@@ -146,20 +155,20 @@ try {
 
   const stats = await result.stats;
   if (stats) {
-    console.log("\nLLM stats:", stats);
+    console.log("\n▸ LLM stats:", stats);
   }
 
   const outWav = "llm-to-tts-streaming-output.wav";
   console.log(
-    `\nWriting ${combinedPcm.length} samples to ${outWav} (full utterance; phrases were already played above).`,
+    `\n▸ Writing ${combinedPcm.length} samples to ${outWav} (full utterance; phrases were already played above).`,
   );
   createWav(combinedPcm, SUPERTONIC_SAMPLE_RATE, outWav);
 
   await unloadModel({ modelId: llmModelId, clearStorage: false });
   await unloadModel({ modelId: ttsModelId, clearStorage: false });
-  console.log("Models unloaded.");
+  console.log("▸ Models unloaded.");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
