@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ba54c3bfe..c8f2a1d3e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1133,7 +1133,7 @@ IF(NOT TARGET pthreadpool)
+       "${CMAKE_BINARY_DIR}/pthreadpool")
+   ELSE()
+     find_package(unofficial-pthreadpool CONFIG REQUIRED)
+-    ADD_LIBRARY(pthreadpool SHARED IMPORTED)
++    ADD_LIBRARY(pthreadpool STATIC IMPORTED)
+     FIND_LIBRARY(PTHREADPOOL_LIBRARY NAMES pthreadpool REQUIRED)
+     FIND_PACKAGE(Threads REQUIRED)
+     TARGET_LINK_LIBRARIES(pthreadpool INTERFACE Threads::Threads unofficial::pthreadpool unofficial::pthreadpool_interface)

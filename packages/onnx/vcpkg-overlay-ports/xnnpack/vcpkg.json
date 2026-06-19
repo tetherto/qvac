@@ -1,0 +1,18 @@
+{
+  "$comment": "Overlay of qvac-registry-vcpkg xnnpack@onnxruntime — drop WINDOWS_USE_MSBUILD so Ninja drives cl.exe on self-hosted VS 2026 runners; fix-windows-pthreadpool uses STATIC IMPORTED on Windows; disable hand-written ASM on Windows (GAS-syntax .S incompatible with ml64 + static-CRT MSVC_RUNTIME_LIBRARY ASM error).",
+  "name": "xnnpack",
+  "version-string": "onnxruntime",
+  "port-version": 3,
+  "description": "High-efficiency floating-point neural network inference operators for mobile, server, and Web",
+  "homepage": "https://github.com/google/XNNPACK",
+  "license": "BSD-3-Clause",
+  "dependencies": [
+    "cpuinfo",
+    "fxdiv",
+    "pthreadpool",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}
