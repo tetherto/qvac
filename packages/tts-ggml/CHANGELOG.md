@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.2] - 2026-06-19
 
 ### Fixed
 
@@ -30,13 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **`tts-cpp` pinned to `2026-06-12`** for `EngineOptions::kv_cache_type`
-  and the streamed (no host-staging) chatterbox GGUF loads.  This pin is
-  Android-safe again: the revision removes the last direct
-  `ggml_backend_is_cpu` / `ggml_get_type_traits_cpu` references from
-  tts-cpp (the unresolvable-UND-symbol dlopen crash that forced the
-  0.2.2 revert), routing them through the backend registry and
-  `ggml_quantize_chunk` (ggml-base) instead.
+- **`tts-cpp` pinned to `2026-06-19`** (`qvac-ext-lib-whisper.cpp` PR #43 on
+  top of master `b95ad447`) for `EngineOptions::kv_cache_type` and the streamed
+  (no host-staging) chatterbox GGUF loads. The Android `GGML_BACKEND_DL` symbol
+  routing (`ggml_backend_is_cpu` / `ggml_get_type_traits_cpu` → backend registry
+  shim + `ggml_quantize_chunk`) now comes from the `b95ad447` base via QVAC-20557
+  (PR #54), so this package no longer carries that fix itself.
 
 ## [0.3.1] - 2026-06-18
 
