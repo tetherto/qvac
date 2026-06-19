@@ -36,7 +36,7 @@ namespace general_error = qvac_errors::general_error;
 // less memory than f32@2048 AND double the context.  Hosts that need
 // longer single-call synthesis can raise the cap, or pass nCtx=0 to
 // restore the uncapped behaviour.
-constexpr int kDefaultNCtx = 4096;
+constexpr int DEFAULT_N_CTX = 4096;
 
 // Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  q8_0 stores
 // the cache at ~27% of f32.  Upstream validation on real GGUFs
@@ -47,7 +47,7 @@ constexpr int kDefaultNCtx = 4096;
 // the exact input text); Metal decode is 20-30% faster from the
 // bandwidth saving.  Pass kvCacheType:"f32" for bit-exact parity with
 // the pre-quantisation behaviour.
-constexpr const char * kDefaultKvCacheType = "q8_0";
+constexpr const char* DEFAULT_KV_CACHE_TYPE = "q8_0";
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;
@@ -58,9 +58,9 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.seed.has_value())    opts.seed         = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
-  opts.n_ctx = cfg.nCtx.value_or(kDefaultNCtx);
+  opts.n_ctx = cfg.nCtx.value_or(DEFAULT_N_CTX);
   opts.kv_cache_type =
-      cfg.kvCacheType.empty() ? kDefaultKvCacheType : cfg.kvCacheType;
+      cfg.kvCacheType.empty() ? DEFAULT_KV_CACHE_TYPE : cfg.kvCacheType;
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
   } else if (cfg.useGpu.has_value()) {
@@ -254,10 +254,11 @@ void ChatterboxModel::loadLocked() {
   // (no Mali device enumerated) still fails CI. OR (not replace) the engine
   // flag so a future-correct engine reading keeps working.
   const bool wantsGpu = cfg_.nGpuLayers.has_value()
-      ? (*cfg_.nGpuLayers != 0)
-      : cfg_.useGpu.value_or(false);
-  gpuUnsupported_ = engine_->gpu_unsupported() ||
-                    (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
+                            ? (*cfg_.nGpuLayers != 0)
+                            : cfg_.useGpu.value_or(false);
+  gpuUnsupported_ =
+      engine_->gpu_unsupported() ||
+      (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
 }
 
 void ChatterboxModel::unloadLocked() {
