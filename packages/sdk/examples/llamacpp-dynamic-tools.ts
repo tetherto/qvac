@@ -101,7 +101,7 @@ async function chatTurn({ modelId, kvCache, history, tools }: ChatTurnParams) {
   const toolEventsTask = (async () => {
     for await (const evt of result.toolCallStream) {
       console.log(
-        `\n→ tool call: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
+        `\n▸ tool call: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
       );
     }
   })();
@@ -121,7 +121,7 @@ async function chatTurn({ modelId, kvCache, history, tools }: ChatTurnParams) {
     if (schema) {
       const parsed = schema.safeParse(call.arguments);
       if (!parsed.success) {
-        console.warn(`   ✗ validation failed for ${call.name}:`, parsed.error);
+        console.log(`✖ validation failed for ${call.name}:`, parsed.error);
       }
     }
   }
@@ -143,10 +143,14 @@ async function main() {
       tools: true,
       toolsMode: "dynamic",
     },
-    onProgress: (progress) =>
-      console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`✅ Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const kvCache = `dynamic-tools-${Date.now()}`;
   const history: Array<{ role: string; content: string }> = [
@@ -160,7 +164,7 @@ async function main() {
 
   // Turn 1 — only weather tools available.
   history.push({ role: "user", content: "What's the weather in Tokyo?" });
-  console.log("\n🤖 Turn 1 (tools=weather):\n");
+  console.log("\n▸ Turn 1 (tools=weather):\n");
   await chatTurn({ modelId, kvCache, history, tools: weatherTools });
 
   // Turn 2 — same session, swap to horoscope tools. Dynamic mode lets the
@@ -169,19 +173,19 @@ async function main() {
     role: "user",
     content: "Now check my horoscope for Aquarius.",
   });
-  console.log("\n\n🤖 Turn 2 (tools=horoscope):\n");
+  console.log("\n\n▸ Turn 2 (tools=horoscope):\n");
   await chatTurn({ modelId, kvCache, history, tools: horoscopeTools });
 
   // Turn 3 — swap to a parameterless tool to confirm empty-arg flows work.
   history.push({ role: "user", content: "What's today's date?" });
-  console.log("\n\n🤖 Turn 3 (tools=date):\n");
+  console.log("\n\n▸ Turn 3 (tools=date):\n");
   await chatTurn({ modelId, kvCache, history, tools: dateTools });
 
-  console.log("\n\n🎉 Done.");
+  console.log("\n\n▸ Done.");
   await unloadModel({ modelId, clearStorage: false });
 }
 
 main().catch((err) => {
-  console.error("❌ Error:", err);
+  console.error("✖", err);
   process.exit(1);
 });

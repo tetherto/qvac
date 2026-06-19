@@ -8,8 +8,11 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: AFRICAN_4B_TRANSLATION_Q4_K_M,
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
     // IMPORTANT: these parameters are validated to be optimal
     modelConfig: {
@@ -42,6 +45,6 @@ try {
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
