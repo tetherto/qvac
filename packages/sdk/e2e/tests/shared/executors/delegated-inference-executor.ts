@@ -27,8 +27,12 @@ import { randomHex } from "../../utils/random.js";
 
 const DEFAULT_DELEGATE_TIMEOUT = 10_000;
 
-const isDelegationError = (msg: string): boolean =>
-  msg.includes("DELEGATE_CONNECTION_FAILED") || msg.includes("RPC connection failed");
+function isDelegationError(msg: string): boolean {
+  return (
+    msg.includes("DELEGATE_CONNECTION_FAILED") ||
+    msg.includes("RPC connection failed")
+  );
+}
 
 const allTests = [
   delegatedProviderStart,
@@ -140,7 +144,7 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
   async loadModelFallbackLocal(): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelType: "llm",
+      modelType: "llamacpp-completion",
       delegate: {
         providerPublicKey: randomHex(32),
         timeout: 3000,
@@ -195,7 +199,7 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
       // (it confirms the cancel routed through the delegation pipe).
       const op = loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         delegate: {
           providerPublicKey: publicKey,
           timeout: DEFAULT_DELEGATE_TIMEOUT,
@@ -223,7 +227,7 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
     try {
       await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         delegate: {
           providerPublicKey: randomHex(32),
           timeout,
@@ -245,7 +249,7 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
     try {
       await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         delegate: {
           providerPublicKey: "also-invalid",
           fallbackToLocal: false,

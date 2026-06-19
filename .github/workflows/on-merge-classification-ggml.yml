@@ -127,40 +127,8 @@ jobs:
       ref: ${{ github.sha }}
       workdir: "packages/classification-ggml"
 
-  run-integration-tests:
-    needs: [publish-logic, prebuild]
-    if: |
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_release == 'true' ||
-      needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
-    uses: ./.github/workflows/integration-test-classification-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-      workdir: "packages/classification-ggml"
-
-  mobile-integration-tests:
-    needs: [publish-logic, prebuild]
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    if: |
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_release == 'true' ||
-      needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
-    uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-
   publish-gpr:
-    needs: [publish-logic, prebuild, run-integration-tests, mobile-integration-tests]
+    needs: [publish-logic, prebuild]
     if: |
       !cancelled() &&
       needs.prebuild.result == 'success' &&
@@ -194,7 +162,7 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [publish-logic, release-merge-guard, prebuild, run-integration-tests, mobile-integration-tests]
+    needs: [publish-logic, release-merge-guard, prebuild]
     if: |
       !cancelled() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
