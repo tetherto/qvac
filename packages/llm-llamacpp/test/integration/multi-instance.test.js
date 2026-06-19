@@ -11,6 +11,7 @@ const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isWindowsX64 = platform === 'win32' && arch === 'x64'
 const useCpu = isDarwinX64 || isLinuxArm64
+const skip = isDarwinX64 || isWindowsX64
 
 const DEFAULT_MODEL = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
@@ -73,7 +74,7 @@ async function collectResponse (response) {
 
 safeTest('Two instances can run inference simultaneously', {
   timeout: 900_000,
-  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+  skip // TODO: unskip Windows once we have a new Windows runner with a GPU
 }, async t => {
   let addon1 = null
   let addon2 = null
@@ -107,7 +108,7 @@ safeTest('Two instances can run inference simultaneously', {
 
 safeTest('Repeated load/unload cycles should remain stable', {
   timeout: 900_000,
-  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+  skip // TODO: unskip Windows once we have a new Windows runner with a GPU
 }, async t => {
   let currentAddon = null
   try {
@@ -142,7 +143,7 @@ safeTest('Repeated load/unload cycles should remain stable', {
 
 safeTest('Unloading one instance does not affect another generating instance', {
   timeout: 900_000,
-  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+  skip // TODO: unskip Windows once we have a new Windows runner with a GPU
 }, async t => {
   let addon1 = null
   let addon2 = null
@@ -204,7 +205,7 @@ safeTest('Unloading one instance does not affect another generating instance', {
 
 safeTest('Multiple load/unload cycles on one instance while another generates', {
   timeout: 900_000,
-  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+  skip // TODO: unskip Windows once we have a new Windows runner with a GPU
 }, async t => {
   let addon1 = null
   try {

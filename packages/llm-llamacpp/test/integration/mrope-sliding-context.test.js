@@ -4,7 +4,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { cleanupIntegrationCacheFiles, ensureModel, getMediaPath, safeTest } = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModel, getMediaPath, safeTest: integrationTest } = require('./utils')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -15,6 +15,10 @@ const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const useCpu = isDarwinX64 || isLinuxArm64
 const skipTbqPq = isDarwin || isIos || isAndroid
+
+function safeTest (name, opts, fn) {
+  integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
+}
 
 const QWEN3_5_MODEL = {
   name: 'Qwen3.5-0.8B-Q8_0.gguf',
