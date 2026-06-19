@@ -1,9 +1,7 @@
 {
-  "$note": "default-registry temporarily tracks the tts-cpp-2026-06-19-chatterbox-mem-merged branch (qvac-registry-vcpkg#198, tts-cpp 2026-06-19 @ master a679c7e7 = PR #43 merged) so CI resolves tts-cpp>=2026-06-19 before #198 lands; once #198 merges, drop 'reference' and move 'baseline' to the merged registry main commit.",
   "default-registry": {
     "kind": "git",
-    "baseline": "e03fa0def6983287c46b8b790c14b3edcebca194",
-    "reference": "tts-cpp-2026-06-19-chatterbox-mem-merged",
+    "baseline": "233c2d41bf10d7a3c4150a0a7a515333b1437ad1",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
