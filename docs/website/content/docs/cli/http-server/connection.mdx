@@ -28,16 +28,16 @@ Then run OpenCode normally:
 opencode
 ```
 
-The plugin uses `qvac/qwen3.5-9b` by default. Use that for the best local OpenCode experience; if your machine cannot keep the 9B model warm comfortably, switch to `qwen3.5-4b`:
+The plugin uses `qvac/qwen3.5-9b` by default. Use that for the best friendly-id default. You can also choose a different model with the plugin tuple; for example, use the larger GPT-OSS 20B model for more demanding local agent work:
 
 ```json title="opencode.json"
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [["@qvac/opencode-plugin", { "model": "qwen3.5-4b" }]]
+  "plugin": [["@qvac/opencode-plugin", { "model": "GPT_OSS_20B_INST_Q4_K_M" }]]
 }
 ```
 
-See the [`@qvac/opencode-plugin` README](https://www.npmjs.com/package/@qvac/opencode-plugin) for the complete plugin model list and advanced options.
+See the [`@qvac/opencode-plugin` README](https://www.npmjs.com/package/@qvac/opencode-plugin) for friendly model ids, raw QVAC constants such as GPT-OSS and Gemma4, and advanced options.
 
 ## Compatible tools
 
