@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -10,6 +11,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -24,6 +26,7 @@
 #include <gguf.h>
 #include <opencv2/opencv.hpp>
 
+#include "model-interface/OcrBackendSelection.hpp"
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)
@@ -449,6 +452,51 @@ struct GraphResources {
   }
 };
 
+// Direct regular conv on OpenCL (Adreno), im2col elsewhere — see the matching
+// note in MobileNetGraph.cpp. Depthwise stays on ggml_conv_2d_dw_direct.
+struct ggml_tensor* doctrConv2d(
+    struct ggml_context* ctx, struct ggml_tensor* w, struct ggml_tensor* x,
+    int s0, int s1, int p0, int p1, int d0, int d1, bool useDirect) {
+  if (useDirect) {
+    return ggml_conv_2d_direct(ctx, w, x, s0, s1, p0, p1, d0, d1);
+  }
+  return ggml_conv_2d(ctx, w, x, s0, s1, p0, p1, d0, d1);
+}
+
+// Default from the backend: ON for OpenCL, OFF otherwise. Env
+// OCR_DOCTR_FUSED_CONV overrides ("1" on, "0" off).
+bool resolveDirectConv(const char* envName, bool backendDefault) {
+  const char* e = std::getenv(envName);
+  if (e != nullptr && (e[0] == '0' || e[0] == '1') && e[1] == '\0') {
+    return e[0] == '1';
+  }
+  return backendDefault;
+}
+
+// True when the compute backend is ggml's OpenCL backend (Adreno).
+bool backendIsOpenCl(ggml_backend_t backend) {
+  if (backend == nullptr) {
+    return false;
+  }
+  const char* name = ggml_backend_name(backend);
+  return name != nullptr &&
+         qvac_lib_infer_ocr_ggml::ocr_backend_selection::isOpenCLBackendName(
+             name);
+}
+
+// True when the compute backend is ggml's Vulkan backend (Mali). The fused
+// GGML_OP_CONV_2D kernel avoids the per-conv im2col dispatch that is slow on
+// Mali, so DocTR recognition uses the direct path on Vulkan too.
+bool backendIsVulkan(ggml_backend_t backend) {
+  if (backend == nullptr) {
+    return false;
+  }
+  const char* name = ggml_backend_name(backend);
+  return name != nullptr &&
+         qvac_lib_infer_ocr_ggml::ocr_backend_selection::isVulkanBackendName(
+             name);
+}
+
 struct GraphBuilder {
   struct ggml_context* ctx;
   // GraphBuilder is a stateless one-shot helper that never outlives its
@@ -456,6 +504,12 @@ struct GraphBuilder {
   // graph build.
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
+
+  // Resolved once per graph build (see buildGraph): use the direct (fused
+  // GGML_OP_CONV_2D) regular-conv kernel instead of im2col + mul_mat. On for
+  // OpenCL (Adreno) and Vulkan (Mali) by default; on Metal the tuned GEMM keeps
+  // im2col faster, so it stays off there.
+  bool useDirectConv = false;
 
   [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
     auto it = w.find(name);
@@ -484,7 +538,7 @@ struct GraphBuilder {
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
       const std::string& convPrefix, const std::string& bnPrefix, int strideW,
       int strideH, int kernel, bool applyActivation, bool useHardswish) const {
-    struct ggml_tensor* conv = ggml_conv_2d(
+    struct ggml_tensor* conv = doctrConv2d(
         ctx,
         t(convPrefix + ".weight"),
         x,
@@ -493,7 +547,8 @@ struct GraphBuilder {
         samePadding(kernel),
         samePadding(kernel),
         1,
-        1);
+        1,
+        useDirectConv);
     conv = applyBn(conv, bnPrefix);
     return applyActivation ? activate(conv, useHardswish) : conv;
   }
@@ -524,8 +579,8 @@ struct GraphBuilder {
   struct ggml_tensor* convBiasAct(
       struct ggml_tensor* x, const std::string& convPrefix,
       bool applyActivation, bool useHardswish) const {
-    struct ggml_tensor* conv =
-        ggml_conv_2d(ctx, t(convPrefix + ".weight"), x, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* conv = doctrConv2d(
+        ctx, t(convPrefix + ".weight"), x, 1, 1, 0, 0, 1, 1, useDirectConv);
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
     return applyActivation ? activate(conv, useHardswish) : conv;
   }
@@ -709,13 +764,14 @@ struct StepDoctrRecognitionGGML::Impl {
 
   explicit Impl(
       const std::string& pathRecognizer, ggml_backend_dev_t backendDevice,
-      int batchSizeArg)
+      int batchSizeArg, int nThreadsArg = 0)
       : batchSize(batchSizeArg > 0 ? batchSizeArg : 1) {
-    load(pathRecognizer, backendDevice);
+    load(pathRecognizer, backendDevice, nThreadsArg);
   }
 
-  void
-  load(const std::string& pathRecognizer, ggml_backend_dev_t backendDevice) {
+  void load(
+      const std::string& pathRecognizer, ggml_backend_dev_t backendDevice,
+      int nThreads) {
     graph.reset();
     ggml_backend_dev_t dev =
         (backendDevice != nullptr)
@@ -728,6 +784,22 @@ struct StepDoctrRecognitionGGML::Impl {
     graph.backend = dev ? ggml_backend_dev_init(dev, nullptr) : nullptr;
     if (graph.backend == nullptr) {
       raise("failed to initialize ggml backend");
+    }
+    // Thread-count tuning only applies to the CPU backend; on big.LITTLE
+    // mobile SoCs the default (all cores) drags the conv work onto slow
+    // efficiency cores, so the pipeline's nThreads (4 = the big cluster on
+    // Pixel-class devices) is forwarded here like in StepDoctrDetectionGGML.
+    if (dev != nullptr && nThreads > 0 &&
+        ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+      ggml_backend_reg_t cpuReg = ggml_backend_dev_backend_reg(dev);
+      auto* fnSetNThreads =
+          cpuReg ? reinterpret_cast<ggml_backend_set_n_threads_t>(
+                       ggml_backend_reg_get_proc_address(
+                           cpuReg, "ggml_backend_set_n_threads"))
+                 : nullptr;
+      if (fnSetNThreads != nullptr) {
+        fnSetNThreads(graph.backend, nThreads);
+      }
     }
 
     struct ggml_context* ggufGgmlCtx = nullptr;
@@ -830,12 +902,12 @@ struct StepDoctrRecognitionGGML::Impl {
   }
 
   // Builds and runs a batched bidirectional 2-layer LSTM + linear classifier on
-  // the backend for all `n` crops at once, returning logits laid out
+  // the backend for `n` crops at once, returning logits laid out
   // [vocab, seq, n] (per crop: [seq, vocab] vocab-fastest, matching decodeCTC).
-  // `allFeatures` is the concatenated feature-extractor output, per crop
+  // `allFeatures` points at the concatenated feature-extractor output, per crop
   // [seq, channels] seq-fastest (featStride = seq * kFeatureChannels).
   [[nodiscard]] std::vector<float>
-  runLstmLinearGpu(const std::vector<float>& allFeatures, int n) const {
+  runLstmLinearGpu(const float* allFeatures, int n) const {
     constexpr int H = kLstmHiddenSize;
     constexpr int gates = kLstmGateCount * H;
     constexpr int seq = kSequenceLength;
@@ -970,7 +1042,7 @@ struct StepDoctrRecognitionGGML::Impl {
 
     ggml_backend_tensor_set(
         feat,
-        allFeatures.data(),
+        allFeatures,
         0,
         static_cast<size_t>(n) * seq * kFeatureChannels * sizeof(float));
 
@@ -1290,7 +1362,8 @@ private:
       if (prefix.size() < 2 || prefix.substr(prefix.size() - 2) != ".1") {
         raise(
             "BN fold: unexpected BN tensor name " + prefix +
-            " (expected it to end in \".1\" so the conv weight can be located)");
+            " (expected it to end in \".1\" so the conv weight can be "
+            "located)");
       }
       const std::string convWeightName =
           prefix.substr(0, prefix.size() - 2) + ".0.weight";
@@ -1447,6 +1520,12 @@ private:
     ggml_set_input(graph.input);
 
     GraphBuilder gb{.ctx = ctx, .w = graph.weights};
+    // Direct regular convs by default on OpenCL (Adreno) and Vulkan (Mali) —
+    // both avoid the im2col path that is slow on those GPUs; env
+    // OCR_DOCTR_FUSED_CONV (0/1) overrides the backend default for A/B.
+    gb.useDirectConv = resolveDirectConv(
+        "OCR_DOCTR_FUSED_CONV",
+        backendIsOpenCl(graph.backend) || backendIsVulkan(graph.backend));
     struct ggml_tensor* x = gb.convBnAct(
         graph.input,
         "crnn.features.0.0",
@@ -1478,16 +1557,26 @@ private:
 
 StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
     const std::string& pathRecognizer, int batchSize, DecodingMethod decoding,
-    ggml_backend_dev_t backendDevice, int nThreads)
+    ggml_backend_dev_t backendDevice, int nThreads,
+    ggml_backend_dev_t assistDevice, int assistBatchSize)
     : impl_(std::make_unique<Impl>(pathRecognizer, backendDevice, batchSize)),
       batchSize_(batchSize), decodingMethod_(decoding), nThreads_(nThreads),
       vocabChars_(parseVocabToChars(VOCAB)) {
+  if (assistDevice != nullptr) {
+    constexpr int kDefaultAssistBatch = 8;
+    assistImpl_ = std::make_unique<Impl>(
+        pathRecognizer,
+        assistDevice,
+        assistBatchSize > 0 ? assistBatchSize : kDefaultAssistBatch,
+        nThreads);
+  }
   const std::string decodingStr =
       (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[DoctrRecognitionGGML] GGML recognizer loaded, batchSize=" +
-          std::to_string(batchSize) + ", decoding=" + decodingStr);
+          std::to_string(batchSize) + ", decoding=" + decodingStr +
+          (assistImpl_ ? ", cpuAssist=on" : ""));
   ALOG_INFO(
       std::string(
           "[DoctrRecognitionGGML] GGML recognizer loaded, decoding=" +
@@ -1673,48 +1762,172 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
       static_cast<size_t>(kSequenceLength) * kFeatureChannels;
   const int total = static_cast<int>(input.polygons.size());
 
-  // MobileNet feature extraction: run the graph in batches of `batchSize_`
-  // crops (one ggml backend compute per batch, on the GPU when Vulkan was
-  // resolved). All batches' features are collected into `allFeatures` so the
-  // CPU-bound LSTM/linear tail can then be parallelised across every crop at
-  // once (one thread-spawn wave, best load balance).
-  std::vector<float> batchInput(static_cast<size_t>(batchSize_) * cropStride);
+  // MobileNet feature extraction: run the graph in chunks (one ggml backend
+  // compute per chunk). All chunks' features are collected into `allFeatures`
+  // so the LSTM/linear tail can then run across every crop at once.
+  //
+  // Chunks are claimed from a shared atomic cursor by one worker per backend:
+  // the primary backend always participates; when `assistImpl_` is present
+  // (CPU assist on Mali) a second worker steals chunks for the CPU backend so
+  // both compute concurrently on disjoint crops. Within the primary worker the
+  // CPU preprocess of chunk N+1 overlaps the backend compute of chunk N
+  // (double-buffered) — on the GPU path the CPU is otherwise idle during the
+  // compute wait. Per-crop math is unchanged in all cases.
   std::vector<float> allFeatures(static_cast<size_t>(total) * featStride);
 
-  // Number of crops whose features were actually computed. The cancel check
-  // fires at a batch boundary, so every batch before `batchStart` is complete
-  // and exactly `batchStart` crops are ready when we break (this is NOT the
-  // largest multiple of batchSize_ <= total — they differ for any cancellation
-  // before the final full-batch boundary).
-  int decodeCount = total;
+  std::atomic<int> nextClaim{0};
+  std::mutex doneMutex;
+  std::vector<std::pair<int, int>> doneRanges; // (start, count) per chunk
 
-  for (int batchStart = 0; batchStart < total; batchStart += batchSize_) {
+  // Claim the next up-to-`want` crops; {total, 0} when exhausted or cancelled.
+  const auto claim = [&](int want) -> std::pair<int, int> {
     if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "[DoctrRecognitionGGML] Cancelled at batch offset " +
-              std::to_string(batchStart));
-      decodeCount = batchStart;
-      break;
+      return {total, 0};
     }
+    const int start = nextClaim.fetch_add(want, std::memory_order_relaxed);
+    if (start >= total) {
+      return {total, 0};
+    }
+    return {start, std::min(want, total - start)};
+  };
 
-    const int count = std::min(batchSize_, total - batchStart);
+  const auto preprocessRange =
+      [&](int start, int count, std::vector<float>& buf) {
+        parallelFor(count, workers, [&](int j) {
+          cv::Mat crop = preprocessCrop(origImg, input.polygons[start + j]);
+          packCropIntoBatch(crop, buf, j);
+        });
+      };
 
-    // Preprocess + pack each crop into its batch slot (parallel; each thread
-    // writes a distinct slot of `batchInput`).
-    parallelFor(count, workers, [&](int j) {
-      cv::Mat crop = preprocessCrop(origImg, input.polygons[batchStart + j]);
-      packCropIntoBatch(crop, batchInput, j);
+  const auto markDone = [&](int start, int count) {
+    const std::lock_guard<std::mutex> lock(doneMutex);
+    doneRanges.emplace_back(start, count);
+  };
+
+  // Primary worker (runs on this thread): double-buffered preprocess overlap.
+  const auto runPrimary = [&]() {
+    std::vector<float> bufA(static_cast<size_t>(batchSize_) * cropStride);
+    std::vector<float> bufB(static_cast<size_t>(batchSize_) * cropStride);
+    std::vector<float>* cur = &bufA;
+    std::vector<float>* next = &bufB;
+
+    auto chunk = claim(batchSize_);
+    if (chunk.second > 0) {
+      preprocessRange(chunk.first, chunk.second, *cur);
+    }
+    while (chunk.second > 0) {
+      const auto nextChunk = claim(batchSize_);
+      std::thread preThread;
+      std::exception_ptr preError;
+      if (nextChunk.second > 0) {
+        preThread = std::thread([&]() {
+          try {
+            preprocessRange(nextChunk.first, nextChunk.second, *next);
+          } catch (...) {
+            preError = std::current_exception();
+          }
+        });
+      }
+
+      std::exception_ptr featError;
+      std::vector<float> features;
+      try {
+        features = impl_->runFeatureExtractor(*cur);
+      } catch (...) {
+        featError = std::current_exception();
+      }
+
+      if (preThread.joinable()) {
+        preThread.join();
+      }
+      if (featError) {
+        std::rethrow_exception(featError);
+      }
+      if (preError) {
+        std::rethrow_exception(preError);
+      }
+
+      CV_Assert(
+          features.size() >= static_cast<size_t>(chunk.second) * featStride);
+      std::memcpy(
+          allFeatures.data() + (static_cast<size_t>(chunk.first) * featStride),
+          features.data(),
+          static_cast<size_t>(chunk.second) * featStride * sizeof(float));
+      markDone(chunk.first, chunk.second);
+      std::swap(cur, next);
+      chunk = nextChunk;
+    }
+  };
+
+  // Assist worker (separate thread, CPU backend): serial claim->pre->compute;
+  // its preprocess and compute share the same cores, so no internal overlap.
+  const auto runAssist = [&]() {
+    const int assistBatch = assistImpl_->batchSize;
+    std::vector<float> buf(static_cast<size_t>(assistBatch) * cropStride);
+    while (true) {
+      const auto chunk = claim(assistBatch);
+      if (chunk.second <= 0) {
+        break;
+      }
+      preprocessRange(chunk.first, chunk.second, buf);
+      std::vector<float> features = assistImpl_->runFeatureExtractor(buf);
+      CV_Assert(
+          features.size() >= static_cast<size_t>(chunk.second) * featStride);
+      std::memcpy(
+          allFeatures.data() + (static_cast<size_t>(chunk.first) * featStride),
+          features.data(),
+          static_cast<size_t>(chunk.second) * featStride * sizeof(float));
+      markDone(chunk.first, chunk.second);
+    }
+  };
+
+  std::thread assistThread;
+  std::exception_ptr assistError;
+  if (assistImpl_ && total > 0) {
+    assistThread = std::thread([&]() {
+      try {
+        runAssist();
+      } catch (...) {
+        assistError = std::current_exception();
+      }
     });
+  }
 
-    // One batched feature-extractor compute (unused tail slots produce ignored
-    // outputs); copy this batch's features into the global buffer.
-    std::vector<float> features = impl_->runFeatureExtractor(batchInput);
-    CV_Assert(features.size() >= static_cast<size_t>(count) * featStride);
-    std::memcpy(
-        allFeatures.data() + (static_cast<size_t>(batchStart) * featStride),
-        features.data(),
-        static_cast<size_t>(count) * featStride * sizeof(float));
+  std::exception_ptr primaryError;
+  try {
+    runPrimary();
+  } catch (...) {
+    primaryError = std::current_exception();
+  }
+  if (assistThread.joinable()) {
+    assistThread.join();
+  }
+  if (primaryError) {
+    std::rethrow_exception(primaryError);
+  }
+  if (assistError) {
+    std::rethrow_exception(assistError);
+  }
+
+  // Number of crops whose features were actually computed: the contiguous
+  // prefix of completed chunks (only relevant after a cancellation; without
+  // one every chunk completes and this equals `total`).
+  int decodeCount = 0;
+  {
+    std::sort(doneRanges.begin(), doneRanges.end());
+    for (const auto& [start, count] : doneRanges) {
+      if (start != decodeCount) {
+        break;
+      }
+      decodeCount += count;
+    }
+  }
+  if (decodeCount < total) {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "[DoctrRecognitionGGML] Cancelled; decoding " +
+            std::to_string(decodeCount) + "/" + std::to_string(total) +
+            " crops");
   }
 
   std::vector<std::pair<std::string, float>> decoded(
@@ -1724,10 +1937,56 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
   // CTC decode. Set OCR_DOCTR_LSTM_CPU=1 to fall back to the scalar CPU path
   // (kept for numeric comparison / hosts without a usable GPU LSTM).
   if (decodeCount > 0 && std::getenv("OCR_DOCTR_LSTM_CPU") == nullptr) {
-    const std::vector<float> allLogits =
-        impl_->runLstmLinearGpu(allFeatures, decodeCount);
+    // GPU/CPU split of the LSTM tail (crops are independent): the assist
+    // backend computes the last `share` fraction concurrently with the
+    // primary backend. Default 0.4 when the assist exists — calibrated on
+    // Pixel 9 Pro (Mali-G715), where the two LSTM rates are nearly equal
+    // (share 0.45: GPU 171ms || CPU 169ms, vs 242ms GPU-only).
+    // OCR_DOCTR_LSTM_SPLIT overrides (0..0.9; 0 disables).
+    int lstmCpuCount = 0;
+    if (assistImpl_) {
+      double share = 0.4;
+      if (const char* shareEnv = std::getenv("OCR_DOCTR_LSTM_SPLIT")) {
+        share = std::clamp(std::atof(shareEnv), 0.0, 0.9);
+      }
+      lstmCpuCount = static_cast<int>(decodeCount * share);
+    }
+    const int lstmGpuCount = decodeCount - lstmCpuCount;
     const size_t logitStride =
         static_cast<size_t>(kSequenceLength) * kVocabSize;
+
+    std::vector<float> cpuLogits;
+    std::exception_ptr lstmCpuError;
+    std::thread lstmCpuThread;
+    if (lstmCpuCount > 0) {
+      lstmCpuThread = std::thread([&]() {
+        try {
+          cpuLogits = assistImpl_->runLstmLinearGpu(
+              allFeatures.data() +
+                  (static_cast<size_t>(lstmGpuCount) * featStride),
+              lstmCpuCount);
+        } catch (...) {
+          lstmCpuError = std::current_exception();
+        }
+      });
+    }
+
+    std::vector<float> allLogits =
+        impl_->runLstmLinearGpu(allFeatures.data(), lstmGpuCount);
+    if (lstmCpuThread.joinable()) {
+      lstmCpuThread.join();
+    }
+    if (lstmCpuError) {
+      std::rethrow_exception(lstmCpuError);
+    }
+    if (lstmCpuCount > 0) {
+      allLogits.resize(static_cast<size_t>(decodeCount) * logitStride);
+      std::memcpy(
+          allLogits.data() + (static_cast<size_t>(lstmGpuCount) * logitStride),
+          cpuLogits.data(),
+          static_cast<size_t>(lstmCpuCount) * logitStride * sizeof(float));
+    }
+
     parallelFor(decodeCount, workers, [&](int j) {
       const float* span =
           allLogits.data() + (static_cast<size_t>(j) * logitStride);

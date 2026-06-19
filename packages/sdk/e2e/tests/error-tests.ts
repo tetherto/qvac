@@ -17,7 +17,7 @@ export const errorInvalidResponseType: TestDefinition = {
 
 export const errorModelLoadFailed: TestDefinition = {
   testId: "error-model-load-failed",
-  params: { modelPath: "/invalid/path/to/model.gguf", modelType: "llm" },
+  params: { modelPath: "/invalid/path/to/model.gguf", modelType: "llamacpp-completion" },
   expectation: { validation: "throws-error", errorContains: "" },
   metadata: { category: "error", dependency: "none", estimatedDurationMs: 5000 },
 };

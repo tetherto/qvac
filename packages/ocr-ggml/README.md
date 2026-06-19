@@ -308,6 +308,33 @@ Two env vars override the default (read once at model load; only the exact value
 These are useful for A/B-benchmarking the two paths or as an escape hatch if a
 backend's `mul_mat` path ever misbehaves. They do not affect the DocTR pipeline.
 
+### Direct conv path (backend-aware; `OCR_GGML_DIRECT_CONV` / `OCR_GGML_IM2COL_CONV`)
+
+The non-pointwise (e.g. 3×3) convs can run either through `ggml_conv_2d`
+(im2col → GEMM) or the fused `ggml_conv_2d_direct` (`GGML_OP_CONV_2D`). On the
+**OpenCL** backend (Adreno) the im2col path rides a slow f16×f16 GEMV, so the
+direct kernel is much faster there (the EasyOCR counterpart of the DocTR
+`doctrConv2d` work). On CPU/Vulkan/Metal the im2col path is kept (direct is
+~2× slower on Metal). The default is therefore **backend-aware**, resolved once
+at model-load time:
+
+| Resolved backend | non-1×1 conv default |
+|---|---|
+| OpenCL (Adreno) | **`ggml_conv_2d_direct`** |
+| CPU / Vulkan / Metal | **`ggml_conv_2d`** (im2col) |
+
+Two env vars override the default (read once at model load; `IM2COL` wins if both
+are set):
+
+| Env var | Effect |
+|---|---|
+| `OCR_GGML_DIRECT_CONV=1` | force `ggml_conv_2d_direct` on every backend |
+| `OCR_GGML_IM2COL_CONV=1` | force the `ggml_conv_2d` (im2col) path on every backend |
+
+> Note: `ggml_conv_2d_direct` is only implemented on some backends; forcing it
+> on a backend without `GGML_OP_CONV_2D` will abort. It does not affect the
+> DocTR pipeline.
+
 ### Conv bias broadcast (`OCR_GGML_CRAFT_BIAS_REPEAT`)
 
 Each convolution adds a per-output-channel bias. By default the EasyOCR
@@ -322,6 +349,18 @@ Set `OCR_GGML_CRAFT_BIAS_REPEAT=1` to fall back to the legacy `ggml_repeat`
 broadcast — an escape hatch to recover without a code change if a backend's
 broadcast-add ever misbehaves (read once at graph-build time; only the exact
 value `1` enables it). It does not affect the DocTR pipeline.
+
+### CRNN recognizer bias broadcast (`OCR_GGML_CRNN_BIAS_REPEAT`)
+
+The EasyOCR **recognizer** applies the same broadcast to its sequence biases:
+the BiLSTM `Linear` and the final `Prediction` add their `[F]` bias via
+`ggml_add`'s implicit broadcast over the `(T, N)` axes, instead of materialising
+a full `[F, T, N]` `ggml_repeat` copy. Numerically identical to the legacy path.
+
+Set `OCR_GGML_CRNN_BIAS_REPEAT=1` to fall back to the legacy `ggml_repeat`
+broadcast — the recognizer-side counterpart of `OCR_GGML_CRAFT_BIAS_REPEAT`
+(read once at graph-build time; only the exact value `1` enables it). It does
+not affect the DocTR pipeline.
 
 ### `run(input)` shape
 
