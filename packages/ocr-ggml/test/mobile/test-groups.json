@@ -2,6 +2,7 @@
   "android": {
     "perf": [
       "runDoctrClinicalChemistryTest",
+      "runDoctrWarmTest",
       "runDoctrCtScanTest",
       "runDoctrLabResultsTest",
       "runDoctrLiverFunctionTest"

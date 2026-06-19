@@ -62,12 +62,12 @@ try {
     stream: true,
   });
 
-  console.log(`requestId: ${run.requestId}`);
+  console.log(`▸ requestId: ${run.requestId}`);
 
   // Cancel after a short delay so we exercise the cancel-mid-decode path.
   setTimeout(() => {
     void cancel({ requestId: run.requestId });
-    console.log("(cancel issued)");
+    console.log("▸ cancel issued");
   }, 250);
 
   // Channel 1: the events stream ends normally on cancel. The
@@ -84,7 +84,7 @@ try {
     }
   }
   console.log(
-    `\n\nstreamed ${tokenCount} content deltas, stopReason=${endReason}.`,
+    `\n\n▸ streamed ${tokenCount} content deltas, stopReason=${endReason}`,
   );
 
   // Channel 2: promise-aggregates reject with InferenceCancelledError
@@ -92,18 +92,18 @@ try {
   // on `err.partial`.
   try {
     const text = await run.text;
-    console.log(`completed normally (${text.length} chars).`);
+    console.log(`▸ completed normally (${text.length} chars)`);
   } catch (err) {
     if (err instanceof InferenceCancelledError) {
-      console.log(`run.text rejected: cancelled (requestId=${err.requestId})`);
-      console.log(`partial text length: ${(err.partial.text ?? "").length}`);
+      console.log(`▸ run.text rejected: cancelled (requestId=${err.requestId})`);
+      console.log(`▸ partial text length: ${(err.partial.text ?? "").length}`);
       if (err.partial.stats?.tokensPerSecond !== undefined) {
         console.log(
-          `partial stats: ${err.partial.stats.tokensPerSecond.toFixed(1)} tok/s`,
+          `▸ partial stats: ${err.partial.stats.tokensPerSecond.toFixed(1)} tok/s`,
         );
       }
       if (err.partial.toolCalls && err.partial.toolCalls.length > 0) {
-        console.log(`partial tool calls: ${err.partial.toolCalls.length}`);
+        console.log(`▸ partial tool calls: ${err.partial.toolCalls.length}`);
       }
     } else {
       throw err;
@@ -113,6 +113,6 @@ try {
   await unloadModel({ modelId });
   process.exit(0);
 } catch (error) {
-  console.error("Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
