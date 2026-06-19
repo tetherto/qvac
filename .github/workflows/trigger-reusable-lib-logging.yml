@@ -155,19 +155,16 @@ jobs:
       workdir: packages/logging
       caller_event_name: ${{ github.event_name }}
 
-  # Create GitHub release only for actual releases (after NPM publish)
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "logging"
-      release_name: "QVAC logging Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/logging"
 
   publish-feature-gpr:
     needs:

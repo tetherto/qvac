@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Changed
+
+- `bci-whispercpp`'s `vcpkg.json` now selects `whisper-cpp[metal]` on
+  **iOS** as well as macOS (QVAC-20692). The separate featureless `ios`
+  dependency entry is merged into the `osx` entry as a single
+  `"platform": "osx | ios"` block requesting `["metal"]`, so the Apple GPU
+  backend is selected declaratively on iOS for `bci-whispercpp` — at
+  parity with the same fix already landed in `transcription-whispercpp`
+  (QVAC-20687). Supersedes the `bci-whispercpp` 0.2.0 note that iOS stayed
+  CPU-only pending the upstream Metal/MTLCompiler XPC issue.
+
 ## [0.2.0]
 
 Explicit per-platform GPU backend selection (QVAC-19234). Vulkan and

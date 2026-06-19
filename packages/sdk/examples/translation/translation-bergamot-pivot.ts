@@ -44,21 +44,24 @@ try {
         lengthpenalty: 1.2,
       },
     },
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`✅ Pivot translation model loaded: ${modelId}`);
-  console.log("   Primary: Spanish → English");
-  console.log("   Pivot: English → Italian");
+  console.log(`▸ Pivot translation model loaded: ${modelId}`);
+  console.log("▸ Primary: Spanish → English");
+  console.log("▸ Pivot: English → Italian");
 
   // Spanish text to translate
   const spanishText = `Era una mañana soleada cuando María decidió visitar el mercado local.
   Compró frutas frescas, verduras y flores para su casa.
   El vendedor le recomendó las mejores manzanas de la temporada.`;
 
-  console.log("\n📝 Original Spanish text:");
+  console.log("▸ Original Spanish text:");
   console.log(spanishText);
 
   // Translate Spanish → English → Italian
@@ -71,7 +74,7 @@ try {
 
   const italianText = await result.text;
 
-  console.log("\n🇮🇹 Translated to Italian (via English):");
+  console.log("▸ Translated to Italian (via English):");
   console.log(italianText);
 
   // Expected output (approximate):
@@ -80,8 +83,8 @@ try {
   //  Il venditore ha consigliato le migliori mele della stagione."
 
   await unloadModel({ modelId });
-  console.log("\n✅ Model unloaded successfully");
+  console.log("▸ Model unloaded successfully");
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

@@ -193,8 +193,36 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
+  combine-perf-reports:
+    name: Combined Performance Report
+    needs: [authorize, run-integration-tests, run-mobile-integration-tests]
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout repository (base branch for action code)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.ref }}
+          sparse-checkout: |
+            .github/actions
+            scripts/perf-report
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Combine performance reports
+        uses: ./.github/actions/run-mobile-integration-tests/combine-perf-reports
+        with:
+          artifact-pattern: perf-report-diffusion-cpp-*-${{ github.run_number }}
+          report-title: 'Diffusion Performance Report (All Platforms)'
+
   merge-guard:
-    needs: [authorize, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
+    needs: [authorize, run-integration-tests, run-mobile-integration-tests, combine-perf-reports, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     permissions:

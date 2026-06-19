@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -101,7 +101,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/infer-base": "^0.6.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",

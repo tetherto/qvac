@@ -271,7 +271,8 @@ jobs:
             echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-npm]
     if: |
       !cancelled() &&
@@ -279,13 +280,10 @@ jobs:
       needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "whispercpp"
-      release_name: "QVAC Transcription Whisper Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/transcription-whispercpp"
 
   post-build-gate:
     name: Post-Build Gate

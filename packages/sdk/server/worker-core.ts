@@ -12,8 +12,14 @@ import { closeRegistryClient } from "@/server/bare/registry/registry-client";
 import {
   clearAllLoggingStreams,
   startLogBuffering,
+  stopLogBufferingWithTimeout,
 } from "@/server/bare/registry/logging-stream-registry";
-import { clearAllAddonLoggers, getServerLogger, SDK_LOG_ID } from "@/logging";
+import {
+  clearAllAddonLoggers,
+  getServerLogger,
+  SDK_LOG_ID,
+  SDK_ALL_LOG_ID,
+} from "@/logging";
 import { clearPlugins } from "@/server/plugins";
 import {
   acquireWorkerLock,
@@ -68,6 +74,7 @@ export function initializeWorkerCore(): { hasRPCConfig: boolean } {
   }
 
   startLogBuffering(SDK_LOG_ID);
+  startLogBuffering(SDK_ALL_LOG_ID);
 
   const { hasRPCConfig } = initEnv();
 
@@ -109,6 +116,13 @@ export function ensureRPCSetup() {
     logger.info("Bare worker started and listening for RPC requests");
     logger.debug("Working directory:", process.cwd());
     rpcInitialized = true;
+
+    // The worker is now reachable, so a `subscribeServerLogs` client can connect.
+    // Bound the global startup buffer the same way model-load buffering is bounded:
+    // if nothing subscribes within the grace window, stop buffering so every server
+    // log doesn't keep churning that buffer for the worker's whole lifetime. A
+    // subscriber that connects in time cancels the timeout and flushes the buffer.
+    stopLogBufferingWithTimeout(SDK_ALL_LOG_ID);
   } catch (error) {
     logger.error("Worker error:", error);
     process.exit(1);

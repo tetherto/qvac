@@ -972,6 +972,33 @@ test("parseToolCalls(dialect=qwen35): JSON inside tool_call falls through to her
   t.alike(toolCalls[0]?.arguments, { city: "Seoul" });
 });
 
+test("parseToolCalls(dialect=qwen35): recovers function-equals JSON hybrid", (t) => {
+  const webfetchTool: Tool = {
+    type: "function",
+    name: "webfetch",
+    description: "Fetch a URL",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        format: { type: "string" },
+      },
+      required: ["url"],
+    },
+  };
+  const text = `<tool_call>
+{"function=webfetch","arguments":{"url":"https://docs.opencode.ai","format":"markdown"}}
+</tool_call>`;
+  const { toolCalls, errors } = parseToolCalls(text, [webfetchTool], "qwen35");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "webfetch");
+  t.alike(toolCalls[0]?.arguments, {
+    url: "https://docs.opencode.ai",
+    format: "markdown",
+  });
+});
+
 // --- gemma4 structural and error-surface tests ---
 
 test("parseGemma4NativeFormat: bare numeric arg is parsed as number", (t) => {
