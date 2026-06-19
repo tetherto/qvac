@@ -133,6 +133,39 @@ def _parse_nvidia_smi(output: Optional[str]) -> Optional[str]:
     return match.group(1).strip() if match else None
 
 
+def _first_gpu_line(output: Optional[str], skip_header: bool = False) -> Optional[str]:
+    """First non-empty (optionally non-header) line of a probe's output."""
+    if not output:
+        return None
+    for line in output.splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        if skip_header and text.lower() == "name":
+            continue
+        return text
+    return None
+
+
+def _read_proc_nvidia() -> Optional[str]:
+    """GPU model from the NVIDIA kernel driver's procfs entry. Works whenever the
+    nvidia module is loaded (guaranteed on a CUDA host) even when the nvidia-smi
+    binary is not installed / not on PATH — the case on the GPU CI runners."""
+    try:
+        info_files = sorted(Path("/proc/driver/nvidia/gpus").glob("*/information"))
+    except Exception:
+        return None
+    for info in info_files:
+        try:
+            text = info.read_text()
+        except Exception:
+            continue
+        match = re.search(r"^Model:\s*(.+)$", text, re.MULTILINE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
 def detect_gpu_model(platform_name: str) -> Optional[str]:
     """Best-effort GPU hardware model name, mirroring the JS perf reporter."""
     global _GPU_MODEL_PROBED, _GPU_MODEL_VALUE
@@ -153,26 +186,35 @@ def detect_gpu_model(platform_name: str) -> Optional[str]:
             if chip and chip.strip():
                 value = chip.strip()
     elif not value and platform_name == "linux":
-        lspci = _safe_run(["lspci"])
-        if lspci:
-            for line in lspci.splitlines():
-                if re.search(
-                    r"VGA compatible controller|3D controller|Display controller",
-                    line,
-                ):
-                    parts = line.split(":", 2)
-                    value = parts[2].strip() if len(parts) >= 3 else line.strip()
-                    break
+        # procfs first: it does not need the nvidia-smi binary on PATH, only the
+        # loaded kernel driver (which a CUDA run guarantees). lspci is the
+        # secondary path for non-NVIDIA / when procfs is unavailable.
+        value = _read_proc_nvidia()
+        if not value:
+            lspci = _safe_run(["lspci"])
+            if lspci:
+                for line in lspci.splitlines():
+                    if re.search(
+                        r"VGA compatible controller|3D controller|Display controller",
+                        line,
+                    ):
+                        parts = line.split(":", 2)
+                        value = parts[2].strip() if len(parts) >= 3 else line.strip()
+                        break
     elif not value and platform_name == "win32":
-        wmic = _safe_run(["wmic", "path", "win32_VideoController", "get", "name"])
-        if wmic:
-            names = [
-                line.strip()
-                for line in wmic.splitlines()
-                if line.strip() and line.strip().lower() != "name"
-            ]
-            if names:
-                value = names[0]
+        # PowerShell CIM first: `wmic` was removed in Windows 11 24H2 / Server
+        # 2025, so it is absent on the windows-2025 runner. wmic stays as a
+        # fallback for older Windows images.
+        value = _first_gpu_line(_safe_run([
+            "powershell", "-NoProfile", "-Command",
+            "Get-CimInstance Win32_VideoController | "
+            "Select-Object -ExpandProperty Name",
+        ]))
+        if not value:
+            value = _first_gpu_line(
+                _safe_run(["wmic", "path", "win32_VideoController", "get", "name"]),
+                skip_header=True,
+            )
 
     _GPU_MODEL_VALUE = value
     return value
