@@ -1,5 +1,6 @@
 """Utility functions for TTS benchmarks"""
 
+import functools
 import json
 import logging
 import os
@@ -109,10 +110,6 @@ def derive_benchmark_backend(platform_name: str, use_gpu: bool, backend_hint: st
     return "gpu"
 
 
-_GPU_MODEL_PROBED = False
-_GPU_MODEL_VALUE: Optional[str] = None
-
-
 def _safe_run(cmd: List[str]) -> Optional[str]:
     """Run a probe command, returning stdout or None on any failure/timeout."""
     try:
@@ -166,13 +163,11 @@ def _read_proc_nvidia() -> Optional[str]:
     return None
 
 
+@functools.lru_cache(maxsize=1)
 def detect_gpu_model(platform_name: str) -> Optional[str]:
-    """Best-effort GPU hardware model name, mirroring the JS perf reporter."""
-    global _GPU_MODEL_PROBED, _GPU_MODEL_VALUE
-    if _GPU_MODEL_PROBED:
-        return _GPU_MODEL_VALUE
-
-    _GPU_MODEL_PROBED = True
+    """Best-effort GPU hardware model name, mirroring the JS perf reporter.
+    lru_cache runs the probes once per process (the result is stable for the
+    host)."""
     value: Optional[str] = _parse_nvidia_smi(_safe_run(["nvidia-smi", "-L"]))
 
     if not value and platform_name == "darwin":
@@ -207,8 +202,7 @@ def detect_gpu_model(platform_name: str) -> Optional[str]:
         # fallback for older Windows images.
         value = _first_gpu_line(_safe_run([
             "powershell", "-NoProfile", "-Command",
-            "Get-CimInstance Win32_VideoController | "
-            "Select-Object -ExpandProperty Name",
+            "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name",
         ]))
         if not value:
             value = _first_gpu_line(
@@ -216,7 +210,6 @@ def detect_gpu_model(platform_name: str) -> Optional[str]:
                 skip_header=True,
             )
 
-    _GPU_MODEL_VALUE = value
     return value
 
 
