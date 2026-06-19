@@ -22,6 +22,10 @@ inputs:
     description: "Polling-loop hard ceiling. Default 7200 (2h). Addons whose Device Farm runs exceed 2h pass a larger value here."
     required: false
     default: "7200"
+  test-specs:
+    description: "JSON array from upload-to-devicefarm: [{name, grep, arn}]. Used to print a run-to-tests legend. Optional; omit for non-sharded runs."
+    required: false
+    default: "[]"
 
 outputs:
   test-result:
@@ -55,6 +59,7 @@ runs:
       env:
         RUN_ARNS_JSON: ${{ inputs.run-arns }}
         MAX_WAIT_TIME_SECONDS: ${{ inputs.max-wait-time-seconds }}
+        TEST_SPECS_JSON: ${{ inputs.test-specs }}
       run: |
         # ── helpers ──────────────────────────────────────────────────
         # Bash 3.2 compat: no mapfile, no declare -A.
@@ -86,6 +91,28 @@ runs:
           echo "  Run $((i+1)): ${RUN_ARNS[$i]}"
         done
         echo ""
+
+        # ── run-to-tests legend ────────────────────────────────────
+        # When test-specs is provided (sharded mode), print a table so
+        # anyone reading the log knows which tests are in each run.
+        SPEC_COUNT=0
+        if [ -n "$TEST_SPECS_JSON" ] && [ "$TEST_SPECS_JSON" != "[]" ]; then
+          SPEC_COUNT=$(echo "$TEST_SPECS_JSON" | jq 'length')
+        fi
+        if [ "$SPEC_COUNT" -gt 0 ]; then
+          echo "::group::Run → tests mapping"
+          for ((i=0; i<SPEC_COUNT && i<RUN_COUNT; i++)); do
+            _name=$(echo "$TEST_SPECS_JSON" | jq -r ".[$i].name // \"?\"")
+            # QVAC-19368: prefer the `tests` field (covers default single-spec
+            # mode where grep is empty) and fall back to `grep` for older
+            # callers that don't emit `tests`.
+            _list=$(echo "$TEST_SPECS_JSON" | jq -r ".[$i].tests // .[$i].grep // \"\"")
+            _tests=$(echo "$_list" | tr '|' ', ')
+            echo "  Run $((i+1)): $_name → $_tests"
+          done
+          echo "::endgroup::"
+          echo ""
+        fi
 
         # ── legend (QVAC-18943, ported from PR #2072) ───────────────
         # Printed once so anyone reading the log can decode the per-poll
@@ -286,7 +313,17 @@ runs:
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
 
           if [ "$RUN_COUNT" -ge 2 ]; then
-            echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) ---"
+            _idx=$((RUN_INDEX - 1))
+            _spec_tests=""
+            if [ "$SPEC_COUNT" -gt 0 ] && [ "$_idx" -lt "$SPEC_COUNT" ]; then
+              # QVAC-19368: prefer `tests` (default-mode list), fall back to grep.
+              _spec_tests=$(echo "$TEST_SPECS_JSON" | jq -r ".[$_idx].tests // .[$_idx].grep // \"\"" | tr '|' ', ')
+            fi
+            if [ -n "$_spec_tests" ]; then
+              echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) [tests: $_spec_tests] ---"
+            else
+              echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) ---"
+            fi
           else
             echo "Result: $RESULT"
           fi

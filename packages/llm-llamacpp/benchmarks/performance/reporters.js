@@ -13,6 +13,13 @@ function tsFileStamp () {
   return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`
 }
 
+// Baseline rows render every config column as 'default'; otherwise show the
+// runtime value (stringified) or blank when unset.
+function cfgCell (isBaseline, value) {
+  if (isBaseline) return 'default'
+  return value != null ? String(value) : ''
+}
+
 function compactPromptErrors (promptResults) {
   if (!Array.isArray(promptResults)) return []
   const out = []
@@ -45,34 +52,33 @@ function toMarkdown (report) {
   lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)
-    lines.push('| Quantization | Device | Ctx Size | Batch Size | Ubatch Size | Flash Attn | Threads | Cache K | Cache V | Prompt Case | Status | Load Mean | Load Std | Run Mean | Run Std | TTFT Mean | TTFT Std | TPS Mean | TPS Std | Unload Mean | Unload Std | Prompt Tokens | Generated Tokens | Quality Match | Error |')
-    lines.push('|---|---|---:|---:|---:|---|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
+    lines.push('| Quantization | Reasoning Budget | Device | Ctx Size | Batch Size | Ubatch Size | Flash Attn | Threads | Cache K | Cache V | Prompt Case | Status | TTFT Mean | TTFT Std | TPS Mean | TPS Std | ppTPS Mean | ppTPS Std | Load Mean | Load Std | Run Mean | Run Std | Unload Mean | Unload Std | Prompt Tokens | Generated Tokens | Quality Match | Error |')
+    lines.push('|---|---|---|---:|---:|---:|---|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
     for (const item of model.cases) {
       const runtimeConfig = item.runtimeConfig || {}
-      const quality = item.qualityMatch != null ? item.qualityMatch.toFixed(3) : ''
-      const quantizationCell = item.isBaseline ? 'default' : (item.quantization ?? '')
-      const deviceCell = item.isBaseline ? 'default' : (runtimeConfig.device != null ? String(runtimeConfig.device) : '')
-      const ctxSizeCell = item.isBaseline ? 'default' : (runtimeConfig['ctx-size'] != null ? String(runtimeConfig['ctx-size']) : '')
-      const batchSizeCell = item.isBaseline ? 'default' : (runtimeConfig['batch-size'] != null ? String(runtimeConfig['batch-size']) : '')
-      const ubatchSizeCell = item.isBaseline ? 'default' : (runtimeConfig['ubatch-size'] != null ? String(runtimeConfig['ubatch-size']) : '')
-      const flashAttnCell = item.isBaseline
-        ? 'default'
-        : (runtimeConfig['flash-attn'] != null ? String(runtimeConfig['flash-attn']) : '')
-      const threadsCell = item.isBaseline ? 'default' : (runtimeConfig.threads != null ? String(runtimeConfig.threads) : '')
-      const cacheKCell = item.isBaseline ? 'default' : (runtimeConfig['cache-type-k'] != null ? String(runtimeConfig['cache-type-k']) : '')
-      const cacheVCell = item.isBaseline ? 'default' : (runtimeConfig['cache-type-v'] != null ? String(runtimeConfig['cache-type-v']) : '')
+      const quantizationCell = cfgCell(item.isBaseline, item.quantization)
+      const rbCell = cfgCell(item.isBaseline, runtimeConfig['reasoning-budget'])
+      const deviceCell = cfgCell(item.isBaseline, runtimeConfig.device)
+      const ctxSizeCell = cfgCell(item.isBaseline, runtimeConfig['ctx-size'])
+      const batchSizeCell = cfgCell(item.isBaseline, runtimeConfig['batch-size'])
+      const ubatchSizeCell = cfgCell(item.isBaseline, runtimeConfig['ubatch-size'])
+      const flashAttnCell = cfgCell(item.isBaseline, runtimeConfig['flash-attn'])
+      const threadsCell = cfgCell(item.isBaseline, runtimeConfig.threads)
+      const cacheKCell = cfgCell(item.isBaseline, runtimeConfig['cache-type-k'])
+      const cacheVCell = cfgCell(item.isBaseline, runtimeConfig['cache-type-v'])
       const errorCell = item.error && item.error.message
         ? truncateText(item.error.message, 120)
         : ''
       lines.push(
-        `| ${quantizationCell} | ${deviceCell} | ${ctxSizeCell} | ${batchSizeCell} | ${ubatchSizeCell} | ${flashAttnCell} | ${threadsCell} | ${cacheKCell} | ${cacheVCell} | ${item.promptCase ?? ''} | ${item.status ?? ''}` +
-        ` | ${item.metrics?.loadMsMean ?? ''} | ${item.metrics?.loadMsStd ?? ''}` +
-        ` | ${item.metrics?.runMsMean ?? ''} | ${item.metrics?.runMsStd ?? ''}` +
+        `| ${quantizationCell} | ${rbCell} | ${deviceCell} | ${ctxSizeCell} | ${batchSizeCell} | ${ubatchSizeCell} | ${flashAttnCell} | ${threadsCell} | ${cacheKCell} | ${cacheVCell} | ${item.promptCase ?? ''} | ${item.status ?? ''}` +
         ` | ${item.metrics?.ttftMsMean ?? ''} | ${item.metrics?.ttftMsStd ?? ''}` +
         ` | ${item.metrics?.tpsMean ?? ''} | ${item.metrics?.tpsStd ?? ''}` +
+        ` | ${item.metrics?.ppTpsMean ?? ''} | ${item.metrics?.ppTpsStd ?? ''}` +
+        ` | ${item.metrics?.loadMsMean ?? ''} | ${item.metrics?.loadMsStd ?? ''}` +
+        ` | ${item.metrics?.runMsMean ?? ''} | ${item.metrics?.runMsStd ?? ''}` +
         ` | ${item.metrics?.unloadMsMean ?? ''} | ${item.metrics?.unloadMsStd ?? ''}` +
         ` | ${item.metrics?.promptTokens ?? ''} | ${item.metrics?.generatedTokens ?? ''}` +
-        ` | ${quality} | ${errorCell} |`
+        ` | ${item.qualityMatch != null ? item.qualityMatch.toFixed(3) : ''} | ${errorCell} |`
       )
     }
     lines.push('')

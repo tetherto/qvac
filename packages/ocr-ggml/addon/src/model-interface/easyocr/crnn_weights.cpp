@@ -373,6 +373,15 @@ void build_crnn_weights_impl(
 } // namespace
 
 void CrnnGen2Weights::build_(const GgufLoader& loader, ggml_backend_t backend) {
+  // Backend-aware 1x1-conv strategy, resolved once at load time (mirrors the
+  // F16 kernel decision): mul_mat on GPU, conv_2d on CPU, overridable via
+  // OCR_GGML_CONV1X1_{MULMAT,CONV2D}.
+  if (backend != nullptr) {
+    conv1x1_mulmat_ = ocr_conv1x1_mulmat_use(backend);
+    // Direct-conv strategy: ggml_conv_2d_direct on OpenCL, im2col elsewhere;
+    // overridable via OCR_GGML_{DIRECT_CONV,IM2COL_CONV}.
+    use_direct_conv_ = ocr_use_direct_conv(backend);
+  }
   build_crnn_weights_impl(
       loader, backend, gen2_convs(), w_, b_, t_, ctx_, buf_, err_);
 }

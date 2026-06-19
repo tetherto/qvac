@@ -43,6 +43,9 @@ find_package(llama CONFIG REQUIRED)
 # need the full nlohmann headers, not just the forward decl shipped with
 # `llama/common/json-schema-to-grammar.h`.
 find_package(nlohmann_json CONFIG REQUIRED)
+# Lock-free MPMC queue (moodycamel) backing the ContinuousBatchScheduler
+# request intake: `processBatch` callers enqueue, the worker dequeues.
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
@@ -75,12 +78,14 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
@@ -111,6 +116,7 @@ endif()
       llama::common
       llama::mtmd
       nlohmann_json::nlohmann_json
+      unofficial::concurrentqueue::concurrentqueue
   )
 
 
@@ -126,11 +132,13 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
@@ -158,6 +166,7 @@ if(BUILD_CLI)
           llama::common
           llama::mtmd
           nlohmann_json::nlohmann_json
+          unofficial::concurrentqueue::concurrentqueue
   )
   find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})

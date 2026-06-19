@@ -31,11 +31,11 @@ const neuralFilePath = args[0];
 const CHUNK_SIZE = 64 * 1024;
 
 try {
-  console.log("=== BCI transcribeStream file test ===");
-  console.log(`File: ${neuralFilePath}`);
-  console.log(`Chunk size: ${CHUNK_SIZE} bytes\n`);
+  console.log("▸ BCI transcribeStream file test");
+  console.log(`▸ File: ${neuralFilePath}`);
+  console.log(`▸ Chunk size: ${CHUNK_SIZE} bytes`);
 
-  console.log("Loading model...");
+  console.log("▸ Loading model...");
   const modelId = await loadModel({
     modelSrc: BCI_WINDOWED,
     modelConfig: {
@@ -51,11 +51,10 @@ try {
       },
     },
   });
-  console.log(`Model loaded: ${modelId}\n`);
-
-  console.log("Opening live session...");
+  console.log(`▸ Model loaded: ${modelId}`);
+  console.log("▸ Opening live session...");
   const session = await bciTranscribeStream({ modelId, emit: "delta" });
-  console.log("Session open. Streaming neural signal...\n");
+  console.log("▸ Session open. Streaming neural signal...");
 
   // Drain the session concurrently with writing so the sliding-window
   // decode can make progress as chunks arrive instead of stalling.
@@ -78,20 +77,20 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 
-  console.log(`\n\nNeural signal streamed: ${totalBytes} bytes`);
-  console.log("Waiting for transcription to finish...\n");
+  console.log(`\n\n▸ Neural signal streamed: ${totalBytes} bytes`);
+  console.log("▸ Waiting for transcription to finish...");
   session.end();
 
   const transcript = await consume;
 
-  console.log("\n=== Results ===");
-  console.log(`Transcript: ${transcript.trim() || "(no text received)"}`);
+  console.log("\n▸ Results");
+  console.log(transcript.trim() || "(no text received)");
 
-  console.log("\nUnloading model...");
+  console.log("▸ Unloading model...");
   await unloadModel({ modelId });
-  console.log("Done.");
+  console.log("▸ Done.");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

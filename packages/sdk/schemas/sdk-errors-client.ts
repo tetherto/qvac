@@ -12,6 +12,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   OCR_FAILED: 50007,
   MODEL_TYPE_REQUIRED: 50008,
   MODEL_SRC_TYPE_MISMATCH: 50009,
+  REQUEST_VALIDATION_FAILED: 50010,
 
   // RPC Communication Errors (50,200-50,399)
   RPC_NO_HANDLER: 50200,
@@ -92,6 +93,10 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "MODEL_SRC_TYPE_MISMATCH",
     message: (inferred: string, resolved: string) =>
       `modelSrc describes "${inferred}", but modelType resolves to "${resolved}". Omit modelType to infer it automatically, or pass a matching modelType.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED]: {
+    name: "REQUEST_VALIDATION_FAILED",
+    message: (errors: string) => `Invalid request:\n${errors}`,
   },
 
   // RPC Communication Errors (50,200-50,399)
@@ -196,7 +201,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
     name: "WORKER_PLUGINS_NOT_REGISTERED",
     message: () =>
-      "No plugins registered in the worker. Call `plugins([...])` (or `registerPlugin(...)`) before the first SDK call. Import default plugin manifests from `@qvac/sdk/server/bare/plugins` if you want the full built-in set.",
+      "No plugins registered in the worker. On Bare, register the plugins you need with `plugins([...])` (or `registerPlugin(...)`) before the first SDK call — import each from its subpath, e.g. `@qvac/sdk/llamacpp-completion/plugin`. For direct Bare usage we recommend the dedicated `@qvac/bare-sdk` package. See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare",
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: "BUNDLE_VERIFICATION_FAILED",

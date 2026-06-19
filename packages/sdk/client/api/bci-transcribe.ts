@@ -17,6 +17,7 @@ import { stream, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
 import { getClientLogger } from "@/logging";
 import { TranscriptionFailedError } from "@/utils/errors-client";
 import { decoratePromise } from "@/utils/decorate-promise";
+import { parseClientInput } from "@/client/parse-input";
 import { generateClientRequestId } from "@/client/api/client-request-id";
 
 const logger = getClientLogger();
@@ -70,7 +71,7 @@ export function bciTranscribe(
   params: BciTranscribeClientParams,
   options?: RPCOptions,
 ): Promise<string | TranscribeSegment[]> & { requestId: string } {
-  const parsed = bciTranscribeClientParamsSchema.parse(params);
+  const parsed = parseClientInput(bciTranscribeClientParamsSchema, params);
   const requestId = generateClientRequestId();
   const inner = runBciTranscribe(parsed, requestId, options);
   return decoratePromise(inner, { requestId });

@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
-import { getClientLogger } from "@/logging";
+import { getClientLogger, getLogger, SDK_SERVER_NAMESPACE } from "@/logging";
 import {
   BareRuntimeBinaryNotFoundError,
   RPCInitTimeoutError,
@@ -22,8 +22,12 @@ import {
 import type { RuntimeContext } from "@/schemas";
 
 const RPC_INIT_TIMEOUT_MS = 30_000;
+const WORKER_STDERR_TAIL_CHARS = 16_384;
 
 const logger = getClientLogger();
+// Addons route real logs through their JS callback; anything written straight to the
+// worker's stderr is treated as debug.
+const workerLogger = getLogger(SDK_SERVER_NAMESPACE, { enableConsole: false });
 
 let rpcInstance: RPC | null = null;
 let rpcPromise: Promise<RPC> | null = null;
@@ -175,6 +179,19 @@ function bestEffortUnlinkSocket(socketPath: string | null) {
   }
 }
 
+function appendWorkerStderrTail(current: string, chunk: string) {
+  const next = current + chunk;
+  if (next.length <= WORKER_STDERR_TAIL_CHARS) return next;
+  return next.slice(next.length - WORKER_STDERR_TAIL_CHARS);
+}
+
+function createWorkerStartupError(details: string, stderrTail: string) {
+  const stderr = stderrTail.trimEnd();
+  if (!stderr) return new Error(details);
+
+  return new Error(`${details}\n\nWorker stderr:\n${stderr}`);
+}
+
 function resetModuleState() {
   rpcInstance = null;
   rpcPromise = null;
@@ -228,6 +245,14 @@ interface SpawnResources {
   controller: AbortController;
   server: ReturnType<typeof createServer>;
   socketPath: string;
+}
+
+interface WorkerStderrStream {
+  on(event: "data", listener: (chunk: Buffer | string) => void): void;
+}
+
+function getWorkerStderr(proc: BareChildProcess): WorkerStderrStream | null {
+  return (proc as { stderr?: WorkerStderrStream | null }).stderr ?? null;
 }
 
 // `bare-runtime` resolves its platform binary with
@@ -322,12 +347,19 @@ async function ensureRPC(): Promise<RPC> {
 
   rpcPromise = new Promise((resolve, reject) => {
     let settled = false;
+    let workerStderrTail = "";
 
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
+      const cause = workerStderrTail
+        ? createWorkerStartupError(
+            "Worker did not establish IPC before the RPC initialization timeout",
+            workerStderrTail,
+          )
+        : undefined;
       teardownFailedInit();
-      reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS));
+      reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS, cause));
     }, RPC_INIT_TIMEOUT_MS);
 
     ipcServer = createServer((socket) => {
@@ -370,7 +402,7 @@ async function ensureRPC(): Promise<RPC> {
           ],
           platform: process.platform,
           arch: process.arch,
-          stdio: ["inherit", "inherit", "inherit"],
+          stdio: ["inherit", "inherit", "pipe"],
         });
       } catch (error) {
         // `spawn` resolves the bare binary synchronously and can throw before
@@ -386,6 +418,14 @@ async function ensureRPC(): Promise<RPC> {
       }
 
       if (bareWorkerProc) {
+        getWorkerStderr(bareWorkerProc)?.on("data", (chunk) => {
+          const text = chunk.toString();
+          workerStderrTail = appendWorkerStderrTail(workerStderrTail, text);
+          for (const line of text.split("\n")) {
+            if (line.trim()) workerLogger.debug(line);
+          }
+        });
+
         bareWorkerProc.on(
           "exit",
           (code: number | null, exitSignal: string | null) => {
@@ -397,15 +437,29 @@ async function ensureRPC(): Promise<RPC> {
               );
               return;
             }
-            // Worker died before handshake — reject the init promise.
+            // Pre-handshake failures are rejected from "close" so stderr has
+            // drained before we assemble the startup error cause.
+          },
+        );
+
+        bareWorkerProc.on(
+          "close",
+          (...args: unknown[]) => {
+            if (settled) return;
+            const code = typeof args[0] === "number" ? args[0] : null;
+            const exitSignal = typeof args[1] === "string" ? args[1] : null;
+
+            // Worker died before handshake. Use close, not exit, so piped
+            // stderr has drained before we build the error cause.
             settled = true;
             clearTimeout(timer);
             teardownFailedInit();
             reject(
               new RPCInitTimeoutError(
                 RPC_INIT_TIMEOUT_MS,
-                new Error(
-                  `Worker process exited with code ${code} before IPC connection was established`,
+                createWorkerStartupError(
+                  `Worker process exited with code ${code}, signal ${exitSignal} before IPC connection was established`,
+                  workerStderrTail,
                 ),
               ),
             );

@@ -1,4 +1,28 @@
 # Changelog
+## [0.27.0] - 2026-06-18
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.2` (adds the OpenCL DocTR ops — `CONV_2D_DW`, `POOL_2D`, `HARDSWISH`, `HARDSIGMOID` — for the Adreno OpenCL backend; no behavioral change for this package).
+
+## Pull Requests
+
+- [#2617](https://github.com/tetherto/qvac/pull/2617) - feat[api]: DocTR Adreno OpenCL — direct regular conv (~0.72s on S25) + qvac-fabric 8828.1.2
+
+## [0.26.0] - 2026-06-15
+
+### Added
+
+- Continuous-batching support: `run()` now accepts an array of prompts and decodes them concurrently in a single native batch. Each request streams independently and resolves in the original submission order. Per-request generation params and explicit ids are supported via `BatchPrompt` wrappers.
+- `avgConcurrentSeq` runtime stat reporting the average number of sequences decoded together during a request.
+
+### Fixed
+
+- Token-budget stop (`n_predict`) no longer fires on the single-prompt decode path, where the generation loop already caps output. The guard was consuming an extra eval cycle and breaking C++ unit tests.
+
+## Pull Requests
+
+- [#2327](https://github.com/tetherto/qvac/pull/2327) - QVAC-18395: Continuous Batching (single-job)
 
 ## [0.25.0] - 2026-06-12
 

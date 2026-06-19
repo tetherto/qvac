@@ -12,6 +12,7 @@ const {
   isPng,
   safeTest
 } = require('./utils')
+const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
 
@@ -90,45 +91,64 @@ safeTest('SD3 Medium img2img — transforms an input image', { timeout: 1800000,
     const initImage = fs.readFileSync(initImagePath)
     console.log(`\nLoaded init image: ${initImage.length} bytes`)
 
-    // ── Generate (img2img) ────────────────────────────────────────────────────
-    console.log('\n=== Generating image (img2img) ===')
-    console.log(`  Steps    : ${STEPS}`)
-    console.log(`  CFG Scale: ${CFG_SCALE}`)
-    console.log(`  Strength : ${STRENGTH}`)
-    console.log(`  Seed     : ${SEED}`)
+    // ── Generate (perf loop) ───────────────────────────────────────────────────
+    const totalIterations = WARMUP_RUNS + PERF_RUNS
+    for (let iteration = 0; iteration < totalIterations; iteration++) {
+      const isWarmup = iteration < WARMUP_RUNS
+      const runLabel = isWarmup ? `warmup ${iteration + 1}` : `run ${iteration - WARMUP_RUNS + 1}/${PERF_RUNS}`
+      console.log(`\n=== Generating image (img2img ${runLabel}) ===`)
+      console.log(`  Steps    : ${STEPS}`)
+      console.log(`  CFG Scale: ${CFG_SCALE}`)
+      console.log(`  Strength : ${STRENGTH}`)
+      console.log(`  Seed     : ${SEED + iteration}`)
 
-    const tGen = Date.now()
+      const tGen = Date.now()
+      let ttfbMs = null
 
-    const response = await model.run({
-      prompt: 'anime portrait, scientist, same pose, comic-book style, professional illustration',
-      negative_prompt: 'photorealistic, blurry, low quality, 3d render, deformed, different person',
-      init_image: initImage,
-      cfg_scale: CFG_SCALE,
-      steps: STEPS,
-      strength: STRENGTH,
-      sampling_method: 'euler',
-      seed: SEED
-    })
+      images.length = 0
+      progressTicks.length = 0
 
-    await response
-      .onUpdate((data) => {
-        if (data instanceof Uint8Array) {
-          images.push(data)
-        } else if (typeof data === 'string') {
-          try {
-            const tick = JSON.parse(data)
-            if ('step' in tick && 'total' in tick) {
-              progressTicks.push(tick)
-            }
-          } catch (_) {}
-        }
+      const response = await model.run({
+        prompt: 'anime portrait, scientist, same pose, comic-book style, professional illustration',
+        negative_prompt: 'photorealistic, blurry, low quality, 3d render, deformed, different person',
+        init_image: initImage,
+        cfg_scale: CFG_SCALE,
+        steps: STEPS,
+        strength: STRENGTH,
+        sampling_method: 'euler',
+        seed: SEED + iteration
       })
-      .await()
 
-    const genMs = Date.now() - tGen
-    console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
+      await response
+        .onUpdate((data) => {
+          if (ttfbMs === null) ttfbMs = Date.now() - tGen
+          if (data instanceof Uint8Array) {
+            images.push(data)
+          } else if (typeof data === 'string') {
+            try {
+              const tick = JSON.parse(data)
+              if ('step' in tick && 'total' in tick) {
+                progressTicks.push(tick)
+              }
+            } catch (_) {}
+          }
+        })
+        .await()
 
-    // ── Assertions ────────────────────────────────────────────────────────────
+      const genMs = Date.now() - tGen
+      console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
+
+      if (!isWarmup) {
+        t.comment(recordPerformance('[SD3 img2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
+          scenario: 'img2img',
+          model: 'sd3_medium_incl_clips',
+          execution_provider: useCpu ? 'cpu' : 'gpu',
+          ttfbMs
+        }))
+      }
+    }
+
+    // ── Assertions (on last iteration) ──────────────────────────────────────
     t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
 
     t.is(images.length, 1, 'Received exactly 1 image')
@@ -146,17 +166,6 @@ safeTest('SD3 Medium img2img — transforms an input image', { timeout: 1800000,
     const outPath = path.join(modelDir, 'generate-image--sd3-i2i-seed3.png')
     fs.writeFileSync(outPath, img)
     console.log(`\nSaved → ${outPath}`)
-
-    // ── Summary ───────────────────────────────────────────────────────────────
-    console.log('\n' + '='.repeat(60))
-    console.log('TEST SUMMARY')
-    console.log('='.repeat(60))
-    console.log(` Load time   : ${(loadMs / 1000).toFixed(1)}s`)
-    console.log(` Gen time    : ${(genMs / 1000).toFixed(1)}s`)
-    console.log(` Steps ticks : ${progressTicks.length}`)
-    console.log(` Image size  : ${img.length} bytes`)
-    console.log(' PNG valid   : true')
-    console.log('='.repeat(60))
   } finally {
     console.log('\n=== Cleanup ===')
     if (model) await model.unload().catch(() => {})

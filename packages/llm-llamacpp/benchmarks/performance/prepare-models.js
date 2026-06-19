@@ -160,6 +160,39 @@ function downloadFile (url, destination, headers, redirects = 5) {
   })
 }
 
+// Transient-error handling mirrors the addon's integration-test downloader
+// (test/integration/utils.js). That helper is Bare-only (bare-https) and can't
+// be imported into this Node script, so the semantics are duplicated here
+// rather than diverged: same error set, same exponential backoff with jitter.
+const TRANSIENT_ERROR_CODES = new Set([
+  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
+  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+])
+
+function isTransientError (err) {
+  if (err && err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
+  // downloadFile reports HTTP failures with a numeric `code` (e.g. 500).
+  const status = (err && err.statusCode) || (err && typeof err.code === 'number' ? err.code : null)
+  if (status) return status === 408 || status === 429 || status >= 500
+  return false
+}
+
+// Retry transient network/HTTP failures so a single HuggingFace blip doesn't
+// abort the whole benchmark. 404 and other client errors are re-thrown
+// immediately — the caller handles 404 via its filename-candidate fallback.
+async function downloadFileWithRetry (url, destination, headers, retries = 3) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await downloadFile(url, destination, headers)
+    } catch (error) {
+      if (!isTransientError(error) || attempt >= retries) throw error
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
+      console.log(`[addon] download attempt ${attempt + 1}/${retries + 1} failed (${(error && (error.code || error.message)) || error}), retrying in ${Math.round(delay)}ms...`)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+}
+
 async function listRepoGgufFiles (repo, revision, headers) {
   const encodedRepo = String(repo)
     .split('/')
@@ -259,7 +292,7 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
         const url = `https://huggingface.co/${repo}/resolve/${revision}/${candidateFilename}`
         console.log(`[addon] downloading ${modelId}:${quantization} from ${url}`)
         try {
-          await downloadFile(url, candidateDestination, headers)
+          await downloadFileWithRetry(url, candidateDestination, headers)
           selectedFilename = candidateFilename
           destination = candidateDestination
           break
@@ -284,7 +317,7 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
           } else {
             console.log(`[addon] downloading ${modelId}:${quantization} from resolved filename ${selectedFilename}`)
           }
-          await downloadFile(url, destination, headers)
+          await downloadFileWithRetry(url, destination, headers)
         }
       }
 

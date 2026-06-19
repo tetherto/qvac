@@ -25,6 +25,13 @@ llama_pos ToolsCompactController::anchor() const noexcept {
   return nPastBeforeTools_;
 }
 
+std::optional<ToolsCompactProfile> ToolsCompactController::profile() const {
+  if (!enabled_) {
+    return std::nullopt;
+  }
+  return profile_;
+}
+
 void ToolsCompactController::validatePrompt(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
