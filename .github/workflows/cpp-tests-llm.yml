@@ -37,9 +37,10 @@ jobs:
             platform: linux
             runner: qvac-ubuntu2404-x64
             arch: x64
-          - os: macos-14
+          - os: macos-15-xlarge
             platform: darwin
             arch: arm64
+            runner: macos-15-xlarge
           - os: windows-2025
             platform: windows
             runner: qvac-win25-x64
