@@ -32,22 +32,24 @@ const modelSrcOverride = process.argv[2];
 const modelSrc = modelSrcOverride ?? PI05_BASE_Q_AGGRESSIVE;
 
 try {
-  console.log("Loading π₀.₅ (pi05) model...");
+  console.log("▸ Loading π₀.₅ (pi05) model...");
   const modelId = await loadModel({
     modelSrc,
     modelType: "ggml-vla",
     modelConfig: { backend: "cpu" },
-    onProgress: (p) =>
-      typeof modelSrc === "string"
-        ? undefined
-        : process.stdout.write(`\rDownloading: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  if (typeof modelSrc !== "string") process.stdout.write("\n");
-  console.log(`Model loaded: ${modelId}`);
+  if (typeof modelSrc !== "string") process.stderr.write("\n");
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const { hparams, backendName } = await vlaHparams({ modelId });
-  console.log(`Backend: ${backendName ?? "(unknown)"}`);
-  console.log("Hparams:", hparams);
+  console.log(`▸ Backend: ${backendName ?? "(unknown)"}`);
+  console.log("▸ Hparams:", hparams);
 
   // Build synthetic inputs sized to the model's expectations. A real
   // consumer would: read camera frames, tokenize the instruction with the
@@ -71,7 +73,7 @@ try {
   const state = new Float32Array(0);
   const noise = new Float32Array(hparams.chunkSize * hparams.maxActionDim);
 
-  console.log("Running VLA inference...");
+  console.log("▸ Running VLA inference...");
   const { actions, actionDim, chunkSize, stats } = await vla({
     modelId,
     images,
@@ -83,11 +85,11 @@ try {
     noise,
   });
 
-  console.log(`Got ${chunkSize} action steps of dim ${actionDim}.`);
-  console.log("First step:", Array.from(actions.subarray(0, actionDim)));
+  console.log(`▸ Got ${chunkSize} action steps of dim ${actionDim}.`);
+  console.log(Array.from(actions.subarray(0, actionDim)));
   if (stats) {
     console.log(
-      `Timing: vision=${stats.vision_ms?.toFixed(0)}ms ` +
+      `▸ Timing: vision=${stats.vision_ms?.toFixed(0)}ms ` +
         `prefill=${stats.prefill_total_ms?.toFixed(0)}ms ` +
         `ode=${stats.ode_ms?.toFixed(0)}ms ` +
         `total=${stats.total_ms?.toFixed(0)}ms`,
@@ -95,10 +97,10 @@ try {
   }
 
   await unloadModel({ modelId, clearStorage: false });
-  console.log("Model unloaded.");
+  console.log("▸ Model unloaded.");
   process.exit(0);
 } catch (error) {
-  console.error("π₀.₅ example failed:", error);
+  console.error("✖", error);
   await close();
   process.exit(1);
 }

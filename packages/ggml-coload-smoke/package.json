@@ -1,0 +1,30 @@
+{
+  "name": "@qvac/ggml-coload-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Multi-addon co-load smoke harness: require()s several @qvac ggml addons into one Bare process to catch cross-addon ggml symbol / dlopen clashes that single-addon CI cannot see (e.g. the @qvac/tts-ggml@0.2.1 Android dlopen crash).",
+  "engines": {
+    "bare": ">=1.19.0"
+  },
+  "scripts": {
+    "test": "bare test/coload.test.js",
+    "coload": "bare test/coload.test.js",
+    "combinations": "node scripts/coload-combinations.mjs",
+    "lint": "standard \"*.js\" \"test/**/*.js\" \"scripts/**/*.mjs\""
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/ggml-coload-smoke"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-coload-smoke#readme",
+  "devDependencies": {
+    "standard": "^17.0.0"
+  },
+  "dependencies": {
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2"
+  }
+}

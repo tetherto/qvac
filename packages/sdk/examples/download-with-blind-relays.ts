@@ -16,7 +16,7 @@ import {
   unloadModel,
 } from "@qvac/sdk";
 
-console.log(`🚀 Download with Blind Relays Example`);
+console.log(`▸ Download with Blind Relays Example`);
 console.log(`${"=".repeat(60)}\n`);
 
 try {
@@ -24,53 +24,41 @@ try {
   // The config contains swarmRelays - an array of Hyperswarm relay public keys
   // These relays help with NAT traversal and firewall bypassing for P2P downloads
 
-  console.log(`📥 Starting model download from Hyperdrive...\n`);
-
-  const startTime = Date.now();
+  console.log(`▸ Starting model download from Hyperdrive...\n`);
 
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
   });
 
-  console.log(`Model loaded with ID: ${modelId}`);
+  console.log(`▸ Model loaded with ID: ${modelId}`);
 
   const firstStatus = await getModelInfo(LLAMA_3_2_1B_INST_Q4_0);
 
-  console.log(`First status: ${JSON.stringify(firstStatus)}`);
+  console.log(`▸ First status: ${JSON.stringify(firstStatus)}`);
 
   await unloadModel({ modelId });
 
   // Download model with progress tracking
   await downloadAsset({
     assetSrc: LLAMA_3_2_1B_INST_Q4_0,
-    onProgress: (progress: ModelProgressUpdate) => {
-      const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
-      const totalMB = (progress.total / 1024 / 1024).toFixed(2);
-      const percentage = progress.percentage.toFixed(1);
-      const elapsedSeconds = (Date.now() - startTime) / 1000;
-      const speedMBps = (
-        progress.downloaded /
-        1024 /
-        1024 /
-        elapsedSeconds
-      ).toFixed(2);
-
-      console.log(
-        `📊 ${percentage}% - ${downloadedMB}MB / ${totalMB}MB (${speedMBps} MB/s)`,
-      );
+    onProgress: (p: ModelProgressUpdate) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`\n✅ Model downloaded successfully using blind relays!`);
+  console.log(`\n▸ Model downloaded successfully using blind relays!`);
   console.log(
-    `Blind relays helped establish peer connections through NAT/firewalls\n`,
+    `▸ Blind relays helped establish peer connections through NAT/firewalls\n`,
   );
 
   await close();
 } catch (error) {
-  console.error("❌ Error:", error);
-  console.log(`\nIf download failed, check the relay public keys in:`);
-  console.log(`   examples/config/qvac.config.json`);
-  console.log(`   (Mock keys in this example won't work in practice!)`);
+  console.error("✖", error);
+  console.log(`\n▸ If download failed, check the relay public keys in:`);
+  console.log(`▸ examples/config/qvac.config.json`);
+  console.log(`▸ (Mock keys in this example won't work in practice!)`);
   process.exit(1);
 }

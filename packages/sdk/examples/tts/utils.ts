@@ -62,7 +62,7 @@ export function createWav(
   const wavFile = Buffer.concat([wavHeader, audioData]);
 
   writeFileSync(filename, wavFile);
-  console.log(`WAV file saved as: ${filename}`);
+  console.log(`▸ WAV file saved as: ${filename}`);
 }
 
 /**

@@ -86,12 +86,12 @@ function parseSearchResults(mcpResult: unknown): string {
 let mcpClient: Client | null = null;
 
 try {
-  console.log("🦆 MCP DuckDuckGo Search Example\n");
+  console.log("▸ MCP DuckDuckGo Search Example\n");
 
   // ============================================================
   // STEP 1: Connect to DuckDuckGo MCP server
   // ============================================================
-  console.log("1️⃣  Starting DuckDuckGo MCP server...");
+  console.log("▸ Starting DuckDuckGo MCP server...");
 
   mcpClient = new Client({
     name: "qvac-ddg-example",
@@ -104,22 +104,26 @@ try {
   });
 
   await mcpClient.connect(transport);
-  console.log("   ✓ MCP server connected\n");
+  console.log("▸ MCP server connected\n");
 
   // ============================================================
   // STEP 2: Load model
   // ============================================================
-  console.log("2️⃣  Loading model...");
+  console.log("▸ Loading model...");
   const modelId = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
     modelConfig: {
       ctx_size: 4096,
       tools: true,
     },
-    onProgress: (progress) =>
-      process.stdout.write(`\r   Loading: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`\n   ✓ Model loaded\n`);
+  console.log(`\n▸ Model loaded\n`);
 
   // ============================================================
   // STEP 3: Ask AI to search the web (with MCP client)
@@ -137,8 +141,8 @@ Always cite your sources with the URL.`,
     },
   ];
 
-  console.log("3️⃣  Asking AI to search the web...\n");
-  console.log("🤖 AI Response:");
+  console.log("▸ Asking AI to search the web...\n");
+  console.log("▸ AI Response:");
 
   // Pass MCP client directly to completion - tools are adapted internally!
   const result = completion({
@@ -159,15 +163,17 @@ Always cite your sources with the URL.`,
   // STEP 4: Execute tool calls using call() - automatic MCP routing!
   // ============================================================
   if (toolCalls.length > 0) {
-    console.log("4️⃣  Executing search...\n");
+    console.log("▸ Executing search...\n");
 
     const toolResults: Array<{ id: string; result: string }> = [];
 
     for (const toolCall of toolCalls) {
-      console.log(`🔍 ${toolCall.name}(${JSON.stringify(toolCall.arguments)})`);
+      console.log(
+        `▸ ${toolCall.name}(${JSON.stringify(toolCall.arguments)})`,
+      );
 
       if (!toolCall.invoke) {
-        console.log(`   ⚠️ No handler found for tool "${toolCall.name}"`);
+        console.log(`▸ No handler found for tool "${toolCall.name}"`);
         continue;
       }
 
@@ -177,7 +183,7 @@ Always cite your sources with the URL.`,
       // Parse and clean up the search results
       const cleanResult = parseSearchResults(mcpResult);
 
-      console.log(`   ✓ Got search results:`);
+      console.log(`▸ Got search results:`);
       console.log(
         cleanResult
           .split("\n")
@@ -192,7 +198,7 @@ Always cite your sources with the URL.`,
     // ============================================================
     // STEP 5: Continue with search results
     // ============================================================
-    console.log("5️⃣  Getting AI response with search results...\n");
+    console.log("▸ Getting AI response with search results...\n");
 
     history.push({
       role: "assistant",
@@ -206,7 +212,7 @@ Always cite your sources with the URL.`,
       });
     }
 
-    console.log("🤖 Final Response:");
+    console.log("▸ Final Response:");
     const finalResult = completion({
       modelId,
       history,
@@ -223,14 +229,14 @@ Always cite your sources with the URL.`,
   // ============================================================
   // Cleanup
   // ============================================================
-  console.log("6️⃣  Cleaning up...");
+  console.log("▸ Cleaning up...");
   await unloadModel({ modelId, clearStorage: false });
-  console.log("   ✓ Done\n");
+  console.log("▸ Done\n");
 
-  console.log("🎉 Example completed!");
+  console.log("▸ Example completed!");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 } finally {
   if (mcpClient) {

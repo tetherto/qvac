@@ -4,14 +4,22 @@
 **Package Type:** Native Bare addon
 
 A vision-language-action (VLA) inference addon for the Bare runtime, running
-the [SmolVLA](https://huggingface.co/HuggingFaceVLA/smolvla_libero) model on
-ggml. Given a pair of camera frames and a natural-language instruction, it
-produces a chunk of robot actions ready to dispatch to a manipulator.
+[SmolVLA](https://huggingface.co/HuggingFaceVLA/smolvla_libero) and Physical
+Intelligence [π₀.₅](https://www.physicalintelligence.company/blog/pi05) on
+ggml. Given camera frames and a natural-language instruction, it produces a
+chunk of robot actions ready to dispatch to a manipulator. The model
+architecture is selected automatically from the GGUF `general.architecture`
+key, so the same `VlaModel` API serves both.
 
 ## Key Features
 
-- **SmolVLA inference on ggml** — full pipeline: SigLIP-B/16 vision encoder,
-  SmolLM2 language tower, action expert, and 10-step flow-matching ODE.
+- **Two VLA architectures on ggml** — *SmolVLA* (SigLIP-B/16 vision encoder,
+  SmolLM2 language tower, action expert, 10-step flow-matching ODE) and
+  *π₀.₅* (SigLIP vision + PaliGemma/Gemma-1 VLM + action expert, same
+  flow-matching ODE). The polymorphic `IVlaModel` interface dispatches on the
+  GGUF `general.architecture` key; legacy weights without the key load as
+  SmolVLA. Every sub-graph of both models is parity-tested against a PyTorch
+  reference at cos > 0.999.
 - **Cross-platform GPU acceleration** — Vulkan on Linux/Windows/Android-Mali,
   Metal on Apple, OpenCL on Adreno 800+, CPU fallback everywhere else. On
   Adreno the backend selector picks OpenCL (the path Qualcomm/qvac-fabric
@@ -23,12 +31,28 @@ produces a chunk of robot actions ready to dispatch to a manipulator.
   closed-loop eval. Other towers stay F32.
 - **Bare async API** — model loading and inference run off the JS event loop.
 
-## Model
+## Models
 
-Default-tested fixture: SmolVLA fine-tuned on LIBERO
-(`HuggingFaceVLA/smolvla_libero`), packaged as a single ~1.9 GB GGUF. The
-GGUF carries SmolVLA's vision tower, SmolLM2 language model, action expert,
-and flow-matching projections in a unified file.
+Both architectures ship as a single unified GGUF (vision tower, language
+model, action expert, and flow-matching projections in one file) and are
+loaded through the same `VlaModel` API; `getVlaHparams()` reports the
+per-architecture shape so callers can adapt.
+
+| Model | GGUF `general.architecture` | Cameras | Robot state | Default fixture |
+|---|---|---|---|---|
+| **SmolVLA** | `smolvla` (or no key — legacy) | 2 | continuous (`state` Float32Array) | `HuggingFaceVLA/smolvla_libero`, ~1.9 GB |
+| **π₀.₅** | `pi05` | 3 | discrete — encoded as text in the prompt (`state` arg ignored) | `pi05_base.gguf` |
+
+For π₀.₅ the prompt is **not** just the instruction: following the openpi /
+PaliGemma-VLA convention, the caller builds a templated prompt
+(`Task: <instruction>, State: <state>;\nAction:`) where the quantile-normalised
+robot state is discretised and rendered as text into the `State:` segment, then
+tokenises the whole string. That token array is passed as the usual
+`tokens`/`mask` input; the addon's separate `state` argument is **ignored** for
+π₀.₅ (pass an empty `Float32Array`). SmolVLA, by contrast, takes the instruction
+as the prompt and the robot state as the continuous `state` vector. For
+converting LeRobot / openpi π₀.₅ checkpoints to GGUF and the quantization
+profiles, see [`scripts/README-pi05-converter.md`](./scripts/README-pi05-converter.md).
 
 ## Installation
 
@@ -81,6 +105,12 @@ const { actions, stats } = await response.await()
 // actions: Float32Array, length = chunkSize * actionDim (50 × 7 by default)
 ```
 
+The example above is SmolVLA (2 cameras, continuous `state` vector). π₀.₅ takes
+up to 3 images and ignores the `state` argument — the caller instead encodes
+robot state as text inside the prompt (`Task: …, State: …;\nAction:`) before
+tokenising (see [Models](#models)). Check `hparams.numCameras` /
+`hparams.stateInputMode` after `load()` rather than hard-coding the input shape.
+
 ## JavaScript API
 
 | Export | What |
@@ -113,8 +143,9 @@ regardless, pass `backend: 'cpu'` to `load()`.
 
 - [qvac-lib-inference-addon-cpp](https://github.com/tetherto/qvac-lib-inference-addon-cpp) — foundational Bare-addon framework.
 - [ggml](https://github.com/ggml-org/ggml) — tensor / inference primitives. We use raw ggml directly (not llama.cpp) because SmolVLA's flow-matching ODE and dual-VLM-with-expert architecture aren't representable in any existing higher-level wrapper.
-- [SmolVLA](https://huggingface.co/HuggingFaceVLA/smolvla_libero) by LeRobot / HuggingFace — the upstream model architecture.
-- [SmolVLM2](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct) by HuggingFaceTB — the underlying VLM the action expert attaches to.
+- [SmolVLA](https://huggingface.co/HuggingFaceVLA/smolvla_libero) by LeRobot / HuggingFace — one of the two upstream model architectures.
+- [SmolVLM2](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct) by HuggingFaceTB — the underlying VLM SmolVLA's action expert attaches to.
+- [π₀.₅](https://www.physicalintelligence.company/blog/pi05) by Physical Intelligence — the second supported architecture (SigLIP vision + PaliGemma/Gemma-1 VLM + action expert).
 
 ## Development
 

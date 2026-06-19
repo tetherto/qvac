@@ -22,10 +22,14 @@ try {
   modelId = await loadModel({
     modelSrc: GPT_OSS_20B_INST_Q4_K_M,
     modelConfig: { ctx_size: 4096, tools: true },
-    onProgress: (progress) =>
-      console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`✅ Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const history: Array<{ role: string; content: string }> = [
     {
@@ -40,7 +44,7 @@ try {
   ];
 
   for (let turn = 1; turn <= MAX_TURNS; turn++) {
-    console.log(`\n========== TURN ${turn} ==========`);
+    console.log(`\n▸ ========== TURN ${turn} ==========`);
     const result = completion({ modelId, history, tools, stream: true });
 
     for await (const token of result.tokenStream) {
@@ -49,14 +53,14 @@ try {
     console.log();
 
     const final = await result.final;
-    console.log(`\n--- TURN ${turn} SUMMARY ---`);
-    console.log(`[sdk toolCalls] ${final.toolCalls.length}`);
+    console.log(`\n▸ --- TURN ${turn} SUMMARY ---`);
+    console.log(`▸ [sdk toolCalls] ${final.toolCalls.length}`);
     for (const call of final.toolCalls) {
-      console.log(`  → ${call.name}(${JSON.stringify(call.arguments)})`);
+      console.log(`▸   ${call.name}(${JSON.stringify(call.arguments)})`);
     }
 
     if (final.toolCalls.length === 0) {
-      console.log(`\n🎉 Final response received — exiting loop.`);
+      console.log(`\n▸ Final response received — exiting loop.`);
       break;
     }
 
@@ -67,32 +71,32 @@ try {
 
     for (const call of final.toolCalls) {
       const toolResult = mockExecute(call.name, call.arguments);
-      console.log(`  ✓ mock-executed ${call.name}: ${toolResult}`);
+      console.log(`▸   mock-executed ${call.name}: ${toolResult}`);
       history.push({ role: "tool", content: toolResult });
     }
 
     if (turn === MAX_TURNS) {
-      console.log(`\n⚠️  MAX_TURNS (${MAX_TURNS}) reached — stopping.`);
+      console.log(`\n▸ MAX_TURNS (${MAX_TURNS}) reached — stopping.`);
     }
   }
 
-  console.log(`\n========== HISTORY ==========`);
+  console.log(`\n▸ ========== HISTORY ==========`);
   for (const msg of history) {
     const preview = msg.content.slice(0, 120).replace(/\n/g, "\\n");
     console.log(
-      `[${msg.role}] ${preview}${msg.content.length > 120 ? "…" : ""}`,
+      `▸ [${msg.role}] ${preview}${msg.content.length > 120 ? "…" : ""}`,
     );
   }
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 } finally {
   if (modelId) {
     try {
       await unloadModel({ modelId, clearStorage: false });
-      console.log(`\n[unload] done`);
+      console.log(`\n▸ [unload] done`);
     } catch (unloadError) {
-      console.error("[unload] failed:", unloadError);
+      console.error("✖ [unload] failed:", unloadError);
     }
   }
 }

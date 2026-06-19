@@ -34,7 +34,7 @@ async function loadAndUnload(
 ): Promise<void> {
   const id = await loadModel({
     modelSrc: pair.descriptor as never,
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     modelConfig: { engine: "Bergamot", from: pair.from, to: pair.to },
     ...(onProgress && { onProgress }),
   });
