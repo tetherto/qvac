@@ -32,7 +32,7 @@ try {
   const r = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
   if (r.error || r.status !== 0) throw new Error("FFmpeg not found");
 } catch {
-  console.error("❌ Error: FFmpeg is required. Install it and try again.");
+  console.error("✖ FFmpeg is required. Install it and try again.");
   process.exit(1);
 }
 
@@ -40,10 +40,10 @@ let modelId: string | null = null;
 let ffmpeg: ReturnType<typeof startMicrophone> | null = null;
 
 async function cleanup() {
-  console.log("\n\nStopping...");
+  console.log("\n\n▸ Stopping...");
   ffmpeg?.kill();
   if (modelId) await unloadModel({ modelId });
-  console.log("Done.");
+  console.log("▸ Done.");
 }
 
 process.on("SIGINT", () => {
@@ -54,7 +54,7 @@ process.on("SIGTERM", () => {
 });
 
 try {
-  console.log("Loading model (whisper-tiny + Silero VAD)...");
+  console.log("▸ Loading model (whisper-tiny + Silero VAD)...");
   modelId = await loadModel({
     modelSrc: WHISPER_TINY,
     modelConfig: {
@@ -76,7 +76,7 @@ try {
       },
     },
   });
-  console.log("Model loaded.\n");
+  console.log("▸ Model loaded.\n");
 
   ffmpeg = startMicrophone({ sampleRate: SAMPLE_RATE, format: "f32le" });
 
@@ -89,7 +89,7 @@ try {
   ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
 
   console.log(
-    "Listening... speak and pause to see transcripts, VAD events, and end-of-turn signals.\n",
+    "▸ Listening... speak and pause to see transcripts, VAD events, and end-of-turn signals.\n",
   );
 
   let lastSpeaking = false;
@@ -101,7 +101,7 @@ try {
       case "vad":
         if (event.speaking !== lastSpeaking) {
           console.log(
-            `[vad] speaking=${event.speaking} probability=${event.probability.toFixed(2)}`,
+            `▸ [vad] speaking=${event.speaking} probability=${event.probability.toFixed(2)}`,
           );
           lastSpeaking = event.speaking;
         }
@@ -109,16 +109,16 @@ try {
       case "endOfTurn":
         if (event.source === "whisper") {
           console.log(
-            `[endOfTurn] silence ${event.silenceDurationMs}ms — turn complete\n`,
+            `▸ [endOfTurn] silence ${event.silenceDurationMs}ms — turn complete\n`,
           );
         } else {
-          console.log(`[endOfTurn] turn complete (token-driven EOU)\n`);
+          console.log(`▸ [endOfTurn] turn complete (token-driven EOU)\n`);
         }
         break;
     }
   }
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   await cleanup();
   process.exit(1);
 }

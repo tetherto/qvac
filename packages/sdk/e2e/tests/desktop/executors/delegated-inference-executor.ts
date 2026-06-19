@@ -93,7 +93,7 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     return this.withRemoteProvider(async ({ publicKey }) => {
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         delegate: { providerPublicKey: publicKey, timeout: E2E_DELEGATION_TIMEOUT, fallbackToLocal: false },
       });
       try {
@@ -133,7 +133,7 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     return this.withRemoteProvider(async ({ publicKey }) => {
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         delegate: { providerPublicKey: publicKey, timeout: E2E_DELEGATION_TIMEOUT, fallbackToLocal: false },
       });
       try {

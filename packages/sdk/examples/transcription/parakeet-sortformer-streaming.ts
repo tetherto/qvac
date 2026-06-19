@@ -96,7 +96,12 @@ function readS16leFromWav(wavPath: string): Promise<Uint8Array> {
 const loadOptions: LoadModelOptions = {
   modelType: "parakeet-transcription",
   modelConfig: { ...SORTFORMER_V21_AOSC_LOAD_CONFIG },
-  onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
+  onProgress: (p) => {
+    const mb = (n: number) => (n / 1e6).toFixed(1);
+    const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+    process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+    if (p.percentage >= 100) process.stderr.write("\n");
+  },
   ...(sortformerOverride
     ? { modelSrc: sortformerOverride }
     : { modelSrc: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0 }),
@@ -104,10 +109,10 @@ const loadOptions: LoadModelOptions = {
 
 try {
   console.log(
-    "Loading Sortformer v2.1 with streaming + AOSC (load-time config)...",
+    "▸ Loading Sortformer v2.1 with streaming + AOSC (load-time config)...",
   );
   modelId = await loadModel(loadOptions);
-  console.log(`Model loaded: ${modelId}\n`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const session = await transcribeStream({
     modelId,
@@ -115,7 +120,7 @@ try {
   });
 
   console.log(
-    `Streaming ${audioFilePath} in ${STREAM_CHUNK_MS}ms chunks (wall-clock paced)...\n`,
+    `▸ Streaming ${audioFilePath} in ${STREAM_CHUNK_MS}ms chunks (wall-clock paced)...`,
   );
 
   const pcm = await readS16leFromWav(audioFilePath);
@@ -150,13 +155,13 @@ try {
     }
   }
 
-  console.log("\n=== Streaming diarization transcript ===");
+  console.log("\n▸ Streaming diarization transcript");
   console.log(lines.join("\n") || "(no speaker lines emitted)");
 
   await cleanup();
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   await cleanup();
   process.exit(1);
 }

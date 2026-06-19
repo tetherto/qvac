@@ -905,6 +905,46 @@ async function runDoctrOCR (t, params, imagePath) {
   }
 }
 
+// Cached resolution of the Android GPU backend for the EasyOCR perf GPU pass
+// (QVAC-20949). Vulkan is the right GPU backend on Mali (e.g. Pixel 9 Pro) but
+// is auto-skipped on Adreno (numerically broken) — so on Adreno the perf GPU
+// pass must request OpenCL instead, otherwise it silently falls back to CPU and
+// the perf report leaves the Android GPU cells blank. The JS can't tell Adreno
+// from Mali up front, so we probe once: load a throwaway Vulkan instance and
+// read getBackendInfo — a real GPU means Mali-class (keep Vulkan); a CPU
+// fallback means Adreno (use OpenCL). null = not yet resolved.
+let _androidGpuDevice = null
+
+function _hasBackendOverride () {
+  let raw = ''
+  if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
+  if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
+  return String(raw).trim() !== ''
+}
+
+async function ensureAndroidGpuResolved (detectorPath, recognizerPath) {
+  if (_androidGpuDevice) return _androidGpuDevice
+  const { OcrGgml } = require('../..')
+  const probe = new OcrGgml({
+    params: { pathDetector: detectorPath, pathRecognizer: recognizerPath, langList: ['en'], backendDevice: 'vulkan' },
+    opts: {}
+  })
+  try {
+    await probe.load()
+    const info = typeof probe.getBackendInfo === 'function' ? probe.getBackendInfo() : null
+    const isGpu = !!info && (info.backendDevice === 'GPU' || info.backendDevice === 'IGPU')
+    // Mali resolves Vulkan to a GPU -> keep Vulkan; Adreno falls back to CPU
+    // (Vulkan auto-skipped) -> request OpenCL for the GPU pass instead.
+    _androidGpuDevice = isGpu ? 'vulkan' : 'opencl'
+  } catch (e) {
+    _androidGpuDevice = 'vulkan' // safe default on probe failure
+  } finally {
+    await safeUnload(probe)
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+  return _androidGpuDevice
+}
+
 /**
  * Runs a single EasyOCR-style inference pass: constructs an OcrGgml instance
  * (forcing CPU when `forceCpu` is set), loads, runs, records perf and invokes
@@ -919,7 +959,16 @@ async function runDoctrOCR (t, params, imagePath) {
  */
 async function _runOcrPass (t, cfg, forceCpu) {
   const { params, imagePath, runOptions, perfLabel, perfOpts, assertResult } = cfg
-  const passParams = forceCpu ? { ...params, backendDevice: 'cpu' } : { ...params }
+  let passParams
+  if (forceCpu) {
+    passParams = { ...params, backendDevice: 'cpu' }
+  } else if (platform === 'android' && !_hasBackendOverride() && params.pathDetector && params.pathRecognizer) {
+    // EasyOCR GPU pass on Android: Vulkan on Mali, OpenCL on Adreno (QVAC-20949).
+    const resolved = await ensureAndroidGpuResolved(params.pathDetector, params.pathRecognizer)
+    passParams = { ...params, backendDevice: resolved }
+  } else {
+    passParams = { ...params }
+  }
   const ocrGgml = createOcrGgml(passParams, { stats: true })
 
   await ocrGgml.load()
@@ -1046,8 +1095,76 @@ async function runDoctrComparison (t, cfg) {
   return pass2
 }
 
+/**
+ * Warm-vs-cold profiler: loads ONE OcrGgml (Vulkan) instance and runs the same
+ * image N times, logging each run's detection/recognition/total. Run 0 is cold
+ * (includes Vulkan pipeline/shader compilation); later runs are warm
+ * steady-state. Separates one-time cold-start cost from real inference.
+ */
+async function runDoctrWarmProfile (t, cfg) {
+  const { OcrGgml } = require('../..')
+  const { params = {}, imagePath, runs = 4, label = '' } = cfg
+  const ocrGgml = new OcrGgml({
+    params: {
+      langList: ['en'],
+      pipelineType: 'doctr',
+      nThreads: 4,
+      backendDevice: 'vulkan',
+      ...params
+    },
+    opts: { stats: true }
+  })
+  await ocrGgml.load()
+  const info = typeof ocrGgml.getBackendInfo === 'function' ? ocrGgml.getBackendInfo() : null
+  console.log(`[WARM${label}] backend=` + JSON.stringify(info))
+  // Clinical-chemistry accuracy guard: every run must keep recognising these
+  // 12 keywords (case-insensitive substring over all recognised rows), so perf
+  // changes that degrade recognition are caught in the same device round.
+  const KEYWORDS = ['clinical', 'chemistry', 'alkaline', 'phosphatase', 'hemoglobin', 'creatinine', 'cholesterol', 'triglycerides', 'bilirubin', 'albumin', 'protein', 'lipid']
+  // Fastest steady-state (warm) run, recorded as the canonical warm metric.
+  let best = null
+  try {
+    for (let i = 0; i < runs; i++) {
+      const response = await ocrGgml.run({ path: imagePath, options: { paragraph: false } })
+      let boxes = 0
+      let texts = []
+      let originalTexts = []
+      await response.onUpdate(o => {
+        boxes = Array.isArray(o) ? o.length : 0
+        if (Array.isArray(o)) {
+          originalTexts = o.map(row => String(row[1]))
+          texts = originalTexts.map(tx => tx.toLowerCase())
+        }
+      }).onError(() => {}).await()
+      const s = response.stats || {}
+      const ms = (v) => ((v || 0) * 1000).toFixed(0)
+      const hits = KEYWORDS.filter(w => texts.some(tx => tx.includes(w)))
+      console.log(`[WARM${label}] run ${i} gpu=${s.backendIsGpu} boxes=${boxes} kw=${hits.length}/${KEYWORDS.length} total=${ms(s.totalTime)}ms det=${ms(s.detectionTime)}ms rec=${ms(s.recognitionTime)}ms`)
+      // Run 0 is cold (Vulkan pipeline/shader compile); runs >=1 are warm
+      // steady-state. Guard accuracy on every warm run and keep the fastest as
+      // the recorded warm number — this is the inference time the effort targets.
+      if (i >= 1) {
+        t.is(hits.length, KEYWORDS.length, `[WARM${label}] run ${i} keeps all ${KEYWORDS.length} clinical keywords`)
+        const totalMs = (s.totalTime || 0) * 1000
+        if (!best || totalMs < best.totalMs) best = { totalMs, stats: s, texts: originalTexts }
+      }
+    }
+    // Surface the fastest warm run in performance-report.json (and the combined
+    // PR perf comment) alongside the cold single-shot. The `clinical_chemistry`
+    // token keeps it within the mobile perf_report_filter; the backend token is
+    // normalized to the resolved accelerator by formatOCRPerformanceMetrics.
+    if (best) {
+      t.comment(formatOCRPerformanceMetrics('[DocTR clinical_chemistry warm] [GPU]', best.stats, best.texts, { imagePath }))
+    }
+    t.pass('warm profile complete')
+  } finally {
+    await safeUnload(ocrGgml)
+  }
+}
+
 module.exports = {
   isMobile,
+  runDoctrWarmProfile,
   isWindows,
   platform,
   PERF_RUNS,

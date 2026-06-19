@@ -10,12 +10,12 @@ try {
     },
   });
 
-  console.log(`✅ Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const text =
     "Hello, how are you today? I hope you are having a wonderful day!";
 
-  console.log("\n--- Streaming Translation ---");
+  console.log("▸ Streaming Translation");
   const streamResult = translate({
     modelId,
     text,
@@ -31,11 +31,11 @@ try {
 
   const stats = await streamResult.stats;
   if (stats) {
-    console.log(`Processing stats:`, stats);
+    console.log(`▸ Processing stats:`, stats);
   }
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
