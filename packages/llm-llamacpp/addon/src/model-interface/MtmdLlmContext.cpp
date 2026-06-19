@@ -219,9 +219,13 @@ void MtmdLlmContext::tokenizeChat(
   std::string thinkingStartTag;
   std::string thinkingEndTag;
   std::string generationPrompt;
-  formattedChat =
-      getPrompt(tmpls_.get(), inputs, &thinkingForcedOpen_, &thinkingStartTag,
-                &thinkingEndTag, &generationPrompt);
+  formattedChat = getPrompt(
+      tmpls_.get(),
+      inputs,
+      &thinkingForcedOpen_,
+      &thinkingStartTag,
+      &thinkingEndTag,
+      &generationPrompt);
   thinkingForcedOpenText_ =
       thinkingForcedOpen_
           ? getThinkingForcedOpenText(generationPrompt, thinkingStartTag)
@@ -233,9 +237,12 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
 
-  if (configureReasoningBudgetSampling(params_, modelCtx_.lctx,
-                                       thinkingStartTag, thinkingEndTag,
-                                       generationPrompt)) {
+  if (configureReasoningBudgetSampling(
+          params_,
+          modelCtx_.lctx,
+          thinkingStartTag,
+          thinkingEndTag,
+          generationPrompt)) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {
       std::string errorMsg = string_format(

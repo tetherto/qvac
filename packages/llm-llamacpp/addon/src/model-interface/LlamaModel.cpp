@@ -146,8 +146,8 @@ void LlamaModel::tuneConfigMap(
   } else if (notUserSet("flash-attn", "flash_attn")) {
     configFilemap.erase("flash_attn");
     configFilemap["flash-attn"] = "on";
-    QLOG_IF(Priority::INFO,
-            "[LlamaModel] Enabling flash attention by default\n");
+    QLOG_IF(
+        Priority::INFO, "[LlamaModel] Enabling flash attention by default\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;

@@ -239,9 +239,13 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
   std::string thinkingStartTag;
   std::string thinkingEndTag;
   std::string generationPrompt;
-  const std::string prompt =
-      getPrompt(tmpls.get(), inputs, &thinkingForcedOpen, &thinkingStartTag,
-                &thinkingEndTag, &generationPrompt);
+  const std::string prompt = getPrompt(
+      tmpls.get(),
+      inputs,
+      &thinkingForcedOpen,
+      &thinkingStartTag,
+      &thinkingEndTag,
+      &generationPrompt);
 
   EXPECT_NE(prompt.find("<|im_start|>assistant"), std::string::npos);
   EXPECT_EQ(thinkingStartTag, "<think>");
@@ -251,13 +255,14 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
 }
 
 TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextUsesTemplateSuffix) {
-  EXPECT_EQ(getThinkingForcedOpenText("<|assistant|>\n<reason>\n", "<reason>"),
-            "<reason>\n");
+  EXPECT_EQ(
+      getThinkingForcedOpenText("<|assistant|>\n<reason>\n", "<reason>"),
+      "<reason>\n");
 }
 
 TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextFallsBackToStartTag) {
-  EXPECT_EQ(getThinkingForcedOpenText("<|assistant|>\n", "<reason>"),
-            "<reason>");
+  EXPECT_EQ(
+      getThinkingForcedOpenText("<|assistant|>\n", "<reason>"), "<reason>");
 }
 
 TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextEmptyWithoutStartTag) {

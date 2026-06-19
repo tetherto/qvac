@@ -78,12 +78,13 @@ std::string getChatTemplate(
  * @p outGenerationPrompt (optional) receives the assistant generation prompt
  *    already appended to the formatted prompt.
  */
-std::string getPrompt(const struct common_chat_templates *tmpls,
-                      struct common_chat_templates_inputs &inputs,
-                      bool *outThinkingForcedOpen = nullptr,
-                      std::string *outThinkingStartTag = nullptr,
-                      std::string *outThinkingEndTag = nullptr,
-                      std::string *outGenerationPrompt = nullptr);
+std::string getPrompt(
+    const struct common_chat_templates* tmpls,
+    struct common_chat_templates_inputs& inputs,
+    bool* outThinkingForcedOpen = nullptr,
+    std::string* outThinkingStartTag = nullptr,
+    std::string* outThinkingEndTag = nullptr,
+    std::string* outGenerationPrompt = nullptr);
 
 /**
  * @brief Configures the common-sampling reasoning-budget fields from
@@ -92,14 +93,13 @@ std::string getPrompt(const struct common_chat_templates *tmpls,
  * Returns true when the sampling block changed and the caller should recreate
  * the common_sampler.
  */
-bool configureReasoningBudgetSampling(common_params &params,
-                                      ::llama_context *lctx,
-                                      const std::string &thinkingStartTag,
-                                      const std::string &thinkingEndTag,
-                                      const std::string &generationPrompt);
+bool configureReasoningBudgetSampling(
+    common_params& params, ::llama_context* lctx,
+    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& generationPrompt);
 
-std::string getThinkingForcedOpenText(const std::string &generationPrompt,
-                                      const std::string &thinkingStartTag);
+std::string getThinkingForcedOpenText(
+    const std::string& generationPrompt, const std::string& thinkingStartTag);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

@@ -69,8 +69,9 @@ TEST(GenerationParamsApplyTest, ZeroReasoningBudgetClearsBudgetSamplerState) {
   EXPECT_TRUE(sampling.reasoning_budget_forced.empty());
 }
 
-TEST(GenerationParamsApplyTest,
-     UnrestrictedReasoningBudgetClearsBudgetSamplerState) {
+TEST(
+    GenerationParamsApplyTest,
+    UnrestrictedReasoningBudgetClearsBudgetSamplerState) {
   common_params_sampling sampling;
   sampling.reasoning_budget_tokens = 16;
   sampling.reasoning_budget_start = tokens({10});
@@ -88,8 +89,9 @@ TEST(GenerationParamsApplyTest,
   EXPECT_TRUE(sampling.reasoning_budget_forced.empty());
 }
 
-TEST(GenerationParamsApplyTest,
-     ConfigureReasoningBudgetSamplingClearsStaleStateWhenDisabled) {
+TEST(
+    GenerationParamsApplyTest,
+    ConfigureReasoningBudgetSamplingClearsStaleStateWhenDisabled) {
   common_params params;
   params.reasoning_budget = 0;
   params.sampling.reasoning_budget_tokens = 16;
@@ -107,8 +109,9 @@ TEST(GenerationParamsApplyTest,
   EXPECT_TRUE(params.sampling.generation_prompt.empty());
 }
 
-TEST(GenerationParamsApplyTest,
-     ConfigureReasoningBudgetSamplingKeepsPositiveCapWithoutContext) {
+TEST(
+    GenerationParamsApplyTest,
+    ConfigureReasoningBudgetSamplingKeepsPositiveCapWithoutContext) {
   common_params params;
   params.reasoning_budget = 8;
   params.sampling.reasoning_budget_tokens = -1;

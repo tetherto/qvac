@@ -173,12 +173,11 @@ std::string getChatTemplate(
   return chatTemplate;
 }
 
-std::string getPrompt(const struct common_chat_templates *tmpls,
-                      struct common_chat_templates_inputs &inputs,
-                      bool *outThinkingForcedOpen,
-                      std::string *outThinkingStartTag,
-                      std::string *outThinkingEndTag,
-                      std::string *outGenerationPrompt) {
+std::string getPrompt(
+    const struct common_chat_templates* tmpls,
+    struct common_chat_templates_inputs& inputs, bool* outThinkingForcedOpen,
+    std::string* outThinkingStartTag, std::string* outThinkingEndTag,
+    std::string* outGenerationPrompt) {
   auto exportParams = [&](const common_chat_params& params) {
     if (outThinkingForcedOpen) {
       *outThinkingForcedOpen = params.thinking_forced_open;
@@ -224,11 +223,10 @@ std::string getPrompt(const struct common_chat_templates *tmpls,
   }
 }
 
-bool configureReasoningBudgetSampling(common_params &params,
-                                      ::llama_context *lctx,
-                                      const std::string &thinkingStartTag,
-                                      const std::string &thinkingEndTag,
-                                      const std::string &generationPrompt) {
+bool configureReasoningBudgetSampling(
+    common_params& params, ::llama_context* lctx,
+    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& generationPrompt) {
   common_params_sampling next = params.sampling;
   next.reasoning_budget_tokens =
       params.reasoning_budget > 0 ? params.reasoning_budget : -1;
@@ -247,7 +245,9 @@ bool configureReasoningBudgetSampling(common_params &params,
     next.reasoning_budget_end =
         common_tokenize(lctx, thinkingEndTag, false, true);
     next.reasoning_budget_forced = common_tokenize(
-        lctx, params.sampling.reasoning_budget_message + thinkingEndTag, false,
+        lctx,
+        params.sampling.reasoning_budget_message + thinkingEndTag,
+        false,
         true);
   }
 
@@ -263,8 +263,8 @@ bool configureReasoningBudgetSampling(common_params &params,
   return changed;
 }
 
-std::string getThinkingForcedOpenText(const std::string &generationPrompt,
-                                      const std::string &thinkingStartTag) {
+std::string getThinkingForcedOpenText(
+    const std::string& generationPrompt, const std::string& thinkingStartTag) {
   if (thinkingStartTag.empty()) {
     return {};
   }
