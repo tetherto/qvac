@@ -264,7 +264,7 @@ safeTest('Qwen3 reasoning-budget=N caps reasoning channel below baseline', {
     verbosity: '0'
   }
 
-  async function runOnce (extra) {
+  async function runOnce (extra, runOptions) {
     const inference = new LlmLlamacpp({
       files: { model: [modelPath] },
       config: { ...baseConfig, ...extra },
@@ -276,7 +276,7 @@ safeTest('Qwen3 reasoning-budget=N caps reasoning channel below baseline', {
         { role: 'system', content: 'You are a helpful assistant.' },
         { role: 'user', content: 'What is the capital of France? Answer in one word.' }
       ]
-      return await runCompletion(inference, messages)
+      return await runCompletion(inference, messages, runOptions)
     } finally {
       await inference.unload().catch(() => {})
     }
