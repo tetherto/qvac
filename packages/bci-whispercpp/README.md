@@ -10,6 +10,7 @@ Transcribes multi-channel neural signals (e.g., 512-channel microelectrode array
 - [Results](#results)
 - [Neural Signal Format](#neural-signal-format)
 - [Installation](#installation)
+- [Quickstart](#quickstart)
 - [Model Conversion](#model-conversion)
 - [Usage](#usage)
 - [Configuration](#configuration)
@@ -85,6 +86,38 @@ VCPKG_ROOT=/path/to/vcpkg npm run build
 - **Bare runtime** >= 1.24.0
 - **CMake** >= 3.25
 - **vcpkg** with `VCPKG_ROOT` environment variable set
+
+## Quickstart
+
+To run an example you need the BCI model files and (for batch mode) the test fixtures. The download script fetches the **model files from the QVAC model registry** (no GitHub CLI, no auth) and the **neural-signal fixtures from the public release tarball** (the fixtures aren't in the registry yet).
+
+```bash
+cd packages/bci-whispercpp
+npm install   # installs @qvac/registry-client (devDependency)
+
+# Download model files (ggml-bci-windowed.bin + bci-embedder.bin) + test fixtures
+npm run download-models
+# node scripts/download-models.js --models    # models only (from the registry)
+# node scripts/download-models.js --fixtures  # fixtures only
+# node scripts/download-models.js --force     # re-download even if present
+```
+
+The models land in `models/` and the neural-signal fixtures in `test/fixtures/`. Then run an example:
+
+```bash
+# Transcribe all bundled fixture samples and print WER
+bare examples/transcribe-neural.js --batch
+
+# Transcribe a single neural signal file
+bare examples/transcribe-neural.js test/fixtures/neural_sample_0.bin
+
+# Streaming transcription over a sliding window
+bare examples/transcribe-stream-neural.js test/fixtures/neural_sample_0.bin
+```
+
+By default the examples look for `models/ggml-bci-windowed.bin` (with `bci-embedder.bin` alongside it). Override with `WHISPER_MODEL_PATH=/path/to/ggml-bci-windowed.bin` or by passing the model path as the final argument.
+
+> The model files come from the [`qvac` model registry](https://github.com/tetherto/qvac/tree/main/packages/registry-server) (engine `@qvac/bci-whispercpp`, S3 source `qvac_models_compiled/bci-whispercpp/...`). If you already have them locally, skip the download step and point `WHISPER_MODEL_PATH` at your copy. The fixtures URL can be overridden with `BCI_FIXTURES_URL`.
 
 ### Model Conversion Prerequisites
 
@@ -252,7 +285,7 @@ VCPKG_ROOT=/path/to/vcpkg npm run test:cpp
 npm run test:dts
 ```
 
-Integration tests require both `ggml-bci-windowed.bin` and `bci-embedder.bin` to be present in the same directory. See [Model Conversion](#model-conversion).
+Integration tests require both `ggml-bci-windowed.bin` and `bci-embedder.bin` to be present in the same directory, plus the neural-signal fixtures. The quickest way to get them is `npm run download-models` (see [Quickstart](#quickstart)); alternatively produce the models yourself via [Model Conversion](#model-conversion).
 
 ## Configuration
 

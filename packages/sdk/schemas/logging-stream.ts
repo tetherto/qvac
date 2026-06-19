@@ -1,7 +1,13 @@
 import type { LogLevel } from "@qvac/logging";
 import { z } from "zod";
 
-const logLevelValues: LogLevel[] = ["error", "warn", "info", "debug"] as const;
+const logLevelValues: LogLevel[] = [
+  "error",
+  "warn",
+  "info",
+  "debug",
+  "off",
+] as const;
 export const logLevelSchema = z.enum(logLevelValues);
 
 const loggingParamsSchema = z.object({

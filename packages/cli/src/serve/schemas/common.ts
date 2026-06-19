@@ -39,11 +39,22 @@ export const toolDef = z.object({
   }).optional()
 }).passthrough()
 
-const contentPart = z.object({ type: z.string() }).passthrough()
+const textContentPart = z.object({
+  type: z.literal('text'),
+  text: z.string()
+}).passthrough()
+
+const imageContentPart = z.object({
+  type: z.literal('image_url'),
+  image_url: z.union([z.string(), z.object({ url: z.string() }).passthrough()])
+}).passthrough()
+
+export const messageContentPart = z.discriminatedUnion('type', [textContentPart, imageContentPart])
+export type MessageContentPart = z.infer<typeof messageContentPart>
 
 export const chatMessage = z.object({
   role: z.string(),
-  content: z.union([z.string(), z.null(), z.array(contentPart)]).optional(),
+  content: z.union([z.string(), z.null(), z.array(messageContentPart)]).optional(),
   tool_calls: z.array(z.object({
     id: z.string(),
     type: z.string(),
@@ -134,6 +145,13 @@ export class InvalidResponseFormatError extends Error {
   constructor (message: string) {
     super(message)
     this.name = 'InvalidResponseFormatError'
+  }
+}
+
+export class UnsupportedImageContentError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'UnsupportedImageContentError'
   }
 }
 

@@ -75,23 +75,41 @@ pointwise_conv(::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel) {
 ::ggml_tensor* conv_2d_bias(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
     ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1,
-    bool conv1x1_mulmat) {
+    bool conv1x1_mulmat, bool use_direct_conv) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
-  auto* y =
-      (conv1x1_mulmat && is_pointwise_conv(kernel, s0, s1, p0, p1, d0, d1))
-          ? pointwise_conv(ctx, x, kernel)
-          : ggml_conv_2d(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
+  ::ggml_tensor* y = nullptr;
+  if (conv1x1_mulmat && is_pointwise_conv(kernel, s0, s1, p0, p1, d0, d1)) {
+    // 1x1 stride-1 conv as a plain matmul (skips im2col).
+    y = pointwise_conv(ctx, x, kernel);
+  } else if (use_direct_conv) {
+    // Fused GGML_OP_CONV_2D — faster than im2col on OpenCL/Adreno.
+    y = ggml_conv_2d_direct(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
+  } else {
+    // Default: im2col + mul_mat (best on CPU/Vulkan/Metal).
+    y = ggml_conv_2d(ctx, kernel, x, s0, s1, p0, p1, d0, d1);
+  }
   return add_channel_bias(ctx, y, bias);
 }
 
 ::ggml_tensor* conv_2d_bias_relu(
     ::ggml_context* ctx, ::ggml_tensor* x, ::ggml_tensor* kernel,
     ::ggml_tensor* bias, int s0, int s1, int p0, int p1, int d0, int d1,
-    bool conv1x1_mulmat) {
+    bool conv1x1_mulmat, bool use_direct_conv) {
   return ggml_relu(
       ctx,
       conv_2d_bias(
-          ctx, x, kernel, bias, s0, s1, p0, p1, d0, d1, conv1x1_mulmat));
+          ctx,
+          x,
+          kernel,
+          bias,
+          s0,
+          s1,
+          p0,
+          p1,
+          d0,
+          d1,
+          conv1x1_mulmat,
+          use_direct_conv));
 }
 
 ::ggml_tensor* bilinear_to(
