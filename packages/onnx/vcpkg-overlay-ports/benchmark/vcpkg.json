@@ -1,0 +1,20 @@
+{
+  "$comment": "Overlay of microsoft/vcpkg benchmark@1.9.1 — disables -Werror for clang-22 C2y extension failures on __COUNTER__.",
+  "name": "benchmark",
+  "version-semver": "1.9.1",
+  "port-version": 1,
+  "description": "A library to benchmark code snippets, similar to unit tests.",
+  "homepage": "https://github.com/google/benchmark",
+  "license": "Apache-2.0",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}
