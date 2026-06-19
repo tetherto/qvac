@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const { matrix, shardFileName } = require('../test/integration/_benchmark-matrix.js')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -11,6 +12,26 @@ const groupsFile = path.join(mobileDir, 'test-groups.json')
 const mobileExcludedTests = new Set([
   'continuous-batching.test.js'
 ])
+
+// The benchmark-perf-*.test.js shards are generated, not committed (see
+// .gitignore), but the committed integration.auto.cjs references them. Enumerating
+// the directory without them on disk would silently regenerate this file with the
+// benchmark runners dropped, leaving the Benchmark Performance workflow to grep for
+// functions that no longer exist and schedule zero tests. Refuse to run unless every
+// shard is present. `npm run test:mobile:generate` writes them first; a bare
+// invocation must run `npm run generate:benchmark-shards` beforehand.
+function assertBenchmarkShardsPresent () {
+  const missing = matrix()
+    .map(shardFileName)
+    .filter(name => !fs.existsSync(path.join(integrationDir, name)))
+  if (missing.length) {
+    throw new Error(
+      `Refusing to regenerate mobile tests: ${missing.length} benchmark shard(s) absent ` +
+      `(e.g. ${missing[0]}). Run \`npm run generate:benchmark-shards\` first, or use ` +
+      '`npm run test:mobile:generate`, which does it for you.'
+    )
+  }
+}
 
 function getIntegrationFiles () {
   if (!fs.existsSync(integrationDir)) {
@@ -79,6 +100,13 @@ function validateGroups (functionNames) {
   const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
   const nameSet = new Set(functionNames)
 
+  // Benchmark shards (benchmark-perf-*.test.js -> runBenchmarkPerf*) are
+  // scheduled only by the Benchmark Performance workflow via an explicit
+  // test_groups override, and are deliberately absent from test-groups.json
+  // so normal mobile integration runs never trigger the heavy benchmark.
+  // Exclude them from the group-coverage requirement.
+  const isOverrideOnly = (n) => n.startsWith('runBenchmarkPerf')
+
   const coveredByFamily = new Map()
   for (const [platform, splits] of Object.entries(groups)) {
     const family = platformFamily(platform)
@@ -90,7 +118,7 @@ function validateGroups (functionNames) {
   }
 
   for (const [family, covered] of coveredByFamily) {
-    const missing = functionNames.filter(n => !covered.has(n))
+    const missing = functionNames.filter(n => !covered.has(n) && !isOverrideOnly(n))
     const extra = [...covered].filter(n => !nameSet.has(n))
     if (missing.length) {
       throw new Error(
@@ -110,6 +138,7 @@ function validateGroups (functionNames) {
 }
 
 function main () {
+  assertBenchmarkShardsPresent()
   const files = getIntegrationFiles()
   if (files.length === 0) {
     throw new Error(`No integration test files found inside ${integrationDir}`)

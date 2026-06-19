@@ -20,7 +20,7 @@ async function readProgress(
   for await (const tick of handle.progressStream) {
     const phase = tick.is_train ? "train" : "val";
     console.log(
-      `epoch=${tick.current_epoch + 1} step=${tick.global_steps} batch=${tick.current_batch}/${tick.total_batches} ${phase} loss=${tick.loss?.toFixed(4)} acc=${tick.accuracy?.toFixed(4)} eta=${Math.round(tick.eta_ms / 1000)}s`,
+      `▸ epoch=${tick.current_epoch + 1} step=${tick.global_steps} batch=${tick.current_batch}/${tick.total_batches} ${phase} loss=${tick.loss?.toFixed(4)} acc=${tick.accuracy?.toFixed(4)} eta=${Math.round(tick.eta_ms / 1000)}s`,
     );
 
     onTick(tick.global_steps);
@@ -36,7 +36,7 @@ try {
     },
   });
 
-  console.log(`✅ Model loaded with ID: ${modelId}`);
+  console.log(`▸ Model loaded with ID: ${modelId}`);
   const loadedModelId = modelId;
 
   const finetuneParams: FinetuneRunParams = {
@@ -65,7 +65,7 @@ try {
   const progressTask = readProgress(handle, (globalSteps) => {
     if (pauseResumeEnabled && !pauseRequested && globalSteps >= 10) {
       pauseRequested = true;
-      console.log("⏸️ Requesting a pause so the run can be resumed...");
+      console.log("▸ Requesting a pause so the run can be resumed...");
       pauseResultPromise = finetune({
         modelId: loadedModelId,
         operation: "pause",
@@ -80,10 +80,10 @@ try {
     await pauseResultPromise;
   }
 
-  console.log("📦 Initial finetune result:", initialResult);
+  console.log("▸ Initial finetune result:", initialResult);
 
   if (pauseResumeEnabled && initialResult.status === "PAUSED") {
-    console.log("▶️ Resuming from the saved checkpoint...");
+    console.log("▸ Resuming from the saved checkpoint...");
 
     const resumedHandle = finetune({
       ...finetuneParams,
@@ -94,10 +94,10 @@ try {
     const resumedResult = await resumedHandle.result;
     await resumedProgressTask;
 
-    console.log("✅ Resumed finetune result:", resumedResult);
+    console.log("▸ Resumed finetune result:", resumedResult);
   }
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   exitCode = 1;
 } finally {
   if (modelId) {
