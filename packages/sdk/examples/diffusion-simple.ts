@@ -16,7 +16,7 @@ const { outputs } = diffusion({ modelId, prompt });
 const buffers = await outputs;
 
 fs.writeFileSync("output.png", buffers[0]!);
-console.log("Saved: output.png");
+console.log("▸ Saved output.png");
 
 await unloadModel({ modelId, clearStorage: false });
 process.exit(0);

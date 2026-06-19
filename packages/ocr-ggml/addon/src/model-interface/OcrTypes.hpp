@@ -67,10 +67,14 @@ struct OcrConfig {
   std::vector<int> defaultRotationAngles{90, 270};
   bool contrastRetry{false};
   float lowConfidenceThreshold{0.4F};
-  // DocTR recognizer feature-extractor batch (crops per backend compute). On
-  // Metal a small batch is markedly faster than a large one (per-op cost grows
-  // super-linearly with batch); measured optimum ~4 on Apple GPUs. Overridable.
-  int recognizerBatchSize{4};
+  // DocTR recognizer feature-extractor batch (crops per backend compute).
+  // 0 = auto: resolved per backend in Pipeline. On Metal a small batch is
+  // markedly faster than a large one (per-op cost grows super-linearly with
+  // batch); measured optimum ~4 on Apple GPUs. On Vulkan the opposite holds —
+  // many tiny per-crop dispatches dominate (especially on mobile GPUs like
+  // Mali), so a large batch (32) is markedly faster. A positive value here
+  // overrides the auto choice on every backend.
+  int recognizerBatchSize{0};
   // <0 leave GGML default, 0 auto-detect physical cores, >0 explicit override.
   int nThreads{0};
   // Directory that holds dynamic ggml backend shared libraries (libggml-*.so).
@@ -89,6 +93,20 @@ struct OcrConfig {
   // the pipeline falls back to CPU (see `OcrBackendSelection`). Ignored for the
   // CPU backend.
   std::optional<int> gpuDevice;
+  // Optional per-stage backend override for the DocTR detector (mapped from
+  // `params.detectionBackendDevice`). When set, detection runs on this backend
+  // while recognition uses `backendDevice`. Motivation: on Mali-G715 the DBNet
+  // detector's many conv2d dispatches carry ~3.4s of Vulkan GPU-side overhead
+  // (measured), while CPU detection is ~1.3s; running detection on CPU and
+  // recognition on Vulkan ("hybrid") is the fastest config on that device.
+  std::optional<BackendDevice> detectionBackendDevice;
+  // Optional toggle for the DocTR recognizer's CPU-assist worker (mapped from
+  // `params.recognizerCpuAssist`). When recognition runs on a GPU backend, a
+  // second CPU feature-extractor instance steals crop chunks and computes them
+  // concurrently with the GPU. Unset = auto (enabled on Mali/Immortalis Vulkan,
+  // where the CPU is idle during the GPU compute wait and the two are of
+  // comparable speed). Ignored when recognition already runs on CPU.
+  std::optional<bool> recognizerCpuAssist;
 };
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 

@@ -72,6 +72,10 @@ jobs:
             platform: linux
             arch: x64
             runner: qvac-ubuntu2404-x64-gpu
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64

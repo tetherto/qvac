@@ -8,12 +8,15 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: SALAMANDRATA_2B_INST_Q8,
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`✅ Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   // With explicit source language
   const engText = "bank";
@@ -33,6 +36,6 @@ try {
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
