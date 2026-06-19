@@ -42,9 +42,9 @@
     "lint": "tsc --noEmit",
     "test": "npx tsx --test test/*.test.ts",
     "test:unit": "npx tsx --test test/*.test.ts",
-    "test:bats": "npm run build && bats test/cli.bats",
-    "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats",
-    "test:e2e:local": "npm run build && bats test/e2e-local.bats",
+    "test:e2e": "npm run test:e2e:js",
+    "test:e2e:js": "tsx --test 'test/e2e/*.test.ts' 'test/e2e/cli/*.test.ts' 'test/e2e/http/*.test.ts' && tsx --test --test-concurrency=1 'test/e2e/model/*.test.ts'",
+    "test:e2e:js:coverage": "tsx --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-exclude='**/test/**' 'test/e2e/**/*.test.ts'",
     "dev:link": "npm install ../sdk",
     "dev:unlink": "node scripts/dev-unlink.cjs",
     "sdk-source:workspace": "node scripts/preinstall-build-local-sdk.cjs && npm install ../sdk"
@@ -68,7 +68,6 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.3",
-    "bats": "^1.13.0",
     "typescript": "^5.9.3"
   }
 }
