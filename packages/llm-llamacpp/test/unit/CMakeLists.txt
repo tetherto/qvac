@@ -120,7 +120,7 @@ target_link_libraries(
   addon-test
   PRIVATE
     llama::llama
-    llama::common
+    llama::llama-common
     llama::mtmd
     nlohmann_json::nlohmann_json
     GTest::gtest
