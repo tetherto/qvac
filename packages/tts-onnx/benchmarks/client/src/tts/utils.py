@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 import platform as pyplatform
 import re
 import statistics
+import subprocess
 import numpy as np
 
 from .config import Config
@@ -106,6 +107,75 @@ def derive_benchmark_backend(platform_name: str, use_gpu: bool, backend_hint: st
     if platform_name == "linux":
         return "cuda"
     return "gpu"
+
+
+_GPU_MODEL_PROBED = False
+_GPU_MODEL_VALUE: Optional[str] = None
+
+
+def _safe_run(cmd: List[str]) -> Optional[str]:
+    """Run a probe command, returning stdout or None on any failure/timeout."""
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=5, check=False
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _parse_nvidia_smi(output: Optional[str]) -> Optional[str]:
+    if not output:
+        return None
+    match = re.search(r"GPU \d+:\s*(.+?)(?:\s*\(UUID:|$)", output, re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+def detect_gpu_model(platform_name: str) -> Optional[str]:
+    """Best-effort GPU hardware model name, mirroring the JS perf reporter."""
+    global _GPU_MODEL_PROBED, _GPU_MODEL_VALUE
+    if _GPU_MODEL_PROBED:
+        return _GPU_MODEL_VALUE
+
+    _GPU_MODEL_PROBED = True
+    value: Optional[str] = _parse_nvidia_smi(_safe_run(["nvidia-smi", "-L"]))
+
+    if not value and platform_name == "darwin":
+        displays = _safe_run(["system_profiler", "SPDisplaysDataType"])
+        if displays:
+            match = re.search(r"Chipset Model:\s*(.+)", displays)
+            if match:
+                value = match.group(1).strip()
+        if not value:
+            chip = _safe_run(["sysctl", "-n", "machdep.cpu.brand_string"])
+            if chip and chip.strip():
+                value = chip.strip()
+    elif not value and platform_name == "linux":
+        lspci = _safe_run(["lspci"])
+        if lspci:
+            for line in lspci.splitlines():
+                if re.search(
+                    r"VGA compatible controller|3D controller|Display controller",
+                    line,
+                ):
+                    parts = line.split(":", 2)
+                    value = parts[2].strip() if len(parts) >= 3 else line.strip()
+                    break
+    elif not value and platform_name == "win32":
+        wmic = _safe_run(["wmic", "path", "win32_VideoController", "get", "name"])
+        if wmic:
+            names = [
+                line.strip()
+                for line in wmic.splitlines()
+                if line.strip() and line.strip().lower() != "name"
+            ]
+            if names:
+                value = names[0]
+
+    _GPU_MODEL_VALUE = value
+    return value
 
 
 def _get_supertonic_benchmark_labels() -> Dict[str, str]:
@@ -212,6 +282,7 @@ def build_supertonic_perf_report(
             "runner": labels["runner"],
             "device": labels["device"],
             "backend": backend,
+            "gpuModel": detect_gpu_model(platform_name),
         },
         "requested": {
             "useGPU": bool(cfg.model.useGPU),

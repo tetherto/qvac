@@ -20,6 +20,7 @@
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
+const os = require('bare-os')
 const process = require('bare-process')
 const binding = require('../../binding')
 const TranscriptionParakeet = require('../../index.js')
@@ -40,6 +41,21 @@ const VALID_MODEL_TYPES = ['tdt', 'ctc', 'eou', 'sortformer']
 const VALID_QUANTS = ['q8_0', 'q4_0', 'f16']
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 const RESULT_MARKER = 'QVAC_RTF_REPORT::'
+
+
+let _hwDevice = null
+try {
+  let _subprocess = null
+  try { _subprocess = require('bare-subprocess') } catch (_) {}
+  const _perfBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+  const _perfMod = require(path.join(_perfBase, 'performance-reporter'))
+  _perfMod.configure({ fs, path, process, os, subprocess: _subprocess })
+  _hwDevice = _perfMod.detectDevice()
+} catch (_) {}
+
+function _hwGpu () {
+  return _hwDevice && _hwDevice.gpu ? _hwDevice.gpu : null
+}
 
 function getEnvBoolean (name, fallback) {
   const value = process.env[name]
@@ -427,6 +443,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         device: benchmarkSettings.deviceLabel,
         backend: getRequestedBackendFamily(platformName, benchmarkSettings.useGPU, benchmarkSettings.backendHint),
         activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
+        gpuModel: _hwGpu(),
         requestedBackend: benchmarkSettings.useGPU ? 'gpu' : 'cpu',
         label: benchmarkSettings.label
       },
