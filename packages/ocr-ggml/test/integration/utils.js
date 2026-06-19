@@ -369,7 +369,7 @@ function findOpenCLBackendLib (dir) {
  *
  * Precedence:
  *   1. Explicit `OCR_GGML_BACKEND` (via `os.getEnv` then `process.env`) wins —
- *      accepts a known GPU backend ('vulkan' or 'metal', case-insensitive),
+ *      accepts a known GPU backend ('vulkan', 'metal' or 'opencl', case-insensitive),
  *      else 'cpu'. This preserves a manual override (e.g. workflow_dispatch /
  *      forcing CPU, or forcing a specific GPU backend).
  *   2. Else, on any Apple platform (desktop `darwin` AND iOS), select 'metal'.
@@ -391,7 +391,7 @@ function findOpenCLBackendLib (dir) {
  *      gracefully falls back to CPU when no Vulkan GPU is present, so requesting
  *      'vulkan' is safe on non-GPU hosts.
  *   5. Else 'cpu' (desktop without a GPU backend).
- * @returns {'cpu'|'vulkan'|'metal'}
+ * @returns {'cpu'|'vulkan'|'metal'|'opencl'}
  */
 function getBackendDevice () {
   let raw = ''
@@ -399,7 +399,7 @@ function getBackendDevice () {
   if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
   const override = String(raw).trim().toLowerCase()
   if (override !== '') {
-    return (override === 'vulkan' || override === 'metal') ? override : 'cpu'
+    return (override === 'vulkan' || override === 'metal' || override === 'opencl') ? override : 'cpu'
   }
   // Apple platforms (desktop + iOS) ship the Metal backend; request it on both.
   if (platform === 'darwin' || platform === 'ios') return 'metal'
@@ -1017,7 +1017,24 @@ async function runDoctrComparison (t, cfg) {
     assertResult(pass1.results, { stats: pass1.stats, isGpuPass: isGpuPass1 })
   }
 
-  if (!isGpuPass1) return pass1
+  if (!isGpuPass1) {
+    // The auto backend (Vulkan on Android) ran on CPU. On Adreno GPUs the addon
+    // rejects Vulkan (numerically broken for DocTR) and falls back to CPU, so no
+    // [GPU] row is recorded. Retry once with OpenCL — the sound Adreno GPU path —
+    // so Adreno devices (e.g. Galaxy S25/S26) still report a GPU number.
+    if (isMobile && platform === 'android') {
+      const passCl = await runDoctrOCR(t, { ...params, backendDevice: 'opencl' }, imagePath)
+      const isGpuCl = !!(passCl.stats && passCl.stats.backendIsGpu === 1)
+      if (perfLabel) {
+        t.comment(formatOCRPerformanceMetrics(perfLabel, passCl.stats, passCl.results.map(r => r.text), perfOpts))
+      }
+      if (typeof assertResult === 'function') {
+        assertResult(passCl.results, { stats: passCl.stats, isGpuPass: isGpuCl })
+      }
+      return isGpuCl ? passCl : pass1
+    }
+    return pass1
+  }
 
   const pass2 = await runDoctrOCR(t, { ...params, backendDevice: 'cpu' }, imagePath)
   if (perfLabel) {

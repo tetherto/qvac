@@ -23,7 +23,8 @@
     "coverage:cpp:report": "cd build/addon/tests/ && ls -lha && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./test-bci-core -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./test-bci-core -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
     "test:dts": "tsc -p tsconfig.dts.json",
-    "test:mobile:generate": "node scripts/generate-mobile-tests.js"
+    "test:mobile:generate": "node scripts/generate-mobile-tests.js",
+    "download-models": "node scripts/download-models.js"
   },
   "files": [
     "addonLogging.js",
@@ -59,6 +60,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp#readme",
   "devDependencies": {
+    "@qvac/registry-client": "^0.6.0",
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
     "brittle": "^3.17.0",

@@ -33,7 +33,7 @@ const requireModel = os.hasEnv('BCI_REQUIRE_MODEL') && os.getEnv('BCI_REQUIRE_MO
 if (requireModel && !hasModel) {
   throw new Error(
     'BCI_REQUIRE_MODEL=1 but model file was not found at ' + MODEL_PATH +
-    '. Run `bash scripts/download-models.sh` or set WHISPER_MODEL_PATH.'
+    '. Run `npm run download-models` (or `node scripts/download-models.js`) or set WHISPER_MODEL_PATH.'
   )
 }
 

@@ -7,11 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-18
+
+### Fixed
+
+- **End-of-speech robustness for the Chatterbox multilingual engine
+  (QVAC-20616).** Fixes the model emitting up to ~20s of random tokens after
+  the intended text finishes. Consumes the new `tts-cpp` stop logic: an
+  alignment-based EOS analyzer (ports the reference `AlignmentStreamAnalyzer`
+  cross-attention signal, extracted from the GGML graph via an in-graph
+  attention probe) layered with a heuristic stop controller (EOS confidence,
+  n-gram repetition, text-length budget) and per-language calibration. An
+  anti-early-truncation `suppress_eos` path keeps very short inputs from being
+  clipped. Validated end-to-end on desktop (CPU + Vulkan/RTX) and on real
+  mobile GPUs (Android OpenCL + iOS Metal via AWS Device Farm), plus a
+  round-trip ASR regression gate (synthesize → Whisper transcribe → compare).
+
 ### Added
 
 - Internal RTF + streaming benchmark suite for the Chatterbox and Supertonic GGML engines (`test/benchmark/rtf-benchmark.test.js`, `test/benchmark/streaming-benchmark.test.js`, matrix runner, `scripts/perf-report/aggregate-tts-ggml-rtf.js`), runnable via the `Benchmark RTF (TTS GGML)` GitHub Actions workflow on the `qvac-*-gpu` self-hosted runners (CPU + Vulkan). CI-only; not shipped with the npm package.
 - Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
 - RTF benchmark reports now surface the desktop GPU hardware name (QVAC-20499). `test/benchmark/rtf-benchmark.test.js` drives the shared performance reporter's `detectDevice()` (via `bare-subprocess`: nvidia-smi / vulkaninfo / system_profiler) to populate `device.gpu` / `device.cpu` in the canonical report and `labels.gpuModel` in the per-config JSON; `scripts/perf-report/aggregate-tts-ggml-rtf.js` renders a `GPU Model` column. Mobile leaves `device.gpu` null (device name is the proxy). CI-only.
+
+### Changed
+
+- Bump the `tts-cpp` pin to `2026-06-18` (`qvac-ext-lib-whisper.cpp` master
+  `b95ad447`), consumed straight from `qvac-registry-vcpkg`. Carries QVAC-20616
+  (the EOS fix above, PR #53) and QVAC-20557 Supertonic Android GPU (PR #54:
+  Adreno OpenCL + Xclipse/Mali Vulkan). The latter reroutes the direct
+  Supertonic CPU-backend calls (`ggml_backend_is_cpu` /
+  `ggml_get_type_traits_cpu`) to ggml-base + a registry shim — the upstream
+  successor to the interim `f7d4d6c` overlay that 0.3.0 carried — so the addon
+  `dlopen`s cleanly on Android with no package-local overlay port.
 
 ## [0.3.0] - 2026-06-11
 

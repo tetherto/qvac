@@ -24,6 +24,7 @@
 #include <gguf.h>
 #include <opencv2/opencv.hpp>
 
+#include "model-interface/OcrBackendSelection.hpp"
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)
@@ -449,6 +450,38 @@ struct GraphResources {
   }
 };
 
+// Direct regular conv on OpenCL (Adreno), im2col elsewhere — see the matching
+// note in MobileNetGraph.cpp. Depthwise stays on ggml_conv_2d_dw_direct.
+struct ggml_tensor* doctrConv2d(
+    struct ggml_context* ctx, struct ggml_tensor* w, struct ggml_tensor* x,
+    int s0, int s1, int p0, int p1, int d0, int d1, bool useDirect) {
+  if (useDirect) {
+    return ggml_conv_2d_direct(ctx, w, x, s0, s1, p0, p1, d0, d1);
+  }
+  return ggml_conv_2d(ctx, w, x, s0, s1, p0, p1, d0, d1);
+}
+
+// Default from the backend: ON for OpenCL, OFF otherwise. Env
+// OCR_DOCTR_FUSED_CONV overrides ("1" on, "0" off).
+bool resolveDirectConv(const char* envName, bool backendDefault) {
+  const char* e = std::getenv(envName);
+  if (e != nullptr && (e[0] == '0' || e[0] == '1') && e[1] == '\0') {
+    return e[0] == '1';
+  }
+  return backendDefault;
+}
+
+// True when the compute backend is ggml's OpenCL backend (Adreno).
+bool backendIsOpenCl(ggml_backend_t backend) {
+  if (backend == nullptr) {
+    return false;
+  }
+  const char* name = ggml_backend_name(backend);
+  return name != nullptr &&
+         qvac_lib_infer_ocr_ggml::ocr_backend_selection::isOpenCLBackendName(
+             name);
+}
+
 struct GraphBuilder {
   struct ggml_context* ctx;
   // GraphBuilder is a stateless one-shot helper that never outlives its
@@ -456,6 +489,9 @@ struct GraphBuilder {
   // graph build.
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
+
+  // Resolved once per graph build: direct regular-conv kernel vs im2col.
+  bool useDirectConv = false;
 
   [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
     auto it = w.find(name);
@@ -484,7 +520,7 @@ struct GraphBuilder {
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
       const std::string& convPrefix, const std::string& bnPrefix, int strideW,
       int strideH, int kernel, bool applyActivation, bool useHardswish) const {
-    struct ggml_tensor* conv = ggml_conv_2d(
+    struct ggml_tensor* conv = doctrConv2d(
         ctx,
         t(convPrefix + ".weight"),
         x,
@@ -493,7 +529,8 @@ struct GraphBuilder {
         samePadding(kernel),
         samePadding(kernel),
         1,
-        1);
+        1,
+        useDirectConv);
     conv = applyBn(conv, bnPrefix);
     return applyActivation ? activate(conv, useHardswish) : conv;
   }
@@ -524,8 +561,8 @@ struct GraphBuilder {
   struct ggml_tensor* convBiasAct(
       struct ggml_tensor* x, const std::string& convPrefix,
       bool applyActivation, bool useHardswish) const {
-    struct ggml_tensor* conv =
-        ggml_conv_2d(ctx, t(convPrefix + ".weight"), x, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* conv = doctrConv2d(
+        ctx, t(convPrefix + ".weight"), x, 1, 1, 0, 0, 1, 1, useDirectConv);
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
     return applyActivation ? activate(conv, useHardswish) : conv;
   }
@@ -1290,7 +1327,8 @@ private:
       if (prefix.size() < 2 || prefix.substr(prefix.size() - 2) != ".1") {
         raise(
             "BN fold: unexpected BN tensor name " + prefix +
-            " (expected it to end in \".1\" so the conv weight can be located)");
+            " (expected it to end in \".1\" so the conv weight can be "
+            "located)");
       }
       const std::string convWeightName =
           prefix.substr(0, prefix.size() - 2) + ".0.weight";
@@ -1447,6 +1485,10 @@ private:
     ggml_set_input(graph.input);
 
     GraphBuilder gb{.ctx = ctx, .w = graph.weights};
+    // Direct regular convs by default on OpenCL (Adreno); env overrides for
+    // A/B.
+    gb.useDirectConv = resolveDirectConv(
+        "OCR_DOCTR_FUSED_CONV", backendIsOpenCl(graph.backend));
     struct ggml_tensor* x = gb.convBnAct(
         graph.input,
         "crnn.features.0.0",
