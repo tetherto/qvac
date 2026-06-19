@@ -267,7 +267,7 @@ if(WIN32)
 endif()
 ```
 
-> **Do not link `msvcrt.lib`.** The shared `vcpkg/triplets/{arm64,x64}-windows.cmake`
+> **Do not link `msvcrt.lib`.** The shared `vcpkg-overlays/triplets/{arm64,x64}-windows.cmake`
 > build dependencies with the static MSVC runtime, and the bare-make win32 toolchain
 > compiles the addon with the static runtime too. Linking `msvcrt.lib` (the dynamic
 > CRT import library) reintroduces a runtime dependency on `vcruntime140.dll` /

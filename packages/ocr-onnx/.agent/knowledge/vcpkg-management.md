@@ -195,13 +195,16 @@ The `cmake-vcpkg` npm package provides 15 standard triplets:
 | `arm64-windows` | Windows ARM64 |
 | `x64-windows` | Windows x64 |
 
-### Shared Override Triplets (monorepo root `vcpkg/`)
+### Shared Override Triplets (monorepo root `vcpkg-overlays/`)
 
 Triplets and toolchain files that are identical across addons live in a single
-shared folder at the repo root instead of being copied into every package:
+shared folder at the repo root instead of being copied into every package. The
+folder is deliberately **not** named `vcpkg/`: CI uses a workspace-root `vcpkg/`
+directory for the macOS vcpkg clone and the files-based binary cache, so a
+committed `vcpkg/` would collide with it.
 
 ```
-vcpkg/
+vcpkg-overlays/
   toolchains/linux-clang.cmake   # unversioned clang/clang++ + vcpkg linux.cmake
   triplets/
     arm64-linux.cmake            # libc++ / -fPIC / static libs
@@ -219,15 +222,15 @@ containing a given triplet name wins, which enables layering:
 
 ```cmake
 # Most addons: shared triplets only
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 # Addons that need package-specific overrides: local first, shared second
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 ```
 
 #### Linux — Clang Toolchain (shared)
 
-`vcpkg/triplets/{arm64,x64}-linux.cmake` + `vcpkg/toolchains/linux-clang.cmake`
+`vcpkg-overlays/triplets/{arm64,x64}-linux.cmake` + `vcpkg-overlays/toolchains/linux-clang.cmake`
 enforce:
 - Unversioned `clang` / `clang++` compiler via the shared toolchain file
   (the LLVM major is pinned globally by `.github/actions/setup-llvm` in CI;
@@ -249,7 +252,7 @@ set(VCPKG_LINKER_FLAGS "-stdlib=libc++")
 
 #### Windows — Static Runtime (shared)
 
-`vcpkg/triplets/{arm64,x64}-windows.cmake` build dependencies with the **static**
+`vcpkg-overlays/triplets/{arm64,x64}-windows.cmake` build dependencies with the **static**
 MSVC runtime so addons do not acquire a runtime dependency on the dynamic Visual
 C++ runtime (`vcruntime140.dll` / `msvcp140.dll`). This matches the bare-make
 win32 toolchain, which compiles the addon itself with
@@ -275,7 +278,7 @@ Triplets that genuinely differ from the shared defaults stay in the package's ow
 
 - **parakeet / tts-onnx**: a `x64-linux.cmake` variant that adds `-Wno-array-bounds`,
   plus their macOS/iOS triplets. Local linux triplets chainload the shared
-  toolchain via `${CMAKE_CURRENT_LIST_DIR}/../../../../vcpkg/toolchains/linux-clang.cmake`.
+  toolchain via `${CMAKE_CURRENT_LIST_DIR}/../../../../vcpkg-overlays/toolchains/linux-clang.cmake`.
 - **ocr-onnx**: its own `{arm64,x64}-linux.cmake` plus macOS/iOS/Android triplets.
 - **onnx**: keeps `vcpkg-override-triplets/triplets/` (apple/unix/android), layered
   ahead of the shared folder.
@@ -458,7 +461,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 # Prepend the shared monorepo triplets (add a local "vcpkg/triplets" entry
 # before this one if the package needs its own overrides)
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(<project-name> C CXX)
 ```
@@ -569,7 +572,7 @@ If a package can't be resolved:
 
 ## Package Reference Table
 
-All addons use the shared root `vcpkg/triplets` (linux clang + static-CRT windows).
+All addons use the shared root `vcpkg-overlays/triplets` (linux clang + static-CRT windows).
 The "Local Triplet Overrides" column lists package-specific triplets layered ahead
 of the shared ones.
 
