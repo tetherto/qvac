@@ -1414,6 +1414,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"visionEncodeTiles",
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
+      {"draftAccepted", state_->llmContext_->getDraftAccepted()},
+      {"draftTotal", state_->llmContext_->getDraftTotal()},
       {"backendDevice", runtimeBackendDevice_}};
 }
 
