@@ -41,10 +41,16 @@ per-architecture shape so callers can adapt.
 | Model | GGUF `general.architecture` | Cameras | Robot state | Default fixture |
 |---|---|---|---|---|
 | **SmolVLA** | `smolvla` (or no key — legacy) | 2 | continuous (`state` Float32Array) | `HuggingFaceVLA/smolvla_libero`, ~1.9 GB |
-| **π₀.₅** | `pi05` | 3 | discrete (tokenised into the prompt; `state` ignored) | `pi05_base.gguf` |
+| **π₀.₅** | `pi05` | 3 | discrete — encoded as text in the prompt (`state` arg ignored) | `pi05_base.gguf` |
 
-π₀.₅ tokenises robot state into digit tokens inside the language prompt, so
-the caller passes an empty (or any) `state` array — it's ignored. For
+For π₀.₅ the prompt is **not** just the instruction: following the openpi /
+PaliGemma-VLA convention, the caller builds a templated prompt
+(`Task: <instruction>, State: <state>;\nAction:`) where the quantile-normalised
+robot state is discretised and rendered as text into the `State:` segment, then
+tokenises the whole string. That token array is passed as the usual
+`tokens`/`mask` input; the addon's separate `state` argument is **ignored** for
+π₀.₅ (pass an empty `Float32Array`). SmolVLA, by contrast, takes the instruction
+as the prompt and the robot state as the continuous `state` vector. For
 converting LeRobot / openpi π₀.₅ checkpoints to GGUF and the quantization
 profiles, see [`scripts/README-pi05-converter.md`](./scripts/README-pi05-converter.md).
 
@@ -99,10 +105,11 @@ const { actions, stats } = await response.await()
 // actions: Float32Array, length = chunkSize * actionDim (50 × 7 by default)
 ```
 
-The example above is SmolVLA (2 cameras, continuous state). π₀.₅ takes up to
-3 images and ignores `state` (it reads robot state from the prompt instead);
-check `hparams.numCameras` / `hparams.stateInputMode` after `load()` rather
-than hard-coding the input shape.
+The example above is SmolVLA (2 cameras, continuous `state` vector). π₀.₅ takes
+up to 3 images and ignores the `state` argument — the caller instead encodes
+robot state as text inside the prompt (`Task: …, State: …;\nAction:`) before
+tokenising (see [Models](#models)). Check `hparams.numCameras` /
+`hparams.stateInputMode` after `load()` rather than hard-coding the input shape.
 
 ## JavaScript API
 
