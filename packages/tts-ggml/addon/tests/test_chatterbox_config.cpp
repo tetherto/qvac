@@ -20,6 +20,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <tts-cpp/chatterbox/engine.h>
+
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "inference-addon-cpp/Errors.hpp"
@@ -147,6 +149,63 @@ TEST(ChatterboxValidate, ConfigUseGpuDefaultIsFalse) {
   EXPECT_FALSE(cfg.threads.has_value());
   EXPECT_FALSE(cfg.nGpuLayers.has_value());
   EXPECT_FALSE(cfg.streamChunkTokens.has_value());
+  EXPECT_FALSE(cfg.nCtx.has_value());
+}
+
+TEST(ChatterboxValidate, NegativeNCtxRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.nCtx = -1;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  ChatterboxConfig -> tts_cpp EngineOptions mapping.
+// ─────────────────────────────────────────────────────────────────────
+
+// The T3 KV cache is allocated up-front at n_ctx (Turbo GGUF ships
+// n_ctx=8196 ~= 1.6 GB of f32 KV), so the addon must cap it by default
+// rather than inherit tts-cpp's uncapped library default (QVAC-19557 iOS
+// OOM).  4096 + the q8_0 dtype default below ~= 210 MB.
+TEST(ChatterboxEngineOptions, NCtxDefaultsTo4096) {
+  ChatterboxConfig cfg;
+  const auto opts = qvac::ttsggml::chatterbox::engineOptionsForTests(cfg);
+  EXPECT_EQ(opts.n_ctx, 4096);
+}
+
+// q8_0 KV by default: ~27% of f32's resident KV memory; Turbo greedy
+// decoding validated byte-identical across f32/f16/q8_0 upstream
+// (qvac-ext-lib-whisper.cpp#43).
+TEST(ChatterboxEngineOptions, KvCacheTypeDefaultsToQ8) {
+  ChatterboxConfig cfg;
+  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type, "q8_0");
+}
+
+TEST(ChatterboxEngineOptions, ExplicitKvCacheTypeForwarded) {
+  ChatterboxConfig cfg;
+  cfg.kvCacheType = "f32";
+  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type, "f32");
+  cfg.kvCacheType = "f16";
+  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type, "f16");
+}
+
+TEST(ChatterboxValidate, UnknownKvCacheTypeRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.kvCacheType = "q4_0";
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxEngineOptions, ExplicitNCtxForwarded) {
+  ChatterboxConfig cfg;
+  cfg.nCtx = 1024;
+  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).n_ctx, 1024);
+}
+
+TEST(ChatterboxEngineOptions, NCtxZeroMeansUncapped) {
+  // 0 is the documented escape hatch: tts-cpp treats n_ctx <= 0 as "use
+  // the GGUF's full context".
+  ChatterboxConfig cfg;
+  cfg.nCtx = 0;
+  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).n_ctx, 0);
 }
 
 // ─────────────────────────────────────────────────────────────────────
