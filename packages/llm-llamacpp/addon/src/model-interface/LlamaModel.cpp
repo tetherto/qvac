@@ -19,6 +19,7 @@
 #include <common/chat.h>
 #include <common/common.h>
 #include <common/log.h>
+#include <common/speculative.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 #ifdef __APPLE__
@@ -1214,6 +1215,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"visionEncodeTiles",
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
+      {"draftAccepted", state_->llmContext_->getDraftAccepted()},
+      {"draftTotal", state_->llmContext_->getDraftTotal()},
       {"backendDevice", runtimeBackendDevice_}};
 }
 
@@ -1662,6 +1665,16 @@ void LlamaModel::commonParamsParse(
       if (list.empty() && !listString.empty()) {
         params.antiprompt.push_back(listString);
       }
+      configFilemap.erase(iter);
+    }
+  }
+
+  for (const std::string& key : {"spec-type", "spec_type"}) {
+    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
+      auto types =
+          common_speculative_types_from_names(split(iter->second, ','));
+      params.speculative.types.insert(
+          params.speculative.types.end(), types.begin(), types.end());
       configFilemap.erase(iter);
     }
   }

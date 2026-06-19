@@ -410,6 +410,14 @@ public:
   virtual void resetVisionEncodeMs() {}
 
   /**
+   * Speculative-decoding counters for the most recent generation. Default 0
+   * for contexts without speculative decoding; the single-prompt MTP path
+   * overrides these to surface draft acceptance via RuntimeStats.
+   */
+  [[nodiscard]] virtual int64_t getDraftAccepted() const { return 0; }
+  [[nodiscard]] virtual int64_t getDraftTotal() const { return 0; }
+
+  /**
    * The load media method. It loads the media from memory buffer.
    * Default implementation does nothing (for text-only contexts).
    * Override in multimodal contexts to provide media loading functionality.
