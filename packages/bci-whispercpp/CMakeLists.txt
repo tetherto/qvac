@@ -13,7 +13,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 # externally-set value (matches the other qvac addons). Only the Linux
 # triplets actually differ from vcpkg's defaults today, but exposing the
 # directory uniformly avoids platform-conditional surprises.
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(bci-whispercpp CXX C)
 
@@ -134,15 +134,6 @@ target_link_libraries(
 
 target_compile_definitions(${bci-whispercpp} PUBLIC JS_LOGGER)
 target_compile_definitions(${bci-whispercpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
-
-if(WIN32)
-  target_link_libraries(
-    ${bci-whispercpp}
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 if(BUILD_TESTING)
   find_package(GTest REQUIRED)
 

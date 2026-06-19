@@ -131,15 +131,6 @@ endif()
 if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
   target_link_libraries(addon-test PRIVATE Iconv::Iconv)
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    addon-test
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 add_test(NAME TranslationModelTests COMMAND addon-test)
 set_tests_properties(TranslationModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

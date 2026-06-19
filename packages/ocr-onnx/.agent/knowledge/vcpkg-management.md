@@ -195,20 +195,41 @@ The `cmake-vcpkg` npm package provides 15 standard triplets:
 | `arm64-windows` | Windows ARM64 |
 | `x64-windows` | Windows x64 |
 
-### Custom Override Triplets
+### Shared Override Triplets (monorepo root `vcpkg/`)
 
-Packages can override standard triplets for specific build requirements. Override triplets are prepended to the triplet search path in CMake:
+Triplets and toolchain files that are identical across addons live in a single
+shared folder at the repo root instead of being copied into every package:
 
-```cmake
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+```
+vcpkg/
+  toolchains/linux-clang.cmake   # unversioned clang/clang++ + vcpkg linux.cmake
+  triplets/
+    arm64-linux.cmake            # libc++ / -fPIC / static libs
+    x64-linux.cmake
+    arm64-windows.cmake          # static CRT + static libs (see below)
+    x64-windows.cmake
 ```
 
-#### LLM / Embed — Clang Toolchain
+Packages reference the shared folder via a monorepo-relative path. These files
+are build-time only (they are not in `package.json#files`, so they never ship to
+npm), so the relative path always resolves inside the monorepo checkout.
 
-Location: `packages/llm-llamacpp/vcpkg/triplets/`
+`VCPKG_OVERLAY_TRIPLETS` accepts a `;`-separated list and the **first** directory
+containing a given triplet name wins, which enables layering:
 
-Custom `x64-linux.cmake` and `arm64-linux.cmake` that enforce:
-- Unversioned `clang` / `clang++` compiler via custom toolchain file
+```cmake
+# Most addons: shared triplets only
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+
+# Addons that need package-specific overrides: local first, shared second
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+```
+
+#### Linux — Clang Toolchain (shared)
+
+`vcpkg/triplets/{arm64,x64}-linux.cmake` + `vcpkg/toolchains/linux-clang.cmake`
+enforce:
+- Unversioned `clang` / `clang++` compiler via the shared toolchain file
   (the LLVM major is pinned globally by `.github/actions/setup-llvm` in CI;
   on dev machines, `update-alternatives` should point `clang`/`clang++` at
   the matching major — currently 22)
@@ -226,18 +247,51 @@ set(VCPKG_CXX_FLAGS "-fPIC -stdlib=libc++")
 set(VCPKG_LINKER_FLAGS "-stdlib=libc++")
 ```
 
+#### Windows — Static Runtime (shared)
+
+`vcpkg/triplets/{arm64,x64}-windows.cmake` build dependencies with the **static**
+MSVC runtime so addons do not acquire a runtime dependency on the dynamic Visual
+C++ runtime (`vcruntime140.dll` / `msvcp140.dll`). This matches the bare-make
+win32 toolchain, which compiles the addon itself with
+`CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded..."`.
+
+```cmake
+set(VCPKG_TARGET_ARCHITECTURE x64)  # or arm64
+set(VCPKG_CRT_LINKAGE static)
+set(VCPKG_LIBRARY_LINKAGE static)
+set(VCPKG_BUILD_TYPE release)
+set(VCPKG_CXX_FLAGS "/wd4709")
+set(VCPKG_C_FLAGS "/wd4709")
+```
+
+> Because the runtime is now static, addons must **not** link `msvcrt.lib`
+> (the dynamic CRT import library) — doing so reintroduces the dynamic runtime
+> dependency the static triplet removes.
+
+#### Package-Local Override Triplets
+
+Triplets that genuinely differ from the shared defaults stay in the package's own
+`vcpkg/triplets/` (listed first in `VCPKG_OVERLAY_TRIPLETS` so they win):
+
+- **parakeet / tts-onnx**: a `x64-linux.cmake` variant that adds `-Wno-array-bounds`,
+  plus their macOS/iOS triplets. Local linux triplets chainload the shared
+  toolchain via `${CMAKE_CURRENT_LIST_DIR}/../../../../vcpkg/toolchains/linux-clang.cmake`.
+- **ocr-onnx**: its own `{arm64,x64}-linux.cmake` plus macOS/iOS/Android triplets.
+- **onnx**: keeps `vcpkg-override-triplets/triplets/` (apple/unix/android), layered
+  ahead of the shared folder.
+
 #### ONNX Packages — Release-Only Triplets
 
-Location: `packages/ocr-onnx/vcpkg-override-triplets/triplets/` (and similar for TTS, Parakeet)
+Location: `packages/onnx/vcpkg-override-triplets/triplets/` and the local
+`vcpkg/triplets/` of `ocr-onnx`, `tts-onnx`, `transcription-parakeet`.
 
-Custom triplets for ONNX-based packages that set `VCPKG_BUILD_TYPE release` to halve build time and disk usage:
+These local triplets set `VCPKG_BUILD_TYPE release` to halve build time and disk
+usage, and platform-specific deployment targets (e.g., iOS 13.3):
 
 ```cmake
 set(VCPKG_BUILD_TYPE release)
 set(VCPKG_LIBRARY_LINKAGE static)
 ```
-
-Platform-specific triplets also set deployment targets (e.g., iOS 13.3) and architecture details.
 
 ## Overlay Ports
 
@@ -402,8 +456,9 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-# Optional: prepend custom triplets
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+# Prepend the shared monorepo triplets (add a local "vcpkg/triplets" entry
+# before this one if the package needs its own overrides)
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(<project-name> C CXX)
 ```
@@ -514,15 +569,19 @@ If a package can't be resolved:
 
 ## Package Reference Table
 
-| Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
+All addons use the shared root `vcpkg/triplets` (linux clang + static-CRT windows).
+The "Local Triplet Overrides" column lists package-specific triplets layered ahead
+of the shared ones.
+
+| Addon Package | vcpkg Dependencies | Overlay Ports | Local Triplet Overrides |
 |--------------|-------------------|---------------|-----------------|
-| `llm-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
-| `embed-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
-| `ocr-onnx` | onnxruntime (platform EPs), opencv4, inference-addon-cpp, lint-cpp | None | Release-only |
-| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, inference-addon-cpp, lint-cpp | None | Release-only (macOS/iOS) |
-| `transcription-parakeet` | onnxruntime, inference-addon-cpp | None | Release-only |
-| `onnx` | onnxruntime (platform EPs), inference-addon-cpp, lint-cpp | None | None |
-| `transcription-whispercpp` | whisper-cpp, inference-addon-cpp, lint-cpp | None | None |
-| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, inference-addon-cpp, lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
+| `llm-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | None (shared only) |
+| `embed-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, opencl (Android) | qvac-fabric (local dev) | None (shared only) |
+| `ocr-onnx` | onnxruntime (platform EPs), opencv4, inference-addon-cpp, lint-cpp | None | linux + macOS/iOS/Android (release-only) |
+| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, inference-addon-cpp, lint-cpp | None | x64-linux variant + macOS/iOS (release-only) |
+| `transcription-parakeet` | onnxruntime, inference-addon-cpp | None | x64-linux variant + macOS/iOS (release-only) |
+| `onnx` | onnxruntime (platform EPs), inference-addon-cpp, lint-cpp | None | `vcpkg-override-triplets/` (apple/unix/android) |
+| `transcription-whispercpp` | whisper-cpp, inference-addon-cpp, lint-cpp | None | None (shared only) |
+| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, inference-addon-cpp, lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None (shared only) |
 | `inference-addon-cpp` | lint-cpp | None | None |
 | `lint-cpp` | (none — self-contained) | None | None |

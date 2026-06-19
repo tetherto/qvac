@@ -107,7 +107,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(inference-tts C CXX)
 
@@ -255,11 +255,6 @@ if(APPLE)
 endif()
 
 if(WIN32)
-  target_link_libraries(
-    ${inference-tts}
-    PRIVATE
-      msvcrt.lib
-  )
   # mecab.lib and bare_delay_load.lib both export DllMain. mecab's
   # libmecab.cpp:45 defines a stub that returns TRUE; bare_delay_load defines
   # the real entry point used to dispatch the /DELAYLOAD:bare.exe and

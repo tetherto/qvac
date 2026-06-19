@@ -69,7 +69,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
@@ -203,12 +203,6 @@ if(WIN32)
   target_compile_options(${inference-addon-onnx-ocr-fasttext} PRIVATE "/utf-8")
 
   target_compile_definitions(${inference-addon-onnx-ocr-fasttext} PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX NOGDI)
-
-  target_link_libraries(
-    ${inference-addon-onnx-ocr-fasttext}
-    PRIVATE
-      msvcrt.lib
-  )
 endif()
 
 if(BUILD_TESTING)
