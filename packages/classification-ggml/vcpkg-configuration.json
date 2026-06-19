@@ -17,6 +17,6 @@
     }
   ],
   "overlay-ports": [
-    "../../vcpkg-overlay-ports"
+    "../ports"
   ]
 }
