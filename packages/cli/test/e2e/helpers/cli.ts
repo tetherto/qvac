@@ -7,6 +7,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { before, after, type TestContext } from 'node:test'
+import { writeConfigDir } from './config.js'
 
 // The built CLI entrypoint, run as `node dist/index.js`.
 export const CLI_BIN = fileURLToPath(new URL('../../../dist/index.js', import.meta.url))
@@ -96,6 +97,12 @@ export async function startCliServer (
     }
   }
   throw new Error(`serve did not become ready within timeout:\n${captured}`)
+}
+
+// Write a config dir and spawn the binary against it.
+export async function configuredServer (t: TestContext, config: unknown, args: string[] = []): Promise<SpawnedServer> {
+  const dir = await writeConfigDir(t, config)
+  return startCliServer(t, args, { cwd: dir })
 }
 
 // Describe-scoped spawned server sharing one process across a suite's tests.
