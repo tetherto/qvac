@@ -33,7 +33,7 @@ public:
   // Used on Mali, where the CPU is otherwise idle while the Vulkan recognizer
   // computes; per-crop math is unchanged, only the executing backend differs.
   explicit StepDoctrRecognitionGGML(
-      const std::string& pathRecognizer, int batchSize = DEFAULT_BATCH_SIZE,
+      const std::string &pathRecognizer, int batchSize = DEFAULT_BATCH_SIZE,
       DecodingMethod decoding = DecodingMethod::CTC,
       ggml_backend_dev_t backendDevice = nullptr, int nThreads = 0,
       ggml_backend_dev_t assistDevice = nullptr, int assistBatchSize = 0);

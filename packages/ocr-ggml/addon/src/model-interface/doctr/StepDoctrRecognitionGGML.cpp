@@ -762,16 +762,26 @@ struct StepDoctrRecognitionGGML::Impl {
   // Number of crops the feature-extractor graph processes per compute call.
   int batchSize = 1;
 
+<<<<<<< HEAD
   explicit Impl(
       const std::string& pathRecognizer, ggml_backend_dev_t backendDevice,
       int batchSizeArg, int nThreadsArg = 0)
+=======
+  explicit Impl(const std::string &pathRecognizer,
+                ggml_backend_dev_t backendDevice, int batchSizeArg)
+>>>>>>> 00216d65e (Fix clang-format issues)
       : batchSize(batchSizeArg > 0 ? batchSizeArg : 1) {
     load(pathRecognizer, backendDevice, nThreadsArg);
   }
 
+<<<<<<< HEAD
   void load(
       const std::string& pathRecognizer, ggml_backend_dev_t backendDevice,
       int nThreads) {
+=======
+  void load(const std::string &pathRecognizer,
+            ggml_backend_dev_t backendDevice) {
+>>>>>>> 00216d65e (Fix clang-format issues)
     graph.reset();
     ggml_backend_dev_t dev =
         (backendDevice != nullptr)
@@ -907,7 +917,11 @@ struct StepDoctrRecognitionGGML::Impl {
   // `allFeatures` points at the concatenated feature-extractor output, per crop
   // [seq, channels] seq-fastest (featStride = seq * kFeatureChannels).
   [[nodiscard]] std::vector<float>
+<<<<<<< HEAD
   runLstmLinearGpu(const float* allFeatures, int n) const {
+=======
+  runLstmLinearGpu(const std::vector<float> &allFeatures, int n) const {
+>>>>>>> 00216d65e (Fix clang-format issues)
     constexpr int H = kLstmHiddenSize;
     constexpr int gates = kLstmGateCount * H;
     constexpr int seq = kSequenceLength;
@@ -1040,11 +1054,17 @@ struct StepDoctrRecognitionGGML::Impl {
       raise("failed to allocate LSTM graph");
     }
 
+<<<<<<< HEAD
     ggml_backend_tensor_set(
         feat,
         allFeatures,
         0,
         static_cast<size_t>(n) * seq * kFeatureChannels * sizeof(float));
+=======
+    ggml_backend_tensor_set(feat, allFeatures.data(), 0,
+                            static_cast<size_t>(n) * seq * kFeatureChannels *
+                                sizeof(float));
+>>>>>>> 00216d65e (Fix clang-format issues)
 
     const ggml_status status = ggml_backend_graph_compute(graph.backend, cg);
     if (status != GGML_STATUS_SUCCESS) {
@@ -1520,12 +1540,19 @@ private:
     ggml_set_input(graph.input);
 
     GraphBuilder gb{.ctx = ctx, .w = graph.weights};
+<<<<<<< HEAD
     // Direct regular convs by default on OpenCL (Adreno) and Vulkan (Mali) —
     // both avoid the im2col path that is slow on those GPUs; env
     // OCR_DOCTR_FUSED_CONV (0/1) overrides the backend default for A/B.
     gb.useDirectConv = resolveDirectConv(
         "OCR_DOCTR_FUSED_CONV",
         backendIsOpenCl(graph.backend) || backendIsVulkan(graph.backend));
+=======
+    // Direct regular convs by default on OpenCL (Adreno); env overrides for
+    // A/B.
+    gb.useDirectConv = resolveDirectConv("OCR_DOCTR_FUSED_CONV",
+                                         backendIsOpenCl(graph.backend));
+>>>>>>> 00216d65e (Fix clang-format issues)
     struct ggml_tensor* x = gb.convBnAct(
         graph.input,
         "crnn.features.0.0",
@@ -1556,9 +1583,14 @@ private:
 };
 
 StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
+<<<<<<< HEAD
     const std::string& pathRecognizer, int batchSize, DecodingMethod decoding,
     ggml_backend_dev_t backendDevice, int nThreads,
     ggml_backend_dev_t assistDevice, int assistBatchSize)
+=======
+    const std::string &pathRecognizer, int batchSize, DecodingMethod decoding,
+    ggml_backend_dev_t backendDevice, int nThreads)
+>>>>>>> 00216d65e (Fix clang-format issues)
     : impl_(std::make_unique<Impl>(pathRecognizer, backendDevice, batchSize)),
       batchSize_(batchSize), decodingMethod_(decoding), nThreads_(nThreads),
       vocabChars_(parseVocabToChars(VOCAB)) {
@@ -1572,11 +1604,17 @@ StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
   }
   const std::string decodingStr =
       (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
+<<<<<<< HEAD
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[DoctrRecognitionGGML] GGML recognizer loaded, batchSize=" +
           std::to_string(batchSize) + ", decoding=" + decodingStr +
           (assistImpl_ ? ", cpuAssist=on" : ""));
+=======
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+       "[DoctrRecognitionGGML] GGML recognizer loaded, batchSize=" +
+           std::to_string(batchSize) + ", decoding=" + decodingStr);
+>>>>>>> 00216d65e (Fix clang-format issues)
   ALOG_INFO(
       std::string(
           "[DoctrRecognitionGGML] GGML recognizer loaded, decoding=" +
@@ -1782,7 +1820,15 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
   // Claim the next up-to-`want` crops; {total, 0} when exhausted or cancelled.
   const auto claim = [&](int want) -> std::pair<int, int> {
     if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
+<<<<<<< HEAD
       return {total, 0};
+=======
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+           "[DoctrRecognitionGGML] Cancelled at batch offset " +
+               std::to_string(batchStart));
+      decodeCount = batchStart;
+      break;
+>>>>>>> 00216d65e (Fix clang-format issues)
     }
     const int start = nextClaim.fetch_add(want, std::memory_order_relaxed);
     if (start >= total) {
@@ -1893,6 +1939,7 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
     });
   }
 
+<<<<<<< HEAD
   std::exception_ptr primaryError;
   try {
     runPrimary();
@@ -1928,6 +1975,16 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
         "[DoctrRecognitionGGML] Cancelled; decoding " +
             std::to_string(decodeCount) + "/" + std::to_string(total) +
             " crops");
+=======
+    // One batched feature-extractor compute (unused tail slots produce ignored
+    // outputs); copy this batch's features into the global buffer.
+    std::vector<float> features = impl_->runFeatureExtractor(batchInput);
+    CV_Assert(features.size() >= static_cast<size_t>(count) * featStride);
+    std::memcpy(allFeatures.data() +
+                    (static_cast<size_t>(batchStart) * featStride),
+                features.data(),
+                static_cast<size_t>(count) * featStride * sizeof(float));
+>>>>>>> 00216d65e (Fix clang-format issues)
   }
 
   std::vector<std::pair<std::string, float>> decoded(
