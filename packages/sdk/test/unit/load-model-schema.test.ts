@@ -1,5 +1,8 @@
 import test from "brittle";
-import { loadModelSrcRequestSchema } from "@/schemas/load-model";
+import {
+  loadModelOptionsToRequestSchema,
+  loadModelSrcRequestSchema,
+} from "@/schemas/load-model";
 import { ModelType } from "@/schemas";
 
 test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
@@ -13,6 +16,53 @@ test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
 
   const result = loadModelSrcRequestSchema.safeParse(invalidRequest);
   t.is(result.success, false);
+});
+
+test("loadModelOptionsToRequestSchema: points misplaced LLM config fields to modelConfig", (t) => {
+  try {
+    loadModelOptionsToRequestSchema.parse({
+      modelSrc: "model.gguf",
+      modelType: "llm",
+      ctx_size: 2048,
+    });
+    t.fail("expected misplaced ctx_size to fail validation");
+  } catch (error) {
+    t.ok(error instanceof Error);
+    t.ok(
+      error instanceof Error && error.message.includes("modelConfig.ctx_size"),
+    );
+  }
+});
+
+test("loadModelOptionsToRequestSchema: points misplaced non-LLM config fields to modelConfig", (t) => {
+  const cases = [
+    {
+      input: {
+        modelSrc: "whisper.bin",
+        modelType: "whisper",
+        language: "en",
+      },
+      hint: "modelConfig.language",
+    },
+    {
+      input: {
+        modelSrc: "embed.gguf",
+        modelType: "embeddings",
+        batchSize: 512,
+      },
+      hint: "modelConfig.batchSize",
+    },
+  ];
+
+  for (const { input, hint } of cases) {
+    try {
+      loadModelOptionsToRequestSchema.parse(input);
+      t.fail(`expected misplaced ${hint} to fail validation`);
+    } catch (error) {
+      t.ok(error instanceof Error);
+      t.ok(error instanceof Error && error.message.includes(hint));
+    }
+  }
 });
 
 test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", (t) => {
