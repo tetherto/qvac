@@ -13,8 +13,8 @@
 #include <tts-cpp/chatterbox/engine.h>
 
 #include "addon/TTSErrors.hpp"
-#include "model-interface/BackendUtils.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendUtils.hpp"
 
 namespace qvac::ttsggml::chatterbox {
 
