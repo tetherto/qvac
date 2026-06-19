@@ -17,7 +17,8 @@ opencode          # interactive — uses qvac/qwen3.5-9b by default
 opencode run "…"  # one-shot — works too (no startup race)
 ```
 
-That's it: no `provider` block, no second terminal, no `QVAC_MODEL=` prefix.
+The plugin registers the local `qvac` provider and selects `qvac/qwen3.5-9b`
+as the project model by default.
 
 ## How it works
 
@@ -39,7 +40,7 @@ Multiple OpenCode windows **share one serve** (the provider's `reuse` default):
 the detached runner owns the loaded model and reaps it a few minutes after the
 last session leaves, so a second window doesn't reload the model.
 
-## Model ids
+## Available models
 
 You pick a friendly, models.dev-style id (`qwen3.5-9b`) and that exact id flows
 through the whole stack — OpenCode's model picker (`qvac/qwen3.5-9b`) and the
@@ -48,15 +49,20 @@ request `model` field. The verbose QVAC constant
 friendly-id → constant mapping lives in `@qvac/ai-sdk-provider`'s `qvacCatalog`,
 so every AI-SDK tool resolves the same ids.
 
-| models.dev id  | QVAC constant                     |
-| -------------- | --------------------------------- |
-| `qwen3.5-0.8b` | `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M`  |
-| `qwen3.5-2b`   | `QWEN3_5_2B_MULTIMODAL_Q4_K_M`    |
-| `qwen3.5-4b`   | `QWEN3_5_4B_MULTIMODAL_Q4_K_M`    |
-| `qwen3.5-9b`   | `QWEN3_5_9B_MULTIMODAL_Q4_K_M`    |
+The plugin currently exposes the Qwen3.5 multimodal family with Q4_K_M
+quantization. Use the largest model your machine can keep warm; coding agents
+are far more sensitive to model quality than short chatbots are.
 
-Passing a raw constant also works (it normalizes back to the friendly id for
-display).
+| Model id | Best for | Trade-off | QVAC constant |
+| --- | --- | --- | --- |
+| `qwen3.5-9b` | Default choice for OpenCode, tool use, repository edits, and multi-step tasks. | Best local capability in the plugin catalog; slower cold starts and higher RAM/VRAM use. | `QWEN3_5_9B_MULTIMODAL_Q4_K_M` |
+| `qwen3.5-4b` | Lighter code questions, small edits, and machines that cannot run the 9B model comfortably. | Noticeably faster and smaller, but less reliable at following tool-heavy agent workflows. | `QWEN3_5_4B_MULTIMODAL_Q4_K_M` |
+| `qwen3.5-2b` | Quick local smoke tests, simple prompts, and low-memory machines. | Good for checking that the plugin/server path works; weak for real coding-agent work. | `QWEN3_5_2B_MULTIMODAL_Q4_K_M` |
+| `qwen3.5-0.8b` | Fastest health checks and demos where latency matters more than answer quality. | Not recommended for OpenCode tasks that need reliable tool use or code reasoning. | `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M` |
+
+All four plugin models use text input/output, reasoning, tool calling,
+temperature, and a 32k context window. Passing a raw constant also works, but
+friendly ids are easier to read and match the model picker.
 
 ## Options
 
