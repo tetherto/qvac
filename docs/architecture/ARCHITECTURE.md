@@ -269,9 +269,6 @@ All packages live in this monorepo under `packages/`:
 | Directory | Package | Purpose |
 |-----------|---------|---------|
 | `rag` | `@qvac/rag` | RAG with HyperDB |
-| `dl-base` | `@qvac/dl-base` | Base data loader |
-| `dl-hyperdrive` | `@qvac/dl-hyperdrive` | Hyperdrive data loader |
-| `dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
 | `infer-base` | `@qvac/infer-base` | Base inference client |
 | `decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `logging` | `@qvac/logging` | Logging utilities |

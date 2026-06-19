@@ -905,6 +905,46 @@ async function runDoctrOCR (t, params, imagePath) {
   }
 }
 
+// Cached resolution of the Android GPU backend for the EasyOCR perf GPU pass
+// (QVAC-20949). Vulkan is the right GPU backend on Mali (e.g. Pixel 9 Pro) but
+// is auto-skipped on Adreno (numerically broken) — so on Adreno the perf GPU
+// pass must request OpenCL instead, otherwise it silently falls back to CPU and
+// the perf report leaves the Android GPU cells blank. The JS can't tell Adreno
+// from Mali up front, so we probe once: load a throwaway Vulkan instance and
+// read getBackendInfo — a real GPU means Mali-class (keep Vulkan); a CPU
+// fallback means Adreno (use OpenCL). null = not yet resolved.
+let _androidGpuDevice = null
+
+function _hasBackendOverride () {
+  let raw = ''
+  if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
+  if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
+  return String(raw).trim() !== ''
+}
+
+async function ensureAndroidGpuResolved (detectorPath, recognizerPath) {
+  if (_androidGpuDevice) return _androidGpuDevice
+  const { OcrGgml } = require('../..')
+  const probe = new OcrGgml({
+    params: { pathDetector: detectorPath, pathRecognizer: recognizerPath, langList: ['en'], backendDevice: 'vulkan' },
+    opts: {}
+  })
+  try {
+    await probe.load()
+    const info = typeof probe.getBackendInfo === 'function' ? probe.getBackendInfo() : null
+    const isGpu = !!info && (info.backendDevice === 'GPU' || info.backendDevice === 'IGPU')
+    // Mali resolves Vulkan to a GPU -> keep Vulkan; Adreno falls back to CPU
+    // (Vulkan auto-skipped) -> request OpenCL for the GPU pass instead.
+    _androidGpuDevice = isGpu ? 'vulkan' : 'opencl'
+  } catch (e) {
+    _androidGpuDevice = 'vulkan' // safe default on probe failure
+  } finally {
+    await safeUnload(probe)
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+  return _androidGpuDevice
+}
+
 /**
  * Runs a single EasyOCR-style inference pass: constructs an OcrGgml instance
  * (forcing CPU when `forceCpu` is set), loads, runs, records perf and invokes
@@ -919,7 +959,16 @@ async function runDoctrOCR (t, params, imagePath) {
  */
 async function _runOcrPass (t, cfg, forceCpu) {
   const { params, imagePath, runOptions, perfLabel, perfOpts, assertResult } = cfg
-  const passParams = forceCpu ? { ...params, backendDevice: 'cpu' } : { ...params }
+  let passParams
+  if (forceCpu) {
+    passParams = { ...params, backendDevice: 'cpu' }
+  } else if (platform === 'android' && !_hasBackendOverride() && params.pathDetector && params.pathRecognizer) {
+    // EasyOCR GPU pass on Android: Vulkan on Mali, OpenCL on Adreno (QVAC-20949).
+    const resolved = await ensureAndroidGpuResolved(params.pathDetector, params.pathRecognizer)
+    passParams = { ...params, backendDevice: resolved }
+  } else {
+    passParams = { ...params }
+  }
   const ocrGgml = createOcrGgml(passParams, { stats: true })
 
   await ocrGgml.load()
