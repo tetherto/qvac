@@ -8,7 +8,7 @@ import {
 
 if (process.argv.length < 3) {
   console.error(
-    `Specify an image file path as the first argument and a second image file path as the second (optional) argument`,
+    `▸ Specify an image file path as the first argument and a second image file path as the second (optional) argument`,
   );
   process.exit(1);
 }
@@ -24,8 +24,11 @@ try {
       ctx_size: 1024,
       projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
     },
-    onProgress: (progress) => {
-      console.log(`Loading: ${progress.percentage.toFixed(1)}%`);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
@@ -45,13 +48,13 @@ try {
 
   const stats = await result.stats;
 
-  console.log("\n📊 Performance Stats:", stats);
+  console.log("\n▸ Performance Stats:", stats);
 
-  console.log("--------------------------------");
+  console.log("▸ --------------------------------");
 
   //Using multiple media
   if (process.argv.length < 4) {
-    console.log(`Only one image provided, terminating`);
+    console.log(`▸ Only one image provided, terminating`);
     process.exit(0);
   }
 
@@ -73,12 +76,12 @@ try {
 
   const stats2 = await result2.stats;
 
-  console.log("\n📊 Performance Stats:", stats2);
+  console.log("\n▸ Performance Stats:", stats2);
 
-  console.log("--------------------------------");
+  console.log("▸ --------------------------------");
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
