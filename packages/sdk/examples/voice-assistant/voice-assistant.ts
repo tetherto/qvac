@@ -86,13 +86,13 @@ for (const tool of ["ffmpeg", "ffplay"]) {
   const r = spawnSync(tool, ["-version"], { stdio: "ignore" });
   if (r.error || r.status !== 0) {
     console.error(
-      `${tool} not found on PATH. Install ffmpeg (ffplay ships with it) and retry.`,
+      `✖ ${tool} not found on PATH. Install ffmpeg (ffplay ships with it) and retry.`,
     );
     process.exit(1);
   }
 }
 
-console.log("Loading whisper-tiny + Silero VAD...");
+console.log("▸ Loading whisper-tiny + Silero VAD...");
 const asrModelId = await loadModel({
   modelSrc: WHISPER_TINY,
   modelConfig: {
@@ -109,7 +109,7 @@ const asrModelId = await loadModel({
   },
 });
 
-console.log("Loading Llama 3.2 1B...");
+console.log("▸ Loading Llama 3.2 1B...");
 const llmModelId = await loadModel({
   modelSrc: LLAMA_3_2_1B_INST_Q4_0,
   modelConfig: {
@@ -117,7 +117,7 @@ const llmModelId = await loadModel({
   },
 });
 
-console.log("Loading Supertonic TTS...");
+console.log("▸ Loading Supertonic TTS...");
 const ttsModelId = await loadModel({
   modelSrc: TTS_EN_SUPERTONIC_Q8_0,
   modelConfig: {
@@ -129,7 +129,7 @@ const ttsModelId = await loadModel({
   },
 });
 
-console.log("All models loaded.\n");
+console.log("▸ All models loaded.\n");
 
 const ffmpeg = startMicrophone({
   sampleRate: MIC_SAMPLE_RATE,
@@ -157,7 +157,7 @@ let shuttingDown = false;
 async function cleanup() {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log("\n\nStopping...");
+  console.log("\n\n▸ Stopping...");
   ffmpeg.kill();
   try {
     session.end();
@@ -167,25 +167,25 @@ async function cleanup() {
   await unloadModel({ modelId: ttsModelId }).catch(() => {});
   await unloadModel({ modelId: llmModelId }).catch(() => {});
   await unloadModel({ modelId: asrModelId }).catch(() => {});
-  console.log("Done.");
+  console.log("▸ Done.");
   process.exit(0);
 }
 
 process.on("SIGINT", () => void cleanup());
 process.on("SIGTERM", () => void cleanup());
 
-console.log("🎙️  Listening. Speak a question and pause. Ctrl+C to quit.\n");
+console.log("▸ Listening. Speak a question and pause. Ctrl+C to quit.\n");
 
 for await (const rawText of session) {
   if (!isMeaningfulTranscript(rawText)) continue;
   const userText = rawText.trim();
 
-  console.log(`🗣️  You: ${userText}`);
+  console.log(`▸ You: ${userText}`);
   history.push({ role: "user", content: userText });
 
   isSpeaking = true;
   try {
-    process.stdout.write("🤖 Assistant: ");
+    console.log("▸ Assistant:");
     const llmResult = completion({
       modelId: llmModelId,
       history,
@@ -220,11 +220,11 @@ for await (const rawText of session) {
     }
   } catch (turnError) {
     console.error(
-      "\n⚠️  Turn failed:",
+      "\n✖ Turn failed:",
       turnError instanceof Error ? turnError.message : turnError,
     );
   } finally {
     isSpeaking = false;
-    console.log("\n🎙️  Listening...\n");
+    console.log("\n▸ Listening...\n");
   }
 }

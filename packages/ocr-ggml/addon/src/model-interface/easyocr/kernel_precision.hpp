@@ -156,6 +156,39 @@ inline bool ocr_conv1x1_mulmat_use(ggml_backend_t backend) {
   return ocr_conv1x1_mulmat_default(backend);
 }
 
+// Backend-aware default for routing the EasyOCR non-pointwise (e.g. 3x3) convs
+// through ggml_conv_2d_direct (the fused GGML_OP_CONV_2D kernel) instead of
+// ggml_conv_2d's im2col + mul_mat. On the OpenCL backend (Adreno) the im2col
+// path rides a slow f16xf16 GEMV; the direct kernel is far faster there (the
+// EasyOCR analog of DocTR's doctrConv2d, QVAC-19798). On CPU/Vulkan/Metal the
+// im2col path is kept (direct measured ~2x slower on Metal), so this defaults
+// ON only for OpenCL. Keyed on the backend API name.
+inline bool ocr_use_direct_conv_default(ggml_backend_t backend) {
+  ggml_backend_dev_t dev =
+      (backend != nullptr) ? ggml_backend_get_device(backend) : nullptr;
+  if (dev == nullptr) {
+    return false; // unknown device -> conservative im2col
+  }
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* api = (reg != nullptr) ? ggml_backend_reg_name(reg) : nullptr;
+  return ocr_desc_contains(api, "opencl");
+}
+
+// Resolve whether to use the direct-conv path for `backend`. Env overrides take
+// precedence over the backend-aware default: OCR_GGML_IM2COL_CONV=1 forces the
+// im2col conv_2d path, OCR_GGML_DIRECT_CONV=1 forces ggml_conv_2d_direct
+// (im2col wins if both are set). Resolved once at model-load time and stored on
+// the weights object.
+inline bool ocr_use_direct_conv(ggml_backend_t backend) {
+  if (ocr_env_is_one("OCR_GGML_IM2COL_CONV")) {
+    return false;
+  }
+  if (ocr_env_is_one("OCR_GGML_DIRECT_CONV")) {
+    return true;
+  }
+  return ocr_use_direct_conv_default(backend);
+}
+
 // Upload a BatchNorm-folded F32 conv kernel into its (already-declared)
 // destination tensor. When `w_dst` is F16, convert the F32 data first so
 // ggml_conv_2d takes the F16 fast path (mirrors the doctr

@@ -22,20 +22,20 @@ const qvacOutputDir = path.join(projectRoot, "qvac");
 
 // ─── Generate the worker bundle from the plugins config ─────────────────────
 
-console.log(`🔍 Config: ${configPath}`);
+console.log(`▸ Config: ${configPath}`);
 console.log(
-  `⚠️  This example will generate a worker bundle in ${qvacOutputDir} and delete it on exit.`,
+  `▸ This example will generate a worker bundle in ${qvacOutputDir} and delete it on exit.`,
 );
 console.log(
-  "   If you have an existing qvac/ folder with bundled files, they will be overwritten and removed.\n",
+  "▸ If you have an existing qvac/ folder with bundled files, they will be overwritten and removed.\n",
 );
-console.log("🔨 Generating worker bundle from plugins config...\n");
+console.log("▸ Generating worker bundle from plugins config...\n");
 
 try {
   await bundleSdk({ projectRoot, configPath, quiet: true });
 } catch (error) {
-  console.error("❌ Failed to generate worker bundle.");
-  console.error("❌ Error:", error);
+  console.error("✖ Failed to generate worker bundle.");
+  console.error("✖", error);
   process.exit(1);
 }
 
@@ -45,7 +45,7 @@ console.log("");
 function cleanup() {
   if (existsSync(qvacOutputDir)) {
     rmSync(qvacOutputDir, { recursive: true, force: true });
-    console.log(`\n🧹 Cleaned up ${qvacOutputDir}`);
+    console.log(`\n▸ Cleaned up ${qvacOutputDir}`);
   }
 }
 process.on("exit", cleanup);
@@ -65,20 +65,24 @@ const {
   GTE_LARGE_FP16,
 } = await import("@qvac/sdk");
 
-console.log("1. LLM Completion (llamacpp-completion plugin)");
+console.log("▸ 1. LLM Completion (llamacpp-completion plugin)");
 
 try {
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: { ctx_size: 2048 },
-    onProgress: (p) =>
-      console.log(`   Loading LLM: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
 
-  console.log(`   Model loaded: ${llmModelId}`);
+  console.log(`▸ Model loaded: ${llmModelId}`);
 
   const question = "What is 2 + 2? Answer in one word.";
-  console.log(`   Question: ${question}`);
+  console.log(`▸ Question: ${question}`);
 
   const result = completion({
     modelId: llmModelId,
@@ -86,20 +90,20 @@ try {
     stream: true,
   });
 
-  process.stdout.write("   Response: ");
+  console.log("▸ Response:");
   for await (const token of result.tokenStream) {
     process.stdout.write(token);
   }
-  console.log("\n");
+  console.log("");
 
   await unloadModel({ modelId: llmModelId });
-  console.log("   ✅ LLM unloaded\n");
+  console.log("▸ LLM unloaded\n");
 } catch (error) {
-  console.error("   ❌ LLM failed:", error);
+  console.error("✖ LLM failed:", error);
   process.exit(1);
 }
 
-console.log("2. Translation (nmtcpp-translation plugin)");
+console.log("▸ 2. Translation (nmtcpp-translation plugin)");
 
 try {
   const nmtModelId = await loadModel({
@@ -109,11 +113,15 @@ try {
       from: "en",
       to: "es",
     },
-    onProgress: (p) =>
-      console.log(`   Loading NMT: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
 
-  console.log(`   Model loaded: ${nmtModelId}`);
+  console.log(`▸ Model loaded: ${nmtModelId}`);
 
   const text = "Hello, how are you?";
   const result = translate({
@@ -124,17 +132,17 @@ try {
   });
 
   const translated = await result.text;
-  console.log(`   "${text}" -> "${translated}"\n`);
+  console.log(`"${text}" -> "${translated}"`);
 
   await unloadModel({ modelId: nmtModelId });
-  console.log("   ✅ NMT unloaded\n");
+  console.log("▸ NMT unloaded\n");
 } catch (error) {
-  console.error("   ❌ Translation failed:", error);
+  console.error("✖ Translation failed:", error);
   process.exit(1);
 }
 
-console.log("3. Embeddings (llamacpp-embedding plugin NOT in config)");
-console.log("   Attempting to load an embeddings model...\n");
+console.log("▸ 3. Embeddings (llamacpp-embedding plugin NOT in config)");
+console.log("▸ Attempting to load an embeddings model...\n");
 
 try {
   const embedModelId = await loadModel({
@@ -143,18 +151,18 @@ try {
 
   await embed({ modelId: embedModelId, text: "test" });
 
-  console.error("   ❌ Unexpected: embed succeeded without the plugin!");
+  console.error("✖ Unexpected: embed succeeded without the plugin!");
   process.exit(1);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
 
   if (message.includes("Plugin not found")) {
-    console.log("   ✅ Expected PLUGIN_NOT_FOUND error:");
-    console.log(`   ${message}\n`);
+    console.log("▸ Expected PLUGIN_NOT_FOUND error:");
+    console.log(`▸ ${message}\n`);
   } else {
-    console.error("   ❌ Unexpected error:", error);
+    console.error("✖ Unexpected error:", error);
     process.exit(1);
   }
 }
 
-console.log("Done! Only the selected plugins were available.");
+console.log("▸ Done! Only the selected plugins were available.");

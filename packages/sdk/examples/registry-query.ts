@@ -8,15 +8,15 @@ import {
 } from "@qvac/sdk";
 
 try {
-  console.log("QVAC Model Registry Query Examples\n");
+  console.log("▸ QVAC Model Registry Query Examples\n");
 
   // List all available models
-  console.log("Listing all models in QVAC model registry...");
+  console.log("▸ Listing all models in QVAC model registry...");
   const allModels = await modelRegistryList();
-  console.log(`   Found ${allModels.length} models in registry\n`);
+  console.log(`▸ Found ${allModels.length} models in registry\n`);
 
   // Show first 5 models as sample
-  console.log("   Sample models:");
+  console.log("▸ Sample models:");
   allModels.slice(0, 5).forEach((model) => {
     console.log(
       `   - ${model.name} (${model.addon}, ${model.engine}, ${formatSize(model.expectedSize)})`,
@@ -25,48 +25,48 @@ try {
   console.log();
 
   // Search with text filter
-  console.log('Searching for "whisper" models...');
+  console.log('▸ Searching for "whisper" models...');
   const whisperModels = await modelRegistrySearch({ filter: "whisper" });
-  console.log(`   Found ${whisperModels.length} whisper-related models\n`);
+  console.log(`▸ Found ${whisperModels.length} whisper-related models\n`);
 
   // Search by engine (using canonical ModelType enum)
-  console.log(`Searching by engine (${ModelType.llamacppEmbedding})...`);
+  console.log(`▸ Searching by engine (${ModelType.llamacppEmbedding})...`);
   const embedModels = await modelRegistrySearch({
     engine: ModelType.llamacppEmbedding,
   });
-  console.log(`   Found ${embedModels.length} embedding models`);
+  console.log(`▸ Found ${embedModels.length} embedding models`);
   embedModels.slice(0, 3).forEach((model) => {
     console.log(`   - ${model.name} (${model.quantization})`);
   });
   console.log();
 
   // Search by quantization
-  console.log("Searching for Q4 quantized models...");
+  console.log("▸ Searching for Q4 quantized models...");
   const q4Models = await modelRegistrySearch({ quantization: "q4" });
-  console.log(`   Found ${q4Models.length} Q4 quantized models`);
+  console.log(`▸ Found ${q4Models.length} Q4 quantized models`);
   q4Models.slice(0, 3).forEach((model) => {
     console.log(`   - ${model.name}`);
   });
   console.log();
 
   // Search by addon/model type
-  console.log("Searching for transcription models...");
+  console.log("▸ Searching for transcription models...");
   const transcriptionModels = await modelRegistrySearch({
     addon: "whisper",
   });
-  console.log(`   Found ${transcriptionModels.length} transcription models`);
+  console.log(`▸ Found ${transcriptionModels.length} transcription models`);
   transcriptionModels.slice(0, 3).forEach((model: ModelRegistryEntry) => {
     console.log(`   - ${model.name}`);
   });
   console.log();
 
   // Combined search: engine + quantization
-  console.log("Searching for Q4 LLM models...");
+  console.log("▸ Searching for Q4 LLM models...");
   const q4LlmModels = await modelRegistrySearch({
     engine: ModelType.llamacppCompletion,
     quantization: "q4",
   });
-  console.log(`   Found ${q4LlmModels.length} Q4 LLM models`);
+  console.log(`▸ Found ${q4LlmModels.length} Q4 LLM models`);
   q4LlmModels.slice(0, 3).forEach((model: ModelRegistryEntry) => {
     console.log(`   - ${model.name} (${model.quantization})`);
   });
@@ -76,7 +76,7 @@ try {
   const sampleModel = allModels[0];
   if (sampleModel) {
     console.log(
-      `Getting specific model: ${sampleModel.registrySource}/${sampleModel.registryPath}`,
+      `▸ Getting specific model: ${sampleModel.registrySource}/${sampleModel.registryPath}`,
     );
     const model = await modelRegistryGetModel(
       sampleModel.registryPath,
@@ -92,12 +92,12 @@ try {
     console.log();
   }
 
-  console.log("QVAC model registry query examples completed successfully!");
+  console.log("▸ QVAC model registry query examples completed successfully!");
 
   void close();
   process.exit(0);
 } catch (error) {
-  console.error("Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
 

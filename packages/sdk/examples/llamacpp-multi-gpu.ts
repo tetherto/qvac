@@ -38,11 +38,11 @@ try {
       if (progress.shardInfo) {
         const { shardInfo } = progress;
         console.log(
-          `Downloading ${shardInfo.shardName} (${shardInfo.currentShard}/${shardInfo.totalShards}) ` +
+          `▸ Downloading ${shardInfo.shardName} (${shardInfo.currentShard}/${shardInfo.totalShards}) ` +
             `— overall: ${shardInfo.overallPercentage.toFixed(1)}%`,
         );
       } else {
-        console.log(`Downloading: ${progress.percentage.toFixed(1)}%`);
+        console.log(`▸ Downloading: ${progress.percentage.toFixed(1)}%`);
       }
     },
   });
@@ -62,11 +62,11 @@ try {
   }
 
   const stats = await result.stats;
-  console.log("\n\nStats:", stats);
+  console.log("\n\n▸ Stats:", stats);
 
   await unloadModel({ modelId, clearStorage: false });
   process.exit(0);
 } catch (error) {
-  console.error("Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
