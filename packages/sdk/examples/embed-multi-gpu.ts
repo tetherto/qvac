@@ -39,11 +39,10 @@ try {
 
   for (const text of texts) {
     const { embedding, stats } = await embed({ modelId, text });
-    console.log(`Embedded ${text.slice(0, 50)}...`);
-    console.log(`  Dimensions: ${embedding.length}`);
+    console.log(`${embedding.length} dims  ${text.slice(0, 50)}...`);
     if (stats) {
       console.log(
-        `  Backend: ${stats.backendDevice}, TPS: ${stats.tokensPerSecond?.toFixed(1)}`,
+        `▸ ${stats.backendDevice}  ${stats.tokensPerSecond?.toFixed(1)} tok/s`,
       );
     }
   }
@@ -51,6 +50,6 @@ try {
   await unloadModel({ modelId, clearStorage: false });
   process.exit(0);
 } catch (error) {
-  console.error("Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

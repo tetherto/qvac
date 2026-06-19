@@ -315,7 +315,7 @@ The following OpenAI parameters are forwarded to the model on each request:
 | `seed` | `seed` | Random seed for deterministic output |
 | `frequency_penalty` | `frequency_penalty` | Penalize frequent tokens |
 | `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
-| `reasoning_budget` | `reasoning_budget` | Enable / disable reasoning for hybrid-thinking models (boolean) |
+| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not accept a numeric token budget. |
 
 #### Structured output (`response_format`)
 
@@ -1042,11 +1042,26 @@ Register an alias whose endpoint category is `video` using the virtual SDK type 
           "vaeModelSrc": "WAN_2_1_COMFYUI_REPACKAGED_VAE",
           "offload_to_cpu": true
         }
+      },
+      "wan-i2v": {
+        "src": "WAN2_1_I2V_14B_Q4_K_M",
+        "type": "sdcpp-video",
+        "preload": true,
+        "config": {
+          "t5XxlModelSrc": "UMT5_XXL_FP16",
+          "vaeModelSrc": "WAN_2_1_COMFYUI_REPACKAGED_VAE",
+          "clipVisionModelSrc": "CLIP_VISION_H",
+          "offload_to_cpu": true
+        }
       }
     }
   }
 }
 ```
+
+<Callout type="info">
+**img2vid needs a vision encoder.** Image-to-video (sending `input_reference`) only works on a model loaded with `clipVisionModelSrc` (OpenCLIP ViT-H/14) — e.g. the `wan-i2v` alias above (WAN 2.1 I2V). A txt2vid-only model such as `wan-t2v` cannot animate a reference image.
+</Callout>
 
 Clients select the model by passing the alias key (or its `src` string) in the request `model` field. There is no separate videos aliasing block — to be a drop-in for OpenAI SDK clients (`client.videos.create(...)`, which defaults to `model: "sora-2"`), name the alias after the OpenAI model the client sends (e.g. `"sora-2"`).
 
@@ -1055,6 +1070,8 @@ Clients select the model by passing the alias key (or its `src` string) in the r
 Create a generation job. Accepts `application/json` (txt2vid or img2vid via `{ image_url }` / `{ file_id }`) **or** `multipart/form-data` (img2vid via a binary `input_reference` file field — this is what the OpenAI SDK sends when given a local `File`/`Blob`).
 
 Returns `200` with the `Video` resource at `status: "queued"`.
+
+**Text-to-video (txt2vid)** — JSON body with `prompt`, no reference image:
 
 ```bash
 curl http://localhost:11434/v1/videos \
@@ -1070,6 +1087,45 @@ curl http://localhost:11434/v1/videos \
     "flow_shift": 3.0,
     "negative_prompt": "blurry, low quality, static",
     "seed": 42
+  }'
+```
+
+**Image-to-video (img2vid)** — animate a reference image. Supply `input_reference` in any of three forms (the job switches to img2vid mode automatically). Use a model whose weights include a vision encoder, e.g. WAN 2.1 I2V (`clipVisionModelSrc`).
+
+Multipart file field (what the OpenAI SDK sends for a local `File`/`Blob`):
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -F "model=wan-i2v" \
+  -F "prompt=the cat slowly turns its head and blinks" \
+  -F "input_reference=@cat.png" \
+  -F "strength=0.6" \
+  -F "size=480x832" \
+  -F "seconds=2"
+```
+
+JSON with a base64 data URI or HTTP(S) URL (≤ 100 MB, 30 s fetch timeout):
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan-i2v",
+    "prompt": "the cat slowly turns its head and blinks",
+    "input_reference": { "image_url": "data:image/png;base64,iVBORw0KGgo..." },
+    "strength": 0.6
+  }'
+```
+
+JSON referencing a file previously uploaded via `POST /v1/files`:
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan-i2v",
+    "prompt": "the cat slowly turns its head and blinks",
+    "input_reference": { "file_id": "file-abc123" }
   }'
 ```
 
@@ -1165,10 +1221,12 @@ Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
 | HTTP | `error.code` | When |
 | --- | --- | --- |
 | 400 | `missing_prompt` / `missing_model` | Required field absent. |
-| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 8. |
+| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 16. |
 | 400 | `invalid_seconds` | `seconds` is not a positive-integer string. |
-| 400 | `unsupported_param` | `input_reference` (image-to-video) was sent. |
+| 400 | `invalid_input_reference` | `input_reference` was sent but the image could not be resolved (malformed data URI, invalid base64, unknown `file_id`, fetch failure, or larger than 100 MB). |
+| 400 | `invalid_strength` | `strength` is not a number in `[0, 1]`. |
 | 400 | `invalid_model_type` | Alias is not a `video` model. |
+| 404 | `model_not_found` | `model` alias is not declared under `serve.models`. |
 | 404 | `video_not_found` | Unknown job id. |
 | 409 | `video_not_ready` | `/content` requested before the job is `completed` (response carries `Retry-After`). |
 | 409 | `video_failed` | Generation failed. |

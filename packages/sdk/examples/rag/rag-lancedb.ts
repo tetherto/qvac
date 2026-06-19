@@ -6,13 +6,16 @@ try {
   // Get query from command line or use default
   const query = process.argv[2] || "machine learning algorithms";
 
-  console.log(`🔍 Query: "${query}"`);
+  console.log(`▸ Query: "${query}"`);
 
   const db = await lancedb.connect(".rag-lancedb");
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    onProgress: (progress) => {
-      console.log(`Loading model... ${progress.percentage.toFixed(1)}%`);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
@@ -64,12 +67,12 @@ try {
   try {
     await db.dropTable("documents");
   } catch (e) {
-    console.warn(`Table doesn't exist, no need to drop: ${String(e)}`);
+    console.warn(`▸ Table doesn't exist, no need to drop: ${String(e)}`);
   }
 
   const documentsTable = await db.createEmptyTable("documents", schema);
 
-  console.log("📚 Embedding documents...");
+  console.log("▸ Embedding documents...");
   const documents = [];
   for (const sample of samples) {
     const { embedding } = await embed({ modelId, text: sample.text });
@@ -83,7 +86,7 @@ try {
 
   await documentsTable.add(documents);
 
-  console.log("🔎 Searching for similar documents...");
+  console.log("▸ Searching for similar documents...");
   const { embedding: queryEmbedding } = await embed({ modelId, text: query });
   const results = (await documentsTable
     .vectorSearch(queryEmbedding)
@@ -95,7 +98,7 @@ try {
     _distance: number;
   }[];
 
-  console.log("\n📋 Top 3 most similar documents:");
+  console.log("\n▸ Top 3 most similar documents:");
   results.forEach((result, index) => {
     console.log("=".repeat(50) + " Top result:");
     console.log(`\n${index + 1}. (Score: ${result._distance?.toFixed(4)})`);
@@ -106,6 +109,6 @@ try {
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

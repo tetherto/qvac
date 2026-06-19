@@ -33,12 +33,17 @@ try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
     modelConfig: { ctx_size: 4096 },
-    onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`✅ Model loaded: ${modelId}\n`);
+  console.log(`▸ Model loaded: ${modelId}\n`);
 
   // --- Case 1: natural EOS ---
-  console.log("=== Case 1: natural EOS (no predict limit) ===");
+  console.log("▸ Case 1: natural EOS (no predict limit)");
   const run1 = completion({
     modelId,
     history: [{ role: "user", content: "Say hi in one word." }],
@@ -48,10 +53,10 @@ try {
     if (event.type === "contentDelta") process.stdout.write(event.text);
   }
   const final1 = await run1.final;
-  console.log(`\nstopReason: ${final1.stopReason ?? "(undefined — natural EOS)"}`);
+  console.log(`\n▸ stopReason: ${final1.stopReason ?? "(undefined — natural EOS)"}`);
 
   // --- Case 2: predict budget exhausted → stopReason = "length" ---
-  console.log("\n=== Case 2: predict budget hit (predict: 10) ===");
+  console.log("\n▸ Case 2: predict budget hit (predict: 10)");
   const run2 = completion({
     modelId,
     history: [{ role: "user", content: "Count from 1 to 100, one number per line." }],
@@ -62,11 +67,11 @@ try {
     if (event.type === "contentDelta") process.stdout.write(event.text);
   }
   const final2 = await run2.final;
-  console.log(`\nstopReason: ${final2.stopReason}`);
+  console.log(`\n▸ stopReason: ${final2.stopReason}`);
 
   await unloadModel({ modelId, clearStorage: false });
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
