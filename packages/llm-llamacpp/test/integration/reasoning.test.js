@@ -58,8 +58,8 @@ async function setupReasoningModel (t, toolsEnabled) {
 }
 
 // Shared helper: Run a completion and collect response
-async function runCompletion (inference, messages, runOptions) {
-  const result = await inference.run(messages, runOptions)
+async function runCompletion (inference, messages) {
+  const result = await inference.run(messages)
   let response = ''
   await result
     .onUpdate(token => {
@@ -191,7 +191,7 @@ safeTest('Qwen3 reasoning-budget=0 disables thinking', {
     verbosity: '0'
   }
 
-  async function runOnce (extra, runOptions) {
+  async function runOnce (extra) {
     const inference = new LlmLlamacpp({
       files: { model: [modelPath] },
       config: { ...baseConfig, ...extra },
@@ -203,7 +203,7 @@ safeTest('Qwen3 reasoning-budget=0 disables thinking', {
         { role: 'system', content: 'You are a helpful assistant.' },
         { role: 'user', content: 'What is the capital of France? Answer in one word.' }
       ]
-      return await runCompletion(inference, messages, runOptions)
+      return await runCompletion(inference, messages)
     } finally {
       await inference.unload().catch(() => {})
     }
