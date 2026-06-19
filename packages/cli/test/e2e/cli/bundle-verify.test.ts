@@ -1,4 +1,5 @@
 import { describe, it } from 'node:test'
+import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { mkdir, symlink, access } from 'node:fs/promises'
@@ -17,7 +18,7 @@ async function exists (p: string): Promise<boolean> {
 }
 
 // A throwaway project with @qvac/sdk installed, the way a user's project looks.
-async function project (t: import('node:test').TestContext): Promise<string> {
+async function project (t: TestContext): Promise<string> {
   const dir = await tempDir(t, 'qvac-bundle-')
   await mkdir(join(dir, 'node_modules', '@qvac'), { recursive: true })
   await symlink(INSTALLED_SDK, join(dir, 'node_modules', '@qvac', 'sdk'))

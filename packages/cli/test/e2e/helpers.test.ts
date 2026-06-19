@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
 import { initSSE, sendSSE, endSSE } from '../../src/serve/lib/sse.js'
-import { collectSSE, multipart, assertError } from './helpers/http.js'
+import { collectSSE, multipart, assertError, type InjectResponse } from './helpers/http.js'
 
 // Harness self-tests. The SSE case confirms app.inject captures hijacked
 // reply.raw writes, so streaming routes can be tested in-process.
@@ -37,6 +37,6 @@ describe('e2e harness helpers', () => {
 
   it('assertError matches an OpenAI-style error envelope', () => {
     const fake = { json: () => ({ error: { code: 'missing_model', message: 'no model' } }), payload: '' }
-    assertError(fake as unknown as Parameters<typeof assertError>[0], 'missing_model')
+    assertError(fake as unknown as InjectResponse, 'missing_model')
   })
 })
