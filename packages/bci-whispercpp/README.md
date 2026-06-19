@@ -148,7 +148,7 @@ Both files are written to `models/` by default. All flags are optional:
 | `--last-window-layer` | `3` | Last encoder layer with windowed attention |
 | `--f32` | off | Use f32 for all tensors (avoids f16 precision loss, ~2x larger) |
 
-**Important:** Both files must be in the same directory at runtime. The C++ addon looks for `bci-embedder.bin` next to the GGML model file and will fail if it is missing.
+**Important:** Both files are required at runtime. Pass their paths via `files.model` and `files.embedder` (see [Usage](#usage)). They do not need to share a directory.
 
 ## Usage
 
@@ -162,7 +162,10 @@ const BCIWhispercpp = require('@qvac/bci-whispercpp')
 
 ```js
 const bci = new BCIWhispercpp({
-  files: { model: './models/ggml-bci-windowed.bin' },
+  files: {
+    model: './models/ggml-bci-windowed.bin',
+    embedder: './models/bci-embedder.bin'   // required — embedder weights
+  },
   opts: { stats: true }            // optional — surfaces runtime stats on response.stats
 }, {
   whisperConfig: { language: 'en', temperature: 0.0 },
@@ -171,7 +174,7 @@ const bci = new BCIWhispercpp({
 })
 ```
 
-> The companion `bci-embedder.bin` must sit next to `files.model`. The native addon resolves it by path and will fail to load otherwise.
+> Both `files.model` and `files.embedder` are required. They can live in any location — pass each path explicitly.
 
 ### 2. Load the model
 
@@ -299,7 +302,8 @@ new BCIWhispercpp(args, config)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `files.model` | string | **Required.** Path to BCI GGML model file (`bci-embedder.bin` must sit alongside it). |
+| `files.model` | string | **Required.** Path to BCI GGML model file. |
+| `files.embedder` | string | **Required.** Path to the embedder weights file. |
 | `logger` | object | Optional logger; wrapped in `@qvac/logging`. Defaults to a noop logger. |
 | `opts.stats` | boolean | When `true`, runtime stats are surfaced on `response.stats` for batch jobs. Default `false`. |
 

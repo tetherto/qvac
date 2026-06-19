@@ -57,6 +57,8 @@ class BCIWhispercpp {
    * @param {Object} args
    * @param {Object} args.files - local model file paths
    * @param {string} args.files.model - path to the BCI GGML model file
+   * @param {string} args.files.embedder - path to the embedder weights file
+   *   (required)
    * @param {Object} [args.logger] - optional logger instance
    * @param {Object} [args.opts] - optional options (e.g. { stats: true })
    * @param {Object} config - inference configuration
@@ -73,7 +75,14 @@ class BCIWhispercpp {
       })
     }
 
-    this._files = { model: files.model }
+    if (typeof files.embedder !== 'string' || files.embedder.length === 0) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
+        adds: 'files.embedder is required'
+      })
+    }
+
+    this._files = { model: files.model, embedder: files.embedder }
     this._config = config
     this.opts = opts
     this.logger = new QvacLogger(logger)
@@ -149,6 +158,13 @@ class BCIWhispercpp {
       })
     }
 
+    if (!fs.existsSync(this._files.embedder)) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
+        adds: this._files.embedder
+      })
+    }
+
     const whisperConfig = {
       language: 'en',
       n_threads: 0,
@@ -179,6 +195,10 @@ class BCIWhispercpp {
     if (this._config.bciConfig) {
       configurationParams.bciConfig = this._config.bciConfig
     }
+
+    // Path to the embedder weights file. The native side loads the embedder
+    // from this exact path; it is a required input alongside the GGML model.
+    configurationParams.embedderPath = this._files.embedder
 
     if (this.state.destroyed) {
       throw new QvacErrorAddonBCI({

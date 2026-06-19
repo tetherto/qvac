@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Changed
+
+- **Breaking:** `files.embedder` is now a required constructor input. The
+  embedder weights path is supplied explicitly from JS instead of being
+  derived from a hardcoded `bci-embedder.bin` filename in the native addon.
+  The path flows from JS (`files.embedder` → `configurationParams.embedderPath`)
+  down to `BCIModel::loadEmbedderIfNeeded()`. `files.model` and
+  `files.embedder` no longer need to share a directory. The native side
+  still falls back to resolving `bci-embedder.bin` next to the model when
+  no `embedderPath` is supplied (e.g. direct addon usage), but the public
+  `BCIWhispercpp` class always requires and forwards `files.embedder`.
+
+  Migration: add `embedder` to the `files` object:
+
+  ```js
+  // before
+  new BCIWhispercpp({ files: { model } }, config)
+  // after
+  new BCIWhispercpp({ files: { model, embedder } }, config)
+  ```
+
 ## [0.3.0]
 
 ### Changed
