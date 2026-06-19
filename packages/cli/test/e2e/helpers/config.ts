@@ -1,7 +1,7 @@
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { TestContext } from 'node:test'
+import { tempDir } from './tmp.js'
 
 // A config with a single non-preloaded model. Enough to exercise every
 // validation path (routing, schema, auth, CORS, 404/400) without loading
@@ -21,9 +21,8 @@ export const MODELLESS_CONFIG = {
 // Write a qvac.config.json into a throwaway dir and return its path as a
 // projectRoot. Cleanup is registered on the test context.
 export async function writeConfigDir (t: TestContext, config: unknown): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'qvac-cli-e2e-'))
+  const dir = await tempDir(t)
   await writeFile(join(dir, 'qvac.config.json'), JSON.stringify(config))
-  t.after(async () => { await rm(dir, { recursive: true, force: true }) })
   return dir
 }
 

@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { TestContext } from 'node:test'
 import { runCli } from '../helpers/cli.js'
+import { tempDir } from '../helpers/tmp.js'
 
 // Drives the lockfile-at-ref read → native classification → diff → exit-code
 // pipeline. A package is "native" when its package.json has addon: true.
@@ -16,8 +16,7 @@ function headSha (cwd: string): string {
   return execFileSync('git', ['rev-parse', 'HEAD'], { cwd }).toString().trim()
 }
 async function makeRepo (t: TestContext): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'qvac-verify-deps-'))
-  t.after(async () => { await rm(dir, { recursive: true, force: true }) })
+  const dir = await tempDir(t, 'qvac-verify-deps-')
   git(dir, ['init', '-q'])
   git(dir, ['config', 'user.email', 'e2e@example.invalid'])
   git(dir, ['config', 'user.name', 'e2e'])

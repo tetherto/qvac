@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
+import { tempDir } from '../helpers/tmp.js'
 
 // openai coverage is omitted — it needs network or a cached OpenAPI spec.
 describe('cli: openai spec', () => {
@@ -26,8 +26,7 @@ describe('cli: openai spec', () => {
   })
 
   it('-o writes the spec to a file instead of stdout', async (t) => {
-    const dir = await mkdtemp(join(tmpdir(), 'qvac-cli-openai-'))
-    t.after(async () => { await rm(dir, { recursive: true, force: true }) })
+    const dir = await tempDir(t, 'qvac-cli-openai-')
     const out = join(dir, 'openapi.json')
     const r = await runCli(['openai', 'spec', '-o', out])
     assert.equal(r.code, 0)

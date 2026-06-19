@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
-import { mkdtemp, mkdir, symlink, rm, access } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, symlink, access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
+import { tempDir } from '../helpers/tmp.js'
 
 // bundle sdk resolves @qvac/sdk from the project's node_modules and emits a
 // worker bundle + addons manifest; verify bundle then validates that bundle for
@@ -18,8 +18,7 @@ async function exists (p: string): Promise<boolean> {
 
 // A throwaway project with @qvac/sdk installed, the way a user's project looks.
 async function project (t: import('node:test').TestContext): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'qvac-bundle-'))
-  t.after(async () => { await rm(dir, { recursive: true, force: true }) })
+  const dir = await tempDir(t, 'qvac-bundle-')
   await mkdir(join(dir, 'node_modules', '@qvac'), { recursive: true })
   await symlink(INSTALLED_SDK, join(dir, 'node_modules', '@qvac', 'sdk'))
   return dir

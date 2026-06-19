@@ -1,15 +1,13 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { TestContext } from 'node:test'
 import { runCli } from '../helpers/cli.js'
+import { tempDir } from '../helpers/tmp.js'
 
 async function tmpProject (t: TestContext): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'qvac-cli-cmd-'))
-  t.after(async () => { await rm(dir, { recursive: true, force: true }) })
-  return dir
+  return tempDir(t, 'qvac-cli-cmd-')
 }
 
 describe('cli: version & help', () => {
