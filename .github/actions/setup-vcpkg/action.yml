@@ -63,11 +63,6 @@ runs:
       run: |
         echo "VCPKG_BUILD_TYPE=release" >> "$GITHUB_ENV"
         echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> "$GITHUB_ENV"
-        # TEMP (test/dl-fabric-176): cap build concurrency to test whether the
-        # qvac-fabric GGML_CPU_ALL_VARIANTS build's ~150 parallel -O3 compiles
-        # are exhausting runner RAM (swap thrash). If a capped build finishes in
-        # minutes instead of 6h, that confirms memory pressure. Revert after.
-        echo "VCPKG_MAX_CONCURRENCY=4" >> "$GITHUB_ENV"
 
     - name: Configure vcpkg binary sources
       shell: bash

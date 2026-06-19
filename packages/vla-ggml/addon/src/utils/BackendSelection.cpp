@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdlib>
 #include <filesystem>
 #include <mutex>
 #include <string>
@@ -17,48 +16,15 @@ void loadBackendsOnce(const std::string& backendsDir) {
   static std::once_flag sFlag;
   std::call_once(sFlag, [&backendsDir]() {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-    if (backendsDir.empty()) {
-      ggml_backend_load_all();
-      return;
-    }
-    std::filesystem::path p(backendsDir);
+    if (!backendsDir.empty()) {
+      std::filesystem::path p(backendsDir);
 #ifdef BACKENDS_SUBDIR
-    p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+      p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
 #endif
-    QLOG_IF(Priority::INFO, "Loading backends from: " + p.string());
-
-    // Debug/diagnostic: QVAC_VLA_CPU_VARIANT restricts which ggml-cpu
-    // microarch variant modules are loaded. ggml otherwise registers the
-    // highest-feature-scoring CPU variant as the CPU device; on Graviton/
-    // Neoverse-V1 that's the i8mm+SVE variant (armv8.6_2), which diverges
-    // numerically from the PyTorch reference on arm64 integration (cos ~0.77)
-    // while non-SVE variants match. Set e.g. QVAC_VLA_CPU_VARIANT=armv8.2 to
-    // force a lower variant. Non-CPU backends (Vulkan, etc.) are always loaded.
-    const char* variantFilter = std::getenv("QVAC_VLA_CPU_VARIANT");
-    if (variantFilter == nullptr || variantFilter[0] == '\0') {
+      QLOG_IF(Priority::INFO, "Loading backends from: " + p.string());
       ggml_backend_load_all_from_path(p.string().c_str());
-      return;
-    }
-    const std::string filter(variantFilter);
-    QLOG_IF(
-        Priority::WARNING,
-        "QVAC_VLA_CPU_VARIANT set — loading only CPU variants matching '" +
-            filter + "' (plus all non-CPU backends)");
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(p, ec)) {
-      const std::string fn = entry.path().filename().string();
-      if (fn.find(".so") == std::string::npos &&
-          fn.find(".dll") == std::string::npos &&
-          fn.find(".dylib") == std::string::npos) {
-        continue;
-      }
-      const bool isCpuVariant = fn.find("ggml-cpu-") != std::string::npos;
-      if (isCpuVariant && fn.find(filter) == std::string::npos) {
-        QLOG_IF(Priority::INFO, "  skip CPU variant: " + fn);
-        continue;
-      }
-      QLOG_IF(Priority::INFO, "  load backend: " + fn);
-      ggml_backend_load(entry.path().string().c_str());
+    } else {
+      ggml_backend_load_all();
     }
   });
 }
