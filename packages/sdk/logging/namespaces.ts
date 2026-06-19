@@ -7,5 +7,8 @@ export type AddonNamespace = CanonicalModelType | typeof RAG_NAMESPACE;
 // Reserved ID for SDK server logs
 export const SDK_LOG_ID = "__sdk__";
 
+// Reserved ID for the stream that receives all server-side logs
+export const SDK_ALL_LOG_ID = "__all__";
+
 // Namespace for all SDK server logs
 export const SDK_SERVER_NAMESPACE = "sdk:server";

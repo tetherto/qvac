@@ -2,6 +2,7 @@
   "android": {
     "perf": [
       "runDoctrClinicalChemistryTest",
+      "runDoctrWarmTest",
       "runDoctrCtScanTest",
       "runDoctrLabResultsTest",
       "runDoctrLiverFunctionTest"
@@ -15,15 +16,21 @@
       "runFullOcrSuiteTest"
     ],
     "regularB": [
+      "runAndroidOpenclTest",
       "runAndroidVulkanTest",
       "runBackendDeviceTest",
       "runBatchedRecognizerTest",
+      "runBiasBroadcastTest",
       "runCanvasSizeTest",
+      "runConv1x1MulmatTest",
+      "runCrnnBiasBroadcastTest",
+      "runDirectConvTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
       "runLargeImagesTest",
       "runLifecycleTest",
       "runOcrBasicTest",
+      "runOpenclBackendTest",
       "runParamValidationTest",
       "runPipelineTest",
       "runRunInternalOrderingTest"
@@ -47,12 +54,17 @@
     "regularB": [
       "runBackendDeviceTest",
       "runBatchedRecognizerTest",
+      "runBiasBroadcastTest",
       "runCanvasSizeTest",
+      "runConv1x1MulmatTest",
+      "runCrnnBiasBroadcastTest",
+      "runDirectConvTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
       "runLargeImagesTest",
       "runLifecycleTest",
       "runOcrBasicTest",
+      "runOpenclBackendTest",
       "runParamValidationTest",
       "runPipelineTest",
       "runRunInternalOrderingTest"

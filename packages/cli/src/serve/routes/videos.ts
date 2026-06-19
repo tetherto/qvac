@@ -3,6 +3,7 @@ import type { FastifyReply } from 'fastify'
 import { video, cancel } from '@qvac/sdk'
 import type { VideoClientParams } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
+import { multipartToBodyOptional } from '../lib/multipart.js'
 import { requireModel } from '../plugins/require-model.js'
 import {
   videosCreateBody,
@@ -12,7 +13,8 @@ import {
   videoIdParam,
   videosListQuery,
   videoContentQuery,
-  extractVideoCreateParams
+  extractVideoCreateParams,
+  InvalidVideoStrengthError
 } from '../schemas/videos.js'
 import type { VideoJob } from '../core/video-jobs-store.js'
 import { videoJobResource } from '../core/video-jobs-store.js'
@@ -21,11 +23,19 @@ import type { QvacContext } from '../lib/types.js'
 
 const descriptions = {
   create: `
-Async text-to-video. Returns immediately with \`status: queued\`; poll
+Async video generation. Returns immediately with \`status: queued\`; poll
 \`GET /v1/videos/{id}\` and fetch bytes from \`GET /v1/videos/{id}/content\`
-once \`status: completed\`. JSON body only — multipart isn't accepted because
-the only OpenAI use for it is \`input_reference\`, which this server rejects
-(no image-to-video in the SDK).
+once \`status: completed\`.
+
+**Text-to-video (txt2vid):** send a JSON body with \`prompt\`. No image needed.
+
+**Image-to-video (img2vid):** include \`input_reference\` as one of:
+- a multipart file field (OpenAI SDK \`Uploadable\` — the SDK sends this when you pass a local \`File\`/\`Blob\`)
+- JSON \`{ image_url }\` where \`image_url\` is a base64 data URI (\`data:image/...;base64,...\`) or an HTTP(S) URL (100 MB / 30 s limit)
+- JSON \`{ file_id }\` to reference a file uploaded via \`POST /v1/files\`
+
+Mode is inferred from the presence of \`input_reference\` — no explicit \`mode\` field needed.
+Add \`strength\` (0–1) to control divergence from the first frame.
 
 **Job store is in-memory only.** IDs and rendered bytes are lost on restart.
 `.trim(),
@@ -87,6 +97,102 @@ function tearDownJob (ctx: QvacContext, job: VideoJob): void {
 }
 
 export { tearDownJob }
+
+const MAX_IMAGE_BYTES = 100 * 1024 * 1024
+const FETCH_TIMEOUT_MS = 30_000
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/
+
+export async function resolveInputReferenceImage (
+  ref: { image_url?: string | undefined; file_id?: string | undefined },
+  ctx: QvacContext
+): Promise<Uint8Array> {
+  if (ref.file_id !== undefined) {
+    const record = ctx.ephemeralFiles.get(ref.file_id)
+    if (!record) {
+      throw new HttpError(400, 'invalid_input_reference',
+        `input_reference.file_id: file "${ref.file_id}" not found — upload the image via POST /v1/files first.`)
+    }
+    return new Uint8Array(record.data)
+  }
+
+  const url = ref.image_url!
+  if (url.startsWith('data:')) {
+    const commaIdx = url.indexOf(',')
+    if (commaIdx === -1) {
+      throw new HttpError(400, 'invalid_input_reference',
+        'input_reference.image_url: data URI is missing the comma separator.')
+    }
+    const header = url.slice(5, commaIdx)
+    if (!header.endsWith(';base64')) {
+      throw new HttpError(400, 'invalid_input_reference',
+        'input_reference.image_url: only base64-encoded data URIs are supported (e.g. data:image/jpeg;base64,...).')
+    }
+    const b64Data = url.slice(commaIdx + 1)
+    if (!BASE64_RE.test(b64Data)) {
+      throw new HttpError(400, 'invalid_input_reference',
+        'input_reference.image_url: data URI contains invalid base64 characters.')
+    }
+    const decoded = Buffer.from(b64Data, 'base64')
+    if (decoded.length === 0) {
+      throw new HttpError(400, 'invalid_input_reference',
+        'input_reference.image_url: data URI decoded to empty bytes.')
+    }
+    return new Uint8Array(decoded)
+  }
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    let res: Response
+    try {
+      res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+    } catch (err) {
+      const isTimeout = err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
+      if (isTimeout) {
+        throw new HttpError(400, 'invalid_input_reference',
+          `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`)
+      }
+      const message = err instanceof Error ? err.message : String(err)
+      throw new HttpError(400, 'invalid_input_reference',
+        `input_reference.image_url: failed to fetch image — ${message}`)
+    }
+    if (!res.ok) {
+      throw new HttpError(400, 'invalid_input_reference',
+        `input_reference.image_url: server returned HTTP ${res.status}.`)
+    }
+    const chunks: Uint8Array[] = []
+    let totalBytes = 0
+    const reader = res.body!.getReader()
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        totalBytes += value.length
+        if (totalBytes > MAX_IMAGE_BYTES) {
+          await reader.cancel()
+          throw new HttpError(400, 'invalid_input_reference',
+            `input_reference.image_url: image exceeds the ${MAX_IMAGE_BYTES / (1024 * 1024)} MB limit.`)
+        }
+        chunks.push(value)
+      }
+    } catch (err) {
+      if (err instanceof HttpError) throw err
+      const isTimeout = err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
+      throw new HttpError(400, 'invalid_input_reference',
+        isTimeout
+          ? `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`
+          : `input_reference.image_url: failed reading response body.`)
+    } finally {
+      reader.releaseLock()
+    }
+    const result = new Uint8Array(totalBytes)
+    let offset = 0
+    for (const chunk of chunks) {
+      result.set(chunk, offset)
+      offset += chunk.length
+    }
+    return result
+  }
+  throw new HttpError(400, 'invalid_input_reference',
+    'input_reference.image_url must be a base64 data URI or an HTTP(S) URL.')
+}
 
 async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClientParams, alias: string): Promise<void> {
   const store = ctx.videoJobsStore
@@ -281,13 +387,31 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       tags: ['Videos'],
       summary: 'Create a video generation job',
       description: descriptions.create,
+      consumes: ['application/json', 'multipart/form-data'],
       response: { 200: videoResource }
     },
+    preValidation: multipartToBodyOptional,
     preHandler: requireModel('video')
   }, async (req, reply) => {
     const ctx = app.qvac
     const { alias, sdkModelId } = req.qvacModel!
-    const params = extractVideoCreateParams(req.body, sdkModelId)
+    const inputRef = req.body.input_reference
+    let initImage: Uint8Array | undefined
+    if (inputRef instanceof Buffer) {
+      initImage = new Uint8Array(inputRef)
+    } else if (inputRef !== undefined) {
+      initImage = await resolveInputReferenceImage(
+        inputRef as { image_url?: string | undefined; file_id?: string | undefined },
+        ctx
+      )
+    }
+    let params: VideoClientParams
+    try {
+      params = extractVideoCreateParams(req.body, initImage, sdkModelId)
+    } catch (err) {
+      if (err instanceof InvalidVideoStrengthError) throw new HttpError(400, 'invalid_strength', err.message)
+      throw err
+    }
 
     const job = ctx.videoJobsStore.create({
       model: alias,

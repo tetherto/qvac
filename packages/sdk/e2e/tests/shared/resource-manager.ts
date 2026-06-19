@@ -1,5 +1,12 @@
 import { loadModel, downloadAsset, unloadModel, cancel } from "@qvac/sdk";
 import type { ModelConstant } from "@qvac/sdk";
+import {
+  resolveBootstrapDownloadConcurrency,
+  resolveBootstrapRetryConcurrency,
+  runBootstrapDownloads,
+  type BootstrapDownloadItem,
+  type BootstrapDownloadTarget,
+} from "./bootstrap-downloads.js";
 
 type ModelConfig = Record<string, unknown>;
 type ModelConfigResolver = () => Promise<ModelConfig>;
@@ -80,6 +87,7 @@ export interface ResourceManagerOptions {
    * Default 0 (off).
    */
   unloadSettleMs?: number;
+  downloadTarget?: BootstrapDownloadTarget;
 }
 
 export class ResourceManager {
@@ -89,9 +97,11 @@ export class ResourceManager {
   private testCount = 0;
   private downloaded = false;
   private readonly unloadSettleMs: number;
+  private readonly downloadTarget: BootstrapDownloadTarget;
 
   constructor(options: ResourceManagerOptions = {}) {
     this.unloadSettleMs = options.unloadSettleMs ?? 0;
+    this.downloadTarget = options.downloadTarget ?? "desktop";
   }
 
   private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
@@ -176,52 +186,37 @@ export class ResourceManager {
     }
 
     const downloadList = Array.from(constants.values());
+    const env = typeof process !== "undefined" ? process.env : {};
+    const concurrency = resolveBootstrapDownloadConcurrency(
+      env,
+      this.downloadTarget,
+    );
+    const retryConcurrency = resolveBootstrapRetryConcurrency(concurrency);
     log?.(
-      `📥 Pre-downloading ${downloadList.length} unique model constant(s) from ${contributors.length} def(s) in parallel...`,
+      `📥 Pre-downloading ${downloadList.length} unique model constant(s) from ${contributors.length} def(s) ` +
+      `(concurrency=${concurrency}, retryConcurrency=${retryConcurrency})...`,
     );
 
-    const active = new Set<string>();
-    let leftToCheck = downloadList.length;
-    let maxConcurrent = 0;
-    let parallelDetected = false;
-
-    const results = await Promise.allSettled(
-      downloadList.map(async (constant) => {
-        const ownerLabel = (owners.get(constant.modelId) ?? []).join(",") || "?";
-        log?.(`📥 ${constant.name} (used by: ${ownerLabel})...`);
+    const downloadItems: BootstrapDownloadItem[] = downloadList.map((constant) => ({
+      id: constant.modelId,
+      name: constant.name,
+      ownerLabel: (owners.get(constant.modelId) ?? []).join(",") || "?",
+      run: async () => {
         await downloadAsset({
           assetSrc: constant as never,
-          onProgress: () => {
-            active.add(constant.modelId);
-            if (active.size > maxConcurrent) {
-              maxConcurrent = active.size;
-            }
-            if (!parallelDetected && active.size >= 2) {
-              parallelDetected = true;
-              const names = Array.from(active)
-                .map((id) => constants.get(id)?.name ?? id)
-                .join(", ");
-              log?.(`🔀 Parallel downloads confirmed (active: ${names})`);
-            }
-          },
+          onProgress: () => {},
         });
-        active.delete(constant.modelId);
-        leftToCheck--;
-        log?.(`✅ ${constant.name} cached - still processing: ${leftToCheck}`);
-        return constant.modelId;
-      }),
-    );
+      },
+    }));
 
-    const failed = results.filter((r) => r.status === "rejected");
-    if (failed.length > 0) {
-      for (const f of failed) {
-        log?.(`❌ download failed: ${(f as PromiseRejectedResult).reason}`);
-      }
-      throw new Error(`${failed.length}/${downloadList.length} downloads failed`);
-    }
+    const result = await runBootstrapDownloads(downloadItems, {
+      concurrency,
+      retryConcurrency,
+      log,
+    });
 
     log?.(
-      `📦 All ${downloadList.length} constant(s) pre-cached (max concurrent: ${maxConcurrent})`,
+      `📦 All ${downloadList.length} constant(s) pre-cached (max concurrent: ${result.maxConcurrent})`,
     );
   }
 

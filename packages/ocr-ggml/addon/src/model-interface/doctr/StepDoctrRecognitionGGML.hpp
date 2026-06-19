@@ -27,10 +27,16 @@ public:
   // bidirectional LSTM + linear classifier run on (selected by `Pipeline` via
   // `ocr_backend_selection`). nullptr -> CPU device. The recurrent tail is a
   // batched ggml graph; set OCR_DOCTR_LSTM_CPU=1 to force the scalar CPU path.
+  //
+  // assistDevice: optional second ggml device that runs the feature extractor
+  // concurrently with `backendDevice` on disjoint crop chunks (work-stealing).
+  // Used on Mali, where the CPU is otherwise idle while the Vulkan recognizer
+  // computes; per-crop math is unchanged, only the executing backend differs.
   explicit StepDoctrRecognitionGGML(
       const std::string& pathRecognizer, int batchSize = DEFAULT_BATCH_SIZE,
       DecodingMethod decoding = DecodingMethod::CTC,
-      ggml_backend_dev_t backendDevice = nullptr, int nThreads = 0);
+      ggml_backend_dev_t backendDevice = nullptr, int nThreads = 0,
+      ggml_backend_dev_t assistDevice = nullptr, int assistBatchSize = 0);
   ~StepDoctrRecognitionGGML();
 
   StepDoctrRecognitionGGML(const StepDoctrRecognitionGGML&) = delete;
@@ -53,6 +59,8 @@ private:
 
   struct Impl;
   std::unique_ptr<Impl> impl_;
+  // Second feature-extractor instance on `assistDevice` (see constructor).
+  std::unique_ptr<Impl> assistImpl_;
 
   int batchSize_;
   DecodingMethod decodingMethod_;

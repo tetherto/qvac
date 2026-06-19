@@ -85,6 +85,8 @@ Third-Party Model Licenses
     https://huggingface.co/personalizedrefrigerator/whisper-base-fr
   fr-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-fr
+  gemma-4-E2B-it-GGUF
+    https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF
   ggml-bci-windowed
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/ggml-bci-windowed.bin
   google_gemma-4-31B-it-GGUF
@@ -115,6 +117,8 @@ Third-Party Model Licenses
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parseq
     https://github.com/felixdittrich92/OnnxTR
+  pi05-base-q-aggressive
+    https://huggingface.co/lerobot/pi05_base
   pt-base-ggml-model-f16
     https://huggingface.co/mariana-coelho-9/whisper-base-pt
   Qwen3-0.6B-GGUF
@@ -135,6 +139,8 @@ Third-Party Model Licenses
     https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
   Qwen3.5-0.8B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF
+  Qwen3.5-0.8B-GGUF
+    https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF
   Qwen3.5-2B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-2B-GGUF
   Qwen3.5-4B-GGUF
@@ -189,6 +195,10 @@ Third-Party Model Licenses
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
   Wan_2.1_ComfyUI_repackaged
     https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
+  Wan2.1-I2V-14B-480P-gguf
+    https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf
+  Wan2.1-I2V-14B-720P-gguf
+    https://huggingface.co/city96/Wan2.1-I2V-14B-720P-gguf
   Wan2.1-T2V-14B-gguf
     https://huggingface.co/city96/Wan2.1-T2V-14B-gguf
 
@@ -592,11 +602,6 @@ JavaScript Dependencies
   fb-dotslash@0.5.8
     https://github.com/facebook/dotslash
 
---- (mit AND bsd-3-clause) ---
-
-  sha.js@2.4.12
-    https://github.com/crypto-browserify/sha.js
-
 --- (mit AND cc0-1.0) ---
 
   type-fest@0.21.3
@@ -613,46 +618,44 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
-  @qvac/classification-ggml@0.2.1
+  @qvac/bci-whispercpp@0.2.0
     https://github.com/tetherto/qvac
-  @qvac/decoder-audio@0.3.7
+  @qvac/classification-ggml@0.3.1
+    https://github.com/tetherto/qvac
+  @qvac/decoder-audio@0.4.0
     https://github.com/tetherto/qvac
   @qvac/diagnostics@0.1.1
-  @qvac/diffusion-cpp@0.10.0
+  @qvac/diffusion-cpp@0.11.2
     https://github.com/tetherto/qvac
-  @qvac/dl-base@0.1.1
-  @qvac/dl-hyperdrive@0.1.1
-  @qvac/embed-llamacpp@0.17.1
+  @qvac/embed-llamacpp@0.19.1
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
-  @qvac/infer-base@0.1.1
-  @qvac/infer-base@0.4.1
+  @qvac/infer-base@0.4.2
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.22.1
+  @qvac/llm-llamacpp@0.24.0
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.0
-  @qvac/ocr-onnx@0.5.1
+  @qvac/ocr-onnx@0.6.0
     https://github.com/tetherto/qvac
   @qvac/onnx@0.15.0
     https://github.com/tetherto/qvac
-  @qvac/rag@0.6.2
+  @qvac/rag@0.6.4
     https://github.com/tetherto/qvac
   @qvac/registry-client@0.6.0
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
     https://github.com/tetherto/qvac
-  @qvac/response@0.1.2
-  @qvac/transcription-parakeet@0.6.0
+  @qvac/transcription-parakeet@0.7.2
     https://github.com/tetherto/qvac
-  @qvac/transcription-whispercpp@0.7.0
+  @qvac/transcription-whispercpp@0.9.1
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@4.0.1
+  @qvac/translation-nmtcpp@5.0.2
     https://github.com/tetherto/qvac
-  @qvac/tts-ggml@0.1.4
+  @qvac/tts-ggml@0.2.3
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.2.1
+  @qvac/vla-ggml@0.3.2
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
@@ -676,21 +679,19 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-bundle-id
   bare-channel@5.2.3
     https://github.com/holepunchto/bare-channel
-  bare-crypto@1.13.4
+  bare-crypto@1.15.3
     https://github.com/holepunchto/bare-crypto
   bare-dns@2.1.4
     https://github.com/holepunchto/bare-dns
   bare-env@3.0.0
     https://github.com/holepunchto/bare-env
-  bare-events@2.4.2
+  bare-events@2.9.1
     https://github.com/holepunchto/bare-events
-  bare-events@2.8.2
-    https://github.com/holepunchto/bare-events
-  bare-fetch@2.9.0
+  bare-fetch@3.0.1
     https://github.com/holepunchto/bare-fetch
   bare-ffmpeg@1.2.2
     https://github.com/holepunchto/bare-ffmpeg
-  bare-form-data@1.2.1
+  bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
   bare-fs@4.7.1
     https://github.com/holepunchto/bare-fs
@@ -700,7 +701,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-http-parser
   bare-http1@4.5.6
     https://github.com/holepunchto/bare-http1
-  bare-https@2.1.3
+  bare-https@3.0.0
     https://github.com/holepunchto/bare-https
   bare-inspect@3.1.4
     https://github.com/holepunchto/bare-inspect
@@ -710,27 +711,21 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
-  bare-module@6.2.0
-    https://github.com/holepunchto/bare-module
   bare-module-lexer@1.4.7
     https://github.com/holepunchto/bare-module-lexer
   bare-module-resolve@1.12.1
     https://github.com/holepunchto/bare-module-resolve
   bare-module-traverse@2.0.1
     https://github.com/holepunchto/bare-module-traverse
-  bare-net@2.3.1
+  bare-net@2.3.2
     https://github.com/holepunchto/bare-net
-  bare-node-stream@1.0.0
-    https://github.com/holepunchto/bare-node
-  bare-node-worker-threads@1.0.0
-    https://github.com/holepunchto/bare-node
-  bare-os@3.9.0
+  bare-os@3.9.1
     https://github.com/holepunchto/bare-os
   bare-pack@2.0.1
     https://github.com/holepunchto/bare-pack
-  bare-path@3.0.0
+  bare-path@3.0.1
     https://github.com/holepunchto/bare-path
-  bare-pipe@4.1.5
+  bare-pipe@4.2.2
     https://github.com/holepunchto/bare-pipe
   bare-process@4.4.1
     https://github.com/holepunchto/bare-process
@@ -752,11 +747,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-structured-clone
   bare-subprocess@5.2.3
     https://github.com/holepunchto/bare-subprocess
-  bare-tcp@2.2.12
+  bare-tcp@2.5.1
     https://github.com/holepunchto/bare-tcp
-  bare-thread@1.2.0
-    https://github.com/holepunchto/bare-thread
-  bare-tls@2.2.3
+  bare-tls@3.1.7
     https://github.com/holepunchto/bare-tls
   bare-tty@5.1.0
     https://github.com/holepunchto/bare-tty
@@ -764,8 +757,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-type
   bare-url@2.4.3
     https://github.com/holepunchto/bare-url
-  bare-worker@4.1.6
-    https://github.com/holepunchto/bare-worker
   bare-zlib@1.3.3
     https://github.com/holepunchto/bare-zlib
   baseline-browser-mapping@2.10.23
@@ -835,7 +826,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/paparam
   passive-core-watcher@1.0.1
     https://github.com/holepunchto/passive-core-watcher
-  pear-pipe@1.0.6
   qrcode-terminal@0.11.0
     https://github.com/gtanner/qrcode-terminal
   quickbit-native@2.4.8
@@ -846,8 +836,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/rabin-stream
   rache@1.0.0
     https://github.com/holepunchto/rache
-  react-native-bare-kit@0.14.1
-    https://github.com/holepunchto/react-native-bare-kit
   refcounter@1.0.0
     https://github.com/holepunchto/refcounter
   require-addon@1.2.0
@@ -910,8 +898,6 @@ JavaScript Dependencies
     https://github.com/motdotla/dotenv-expand
   fontfaceobserver@2.3.0
     https://github.com/bramstein/fontfaceobserver
-  json-schema-typed@8.0.2
-    https://github.com/RemyRylan/json-schema-typed
   regjsparser@0.13.1
     https://github.com/jviereck/regjsparser
   terser@5.46.2
@@ -927,14 +913,10 @@ JavaScript Dependencies
     https://github.com/facebook/react-native
   @react-native/debugger-frontend@0.85.2
     https://github.com/facebook/react-native
-  fast-uri@3.1.0
-    https://github.com/fastify/fast-uri
   ieee754@1.2.1
     https://github.com/feross/ieee754
   makeerror@1.0.12
     https://github.com/daaku/nodejs-makeerror
-  qs@6.15.1
-    https://github.com/ljharb/qs
   source-map@0.5.7
     https://github.com/mozilla/source-map
   source-map@0.6.1
@@ -959,8 +941,6 @@ JavaScript Dependencies
     https://github.com/ungap/structured-clone
   bits-to-bytes@1.3.0
     https://github.com/holepunchto/bits-to-bytes
-  browserify-sign@4.2.6
-    https://github.com/crypto-browserify/browserify-sign
   cliui@8.0.1
     https://github.com/yargs/cliui
   compact-encoding-bitfield@1.0.0
@@ -991,8 +971,6 @@ JavaScript Dependencies
     https://github.com/isaacs/node-lru-cache
   lru-cache@5.1.1
     https://github.com/isaacs/node-lru-cache
-  minimalistic-assert@1.0.1
-    https://github.com/calvinmetcalf/minimalistic-assert
   minimatch@3.1.5
     https://github.com/isaacs/minimatch
   minimatch@9.0.9
@@ -1005,8 +983,6 @@ JavaScript Dependencies
     https://github.com/npm/npm-package-arg
   once@1.4.0
     https://github.com/isaacs/once
-  parse-asn1@5.1.9
-    https://github.com/crypto-browserify/parse-asn1
   picocolors@1.1.1
     https://github.com/alexeyraspopov/picocolors
   proc-log@4.2.0
@@ -1039,8 +1015,6 @@ JavaScript Dependencies
     https://github.com/eemeli/yaml
   yargs-parser@21.1.1
     https://github.com/yargs/yargs-parser
-  zod-to-json-schema@3.25.2
-    https://github.com/StefanTerdell/zod-to-json-schema
 
 --- mit (MIT License) ---
 
@@ -1252,8 +1226,6 @@ JavaScript Dependencies
   @expo/vector-icons@15.1.1
     https://github.com/expo/vector-icons
   @expo/ws-tunnel@1.0.6
-  @hono/node-server@1.19.14
-    https://github.com/honojs/node-server
   @jest/schemas@29.6.3
     https://github.com/jestjs/jest
   @jest/types@29.6.3
@@ -1270,8 +1242,6 @@ JavaScript Dependencies
     https://github.com/jridgewell/sourcemaps
   @jridgewell/trace-mapping@0.3.31
     https://github.com/jridgewell/sourcemaps
-  @modelcontextprotocol/sdk@1.29.0
-    https://github.com/modelcontextprotocol/typescript-sdk
   @react-native/assets-registry@0.85.2
     https://github.com/facebook/react-native
   @react-native/babel-plugin-codegen@0.81.5
@@ -1334,10 +1304,6 @@ JavaScript Dependencies
     https://github.com/acornjs/acorn
   agent-base@7.1.4
     https://github.com/TooTallNate/proxy-agents
-  ajv@8.20.0
-    https://github.com/ajv-validator/ajv
-  ajv-formats@3.0.1
-    https://github.com/ajv-validator/ajv-formats
   anser@1.4.10
     https://github.com/IonicaBizau/anser
   ansi-escapes@4.3.2
@@ -1358,12 +1324,8 @@ JavaScript Dependencies
     https://github.com/vercel/arg
   asap@2.0.6
     https://github.com/kriskowal/asap
-  asn1.js@4.10.1
-    https://github.com/indutny/asn1.js
   async-limiter@1.0.1
     https://github.com/strml/async-limiter
-  available-typed-arrays@1.0.7
-    https://github.com/inspect-js/available-typed-arrays
   babel-plugin-polyfill-corejs2@0.4.17
     https://github.com/babel/babel-polyfills
   babel-plugin-polyfill-corejs3@0.13.0
@@ -1394,12 +1356,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/big-sparse-array
   binary-stream-equals@1.0.0
     https://github.com/mafintosh/binary-stream-equals
-  bn.js@4.12.3
-    https://github.com/indutny/bn.js
-  bn.js@5.2.3
-    https://github.com/indutny/bn.js
-  body-parser@2.2.2
-    https://github.com/expressjs/body-parser
   bogon@1.2.0
     https://github.com/mafintosh/bogon
   bplist-creator@0.1.0
@@ -1416,32 +1372,14 @@ JavaScript Dependencies
     https://github.com/juliangruber/brace-expansion
   braces@3.0.3
     https://github.com/micromatch/braces
-  brorand@1.1.0
-    https://github.com/indutny/brorand
-  browserify-aes@1.2.0
-    https://github.com/crypto-browserify/browserify-aes
-  browserify-cipher@1.0.1
-    https://github.com/crypto-browserify/browserify-cipher
-  browserify-des@1.0.2
-    https://github.com/crypto-browserify/browserify-des
-  browserify-rsa@4.1.1
-    https://github.com/crypto-browserify/browserify-rsa
   browserslist@4.28.2
     https://github.com/browserslist/browserslist
   buffer@5.7.1
     https://github.com/feross/buffer
   buffer-from@1.1.2
     https://github.com/LinusU/buffer-from
-  buffer-xor@1.0.3
-    https://github.com/crypto-browserify/buffer-xor
   bytes@3.1.2
     https://github.com/visionmedia/bytes.js
-  call-bind@1.0.9
-    https://github.com/ljharb/call-bind
-  call-bind-apply-helpers@1.0.2
-    https://github.com/ljharb/call-bind-apply-helpers
-  call-bound@1.0.4
-    https://github.com/ljharb/call-bound
   camelcase@6.3.0
     https://github.com/sindresorhus/camelcase
   chalk@2.4.2
@@ -1452,8 +1390,6 @@ JavaScript Dependencies
     https://github.com/watson/ci-info
   ci-info@3.9.0
     https://github.com/watson/ci-info
-  cipher-base@1.0.7
-    https://github.com/crypto-browserify/cipher-base
   cli-cursor@2.1.0
     https://github.com/sindresorhus/cli-cursor
   cli-spinners@2.9.2
@@ -1486,34 +1422,14 @@ JavaScript Dependencies
     https://github.com/substack/node-concat-map
   connect@3.7.0
     https://github.com/senchalabs/connect
-  content-disposition@1.1.0
-    https://github.com/jshttp/content-disposition
-  content-type@1.0.5
-    https://github.com/jshttp/content-type
   convert-source-map@2.0.0
     https://github.com/thlorenz/convert-source-map
-  cookie@0.7.2
-    https://github.com/jshttp/cookie
-  cookie-signature@1.2.2
-    https://github.com/visionmedia/node-cookie-signature
   core-js-compat@3.49.0
     https://github.com/zloirock/core-js
-  core-util-is@1.0.3
-    https://github.com/isaacs/core-util-is
   corestore@7.9.2
     https://github.com/holepunchto/corestore
-  cors@2.8.6
-    https://github.com/expressjs/cors
-  create-ecdh@4.0.4
-    https://github.com/crypto-browserify/createECDH
-  create-hash@1.2.0
-    https://github.com/crypto-browserify/createHash
-  create-hmac@1.1.7
-    https://github.com/crypto-browserify/createHmac
   cross-spawn@7.0.6
     https://github.com/moxystudio/node-cross-spawn
-  crypto-browserify@3.12.1
-    https://github.com/browserify/crypto-browserify
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
   debug@2.6.9
@@ -1528,26 +1444,16 @@ JavaScript Dependencies
     https://github.com/TehShrike/deepmerge
   defaults@1.0.4
     https://github.com/sindresorhus/node-defaults
-  define-data-property@1.1.4
-    https://github.com/ljharb/define-data-property
   define-lazy-prop@2.0.0
     https://github.com/sindresorhus/define-lazy-prop
   depd@2.0.0
     https://github.com/dougwilson/nodejs-depd
-  des.js@1.1.0
-    https://github.com/indutny/des.js
   destroy@1.2.0
     https://github.com/stream-utils/destroy
   dht-rpc@6.26.4
     https://github.com/holepunchto/dht-rpc
-  diffie-hellman@5.0.3
-    https://github.com/crypto-browserify/diffie-hellman
-  dunder-proto@1.0.1
-    https://github.com/es-shims/dunder-proto
   ee-first@1.1.1
     https://github.com/jonathanong/ee-first
-  elliptic@6.6.1
-    https://github.com/indutny/elliptic
   emoji-regex@8.0.0
     https://github.com/mathiasbynens/emoji-regex
   encodeurl@1.0.2
@@ -1558,12 +1464,8 @@ JavaScript Dependencies
     https://github.com/sindresorhus/env-editor
   error-stack-parser@2.1.4
     https://github.com/stacktracejs/error-stack-parser
-  es-define-property@1.0.1
-    https://github.com/ljharb/es-define-property
   es-errors@1.3.0
     https://github.com/ljharb/es-errors
-  es-object-atoms@1.1.1
-    https://github.com/ljharb/es-object-atoms
   escalade@3.2.0
     https://github.com/lukeed/escalade
   escape-html@1.0.3
@@ -1576,21 +1478,11 @@ JavaScript Dependencies
     https://github.com/jshttp/etag
   event-target-shim@5.0.1
     https://github.com/mysticatea/event-target-shim
-  eventsource@3.0.7
-    git://git@github.com/EventSource/eventsource
-  eventsource-parser@3.0.8
-    https://github.com/rexxars/eventsource-parser
-  evp_bytestokey@1.0.3
-    https://github.com/crypto-browserify/EVP_BytesToKey
   expo@54.0.34
     https://github.com/expo/expo
   expo-asset@12.0.13
     https://github.com/expo/expo
-  expo-build-properties@0.12.5
-    https://github.com/expo/expo
   expo-constants@18.0.13
-    https://github.com/expo/expo
-  expo-device@8.0.10
     https://github.com/expo/expo
   expo-file-system@19.0.22
     https://github.com/expo/expo
@@ -1604,12 +1496,6 @@ JavaScript Dependencies
     https://github.com/expo/expo
   expo-server@1.0.6
     https://github.com/expo/expo
-  express@5.2.1
-    https://github.com/expressjs/express
-  express-rate-limit@8.4.1
-    https://github.com/express-rate-limit/express-rate-limit
-  fast-deep-equal@3.1.3
-    https://github.com/epoberezkin/fast-deep-equal
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
   fast-safe-stringify@2.1.1
@@ -1620,21 +1506,13 @@ JavaScript Dependencies
     https://github.com/jonschlinkert/fill-range
   finalhandler@1.1.2
     https://github.com/pillarjs/finalhandler
-  finalhandler@2.1.1
-    https://github.com/pillarjs/finalhandler
   flat-tree@1.13.0
     https://github.com/mafintosh/flat-tree
   flow-enums-runtime@0.0.6
     https://github.com/facebook/flow
-  for-each@0.3.5
-    https://github.com/Raynos/for-each
-  forwarded@0.2.0
-    https://github.com/jshttp/forwarded
   freeport-async@2.0.0
     https://github.com/expo/freeport-async
   fresh@0.5.2
-    https://github.com/jshttp/fresh
-  fresh@2.0.0
     https://github.com/jshttp/fresh
   function-bind@1.1.2
     https://github.com/Raynos/function-bind
@@ -1644,30 +1522,12 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   gensync@1.0.0-beta.2
     https://github.com/loganfsmyth/gensync
-  get-intrinsic@1.3.0
-    https://github.com/ljharb/get-intrinsic
-  get-proto@1.0.1
-    https://github.com/ljharb/get-proto
   getenv@2.0.0
     https://github.com/ctavan/node-getenv
-  gopd@1.2.0
-    https://github.com/ljharb/gopd
   has-flag@3.0.0
     https://github.com/sindresorhus/has-flag
   has-flag@4.0.0
     https://github.com/sindresorhus/has-flag
-  has-property-descriptors@1.0.2
-    https://github.com/inspect-js/has-property-descriptors
-  has-symbols@1.1.0
-    https://github.com/inspect-js/has-symbols
-  has-tostringtag@1.0.2
-    https://github.com/inspect-js/has-tostringtag
-  hash-base@3.0.5
-    https://github.com/crypto-browserify/hash-base
-  hash-base@3.1.2
-    https://github.com/crypto-browserify/hash-base
-  hash.js@1.1.7
-    https://github.com/indutny/hash.js
   hasown@2.0.3
     https://github.com/inspect-js/hasOwn
   hermes-compiler@250829098.0.10
@@ -1688,10 +1548,6 @@ JavaScript Dependencies
     https://github.com/facebook/hermes
   hermes-parser@0.35.0
     https://github.com/facebook/hermes
-  hmac-drbg@1.0.1
-    https://github.com/indutny/hmac-drbg
-  hono@4.12.15
-    https://github.com/honojs/hono
   http-errors@2.0.1
     https://github.com/jshttp/http-errors
   https-proxy-agent@7.0.6
@@ -1706,20 +1562,12 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.0
     https://github.com/holepunchto/hyperswarm
-  iconv-lite@0.7.2
-    https://github.com/pillarjs/iconv-lite
   ignore@5.3.2
     https://github.com/kaelzhang/node-ignore
   image-size@1.2.1
     https://github.com/image-size/image-size
   invariant@2.2.4
     https://github.com/zertosh/invariant
-  ip-address@10.1.0
-    https://github.com/beaugunderson/ip-address
-  ipaddr.js@1.9.1
-    https://github.com/whitequark/ipaddr.js
-  is-callable@1.2.7
-    https://github.com/inspect-js/is-callable
   is-core-module@2.16.1
     https://github.com/inspect-js/is-core-module
   is-docker@2.2.1
@@ -1730,18 +1578,10 @@ JavaScript Dependencies
     https://github.com/jonschlinkert/is-number
   is-options@1.0.2
     https://github.com/mafintosh/is-options
-  is-promise@4.0.0
-    https://github.com/then/is-promise
   is-property@1.0.2
     https://github.com/mikolalysenko/is-property
-  is-typed-array@1.1.15
-    https://github.com/inspect-js/is-typed-array
   is-wsl@2.2.0
     https://github.com/sindresorhus/is-wsl
-  isarray@1.0.0
-    https://github.com/juliangruber/isarray
-  isarray@2.0.5
-    https://github.com/juliangruber/isarray
   jest-get-type@29.6.3
     https://github.com/jestjs/jest
   jest-util@29.7.0
@@ -1752,16 +1592,12 @@ JavaScript Dependencies
     https://github.com/jestjs/jest
   jimp-compact@0.16.1
     https://github.com/nuxt-community/jimp-compact
-  jose@6.2.3
-    https://github.com/panva/jose
   js-tokens@4.0.0
     https://github.com/lydell/js-tokens
   js-yaml@4.1.1
     https://github.com/nodeca/js-yaml
   jsesc@3.1.0
     https://github.com/mathiasbynens/jsesc
-  json-schema-traverse@1.0.0
-    https://github.com/epoberezkin/json-schema-traverse
   json5@2.2.3
     https://github.com/json5/json5
   kademlia-routing-table@1.0.6
@@ -1784,16 +1620,8 @@ JavaScript Dependencies
     https://github.com/sindresorhus/log-symbols
   loose-envify@1.4.0
     https://github.com/zertosh/loose-envify
-  math-intrinsics@1.1.0
-    https://github.com/es-shims/math-intrinsics
-  md5.js@1.3.5
-    https://github.com/crypto-browserify/md5.js
-  media-typer@1.1.0
-    https://github.com/jshttp/media-typer
   memoize-one@5.2.1
     https://github.com/alexreardon/memoize-one
-  merge-descriptors@2.0.0
-    https://github.com/sindresorhus/merge-descriptors
   merge-stream@2.0.0
     https://github.com/grncdr/merge-stream
   metro@0.83.3
@@ -1854,8 +1682,6 @@ JavaScript Dependencies
     https://github.com/facebook/metro
   micromatch@4.0.8
     https://github.com/micromatch/micromatch
-  miller-rabin@4.0.1
-    https://github.com/indutny/miller-rabin
   mime@1.6.0
     https://github.com/broofa/node-mime
   mime-db@1.52.0
@@ -1868,8 +1694,6 @@ JavaScript Dependencies
     https://github.com/jshttp/mime-types
   mimic-fn@1.2.0
     https://github.com/sindresorhus/mimic-fn
-  minimalistic-crypto-utils@1.0.1
-    https://github.com/indutny/minimalistic-crypto-utils
   minimist@1.2.8
     https://github.com/minimistjs/minimist
   minizlib@3.1.0
@@ -1908,8 +1732,6 @@ JavaScript Dependencies
     https://github.com/facebook/metro
   object-assign@4.1.1
     https://github.com/sindresorhus/object-assign
-  object-inspect@1.13.4
-    https://github.com/inspect-js/object-inspect
   on-finished@2.3.0
     https://github.com/jshttp/on-finished
   on-finished@2.4.1
@@ -1936,32 +1758,22 @@ JavaScript Dependencies
     https://github.com/sindresorhus/path-key
   path-parse@1.0.7
     https://github.com/jbgutierrez/path-parse
-  path-to-regexp@8.4.2
-    https://github.com/pillarjs/path-to-regexp
-  pbkdf2@3.1.6
-    https://github.com/browserify/pbkdf2
   picomatch@2.3.2
     https://github.com/micromatch/picomatch
   picomatch@4.0.4
     https://github.com/micromatch/picomatch
   pirates@4.0.7
     https://github.com/danez/pirates
-  pkce-challenge@5.0.1
-    https://github.com/crouchcd/pkce-challenge
   plist@3.1.1
     https://github.com/TooTallNate/node-plist
   pngjs@3.4.0
     https://github.com/lukeapage/pngjs2
-  possible-typed-array-names@1.1.0
-    https://github.com/ljharb/possible-typed-array-names
   postcss@8.4.49
     https://github.com/postcss/postcss
   pretty-bytes@5.6.0
     https://github.com/sindresorhus/pretty-bytes
   pretty-format@29.7.0
     https://github.com/jestjs/jest
-  process-nextick-args@2.0.1
-    https://github.com/calvinmetcalf/process-nextick-args
   progress@2.0.3
     https://github.com/visionmedia/node-progress
   promaphore@1.0.0
@@ -1974,10 +1786,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/protocol-buffers-encodings
   protomux@3.10.3
     https://github.com/holepunchto/protomux
-  proxy-addr@2.0.7
-    https://github.com/jshttp/proxy-addr
-  public-encrypt@4.0.3
-    https://github.com/crypto-browserify/publicEncrypt
   punycode@2.3.1
     https://github.com/mathiasbynens/punycode.js
   queue@6.0.2
@@ -1986,14 +1794,8 @@ JavaScript Dependencies
     https://github.com/mafintosh/queue-tick
   random-array-iterator@1.0.0
     https://github.com/mafintosh/random-array-iterator
-  randombytes@2.1.0
-    https://github.com/crypto-browserify/randombytes
-  randomfill@1.0.4
-    https://github.com/crypto-browserify/randomfill
   range-parser@1.2.1
     https://github.com/jshttp/range-parser
-  raw-body@3.0.2
-    https://github.com/stream-utils/raw-body
   react@19.2.5
     https://github.com/facebook/react
   react-devtools-core@6.1.5
@@ -2004,8 +1806,6 @@ JavaScript Dependencies
     https://github.com/facebook/react-native
   react-refresh@0.14.2
     https://github.com/facebook/react
-  readable-stream@2.3.8
-    https://github.com/nodejs/readable-stream
   ready-resource@1.2.0
     https://github.com/holepunchto/ready-resource
   record-cache@1.2.0
@@ -2040,16 +1840,8 @@ JavaScript Dependencies
     https://github.com/lukeed/resolve.exports
   restore-cursor@2.0.0
     https://github.com/sindresorhus/restore-cursor
-  ripemd160@2.0.3
-    https://github.com/crypto-browserify/ripemd160
-  router@2.2.0
-    https://github.com/pillarjs/router
-  safe-buffer@5.1.2
-    https://github.com/feross/safe-buffer
   safe-buffer@5.2.1
     https://github.com/feross/safe-buffer
-  safer-buffer@2.1.2
-    https://github.com/ChALkeR/safer-buffer
   safety-catch@1.0.3
     https://github.com/mafintosh/safety-catch
   same-data@1.0.0
@@ -2058,16 +1850,10 @@ JavaScript Dependencies
     https://github.com/facebook/react
   send@0.19.2
     https://github.com/pillarjs/send
-  send@1.2.1
-    https://github.com/pillarjs/send
   serialize-error@2.1.0
     https://github.com/sindresorhus/serialize-error
   serve-static@1.16.3
     https://github.com/expressjs/serve-static
-  serve-static@2.2.1
-    https://github.com/expressjs/serve-static
-  set-function-length@1.2.2
-    https://github.com/ljharb/set-function-length
   shebang-command@2.0.0
     https://github.com/kevva/shebang-command
   shebang-regex@3.0.0
@@ -2076,14 +1862,6 @@ JavaScript Dependencies
     https://github.com/ljharb/shell-quote
   shuffled-priority-queue@2.1.0
     https://github.com/mafintosh/shuffled-priority-queue
-  side-channel@1.1.0
-    https://github.com/ljharb/side-channel
-  side-channel-list@1.0.1
-    https://github.com/ljharb/side-channel-list
-  side-channel-map@1.0.1
-    https://github.com/ljharb/side-channel-map
-  side-channel-weakmap@1.0.2
-    https://github.com/ljharb/side-channel-weakmap
   signal-promise@1.0.3
     https://github.com/mafintosh/signal-promise
   signed-varint@2.0.1
@@ -2116,8 +1894,6 @@ JavaScript Dependencies
     https://github.com/jshttp/statuses
   streamx@2.25.0
     https://github.com/mafintosh/streamx
-  string_decoder@1.1.1
-    https://github.com/nodejs/string_decoder
   string-width@4.2.3
     https://github.com/sindresorhus/string-width
   strip-ansi@5.2.0
@@ -2146,8 +1922,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/teex
   terminal-link@2.1.1
     https://github.com/sindresorhus/terminal-link
-  test-tmp@1.4.0
-    https://github.com/mafintosh/test-tmp
   thenify@3.3.1
     https://github.com/thenables/thenify
   thenify-all@1.6.0
@@ -2164,18 +1938,10 @@ JavaScript Dependencies
     https://github.com/SuperchupuDev/tinyglobby
   tinyld@1.3.4
     https://github.com/komodojp/tinyld
-  to-buffer@1.2.2
-    https://github.com/browserify/to-buffer
   to-regex-range@5.0.1
     https://github.com/micromatch/to-regex-range
   toidentifier@1.0.1
     https://github.com/component/toidentifier
-  type-is@2.0.1
-    https://github.com/jshttp/type-is
-  typed-array-buffer@1.0.3
-    https://github.com/inspect-js/typed-array-buffer
-  ua-parser-js@0.7.41
-    https://github.com/faisalman/ua-parser-js
   undici@6.25.0
     https://github.com/nodejs/undici
   undici-types@7.16.0
@@ -2196,8 +1962,6 @@ JavaScript Dependencies
     https://github.com/stream-utils/unpipe
   update-browserslist-db@1.2.3
     https://github.com/browserslist/update-db
-  util-deprecate@1.0.2
-    https://github.com/TooTallNate/util-deprecate
   utils-merge@1.0.1
     https://github.com/jaredhanson/utils-merge
   uuid@7.0.3
@@ -2214,8 +1978,6 @@ JavaScript Dependencies
     https://github.com/github/fetch
   whatwg-url-without-unicode@8.0.0-3
     https://github.com/charpeni/whatwg-url
-  which-typed-array@1.1.20
-    https://github.com/inspect-js/which-typed-array
   wonka@6.3.6
     https://github.com/0no-co/wonka
   wrap-ansi@7.0.0

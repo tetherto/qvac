@@ -202,7 +202,7 @@ test("loadModelOptionsBaseSchema: accepts classification alias", (t) => {
 test("loadModelOptionsBaseSchema: accepts classification with custom modelSrc", (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
     modelSrc: "/abs/path/to/my-classifier.gguf",
-    modelType: "classification",
+    modelType: "ggml-classification",
     modelConfig: { topK: 3 },
   });
   t.is(result.success, true);
@@ -210,7 +210,7 @@ test("loadModelOptionsBaseSchema: accepts classification with custom modelSrc", 
 
 test("loadModelOptionsBaseSchema: rejects classification config with unknown key (strict)", (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
-    modelType: "classification",
+    modelType: "ggml-classification",
     modelConfig: { topK: 3, unknownKey: true },
   });
   t.is(result.success, false);

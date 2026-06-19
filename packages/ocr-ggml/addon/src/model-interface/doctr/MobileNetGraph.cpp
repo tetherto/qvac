@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <sstream>
@@ -18,6 +19,7 @@
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 
+#include "model-interface/OcrBackendSelection.hpp"
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
@@ -162,6 +164,57 @@ struct ggml_tensor* applyFoldedBn(
   return ggml_add(ctx, scaled, shift);
 }
 
+// DocTR regular convs can run via the DIRECT (fused, dedicated-kernel)
+// convolution or the default im2col + mul_mat lowering. On the Adreno OpenCL
+// backend the direct ggml-opencl conv2d kernel is markedly faster than the
+// im2col f16xf16 GEMV (detection ~1.35s -> ~0.5-0.85s) at identical accuracy;
+// on Metal the im2col path is faster, so the default is backend-aware (see
+// resolveDirectConv). Depthwise stays on ggml_conv_2d_dw_direct.
+struct ggml_tensor* doctrConv2d(
+    struct ggml_context* ctx, struct ggml_tensor* w, struct ggml_tensor* x,
+    int s0, int s1, int p0, int p1, int d0, int d1, bool useDirect) {
+  if (useDirect) {
+    return ggml_conv_2d_direct(ctx, w, x, s0, s1, p0, p1, d0, d1);
+  }
+  return ggml_conv_2d(ctx, w, x, s0, s1, p0, p1, d0, d1);
+}
+
+// Resolve whether the DocTR graph uses the direct regular-conv path. Default
+// from the backend: ON for OpenCL (Adreno, where the direct kernel is fast and
+// validated), OFF otherwise (im2col — unchanged on CPU/Vulkan/Metal). Env
+// OCR_DOCTR_FUSED_CONV overrides ("1" on, "0" off) for A/B testing.
+bool resolveDirectConv(const char* envName, bool backendDefault) {
+  const char* e = std::getenv(envName);
+  if (e != nullptr && (e[0] == '0' || e[0] == '1') && e[1] == '\0') {
+    return e[0] == '1';
+  }
+  return backendDefault;
+}
+
+// True when the graph's compute backend is ggml's OpenCL backend (Adreno).
+bool graphBackendIsOpenCl(const std::vector<ggml_backend_t>& backends) {
+  if (backends.empty() || backends[0] == nullptr) {
+    return false;
+  }
+  const char* name = ggml_backend_name(backends[0]);
+  return name != nullptr &&
+         qvac_lib_infer_ocr_ggml::ocr_backend_selection::isOpenCLBackendName(
+             name);
+}
+
+// True when the graph's compute backend is ggml's Vulkan backend (Mali). The
+// fused GGML_OP_CONV_2D kernel avoids the per-conv im2col dispatch that is
+// pathologically slow on Mali, so DocTR uses the direct path on Vulkan too.
+bool graphBackendIsVulkan(const std::vector<ggml_backend_t>& backends) {
+  if (backends.empty() || backends[0] == nullptr) {
+    return false;
+  }
+  const char* name = ggml_backend_name(backends[0]);
+  return name != nullptr &&
+         qvac_lib_infer_ocr_ggml::ocr_backend_selection::isVulkanBackendName(
+             name);
+}
+
 struct GraphBuilder {
   struct ggml_context* ctx;
   // GraphBuilder is a stateless one-shot helper that never outlives its
@@ -169,6 +222,13 @@ struct GraphBuilder {
   // graph build.
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
+
+  // Resolved once per graph build (see buildGraph): use the direct
+  // (fused GGML_OP_CONV_2D) regular-conv kernel instead of im2col + mul_mat.
+  // On for OpenCL (Adreno) and Vulkan (Mali) by default. The fused path avoids
+  // materialising the im2col buffer; on Metal the tuned GEMM keeps im2col
+  // faster, so it stays off there.
+  bool useDirectConv = false;
 
   [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
     auto it = w.find(name);
@@ -192,19 +252,20 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
-    // NOTE: ggml_conv_2d_direct (fused GGML_OP_CONV_2D) measured ~2x SLOWER
-    // than im2col + mul_mat on Metal — the matmul path rides the tuned GEMM
-    // kernel.
-    struct ggml_tensor* conv =
-        ggml_conv_2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
-
-    struct ggml_tensor* bn = applyFoldedBn(
-        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
+    // Backend-aware: direct (fused) conv on OpenCL (Adreno) and Vulkan (Mali),
+    // im2col + mul_mat elsewhere. ggml_conv_2d_direct is ~2x SLOWER than
+    // im2col on Metal (the matmul rides the tuned GEMM), but much faster than
+    // the im2col f16xf16 GEMV on Adreno and avoids Mali's per-conv im2col
+    // dispatch — so the choice follows useDirectConv.
+    struct ggml_tensor* conv = doctrConv2d(
+        ctx, kernelT, x, stride, stride, pad, pad, 1, 1, useDirectConv);
+    // BN scale folded into the conv weights at load time; `.shift` carries the
+    // combined (conv bias + BN shift) offset. One add instead of add+mul+add.
+    conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
     if (!activate) {
-      return bn;
+      return conv;
     }
-    return this->activate(bn, useHardswish);
+    return this->activate(conv, useHardswish);
   }
 
   struct ggml_tensor*
@@ -304,7 +365,8 @@ struct GraphBuilder {
     struct ggml_tensor* w1 = ggml_reshape_4d(ctx, wt, 1, 1, ic, p);
 
     // 1x1 conv: [W, H, IC] -> [W, H, P].
-    struct ggml_tensor* conv = ggml_conv_2d(ctx, w1, input, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* conv =
+        doctrConv2d(ctx, w1, input, 1, 1, 0, 0, 1, 1, useDirectConv);
 
     const int64_t cw = conv->ne[0];
     const int64_t ch = conv->ne[1];
@@ -365,15 +427,16 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
-    // NOTE: Metal does not implement GGML_OP_CONV_2D_DW, so the direct
-    // depthwise variant aborts there. Keep the im2col + mul_mat path
-    // (decomposes into Metal-supported ops).
+    // Direct depthwise kernel (GGML_OP_CONV_2D_DW) — much faster than the
+    // im2col + per-channel batched matmul on GPU backends. Weight is
+    // [KW,KH,1,C] and promoted to F32 (see addConvWeight) so it runs on every
+    // backend.
     struct ggml_tensor* conv =
-        ggml_conv_2d_dw(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
-    struct ggml_tensor* bn = applyFoldedBn(
-        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
-    return activate(bn, useHardswish);
+        ggml_conv_2d_dw_direct(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
+    // BN scale folded into the depthwise weights at load time; `.shift` carries
+    // the combined (conv bias + BN shift) offset.
+    conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
+    return activate(conv, useHardswish);
   }
 
   /// Squeeze-and-excite block: global avg pool → 1x1 conv (reduce) → ReLU →
@@ -387,13 +450,22 @@ struct GraphBuilder {
     struct ggml_tensor* pooled = ggml_pool_2d(
         ctx, x, GGML_OP_POOL_AVG, poolW, poolH, poolW, poolH, 0, 0);
 
-    struct ggml_tensor* fc1 = ggml_conv_2d(
-        ctx, t(sePrefix + ".fc1.weight"), pooled, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* fc1 = doctrConv2d(
+        ctx,
+        t(sePrefix + ".fc1.weight"),
+        pooled,
+        1,
+        1,
+        0,
+        0,
+        1,
+        1,
+        useDirectConv);
     fc1 = ggml_add(ctx, fc1, t(sePrefix + ".fc1.bias_br"));
     fc1 = ggml_relu(ctx, fc1);
 
-    struct ggml_tensor* fc2 =
-        ggml_conv_2d(ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* fc2 = doctrConv2d(
+        ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1, useDirectConv);
     fc2 = ggml_add(ctx, fc2, t(sePrefix + ".fc2.bias_br"));
 
     // torchvision's SE uses hardsigmoid on the scale branch.
@@ -691,8 +763,14 @@ WeightsBundle loadWeights(
           "Expected convolution weight tensor name to end with .weight: " +
           name);
     }
+    // Depthwise weights ([KW,KH,1,C], KW>1) are promoted to F32 so the direct
+    // GGML_OP_CONV_2D_DW kernel runs on every backend (CPU requires F32).
+    struct ggml_tensor* srcW = ggml_get_tensor(ggmlCtx, name.c_str());
+    const bool isDw = srcW != nullptr && srcW->ne[2] == 1 && srcW->ne[0] > 1;
     struct ggml_tensor* weightTensor =
-        cloneRaw(bundle.ctx.get(), gguf, ggmlCtx, name.c_str());
+        isDw ? cloneAsFp32(
+                   bundle.ctx.get(), name.c_str(), ggml_n_dims(srcW), srcW->ne)
+             : cloneRaw(bundle.ctx.get(), gguf, ggmlCtx, name.c_str());
     registerTensor(weightTensor);
     addBiasBroadcast(
         name.substr(0, name.size() - std::string(".weight").size()) + ".bias");
@@ -840,16 +918,23 @@ WeightsBundle loadWeights(
         name.ends_with(".bias_br") || name == "classifier.0.weight" ||
         name == "classifier.0.bias" || name == "classifier.3.weight" ||
         name == "classifier.3.bias") {
-      continue; // handled in the second pass
+      continue; // folded BN params / classifier handled separately
     }
     struct ggml_tensor* src = ggml_get_tensor(ggmlCtx, name.c_str());
     if (src == nullptr) {
       raise("Source tensor missing from GGUF: " + name);
     }
-    if (src->type != dst->type) {
+    if (src->type == dst->type) {
+      ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
+    } else if (dst->type == GGML_TYPE_F32 && src->type == GGML_TYPE_F16) {
+      // Depthwise weights are promoted to F32 (see addConvWeight).
+      const size_t count = ggml_nelements(src);
+      std::vector<float> values(count);
+      fp16ToFp32(src->data, values.data(), count);
+      ggml_backend_tensor_set(dst, values.data(), 0, count * sizeof(float));
+    } else {
       raise("Dtype mismatch while copying tensor: " + name);
     }
-    ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
   }
 
   // Kept for the future classifier-bytes upload path (see commented-out
@@ -899,42 +984,127 @@ WeightsBundle loadWeights(
     ggml_backend_tensor_set(dst, buf.data(), 0, buf.size() * sizeof(float));
   };
 
-  auto foldBnWithEps = [&](const std::string& bnPrefix, float eps) {
-    // When running stats are absent the BN was already folded offline into the
-    // conv weights/biases. Upload identity (scale=1, shift=0) so that
-    // applyFoldedBn becomes a no-op and the conv bias carries the offset.
-    if (gguf_find_tensor(gguf, (bnPrefix + ".running_mean").c_str()) < 0) {
-      const size_t n =
-          static_cast<size_t>(ggml_nelements(tensors.at(bnPrefix + ".scale")));
-      std::vector<float> ones(n, 1.0F);
-      std::vector<float> zeros(n, 0.0F);
-      uploadF32(tensors.at(bnPrefix + ".scale"), ones);
-      uploadF32(tensors.at(bnPrefix + ".shift"), zeros);
-      return;
+  // Fold the BN per-channel scale into the preceding conv's F16 weights and
+  // combine the conv bias + BN shift into a single bias, so the runtime graph
+  // collapses `conv + add(bias) + mul(scale) + add(shift)` down to
+  // `conv + add(combined)`. Removing two full-tensor elementwise passes per
+  // conv is exact (out = scale*(W*x + bias) + shift = (scale*W)*x +
+  // (scale*bias + shift)) and matters most on bandwidth-bound mobile GPUs.
+  // The conv tensor for a BN named "<P>.1" is "<P>.0.weight" and its broadcast
+  // bias is "<P>.0.bias_br" (both already uploaded before this pass runs).
+  auto foldScaleIntoConv = [&](const std::string& bnPrefix,
+                               const std::vector<float>& scale,
+                               std::vector<float>& shift) {
+    if (bnPrefix.size() < 2 || bnPrefix.substr(bnPrefix.size() - 2) != ".1") {
+      raise("BN fold expects a '<prefix>.1' name, got " + bnPrefix);
     }
-    std::vector<float> w = loadVector1d(gguf, ggmlCtx, bnPrefix + ".scale");
-    std::vector<float> b = loadVector1d(gguf, ggmlCtx, bnPrefix + ".shift");
-    std::vector<float> m =
-        loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_mean");
-    std::vector<float> v =
-        loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_var");
-    const size_t n = w.size();
-    if (b.size() != n || m.size() != n || v.size() != n) {
-      raise("BN param size mismatch for " + bnPrefix);
+    const std::string stem = bnPrefix.substr(0, bnPrefix.size() - 2);
+    const std::string convName = stem + ".0.weight";
+    auto wIt = tensors.find(convName);
+    if (wIt == tensors.end()) {
+      raise("BN fold: conv weight not found: " + convName);
     }
-    std::vector<float> scale(n);
-    std::vector<float> shift(n);
-    for (size_t i = 0; i < n; ++i) {
-      const float invStd = 1.0F / std::sqrt(v[i] + eps);
-      scale[i] = w[i] * invStd;
-      shift[i] = b[i] - (m[i] * scale[i]);
+    struct ggml_tensor* wTensor = wIt->second;
+    const int64_t oc = wTensor->ne[3];
+    if (static_cast<size_t>(oc) != scale.size()) {
+      raise(
+          "BN fold: output-channel mismatch for " + convName +
+          ": conv oc=" + std::to_string(oc) +
+          ", BN scale size=" + std::to_string(scale.size()));
+    }
+    const int64_t perOc = wTensor->ne[0] * wTensor->ne[1] * wTensor->ne[2];
+    const size_t n = static_cast<size_t>(oc * perOc);
+    // Pointwise/regular conv weights are F16; depthwise weights are F32 (see
+    // addConvWeight). Fold the per-channel scale in whichever dtype.
+    if (wTensor->type == GGML_TYPE_F16) {
+      std::vector<ggml_fp16_t> wbuf(n);
+      ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+      // F16 has no arithmetic: batch-decode each channel row to F32 with ggml's
+      // SIMD row converters, apply the per-channel scale, then re-encode. The
+      // weight stays F16-stored (not an f16->f16 copy).
+      std::vector<float> f32buf(static_cast<size_t>(perOc));
+      for (int64_t o = 0; o < oc; ++o) {
+        const float s = scale[static_cast<size_t>(o)];
+        ggml_fp16_t* row = wbuf.data() + (o * perOc);
+        ggml_fp16_to_fp32_row(row, f32buf.data(), perOc);
+        for (int64_t i = 0; i < perOc; ++i) {
+          f32buf[static_cast<size_t>(i)] *= s;
+        }
+        ggml_fp32_to_fp16_row(f32buf.data(), row, perOc);
+      }
+      ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(ggml_fp16_t));
+    } else if (wTensor->type == GGML_TYPE_F32) {
+      std::vector<float> wbuf(n);
+      ggml_backend_tensor_get(wTensor, wbuf.data(), 0, n * sizeof(float));
+      for (int64_t o = 0; o < oc; ++o) {
+        const float s = scale[static_cast<size_t>(o)];
+        for (int64_t i = 0; i < perOc; ++i) {
+          const size_t idx = static_cast<size_t>((o * perOc) + i);
+          wbuf[idx] *= s;
+        }
+      }
+      ggml_backend_tensor_set(wTensor, wbuf.data(), 0, n * sizeof(float));
+    } else {
+      raise(
+          "BN fold: unsupported conv weight dtype " +
+          std::string(ggml_type_name(wTensor->type)) + " for " + convName +
+          " (expected F16 or F32; quantized weights are not supported by the "
+          "BN fold)");
+    }
+
+    // combined bias = scale * bias_br + shift (bias_br is zeros for bias=False
+    // convs, the offset for offline-folded models).
+    auto bIt = tensors.find(stem + ".0.bias_br");
+    if (bIt != tensors.end()) {
+      std::vector<float> biasBr(scale.size());
+      ggml_backend_tensor_get(
+          bIt->second, biasBr.data(), 0, biasBr.size() * sizeof(float));
+      for (size_t i = 0; i < shift.size(); ++i) {
+        shift[i] += scale[i] * biasBr[i];
+      }
+    }
+  };
+
+  auto foldBnWithEps = [&](const std::string& bnPrefix,
+                           float eps,
+                           bool foldIntoConv) {
+    const size_t n =
+        static_cast<size_t>(ggml_nelements(tensors.at(bnPrefix + ".scale")));
+    std::vector<float> scale(n, 1.0F);
+    std::vector<float> shift(n, 0.0F);
+    // When running stats are present compute the standard BN fold; otherwise
+    // the BN was already folded offline (identity scale/shift; any offset is
+    // carried by the conv bias, which foldScaleIntoConv absorbs).
+    if (gguf_find_tensor(gguf, (bnPrefix + ".running_mean").c_str()) >= 0) {
+      std::vector<float> w = loadVector1d(gguf, ggmlCtx, bnPrefix + ".scale");
+      std::vector<float> b = loadVector1d(gguf, ggmlCtx, bnPrefix + ".shift");
+      std::vector<float> m =
+          loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_mean");
+      std::vector<float> v =
+          loadVector1d(gguf, ggmlCtx, bnPrefix + ".running_var");
+      if (w.size() != n || b.size() != n || m.size() != n || v.size() != n) {
+        raise(
+            "BN param size mismatch for " + bnPrefix + ": expected " +
+            std::to_string(n) + ", got scale=" + std::to_string(w.size()) +
+            " shift=" + std::to_string(b.size()) +
+            " running_mean=" + std::to_string(m.size()) +
+            " running_var=" + std::to_string(v.size()));
+      }
+      for (size_t i = 0; i < n; ++i) {
+        const float invStd = 1.0F / std::sqrt(v[i] + eps);
+        scale[i] = w[i] * invStd;
+        shift[i] = b[i] - (m[i] * scale[i]);
+      }
+    }
+    if (foldIntoConv) {
+      foldScaleIntoConv(bnPrefix, scale, shift);
     }
     uploadF32(tensors.at(bnPrefix + ".scale"), scale);
     uploadF32(tensors.at(bnPrefix + ".shift"), shift);
   };
 
   auto foldBn = [&](const std::string& bnPrefix) {
-    foldBnWithEps(bnPrefix, bnEps);
+    foldBnWithEps(bnPrefix, bnEps, /*foldIntoConv=*/true);
   };
 
   for (auto& [name, dst] : tensors) {
@@ -976,16 +1146,21 @@ WeightsBundle loadWeights(
 
   for (int branch = 0; branch < fpnInBranchCount; ++branch) {
     const std::string base = "dbnet.fpn.in_branches." + std::to_string(branch);
-    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon);
+    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
   }
 
   for (int branch = 0; branch < fpnInBranchCount; ++branch) {
     const std::string base = "dbnet.fpn.out_branches." + std::to_string(branch);
-    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon);
+    foldBnWithEps(base + ".1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
   }
 
-  foldBnWithEps("dbnet.prob_head.1", dbnetBatchNormEpsilon);
-  foldBnWithEps("dbnet.prob_head.4", dbnetBatchNormEpsilon);
+  // prob_head.0 is a plain 3x3 conv (foldable); prob_head.3/.4 is the
+  // sub-pixel transposed conv whose weight is reshaped at graph build, so its
+  // BN stays as a runtime scale/shift (applyFoldedBn in convTransposeBnAct).
+  foldBnWithEps(
+      "dbnet.prob_head.1", dbnetBatchNormEpsilon, /*foldIntoConv=*/true);
+  foldBnWithEps(
+      "dbnet.prob_head.4", dbnetBatchNormEpsilon, /*foldIntoConv=*/false);
 
   // Classifier FC tensors stay FP16 and are copied directly from GGUF bytes.
   // auto uploadClassifierTensor = [&](const std::string& name) {
@@ -1020,6 +1195,12 @@ ComputeGraph buildGraph(
   ggml_set_name(cg.input, "input");
 
   GraphBuilder gb{.ctx = ctx, .w = weights.tensors};
+  // Direct regular convs by default on OpenCL (Adreno) and Vulkan (Mali) — both
+  // avoid the im2col path that is slow on those GPUs; env OCR_DOCTR_FUSED_CONV
+  // (0/1) overrides the backend default for A/B.
+  gb.useDirectConv = resolveDirectConv(
+      "OCR_DOCTR_FUSED_CONV",
+      graphBackendIsOpenCl(backends) || graphBackendIsVulkan(backends));
 
   // Stem.
   struct ggml_tensor* x = gb.convBnAct(

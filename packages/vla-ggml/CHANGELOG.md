@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0] - 2026-06-18
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.2` (adds the OpenCL DocTR ops — `CONV_2D_DW`, `POOL_2D`, `HARDSWISH`, `HARDSIGMOID` — for the Adreno OpenCL backend; no behavioral change for this package).
+
+## Pull Requests
+
+- [#2617](https://github.com/tetherto/qvac/pull/2617) - feat[api]: DocTR Adreno OpenCL — direct regular conv (~0.72s on S25) + qvac-fabric 8828.1.2
+
+## [0.4.0] - 2026-06-12
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.1` (adds the direct Metal `CONV_2D_DW` depthwise-convolution kernel).
+
+## Pull Requests
+
+- [#2536](https://github.com/tetherto/qvac/pull/2536) - feat[api]: DocTR depthwise convs via direct Metal CONV_2D_DW kernel
+
 ## [0.3.2] - 2026-06-06
 
 - Pinned to the Fabric revision used by the M-RoPE/iM-RoPE sliding-context work.

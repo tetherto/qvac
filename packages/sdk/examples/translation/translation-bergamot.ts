@@ -18,12 +18,15 @@ try {
       norepeatngramsize: 3,
       lengthpenalty: 1.2,
     },
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`✅ Bergamot model loaded: ${modelId}`);
+  console.log(`▸ Bergamot model loaded: ${modelId}`);
 
   const text = "This is a test of the Bergamot translation model.";
   const result = translate({
@@ -38,6 +41,6 @@ try {
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

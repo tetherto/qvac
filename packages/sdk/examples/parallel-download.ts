@@ -23,7 +23,7 @@ const timers: Record<
   { start: number; firstProgress?: number; end?: number }
 > = {};
 
-console.log(`\n=== Parallel Download (${assets.length} assets) ===\n`);
+console.log(`\n▸ Parallel Download (${assets.length} assets)\n`);
 const wallStart = now();
 
 try {
@@ -37,13 +37,13 @@ try {
         if (t.firstProgress == null) {
           t.firstProgress = now();
           console.log(
-            `[${asset.name}] first progress at ${((t.firstProgress - wallStart) / 1000).toFixed(1)}s — ${progress.percentage}%`,
+            `▸ [${asset.name}] first progress at ${((t.firstProgress - wallStart) / 1000).toFixed(1)}s — ${progress.percentage}%`,
           );
         }
         if (progress.percentage === 100 && t.end == null) {
           t.end = now();
           console.log(
-            `[${asset.name}] done at ${((t.end - wallStart) / 1000).toFixed(1)}s`,
+            `▸ [${asset.name}] done at ${((t.end - wallStart) / 1000).toFixed(1)}s`,
           );
         }
       },
@@ -53,7 +53,7 @@ try {
   const results = await Promise.allSettled(promises);
   const wallEnd = now();
 
-  console.log(`\n=== Results ===\n`);
+  console.log(`\n▸ Results\n`);
 
   for (let i = 0; i < assets.length; i++) {
     const asset = assets[i]!;
@@ -70,14 +70,14 @@ try {
       t.end != null ? `${((t.end - t.start) / 1000).toFixed(1)}s` : "N/A";
 
     console.log(
-      `${status} ${asset.name}: first-progress=${timeToFirst}, total=${total}${reason}`,
+      `▸ ${status} ${asset.name}: first-progress=${timeToFirst}, total=${total}${reason}`,
     );
   }
 
-  console.log(`\nWall time: ${((wallEnd - wallStart) / 1000).toFixed(1)}s`);
+  console.log(`\n▸ Wall time: ${((wallEnd - wallStart) / 1000).toFixed(1)}s`);
 
   void close();
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

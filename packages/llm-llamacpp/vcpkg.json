@@ -6,9 +6,10 @@
     },
     "picojson",
     "nlohmann-json",
+    "concurrentqueue",
     {
       "name": "qvac-fabric",
-      "version>=": "8828.1.0"
+      "version>=": "8828.1.2"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",

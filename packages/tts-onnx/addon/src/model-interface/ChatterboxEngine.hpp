@@ -1,17 +1,17 @@
 #pragma once
 
-#include "ChatterboxTextPreprocessor.hpp"
-#include "IChatterboxEngine.hpp"
-#include "IOnnxInferSession.hpp"
-#include "OrtTypes.hpp"
-#include "tokenizers_c.h"
-
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <random>
 #include <stdexcept>
 #include <vector>
+
+#include "ChatterboxTextPreprocessor.hpp"
+#include "IChatterboxEngine.hpp"
+#include "IOnnxInferSession.hpp"
+#include "OrtTypes.hpp"
+#include "tokenizers_c.h"
 
 namespace qvac::ttslib::chatterbox {
 
@@ -172,8 +172,8 @@ private:
   void ensureSession(std::unique_ptr<IOnnxInferSession> &session,
                      const std::string &modelPath);
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
-
-  void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
+  void loadTextPreprocessor(const std::filesystem::path &tokenizerPath,
+                            const std::filesystem::path &mecabDictPath);
   void loadTextEmbWeight(const std::string &embedTokensPath);
 
   TensorData<float>
@@ -230,7 +230,7 @@ private:
   bool loaded_ = false;
   bool lazySessionLoading_ = false;
   std::string language_;
-  text_preprocess::CangjieTable cangjieTable_;
+  text_preprocess::ChatterboxTextPreprocessor textPreprocessor_;
 
   std::vector<float> textEmbWeight_;
   int64_t textEmbRows_ = 0;

@@ -33,8 +33,18 @@ const float MIN_P = 0.05f;
 const float PEAK_NORMALIZE_TARGET = 0.95f;
 const int TOKEN_REPETITION_THRESHOLD = 2;
 const int MAX_NEW_TOKENS_SPEECH = 1024;
+const int STOP_FORCE_TOPK = 20;
 const int SPEECH_TO_TEXT_MAX_RATIO = 3;
 const int MIN_SPEECH_TOKENS = 50;
+
+int computeMaxSpeechTokens(int textTokenCount, const std::string &language) {
+  if (language == "ja") {
+    return MAX_NEW_TOKENS_SPEECH;
+  }
+  const int proportional =
+      std::max(MIN_SPEECH_TOKENS, textTokenCount * SPEECH_TO_TEXT_MAX_RATIO);
+  return std::min(proportional, MAX_NEW_TOKENS_SPEECH);
+}
 const int SILENCE_RUN_THRESHOLD = 5;
 const int PATTERN_MAX_LENGTH = 8;
 const int PATTERN_MIN_REPEATS = 3;
@@ -158,6 +168,28 @@ void applyCfgCombine(std::vector<float> &condLogits,
   }
 }
 
+bool isStopTokenInTopK(const std::vector<float> &logits, int64_t stopToken,
+                       int topK) {
+  const int64_t vocabSize = static_cast<int64_t>(logits.size());
+  if (stopToken < 0 || stopToken >= vocabSize) {
+    return false;
+  }
+  const float stopLogit = logits[stopToken];
+  int countAbove = 0;
+  for (int64_t i = 0; i < vocabSize; i++) {
+    if (i == stopToken) {
+      continue;
+    }
+    if (logits[i] > stopLogit) {
+      countAbove++;
+      if (countAbove >= topK) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 void scaleByTemperature(std::vector<float> &logits, float temperature) {
   for (auto &l : logits) {
     l /= temperature;
@@ -216,6 +248,15 @@ int64_t sampleWithTemperature(std::vector<float> &logits, float temperature,
 
   std::discrete_distribution<int> dist(logits.begin(), logits.end());
   return static_cast<int64_t>(dist(rng));
+}
+
+int64_t selectNextSpeechToken(std::vector<float> &condLogits,
+                              bool forceStopForJapanese, std::mt19937 &rng) {
+  if (forceStopForJapanese &&
+      isStopTokenInTopK(condLogits, STOP_SPEECH_TOKEN, STOP_FORCE_TOPK)) {
+    return STOP_SPEECH_TOKEN;
+  }
+  return sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng);
 }
 
 float findPeakAmplitude(const std::vector<float> &wav) {
@@ -377,7 +418,7 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
     languageModelSession_ = sessionFactory_(cfg.languageModelPath);
   }
 
-  loadCangjieTableIfNeeded(cfg.tokenizerPath);
+  loadTextPreprocessor(cfg.tokenizerPath, cfg.mecabDictPath);
   loadTextEmbWeight(cfg.embedTokensPath);
 
   if (embedTokensSession_ != nullptr) {
@@ -885,7 +926,7 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
   const std::string preprocessed =
-      text_preprocess::preprocessText(text, language_, cangjieTable_);
+      textPreprocessor_.preprocess(text, language_);
   const std::string preparedText = lang_mode::prepareTextForTokenization(
       preprocessed, language_, isEnglish_);
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
@@ -901,24 +942,29 @@ std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
   return tokens;
 }
 
-void ChatterboxEngine::loadCangjieTableIfNeeded(
-    const std::string &tokenizerPath) {
-  if (language_ != "zh") {
-    cangjieTable_.clear();
-    return;
+void ChatterboxEngine::loadTextPreprocessor(
+    const std::filesystem::path &tokenizerPath,
+    const std::filesystem::path &mecabDictPath) {
+  textPreprocessor_.reset();
+
+  std::filesystem::path tokenizerDir = tokenizerPath.parent_path();
+
+  if (language_ == "zh") {
+    std::filesystem::path cangjieTablePath = tokenizerDir / "Cangjie5_TC.tsv";
+    QLOG(Priority::INFO,
+         "Loading Cangjie table from: " + cangjieTablePath.string());
+    textPreprocessor_.loadCangjieTable(cangjieTablePath);
+    QLOG(Priority::INFO,
+         "Cangjie table loaded: " +
+             std::to_string(textPreprocessor_.cangjieTableSize()) + " entries");
   }
 
-  std::string dir = tokenizerPath;
-  size_t lastSlash = dir.find_last_of("/\\");
-  if (lastSlash != std::string::npos) {
-    dir = dir.substr(0, lastSlash);
+  if (language_ == "ja") {
+    QLOG(Priority::INFO,
+         "Loading MeCab dictionary from: " + mecabDictPath.string());
+    textPreprocessor_.loadMeCab(mecabDictPath);
+    QLOG(Priority::INFO, "MeCab dictionary loaded");
   }
-  std::string cangjieTablePath = dir + "/Cangjie5_TC.tsv";
-
-  QLOG(Priority::INFO, "Loading Cangjie table from: " + cangjieTablePath);
-  cangjieTable_ = text_preprocess::loadCangjieTable(cangjieTablePath);
-  QLOG(Priority::INFO, "Cangjie table loaded: " +
-                           std::to_string(cangjieTable_.size()) + " entries");
 }
 
 void ChatterboxEngine::runEmbedTokensInfer(
@@ -1171,8 +1217,9 @@ void ChatterboxEngine::runInitialCfgStep(
   penalizeRepetitionLogits(condLogits, generatedTokens,
                            MULTILINGUAL_REPETITION_PENALTY);
 
+  const bool forceStopForJapanese = (language_ == "ja");
   int64_t firstToken =
-      sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng_);
+      selectNextSpeechToken(condLogits, forceStopForJapanese, rng_);
   generatedTokens.push_back(firstToken);
 
   QLOG(Priority::INFO,
@@ -1219,6 +1266,7 @@ void ChatterboxEngine::runCfgGenerationLoop(
     std::unordered_map<std::string, TensorData<float>> &batchedKv,
     int maxSpeechTokens) {
 
+  const bool forceStopForJapanese = (language_ == "ja");
   for (int step = 0; step < maxSpeechTokens - 1; step++) {
     if (shouldStopGeneration(generatedTokens, step)) {
       if (generatedTokens.back() != STOP_SPEECH_TOKEN) {
@@ -1251,7 +1299,7 @@ void ChatterboxEngine::runCfgGenerationLoop(
                              MULTILINGUAL_REPETITION_PENALTY);
 
     int64_t nextToken =
-        sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng_);
+        selectNextSpeechToken(condLogits, forceStopForJapanese, rng_);
     generatedTokens.push_back(nextToken);
 
     positionIds.data = {static_cast<int64_t>(step + 2)};
@@ -1270,9 +1318,7 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokensWithCfg(
     TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures) {
 
   int textTokenCount = static_cast<int>(inputIds.size());
-  int maxSpeechTokens =
-      std::max(MIN_SPEECH_TOKENS, textTokenCount * SPEECH_TO_TEXT_MAX_RATIO);
-  maxSpeechTokens = std::min(maxSpeechTokens, MAX_NEW_TOKENS_SPEECH);
+  int maxSpeechTokens = computeMaxSpeechTokens(textTokenCount, language_);
 
   QLOG(Priority::INFO,
        "Text tokens: " + std::to_string(textTokenCount) +

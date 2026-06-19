@@ -7,7 +7,7 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream, runSupertonicStreaming } = require('../utils/runSupertonicTTS')
-const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels } = require('../utils/downloadModel')
+const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels, ensureMecabDict } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 const { lavasrEnhancerConfig, loadReferenceAudio } = require('../utils/lavasr-helpers')
 
@@ -470,6 +470,66 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
     console.log(`  [${r.lang}] ${r.sampleCount} samples, ${r.durationMs?.toFixed(0) || 'N/A'}ms audio, RTF: ${rtf} - "${r.text.substring(0, 40)}..."`)
   }
   console.log('='.repeat(60))
+})
+
+// ---------------------------------------------------------------------------
+// Chatterbox Japanese TTS (kanji + MeCab) synthesis
+// ---------------------------------------------------------------------------
+
+const TEXT_JA = 'こんにちは世界。今日はいい天気です。'
+
+test('Chatterbox Multilingual TTS: Japanese (kanji + MeCab) synthesis', { timeout: 3600000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+
+  console.log('\n=== Ensuring Chatterbox multilingual models ===')
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  if (!downloadResult.success) {
+    t.pass('Skipped: Chatterbox multilingual models not available')
+    return
+  }
+
+  const mecab = await ensureMecabDict({ targetDir: path.join(modelDir, 'mecab-ipadic') })
+  if (!mecab.success) {
+    t.pass('Skipped: MeCab/IPAdic dictionary not available')
+    return
+  }
+
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 5000000,
+    minDurationMs: 200,
+    maxDurationMs: 300000
+  }
+
+  console.log('\n=== Loading Chatterbox multilingual model (ja) ===')
+  const model = await loadChatterboxTTS({
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: 'ja',
+    mecabDictPath: mecab.dir
+  })
+  t.ok(model, 'Japanese TTS model should be loaded')
+
+  console.log(`\nInput text: "${TEXT_JA}"`)
+  const saveWav = !isMobile
+  const wavPath = saveWav ? path.join(baseDir, 'test', 'output', 'chatterbox-japanese.wav') : undefined
+  const result = await runChatterboxSynth(model, { text: TEXT_JA, saveWav, wavOutputPath: wavPath }, expectation)
+  console.log(result.output)
+
+  t.ok(result.passed, '[ja] should pass basic audio bounds')
+  t.ok(result.data.sampleCount > 0, '[ja] should produce audio samples')
+
+  await model.unload()
+  t.pass('Japanese TTS model unloaded')
 })
 
 // ---------------------------------------------------------------------------

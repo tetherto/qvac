@@ -26,11 +26,11 @@ try {
   const r = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
   if (r.error || r.status !== 0) throw new Error("FFmpeg not found");
 } catch {
-  console.error("FFmpeg is required. Install it and try again.");
+  console.error("✖ FFmpeg is required. Install it and try again.");
   process.exit(1);
 }
 
-console.log("Loading model (whisper-tiny + Silero VAD)...");
+console.log("▸ Loading model (whisper-tiny + Silero VAD)...");
 const modelId = await loadModel({
   modelSrc: WHISPER_TINY,
   modelConfig: {
@@ -52,7 +52,7 @@ const modelId = await loadModel({
     },
   },
 });
-console.log("Model loaded.\n");
+console.log("▸ Model loaded.\n");
 
 const ffmpeg = startMicrophone({
   sampleRate: SAMPLE_RATE,
@@ -63,17 +63,17 @@ const session = await transcribeStream({ modelId });
 
 ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
 
-console.log("Listening... speak and pause to see transcriptions.\n");
+console.log("▸ Listening... speak and pause to see transcriptions.\n");
 
 for await (const text of session) {
   console.log(`> ${text.trim()}`);
 }
 
 async function cleanup() {
-  console.log("\n\nStopping...");
+  console.log("\n\n▸ Stopping...");
   ffmpeg.kill();
   await unloadModel({ modelId });
-  console.log("Done.");
+  console.log("▸ Done.");
 }
 
 process.on("SIGINT", () => void cleanup());

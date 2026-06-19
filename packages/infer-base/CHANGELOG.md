@@ -1,3 +1,7 @@
+## [0.6.1] - 2026-06-12
+
+chore: replace the exact `bare-events` pin (`2.4.2`) with caret `^2.9.1` so it resolves to the latest 2.x at install. No public API change — only the dependency version range is widened. `bare-os` is left untouched (`^3.2.0`).
+
 ## [0.6.0] - 2026-05-28
 
 Threads an optional `AbortSignal` into `QvacResponse` so addons can settle a job from external timeout / crash paths without polling.
