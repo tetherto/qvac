@@ -196,18 +196,12 @@ Pipeline::Pipeline(
 
     doctrRecognizer_ =
         std::make_unique<doctr::ggml::pipeline::StepDoctrRecognitionGGML>(
-<<<<<<< HEAD
             pathRecognizer,
             doctrRecognizerBatch,
             doctr::ggml::pipeline::DecodingMethod::CTC,
             selectedDevice,
             config_.nThreads,
             recognizerAssistDevice);
-=======
-            pathRecognizer, config_.recognizerBatchSize,
-            doctr::ggml::pipeline::DecodingMethod::CTC, selectedDevice,
-            config_.nThreads);
->>>>>>> 00216d65e (Fix clang-format issues)
   } else {
     easyDetector_ =
         std::make_unique<easyocr::ggml::pipeline::StepDetectionInference>(
@@ -221,18 +215,12 @@ Pipeline::Pipeline(
     easyBoxer_ = std::make_unique<easyocr::ggml::pipeline::StepBoundingBox>();
 
     easyocr::ggml::pipeline::StepRecognizeText::Config recogConfig(
-<<<<<<< HEAD
         config_.defaultRotationAngles,
         config_.contrastRetry,
         config_.lowConfidenceThreshold,
         easyRecognizerBatch,
         config_.nThreads,
         config_.backendsDir);
-=======
-        config_.defaultRotationAngles, config_.contrastRetry,
-        config_.lowConfidenceThreshold, config_.recognizerBatchSize,
-        config_.nThreads, config_.backendsDir);
->>>>>>> 00216d65e (Fix clang-format issues)
     recogConfig.backendDevice = selectedDevice;
 
     easyRecognizer_ =
