@@ -26,21 +26,24 @@ function generateDocuments(count: number): string[] {
 }
 
 try {
-  console.log("RAG Cancellation Example\n");
+  console.log("▸ RAG Cancellation Example");
 
   // Load embedding model
-  console.log("Loading embedding model...");
+  console.log("▸ Loading embedding model...");
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    onProgress: (progress) => {
-      process.stdout.write(`\r   ${progress.percentage.toFixed(1)}%`);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
-  console.log("\n✅ Model loaded\n");
+  console.log("▸ Model loaded");
 
   // Generate documents
   const documents = generateDocuments(200);
-  console.log(`📄 Processing ${documents.length} documents...\n`);
+  console.log(`▸ Processing ${documents.length} documents...`);
 
   let progressCount = 0;
   let cancelled = false;
@@ -55,11 +58,10 @@ try {
     progressInterval: 50,
     onProgress: (stage, current, total) => {
       progressCount++;
-      const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-      console.log(`   [${stage}] ${current}/${total} (${pct}%)`);
+      console.log(`▸ ${stage} ${current}/${total}`);
 
       if (!cancelled && stage === "embedding" && current > 10) {
-        console.log("\n🛑 Triggering cancellation...\n");
+        console.log("▸ Triggering cancellation...");
         cancelled = true;
         void cancel({ requestId: ingest.requestId });
       }
@@ -68,9 +70,7 @@ try {
 
   try {
     await ingest;
-    console.log(
-      "\n⚠️  Ingest completed (cancellation didn't interrupt in time)",
-    );
+    console.log("▸ Ingest completed (cancellation didn't interrupt in time)");
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     const wasCancelled =
@@ -78,8 +78,8 @@ try {
       msg.toLowerCase().includes("abort");
 
     if (wasCancelled) {
-      console.log("✅ Operation cancelled successfully!");
-      console.log(`   Progress updates received: ${progressCount}`);
+      console.log("▸ Operation cancelled successfully!");
+      console.log(`▸ Progress updates received: ${progressCount}`);
     } else {
       throw error;
     }
@@ -92,9 +92,9 @@ try {
 
   await unloadModel({ modelId });
 
-  console.log("✅ Done");
+  console.log("▸ Done");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

@@ -25,7 +25,7 @@ const vaeModelSrc = process.argv[7] || WAN_2_1_COMFYUI_REPACKAGED_VAE;
 const clipVisionModelSrc = process.argv[8] || CLIP_VISION_H;
 
 if (!initImagePath) {
-  console.error("❌ Error: init image path is required");
+  console.error("✖ init image path is required");
   console.error(
     "Usage: bun run bare:example dist/examples/diffusion-img2vid.js " +
     "<initImagePath> [prompt] [outputDir] " +
@@ -35,7 +35,7 @@ if (!initImagePath) {
 }
 
 try {
-  console.log("Loading Wan 2.1 I2V model (diffusion + UMT5-XXL + VAE + CLIP vision)...");
+  console.log("▸ Loading Wan 2.1 I2V model (diffusion + UMT5-XXL + VAE + CLIP vision)...");
   const modelId = await loadModel({
     modelSrc: diffusionModelSrc,
     modelType: "sdcpp-generation",
@@ -51,12 +51,17 @@ try {
       vae_on_cpu: true,
       vae_tiling: true,
     },
-    onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const init_image = new Uint8Array(fs.readFileSync(initImagePath));
-  console.log(`\nGenerating video for: "${prompt}"`);
+  console.log(`▸ Generating video for: "${prompt}"`);
 
   const { progressStream, outputs, stats } = video({
     modelId,
@@ -75,22 +80,21 @@ try {
   });
 
   for await (const { step, totalSteps } of progressStream) {
-    process.stdout.write(`\rStep ${step}/${totalSteps}`);
+    console.log(`▸ step ${step}/${totalSteps}`);
   }
-  console.log();
 
   const buffers = await outputs;
   for (let i = 0; i < buffers.length; i++) {
     const outputPath = path.join(outputDir, `wan_i2v_${i}.avi`);
     fs.writeFileSync(outputPath, buffers[i]!);
-    console.log(`Saved: ${outputPath}`);
+    console.log(`▸ Saved ${outputPath}`);
   }
 
-  console.log("\nStats:", await stats);
+  console.log("▸ Stats:", await stats);
   await unloadModel({ modelId, clearStorage: false });
-  console.log("Done.");
+  console.log("▸ Done");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

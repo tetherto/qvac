@@ -297,9 +297,6 @@ async function runLoadModel(
         "on typical mobile devices. Pass a `delegate` to `loadModel(...)` to " +
         "run generation on a desktop peer instead.";
       logger.warn(message);
-      // Surface via console too - if an RN host app doesn't wire getClientLogger()
-      // to a visible transport, logger.warn alone won't reach the dev.
-      console.warn(message);
     }
   }
 
