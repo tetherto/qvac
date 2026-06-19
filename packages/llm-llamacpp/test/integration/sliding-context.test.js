@@ -13,8 +13,7 @@ const isWindowsX64 = platform === 'win32' && arch === 'x64'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 // These are very slow on CI and should be skipped.
-// TODO: unskip Windows once we have a new Windows runner with a GPU
-const skip = isDarwinX64 || isWindowsX64 || isLinuxArm64
+const skip = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',

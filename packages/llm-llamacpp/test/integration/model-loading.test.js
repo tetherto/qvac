@@ -13,6 +13,7 @@ const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isLinuxX64 = platform === 'linux' && arch === 'x64'
+const isWindowsX64 = platform === 'win32' && arch === 'x64'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
@@ -126,10 +127,9 @@ const SHARDED_MODEL = {
   baseUrl: 'https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main/'
 }
 
-// This test can take longer to download and execute. To avoid blowing up testing time on all
-// platforms, just use Linux for now. C++ tests already have faster coverage for each type
-// of load.
-test('sharded model can run inference end-to-end', { timeout: 4 * 60 * 1000, skip: !isLinuxX64 }, async t => {
+// This test can take longer to download and execute. Keep it on desktop x64
+// runners where the sharded loader has CI coverage.
+test('sharded model can run inference end-to-end', { timeout: 4 * 60 * 1000, skip: !(isLinuxX64 || isWindowsX64) }, async t => {
   const fs = require('bare-fs')
   const modelDir = path.resolve(__dirname, '../model')
   fs.mkdirSync(modelDir, { recursive: true })
