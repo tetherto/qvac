@@ -194,6 +194,20 @@ jobs:
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
 
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Configure CMake generator on Windows
+        shell: powershell
+        env:
+          INPUT_ARCH: ${{ matrix.arch }}
+        run: |
+          echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+          switch ($env:INPUT_ARCH) {
+            'x64'   { echo "CMAKE_GENERATOR_PLATFORM=x64"   >> $env:GITHUB_ENV }
+            'arm64' { echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV }
+            'x86'   { echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV }
+            default { Write-Host "Unknown arch '$env:INPUT_ARCH'; CMAKE_GENERATOR_PLATFORM left unset" }
+          }
+
       - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
