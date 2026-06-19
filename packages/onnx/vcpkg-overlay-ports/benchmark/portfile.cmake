@@ -8,14 +8,15 @@ vcpkg_from_github(
 
 # benchmark@1.9.1 still enables -pedantic-errors when BENCHMARK_ENABLE_WERROR=OFF;
 # clang-22 promotes __COUNTER__ to -Wc2y-extensions, which pedantic-errors treats as fatal.
+# vcpkg_cmake_configure requires C/C++ flag vars to be set together.
 string(APPEND VCPKG_CXX_FLAGS " -Wno-c2y-extensions")
+string(APPEND VCPKG_C_FLAGS " -Wno-c2y-extensions")
 
 vcpkg_cmake_configure(
     SOURCE_PATH ${SOURCE_PATH}
     OPTIONS
         -DBENCHMARK_ENABLE_TESTING=OFF
         -DBENCHMARK_INSTALL_DOCS=OFF
-        -DBENCHMARK_ENABLE_WERROR=OFF
         -Werror=old-style-cast
 )
 
