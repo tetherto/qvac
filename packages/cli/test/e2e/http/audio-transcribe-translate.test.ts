@@ -1,5 +1,4 @@
 import { describe, it } from 'node:test'
-import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
 import { assertError, multipart, JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 
