@@ -42,7 +42,16 @@ const VALID_QUANTS = ['q8_0', 'q4_0', 'f16']
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 const RESULT_MARKER = 'QVAC_RTF_REPORT::'
 
-
+// QVAC-20684: detect the desktop GPU hardware name (e.g. "NVIDIA RTX 4000 SFF
+// Ada") via the shared perf reporter's detectDevice(), which shells out to
+// nvidia-smi / vulkaninfo / system_profiler through bare-subprocess, and stamp
+// it into the report so aggregate-parakeet-rtf.js can render the "GPU Model"
+// column. The reporter lives outside the addon bundle, so require it
+// dynamically (path.join keeps bare-pack from statically resolving it during
+// mobile bundling) and guard with try/catch — on mobile it's absent and the GPU
+// stays null (the Device Farm device name is the proxy there). Mirrors the
+// QVAC-20499 wiring already in test/integration/helpers.js. Probed once at
+// module load.
 let _hwDevice = null
 try {
   let _subprocess = null
