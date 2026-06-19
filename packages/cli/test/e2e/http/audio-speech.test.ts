@@ -1,7 +1,7 @@
 import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
-import { assertError, JSON_HEADERS } from '../helpers/http.js'
+import { assertError, JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 import { probeFfmpegAvailable } from '../../../src/serve/lib/video-transcode.js'
 
 describe('serve: speech validation', () => {
@@ -9,26 +9,22 @@ describe('serve: speech validation', () => {
 
   it('invalid JSON returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', headers: JSON_HEADERS, payload: '{not valid json}' })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_json')
+    assertStatusAndError(res, 400, 'invalid_json')
   })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { input: 'hello', voice: 'alloy' } })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_model')
+    assertStatusAndError(res, 400, 'missing_model')
   })
 
   it('missing input returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { model: 'test', voice: 'alloy' } })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_input')
+    assertStatusAndError(res, 400, 'missing_input')
   })
 
   it('empty input returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { model: 'test', voice: 'alloy', input: '   ' } })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_input')
+    assertStatusAndError(res, 400, 'missing_input')
   })
 
   // ffmpeg-dependent: with ffmpeg the route reaches model lookup (model_not_found);
@@ -45,26 +41,22 @@ describe('serve: speech validation', () => {
 
   it('unknown response_format returns 400 invalid_response_format', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { model: 'test', voice: 'alloy', input: 'hi', response_format: 'mp4' } })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_response_format')
+    assertStatusAndError(res, 400, 'invalid_response_format')
   })
 
   it('input over default 4096-char cap returns 400 input_too_long', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { model: 'test', voice: 'alloy', input: 'a'.repeat(4097) } })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'input_too_long')
+    assertStatusAndError(res, 400, 'input_too_long')
   })
 
   it('unknown model returns 404', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { model: 'nonexistent', voice: 'alloy', input: 'hi' } })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 
   it('defaults voice to alloy when omitted (still 404 model_not_found)', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { model: 'nonexistent', input: 'hi' } })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 })
 
@@ -73,8 +65,7 @@ describe('serve: speech auth', () => {
 
   it('auth required when api-key set', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/speech', payload: { model: 'test', voice: 'alloy', input: 'hi' } })
-    assert.equal(res.statusCode, 401)
-    assertError(res, 'invalid_api_key')
+    assertStatusAndError(res, 401, 'invalid_api_key')
   })
 })
 

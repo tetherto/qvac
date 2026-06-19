@@ -12,6 +12,12 @@ export function assertError (res: InjectResponse, expectedCode: string): void {
   assert.equal(typeof body?.error?.message, 'string', 'error.message should be a string')
 }
 
+// Assert the HTTP status and the OpenAI error code together.
+export function assertStatusAndError (res: InjectResponse, status: number, expectedCode: string): void {
+  assert.equal(res.statusCode, status, `expected status ${status}, got ${res.statusCode}: ${res.payload}`)
+  assertError(res, expectedCode)
+}
+
 export interface MultipartField {
   name: string
   value?: string

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useModelServer } from '../helpers/server.js'
-import { assertError, multipart, collectSSE } from '../helpers/http.js'
+import { assertError, multipart, collectSSE, assertStatusAndError } from '../helpers/http.js'
 import { MODEL_CONFIG, E2E } from '../helpers/config.js'
 import { silenceWav, tinyPng, textFile } from '../helpers/fixtures.js'
 
@@ -100,8 +100,7 @@ describe('chat completions (tools / structured output)', () => {
       response_format: { type: 'json_object' },
       tools: [{ type: 'function', function: { name: 'f', parameters: { type: 'object', properties: {} } } }]
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_response_format')
+    assertStatusAndError(res, 400, 'invalid_response_format')
   })
 
   it('accepts a function tool and returns a valid completion', async () => {
@@ -129,20 +128,17 @@ describe('chat completions (image_url content)', () => {
 
   it('rejects a remote (non-data) image_url', async () => {
     const res = await post('/v1/chat/completions', withImage('http://example.invalid/x.png'))
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'unsupported_image_content')
+    assertStatusAndError(res, 400, 'unsupported_image_content')
   })
 
   it('rejects an unsupported image type', async () => {
     const res = await post('/v1/chat/completions', withImage('data:image/gif;base64,R0lGODlhAQABAAAAACw='))
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'unsupported_image_content')
+    assertStatusAndError(res, 400, 'unsupported_image_content')
   })
 
   it('rejects corrupt/mislabeled base64', async () => {
     const res = await post('/v1/chat/completions', withImage('data:image/png;base64,bm90LWEtcG5n'))
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'unsupported_image_content')
+    assertStatusAndError(res, 400, 'unsupported_image_content')
   })
 })
 

@@ -1,21 +1,19 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
-import { assertError } from '../helpers/http.js'
+import { assertStatusAndError } from '../helpers/http.js'
 
 describe('serve: routing', () => {
   const server = useServer({ cors: true })
 
   it('GET /unknown returns 404', async () => {
     const res = await server().inject({ method: 'GET', url: '/unknown' })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'not_found')
+    assertStatusAndError(res, 404, 'not_found')
   })
 
   it('GET /v1/unknown returns 404', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/unknown' })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'not_found')
+    assertStatusAndError(res, 404, 'not_found')
   })
 })
 
@@ -55,14 +53,12 @@ describe('serve: auth', () => {
 
   it('no key returns 401', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/models' })
-    assert.equal(res.statusCode, 401)
-    assertError(res, 'invalid_api_key')
+    assertStatusAndError(res, 401, 'invalid_api_key')
   })
 
   it('wrong key returns 401', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/models', headers: { authorization: 'Bearer wrong-key' } })
-    assert.equal(res.statusCode, 401)
-    assertError(res, 'invalid_api_key')
+    assertStatusAndError(res, 401, 'invalid_api_key')
   })
 
   it('correct key returns 200', async () => {

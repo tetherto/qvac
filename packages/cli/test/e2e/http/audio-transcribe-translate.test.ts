@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
-import { assertError, multipart, JSON_HEADERS } from '../helpers/http.js'
+import { assertError, multipart, JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 
 // An empty file part with a filename: file present, contents empty.
 const EMPTY_FILE = { name: 'file', filename: 'audio.wav', contentType: 'audio/wav', data: Buffer.alloc(0) }
@@ -11,20 +11,17 @@ describe('serve: transcriptions validation', () => {
 
   it('JSON content-type returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/transcriptions', headers: JSON_HEADERS, payload: '{"model":"test"}' })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_content_type')
+    assertStatusAndError(res, 400, 'invalid_content_type')
   })
 
   it('missing file returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/transcriptions', ...multipart([{ name: 'model', value: 'test' }]) })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_file')
+    assertStatusAndError(res, 400, 'missing_file')
   })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/transcriptions', ...multipart([EMPTY_FILE]) })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_model')
+    assertStatusAndError(res, 400, 'missing_model')
   })
 
   for (const fmt of ['srt', 'vtt', 'verbose_json']) {
@@ -34,8 +31,7 @@ describe('serve: transcriptions validation', () => {
         url: '/v1/audio/transcriptions',
         ...multipart([{ name: 'model', value: 'test' }, { name: 'response_format', value: fmt }, EMPTY_FILE])
       })
-      assert.equal(res.statusCode, 400)
-      assertError(res, 'unsupported_response_format')
+      assertStatusAndError(res, 400, 'unsupported_response_format')
     })
   }
 
@@ -45,16 +41,14 @@ describe('serve: transcriptions validation', () => {
       url: '/v1/audio/transcriptions',
       ...multipart([{ name: 'model', value: 'test' }, { name: 'response_format', value: 'xml' }, EMPTY_FILE])
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_response_format')
+    assertStatusAndError(res, 400, 'invalid_response_format')
   })
 
   it('unknown model returns 404', async () => {
     const res = await server().inject({
       method: 'POST', url: '/v1/audio/transcriptions', ...multipart([{ name: 'model', value: 'nonexistent' }, EMPTY_FILE])
     })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 })
 
@@ -63,20 +57,17 @@ describe('serve: translations validation', () => {
 
   it('JSON content-type returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/translations', headers: JSON_HEADERS, payload: '{"model":"test"}' })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_content_type')
+    assertStatusAndError(res, 400, 'invalid_content_type')
   })
 
   it('missing file returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/translations', ...multipart([{ name: 'model', value: 'test' }]) })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_file')
+    assertStatusAndError(res, 400, 'missing_file')
   })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/audio/translations', ...multipart([EMPTY_FILE]) })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_model')
+    assertStatusAndError(res, 400, 'missing_model')
   })
 
   it('language field returns 400', async () => {
@@ -84,8 +75,7 @@ describe('serve: translations validation', () => {
       method: 'POST', url: '/v1/audio/translations',
       ...multipart([{ name: 'model', value: 'fake-transcribe' }, { name: 'language', value: 'es' }, EMPTY_FILE])
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'unsupported_param')
+    assertStatusAndError(res, 400, 'unsupported_param')
   })
 
   it('unsupported srt format returns 400', async () => {
@@ -93,8 +83,7 @@ describe('serve: translations validation', () => {
       method: 'POST', url: '/v1/audio/translations',
       ...multipart([{ name: 'model', value: 'fake-transcribe' }, { name: 'response_format', value: 'srt' }, EMPTY_FILE])
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'unsupported_response_format')
+    assertStatusAndError(res, 400, 'unsupported_response_format')
   })
 
   it('transcription-only model returns invalid_model_type', async () => {
@@ -108,7 +97,6 @@ describe('serve: translations validation', () => {
     const res = await server().inject({
       method: 'POST', url: '/v1/audio/translations', ...multipart([{ name: 'model', value: 'nonexistent' }, EMPTY_FILE])
     })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 })

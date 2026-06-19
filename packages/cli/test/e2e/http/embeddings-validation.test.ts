@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
-import { assertError, JSON_HEADERS } from '../helpers/http.js'
+import { JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 
 describe('serve: embeddings validation', () => {
   const server = useServer({ cors: true })
@@ -10,31 +10,27 @@ describe('serve: embeddings validation', () => {
     const res = await server().inject({
       method: 'POST', url: '/v1/embeddings', headers: JSON_HEADERS, payload: '{{bad'
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_json')
+    assertStatusAndError(res, 400, 'invalid_json')
   })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({
       method: 'POST', url: '/v1/embeddings', payload: { input: 'hello' }
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_model')
+    assertStatusAndError(res, 400, 'missing_model')
   })
 
   it('missing input returns 400', async () => {
     const res = await server().inject({
       method: 'POST', url: '/v1/embeddings', payload: { model: 'test' }
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_input')
+    assertStatusAndError(res, 400, 'missing_input')
   })
 
   it('unknown model returns 404', async () => {
     const res = await server().inject({
       method: 'POST', url: '/v1/embeddings', payload: { model: 'nonexistent', input: 'hello' }
     })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 })

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
-import { assertError, multipart, JSON_HEADERS } from '../helpers/http.js'
+import { multipart, JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 import { tinyPng } from '../helpers/fixtures.js'
 
 // Image routes resolve the model before per-param checks, so unknown models
@@ -11,8 +11,7 @@ describe('serve: images generations validation', () => {
 
   it('missing model returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/images/generations', payload: { prompt: 'a red square' } })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_model')
+    assertStatusAndError(res, 400, 'missing_model')
   })
 
   const modelFirst: Array<[string, Record<string, unknown>]> = [
@@ -26,8 +25,7 @@ describe('serve: images generations validation', () => {
   for (const [name, payload] of modelFirst) {
     it(`${name} returns 404 model_not_found (model resolves first)`, async () => {
       const res = await server().inject({ method: 'POST', url: '/v1/images/generations', payload })
-      assert.equal(res.statusCode, 404)
-      assertError(res, 'model_not_found')
+      assertStatusAndError(res, 404, 'model_not_found')
     })
   }
 })
@@ -39,14 +37,12 @@ describe('serve: images edits validation', () => {
 
   it('JSON body returns 400 invalid_content_type', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/images/edits', headers: JSON_HEADERS, payload: '{"model":"test","prompt":"hi"}' })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'invalid_content_type')
+    assertStatusAndError(res, 400, 'invalid_content_type')
   })
 
   it('missing image returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/images/edits', ...multipart([{ name: 'model', value: 'test' }, { name: 'prompt', value: 'make it blue' }]) })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_image')
+    assertStatusAndError(res, 400, 'missing_image')
   })
 
   it('mask file returns 400 mask_not_supported', async () => {
@@ -54,14 +50,12 @@ describe('serve: images edits validation', () => {
       method: 'POST', url: '/v1/images/edits',
       ...multipart([image(), { name: 'mask', filename: 'tiny.png', contentType: 'image/png', data: tinyPng() }, { name: 'model', value: 'test' }, { name: 'prompt', value: 'hi' }])
     })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'mask_not_supported')
+    assertStatusAndError(res, 400, 'mask_not_supported')
   })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/images/edits', ...multipart([image(), { name: 'prompt', value: 'make it blue' }]) })
-    assert.equal(res.statusCode, 400)
-    assertError(res, 'missing_model')
+    assertStatusAndError(res, 400, 'missing_model')
   })
 
   const modelFirst: Array<[string, Array<{ name: string, value?: string, filename?: string, contentType?: string, data?: Buffer }>]> = [
@@ -75,8 +69,7 @@ describe('serve: images edits validation', () => {
   for (const [name, fields] of modelFirst) {
     it(`${name} returns 404 model_not_found (model resolves first)`, async () => {
       const res = await server().inject({ method: 'POST', url: '/v1/images/edits', ...multipart([image(), ...fields]) })
-      assert.equal(res.statusCode, 404)
-      assertError(res, 'model_not_found')
+      assertStatusAndError(res, 404, 'model_not_found')
     })
   }
 })
@@ -86,7 +79,6 @@ describe('serve: images on publicBaseUrl server', () => {
 
   it('response_format=url is ACCEPTED when publicBaseUrl is set (then 404 on unknown model)', async () => {
     const res = await server().inject({ method: 'POST', url: '/v1/images/generations', payload: { model: 'nonexistent', prompt: 'p', response_format: 'url' } })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 })

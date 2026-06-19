@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
-import { assertError, multipart } from '../helpers/http.js'
+import { multipart, assertStatusAndError } from '../helpers/http.js'
 import { tinyPng } from '../helpers/fixtures.js'
 
 describe('serve: files content endpoint', () => {
@@ -9,8 +9,7 @@ describe('serve: files content endpoint', () => {
 
   it('GET /v1/files/:id/content returns 404 for unknown id', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/files/file-deadbeef/content' })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'file_not_found')
+    assertStatusAndError(res, 404, 'file_not_found')
   })
 
   it('GET /v1/files/:id/content returns the bytes after a POST /v1/files upload', async () => {
@@ -88,7 +87,6 @@ describe('serve: files list + metadata', () => {
 
   it('GET /v1/files/:id returns 404 for unknown id', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/files/file-nope' })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'file_not_found')
+    assertStatusAndError(res, 404, 'file_not_found')
   })
 })

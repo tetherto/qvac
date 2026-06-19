@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
-import { assertError } from '../helpers/http.js'
+import { assertStatusAndError } from '../helpers/http.js'
 
 describe('serve: models endpoint', () => {
   const server = useServer({ cors: true })
@@ -16,13 +16,11 @@ describe('serve: models endpoint', () => {
 
   it('GET /v1/models/:id returns 404 for unknown model', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/models/nonexistent' })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 
   it('DELETE /v1/models/:id returns 404 for unknown model', async () => {
     const res = await server().inject({ method: 'DELETE', url: '/v1/models/nonexistent' })
-    assert.equal(res.statusCode, 404)
-    assertError(res, 'model_not_found')
+    assertStatusAndError(res, 404, 'model_not_found')
   })
 })
