@@ -8,9 +8,13 @@ vcpkg_from_github(
 
 # benchmark@1.9.1 still enables -pedantic-errors when BENCHMARK_ENABLE_WERROR=OFF;
 # clang-22 promotes __COUNTER__ to -Wc2y-extensions, which pedantic-errors treats as fatal.
+# This is clang-specific: MSVC (cl.exe) rejects -Wno-c2y-extensions with D8021 and has no
+# such diagnostic, so only append it for the non-Windows (clang/gcc) toolchains.
 # vcpkg_cmake_configure requires C/C++ flag vars to be set together.
-string(APPEND VCPKG_CXX_FLAGS " -Wno-c2y-extensions")
-string(APPEND VCPKG_C_FLAGS " -Wno-c2y-extensions")
+if(NOT VCPKG_TARGET_IS_WINDOWS)
+    string(APPEND VCPKG_CXX_FLAGS " -Wno-c2y-extensions")
+    string(APPEND VCPKG_C_FLAGS " -Wno-c2y-extensions")
+endif()
 
 vcpkg_cmake_configure(
     SOURCE_PATH ${SOURCE_PATH}

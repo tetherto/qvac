@@ -1,5 +1,5 @@
 {
-  "$comment": "Overlay of microsoft/vcpkg benchmark@1.9.1 — clang-22 fix: disable Werror and -Wc2y-extensions on __COUNTER__.",
+  "$comment": "Overlay of microsoft/vcpkg benchmark@1.9.1 — clang-22 fix: append -Wno-c2y-extensions on __COUNTER__ for clang/gcc only (MSVC rejects the flag with D8021).",
   "name": "benchmark",
   "version-semver": "1.9.1",
   "description": "A library to benchmark code snippets, similar to unit tests.",
