@@ -17,6 +17,6 @@ const model = await loadModel("model-path");
 **AFTER:**
 
 ```typescript
-const modelId = await loadModel("model-path", { modelType: "llm" });
+const modelId = await loadModel("model-path", { modelType: "llamacpp-completion" });
 ```
 

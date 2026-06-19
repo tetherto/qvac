@@ -23,7 +23,7 @@ const systemPrompt = {
 };
 
 function printStats(stats: CompletionStats | undefined) {
-  console.log("\nPerformance Stats:", {
+  console.log("\n▸ Performance Stats:", {
     timeToFirstToken: stats?.timeToFirstToken,
     tokensPerSecond: stats?.tokensPerSecond,
     cacheTokens: stats?.cacheTokens,
@@ -36,9 +36,9 @@ async function runCachedCompletion(params: {
   history: ChatMessage[];
   kvCache?: string | boolean;
 }) {
-  console.log(`\n=== ${params.label} ===`);
-  console.log(`Cache key: ${params.kvCache || "disabled"}`);
-  console.log("AI Response:");
+  console.log(`\n▸ ${params.label}`);
+  console.log(`▸ Cache key: ${params.kvCache || "disabled"}`);
+  console.log("▸ AI Response:");
 
   const result = completion({
     modelId: params.modelId,
@@ -62,7 +62,7 @@ async function runCachedCompletion(params: {
 let modelId: string | undefined;
 
 try {
-  console.log("Loading llama.cpp model with cache support...");
+  console.log("▸ Loading llama.cpp model with cache support...");
 
   modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
@@ -70,12 +70,15 @@ try {
       ctx_size: 4096,
       verbosity: VERBOSITY.ERROR,
     },
-    onProgress: (progress) => {
-      console.log(`Loading: ${progress.percentage.toFixed(1)}%`);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`Model loaded successfully. Model ID: ${modelId}`);
+  console.log(`▸ Model loaded successfully. Model ID: ${modelId}`);
 
   await deleteCache({ kvCacheKey: sharedCacheKey });
   await deleteCache({ kvCacheKey: isolatedCacheKey });
@@ -123,15 +126,15 @@ try {
     ],
   });
 
-  console.log("\nSummary:");
+  console.log("\n▸ Summary:");
   console.log(
-    `- Reusing "${sharedCacheKey}" keeps conversation context across turns.`,
+    `▸ - Reusing "${sharedCacheKey}" keeps conversation context across turns.`,
   );
   console.log(
-    `- Switching to "${isolatedCacheKey}" starts a separate cache session.`,
+    `▸ - Switching to "${isolatedCacheKey}" starts a separate cache session.`,
   );
   console.log(
-    '- Use deleteCache({ kvCacheKey: "your-session" }) to clear a saved session.',
+    '▸ - Use deleteCache({ kvCacheKey: "your-session" }) to clear a saved session.',
   );
 
   await deleteCache({ kvCacheKey: sharedCacheKey });
@@ -144,10 +147,10 @@ try {
     try {
       await unloadModel({ modelId, clearStorage: false });
     } catch (cleanupError) {
-      console.warn("⚠️ cleanup failed:", cleanupError);
+      console.warn("✖ cleanup failed:", cleanupError);
     }
   }
 
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

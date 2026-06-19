@@ -1,0 +1,114 @@
+name: PR Release Guard (SDK Pod)
+
+# Validates release PRs (base branch release-<slug>-x.y.z) before merge:
+# branch name, version bump, CHANGELOG updated, and a non-empty "## [x.y.z]"
+# section. This is the same set of checks that otherwise only run after merge
+# (release-merge-guard on push) and after npm publish (create-github-release) —
+# brought forward so a broken release fails on the PR.
+#
+# Uses pull_request (not pull_request_target): the job needs no secrets or write
+# token, only reads PR git content, so it must not run with elevated privilege.
+#
+# No trigger-level `paths:` filter on purpose: if this check is added to a branch
+# ruleset, a skipped run never reports a status and GitHub blocks the PR on
+# "waiting for status". So it runs on every release-* PR and no-ops internally
+# for non-SDK-pod release branches (mirrors pr-checks-sdk-pod.yml).
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - release-*
+
+jobs:
+  release-guard:
+    name: Release Guard (changelog/version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Derive package from release slug
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_ref="${{ github.base_ref }}"
+          pods=" sdk cli rag logging error ai-sdk-provider "
+          if [[ ! "$base_ref" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::notice::Base '$base_ref' is not release-<slug>-x.y.z — skipping SDK-pod release guard"
+            echo "is_sdk_pod_package=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          slug="${BASH_REMATCH[1]}"
+          version="${BASH_REMATCH[2]}"
+          if [[ "$pods" != *" $slug "* ]]; then
+            echo "::notice::'$slug' is not an SDK pod — skipping (guarded by its own release workflow)"
+            echo "is_sdk_pod_package=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "is_sdk_pod_package=true"
+            echo "slug=$slug"
+            echo "version=$version"
+            echo "pkg_json=packages/$slug/package.json"
+            echo "changelog=packages/$slug/CHANGELOG.md"
+          } >> "$GITHUB_OUTPUT"
+
+      # Default pull_request checkout = the merge ref; fetch-depth 0 so the guard
+      # can diff base..head and read package.json/CHANGELOG at the head commit.
+      # Local actions below (uses: ./...) resolve from this checkout, i.e. from
+      # base+head — not from main. They ship in the same commit as this workflow,
+      # so any branch running this job also has them; backporting this workflow
+      # without them would fail loudly here.
+      - name: Checkout
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Validate release branch, version bump and changelog
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        uses: ./.github/actions/release-merge-guard
+        with:
+          base-ref: ${{ github.base_ref }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          package-slug: ${{ steps.pkg.outputs.slug }}
+          package-json-path: ${{ steps.pkg.outputs.pkg_json }}
+          changelog-path: ${{ steps.pkg.outputs.changelog }}
+
+      # Read the CHANGELOG as it would be after merge (the PR head commit).
+      - name: Materialize PR-head CHANGELOG
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        id: head_changelog
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGELOG: ${{ steps.pkg.outputs.changelog }}
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/changelog-head.md"
+          if ! git show "${HEAD_SHA}:${CHANGELOG}" > "${out}" 2>/dev/null; then
+            echo "::error::CHANGELOG not found at PR head: ${CHANGELOG}"
+            exit 1
+          fi
+          echo "path=${out}" >> "$GITHUB_OUTPUT"
+
+      # Same version-section check create-github-release.yml runs post-publish,
+      # brought forward to the PR so a missing/empty section fails before merge —
+      # not after the package is already on npm with no GitHub release.
+      - name: Verify CHANGELOG has release notes for this version
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        uses: ./.github/actions/verify-changelog-notes
+        with:
+          changelog-path: ${{ steps.head_changelog.outputs.path }}
+          version: ${{ steps.pkg.outputs.version }}

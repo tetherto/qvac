@@ -7,6 +7,7 @@ Full-factorial parameter sweep for `@qvac/llm-llamacpp`, measuring TTFT, TPS, an
 - [Addon Source](#addon-source)
 - [Setup](#setup)
 - [Quick Start](#quick-start)
+- [CI Workflow (GitHub Actions)](#ci-workflow-github-actions)
 - [Sweep Flags](#sweep-flags)
 - [Prompt Cases](#prompt-cases)
 - [Judge Pass](#judge-pass)
@@ -62,22 +63,106 @@ npm run run:param-sweep -- \
 npm run run:judge
 ```
 
+## CI Workflow (GitHub Actions)
+
+Everything above runs locally. To run the benchmark on CI runners + AWS Device
+Farm (desktop **and** mobile), use the **Benchmark Performance — LLM Parameter
+Sweep** workflow (`.github/workflows/benchmark-perf-llm-llamacpp.yml`).
+
+Trigger it from the GitHub UI: **Actions → Benchmark Performance — LLM Parameter
+Sweep → Run workflow**. There is nothing to configure for a normal run — the
+matrix (models, quantizations, reasoning-budget, KV-cache types, repeats) is
+fixed in the scripts; edit those to change what runs.
+
+The **mobile** sweep runs one Device Farm session per
+`(size, quant, KV-cache)` combination. Those combinations live in a single
+source of truth, `test/integration/_benchmark-matrix.js`. The per-combination
+test files (`test/integration/benchmark-perf-*.test.js`) and the workflow's
+mobile `test_groups` are derived from it and the shard files are **not
+committed** — regenerate them with `npm run generate:benchmark-shards` (the CI
+mobile job does this automatically before the Device Farm bundle is built, and
+fails hard if any shard is missing). To change the mobile grid, edit
+`_benchmark-matrix.js`, run `npm run generate:benchmark-shards` and
+`npm run test:mobile:generate`, then update the workflow groups from
+`node scripts/generate-benchmark-shards.js --groups` and commit
+`integration.auto.cjs`. `npm run verify:benchmark-shards` checks they are all in
+sync.
+
+### Inputs
+
+| Input | Default | Purpose |
+|-------|---------|---------|
+| `ref` | launch branch | Branch/tag/SHA of the benchmark code + addon to build and run |
+| `run_desktop` | `true` | Run the desktop sweep (Linux GPU runner) |
+| `run_mobile` | `true` | Run the mobile sweep (Android + iOS via Device Farm) |
+| `summarize_only` | `false` | Re-render a previous run's report in ~1 min, skipping the ~6 h benchmarks. Needs `artifact_run_id` |
+| `artifact_run_id` | — | Previous run ID to re-render (the number in that run's URL). Only with `summarize_only` |
+| `compare_run_id` | — | Baseline run ID to diff against — adds Δ TTFT / TPS / ppTPS columns |
+
+Run IDs are the number in a run's URL (`.../actions/runs/<run_id>`). You never
+supply a run ID for a fresh run — leave them blank.
+
+### Recipes
+
+| Goal | Inputs |
+|------|--------|
+| Fresh full benchmark (desktop + mobile) | *(all blank)* |
+| Desktop only | `run_mobile = false` |
+| Mobile only | `run_desktop = false` |
+| Benchmark a specific code version | `ref = <branch/tag/SHA>` |
+| Re-render a finished run's report | `summarize_only = true`, `artifact_run_id = <run>` |
+| Compare two runs (regression check) | `summarize_only = true`, `artifact_run_id = <new run>`, `compare_run_id = <baseline run>` |
+| Fresh run that also diffs vs a baseline | `compare_run_id = <baseline run>` |
+
+The comparison downloads both runs' artifacts and prints a `Δ` for every
+metric, e.g. `122.37 ± 0.62 | -0.52` (current value ± stddev, then the delta vs
+baseline). It works against **any** two runs.
+
+### What the report contains
+
+Rendered into the run summary of the `summarize` job and uploaded as the
+`qwen35-benchmark-findings-<n>` artifact. One table per device, identical shape
+for desktop and mobile:
+
+- **Header** — addon version, prompt size, repeats per config (e.g.
+  `desktop=5, mobile=3`). The version is recorded into the run's artifacts at
+  benchmark time, so it is always the version that actually ran and a
+  comparison auto-reads each run's own version (nothing to type, nothing to get
+  wrong).
+- **Columns** — `TTFT (ms) | TPS | ppTPS | Tokens`, each as `mean ± stddev`
+  across the repeats (plus `Δ` columns when comparing).
+- **Desktop device** — shows the detected GPU (e.g. `Desktop (NVIDIA RTX …)`),
+  preserved on re-renders.
+- **`Crashed`** — a configuration that crashed or produced no output on that
+  device (e.g. quantized KV cache on Adreno GPUs).
+- **Best configuration per device** — highest TPS and highest ppTPS.
+
+> Note: the table shape is identical across desktop and mobile, but the
+> generation length differs — desktop caps at `n-predict` 1024 tokens, mobile
+> at 512. The rate metrics (TPS, ppTPS) stay comparable; the `Tokens` column
+> and absolute TTFT reflect those different caps.
+
 ## Sweep Flags
 
 All sweep dimensions accept comma-separated values for full-factorial grid.
 
+Defaults below are the focused set currently pinned in
+`llm-parameter-sweep.config.js` (`PARAMETER_SWEEP`). Pass a flag with
+comma-separated values to widen any dimension into the full grid.
+
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--models` | `str` | All in manifest | Comma-separated model IDs |
-| `--quantization` | `str` | `Q4_0,Q4_K_M,Q8_0,F16` | Quantization levels |
-| `--device` | `str` | `gpu` | `gpu`, `cpu` |
+| `--quantization` | `str` | `Q4_0,Q4_1,Q4_K_M,Q6_K,Q8_0` | Quantization levels |
+| `--reasoning-budget` | `str` | `-1,0` | Reasoning budget values |
+| `--device` | `str` | `gpu` (desktop) | `gpu`, `cpu` |
 | `--ctx-size` | `str` | `2048` | Context sizes |
-| `--batch-size` | `str` | `512,2048` | Batch sizes |
-| `--ubatch-size` | `str` | `128,512` | Micro-batch sizes (must be <= batch-size) |
-| `--threads` | `str` | `2,4,8` | Thread counts |
-| `--flash-attn` | `str` | `off,on` | Flash attention |
-| `--cache-type-k` | `str` | `f16,q8_0,q4_0` | KV cache key type |
-| `--cache-type-v` | `str` | `f16,q8_0,q4_0` | KV cache value type |
+| `--batch-size` | `str` | `512` | Batch sizes |
+| `--ubatch-size` | `str` | `512` | Micro-batch sizes (must be <= batch-size) |
+| `--threads` | `str` | `4` | Thread counts |
+| `--flash-attn` | `str` | `off` | Flash attention |
+| `--cache-type-k` | `str` | `f16` | KV cache key type |
+| `--cache-type-v` | `str` | `f16` | KV cache value type |
 | `--repeats` | `int` | `5` | Repeats per case |
 | `--results-dir` | `str` | `results/parameter-sweep/` | Output directory |
 | `--prompts-file` | `str` | `test-prompts.json` | Prompts file path |
@@ -86,11 +171,14 @@ All sweep dimensions accept comma-separated values for full-factorial grid.
 
 ## Prompt Cases
 
-Each parameter combination runs three prompt cases:
+The sweep currently runs a single prompt case, `long` (the focused ~512-token
+benchmark prompt) — `PROMPT_CASES = ['long']` in `case-runner.js`. The
+`ctx-filling` / `span-fill` fixtures below still exist in `test-prompts.json`
+and can be re-enabled by extending `PROMPT_CASES`.
 
 | Case | Description | Prompt Selection |
 |------|-------------|-----------------|
-| `long` | Long-output generation | Static `long` prompt |
+| `long` | Long-output generation (active) | Static `long` prompt |
 | `ctx-filling` | Maximizes context fill | `ctx-filling__ctx={ctx-size}` |
 | `span-fill` | Spans multiple prefill batches | `batch-spanning__ctx={ctx-size}__bs={batch-size}` |
 

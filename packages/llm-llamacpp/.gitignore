@@ -8,6 +8,9 @@ prebuilds/
 
 test/unit/all.js
 test/integration/all.js
+# Mobile perf benchmark shards — generated from test/integration/_benchmark-matrix.js
+# by scripts/generate-benchmark-shards.js. Never commit them.
+test/integration/benchmark-perf-*.test.js
 test/model/
 test/results/
 .npmrc

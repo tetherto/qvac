@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0]
+
+### Changed
+
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2638](https://github.com/tetherto/qvac/pull/2638)).
+- `vcpkg.json` now selects `whisper-cpp[metal]` on **iOS** as well as
+  macOS (QVAC-20687). The separate featureless `ios` dependency entry is
+  merged into the `osx` entry as a single `"platform": "osx | ios"` block
+  requesting `["metal"]`, so Apple GPU backend selection is declarative
+  and at parity with `transcription-parakeet`. Supersedes the 0.9.0 note
+  that iOS shipped without the `[metal]` feature pending the iOS
+  Metal/MTLCompiler XPC crash investigation.
+
+### Added
+- iOS Metal assertion in the mobile perf integration test
+  (`test/integration/mobile-perf-runner.js`): with `use_gpu=true` on iOS
+  the runner now asserts `backendId === 1` (Metal), mirroring the
+  existing Android GPU-backend assertion. The on-PR iOS device-farm run
+  thus guards that whisper engages Metal (and that the historical
+  MTLCompiler XPC init crash has not regressed) instead of silently
+  falling back to CPU.
+
 ## [0.9.0]
 
 ### Added
