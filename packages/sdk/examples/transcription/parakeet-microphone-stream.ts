@@ -26,7 +26,7 @@ try {
   const r = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
   if (r.error || r.status !== 0) throw new Error("FFmpeg not found");
 } catch {
-  console.error("Error: FFmpeg is required. Install it and try again.");
+  console.error("✖ FFmpeg is required. Install it and try again.");
   process.exit(1);
 }
 
@@ -34,10 +34,10 @@ let modelId: string | null = null;
 let ffmpeg: ReturnType<typeof startMicrophone> | null = null;
 
 async function cleanup() {
-  console.log("\n\nStopping...");
+  console.log("\n▸ Stopping...");
   ffmpeg?.kill();
   if (modelId) await unloadModel({ modelId });
-  console.log("Done.");
+  console.log("▸ Done.");
 }
 
 process.on("SIGINT", () => {
@@ -48,12 +48,17 @@ process.on("SIGTERM", () => {
 });
 
 try {
-  console.log("Loading Parakeet (EOU) streaming model...");
+  console.log("▸ Loading Parakeet (EOU) streaming model...");
   modelId = await loadModel({
     modelSrc: PARAKEET_EOU_120M_V1_Q8_0,
-    onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log("Model loaded.\n");
+  console.log("▸ Model loaded.");
 
   ffmpeg = startMicrophone({ sampleRate: SAMPLE_RATE, format: "s16le" });
 
@@ -68,7 +73,7 @@ try {
   ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
 
   console.log(
-    "Listening... speak and pause to see transcripts. End-of-turn boundaries fire when the EOU model emits an <EOU> token.\n",
+    "▸ Listening... speak and pause to see transcripts. End-of-turn boundaries fire when the EOU model emits an <EOU> token.",
   );
 
   for await (const event of session) {
@@ -79,14 +84,14 @@ try {
         }
         break;
       case "endOfTurn":
-        console.log("\n[endOfTurn] turn boundary detected\n");
+        console.log("\n▸ [endOfTurn] turn boundary detected");
         break;
     }
   }
   await cleanup();
   process.exit(0);
 } catch (error) {
-  console.error("Error:", error);
+  console.error("✖", error);
   await cleanup();
   process.exit(1);
 }

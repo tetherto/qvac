@@ -41,6 +41,16 @@ on:
         type: string
         required: false
         default: ""
+      job_timeout_minutes:
+        description: "Override the build-and-test job timeout (minutes). Default 150. Raised by Benchmark Performance (LLM) where the sharded matrix needs more headroom."
+        type: number
+        required: false
+        default: 150
+      artifact_suffix:
+        description: "Optional suffix appended to the perf-report artifact-name stem (before the platform segment) so multiple invocations in one run (e.g. Benchmark batches) don't collide. Default empty keeps the existing name."
+        type: string
+        required: false
+        default: ""
       pre_build_script:
         description: "Optional node script (path under packages/llm-llamacpp) run before the mobile build to bootstrap a benchmark into the framework (stage files + regenerate the test list). Default '' = no-op."
         type: string
@@ -107,7 +117,7 @@ jobs:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 150
+    timeout-minutes: ${{ inputs.job_timeout_minutes || 150 }}
     continue-on-error: true
     # Surfaced as workflow_call outputs above so schedule-driven callers can
     # report a verdict (the job itself never fails — continue-on-error).
@@ -165,6 +175,20 @@ jobs:
           addon-npm-name: '@qvac/llm-llamacpp'
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
+      # committed — they are generated from test/integration/_benchmark-matrix.js.
+      # Regenerate them after setup (which provisions Node) but before the
+      # bundle is built, so the Device Farm app contains them, then hard-fail if
+      # any are still missing. This makes it impossible to build the bundle
+      # without the shards present. (Runs for every LLM mobile run; for
+      # non-benchmark runs the generated shards are simply skipped, like any
+      # other mobile-only test.)
+      - name: Generate benchmark shards
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          npm run generate:benchmark-shards
+          node scripts/generate-benchmark-shards.js --assert-shards
 
       # ── Benchmark bootstrap (additive, opt-in via pre_build_script) ──────────
       # When a caller passes pre_build_script (only the VLM benchmark does), run the
@@ -291,7 +315,7 @@ jobs:
           platform: ${{ matrix.platform }}
           merge: 'true'
           unzip-customer-artifacts: 'true'
-          artifact-name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}
+          artifact-name: perf-report-llamacpp-llm-${{ inputs.artifact_suffix }}${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

@@ -93,18 +93,16 @@ try {
 
   const merged = mergeSpeakers(results);
 
-  console.log("\n=== DIARIZED TRANSCRIPTION ===");
-  console.log("=".repeat(60));
+  console.log("\n▸ Diarized transcription");
   for (const entry of merged) {
     console.log(
       `Speaker ${entry.speaker} (${entry.start.toFixed(2)}s - ${entry.end.toFixed(2)}s):`,
     );
     console.log(`  ${entry.text}\n`);
   }
-  console.log("=".repeat(60));
-  console.log("\nDone!");
+  console.log("▸ Done");
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
 

@@ -4,7 +4,7 @@ import { ChromaClient } from "chromadb";
 
 // Setup instructions for ChromaDB server
 const CHROMADB_SETUP_INSTRUCTIONS = `
-🚀 To run this example, you need a ChromaDB server running locally.
+▸ To run this example, you need a ChromaDB server running locally.
 
 Setup options:
 
@@ -24,11 +24,11 @@ async function initializeChromaClient() {
 
   try {
     await client.heartbeat();
-    console.log("✅ Connected to ChromaDB server");
+    console.log("▸ Connected to ChromaDB server");
     return client;
   } catch {
-    console.error("❌ Failed to connect to ChromaDB server");
-    console.error("Please ensure the server is running on localhost:8000");
+    console.error("✖ Failed to connect to ChromaDB server");
+    console.error("▸ Please ensure the server is running on localhost:8000");
     console.error(CHROMADB_SETUP_INSTRUCTIONS);
     process.exit(1);
   }
@@ -37,14 +37,18 @@ async function initializeChromaClient() {
 try {
   // Get query from command line or use default
   const query = process.argv[2] || "machine learning algorithms";
-  console.log(`🔍 Query: "${query}"`);
+  console.log(`▸ Query: "${query}"`);
 
   const client = await initializeChromaClient();
 
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    onProgress: (p) =>
-      console.log(`Loading model... ${Math.round(p.percentage)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
 
   // Sample corpus
@@ -88,7 +92,7 @@ try {
   try {
     await client.deleteCollection({ name: collectionName });
   } catch (e) {
-    console.warn(`Collection didn't exist, no need to delete: ${String(e)}`);
+    console.warn(`▸ Collection didn't exist, no need to delete: ${String(e)}`);
   }
   const collection = await client.createCollection({
     name: collectionName,
@@ -96,7 +100,7 @@ try {
   });
 
   // Embed and add documents (we're bringing our own embeddings)
-  console.log("📚 Embedding documents...");
+  console.log("▸ Embedding documents...");
   const ids: string[] = [];
   const documents: string[] = [];
   const embeddings: number[][] = [];
@@ -113,7 +117,7 @@ try {
     embeddings,
   });
 
-  console.log("🔎 Searching for similar documents...");
+  console.log("▸ Searching for similar documents...");
   const { embedding: queryEmbedding } = await embed({ modelId, text: query });
 
   // Query top 3 by vector similarity and include distances
@@ -123,19 +127,17 @@ try {
     include: ["documents", "distances"],
   });
 
-  console.log("\n📋 Top 3 most similar documents:");
+  console.log("▸ Top 3 most similar documents:");
   const docs = res.documents?.[0] ?? [];
   const dists = res.distances?.[0] ?? [];
   for (let i = 0; i < docs.length; i++) {
-    console.log("=".repeat(50) + " Top result:");
-    console.log(`\n${i + 1}. (Score: ${dists[i]?.toFixed(4)})`);
+    console.log(`${i + 1}. (Score: ${dists[i]?.toFixed(4)})`);
     console.log(`   ${docs[i]}`);
-    console.log("=".repeat(100));
     console.log();
   }
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

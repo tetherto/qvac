@@ -15,10 +15,14 @@ try {
       ctx_size: 4096,
       tools: true,
     },
-    onProgress: (progress) =>
-      console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`✅ Model loaded successfully! Model ID: ${modelId}`);
+  console.log(`▸ Model loaded successfully! Model ID: ${modelId}`);
 
   const history = [
     {
@@ -32,8 +36,8 @@ try {
     },
   ];
 
-  console.log("\n🤖 AI Response:");
-  console.log("(Streaming with tool definitions in prompt)\n");
+  console.log("\n▸ AI Response:");
+  console.log("▸ (Streaming with tool definitions in prompt)\n");
 
   const result = completion({ modelId, history, stream: true, tools });
 
@@ -46,9 +50,9 @@ try {
   const toolsTask = (async () => {
     for await (const evt of result.toolCallStream) {
       console.log(
-        `\n\n→ Tool Call Detected: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
+        `\n\n▸ Tool Call Detected: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
       );
-      console.log(`   ID: ${evt.call.id}`);
+      console.log(`▸ ID: ${evt.call.id}`);
     }
   })();
 
@@ -57,33 +61,33 @@ try {
   const stats: CompletionStats | undefined = await result.stats;
   const toolCalls: ToolCall[] = await result.toolCalls;
 
-  console.log("\n\n📋 Parsed Tool Calls:");
+  console.log("\n\n▸ Parsed Tool Calls:");
   if (toolCalls.length > 0) {
     for (const call of toolCalls) {
-      console.log(`  - ${call.name}(${JSON.stringify(call.arguments)})`);
+      console.log(`▸ ${call.name}(${JSON.stringify(call.arguments)})`);
 
       const schema = toolSchemas[call.name as keyof typeof toolSchemas];
       if (schema) {
         const validated = schema.safeParse(call.arguments);
         if (validated.success) {
-          console.log(`    ✓ Arguments validated with Zod`);
+          console.log(`▸ Arguments validated with Zod`);
         } else {
-          console.log(`    ✗ Validation failed:`, validated.error);
+          console.log(`✖ Validation failed:`, validated.error);
         }
       }
     }
   } else {
-    console.log("  No tool calls detected in response");
+    console.log("▸ No tool calls detected in response");
   }
 
-  console.log("\n📊 Performance Stats:", stats);
+  console.log("\n▸ Performance Stats:", stats);
 
   if (toolCalls.length > 0) {
-    console.log("\n\n🔧 Simulating Tool Execution...");
+    console.log("\n\n▸ Simulating Tool Execution...");
 
     const toolResults = toolCalls.map((call) => {
       const result = mockExecute(call.name, call.arguments);
-      console.log(`  ✓ ${call.name}: ${result}`);
+      console.log(`▸ ${call.name}: ${result}`);
       return { toolCallId: call.id, result };
     });
 
@@ -99,7 +103,7 @@ try {
       });
     }
 
-    console.log("\n\n🤖 Follow-up Response with Tool Results:");
+    console.log("\n\n▸ Follow-up Response with Tool Results:");
     const followUpResult = completion({
       modelId,
       history,
@@ -112,12 +116,12 @@ try {
     }
 
     const followUpStats = await followUpResult.stats;
-    console.log("\n\n📊 Follow-up Stats:", followUpStats);
+    console.log("\n\n▸ Follow-up Stats:", followUpStats);
   }
 
-  console.log("\n\n🎉 Completed!");
+  console.log("\n\n▸ Completed!");
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
