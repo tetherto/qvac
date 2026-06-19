@@ -71,8 +71,8 @@ protected:
     return qwen3Model_.found() && fs::exists(qwen3Model_.path);
   }
 
-  std::unique_ptr<LlamaModel> createModel(
-      std::unordered_map<std::string, std::string> config) {
+  std::unique_ptr<LlamaModel>
+  createModel(std::unordered_map<std::string, std::string> config) {
     auto model = std::make_unique<LlamaModel>(
         std::string(qwen3Model_.path), std::string(), std::move(config));
     model->waitForLoadInitialization();
