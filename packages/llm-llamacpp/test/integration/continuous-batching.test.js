@@ -1,6 +1,5 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
