@@ -7,9 +7,37 @@ tocMaxDepth: 3
 
 ## Overview
 
-To connect the HTTP server to your tool, start both with compatible configuration. On the HTTP server side, use `qvac.config.json` to declare the models you want to provide. On the tool side, add QVAC as a custom OpenAI-compatible provider that points its base URL at the running server and references those same models.
+For OpenCode, use the published [`@qvac/opencode-plugin`](https://www.npmjs.com/package/@qvac/opencode-plugin). The plugin starts a local managed QVAC server for the project, registers the `qvac` provider, selects the default local model, and cleans up when OpenCode exits.
 
-Each tool is configured differently, but two things must always match between the two sides: the model name that the tool requests must be identical to an alias you declared in `serve.models`, and the tool's base URL must point to the address and port where the server is listening (`http://localhost:11434/v1` by default).
+Manual HTTP-server setup is still available for other OpenAI-compatible tools, or for OpenCode users who want to run `qvac serve openai` themselves. In that mode, the model name requested by the tool must match an alias declared in `serve.models`, and the tool's base URL must point to the running server (`http://localhost:11434/v1` by default).
+
+## OpenCode quickstart
+
+Add the plugin to your project's `opencode.json`:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@qvac/opencode-plugin"]
+}
+```
+
+Then run OpenCode normally:
+
+```bash
+opencode
+```
+
+The plugin uses `qvac/qwen3.5-9b` by default. Use that for the best local OpenCode experience; if your machine cannot keep the 9B model warm comfortably, switch to `qwen3.5-4b`:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [["@qvac/opencode-plugin", { "model": "qwen3.5-4b" }]]
+}
+```
+
+See the [`@qvac/opencode-plugin` README](https://www.npmjs.com/package/@qvac/opencode-plugin) for the complete plugin model list and advanced options.
 
 ## Compatible tools
 
@@ -27,6 +55,8 @@ The following tools have been verified to work as drop-in replacements by pointi
 | [OpenCode](https://opencode.ai) | `/v1/chat/completions` (streaming, tool calls) |
 
 ## Configure the HTTP server
+
+Skip this section if you are using the OpenCode plugin above.
 
 The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. Coding agents need a larger context window than the server default, so set `ctx_size` explicitly:
 
@@ -54,48 +84,19 @@ See [HTTP server](/cli/http-server) for how to install it, run it, and the other
 
 ## Configure the tool
 
+Skip this section if you are using the OpenCode plugin above.
+
 On the tool side, register QVAC as a custom OpenAI-compatible provider. The exact file and fields differ per tool, but every setup needs the same three things:
 
 - **Base URL** pointing at the running server (`http://localhost:11434/v1` by default).
 - **Model name(s)** that match the aliases declared in `serve.models`.
 - **API key** — the server does not validate it, but some clients refuse to send a request without an `Authorization` header, so set any non-empty value when required.
 
-Consult your tool's documentation for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The OpenCode recipe below is a concrete example of this pattern.
+Consult your tool's documentation for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The manual OpenCode recipe below is a concrete example of this pattern.
 
-### OpenCode
+### OpenCode manual provider
 
-#### Recommended: managed OpenCode plugin
-
-For OpenCode, the easiest path is the published [`@qvac/opencode-plugin`](https://www.npmjs.com/package/@qvac/opencode-plugin). Add it to `opencode.json` and OpenCode starts a local managed `qvac serve`, registers the `qvac` provider, selects the default model, and tears the serve down on exit:
-
-```json title="opencode.json"
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@qvac/opencode-plugin"]
-}
-```
-
-The plugin uses `qvac/qwen3.5-9b` by default. You can choose a smaller model through the plugin tuple or `QVAC_MODEL`:
-
-```json title="opencode.json"
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [["@qvac/opencode-plugin", { "model": "qwen3.5-4b" }]]
-}
-```
-
-| Plugin model id | Use when | Notes |
-| --- | --- | --- |
-| `qwen3.5-9b` | You want the best local OpenCode experience and your machine can keep it warm. | Default. Best choice for tool use, repository edits, and multi-step coding tasks. |
-| `qwen3.5-4b` | You need a smaller/faster model for lighter code questions or modest hardware. | Less reliable for tool-heavy workflows than 9B. |
-| `qwen3.5-2b` | You are smoke-testing the plugin/server path or using a low-memory machine. | Fast, but weak for real coding-agent work. |
-| `qwen3.5-0.8b` | You need the fastest health check or demo. | Not recommended for reliable tool use or code reasoning. |
-
-All plugin model ids are friendly, models.dev-style aliases for QVAC constants; for example `qwen3.5-9b` loads `QWEN3_5_9B_MULTIMODAL_Q4_K_M` and appears in OpenCode as `qvac/qwen3.5-9b`.
-
-#### Manual custom provider
-
-Configure `opencode.json` with a full `qvac` provider block plus the `model` / `small_model` routing keys:
+If you are not using the plugin, configure `opencode.json` with a full `qvac` provider block and point it at the `qvac serve openai` instance you started yourself:
 
 ```json title="opencode.json"
 {
@@ -115,8 +116,7 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
       }
     }
   },
-  "model":       "qvac/qwen3-8b-chat",
-  "small_model": "qvac/qwen3-8b-chat"
+  "model": "qvac/qwen3-8b-chat"
 }
 ```
 
@@ -146,9 +146,7 @@ Coding agents routinely fire concurrent requests — typically a main chat compl
 
 ### `ctx_size` defaults to 1024 — too small for agents
 
-The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat; use 8192+ for a separate utility model that handles summaries or compaction) or you'll see context fills and truncated responses well before the model misbehaves.
-
-OpenCode routes some tool-heavy work to `small_model`, not just lightweight title generation, so a 4k secondary model overflows quickly. If you configure a separate utility model, give it enough context for summaries and compaction rather than a tiny title-only budget.
+The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat) or you'll see context fills and truncated responses well before the model misbehaves.
 
 ### `reasoning_budget: 0` to suppress `<think>` blocks
 
