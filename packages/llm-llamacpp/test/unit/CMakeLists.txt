@@ -20,6 +20,7 @@ add_executable(
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
   test_tune_config_map.cpp
+  test_generation_params_apply.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
