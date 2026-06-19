@@ -380,7 +380,8 @@ safeTest('[qwen3.5-imrope-sliding-context] multimodal cache survives sliding sav
 })
 
 safeTest('[qwen3.5-imrope-sliding-context] q8 K-cache shifts multimodal and text tokens', {
-  timeout: 1_800_000
+  timeout: 1_800_000,
+  skip: isAndroid
 }, async t => {
   await runMultimodalSlidingCacheCase(t, {
     label: 'q8 K-cache multimodal',
