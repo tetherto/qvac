@@ -6,6 +6,10 @@ vcpkg_from_github(
     HEAD_REF main
 )
 
+# benchmark@1.9.1 still enables -pedantic-errors when BENCHMARK_ENABLE_WERROR=OFF;
+# clang-22 promotes __COUNTER__ to -Wc2y-extensions, which pedantic-errors treats as fatal.
+string(APPEND VCPKG_CXX_FLAGS " -Wno-c2y-extensions")
+
 vcpkg_cmake_configure(
     SOURCE_PATH ${SOURCE_PATH}
     OPTIONS

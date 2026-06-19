@@ -1,8 +1,7 @@
 {
-  "$comment": "Overlay of microsoft/vcpkg benchmark@1.9.1 — disables -Werror for clang-22 C2y extension failures on __COUNTER__.",
+  "$comment": "Overlay of microsoft/vcpkg benchmark@1.9.1 — clang-22 fix: disable Werror and -Wc2y-extensions on __COUNTER__.",
   "name": "benchmark",
   "version-semver": "1.9.1",
-  "port-version": 1,
   "description": "A library to benchmark code snippets, similar to unit tests.",
   "homepage": "https://github.com/google/benchmark",
   "license": "Apache-2.0",
