@@ -388,6 +388,66 @@ jobs:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
 
+      # Guards against regressing the static-runtime build: addons must link the
+      # static MSVC runtime, so the shipped .bare/.dll must not import the dynamic
+      # Visual C++ runtime (vcruntime140.dll / msvcp140.dll / ucrtbase.dll / the
+      # api-ms-win-crt-* UCRT forwarders). Re-introducing msvcrt.lib or a
+      # dynamic-CRT vcpkg triplet would make these appear and fail the build.
+      - name: Verify no dynamic C/C++ runtime dependency (Windows)
+        if: matrix.platform == 'win32'
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if (-not (Test-Path -Path "prebuilds" -PathType Container)) {
+            Write-Error "prebuilds/ does not exist; nothing to verify"
+            exit 1
+          }
+
+          # Prefer dumpbin on PATH; otherwise locate it via vswhere (installed
+          # alongside the MSVC build tools that the vcpkg build already requires).
+          $dumpbin = (Get-Command dumpbin -ErrorAction SilentlyContinue).Source
+          if (-not $dumpbin) {
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+            if (Test-Path $vswhere) {
+              $dumpbin = & $vswhere -latest -products * -find "**\dumpbin.exe" | Select-Object -First 1
+            }
+          }
+          if (-not $dumpbin) {
+            Write-Error "dumpbin.exe not found (checked PATH and vswhere)"
+            exit 1
+          }
+          Write-Output "Using dumpbin: $dumpbin"
+
+          # Dynamic C/C++ runtime import names that must never appear.
+          $forbidden = 'vcruntime\d', 'msvcp\d', 'msvcr\d', 'msvcrt\.dll', 'ucrtbase', 'api-ms-win-crt', 'concrt\d'
+
+          $binaries = Get-ChildItem -Path "prebuilds" -Recurse -File -Include *.bare, *.dll
+          if (-not $binaries) {
+            Write-Error "No .bare/.dll binaries found under prebuilds/"
+            exit 1
+          }
+
+          $violations = @()
+          foreach ($bin in $binaries) {
+            $deps = & $dumpbin /nologo /dependents $bin.FullName
+            foreach ($pattern in $forbidden) {
+              foreach ($hit in ($deps | Select-String -Pattern $pattern)) {
+                $violations += "{0} -> {1}" -f $bin.FullName, $hit.Line.Trim()
+              }
+            }
+            Write-Output ("checked: {0}" -f $bin.FullName)
+          }
+
+          if ($violations.Count -gt 0) {
+            Write-Output "::error::Dynamic C/C++ runtime dependency detected in Windows prebuilds:"
+            $violations | ForEach-Object { Write-Output $_ }
+            exit 1
+          }
+
+          Write-Output "OK: no dynamic C/C++ runtime dependency in Windows prebuilds"
+
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
