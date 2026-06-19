@@ -8,6 +8,7 @@
     "gemma": ["runGemma4Test"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
     "continuousBatching": ["runContinuousBatchingTest"],
+    "mtp": ["runMtpTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",

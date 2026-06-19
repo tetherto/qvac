@@ -2,6 +2,7 @@
 
 #include <atomic>
 
+#include <llama-cpp.h>
 #include <llama.h>
 
 #include "../utils/ChatTemplateUtils.hpp"
@@ -11,6 +12,7 @@
 #include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
+#include "common/speculative.h"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Concrete text-only LLM context. Implements both the legacy
@@ -248,6 +250,31 @@ private:
   llama_pos applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
+  // Wraps llama_decode(lctx_, batch). When MTP/speculative is active, also
+  // feeds the batch into common_speculative_process so the draft (MTP) context
+  // tracks the target's post-norm hidden states on every prefill ubatch and
+  // generation step (required before common_speculative_draft can run).
+  int decodeAndSpecProcess(const llama_batch& batch);
+
+  // Sample token from the logits at logitIdx. Extracted from
+  // onLogitsReady so the speculative path, which obtains its tokens from
+  // common_sampler_sample_and_accept_n, can reuse the per-token post-processing
+  // in processToken without re-sampling.
+  llama_token sampleToken(int logitIdx, bool& sampledOut);
+
+  // Post-process a single already-decided token. Shared by the
+  // normal per-token path and the speculative accept loop.
+  SequenceStepResult processToken(
+      llama_token tokenId, bool sampled, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch);
+
+  // MTP speculative-decoding generation loop: draft from the MTP head, verify
+  // the draft against the target in one batch, accept the longest matching
+  // prefix, and feed each accepted token through processToken.
+  bool generateResponseSpeculative(
+      const std::function<void(const std::string&)>& outputCallback);
+
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
@@ -295,5 +322,24 @@ private:
   std::string lastChatParser_;
   std::string lastGenerationPrompt_;
 
+  // MTP speculative decoding state.
+  llama_context_ptr      ctxDraft_;
+  common_speculative_ptr spec_;
+  // common_speculative_get_draft_params requires a non-null .prompt; the MTP
+  // impl never reads its contents (only id_last/n_past/n_max).
+  std::vector<llama_token> specPromptDummy_;
+  // Drafts are capped to the target's bounded partial-seq_rm capacity so a
+  // rejected draft is always a plain seq_rm.
+  common_context_seq_rm_type ctxTgtSeqRmType_ = COMMON_CONTEXT_SEQ_RM_TYPE_PART;
+  // Speculative stats surfaced via response.stats (draftAccepted/draftTotal).
+  int64_t draftAccepted_ = 0;
+  int64_t draftTotal_ = 0;
+
   std::atomic<bool> stopGeneration_ = false;
+
+public:
+  // Speculative-decoding counters surfaced through RuntimeStats. Default 0 on
+  // the base; only the single-prompt MTP path increments them.
+  [[nodiscard]] int64_t getDraftAccepted() const override { return draftAccepted_; }
+  [[nodiscard]] int64_t getDraftTotal() const override { return draftTotal_; }
 };
