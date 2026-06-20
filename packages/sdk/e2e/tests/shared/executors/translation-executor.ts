@@ -62,11 +62,11 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
         text: p.text,
         from: p.from,
         to: p.to,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         stream,
       });
     }
-    return translate({ modelId, text: p.text, modelType: "nmt", stream });
+    return translate({ modelId, text: p.text, modelType: "nmtcpp-translation", stream });
   }
 
   async generic(params: unknown, expectation: Expectation): Promise<TestResult> {
@@ -170,7 +170,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     const modelId = await this.resources.ensureLoaded(p.resource);
 
     try {
-      const result = translate({ modelId, text: p.texts as never, modelType: "nmt", stream: false });
+      const result = translate({ modelId, text: p.texts as never, modelType: "nmtcpp-translation", stream: false });
       const translatedText = await (result as { text: Promise<string> }).text;
       return ValidationHelpers.validate(translatedText, expectation);
     } catch (error) {
@@ -189,7 +189,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
         modelId,
         text: p.text,
         to: p.to!,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         stream: false,
       });
       const translatedText = await (result as { text: Promise<string> }).text;
@@ -219,7 +219,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
         text: p.text,
         from: p.from,
         to: p.to!,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         stream: false,
         context: p.context,
       });

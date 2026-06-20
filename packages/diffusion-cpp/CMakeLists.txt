@@ -150,3 +150,12 @@ if(WIN32)
       msvcrt.lib
   )
 endif()
+
+# Symbol-export hygiene: hide this addon's statically linked ggml /
+# stable-diffusion symbols so they cannot interpose on another ggml addon
+# loaded into the same process (see packages/ggml-coload-smoke and
+# scripts/verify-prebuild-symbols.mjs). Matches every other ggml addon, which
+# all rely on --exclude-libs,ALL alone; diffusion-cpp previously shipped nothing.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${inference-addon-sd}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
