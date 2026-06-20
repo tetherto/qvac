@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "1b499699dc209ed0fbc17649f6174335ce5a2743",
+    "baseline": "78853ca082f592ee7d3d8128209406d0ae9ad7b0",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
@@ -80,8 +80,5 @@
         "spirv-headers"
       ]
     }
-  ],
-  "overlay-ports": [
-    "../ports"
   ]
 }
