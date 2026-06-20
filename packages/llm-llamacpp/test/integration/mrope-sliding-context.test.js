@@ -15,7 +15,6 @@ const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const useCpu = isDarwinX64 || isLinuxArm64
 const skipTbqPq = isDarwin || isIos || isAndroid
-const skipQ8KCache = isAndroid
 
 function safeTest (name, opts, fn) {
   integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
@@ -386,7 +385,7 @@ safeTest('[qwen3.5-imrope-sliding-context] multimodal cache survives sliding sav
 
 safeTest('[qwen3.5-imrope-sliding-context] q8 K-cache shifts multimodal and text tokens', {
   timeout: 1_800_000,
-  skip: skipQ8KCache
+  skip: isAndroid
 }, async t => {
   await runMultimodalSlidingCacheCase(t, {
     label: 'q8 K-cache multimodal',
