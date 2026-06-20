@@ -145,6 +145,7 @@ safeTest('Generation fails with context overflow when sliding disabled', {
   skip
 }, async t => {
   const { model } = await setupModel(t, {
+    ctx_size: '256',
     n_predict: String(SLIDE_PREDICT),
     n_discarded: '0'
   })
