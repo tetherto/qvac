@@ -1,7 +1,7 @@
 {
   "name": "ggml",
   "version-date": "2026-06-06",
-  "port-version": 2,
+  "port-version": 3,
   "description": "Tensor library for machine learning (tetherto fork with overlay patches pre-applied; includes Wan IM2COL_3D support plus merged Flux RoPE and direct Metal conv2d kernels)",
   "homepage": "https://github.com/tetherto/qvac-ext-ggml",
   "license": "MIT",
