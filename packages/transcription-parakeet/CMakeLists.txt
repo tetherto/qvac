@@ -10,7 +10,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
@@ -203,12 +203,6 @@ target_link_libraries(
 )
 if(WIN32)
   target_compile_options(${qvac_lib_infer_parakeet} PRIVATE "/utf-8")
-
-  target_link_libraries(
-    ${qvac_lib_infer_parakeet}
-    PRIVATE
-      msvcrt.lib
-  )
 endif()
 
 if(APPLE)
