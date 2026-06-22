@@ -207,7 +207,7 @@
   },
   "dependencies": {
     "@qvac/bci-whispercpp": "^0.2.0",
-    "@qvac/classification-ggml": "^0.3.1",
+    "@qvac/classification-ggml": "^0.3.0",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.11.2",
     "@qvac/embed-llamacpp": "^0.19.1",
@@ -221,7 +221,7 @@
     "@qvac/transcription-parakeet": "^0.7.1",
     "@qvac/transcription-whispercpp": "^0.10.0",
     "@qvac/translation-nmtcpp": "^5.0.1",
-    "@qvac/tts-ggml": "^0.2.0",
+    "@qvac/tts-ggml": "0.3.1",
     "@qvac/vla-ggml": "^0.3.2",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.15.0",
