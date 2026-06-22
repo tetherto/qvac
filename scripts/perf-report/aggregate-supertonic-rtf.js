@@ -137,6 +137,7 @@ function normalizeArtifactRecord (report, sourceFile) {
     model: report.model && (report.model.variant || report.model.name) || 'supertonic',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
+    gpuModel: (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null,
     meanRtf: Number(rtf.mean),
     p50: Number(rtf.p50),
     p95: Number(rtf.p95),
@@ -163,6 +164,7 @@ function normalizeManualRecord (record, sourceFile) {
     model: record.model || 'supertonic',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    gpuModel: record.gpuModel || record.gpu_model || null,
     meanRtf: Number(record.meanRtf),
     p50: Number(record.p50),
     p95: Number(record.p95),
@@ -285,13 +287,13 @@ function renderMarkdown (records) {
   const lines = [
     '## Supertonic Performance Findings',
     '',
-    '| Source | Device | Platform | Impl | Lang | Model | GPU | Backend | Mean RTF | P50 | P95 | Mean Gen (ms) | Mean Load (ms) | Avg WER | Avg CER | Notes |',
-    '|--------|--------|----------|------|------|-------|-----|---------|----------|-----|-----|----------------|----------------|---------|---------|-------|'
+    '| Source | Device | Platform | Impl | Lang | Model | GPU | Backend | GPU Model | Mean RTF | P50 | P95 | Mean Gen (ms) | Mean Load (ms) | Avg WER | Avg CER | Notes |',
+    '|--------|--------|----------|------|------|-------|-----|---------|-----------|----------|-----|-----|----------------|----------------|---------|---------|-------|'
   ]
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.implementation} | ${record.language} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.meanGenerationMs)} | ${formatMaybeInteger(record.meanLoadMs)} | ${formatPercent(record.avgWer)} | ${formatPercent(record.avgCer)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.implementation} | ${record.language} | ${record.model} | ${record.gpu} | ${record.backend} | ${record.gpuModel || '-'} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.meanGenerationMs)} | ${formatMaybeInteger(record.meanLoadMs)} | ${formatPercent(record.avgWer)} | ${formatPercent(record.avgCer)} | ${record.notes || ''} |`
     )
   }
 
@@ -317,6 +319,7 @@ function renderHtml (records) {
       record.model,
       record.gpu,
       record.backend,
+      record.gpuModel || '-',
       formatNumber(record.meanRtf),
       formatNumber(record.p50),
       formatNumber(record.p95),
@@ -359,6 +362,7 @@ function renderHtml (records) {
     '        <th>Model</th>',
     '        <th>GPU</th>',
     '        <th>Backend</th>',
+    '        <th>GPU Model</th>',
     '        <th>Mean RTF</th>',
     '        <th>P50</th>',
     '        <th>P95</th>',

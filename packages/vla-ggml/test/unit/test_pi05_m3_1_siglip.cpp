@@ -21,12 +21,12 @@
 #include <string>
 #include <vector>
 
-#include <ggml-cpu.h>
 #include <ggml.h>
 #include <gguf.h>
 #include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
+#include "pi05_compute.hpp"
 #include "utils/safetensors_lite.hpp"
 
 namespace {
@@ -185,9 +185,7 @@ TEST(Pi05M3_1, SiglipPatchAndPosEmbedMatchPytorch) {
   ggml_build_forward_expand(gf, outs.patch_embed_out);
   ggml_build_forward_expand(gf, outs.pos_embed_out);
 
-  const int n_threads = 4;
-  ASSERT_EQ(
-      ggml_graph_compute_with_ctx(ctx_g, gf, n_threads), GGML_STATUS_SUCCESS);
+  ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
 
   // ── 4. Compare against PyTorch outputs ───────────────────────────────
   ASSERT_EQ(

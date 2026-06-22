@@ -1310,9 +1310,9 @@ void LlamaModel::commonParamsParse(
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
 
-  postprocess_cpu_params(params.speculative.cpuparams, &params.cpuparams);
+  postprocess_cpu_params(params.speculative.draft.cpuparams, &params.cpuparams);
   postprocess_cpu_params(
-      params.speculative.cpuparams_batch, &params.cpuparams_batch);
+      params.speculative.draft.cpuparams_batch, &params.cpuparams_batch);
 
   if (!params.kv_overrides.empty()) {
     params.kv_overrides.emplace_back();
