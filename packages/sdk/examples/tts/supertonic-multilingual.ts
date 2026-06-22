@@ -12,7 +12,7 @@ import {
   createWavHeader,
 } from "./utils";
 
-// Supertonic 3 TTS (GGML): multilingual synthesis (en/ko/es/pt/fr).
+// Supertonic 3 TTS (GGML): multilingual synthesis across 31 languages.
 const SUPERTONIC_SAMPLE_RATE = 44100;
 
 try {
