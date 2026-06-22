@@ -1,4 +1,19 @@
 # Changelog
+## [0.29.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.29.0] - 2026-06-22
 
 This release makes reasoning-token budgets configurable per model load and per request, while improving how chat-template thinking markers are detected and streamed. It also tightens GPU backend validation so unsupported quantized KV-cache combinations fail early with clear errors instead of reaching backend-specific runtime failures.
