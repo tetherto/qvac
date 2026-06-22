@@ -1,0 +1,126 @@
+# Multi-addon co-load smoke on Android (AWS Device Farm).
+#
+# The @qvac/tts-ggml@0.2.1 dlopen crash only reproduced once MANY ggml addons
+# were co-loaded into one process on a real Android device -- exactly what the
+# SDK consumer does at bootstrap. This workflow reuses the SDK mobile bundle
+# machinery (test-android-sdk.yml) to build a consumer that bundles a chosen
+# subset of plugins (packages/ggml-coload-smoke/scripts/coload-combinations.mjs
+# emits the SDK plugin specifiers per combo) and runs it on Device Farm.
+#
+# Signal: the PRIMARY co-load check is that the consumer BOOTSTRAPS (co-loads
+# the bundled plugins) without a dlopen SIGABRT; test-android-sdk.yml fails the
+# run if the consumer dies. On PRs we run ONLY the full bundle ("all"), which is
+# the exact all-addon Android bootstrap that crashed in 0.2.1 and keeps the
+# signal clean. Subset combos (for isolating which addon/stack regressed) are
+# available via workflow_dispatch; note that the smoke suite may surface
+# secondary feature-test failures for a feature whose plugin is not in the
+# subset -- the co-load/bootstrap result is the signal that matters there.
+#
+# Gated behind the `verified` label (Device Farm is expensive) AND an in-repo
+# branch -- a `pull_request` from a fork cannot read the Device Farm secrets, so
+# fork PRs rely on the desktop co-load plus workflow_dispatch. iOS statically
+# links ggml (the dlopen class does not bite there); an iOS variant is a
+# symmetric follow-up once test-ios-sdk.yml grows the same `plugins` input.
+
+name: Co-load smoke (ggml, mobile)
+
+on:
+  pull_request:
+    paths:
+      - "packages/tts-ggml/**"
+      - "packages/transcription-parakeet/**"
+      - "packages/transcription-whispercpp/**"
+      - "packages/llm-llamacpp/**"
+      - "packages/embed-llamacpp/**"
+      - "packages/vla-ggml/**"
+      - "packages/translation-nmtcpp/**"
+      - "packages/diffusion-cpp/**"
+      - "packages/ggml-coload-smoke/**"
+      - ".github/workflows/coload-smoke-mobile-ggml.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "full (every mobile-capable combo) or changed (focus on --addons)"
+        type: choice
+        options: [full, changed]
+        default: full
+      addons:
+        description: "changed-mode: comma-separated addon short names (e.g. tts-ggml,llm-llamacpp)"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+  pull-requests: write
+  packages: read
+
+jobs:
+  gate:
+    # Device Farm needs base-repo secrets, which a `pull_request` from a fork
+    # cannot access. Only run on explicit dispatch, or on a `verified` PR from an
+    # in-repo branch. Fork PRs are covered by the desktop co-load and can still
+    # be exercised on demand via workflow_dispatch from the base repo.
+    if: ${{ github.event_name == 'workflow_dispatch' || (contains(github.event.pull_request.labels.*.name, 'verified') && github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    outputs:
+      combos: ${{ steps.gen.outputs.combos }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Compute mobile co-load combinations
+        id: gen
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          DISPATCH_ADDONS: ${{ inputs.addons }}
+        run: |
+          set -euo pipefail
+          SCRIPT=packages/ggml-coload-smoke/scripts/coload-combinations.mjs
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$DISPATCH_MODE" = "changed" ] && [ -n "$DISPATCH_ADDONS" ]; then
+              node "$SCRIPT" --mobile --changed "$DISPATCH_ADDONS"
+            else
+              node "$SCRIPT" --mobile
+            fi
+          else
+            # PRs: keep the signal clean -- only the full bundle (all plugins),
+            # the exact all-addon Android bootstrap that crashed in 0.2.1.
+            node "$SCRIPT" --mobile --only all
+          fi
+
+  mobile-coload:
+    needs: gate
+    if: ${{ needs.gate.outputs.combos != '' && needs.gate.outputs.combos != '[]' }}
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        combo: ${{ fromJSON(needs.gate.outputs.combos) }}
+    name: coload-${{ matrix.combo.name }}
+    uses: ./.github/workflows/test-android-sdk.yml
+    with:
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      plugins: ${{ matrix.combo.plugins }}
+      suite: smoke
+      consumer-timeout: 1200
+      device-farm-timeout: 90
+      device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
+      device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
+    secrets: inherit

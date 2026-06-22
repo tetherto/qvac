@@ -133,7 +133,7 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
 
   async modelLoadFailed(params: ModelLoadFailedParams): Promise<TestResult> {
     try {
-      await loadModel({ modelSrc: params.modelPath, modelType: params.modelType as "llm" });
+      await loadModel({ modelSrc: params.modelPath, modelType: params.modelType as "llamacpp-completion" });
       return { passed: false, output: "Expected error for invalid model path" };
     } catch (error) {
       return { passed: true, output: `Correctly threw: ${error}` };
@@ -163,7 +163,7 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
 
   async chainingCause(): Promise<TestResult> {
     try {
-      await loadModel({ modelSrc: "/invalid/nonexistent/path/model.gguf", modelType: "llm" });
+      await loadModel({ modelSrc: "/invalid/nonexistent/path/model.gguf", modelType: "llamacpp-completion" });
       return { passed: false, output: "Expected error" };
     } catch (error) {
       const e = error as Error & { cause?: unknown; code?: number };

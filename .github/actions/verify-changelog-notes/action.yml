@@ -1,0 +1,49 @@
+name: Verify Changelog Notes
+description: Verify a CHANGELOG contains a non-empty "## [version]" section and extract its body
+inputs:
+  changelog-path:
+    required: true
+    description: Path to the CHANGELOG.md file to inspect
+  version:
+    required: true
+    description: Version to look for (x.y.z)
+outputs:
+  release-notes-path:
+    description: Path to a file containing the extracted release-notes body
+    value: ${{ steps.extract.outputs.release_notes_path }}
+runs:
+  using: composite
+  steps:
+    - id: extract
+      shell: bash
+      env:
+        CHANGELOG_PATH: ${{ inputs.changelog-path }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        notes="${RUNNER_TEMP}/release-notes-v${VERSION}.md"
+
+        if [ ! -s "${CHANGELOG_PATH}" ]; then
+          echo "::error::Missing or empty changelog: ${CHANGELOG_PATH}"
+          exit 1
+        fi
+
+        start_line=$(awk -v version="${VERSION}" '$0 ~ "^## \\[" version "\\]" { print NR; exit }' "${CHANGELOG_PATH}")
+        if [ -z "${start_line}" ]; then
+          echo "::error::No CHANGELOG heading '## [${VERSION}]' in ${CHANGELOG_PATH}"
+          exit 1
+        fi
+
+        end_line=$(awk -v start="${start_line}" 'NR > start && /^## \[/ { print NR - 1; found=1; exit } END { if (!found) print NR }' "${CHANGELOG_PATH}")
+        if [ -z "${end_line}" ] || [ "${end_line}" -lt "${start_line}" ]; then
+          echo "::error::Invalid changelog section bounds for version ${VERSION}"
+          exit 1
+        fi
+
+        sed -n "$((start_line + 1)),${end_line}p" "${CHANGELOG_PATH}" > "${notes}"
+        if ! awk 'BEGIN { c=0 } /[^[:space:]]/ { c=1 } END { exit c ? 0 : 1 }' "${notes}"; then
+          echo "::error::Changelog section for version ${VERSION} is empty"
+          exit 1
+        fi
+
+        echo "release_notes_path=${notes}" >> "${GITHUB_OUTPUT}"

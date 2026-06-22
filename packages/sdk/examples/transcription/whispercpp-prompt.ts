@@ -12,10 +12,10 @@
 import { loadModel, unloadModel, transcribe, WHISPER_TINY } from "@qvac/sdk";
 
 try {
-  console.log("🎤 Starting Whisper transcription with prompt example...");
+  console.log("▸ Starting Whisper transcription with prompt example...");
 
   // Load the Whisper model
-  console.log("📥 Loading Whisper model...");
+  console.log("▸ Loading Whisper model...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
     modelConfig: {
@@ -53,15 +53,18 @@ try {
         gpu_device: 0,
       },
     },
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`✅ Whisper model loaded with ID: ${modelId}`);
+  console.log(`▸ Whisper model loaded with ID: ${modelId}`);
 
   // Perform transcription
-  console.log("🎧 Transcribing audio...");
+  console.log("▸ Transcribing audio...");
   const text = await transcribe({
     modelId,
     audioChunk: "examples/audio/sample-16khz.wav",
@@ -69,15 +72,15 @@ try {
       "This is a test recording with clear speech and proper punctuation.",
   });
 
-  console.log("📝 Transcription result:");
+  console.log("▸ Transcription result:");
   console.log(text);
 
   // Unload the model when done
-  console.log("🧹 Unloading Whisper model...");
+  console.log("▸ Unloading Whisper model...");
   await unloadModel({ modelId });
-  console.log("✅ Whisper model unloaded successfully");
+  console.log("▸ Whisper model unloaded successfully");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

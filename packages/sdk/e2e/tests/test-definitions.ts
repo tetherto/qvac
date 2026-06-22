@@ -16,6 +16,7 @@ import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
 import { ocrTests } from "./ocr-tests.js";
+import { classificationTests } from "./classification-tests.js";
 import { ttsTests } from "./tts-tests.js";
 import { configReloadTests } from "./config-reload-tests.js";
 import { loggingTests } from "./logging-tests.js";
@@ -78,7 +79,7 @@ export const modelLoadOcr: TestDefinition = {
 export const modelLoadInvalid: TestDefinition = {
   testId: "model-load-invalid",
   params: {
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     modelPath: "/invalid/path/nonexistent-model.gguf",
   },
   expectation: {
@@ -105,8 +106,8 @@ export const modelLoadConcurrent: TestDefinition = {
   testId: "model-load-concurrent",
   params: {
     models: [
-      { type: "llm", constant: "LLAMA_3_2_1B_INST_Q4_0" },
-      { type: "embeddings", constant: "GTE_LARGE_FP16" },
+      { type: "llamacpp-completion", constant: "LLAMA_3_2_1B_INST_Q4_0" },
+      { type: "llamacpp-embedding", constant: "GTE_LARGE_FP16" },
     ],
   },
   expectation: { validation: "type", expectedType: "array" },
@@ -251,6 +252,9 @@ export const tests = [
 
   // OCR tests
   ...ocrTests,
+
+  // Classification tests
+  ...classificationTests,
 
   // TTS tests
   ...ttsTests,

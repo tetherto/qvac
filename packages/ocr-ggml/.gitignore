@@ -31,3 +31,10 @@ __pycache__/
 out/
 *.profraw
 *.profdata
+
+# Local DocTR/Mali profiling + Device Farm bundling artifacts (never committed)
+build-android/
+media/
+test/mobile/testAssets/
+test/results/
+profile_doctr.js

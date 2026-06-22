@@ -5,7 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.2] - 2026-06-19
+
+### Fixed
+
+- **QVAC-19557: Chatterbox iOS peak-memory OOM — cap the T3 context at
+  4096 and store the KV cache as q8_0 by default.** tts-cpp allocates
+  the T3 KV cache up-front at the GGUF's full `n_ctx`; the Turbo GGUF
+  ships `n_ctx=8196`, which costs ~1.6 GB of f32 KV
+  (`n_embd(1024) × n_layer(24) × 8196 × 4 B × 2`) and pushed the iOS
+  QVAC SDK test process to a ~3.1 GB peak footprint (jetsam kill — the
+  `tts-chatterbox-*` e2e variants are currently skipped on iOS Device
+  Farm for exactly this).  The addon now passes
+  `EngineOptions::n_ctx = 4096` and `kv_cache_type = "q8_0"` (~210 MB
+  of KV for ≈160 s of generated audio per `synthesize()` call) unless
+  the host overrides them via the new `nCtx` / `kvCacheType`
+  constructor options.  `nCtx: 0` restores the uncapped context;
+  `kvCacheType: "f32"` restores the bit-exact pre-quantisation
+  behaviour; negative `nCtx` and unknown `kvCacheType` values are
+  rejected at construction.  Upstream validation
+  (qvac-ext-lib-whisper.cpp#43): Turbo greedy token sequences are
+  byte-identical across f32/f16/q8_0 on CPU and Metal, and Metal
+  decode is 20-30% faster from the KV bandwidth saving.
+
+### Changed
+
+- **`tts-cpp` pinned to `2026-06-19`** (`qvac-ext-lib-whisper.cpp` PR #43 on
+  top of master `b95ad447`) for `EngineOptions::kv_cache_type` and the streamed
+  (no host-staging) chatterbox GGUF loads. The Android `GGML_BACKEND_DL` symbol
+  routing (`ggml_backend_is_cpu` / `ggml_get_type_traits_cpu` → backend registry
+  shim + `ggml_quantize_chunk`) now comes from the `b95ad447` base via QVAC-20557
+  (PR #54), so this package no longer carries that fix itself.
+
+## [0.3.1] - 2026-06-18
+
+### Fixed
+
+- **End-of-speech robustness for the Chatterbox multilingual engine
+  (QVAC-20616).** Fixes the model emitting up to ~20s of random tokens after
+  the intended text finishes. Consumes the new `tts-cpp` stop logic: an
+  alignment-based EOS analyzer (ports the reference `AlignmentStreamAnalyzer`
+  cross-attention signal, extracted from the GGML graph via an in-graph
+  attention probe) layered with a heuristic stop controller (EOS confidence,
+  n-gram repetition, text-length budget) and per-language calibration. An
+  anti-early-truncation `suppress_eos` path keeps very short inputs from being
+  clipped. Validated end-to-end on desktop (CPU + Vulkan/RTX) and on real
+  mobile GPUs (Android OpenCL + iOS Metal via AWS Device Farm), plus a
+  round-trip ASR regression gate (synthesize → Whisper transcribe → compare).
 
 ### Added
 
@@ -13,10 +59,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile (Android / iOS) RTF + streaming benchmark leg for the `Benchmark RTF (TTS GGML)` workflow via AWS Device Farm, opt-in through the `include_mobile` dispatch input. CI-only; not shipped with the npm package.
 - RTF benchmark reports now surface the desktop GPU hardware name (QVAC-20499). `test/benchmark/rtf-benchmark.test.js` drives the shared performance reporter's `detectDevice()` (via `bare-subprocess`: nvidia-smi / vulkaninfo / system_profiler) to populate `device.gpu` / `device.cpu` in the canonical report and `labels.gpuModel` in the per-config JSON; `scripts/perf-report/aggregate-tts-ggml-rtf.js` renders a `GPU Model` column. Mobile leaves `device.gpu` null (device name is the proxy). CI-only.
 
+### Changed
+
+- Bump the `tts-cpp` pin to `2026-06-18` (`qvac-ext-lib-whisper.cpp` master
+  `b95ad447`), consumed straight from `qvac-registry-vcpkg`. Carries QVAC-20616
+  (the EOS fix above, PR #53) and QVAC-20557 Supertonic Android GPU (PR #54:
+  Adreno OpenCL + Xclipse/Mali Vulkan). The latter reroutes the direct
+  Supertonic CPU-backend calls (`ggml_backend_is_cpu` /
+  `ggml_get_type_traits_cpu`) to ggml-base + a registry shim — the upstream
+  successor to the interim `f7d4d6c` overlay that 0.3.0 carried — so the addon
+  `dlopen`s cleanly on Android with no package-local overlay port.
+
 ## [0.3.0] - 2026-06-11
 
 ### Added
 
+- **Supertonic 3 (31-language) support (QVAC-19305).** Brings the v3 Supertonic
+  model to the addon: `index.js` recognises the Supertonic 3 GGUFs in the
+  `modelDir` auto-detect / path-resolve paths (the v3 GGUFs are published per
+  quant tier with the quant in the filename, e.g. `supertonic3-f16.gguf` /
+  `supertonic3-q8_0.gguf`, so the lookup matches any `supertonic3[-<quant>].gguf`).
+  The v3 model/inference code lands in `tts-cpp` (`qvac-ext-lib-whisper.cpp` PR
+  #42, `master` @ `24eeb028`); `vcpkg.json` bumps the `tts-cpp` pin to
+  `2026-06-12`.
+- **Supertonic 3 GGUF tooling.** `convert-supertonic2-to-gguf.py --arch
+  supertonic3` (text-encoder ConvNeXt dilations + vector-estimator CFG
+  numerical-parity fixes; pipeline parity < 2e-4 across en/ko/es/pt/fr) and
+  `requantize-gguf.py` q8_0 / q4_0 block-quant support (ConvNeXt pointwise convs
+  squeezed to 2-D and re-expanded at load via `supertonic.pwconv_squeezed`,
+  fixing the old q4_0 SIGBUS). These are the converters used to produce the
+  GGUFs published to the registry.
+- **Registry-hosted Supertonic 3 models.** All four tiers are published on the
+  QVAC model registry (f16 / f32 @ `2026-06-10`, QVAC-20568; q8_0 / q4_0 @
+  `2026-06-15`, QVAC-20686). `download-tts-ggml-models.js` +
+  `test/utils/downloadModel.js` fetch every tier from S3 (per-tier build dates).
+- **Supertonic 3 integration tests** (`test/integration/supertonic3-quant.test.js`):
+  sweep f16 / f32 / q8_0 / q4_0 across the five inherited (en/ko/es/pt/fr) plus
+  the new v3-only (de/it/nl) languages; assert load + run + 44.1 kHz output. A
+  tier that can't be fetched fails the run (every tier is published on the
+  registry). Mobile integration auto-test wiring added.
 - **Supertonic GPU support (re-land of QVAC-19255, reverted in 0.2.2).**
   Caller GPU intent (`useGPU` / `nGpuLayers`) is honored again for the
   Supertonic engine on GPU-capable hosts (Metal on Apple, Vulkan/CUDA on
@@ -26,12 +107,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Consume `tts-cpp` `2026-06-05` via a package-local overlay port pinned at
-  `qvac-ext-lib-whisper.cpp@f7d4d6c` (the QVAC-19254 sched + cpu_backend
-  follow-up). `f7d4d6c` reroutes the direct `ggml_backend_is_cpu` /
-  `ggml_get_type_traits_cpu` calls that made `2026-06-05` fail to `dlopen` on
-  Android (the 0.2.1 bootstrap crash), so the addon loads cleanly while still
-  shipping the Supertonic GPU optimisations.
+- Resolve `tts-cpp` entirely from the official `tetherto/qvac-registry-vcpkg`
+  registry: drop the package-local `ports/tts-cpp` overlay (and the
+  `overlay-ports` entry in `vcpkg-configuration.json`) used during development
+  as an interim measure, and bump the `default-registry` baseline to `e55f10fb`
+  (`tts-cpp` `2026-06-12`, `ggml-speech` `2026-06-15`). The baseline preserves
+  the `ggml-speech` Metal residency-set teardown fix that the overlay previously
+  pinned (#2645).
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2636](https://github.com/tetherto/qvac/pull/2636)).
 
 ### Notes
@@ -41,10 +123,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Android transparently falls back to CPU: Adreno Vulkan/OpenCL `ggml` graph
   compute still aborts (same family as the parakeet Adreno crash). The GPU
   smoke test skips Supertonic on Android accordingly.
-- The `ports/tts-cpp` overlay and the `overlay-ports` entry in
-  `vcpkg-configuration.json` are **interim**: drop them and bump
-  `vcpkg.json`'s `tts-cpp` pin once `f7d4d6c` (or a successor) is published to
-  `qvac-registry-vcpkg`.
 
 ## [0.2.2] - 2026-06-09
 
