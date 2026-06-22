@@ -12508,6 +12508,22 @@
     "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
   },
   {
+    "source": "https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF/resolve/33cc6944e40cb93e38332cd46b2a6e3c6acf081e/Qwen3.5-2B.mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 2B",
+    "quantization": "q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from mradermacher (the registry's unsloth Qwen3.5-2B repo ships only F16/BF16 mmproj). Same base Qwen3.5-2B model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 4B multimodal model",
@@ -12570,6 +12586,22 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF/resolve/1a5df2c0cba51dae8ac5888420360d8703707171/Qwen3.5-4B.mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 4B",
+    "quantization": "q8_0",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from mradermacher (the registry's unsloth Qwen3.5-4B repo ships only F16/BF16 mmproj). Same base Qwen3.5-4B model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF"
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
