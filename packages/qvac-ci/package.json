@@ -26,8 +26,8 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "test:unit": "brittle-node test/unit/*.test.js test/unit/**/*.test.js",
     "test": "npm run test:unit",
     "audit": "npm audit --audit-level=high"
@@ -48,6 +48,8 @@
   },
   "devDependencies": {
     "brittle": "^3.10.1",
-    "standard": "17.1.0"
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
   }
 }
