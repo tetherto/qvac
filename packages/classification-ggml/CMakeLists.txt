@@ -114,6 +114,13 @@ target_compile_definitions(
     BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
 )
 
+# When ggml is built with GGML_BACKEND_DL=ON (gpu-backends on Linux/Android) the
+# backends are dlopen'd modules; tell the addon so load() uses the registry API
+# instead of the statically-linked ggml_backend_cpu_init().
+if(GGML_BACKEND_DL)
+  target_compile_definitions(${classification-ggml} PRIVATE GGML_BACKEND_DL)
+endif()
+
 if(WIN32)
   target_link_libraries(
     ${classification-ggml}

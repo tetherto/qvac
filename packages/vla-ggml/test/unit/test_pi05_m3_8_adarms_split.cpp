@@ -10,12 +10,12 @@
 #include <string>
 #include <vector>
 
-#include <ggml-cpu.h>
 #include <ggml.h>
 #include <gguf.h>
 #include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
+#include "pi05_compute.hpp"
 #include "utils/safetensors_lite.hpp"
 
 namespace {
@@ -126,9 +126,7 @@ TEST(Pi05M3_8, AdaRmsSplitMatchesPytorch) {
   ggml_build_forward_expand(gf, split.scale);
   ggml_build_forward_expand(gf, split.shift);
   ggml_build_forward_expand(gf, split.gate);
-  ASSERT_EQ(
-      ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
-      GGML_STATUS_SUCCESS);
+  ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
 
   // The three slices alias the modulation tensor, so they share its
   // buffer and `->data` points to the right offset. Read them out.
