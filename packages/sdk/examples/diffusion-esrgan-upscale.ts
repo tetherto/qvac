@@ -27,7 +27,7 @@ const outputDir = outputDirArg ?? ".";
 const seed = 42;
 
 try {
-  console.log("Loading SD 2.1 + ESRGAN upscaler...");
+  console.log("▸ Loading SD 2.1 + ESRGAN upscaler...");
   const modelId = await loadModel({
     modelSrc: SD_V2_1_1B_Q8_0,
     modelConfig: {
@@ -38,9 +38,14 @@ try {
         tile_size: 128,
       },
     },
-    onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   // Source size is intentionally small — each ESRGAN repeat multiplies dimensions.
   const baseParams = {
@@ -54,40 +59,38 @@ try {
     seed,
   };
 
-  console.log(`\nGenerating ESRGAN x4 upscale: "${prompt}"`);
+  console.log(`▸ Generating ESRGAN x4 upscale: "${prompt}"`);
   const single = diffusion({ ...baseParams, upscale: true });
   for await (const { step, totalSteps } of single.progressStream) {
-    process.stdout.write(`\rStep ${step}/${totalSteps}\x1b[K`);
+    console.log(`▸ step ${step}/${totalSteps}`);
   }
-  console.log();
 
   const singleBuffers = await single.outputs;
   for (let i = 0; i < singleBuffers.length; i++) {
     const out = path.join(outputDir, `sd2_esrgan_x4_seed${seed}_${i}.png`);
     fs.writeFileSync(out, singleBuffers[i]!);
-    console.log(`Saved: ${out}`);
+    console.log(`▸ Saved ${out}`);
   }
-  console.log("Stats:", await single.stats);
+  console.log("▸ Stats:", await single.stats);
 
-  console.log("\nGenerating ESRGAN two-pass x16 upscale...");
+  console.log("▸ Generating ESRGAN two-pass x16 upscale...");
   const twoPass = diffusion({ ...baseParams, upscale: { repeats: 2 } });
   for await (const { step, totalSteps } of twoPass.progressStream) {
-    process.stdout.write(`\rStep ${step}/${totalSteps}\x1b[K`);
+    console.log(`▸ step ${step}/${totalSteps}`);
   }
-  console.log();
 
   const twoPassBuffers = await twoPass.outputs;
   for (let i = 0; i < twoPassBuffers.length; i++) {
     const out = path.join(outputDir, `sd2_esrgan_x16_seed${seed}_${i}.png`);
     fs.writeFileSync(out, twoPassBuffers[i]!);
-    console.log(`Saved: ${out}`);
+    console.log(`▸ Saved ${out}`);
   }
-  console.log("Stats:", await twoPass.stats);
+  console.log("▸ Stats:", await twoPass.stats);
 
   await unloadModel({ modelId, clearStorage: false });
-  console.log("Done.");
+  console.log("▸ Done");
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

@@ -16,7 +16,7 @@ const vaeModelSrc = process.argv[4] || FLUX_2_KLEIN_4B_VAE;
 const prompt = process.argv[5] || "a futuristic city at sunset, photorealistic";
 const outputDir = process.argv[6] || ".";
 
-console.log("Loading FLUX.2 [klein] split-layout model...");
+console.log("▸ Loading FLUX.2 [klein] split-layout model...");
 
 const modelId = await loadModel({
   modelSrc: diffusionModelSrc,
@@ -27,11 +27,16 @@ const modelId = await loadModel({
     llmModelSrc,
     vaeModelSrc,
   },
-  onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
+  onProgress: (p) => {
+    const mb = (n: number) => (n / 1e6).toFixed(1);
+    const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+    process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+    if (p.percentage >= 100) process.stderr.write("\n");
+  },
 });
-console.log(`Model loaded: ${modelId}`);
+console.log(`▸ Model loaded: ${modelId}`);
 
-console.log(`\nGenerating: "${prompt}"`);
+console.log(`▸ Generating: "${prompt}"`);
 
 const { progressStream, outputs, stats } = diffusion({
   modelId,
@@ -45,18 +50,17 @@ const { progressStream, outputs, stats } = diffusion({
 });
 
 for await (const { step, totalSteps } of progressStream) {
-  process.stdout.write(`\rStep ${step}/${totalSteps}`);
+  console.log(`▸ step ${step}/${totalSteps}`);
 }
-console.log();
 
 const buffers = await outputs;
 for (let i = 0; i < buffers.length; i++) {
   const outputPath = path.join(outputDir, `flux2_${i}.png`);
   fs.writeFileSync(outputPath, buffers[i]!);
-  console.log(`Saved: ${outputPath}`);
+  console.log(`▸ Saved ${outputPath}`);
 }
 
-console.log("\nStats:", await stats);
+console.log("▸ Stats:", await stats);
 await unloadModel({ modelId, clearStorage: false });
-console.log("Done.");
+console.log("▸ Done");
 process.exit(0);

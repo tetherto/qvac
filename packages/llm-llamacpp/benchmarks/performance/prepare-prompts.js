@@ -153,6 +153,10 @@ async function tuneToBudget (model, templateMessages, budget) {
   }
 }
 
+// The 'long' prompt is the focused ~512-token benchmark prompt (verified
+// against the Qwen3.5 tokenizer). Kept in sync with the committed
+// test-prompts.json and the PROMPT constant in
+// test/integration/_benchmark-perf.js so desktop and mobile measure the same input.
 function basePrompts () {
   return [
     {
@@ -161,11 +165,7 @@ function basePrompts () {
         { role: 'system', content: 'You are a helpful assistant.' },
         {
           role: 'user',
-          content: (
-            'You are reviewing an incident report. Write a detailed narrative with sections for timeline, ' +
-            'root cause, impact, mitigations, and follow-up actions. Target a long answer close to 1000 tokens, ' +
-            'include concrete checkpoints, and avoid bullet points unless needed for clarity. '
-          ).repeat(15)
+          content: 'Summarize the following passage and explain its key technical implications for on-device inference.\n\nModern large language models have transformed natural language processing. Unlike earlier systems that relied on handcrafted features and task-specific architectures, transformer-based models learn general-purpose representations that transfer across many tasks. This shift enabled strong performance in text generation, translation, question answering, and code synthesis, frequently matching expert humans on established benchmarks.\n\nThe scaling laws governing these models describe a consistent relationship between compute, training data, and model capacity. As researchers grow model size and dataset volume, capabilities tend to improve smoothly and predictably, with occasional emergent abilities appearing at particular scale thresholds. This predictability has guided the design of increasingly capable systems, while raising real questions about energy use and cost.\n\nInference efficiency is now a central challenge. Quantization reduces the memory footprint and increases throughput by storing weights at lower numerical precision, allowing deployment on edge devices that would otherwise lack the necessary memory bandwidth. Speculative decoding and continuous batching push throughput further by using available compute more fully during autoregressive generation. Together these techniques make it practical to run capable models locally on consumer hardware, cutting latency and preserving privacy because data never leaves the device.\n\nReasoning quality continues to improve through chain-of-thought prompting and reinforcement learning from human feedback. Models with an explicit reasoning budget can spend more computation on hard problems while staying efficient on simple queries by disabling the reasoning trace entirely. Balancing this budget against latency and battery on mobile hardware is an open and practical engineering problem that the field is only beginning to address in production systems.\n\nOn mobile devices the constraints are sharper than on servers. Memory is limited, thermal headroom is small, and sustained throughput drops as the device heats up under a long generation. Prefill throughput, measured as prompt tokens processed per second, often behaves very differently from decode throughput, because prefill is compute bound across the whole prompt while decode is memory bound on a single token at a time. Quantization format interacts with both phases in ways that are hard to predict from first principles, which is exactly why empirical benchmarks across formats and devices matter. A format that is fast to decode on a desktop GPU may be slower on a phone because of how its blocks map onto the available kernels and cache hierarchy. Measuring time to first token, decode tokens per second, and prefill tokens per second across each quantization and reasoning setting gives the clearest practical picture of what users will actually experience.'
         }
       ]
     }

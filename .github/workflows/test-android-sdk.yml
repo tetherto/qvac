@@ -48,6 +48,16 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      plugins:
+        description: >-
+          Optional comma-separated SDK plugin specifiers (e.g.
+          "@qvac/sdk/tts-ggml/plugin,@qvac/sdk/llamacpp-completion/plugin").
+          When set, a qvac.config.json is written into working-directory before
+          the consumer build so the mobile bundle includes ONLY this subset.
+          Used by the ggml multi-addon co-load smoke; empty = full plugin set.
+        required: false
+        type: string
+        default: ""
     secrets:
       # MQTT_* and NPM_TOKEN are typically provided via the release environment
       # (see jobs with `environment: release`). They are declared required: false
@@ -294,6 +304,19 @@ jobs:
         if: inputs.working-directory != inputs.project-directory
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
+
+      # ggml co-load smoke: restrict the mobile bundle to a subset of plugins so
+      # the consumer co-loads exactly those addons. No-op for normal SDK e2e
+      # runs (plugins input empty -> default full plugin bundle).
+      - name: Write plugin-subset config (co-load smoke)
+        if: ${{ inputs.plugins != '' }}
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          PLUGINS: ${{ inputs.plugins }}
+        run: |
+          set -euo pipefail
+          node -e 'const fs=require("fs");const p=(process.env.PLUGINS||"").split(",").map(s=>s.trim()).filter(Boolean);fs.writeFileSync("qvac.config.json",JSON.stringify({plugins:p},null,2)+"\n");console.log("[co-load] wrote qvac.config.json plugins:",p.join(", "))'
 
       - name: Build mobile consumer APK
         working-directory: ${{ inputs.working-directory }}

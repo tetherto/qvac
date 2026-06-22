@@ -71,11 +71,35 @@ std::string getChatTemplate(
  *
  * @p outThinkingForcedOpen (optional) receives the flag indicating that the
  *    template force-opened the reasoning channel in the prompt suffix.
+ * @p outThinkingStartTag (optional) receives the template-specific reasoning
+ *    start tag, when the template exposes one.
+ * @p outThinkingEndTag (optional) receives the template-specific reasoning
+ *    end tag, when the template exposes one.
+ * @p outGenerationPrompt (optional) receives the assistant generation prompt
+ *    already appended to the formatted prompt.
  */
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs,
-    bool* outThinkingForcedOpen = nullptr);
+    bool* outThinkingForcedOpen = nullptr,
+    std::string* outThinkingStartTag = nullptr,
+    std::string* outThinkingEndTag = nullptr,
+    std::string* outGenerationPrompt = nullptr);
+
+/**
+ * @brief Configures the common-sampling reasoning-budget fields from
+ * template-derived thinking tags.
+ *
+ * Returns true when the sampling block changed and the caller should recreate
+ * the common_sampler.
+ */
+bool configureReasoningBudgetSampling(
+    common_params& params, ::llama_context* lctx,
+    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& generationPrompt);
+
+std::string getThinkingForcedOpenText(
+    const std::string& generationPrompt, const std::string& thinkingStartTag);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.13.5]
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.5
+
+A patch release that fixes Expo RPC worker cleanup on Android and other
+non-iOS platforms when the SDK closes its RPC connection.
+
+## Bug Fixes
+
+### Clean up the Expo RPC worker on non-iOS close
+
+On Expo, closing the SDK RPC connection now sends the worker a shutdown
+roundtrip before dropping client-side references. On iOS the worklet can still
+be terminated safely; on Android and other non-iOS platforms the worklet cannot
+be terminated without risking a native crash, so the SDK releases addon logger
+handles and clears worklet state instead.
+
+After shutdown, the SDK also resets its worklet reference so the next RPC
+session starts with a fresh worker and a fully populated plugin registry. This
+prevents follow-up model loads from failing with "Plugin not found" when tests
+or app flows unload the last model and auto-close the RPC client between runs.
+
+The same update is mirrored into the Bare build (`@qvac/bare-sdk`), which ships
+in lockstep with `@qvac/sdk`.
+
+## [0.13.4]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.4
+
+A patch release that hardens tool-call parsing for Qwen models used in agentic
+workflows.
+
+## Bug Fixes
+
+### Recover malformed Qwen tool-call frames
+
+Qwen3.5/3.6 can intermittently emit a malformed tool-call frame that fuses its
+XML and JSON tool templates, embedding the `function=<name>` token as a bare
+string key inside an otherwise JSON object. Previously the parser rejected that
+frame as invalid JSON, so no structured tool call was produced and callers saw
+the raw markup as assistant text. The parser now recognizes and repairs this
+specific shape, so the tool call is recovered and dispatched correctly.
+
 ## [0.13.3]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.3

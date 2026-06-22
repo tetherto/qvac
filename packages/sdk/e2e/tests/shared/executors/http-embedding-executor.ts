@@ -33,7 +33,7 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
     try {
       const modelId = await loadModel({
         modelSrc: p.modelUrl,
-        modelType: p.modelType as "embeddings",
+        modelType: p.modelType as "llamacpp-embedding",
       });
       this.resources.register("embeddings", modelId);
       return ValidationHelpers.validate(modelId, expectation as Expectation);
@@ -50,7 +50,7 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
     try {
       const modelId = await loadModel({
         modelSrc: p.modelUrl,
-        modelType: p.modelType as "embeddings",
+        modelType: p.modelType as "llamacpp-embedding",
         onProgress: (progress: unknown) => {
           progressEvents.push(progress);
         },
@@ -69,7 +69,7 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
     try {
       const modelId = await loadModel({
         modelSrc: p.modelUrl,
-        modelType: p.modelType as "embeddings",
+        modelType: p.modelType as "llamacpp-embedding",
       });
       this.resources.register("embeddings", modelId);
       const { embedding: embeddings } = await embed({ modelId, text: p.text });

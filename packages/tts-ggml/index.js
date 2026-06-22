@@ -23,6 +23,18 @@ const CHATTERBOX_S3GEN_DEFAULT = 'chatterbox-s3gen.gguf'
 const CHATTERBOX_S3GEN_MTL = 'chatterbox-s3gen-mtl.gguf'
 const SUPERTONIC_DEFAULT = 'supertonic.gguf'
 const SUPERTONIC_MTL = 'supertonic2.gguf'
+// Supertonic 3 (31-language).  Same thin engine as v1/v2 — the architecture
+// and quantisation are read from the GGUF metadata by tts-cpp at load time, so
+// the addon only needs to recognise the filename for the modelDir auto-detect
+// path (explicit `files.supertonicModel` paths bypass this and already route
+// to the Supertonic engine).  Unlike v1/v2 (which keep a single historical
+// bare `supertonic.gguf` / `supertonic2.gguf` on disk), the v3 GGUFs are
+// published per quant tier with the quant in the filename
+// (`supertonic3-f16.gguf`, `supertonic3-q8_0.gguf`, ...), so the modelDir
+// lookup matches any `supertonic3[-<quant>].gguf` (see findSupertonicV3InDir).
+const SUPERTONIC_V3_RE = /^supertonic3(-[a-z0-9_]+)?\.gguf$/i
+// Preference when several v3 tiers share a modelDir: highest precision first.
+const SUPERTONIC_V3_QUANT_ORDER = ['f16', 'f32', 'q8_0', 'q4_0']
 
 function firstNonEmpty (...candidates) {
   for (let i = 0; i < candidates.length; i++) {
@@ -39,6 +51,37 @@ function fileExistsSafe (p) {
   } catch (_e) {
     return false
   }
+}
+
+/**
+ * Find a Supertonic 3 GGUF inside `modelDir`.  The v3 models are published
+ * per quant tier with the quant baked into the filename
+ * (`supertonic3-f16.gguf`, `supertonic3-q8_0.gguf`, ...), so a plain
+ * `supertonic3.gguf` lookup never matches.  Match any tier present, preferring
+ * a bare `supertonic3.gguf` (forward-compat) and then highest precision.
+ * Returns the absolute path of the chosen file, or undefined when none exist.
+ *
+ * @param {string|undefined} modelDir
+ * @returns {string|undefined}
+ */
+function findSupertonicV3InDir (modelDir) {
+  if (!modelDir) return undefined
+  let entries
+  try {
+    entries = fs.readdirSync(modelDir)
+  } catch (_e) {
+    return undefined
+  }
+  const matches = entries.filter((n) => SUPERTONIC_V3_RE.test(n))
+  if (matches.length === 0) return undefined
+  const rank = (n) => {
+    if (/^supertonic3\.gguf$/i.test(n)) return 0
+    const m = n.match(/^supertonic3-(.+)\.gguf$/i)
+    const idx = m ? SUPERTONIC_V3_QUANT_ORDER.indexOf(m[1].toLowerCase()) : -1
+    return idx === -1 ? SUPERTONIC_V3_QUANT_ORDER.length + 1 : idx + 1
+  }
+  matches.sort((a, b) => rank(a) - rank(b))
+  return path.join(modelDir, matches[0])
 }
 
 /**
@@ -102,8 +145,10 @@ function detectEngineType (engine, normalizedFiles) {
     const mtlT3 = path.join(normalizedFiles.modelDir, CHATTERBOX_T3_MTL)
     const supertonicEn = path.join(normalizedFiles.modelDir, SUPERTONIC_DEFAULT)
     const supertonicMtl = path.join(normalizedFiles.modelDir, SUPERTONIC_MTL)
+    const supertonicV3 = findSupertonicV3InDir(normalizedFiles.modelDir)
     const hasChatterbox = fileExistsSafe(turboT3) || fileExistsSafe(mtlT3)
-    const hasSupertonic = fileExistsSafe(supertonicEn) || fileExistsSafe(supertonicMtl)
+    const hasSupertonic = fileExistsSafe(supertonicEn) || fileExistsSafe(supertonicMtl) ||
+      !!supertonicV3
     if (hasChatterbox) return ENGINE_CHATTERBOX
     if (hasSupertonic) return ENGINE_SUPERTONIC
   }
@@ -120,8 +165,10 @@ function detectEngineType (engine, normalizedFiles) {
 function resolveSupertonicModelDirPath (modelDir) {
   const supertonicEn = path.join(modelDir, SUPERTONIC_DEFAULT)
   const supertonicMtl = path.join(modelDir, SUPERTONIC_MTL)
+  const supertonicV3 = findSupertonicV3InDir(modelDir)
   if (fileExistsSafe(supertonicEn)) return supertonicEn
   if (fileExistsSafe(supertonicMtl)) return supertonicMtl
+  if (supertonicV3) return supertonicV3
   return supertonicEn
 }
 
@@ -204,6 +251,8 @@ class TTSGgml {
       voiceDir,
       seed,
       nGpuLayers,
+      nCtx,
+      kvCacheType,
       threads,
       streamChunkTokens,
       streamFirstChunkTokens,
@@ -308,6 +357,8 @@ class TTSGgml {
     this._voiceDir = voiceDir
     this._seed = seed
     this._nGpuLayers = nGpuLayers
+    this._nCtx = nCtx
+    this._kvCacheType = kvCacheType
     this._threads = threads
     this._streamChunkTokens = streamChunkTokens
     this._streamFirstChunkTokens = streamFirstChunkTokens
@@ -366,9 +417,8 @@ class TTSGgml {
     // Default GPU off only when neither knob is set, for every engine. A
     // caller passing nGpuLayers alone keeps it (no silent conflict with the
     // JS-side default). Supertonic GPU intent now flows through to tts-cpp on
-    // GPU-capable hosts (Metal / Vulkan / CUDA); on Android it is forced back
-    // to CPU at the native engine boundary (SupertonicModel::loadLocked) until
-    // the Adreno OpenCL/Vulkan path stabilizes.
+    // GPU-capable hosts (Metal / Vulkan / CUDA), including Android, where
+    // tts-cpp picks the GPU backend per its per-vendor allowlist.
     if (this._config.useGPU === undefined && this._nGpuLayers == null) {
       this._config.useGPU = false
     }
@@ -755,6 +805,8 @@ class TTSGgml {
     }
     if (this._seed != null) params.seed = this._seed | 0
     if (this._nGpuLayers != null) params.nGpuLayers = this._nGpuLayers | 0
+    if (this._nCtx != null) params.nCtx = this._nCtx | 0
+    if (this._kvCacheType != null) params.kvCacheType = String(this._kvCacheType)
     if (this._threads != null) params.threads = this._threads | 0
     if (this._streamChunkTokens != null) params.streamChunkTokens = this._streamChunkTokens | 0
     if (this._streamFirstChunkTokens != null) {

@@ -74,8 +74,13 @@ export interface LlamaConfig {
   'cache-type-v'?: string
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
   openclCacheDir?: string
-  /** Reasoning channel budget. `-1` (default) leaves the model's reasoning channel on; `0` disables it. */
-  reasoning_budget?: -1 | 0 | '-1' | '0'
+  /**
+   * Reasoning channel budget. `-1` (default) leaves the model's reasoning
+   * channel on; `0` disables it; any positive integer caps the reasoning
+   * channel at that many tokens (the sampler force-emits `</think>` once
+   * the budget is exhausted).
+   */
+  reasoning_budget?: number | `${number}`
   /**
    * Number of concurrent sequence slots for continuous-batching (`--parallel` /
    * `n_parallel` in llama.cpp). Values `>= 2` activate the continuous-batch
@@ -157,11 +162,12 @@ export interface GenerationParams {
   json_schema?: string | Record<string, unknown>
   /**
    * Per-request reasoning channel budget. `-1` keeps the model's reasoning
-   * channel on; `0` disables it for this request. Equivalent to the load-time
+   * channel on; `0` disables it for this request; any positive integer caps
+   * the reasoning channel at that many tokens. Equivalent to the load-time
    * `reasoning_budget` config but scoped to a single `run()` call; the prior
    * value is restored afterwards.
    */
-  reasoning_budget?: -1 | 0
+  reasoning_budget?: number
 }
 
 export interface RunOptions {

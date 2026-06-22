@@ -1,0 +1,60 @@
+name: Verify prebuild symbols
+description: >-
+  Static guard that prebuilt addon modules contain no unresolvable engine
+  symbols (ggml_/gguf_/llama_/whisper_/...) -- the @qvac/tts-ggml@0.2.1
+  dlopen-on-device crash class -- and (optionally) do not leak engine symbols
+  into their export table (cross-addon interposition risk). Runs
+  scripts/verify-prebuild-symbols.mjs against the workdir's prebuilds/ tree.
+  No emulator or device required; runs straight off the build artifacts.
+
+inputs:
+  platform:
+    description: Build platform (linux, android, darwin, ios, win32)
+    required: true
+  workdir:
+    description: Directory containing the prebuilds/ folder
+    required: true
+  enforce-exports:
+    description: >-
+      Fail (instead of warn) when a module exports engine symbols at default
+      visibility. Default false during rollout; flip to true per package once
+      it ships a symbols.map / -Wl,--exclude-libs,ALL.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - if: ${{ inputs.platform == 'android' }}
+      name: Verify symbols (Android)
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      env:
+        ENFORCE_EXPORTS: ${{ inputs.enforce-exports }}
+      run: |
+        set -euo pipefail
+        TOOLCHAIN="${ANDROID_TOOLCHAIN_ROOT:-${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64}"
+        export READELF="${TOOLCHAIN}/bin/llvm-readelf"
+        export NM="${TOOLCHAIN}/bin/llvm-nm"
+        EXTRA=""
+        if [ "$ENFORCE_EXPORTS" = "true" ]; then EXTRA="--enforce-exports"; fi
+        node "$GITHUB_WORKSPACE/scripts/verify-prebuild-symbols.mjs" --dir prebuilds --platform android $EXTRA
+
+    - if: ${{ inputs.platform == 'linux' || inputs.platform == 'darwin' || inputs.platform == 'ios' }}
+      name: Verify symbols (native)
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      env:
+        ENFORCE_EXPORTS: ${{ inputs.enforce-exports }}
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        set -euo pipefail
+        EXTRA=""
+        if [ "$ENFORCE_EXPORTS" = "true" ]; then EXTRA="--enforce-exports"; fi
+        node "$GITHUB_WORKSPACE/scripts/verify-prebuild-symbols.mjs" --dir prebuilds --platform "$PLATFORM" $EXTRA
+
+    - if: ${{ inputs.platform == 'win32' }}
+      name: Verify symbols (skip on Windows)
+      shell: bash
+      run: |
+        echo "verify-prebuild-symbols skipped on win32 (PE format is not analyzed by the ELF/Mach-O gate)."

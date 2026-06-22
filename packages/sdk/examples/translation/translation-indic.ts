@@ -12,8 +12,11 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: MARIAN_EN_HI_INDIC_1B_Q4_0,
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
     modelConfig: {
       engine: "IndicTrans",
@@ -22,7 +25,7 @@ try {
     },
   });
 
-  console.log(`✅ Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const text = "Hello, how are you today?";
   const result = translate({
@@ -37,6 +40,6 @@ try {
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
