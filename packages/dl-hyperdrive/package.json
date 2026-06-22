@@ -9,8 +9,8 @@
     "test:unit": "brittle-bare test/unit/*.test.js",
     "test:integration": "brittle-bare test/integration/*.test.js",
     "hd-provider": "bare scripts/runHyperdriveProvider",
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "test:dts": "tsc index.d.ts --noEmit",
     "coverage:unit": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && npx istanbul report html --include=coverage/unit/coverage-final.json",
     "coverage:integration": "brittle-bare --coverage --cov-dir=coverage/integration test/integration/*.test.js && npx istanbul report html --include=coverage/integration/coverage-final.json",
@@ -38,7 +38,9 @@
     "debounceify": "1.1.0",
     "istanbul": "^0.4.5",
     "localdrive": "^2.1.0",
-    "standard": "^17.1.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.0.0"
   },
   "repository": {
