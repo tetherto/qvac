@@ -1,4 +1,30 @@
 # Changelog
+## [0.29.0] - 2026-06-22
+
+This release makes reasoning-token budgets configurable per model load and per request, while improving how chat-template thinking markers are detected and streamed. It also tightens GPU backend validation so unsupported quantized KV-cache combinations fail early with clear errors instead of reaching backend-specific runtime failures.
+
+### Breaking Changes
+
+- TurboQuant and PolarQuant KV-cache types are now rejected during model configuration on OpenCL and Metal backends, where the required kernels are not available. Use CPU/Vulkan for TBQ/PQ KV-cache modes, or use standard KV-cache types such as `q4_0` and `q8_0` on OpenCL or Metal.
+
+### New APIs
+
+- `reasoning_budget` now accepts positive integer token caps in addition to the existing `-1` unrestricted and `0` disabled modes. Callers can set the cap at model load time or override it per request through generation params.
+
+### Changed
+
+- Reasoning-budget sampling now derives template-specific thinking start/end markers and generation prompts from the active chat template, so capped thinking output stays aligned with models that use custom `<think>`-style delimiters.
+- Flash attention now defaults on for supported non-BitNet, non-finetuning configurations, while preserving existing override behavior.
+
+### Fixed
+
+- Metal backend detection now recognizes runtime `mtl*` device names, so CPU-only Apple runs do not get treated as Metal while actual Metal devices still reject unsupported TBQ/PQ KV-cache modes.
+- Mobile and desktop LLM integration tests were adjusted for the new backend behavior and to reduce platform-specific flake in reasoning, cache, multimodal, and performance suites.
+
+## Pull Requests
+
+- [#2366](https://github.com/tetherto/qvac/pull/2366) - QVAC-20987 feat[api]: add llm reasoning budget caps
+
 ## [0.28.0] - 2026-06-22
 
 ### Changed
