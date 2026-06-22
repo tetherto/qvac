@@ -260,8 +260,13 @@ TEST_F(TuneConfigMapTest, OpenCl_AllowsNonQuantizedCacheTypes) {
   configFilemap_["cache-type-k"] = "f16";
   configFilemap_["cache-type-v"] = "bf16";
 
-  EXPECT_NO_THROW(LlamaModel::tuneConfigMap(
-      configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true));
+  EXPECT_NO_THROW(
+      LlamaModel::tuneConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/true));
 }
 
 TEST_F(TuneConfigMapTest, NotOpenCl_AllowsStandardQuantizedCacheTypes) {
@@ -269,8 +274,13 @@ TEST_F(TuneConfigMapTest, NotOpenCl_AllowsStandardQuantizedCacheTypes) {
   configFilemap_["cache-type-k"] = "q8_0";
   configFilemap_["cache-type-v"] = "q4_0";
 
-  EXPECT_NO_THROW(LlamaModel::tuneConfigMap(
-      configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/false));
+  EXPECT_NO_THROW(
+      LlamaModel::tuneConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false));
 }
 
 // ---- Finetuning: flash-attn disabled for any architecture ----

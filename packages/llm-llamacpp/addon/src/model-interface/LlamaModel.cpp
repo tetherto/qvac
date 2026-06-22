@@ -243,9 +243,9 @@ void LlamaModel::tuneConfigMap(
         return;
       }
       const char* backendName = isOpenCl ? "OpenCL" : "Metal";
-      const char* typeName =
-          isTurboQuantKvType(it->second) ? "TurboQuant/PolarQuant"
-                                         : "quantized";
+      const char* typeName = isTurboQuantKvType(it->second)
+                                 ? "TurboQuant/PolarQuant"
+                                 : "quantized";
       const char* alternatives =
           isOpenCl ? "f32/f16/bf16"
                    : "f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl";
