@@ -57,6 +57,9 @@ class BCIWhispercpp {
    * @param {Object} args
    * @param {Object} args.files - local model file paths
    * @param {string} args.files.model - path to the BCI GGML model file
+   * @param {string} [args.files.embedder] - optional path to the embedder
+   *   weights file. When omitted, the native addon falls back to resolving
+   *   `bci-embedder.bin` next to `files.model`.
    * @param {Object} [args.logger] - optional logger instance
    * @param {Object} [args.opts] - optional options (e.g. { stats: true })
    * @param {Object} config - inference configuration
@@ -73,7 +76,18 @@ class BCIWhispercpp {
       })
     }
 
+    if (files.embedder !== undefined &&
+        (typeof files.embedder !== 'string' || files.embedder.length === 0)) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
+        adds: 'files.embedder must be a non-empty string when provided'
+      })
+    }
+
     this._files = { model: files.model }
+    if (typeof files.embedder === 'string' && files.embedder.length > 0) {
+      this._files.embedder = files.embedder
+    }
     this._config = config
     this.opts = opts
     this.logger = new QvacLogger(logger)
@@ -149,6 +163,13 @@ class BCIWhispercpp {
       })
     }
 
+    if (this._files.embedder && !fs.existsSync(this._files.embedder)) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
+        adds: this._files.embedder
+      })
+    }
+
     const whisperConfig = {
       language: 'en',
       n_threads: 0,
@@ -178,6 +199,13 @@ class BCIWhispercpp {
 
     if (this._config.bciConfig) {
       configurationParams.bciConfig = this._config.bciConfig
+    }
+
+    // Optional override. When provided, the native side loads the embedder
+    // weights from this exact path instead of resolving `bci-embedder.bin`
+    // next to the GGML model file. Mirrors the `backendsDir` override.
+    if (this._files.embedder) {
+      configurationParams.embedderPath = this._files.embedder
     }
 
     if (this.state.destroyed) {

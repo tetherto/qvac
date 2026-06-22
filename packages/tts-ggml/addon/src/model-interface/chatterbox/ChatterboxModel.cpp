@@ -13,9 +13,8 @@
 #include <tts-cpp/chatterbox/engine.h>
 
 #include "addon/TTSErrors.hpp"
-#include "model-interface/BackendUtils.hpp"
 #include "inference-addon-cpp/Errors.hpp"
-#include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/BackendUtils.hpp"
 
 namespace qvac::ttsggml::chatterbox {
 
@@ -25,7 +24,6 @@ using qvac_errors::createTTSError;
 using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
-namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 // Default T3 context cap (EngineOptions::n_ctx) when the host doesn't pass
 // `nCtx`.  tts-cpp's library default (0 = uncapped) takes the GGUF's own
@@ -38,7 +36,7 @@ namespace logger = qvac_lib_inference_addon_cpp::logger;
 // less memory than f32@2048 AND double the context.  Hosts that need
 // longer single-call synthesis can raise the cap, or pass nCtx=0 to
 // restore the uncapped behaviour.
-constexpr int kDefaultNCtx = 4096;
+constexpr int DEFAULT_N_CTX = 4096;
 
 // Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  q8_0 stores
 // the cache at ~27% of f32.  Upstream validation on real GGUFs
@@ -49,7 +47,7 @@ constexpr int kDefaultNCtx = 4096;
 // the exact input text); Metal decode is 20-30% faster from the
 // bandwidth saving.  Pass kvCacheType:"f32" for bit-exact parity with
 // the pre-quantisation behaviour.
-constexpr const char * kDefaultKvCacheType = "q8_0";
+constexpr const char* DEFAULT_KV_CACHE_TYPE = "q8_0";
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;
@@ -60,9 +58,9 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.seed.has_value())    opts.seed         = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
-  opts.n_ctx = cfg.nCtx.value_or(kDefaultNCtx);
+  opts.n_ctx = cfg.nCtx.value_or(DEFAULT_N_CTX);
   opts.kv_cache_type =
-      cfg.kvCacheType.empty() ? kDefaultKvCacheType : cfg.kvCacheType;
+      cfg.kvCacheType.empty() ? DEFAULT_KV_CACHE_TYPE : cfg.kvCacheType;
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
   } else if (cfg.useGpu.has_value()) {
@@ -234,24 +232,6 @@ void ChatterboxModel::reload() {
 void ChatterboxModel::loadLocked() {
   if (engine_) return;
 
-  // Force useGPU to false on Android until Vulkan (Mali) and OpenCL (Adreno)
-  // stabilize for the Chatterbox graph.
-#ifdef __ANDROID__
-  {
-    const bool wantsGpu =
-        cfg_.useGpu.value_or(false) ||
-        (cfg_.nGpuLayers.has_value() && *cfg_.nGpuLayers != 0);
-    if (wantsGpu) {
-      QLOG(logger::Priority::WARNING,
-           "Chatterbox: useGPU=true is currently ignored on Android "
-           "(GPU backends disabled at engine boundary pending Vulkan/Mali "
-           "and OpenCL/Adreno driver fixes); falling back to CPU.");
-    }
-    cfg_.useGpu     = false;
-    cfg_.nGpuLayers = 0;
-  }
-#endif
-
   try {
     engine_ = std::make_shared<tts_cpp::chatterbox::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {
@@ -264,6 +244,21 @@ void ChatterboxModel::loadLocked() {
   backendName_   = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
+
+  // Chatterbox declines ARM Mali/Immortalis (Valhall) by policy
+  // (tts-cpp init_backend passes allow_arm_mali=false because the T3
+  // graph hits the Valhall mul_mat bug) and falls back to CPU. That is a
+  // legitimate "GPU present but unused", not a regression — surface it via
+  // gpuUnsupported so gpu-smoke's allowPolicyCpu path accepts the CPU
+  // fallback on Mali while a genuine GPU->CPU fallback on any other vendor
+  // (no Mali device enumerated) still fails CI. OR (not replace) the engine
+  // flag so a future-correct engine reading keeps working.
+  const bool wantsGpu = cfg_.nGpuLayers.has_value()
+                            ? (*cfg_.nGpuLayers != 0)
+                            : cfg_.useGpu.value_or(false);
+  gpuUnsupported_ =
+      engine_->gpu_unsupported() ||
+      (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
 }
 
 void ChatterboxModel::unloadLocked() {
@@ -410,6 +405,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const
   stats.emplace_back("totalSamples", totalSamples_);
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
+  stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
   return stats;
 }
 

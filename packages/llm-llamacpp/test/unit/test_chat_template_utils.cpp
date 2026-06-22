@@ -220,3 +220,51 @@ TEST_F(
   std::string result = getChatTemplate(nullptr, params, false);
   EXPECT_EQ(result, "my_custom_template");
 }
+
+TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs;
+  inputs.use_jinja = true;
+  inputs.enable_thinking = true;
+  inputs.add_generation_prompt = true;
+  inputs.messages = {common_chat_msg{
+      /* role = */ "user",
+      /* content = */ "What is the capital of France?",
+  }};
+
+  bool thinkingForcedOpen = true;
+  std::string thinkingStartTag;
+  std::string thinkingEndTag;
+  std::string generationPrompt;
+  const std::string prompt = getPrompt(
+      tmpls.get(),
+      inputs,
+      &thinkingForcedOpen,
+      &thinkingStartTag,
+      &thinkingEndTag,
+      &generationPrompt);
+
+  EXPECT_NE(prompt.find("<|im_start|>assistant"), std::string::npos);
+  EXPECT_EQ(thinkingStartTag, "<think>\n");
+  EXPECT_EQ(thinkingEndTag, "\n</think>\n\n");
+  EXPECT_NE(generationPrompt.find("<|im_start|>assistant"), std::string::npos);
+  EXPECT_FALSE(thinkingForcedOpen);
+}
+
+TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextUsesTemplateSuffix) {
+  EXPECT_EQ(
+      getThinkingForcedOpenText("<|assistant|>\n<reason>\n", "<reason>"),
+      "<reason>\n");
+}
+
+TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextFallsBackToStartTag) {
+  EXPECT_EQ(
+      getThinkingForcedOpenText("<|assistant|>\n", "<reason>"), "<reason>");
+}
+
+TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextEmptyWithoutStartTag) {
+  EXPECT_EQ(getThinkingForcedOpenText("<|assistant|>\n", ""), "");
+}
