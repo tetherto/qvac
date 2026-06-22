@@ -7,7 +7,6 @@ const os = require('bare-os')
 const LlmLlamacpp = require('../../index.js')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
-const isWindowsX64 = os.platform() === 'win32' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const useCpu = isLinuxArm64
 
@@ -126,7 +125,7 @@ function createFollowUpMessages (initialMessages, previousResponse) {
   ]
 }
 safeTest('reasoning tag EOS replacement works with tools=false', {
-  skip: isDarwinX64 || isWindowsX64, // TODO: unskip isWindowsX64 once we have GPU, takes too long
+  skip: isDarwinX64,
   timeout: 600_000
 }, async t => {
   const { inference } = await setupReasoningModel(t, false)
@@ -149,7 +148,7 @@ safeTest('reasoning tag EOS replacement works with tools=false', {
 })
 
 safeTest('reasoning tag EOS replacement works with tools=true', {
-  skip: isDarwinX64 || isWindowsX64, // TODO: unskip isWindowsX64 once we have GPU, takes too long
+  skip: isDarwinX64,
   timeout: 600_000
 }, async t => {
   const { inference } = await setupReasoningModel(t, true)
@@ -172,7 +171,7 @@ safeTest('reasoning tag EOS replacement works with tools=true', {
 })
 
 safeTest('Qwen3 reasoning-budget=0 disables thinking', {
-  skip: isDarwinX64 || isWindowsX64,
+  skip: isDarwinX64,
   timeout: 600_000
 }, async t => {
   const [modelName, dirPath] = await ensureModel({

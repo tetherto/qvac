@@ -4,6 +4,7 @@
 #include <cctype>
 #include <ranges>
 #include <string_view>
+#include <utility>
 
 #include <llama.h>
 
@@ -174,10 +175,21 @@ std::string getChatTemplate(
 
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs, bool* outThinkingForcedOpen) {
+    struct common_chat_templates_inputs& inputs, bool* outThinkingForcedOpen,
+    std::string* outThinkingStartTag, std::string* outThinkingEndTag,
+    std::string* outGenerationPrompt) {
   auto exportParams = [&](const common_chat_params& params) {
     if (outThinkingForcedOpen) {
       *outThinkingForcedOpen = params.thinking_forced_open;
+    }
+    if (outThinkingStartTag) {
+      *outThinkingStartTag = params.thinking_start_tag;
+    }
+    if (outThinkingEndTag) {
+      *outThinkingEndTag = params.thinking_end_tag;
+    }
+    if (outGenerationPrompt) {
+      *outGenerationPrompt = params.generation_prompt;
     }
   };
   try {
@@ -209,6 +221,58 @@ std::string getPrompt(
     exportParams(params);
     return params.prompt;
   }
+}
+
+bool configureReasoningBudgetSampling(
+    common_params& params, ::llama_context* lctx,
+    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& generationPrompt) {
+  common_params_sampling next = params.sampling;
+  next.reasoning_budget_tokens =
+      params.reasoning_budget > 0 ? params.reasoning_budget : -1;
+  next.reasoning_budget_start.clear();
+  next.reasoning_budget_end.clear();
+  next.reasoning_budget_forced.clear();
+  next.generation_prompt.clear();
+
+  if (params.reasoning_budget > 0 && lctx != nullptr &&
+      !thinkingEndTag.empty()) {
+    next.generation_prompt = generationPrompt;
+    if (!thinkingStartTag.empty()) {
+      next.reasoning_budget_start =
+          common_tokenize(lctx, thinkingStartTag, false, true);
+    }
+    next.reasoning_budget_end =
+        common_tokenize(lctx, thinkingEndTag, false, true);
+    next.reasoning_budget_forced = common_tokenize(
+        lctx,
+        params.sampling.reasoning_budget_message + thinkingEndTag,
+        false,
+        true);
+  }
+
+  const bool changed =
+      params.sampling.reasoning_budget_tokens != next.reasoning_budget_tokens ||
+      params.sampling.reasoning_budget_start != next.reasoning_budget_start ||
+      params.sampling.reasoning_budget_end != next.reasoning_budget_end ||
+      params.sampling.reasoning_budget_forced != next.reasoning_budget_forced ||
+      params.sampling.generation_prompt != next.generation_prompt;
+  if (changed) {
+    params.sampling = std::move(next);
+  }
+  return changed;
+}
+
+std::string getThinkingForcedOpenText(
+    const std::string& generationPrompt, const std::string& thinkingStartTag) {
+  if (thinkingStartTag.empty()) {
+    return {};
+  }
+  const auto start = generationPrompt.rfind(thinkingStartTag);
+  if (start == std::string::npos) {
+    return thinkingStartTag;
+  }
+  return generationPrompt.substr(start);
 }
 
 } // namespace utils
