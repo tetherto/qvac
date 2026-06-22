@@ -216,12 +216,40 @@ void MtmdLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  formattedChat = getPrompt(tmpls_.get(), inputs, &thinkingForcedOpen_);
+  std::string thinkingStartTag;
+  std::string thinkingEndTag;
+  std::string generationPrompt;
+  formattedChat = getPrompt(
+      tmpls_.get(),
+      inputs,
+      &thinkingForcedOpen_,
+      &thinkingStartTag,
+      &thinkingEndTag,
+      &generationPrompt);
+  thinkingForcedOpenText_ =
+      thinkingForcedOpen_
+          ? getThinkingForcedOpenText(generationPrompt, thinkingStartTag)
+          : std::string{};
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(
         "[MtmdLlm] %s: formatted chat prompt is empty\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
+  }
+
+  if (configureReasoningBudgetSampling(
+          params_,
+          modelCtx_.lctx,
+          thinkingStartTag,
+          thinkingEndTag,
+          generationPrompt)) {
+    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
+    if (!smpl_) {
+      std::string errorMsg = string_format(
+          "[MtmdLlm] %s: failed to initialize sampling subsystem\n", __func__);
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+    }
   }
 
   QLOG_IF(
@@ -492,10 +520,10 @@ bool MtmdLlmContext::generateResponse(
   if (thinkingForcedOpen_ && outputCallback) {
     // MtmdLlmContext doesn't carry a reasoningState_ (no reasoning-aware EOS
     // replacement on the multimodal path today), so unlike TextLlmContext we
-    // only prepend the visible "<think>\n" opener and don't flip an
+    // only prepend the visible reasoning opener and don't flip an
     // inside_reasoning flag. If reasoning state is added here later, mirror
     // TextLlmContext::generateResponse and set it true alongside this emit.
-    outputCallback("<think>\n");
+    outputCallback(thinkingForcedOpenText_);
   }
 
   if (stopGeneration_.load()) {
@@ -717,6 +745,8 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
+  thinkingForcedOpen_ = false;
+  thinkingForcedOpenText_.clear();
 
   clearSequenceMemory(modelCtx_.lctx);
 

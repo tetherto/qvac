@@ -98,7 +98,8 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl) {
+    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
+    bool isMetal) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -143,13 +144,11 @@ void LlamaModel::tuneConfigMap(
     QLOG_IF(
         Priority::INFO,
         "[LlamaModel] BitNet model detected: disabling flash attention\n");
-  } else if (isOpenCl && notUserSet("flash-attn", "flash_attn")) {
+  } else if (notUserSet("flash-attn", "flash_attn")) {
     configFilemap.erase("flash_attn");
-    configFilemap["flash-attn"] = "off";
+    configFilemap["flash-attn"] = "on";
     QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] OpenCL backend selected: disabling flash attention by "
-        "default (not reliably supported on OpenCL)\n");
+        Priority::INFO, "[LlamaModel] Enabling flash attention by default\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
@@ -213,21 +212,17 @@ void LlamaModel::tuneConfigMap(
     }
   }
 
-  // TurboQuant / PolarQuant KV-cache types (tbq3_0 / tbq4_0 / pq3_0 / pq4_0,
-  // ship Vulkan + CPU implementations only. On the OpenCL backend
-  // the kernels don't exist; on Metal the standalone MUL_MAT pipelines are
-  // explicitly disabled. Silently letting the user proceed lets llama.cpp
-  // commit KV-cache tensors to a backend that can't run the ops on them,
-  // which then aborts in ggml_backend_sched_split_graph at model load.
-  // Surface a clean error here instead.
-#if defined(__APPLE__)
-  constexpr bool kIsMetal = true;
-#else
-  constexpr bool kIsMetal = false;
-#endif
-  if (isOpenCl || kIsMetal) {
+  // Quantized KV-cache types are fragile on OpenCL: standard q-cache types can
+  // fail later during cache shifts, while TBQ/PQ kernels are not implemented.
+  // Surface a clean error here instead of letting llama.cpp commit KV-cache
+  // tensors to a backend that can't run the required ops.
+  if (isOpenCl || isMetal) {
     auto isTurboQuantKvType = [](const std::string& v) {
       return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
+    };
+    auto isQuantizedKvType = [&](const std::string& v) {
+      return isTurboQuantKvType(v) || v == "q4_0" || v == "q4_1" ||
+             v == "q5_0" || v == "q5_1" || v == "q8_0" || v == "iq4_nl";
     };
     auto checkCacheType = [&](const char* hyphenKey,
                               const char* underscoreKey,
@@ -237,20 +232,30 @@ void LlamaModel::tuneConfigMap(
         it = configFilemap.find(underscoreKey);
       if (it == configFilemap.end())
         return;
-      if (!isTurboQuantKvType(it->second))
+      if (isOpenCl) {
+        if (!isQuantizedKvType(it->second))
+          return;
+      } else if (!isTurboQuantKvType(it->second)) {
         return;
+      }
       const char* backendName = isOpenCl ? "OpenCL" : "Metal";
+      const char* typeName = isTurboQuantKvType(it->second)
+                                 ? "TurboQuant/PolarQuant"
+                                 : "quantized";
+      const char* alternatives =
+          isOpenCl ? "f32/f16/bf16"
+                   : "f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl";
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
-              "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant type "
-              "and is not supported on the %s backend (Vulkan and CPU only). "
-              "Either pick a different cache type (f32/f16/bf16/q4_0/q4_1/"
-              "q5_0/q5_1/q8_0/iq4_nl) or switch device to a Vulkan GPU or "
-              "CPU.\n",
+              "[LlamaModel] cache-type-%s=%s is a %s KV-cache type and is not "
+              "supported on the %s backend. Either pick a different cache "
+              "type (%s) or switch device to a Vulkan GPU or CPU.\n",
               side,
               it->second.c_str(),
-              backendName));
+              typeName,
+              backendName,
+              alternatives));
     };
     checkCacheType("cache-type-k", "cache_type_k", "k");
     checkCacheType("cache-type-v", "cache_type_v", "v");
@@ -994,21 +999,23 @@ void LlamaModel::commonParamsParse(
         "embedded chat template is applied\n");
   }
 
-  // reasoning-budget controls whether the model emits a <think> reasoning
-  // channel. -1 (default) leaves it on; 0 disables. `std::from_chars` is used
-  // instead of `std::stoi` because the latter accepts trailing garbage ("0abc"
-  // → 0) and throws an uncaught `std::out_of_range` on overflow.
+  // reasoning-budget controls the size of the model's <think> reasoning
+  // channel: -1 (default) leaves it unrestricted, 0 disables thinking
+  // entirely, any positive N caps the reasoning channel at N tokens (the
+  // budget sampler forces </think> once N reasoning tokens have been
+  // emitted).
   auto parseReasoningBudget = [](const std::string& raw) {
     int value = 0;
     const char* begin = raw.data();
     const char* end = begin + raw.size();
     const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end || (value != 0 && value != -1)) {
+    if (ec != std::errc{} || ptr != end || value < -1) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
-          "reasoning-budget must be -1 (unrestricted) or 0 (disabled)");
+          "reasoning-budget must be -1 (unrestricted), 0 (disabled), or a "
+          "positive integer (token cap)");
     }
     return value;
   };
@@ -1114,6 +1121,7 @@ void LlamaModel::commonParamsParse(
   }
 
   bool isOpenCl = false;
+  bool isMetal = false;
   {
     using namespace backend_selection;
     const BackendType preferredBackend =
@@ -1180,6 +1188,9 @@ void LlamaModel::commonParamsParse(
 
     isOpenCl = chosenBackend.first == BackendType::GPU &&
                chosenBackend.second.find("opencl") != std::string::npos;
+    isMetal = chosenBackend.first == BackendType::GPU &&
+              (chosenBackend.second.find("metal") != std::string::npos ||
+               chosenBackend.second.rfind("mtl", 0) == 0);
   }
 
   tuneConfigMap(
@@ -1187,7 +1198,8 @@ void LlamaModel::commonParamsParse(
       metadata_,
       outAdrenoVersion,
       pendingFinetuneOverrides_,
-      isOpenCl);
+      isOpenCl,
+      isMetal);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
@@ -1309,10 +1321,6 @@ void LlamaModel::commonParamsParse(
 
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
-
-  postprocess_cpu_params(params.speculative.draft.cpuparams, &params.cpuparams);
-  postprocess_cpu_params(
-      params.speculative.draft.cpuparams_batch, &params.cpuparams_batch);
 
   if (!params.kv_overrides.empty()) {
     params.kv_overrides.emplace_back();
