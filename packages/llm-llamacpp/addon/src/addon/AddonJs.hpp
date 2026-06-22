@@ -1,6 +1,8 @@
 #pragma once
 #include <any>
+#include <cmath>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -371,15 +373,18 @@ inline void parseGenerationParams(
   auto reasoningBudget = configObj->getOptionalPropertyAs<js::Number, double>(
       env, "reasoning_budget");
   if (reasoningBudget.has_value()) {
-    // Exact compare (0 and -1 are representable doubles) so fractional
-    // inputs like 0.5 are rejected, not silently truncated.
-    if (*reasoningBudget != 0 && *reasoningBudget != -1) {
+    // Reject fractional inputs (0.5, -1.1, 32.7) by requiring the value to
+    // round-trip through int. -1 = unrestricted, 0 = disabled, N>0 caps the
+    // reasoning channel at N tokens via the budget sampler.
+    const double value = *reasoningBudget;
+    if (value < -1 || value != std::floor(value) ||
+        value > static_cast<double>(std::numeric_limits<int>::max())) {
       throw StatusError(
           general_error::InvalidArgument,
-          "generationParams.reasoning_budget must be -1 (unrestricted) "
-          "or 0 (disabled)");
+          "generationParams.reasoning_budget must be -1 (unrestricted), "
+          "0 (disabled), or a positive integer (token cap)");
     }
-    overrides.reasoning_budget = static_cast<int>(*reasoningBudget);
+    overrides.reasoning_budget = static_cast<int>(value);
   }
 }
 
