@@ -7,6 +7,8 @@
     "imageFruitPlate": ["runImageFruitPlateTest"],
     "gemma": ["runGemma4Test"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
+    "visionCacheGemma": ["runVisionCacheGemma4Test"],
+    "visionCacheQwen35": ["runVisionCacheQwen35Test"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -77,6 +79,12 @@
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest"
+    ],
+    "visionCacheGemma": [
+      "runVisionCacheGemma4Test"
+    ],
+    "visionCacheQwen35": [
+      "runVisionCacheQwen35Test"
     ]
   },
   "iosWeekly": {
@@ -97,6 +105,12 @@
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest"
+    ],
+    "visionCacheGemma": [
+      "runVisionCacheGemma4Test"
+    ],
+    "visionCacheQwen35": [
+      "runVisionCacheQwen35Test"
     ]
   }
 }

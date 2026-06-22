@@ -21,7 +21,7 @@ on:
         required: false
         default: ""
       qvac_perf_only:
-        description: "If true, run only the perf-emitting tests (image-*, bitnet, tool-calling, gemma4-image-*-perf, qwen3-5-image-*-perf)."
+        description: "If true, run only the perf-emitting tests (image-*, bitnet, tool-calling, gemma4-image-*-perf, qwen3-5-image-*-perf, vision-cache-gemma4, vision-cache-qwen3-5)."
         type: boolean
         required: false
         default: false
@@ -48,7 +48,7 @@ on:
         required: false
         default: ""
       qvac_perf_only:
-        description: "If true, run only the perf-emitting tests."
+        description: "If true, run only the perf-emitting tests (incl. vision-cache-gemma4, vision-cache-qwen3-5 for cache-hit improvement numbers)."
         type: boolean
         required: false
         default: false
@@ -284,7 +284,9 @@ jobs:
               test/integration/gemma4-image-high-res-aurora-perf.test.js \
               test/integration/qwen3-5-image-elephant-perf.test.js \
               test/integration/qwen3-5-image-fruit-plate-perf.test.js \
-              test/integration/qwen3-5-image-high-res-aurora-perf.test.js
+              test/integration/qwen3-5-image-high-res-aurora-perf.test.js \
+              test/integration/vision-cache-gemma4.test.js \
+              test/integration/vision-cache-qwen3-5.test.js
             bare test/integration/all.js --exit 2>&1 | tee test-output.log
             exit ${PIPESTATUS[0]}
           fi
@@ -313,7 +315,9 @@ jobs:
               test/integration/gemma4-image-high-res-aurora-perf.test.js `
               test/integration/qwen3-5-image-elephant-perf.test.js `
               test/integration/qwen3-5-image-fruit-plate-perf.test.js `
-              test/integration/qwen3-5-image-high-res-aurora-perf.test.js
+              test/integration/qwen3-5-image-high-res-aurora-perf.test.js `
+              test/integration/vision-cache-gemma4.test.js `
+              test/integration/vision-cache-qwen3-5.test.js
           } else {
             npm run test:integration:generate
           }

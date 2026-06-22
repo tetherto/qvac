@@ -19,6 +19,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 - [Fine-tuning](#fine-tuning)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
+- [Vision Prefix Cache](#vision-prefix-cache)
 - [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
@@ -180,6 +181,8 @@ const config = {
 | split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
+| vision_cache      | `"true"` or `"false"`                       | `"true"`                     | Cache post-projection image embeddings for multimodal models so repeated images skip CLIP + projection ([details](#vision-prefix-cache)) |
+| vision_cache_budget_mb | integer (MB)                           | `100`                        | Max memory for cached image embeddings; LRU eviction once the budget is exceeded ([details](#vision-prefix-cache)) |
 
 
 #### IGPU/GPU  selection logic:
@@ -442,6 +445,115 @@ await response.await()
 console.log(output.join(''))
 
 await model.unload()
+```
+
+## Vision Prefix Cache
+
+When a multimodal model processes an image, the bytes are run through a CLIP-style
+vision encoder and then a projection layer (`mmproj`) that maps the vision features
+into the LLM's embedding space. Both steps run on every turn that includes the image.
+
+**Use case.** Multimodal chat and document-understanding apps almost always re-send the
+same image across turns — either as an explicit "send an image, then ask several
+questions about it" flow, or because the client replays the full message history (image
+included) on each stateless `run()`. Without caching, that identical image is re-encoded
+and re-projected from scratch on every single turn — redundant work that grows with
+conversation length and dominates time-to-first-token on constrained devices.
+
+The **vision prefix cache** stores the *post-projection* image embeddings so that
+re-sending the same image skips **both** the CLIP encode and the projection on
+subsequent turns. It is keyed by `SHA-256(image bytes)` combined with the model and
+mmproj paths, evicts least-recently-used entries once a byte budget is exceeded, and
+is held in CPU memory (the embeddings are copied to the GPU transiently when decoded).
+
+Crucially, the cached embeddings are **context-independent feature vectors**, not KV
+positions — so the cache persists across KV-cache resets and is re-injected into a
+fresh context on every use. This makes the common multi-turn pattern — *send an image
+once, then ask several questions about it* — fast: only the first turn pays the
+encode + projection cost. A multi-turn, same-image run on a Mac M4 (Gemma 4 E2B Q4_K_M)
+measured a **~48 % reduction in time-to-first-token** on the cached turns.
+
+### Vision cache vs. the KV / prompt cache
+
+The vision prefix cache is **not** the KV / prompt cache — they cache different data
+and are complementary. (For the KV / prompt cache itself, see [Cache API](./docs/cache-api.md).)
+
+|                                              | KV / prompt cache                                  | Vision prefix cache                                       |
+|----------------------------------------------|----------------------------------------------------|-----------------------------------------------------------|
+| What it stores                               | Token **KV state** (attention keys/values at fixed context positions) | **Post-projection image embeddings** (context-independent feature vectors) |
+| Keyed by                                     | Conversation prefix / session                      | `SHA-256(image bytes)` + model + mmproj                   |
+| Survives a KV reset / context-window eviction? | No — tied to live positions in the context        | **Yes** — re-injected into a fresh context on every use   |
+| Survives the image being re-attached later?  | No — the prefix no longer matches                  | **Yes** — same bytes still hit                            |
+| Lifetime                                     | Per session / context                              | Model lifetime (until LRU eviction or `onMemoryWarning()`) |
+
+**Why the vision cache adds value on top of the KV cache.** When the host keeps a
+conversation's KV state across turns and does *not* re-send the image, the LLM KV cache
+already makes follow-up turns free — the image's tokens are still in context, so there is
+nothing to re-encode. The vision cache targets the cases the KV cache **cannot** cover:
+
+- **Sliding-window agent loops.** In a long loop the image's tokens are eventually evicted
+  from the context window and the image is re-attached later. The KV prefix no longer holds
+  it, so it would normally be re-encoded + re-projected from scratch — the vision cache
+  serves the cached embeddings instead.
+- **Stateless / history-replay clients.** A client that resends the full message history
+  (image included) on each `run()` invalidates the KV prefix every turn, but the vision
+  cache still hits on the identical image bytes.
+
+The two caches **compound**: KV reuse skips re-decoding
+tokens that are still in context, while the vision cache skips re-encoding images whenever
+they fall out of (or never entered) the KV prefix.
+
+### Options
+
+| Parameter                | Type                  | Default  | Description |
+|--------------------------|-----------------------|----------|-------------|
+| `vision_cache`           | `"true"` / `"false"`  | `"true"` | Enable/disable the cache. When disabled, every image is encoded + projected from scratch. |
+| `vision_cache_budget_mb` | integer (MB)          | `100`    | Maximum memory for cached embeddings. Entries are evicted LRU once the budget is exceeded; an image whose embeddings alone exceed the budget is never cached. |
+
+> The hyphen spellings `vision-cache` and `vision-cache-budget-mb` are also accepted, matching the dual-form convention used by keys like `main-gpu` / `reasoning-budget`.
+
+```js
+const model = new LlmLlamacpp({
+  files: { model: [modelPath], projectionModel: projPath },
+  config: {
+    device: 'gpu',
+    gpu_layers: '98',
+    vision_cache: 'true',        // default — pass 'false' to disable
+    vision_cache_budget_mb: '100' // default budget
+  },
+  opts: { stats: true },          // required to read the telemetry below
+  logger: console
+})
+```
+
+### Telemetry
+
+When `opts.stats` is `true`, each response exposes cumulative cache counters on
+`response.stats`:
+
+| Field                          | Meaning |
+|--------------------------------|---------|
+| `visionCacheHits`              | Lookups served from the cache (encode + projection skipped) |
+| `visionCacheMisses`            | Lookups not in the cache (full encode + projection ran) |
+| `visionCacheEvictions`         | Entries dropped to stay within the budget |
+| `visionCacheDistinctImages`    | Unique images inserted over the model's lifetime |
+| `visionCachePeakBytes`         | Peak memory held by the cache (never exceeds the budget) |
+
+```js
+const response = await model.run(messages)
+await response.await()
+const s = response.stats
+console.log(`vision cache: ${s.visionCacheHits} hits / ${s.visionCacheMisses} misses`)
+```
+
+### Memory pressure
+
+On iOS/Android, forward OS low-memory warnings to the model so it can release the
+cached embeddings immediately:
+
+```js
+// In your platform's memory-warning handler:
+model.onMemoryWarning() // clears the vision prefix cache, freeing its memory
 ```
 
 ## Architecture

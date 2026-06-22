@@ -83,6 +83,19 @@ export interface LlamaConfig {
    * forward pass. Default `1` (sequential, batching disabled).
    */
   parallel?: NumericLike
+  /**
+   * Enable the vision prefix cache for multimodal models (caches
+   * post-projection image embeddings so repeated images skip CLIP +
+   * projection). Enabled by default; pass `'false'` / `'0'` to disable.
+   * The hyphen alias `vision-cache` is also accepted.
+   */
+  vision_cache?: boolean | 'true' | 'false' | '0' | '1'
+  /**
+   * Maximum memory (in MB) for cached image embeddings; least-recently-used
+   * entries are evicted once the budget is exceeded. Default `100`. The
+   * hyphen alias `vision-cache-budget-mb` is also accepted.
+   */
+  vision_cache_budget_mb?: NumericLike
   [key: string]: string | number | boolean | string[] | undefined
 }
 
@@ -210,6 +223,16 @@ export interface RuntimeStats {
    */
   avgConcurrentSeq: number
   backendDevice: 'cpu' | 'gpu'
+  /** Vision prefix cache: lookups served from cache (CLIP encode + projection skipped). */
+  visionCacheHits: number
+  /** Vision prefix cache: lookups not in cache (full encode + projection ran). */
+  visionCacheMisses: number
+  /** Vision prefix cache: entries evicted to stay within the byte budget. */
+  visionCacheEvictions: number
+  /** Vision prefix cache: unique images inserted over the model's lifetime. */
+  visionCacheDistinctImages: number
+  /** Vision prefix cache: peak memory held by the cache, in bytes. */
+  visionCachePeakBytes: number
 }
 
 export interface FinetuneValidationNone {
@@ -339,6 +362,11 @@ export default class LlmLlamacpp {
   cancel(): Promise<void>
   pause(): Promise<void>
   unload(): Promise<void>
+  /**
+   * Notify the addon of OS memory pressure (iOS/Android low-memory warning).
+   * Clears the vision prefix cache immediately, freeing cached embeddings.
+   */
+  onMemoryWarning(): void
   getState(): { configLoaded: boolean }
 }
 

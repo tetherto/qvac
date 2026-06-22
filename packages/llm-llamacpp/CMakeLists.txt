@@ -32,9 +32,8 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
 
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
-# llama-targets.cmake transitively requires OpenSSL::SSL via cpp-httplib's
-# IMPORTED interface. Make OpenSSL discoverable before find_package(llama)
-# so the target chain resolves on local builds.
+# llama-targets.cmake may transitively require OpenSSL::SSL via cpp-httplib.
+# Make OpenSSL discoverable (optional) so the target chain resolves.
 find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 # Required to call llama.cpp's `json_schema_to_grammar()` for per-request
@@ -95,6 +94,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/VisionPrefixCache.cpp
   )
 
   target_sources(
@@ -148,6 +148,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/VisionPrefixCache.cpp
   )
 
   target_include_directories(

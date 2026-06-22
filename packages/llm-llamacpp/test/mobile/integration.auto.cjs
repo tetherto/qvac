@@ -515,3 +515,13 @@ async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unus
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUtf8OutputTest')) return __FILTERED
   return runIntegrationModule('../integration/utf8-output.test.js', options)
 }
+
+async function runVisionCacheGemma4Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVisionCacheGemma4Test')) return __FILTERED
+  return runIntegrationModule('../integration/vision-cache-gemma4.test.js', options)
+}
+
+async function runVisionCacheQwen35Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVisionCacheQwen35Test')) return __FILTERED
+  return runIntegrationModule('../integration/vision-cache-qwen3-5.test.js', options)
+}

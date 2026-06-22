@@ -155,7 +155,7 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
   return { inference, modelName: modelName.replace(/\.gguf$/i, '') }
 }
 
-async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
+async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt, runOptions = undefined) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
   const messages = [
@@ -165,7 +165,12 @@ async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.
   ]
 
   const startTime = Date.now()
-  const response = await inference.run(messages)
+  // QVAC-19118 (A2): optional runOptions lets cache-perf tests pass a
+  // { cacheKey, saveCacheToDisk } so a repeated prompt reuses the KV
+  // prefix (KV-cache hit). Defaults to undefined → identical to the
+  // previous stateless `inference.run(messages)` call for every other
+  // caller.
+  const response = await inference.run(messages, runOptions)
   const generatedText = []
   let error = null
 

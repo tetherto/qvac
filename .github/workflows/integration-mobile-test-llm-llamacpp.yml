@@ -234,9 +234,12 @@ jobs:
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
           # QVAC-17830: VLM image tests on Android exceed the 20-minute
           # default per-test ceiling. Paired with mocha-timeout-ms on
-          # upload-to-devicefarm below (35 min) so the WDIO/Mocha
+          # upload-to-devicefarm below (65 min) so the WDIO/Mocha
           # session outlives any single test.
-          android-per-test-timeout-minutes: '30'
+          # QVAC-19118: the vision-cache Gemma4 suite reloads the model 5×
+          # and runs ~15 cold encodes; on slower Android GPUs (Pixel 9 Pro
+          # Mali, S25 Ultra) this exceeds 30 min, so the ceiling is 60 min.
+          android-per-test-timeout-minutes: '60'
 
       # LLM ships with its own dedicated Device Farm project + iOS pool
       # (the LLM_* secrets), historically because LLM runs more often
@@ -254,9 +257,10 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
           enables-perf: 'true'
-          # QVAC-17830: 35-minute WDIO/Mocha ceiling so the runner
-          # outlives the per-test 30-minute ceiling enforced above.
-          mocha-timeout-ms: '2100000'
+          # QVAC-17830: WDIO/Mocha ceiling kept 5 min above the per-test
+          # ceiling enforced above so the runner outlives any single test.
+          # QVAC-19118: bumped to 65 min to match the 60-min per-test cap.
+          mocha-timeout-ms: '3900000'
           qvac-perf-runs: ${{ inputs.qvac_perf_runs }}
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}

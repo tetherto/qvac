@@ -509,6 +509,14 @@ class LlmLlamacpp {
   }
 
   /**
+   * Notify the addon of OS memory pressure (iOS/Android low-memory warning).
+   * Clears the vision prefix cache immediately, freeing cached embeddings.
+   */
+  onMemoryWarning () {
+    this.addon?.onMemoryWarning?.()
+  }
+
+  /**
    * Unload the model safely by cancelling the in-flight job and releasing
    * native resources. Subsequent calls to `run()` / `finetune()` / `cancel()`
    * are safe; they hit the `!this.addon` guard and throw or no-op.

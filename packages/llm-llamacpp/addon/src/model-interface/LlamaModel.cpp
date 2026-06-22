@@ -382,6 +382,57 @@ void LlamaModel::init(bool acquireLock) {
     snap->backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
   }
 
+  std::size_t visionCacheBudgetBytes =
+      qvac_lib_inference_addon_llama::VisionPrefixCache::DEFAULT_BUDGET_BYTES;
+  bool visionCacheExplicitlyDisabled = false;
+  {
+    // Accept both the hyphen and underscore spellings, consistent with the
+    // dual-form lookup used for reasoning-budget, main-gpu, etc.
+    for (const std::string& key : {"vision-cache", "vision_cache"}) {
+      auto vcIt = configFilemap.find(key);
+      if (vcIt != configFilemap.end()) {
+        if (vcIt->second == "0" || vcIt->second == "false") {
+          visionCacheExplicitlyDisabled = true;
+        }
+        configFilemap.erase(vcIt);
+      }
+    }
+    if (!visionCacheExplicitlyDisabled) {
+      for (const std::string& key :
+           {"vision-cache-budget-mb", "vision_cache_budget_mb"}) {
+        auto budgetIt = configFilemap.find(key);
+        if (budgetIt == configFilemap.end()) {
+          continue;
+        }
+        try {
+          constexpr std::size_t kMaxMB = SIZE_MAX / (1024ULL * 1024ULL);
+          auto val = std::stoul(budgetIt->second, nullptr, 10);
+          if (val == 0) {
+            visionCacheBudgetBytes = 0;
+            QLOG_IF(
+                Priority::WARNING,
+                "[LlamaModel] vision_cache_budget_mb=0 disables vision "
+                "caching; use vision_cache:\"false\" to disable explicitly\n");
+          } else if (val <= kMaxMB) {
+            visionCacheBudgetBytes = val * 1024ULL * 1024ULL;
+          }
+        } catch (const std::exception&) {
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] invalid vision_cache_budget_mb value: '%s', "
+                  "using default\n",
+                  budgetIt->second.c_str()));
+        }
+        configFilemap.erase(budgetIt);
+      }
+    } else {
+      visionCacheBudgetBytes = 0;
+      configFilemap.erase("vision-cache-budget-mb");
+      configFilemap.erase("vision_cache_budget_mb");
+    }
+  }
+
   common_params params;
   std::optional<int> adrenoVersion;
   ResolvedToolsCompactConfig toolsCompactConfig;
@@ -417,7 +468,8 @@ void LlamaModel::init(bool acquireLock) {
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      *snap->toolsCompact_);
+      *snap->toolsCompact_,
+      visionCacheBudgetBytes);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -898,6 +950,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
           ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
           : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
+
+  auto vcStats = state_->llmContext_->visionCacheStats();
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
@@ -908,7 +962,13 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"contextSlides",
        static_cast<int64_t>(state_->llmContext_->getNSlides())},
       {"avgConcurrentSeq", 1.0},
-      {"backendDevice", runtimeBackendDevice_}};
+      {"backendDevice", runtimeBackendDevice_},
+      {"visionCacheHits", static_cast<int64_t>(vcStats.hits)},
+      {"visionCacheMisses", static_cast<int64_t>(vcStats.misses)},
+      {"visionCacheEvictions", static_cast<int64_t>(vcStats.evictions)},
+      {"visionCacheDistinctImages",
+       static_cast<int64_t>(vcStats.distinctImages)},
+      {"visionCachePeakBytes", static_cast<int64_t>(vcStats.peakBytes)}};
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats
@@ -1501,11 +1561,12 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result_ptr llamaInit, ToolsCompactController& tools) {
+    common_init_result_ptr llamaInit, ToolsCompactController& tools,
+    std::size_t visionCacheBudgetBytes) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), tools);
+        params, std::move(llamaInit), tools, visionCacheBudgetBytes);
   }
   return std::make_unique<TextLlmContext>(params, std::move(llamaInit), tools);
 }

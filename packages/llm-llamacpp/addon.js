@@ -150,6 +150,15 @@ class LlamaInterface {
   }
 
   /**
+   * Notify the addon that the OS is under memory pressure.
+   * Clears the vision prefix cache immediately.
+   */
+  onMemoryWarning () {
+    if (!this._handle) return
+    this._binding.onMemoryWarning(this._handle)
+  }
+
+  /**
    * Unload the model and clear resources (including memory).
    */
   async unload () {
