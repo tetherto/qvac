@@ -11,8 +11,8 @@
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "mobile:generate-urls": "bash ./scripts/generate-ocr-ggml-presigned-urls.sh",
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
@@ -73,7 +73,9 @@
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.0.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.2"
   },
   "dependencies": {
@@ -90,12 +92,5 @@
     },
     "./addonLogging.js": "./addonLogging.js"
   },
-  "types": "index.d.ts",
-  "standard": {
-    "ignore": [
-      "build/**",
-      "prebuilds/**",
-      "examples/**"
-    ]
-  }
+  "types": "index.d.ts"
 }
