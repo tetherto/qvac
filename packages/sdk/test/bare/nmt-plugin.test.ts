@@ -23,18 +23,11 @@ test("nmtPlugin.resolveConfig: IndicTrans config passes through without vocab re
   });
 
   t.ok(result.config, "resolveConfig returns a config object");
-  t.is(
-    (result.config as Record<string, unknown>).engine,
-    "IndicTrans",
-    "engine is preserved",
-  );
-  t.is(
-    (result.config as Record<string, unknown>).beamsize,
-    1,
-    "beamsize is preserved",
-  );
+  const cfg = result.config as Record<string, unknown>;
+  t.is(cfg["engine"], "IndicTrans", "engine is preserved");
+  t.is(cfg["beamsize"], 1, "beamsize is preserved");
   t.absent(
-    (result as Record<string, unknown>).artifacts,
+    (result as unknown as Record<string, unknown>)["artifacts"],
     "IndicTrans produces no artifacts (no vocab resolution)",
   );
 });
@@ -54,8 +47,8 @@ test("nmtPlugin.resolveConfig: Bergamot config strips vocab sources and delegate
 
   const resolvedPaths: string[] = [];
   const result = await nmtPlugin.resolveConfig!(config, {
-    resolveModelPath: async (src: string) => {
-      resolvedPaths.push(src as string);
+    resolveModelPath: async (src) => {
+      resolvedPaths.push(String(src));
       return `/resolved/${src}`;
     },
     modelSrc: "s3:///model.enfr.intgemm.alphas.bin",
