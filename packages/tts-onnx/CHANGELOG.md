@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
   build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
   which had forced the dynamic runtime. Package-local vcpkg triplets now layer
-  on the shared `vcpkg-overlays/` tree. Bumped `@qvac/onnx` to `^0.16.0` for
+  on the shared `vcpkg-overlays/` tree. Bumped `@qvac/onnx` to `^0.15.1` for
   the same static-runtime baseline. No public API change.
 
 ## Pull Requests
