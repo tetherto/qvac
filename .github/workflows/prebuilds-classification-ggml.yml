@@ -42,9 +42,10 @@ jobs:
       repository: ${{ inputs.repository }}
       artifact-name-prefix: classification-ggml-
       # classification-ggml builds the GGML_BACKEND_DL fabric (gpu-backends), so
-      # build hosts need the Vulkan SDK (incl. glslc) to compile the ggml-vulkan
-      # module from source on cache-miss — same as the other gpu-backends
-      # consumers (embed/llm/nmtcpp/ocr), which already set this. Without it the
-      # linux-arm64 / android-arm64 prebuilds fail to find glslc.
+      # the build host needs the Vulkan SDK (incl. glslc) to compile the
+      # ggml-vulkan module from source on cache-miss — same as the other
+      # gpu-backends consumers (vla/embed/llm/nmtcpp/ocr). The consumer-side
+      # find_dependency(Vulkan) is separately removed under DL by qvac-fabric
+      # 8828.0.2#5, but the fabric's own Vulkan backend build still needs it.
       include-vulkan-sdk: true
     secrets: inherit

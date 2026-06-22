@@ -11,6 +11,7 @@ set(TEST_SOURCES
   nmt_model_wrapper_test_indic.cpp
   nmt_test.cpp
   test_nmt_lazy_init_backend.cpp
+  backend_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp
@@ -43,6 +44,12 @@ target_compile_options(
 
 # Disable POSIX regex in gtest - clang cross-compilation target doesn't find regex.h properly
 target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0)
+
+# Under GGML_BACKEND_DL the backend modules (libqvac-ggml-*.so) live in the ggml
+# lib dir, which ggml's default loader doesn't search. Inject that dir so the
+# test env (backend_env.cpp) preloads the backends before any test runs.
+target_compile_definitions(
+  addon-test PRIVATE GGML_BACKEND_DIR="$<TARGET_FILE_DIR:ggml::ggml>")
 
 if(NOT WIN32)
   target_compile_options(
