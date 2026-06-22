@@ -32,6 +32,14 @@ tts_cpp::chatterbox::EngineOptions engineOptionsForTests(
     const ChatterboxConfig& cfg);
 
 /**
+ * Per-language default speaking-rate multiplier applied by synthesize() when
+ * ChatterboxConfig::speed is left unset (QVAC-21119).  Exposed for tests; the
+ * production path consumes it internally.  An explicit `speed` (including 1.0
+ * for raw model output) overrides this default.
+ */
+float chatterboxDefaultSpeedForLanguage(const std::string& language);
+
+/**
  * IModel implementation that wraps the tts-cpp::tts-cpp static library
  * (Chatterbox English GGUF).  Holds a persistent
  * `tts_cpp::chatterbox::Engine` so that each {@link process} call pays only

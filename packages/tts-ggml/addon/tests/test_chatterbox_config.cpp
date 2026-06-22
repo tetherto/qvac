@@ -158,6 +158,70 @@ TEST(ChatterboxValidate, NegativeNCtxRejected) {
   EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
 }
 
+TEST(ChatterboxValidate, SpeedBelowRangeRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.1f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, SpeedAboveRangeRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 8.0f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, SpeedZeroRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.0f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, ValidSpeedAccepted) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.8f;  // a typical "slow it down" value
+  // Stub files pass validation; load is deferred, so construction succeeds.
+  std::unique_ptr<ChatterboxModel> m;
+  EXPECT_NO_THROW(m = std::make_unique<ChatterboxModel>(cfg));
+  EXPECT_NE(m, nullptr);
+}
+
+TEST(ChatterboxValidate, ConfigSpeedDefaultUnset) {
+  ChatterboxConfig cfg;
+  EXPECT_FALSE(cfg.speed.has_value());
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  Per-language default speaking rate (applied when speed is unset).
+// ─────────────────────────────────────────────────────────────────────
+
+using qvac::ttsggml::chatterbox::chatterboxDefaultSpeedForLanguage;
+
+TEST(ChatterboxDefaultSpeed, EnglishSlowsDownFromBaseline) {
+  EXPECT_FLOAT_EQ(chatterboxDefaultSpeedForLanguage("en"), 0.80f);
+}
+
+TEST(ChatterboxDefaultSpeed, ItalianSlowerThanEnglish) {
+  EXPECT_LT(chatterboxDefaultSpeedForLanguage("it"),
+            chatterboxDefaultSpeedForLanguage("en"));
+}
+
+TEST(ChatterboxDefaultSpeed, UnknownLanguageUsesConservativeDefault) {
+  EXPECT_FLOAT_EQ(chatterboxDefaultSpeedForLanguage("xx"), 0.85f);
+}
+
+TEST(ChatterboxDefaultSpeed, RegionSuffixIsNormalized) {
+  EXPECT_FLOAT_EQ(chatterboxDefaultSpeedForLanguage("en-US"),
+                  chatterboxDefaultSpeedForLanguage("en"));
+}
+
+TEST(ChatterboxDefaultSpeed, AllDefaultsWithinValidatedRange) {
+  for (const char* lang : {"en", "it", "es", "fr", "de", "xx"}) {
+    const float s = chatterboxDefaultSpeedForLanguage(lang);
+    EXPECT_GE(s, 0.25f) << lang;
+    EXPECT_LE(s, 4.0f) << lang;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  ChatterboxConfig -> tts_cpp EngineOptions mapping.
 // ─────────────────────────────────────────────────────────────────────
