@@ -37,7 +37,13 @@
       ]
     },
     "hip-backend": {
-      "description": "Build the ROCm/HIP GPU backend (libqvac-ggml-hip.so) for AMD GPUs on Linux as a DL module alongside Vulkan. Opt-in (only @qvac/vla-ggml requests it); requires the ROCM_PATH env at build time. Targets gfx1151 (Strix Halo)."
+      "description": "Build the ROCm/HIP GPU backend (libqvac-ggml-hip.so) for AMD GPUs on Linux as a DL module alongside Vulkan. Opt-in (only @qvac/vla-ggml requests it). Fail-safe: if no ROCm SDK is present at build time the HIP backend is skipped (Vulkan/CPU only). Targets gfx1151 (Strix Halo). The 'hip' dependency forwards the system ROCm find_package configs.",
+      "dependencies": [
+        {
+          "name": "hip",
+          "platform": "linux"
+        }
+      ]
     },
     "kleidiai": {
       "description": "Enable ARM KleidiAI optimized kernels on Android."

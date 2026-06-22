@@ -1,0 +1,8 @@
+{
+  "name": "hip",
+  "version": "7.13.0",
+  "description": "Thin wrapper that exposes the system-installed ROCm/HIP SDK (hip, rocblas, hipblas and their CMake configs) to vcpkg consumers on Linux. ROCm is a large, system-installed SDK and is NOT built from source like other ports — this port forwards find_package(<pkg> CONFIG) to the ROCm install located via the ROCM_PATH env var, so a consumer (qvac-fabric's hip-backend feature) can build GGML_HIP against it under vcpkg's find-root scoping. Runtime libs come from the system ROCm / are shipped by the consumer.",
+  "homepage": "https://rocm.docs.amd.com",
+  "license": "MIT",
+  "supports": "linux"
+}

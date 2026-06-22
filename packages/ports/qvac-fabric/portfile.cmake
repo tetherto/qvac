@@ -107,27 +107,26 @@ endif()
 
 # HIP/ROCm backend — opt-in via the 'hip-backend' feature (Linux + AMD only).
 # Only @qvac/vla-ggml requests it, so every other consumer builds with no HIP
-# and gains no ROCm build/runtime dependency. Builds libqvac-ggml-hip.so as a
-# standalone DL module alongside Vulkan (GGML_BACKEND_DL is already ON above for
-# Linux GPU), so the addon dlopen's whichever GPU backend it selects at runtime.
-# Requires the ROCM_PATH env var at build time (a ROCm SDK prefix); we point
-# find_package() straight at its config dirs so vcpkg's find-root scoping does
-# not hide the system/user ROCm. Targets gfx1151 (Strix Halo / Radeon 8060S).
+# and gains no ROCm dependency. Builds libqvac-ggml-hip.so as a standalone DL
+# module alongside Vulkan (GGML_BACKEND_DL is already ON above), so the addon
+# dlopen's whichever GPU backend BackendSelection picks at runtime. The `hip`
+# feature-dependency port forwards the system ROCm's find_package() configs.
+#
+# FAIL-SAFE: enable GGML_HIP only when a ROCm SDK is actually present. On a build
+# host without ROCm we skip HIP and build Vulkan/CPU only — the build never
+# hard-fails, and at runtime a missing HIP module just isn't loaded (the DL
+# loader skips it) so BackendSelection falls back to Vulkan/CPU. Targets gfx1151
+# (Strix Halo / Radeon 8060S); the HIP compiler + ROCM_PATH come from the build env.
 if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_HIP_BACKEND)
-  if(NOT DEFINED ENV{ROCM_PATH})
-    message(FATAL_ERROR "qvac-fabric: hip-backend feature requires the ROCM_PATH env var pointing at a ROCm SDK prefix")
+  if(DEFINED ENV{ROCM_PATH} AND EXISTS "$ENV{ROCM_PATH}/lib/cmake/hip/hip-config.cmake")
+    message(STATUS "qvac-fabric: hip-backend ON — ROCm found, building GGML_HIP (gfx1151)")
+    list(APPEND PLATFORM_OPTIONS
+      -DGGML_HIP=ON
+      -DAMDGPU_TARGETS=gfx1151
+      -DCMAKE_HIP_ARCHITECTURES=gfx1151)
+  else()
+    message(WARNING "qvac-fabric: hip-backend requested but no ROCm SDK found (ROCM_PATH) — skipping HIP backend; building Vulkan/CPU only")
   endif()
-  set(_ROCM "$ENV{ROCM_PATH}")
-  message(STATUS "qvac-fabric: hip-backend ON — GGML_HIP for gfx1151 (ROCm: ${_ROCM})")
-  list(APPEND PLATFORM_OPTIONS
-    -DGGML_HIP=ON
-    -DAMDGPU_TARGETS=gfx1151
-    -DCMAKE_HIP_ARCHITECTURES=gfx1151
-    -DCMAKE_HIP_COMPILER=${_ROCM}/lib/llvm/bin/clang++
-    -DCMAKE_HIP_COMPILER_ROCM_ROOT=${_ROCM}
-    -Dhip_DIR=${_ROCM}/lib/cmake/hip
-    -Dhipblas_DIR=${_ROCM}/lib/cmake/hipblas
-    -Drocblas_DIR=${_ROCM}/lib/cmake/rocblas)
 endif()
 
 if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
