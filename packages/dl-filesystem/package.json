@@ -6,8 +6,8 @@
   "types": "index.d.ts",
   "scripts": {
     "test": "npm run test:unit && npm run test:integration",
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "test:dts": "tsc index.d.ts --noEmit",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
@@ -25,7 +25,9 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "brittle": "3.7.0",
-    "standard": "17.1.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.0.0"
   },
   "repository": {
