@@ -53,12 +53,18 @@ int backendIdFromName(const std::string& name) {
 // device the engine selected can be matched against the ggml device registry
 // to recover its human-readable description.
 int backendIdFromRegName(std::string regName) {
-  std::transform(regName.begin(), regName.end(), regName.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  if (regName.rfind("metal",  0) == 0) return 1;
-  if (regName.rfind("cuda",   0) == 0) return 2;
-  if (regName.rfind("vulkan", 0) == 0) return 3;
-  if (regName.rfind("opencl", 0) == 0) return 4;
+  std::transform(
+      regName.begin(), regName.end(), regName.begin(), [](unsigned char c) {
+        return std::tolower(c);
+      });
+  if (regName.rfind("metal", 0) == 0)
+    return 1;
+  if (regName.rfind("cuda", 0) == 0)
+    return 2;
+  if (regName.rfind("vulkan", 0) == 0)
+    return 3;
+  if (regName.rfind("opencl", 0) == 0)
+    return 4;
   return 99;
 }
 
@@ -74,7 +80,7 @@ int backendIdFromRegName(std::string regName) {
 // GPU/IGPU device.
 std::string captureBackendDescription(int backendId, int backendDevice) {
   if (backendDevice != 1) {
-    return "";  // CPU backend: no GPU hardware name to report.
+    return ""; // CPU backend: no GPU hardware name to report.
   }
 
   ggml_backend_dev_t firstGpu = nullptr;

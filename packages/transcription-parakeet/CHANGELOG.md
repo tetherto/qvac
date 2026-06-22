@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- New `getBackendInfo()` surfaces the active GPU hardware name. The native addon now captures `ggml_backend_dev_description()` for the resolved GPU device at `load()` (e.g. "NVIDIA GeForce RTX 3090", "Apple M2 Pro") and exposes it through `TranscriptionParakeet#getBackendInfo()` → `{ backendDevice, backendId, backendName, backendDescription }`. The RTF benchmark uses it as a fallback for `labels.gpuModel` on CI GPU runners where the host probe (nvidia-smi / procfs) can't see the device but the ggml CUDA/Vulkan/Metal backend still knows its name via `cudaGetDeviceProperties` / `VkPhysicalDeviceProperties` / `MTLDevice.name` (QVAC-21167).
+
 ## [0.8.1] - 2026-06-22
 
 ### Changed
@@ -43,7 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped the `parakeet-cpp` `version>=` constraint to `2026-06-10` (whisper.cpp `1c75d6e9`), which refreshes the bundled `ggml-speech` to the current speech-branch tip `bec032cd`. The registry baseline is left unchanged. The `parakeet-cpp` C++ tree is unchanged since the previous `128dae42` pin, so this only moves `ggml-speech`; prebuilds and the desktop RTF benchmark now build against the latest speech stack (QVAC-20614).
 - Performance reports now surface the desktop GPU hardware name. `test/integration/helpers.js` injects `bare-subprocess` into the shared performance reporter's `configure()` so `_detectGpu()` can shell out to nvidia-smi / vulkaninfo / system_profiler and populate `device.gpu` (e.g. "NVIDIA RTX 4000 SFF Ada") on GPU desktop runners (QVAC-20499). Mobile (Device Farm) reports continue to leave `device.gpu` null — the device name is the proxy there.
 - RTF benchmark now reports GGML backends. `test/benchmark/rtf-benchmark.test.js` resolves the requested GPU backend family to the parakeet.cpp cascade (Metal on darwin/ios, Vulkan on linux/win32, Vulkan/OpenCL on android) instead of the stale ONNX names (coreml/nnapi/auto-gpu), and now captures the *actual* backend the engine ran on via `stats.backendId` / `stats.backendDevice` (`labels.activeBackend`, `summary.backendId`). `scripts/perf-report/aggregate-parakeet-rtf.js` GPU-backend coverage map updated to the GGML set (vulkan/metal/opencl/cuda).
-- New `getBackendInfo()` surfaces the active GPU hardware name. The native addon now captures `ggml_backend_dev_description()` for the resolved GPU device at `load()` (e.g. "NVIDIA GeForce RTX 3090", "Apple M2 Pro") and exposes it through `TranscriptionParakeet#getBackendInfo()` → `{ backendDevice, backendId, backendName, backendDescription }`. The RTF benchmark uses it as a fallback for `labels.gpuModel` on CI GPU runners where the host probe (nvidia-smi / procfs) can't see the device but the ggml CUDA/Vulkan/Metal backend still knows its name via `cudaGetDeviceProperties` / `VkPhysicalDeviceProperties` / `MTLDevice.name` (QVAC-20684).
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2637](https://github.com/tetherto/qvac/pull/2637)).
 
 ### Fixed
