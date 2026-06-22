@@ -184,6 +184,13 @@ const modelPath = path.join(dirPath, modelName)
 ### 3. Create the `args` obj
 
 ```js
+// a minimal config; see step 4 for all available options
+const config = {
+  gpu_layers: '99',
+  ctx_size: '1024',
+  device: 'cpu'
+}
+
 const args = {
   files: {
     model: [modelPath],
@@ -206,7 +213,7 @@ The `args` obj contains the following properties:
 ### 4. Create the `config` obj
 
 The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-*All parameters must by strings.*
+*All parameters must be strings.*
 
 ```js
 // an example of possible configuration
