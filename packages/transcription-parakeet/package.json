@@ -7,8 +7,8 @@
     "bare": ">=1.20.0"
   },
   "scripts": {
-    "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
-    "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "lint": "prettier --check \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\" && lunte \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "format": "prettier --write \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "clean": "rm -rf build/ prebuilds/",
@@ -83,7 +83,9 @@
     "cmake-vcpkg": "^1.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "standard": "^17.1.2",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
@@ -109,6 +111,9 @@
   },
   "types": "index.d.ts",
   "lint-staged": {
-    "*.js": "standard --fix"
+    "*.js": [
+      "prettier --write",
+      "lunte"
+    ]
   }
 }
