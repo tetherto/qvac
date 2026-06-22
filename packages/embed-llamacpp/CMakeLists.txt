@@ -56,7 +56,7 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
   endforeach()
-endif()
+endif()  
 
 add_bare_module(embed-llamacpp EXPORTS ${BACKEND_DL_LIBS})
 
@@ -101,7 +101,7 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
-
+  
   add_subdirectory(test/unit)
 endif()
 
