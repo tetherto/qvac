@@ -251,6 +251,7 @@
     "@types/node": "^24.2.1",
     "@types/semver": "^7.7.1",
     "@types/tar-stream": "^3.1.4",
+    "bare-process": "^4.4.1",
     "bare-readline": "^1.2.0",
     "bare-stdio": "^1.0.2",
     "bare-subprocess": "^6.1.0",
