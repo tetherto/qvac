@@ -39,12 +39,22 @@ export const TTS_LANGUAGES = [...TTS_CHATTERBOX_LANGUAGES] as const;
 
 const ttsChatterboxLanguageSchema = z.enum(TTS_CHATTERBOX_LANGUAGES);
 const ttsSupertonicLanguageSchema = z.enum(TTS_SUPERTONIC_LANGUAGES);
+const ttsIntegerSchema = z.number().int();
+const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative();
+const ttsPositiveIntegerSchema = ttsIntegerSchema.positive();
 
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal("chatterbox"),
   language: ttsChatterboxLanguageSchema,
   voice: z.string().optional(),
   useGPU: z.boolean().optional(),
+  // Chatterbox-only native streaming controls.
+  streamChunkTokens: ttsNonNegativeIntegerSchema.optional(),
+  streamFirstChunkTokens: ttsNonNegativeIntegerSchema.optional(),
+  cfmSteps: ttsNonNegativeIntegerSchema.optional(),
+  threads: ttsPositiveIntegerSchema.optional(),
+  nGpuLayers: ttsIntegerSchema.optional(),
+  seed: ttsIntegerSchema.optional(),
 });
 
 export const ttsSupertonicRuntimeConfigSchema = z.object({
