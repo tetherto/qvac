@@ -69,11 +69,13 @@ public:
   /// context/batch params and GPU caps.
   /// @param isOpenCl True when the chosen GPU backend is OpenCL; used to reject
   /// unsupported quantized KV-cache types.
+  /// @param isMetal True when the chosen GPU backend is Metal; used to reject
+  /// unsupported TurboQuant/PolarQuant KV-cache types.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
       const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
       const FinetuneConfigOverrides& finetuneOverrides = {},
-      bool isOpenCl = false);
+      bool isOpenCl = false, bool isMetal = false);
 
   /**
    * The Constructor for llama model.

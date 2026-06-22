@@ -98,7 +98,8 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl) {
+    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
+    bool isMetal) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -215,12 +216,7 @@ void LlamaModel::tuneConfigMap(
   // fail later during cache shifts, while TBQ/PQ kernels are not implemented.
   // Surface a clean error here instead of letting llama.cpp commit KV-cache
   // tensors to a backend that can't run the required ops.
-#if defined(__APPLE__)
-  constexpr bool kIsMetal = true;
-#else
-  constexpr bool kIsMetal = false;
-#endif
-  if (isOpenCl || kIsMetal) {
+  if (isOpenCl || isMetal) {
     auto isTurboQuantKvType = [](const std::string& v) {
       return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
     };
@@ -1125,6 +1121,7 @@ void LlamaModel::commonParamsParse(
   }
 
   bool isOpenCl = false;
+  bool isMetal = false;
   {
     using namespace backend_selection;
     const BackendType preferredBackend =
@@ -1191,6 +1188,8 @@ void LlamaModel::commonParamsParse(
 
     isOpenCl = chosenBackend.first == BackendType::GPU &&
                chosenBackend.second.find("opencl") != std::string::npos;
+    isMetal = chosenBackend.first == BackendType::GPU &&
+              chosenBackend.second.find("metal") != std::string::npos;
   }
 
   tuneConfigMap(
@@ -1198,7 +1197,8 @@ void LlamaModel::commonParamsParse(
       metadata_,
       outAdrenoVersion,
       pendingFinetuneOverrides_,
-      isOpenCl);
+      isOpenCl,
+      isMetal);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {

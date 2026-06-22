@@ -283,6 +283,51 @@ TEST_F(TuneConfigMapTest, NotOpenCl_AllowsStandardQuantizedCacheTypes) {
           /*isOpenCl=*/false));
 }
 
+TEST_F(TuneConfigMapTest, NotOpenClNotMetal_AllowsTurboQuantCacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "tbq4_0";
+  configFilemap_["cache-type-v"] = "pq4_0";
+
+  EXPECT_NO_THROW(
+      LlamaModel::tuneConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false));
+}
+
+TEST_F(TuneConfigMapTest, Metal_RejectsTurboQuantCacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "tbq4_0";
+
+  EXPECT_THROW(
+      LlamaModel::tuneConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(TuneConfigMapTest, Metal_AllowsStandardQuantizedCacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["cache-type-v"] = "q4_0";
+
+  EXPECT_NO_THROW(
+      LlamaModel::tuneConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/true));
+}
+
 // ---- Finetuning: flash-attn disabled for any architecture ----
 
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_FlashAttnDisabled) {
