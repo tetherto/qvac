@@ -136,9 +136,8 @@ void BCIModel::loadEmbedderIfNeeded() {
     const auto modelPath = std::get<std::string>(modelPathIt->second);
 
     auto lastSep = modelPath.find_last_of("/\\");
-    auto dir = (lastSep != std::string::npos)
-                   ? modelPath.substr(0, lastSep)
-                   : ".";
+    auto dir =
+        (lastSep != std::string::npos) ? modelPath.substr(0, lastSep) : ".";
     embedderPath = dir + "/bci-embedder.bin";
   }
 
