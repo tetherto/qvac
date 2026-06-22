@@ -20,6 +20,59 @@ test("ttsConfigSchema: accepts GGML chatterbox load config", (t) => {
   t.is(r.success, true);
 });
 
+test("ttsConfigSchema: accepts Chatterbox native constructor options", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: "s3:///example/s3gen.gguf",
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    cfmSteps: 1,
+    threads: 8,
+    nGpuLayers: 99,
+    seed: 42,
+  });
+  t.is(r.success, true);
+  if (r.success) {
+    t.is(r.data.streamChunkTokens, 25);
+    t.is(r.data.streamFirstChunkTokens, 10);
+    t.is(r.data.cfmSteps, 1);
+    t.is(r.data.threads, 8);
+    t.is(r.data.nGpuLayers, 99);
+    t.is(r.data.seed, 42);
+  }
+});
+
+test("ttsConfigSchema: rejects invalid Chatterbox constructor option ranges", (t) => {
+  const invalidConfigs = [
+    { streamChunkTokens: -1 },
+    { streamFirstChunkTokens: -1 },
+    { cfmSteps: -1 },
+    { threads: 0 },
+    { nGpuLayers: 1.5 },
+    { seed: 1.5 },
+  ];
+
+  for (const invalidConfig of invalidConfigs) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: "chatterbox",
+      language: "en",
+      s3genModelSrc: "s3:///example/s3gen.gguf",
+      ...invalidConfig,
+    });
+    t.is(r.success, false, JSON.stringify(invalidConfig));
+  }
+});
+
+test("ttsConfigSchema: rejects Chatterbox-only native streaming options for supertonic", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "supertonic",
+    language: "en",
+    streamChunkTokens: 25,
+  });
+  t.is(r.success, false);
+});
+
 test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: "supertonic",

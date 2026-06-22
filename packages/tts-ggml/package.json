@@ -59,7 +59,6 @@
     "test/utils/runSupertonicTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
-    "test/utils/loader.fake.js",
     "test/utils/pcmConcatenator.js",
     "test/utils/runWhisper.js",
     "test/data/sentences-medium.js",
@@ -88,7 +87,7 @@
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/registry-client": "^0.4.0",
-    "@qvac/transcription-whispercpp": "^0.5.5",
+    "@qvac/transcription-whispercpp": "^0.10.0",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^5.2.1",
     "brittle": "^3.17.0",
