@@ -18,7 +18,7 @@ const logger = getServerLogger();
 // fd-lock issue a blocking flock(LOCK_EX) on a libuv worker thread. The
 // blocking variant cannot be cancelled from JS, so if another SDK process
 // holds the lock indefinitely it leaves a pending native handle that
-// prevents process.exit() from terminating the worker — see QVAC-18197.
+// prevents Bare.exit() from terminating the worker — see QVAC-18197.
 //
 // With tryLock + bounded retries we get the same "tolerate transient locks
 // during another SDK's startup/shutdown" property #1480 wanted, but every
