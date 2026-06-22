@@ -299,8 +299,17 @@ function _scheduleReportWrite () {
 /** Mobile timeout: 10 minutes (model downloads can be slow) */
 const MOBILE_TIMEOUT = 600 * 1000
 
-/** Desktop timeout: 2 minutes (models pre-downloaded) */
-const DESKTOP_TIMEOUT = 120 * 1000
+/**
+ * Desktop timeout: 5 minutes. Models are pre-downloaded, but under the
+ * GGML_BACKEND_DL fabric the CPU backend is a runtime-dispatched microarch
+ * variant (GGML_NATIVE=OFF) rather than a -march=native build, so CPU-path
+ * translations (esp. IndicTrans beam decode + the CPU-vs-GPU parity test) run
+ * slower than the old static build — ~80-130s on loaded runners, right at the
+ * old 120s ceiling, making it a coin-flip. The tests themselves pass (asserts
+ * green); this is timeout headroom for the slower-but-correct DL CPU path, not
+ * a relaxed assertion.
+ */
+const DESKTOP_TIMEOUT = 300 * 1000
 
 /** Appropriate timeout based on platform */
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT

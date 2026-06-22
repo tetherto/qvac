@@ -14,14 +14,17 @@ try {
   // Get query from command line or use default
   const query = process.argv[2] || "machine learning algorithms";
 
-  console.log("🔧 RAG Pipeline Example (Segregated Flow)\n");
-  console.log(`🔍 Query: "${query}"`);
+  console.log("▸ RAG Pipeline Example (Segregated Flow)");
+  console.log(`▸ Query: "${query}"`);
   const workspace = "pipeline-example";
 
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    onProgress: (progress) => {
-      console.log(`Loading model... ${progress.percentage.toFixed(1)}%`);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
@@ -36,7 +39,7 @@ try {
     "Cybersecurity protects digital systems, networks, and data from malicious attacks, unauthorized access, and various forms of cyber threats through multiple layers of defense.",
   ];
 
-  console.log("\n📝 Step 1: Chunking documents...");
+  console.log("▸ Step 1: Chunking documents...");
   const chunks = await ragChunk({
     documents: samples,
     chunkOpts: {
@@ -44,9 +47,9 @@ try {
       chunkOverlap: 20,
     },
   });
-  console.log(`   Created ${chunks.length} chunks`);
+  console.log(`▸ Created ${chunks.length} chunks`);
 
-  console.log("\n🧠 Step 2: Generating embeddings (batch)...");
+  console.log("▸ Step 2: Generating embeddings (batch)...");
   const texts = chunks.map((chunk) => chunk.content);
   const { embedding: embeddings } = await embed({ modelId, text: texts });
 
@@ -56,17 +59,17 @@ try {
     embedding: embeddings[i],
     embeddingModelId: modelId,
   })) as RagEmbeddedDoc[];
-  console.log(`   Generated ${embeddedDocs.length} embeddings`);
+  console.log(`▸ Generated ${embeddedDocs.length} embeddings`);
 
-  console.log("\n💾 Step 3: Saving to vector database...");
+  console.log("▸ Step 3: Saving to vector database...");
   const saveResult = await ragSaveEmbeddings({
     workspace,
     documents: embeddedDocs,
   });
   const saved = saveResult.filter((r) => r.status === "fulfilled").length;
-  console.log(`   Saved ${saved}/${saveResult.length} documents`);
+  console.log(`▸ Saved ${saved}/${saveResult.length} documents`);
 
-  console.log("\n🔎 Step 4: Searching...");
+  console.log("▸ Step 4: Searching...");
   const results = await ragSearch({
     workspace,
     modelId,
@@ -74,21 +77,19 @@ try {
     topK: 3,
   });
 
-  console.log("\n📋 Top 3 most similar documents:");
+  console.log("▸ Top 3 most similar documents:");
   results.forEach((result, index) => {
-    console.log("=".repeat(50) + " Top result:");
-    console.log(`\n${index + 1}. (Score: ${result.score})`);
+    console.log(`${index + 1}. (Score: ${result.score})`);
     console.log(`   ${result.content}`);
-    console.log("=".repeat(100));
     console.log();
   });
 
   // Cleanup: close and delete workspace
   await ragCloseWorkspace({ workspace, deleteOnClose: true });
-  console.log(`🗑️  Deleted '${workspace}' workspace`);
+  console.log(`▸ Deleted '${workspace}' workspace`);
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

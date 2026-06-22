@@ -9,6 +9,7 @@ export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   "onnx-ocr": { exportName: "ocrPlugin" },
   "sdcpp-generation": { exportName: "diffusionPlugin" },
   "ggml-vla": { exportName: "vlaPlugin" },
+  "ggml-classification": { exportName: "classificationPlugin" },
 };
 
 export const BUILTIN_SUFFIXES = Object.keys(BUILTIN_PLUGINS);

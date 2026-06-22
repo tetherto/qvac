@@ -17,10 +17,10 @@ try {
     },
   });
 
-  console.log("🧠 Testing KV Cache functionality...\n");
+  console.log("▸ Testing KV Cache functionality...\n");
 
   // First conversation with auto-keyed cache enabled
-  console.log("📝 First conversation (building cache for the next turn):");
+  console.log("▸ First conversation (building cache for the next turn):");
   const history1 = [
     { role: "user", content: "What is the capital of France?" },
   ];
@@ -38,10 +38,10 @@ try {
 
   const final1 = await result1.final;
   const stats1 = final1.stats;
-  console.log(`\n⏱️  First completion stats: ${JSON.stringify(stats1)}\n`);
+  console.log(`\n▸ First completion stats: ${JSON.stringify(stats1)}\n`);
 
   // Continue conversation (should reuse the completed first-turn cache).
-  console.log("🔄 Continuing conversation (reusing previous turn cache):");
+  console.log("▸ Continuing conversation (reusing previous turn cache):");
   const history2 = [
     { role: "user", content: "What is the capital of France?" },
     {
@@ -67,10 +67,10 @@ try {
   }
 
   const stats2 = await result2.stats;
-  console.log(`\n⏱️  Second completion stats: ${JSON.stringify(stats2)}\n`);
+  console.log(`\n▸ Second completion stats: ${JSON.stringify(stats2)}\n`);
 
   // Compare with non-cached version
-  console.log("🚀 Same conversation without cache:");
+  console.log("▸ Same conversation without cache:");
   const result3 = completion({
     modelId,
     history: history2,
@@ -83,12 +83,12 @@ try {
   }
 
   const stats3 = await result3.stats;
-  console.log(`\n⏱️  Non-cached completion stats: ${JSON.stringify(stats3)}\n`);
+  console.log(`\n▸ Non-cached completion stats: ${JSON.stringify(stats3)}\n`);
 
-  console.log("✅ KV Cache test completed!");
+  console.log("▸ KV Cache test completed!");
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

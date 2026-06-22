@@ -37,7 +37,7 @@ function terminateProvider(provider: ChildProcess): void {
 // The provider's Hyperswarm identity (and therefore its public key) is
 // generated at startup — it can't be known ahead of time. We parse it from
 // the provider's stdout where it prints:
-//   "🆔 Provider Public Key: <hex>"
+//   "▸ Provider Public Key: <hex>"
 function waitForProviderPublicKey(provider: ChildProcess): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let output = "";
@@ -73,42 +73,45 @@ function waitForProviderPublicKey(provider: ChildProcess): Promise<string> {
 async function runDelegatedCompletion(
   providerPublicKey: string,
 ): Promise<void> {
-  console.log("→ Loading model via delegation...");
+  console.log("▸ Loading model via delegation...");
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     delegate: {
       providerPublicKey,
       timeout: 30_000,
     },
-    onProgress: (progress) => {
-      console.log(`  Download: ${progress.percentage.toFixed(1)}%`);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
-  console.log(`✅ Model loaded: ${modelId}\n`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
-  console.log("→ Running delegated completion (streamed)...");
+  console.log("▸ Running delegated completion (streamed)...");
   const response = completion({
     modelId,
     history: [{ role: "user", content: "Say hello in exactly 5 words." }],
     stream: true,
   });
 
-  process.stdout.write("  Response: ");
+  console.log("▸ Response:");
   for await (const token of response.tokenStream) {
     process.stdout.write(token);
   }
 
   const stats = await response.stats;
-  console.log(`\n📊 Stats: ${JSON.stringify(stats)}`);
+  console.log(`\n▸ Stats: ${JSON.stringify(stats)}`);
 }
 
 const provider = spawnProviderProcess();
 
 try {
-  console.log("🔧 Waiting for provider to start and announce its key...\n");
+  console.log("▸ Waiting for provider to start and announce its key...");
   const publicKey = await waitForProviderPublicKey(provider);
 
-  console.log(`\n📡 Provider ready — key: ${publicKey}\n`);
+  console.log(`\n▸ Provider ready — key: ${publicKey}\n`);
 
   await runDelegatedCompletion(publicKey);
   void close();

@@ -66,7 +66,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
   ): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelType: "llm",
+      modelType: "llamacpp-completion",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
     this.resources.register("llm", modelId);
@@ -79,7 +79,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
   ): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: GTE_LARGE_FP16,
-      modelType: "embeddings",
+      modelType: "llamacpp-embedding",
     });
     this.resources.register("embeddings", modelId);
     return ValidationHelpers.validate(modelId, expectation);
@@ -91,7 +91,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
   ): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: OCR_LATIN_RECOGNIZER_1,
-      modelType: "ocr",
+      modelType: "onnx-ocr",
       modelConfig: { langList: ["en"] },
     });
     this.resources.register("ocr", modelId);
@@ -105,7 +105,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     try {
       await loadModel({
         modelSrc: params.modelPath,
-        modelType: params.modelType as "llm",
+        modelType: params.modelType as "llamacpp-completion",
       });
       return {
         passed: false,
@@ -156,17 +156,17 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
           : GTE_LARGE_FP16;
 
       let modelId: string;
-      if (model.type === "llm") {
+      if (model.type === "llamacpp-completion") {
         modelId = await loadModel({
           modelSrc,
-          modelType: "llm",
+          modelType: "llamacpp-completion",
           modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
         });
         this.resources.register("llm", modelId);
       } else {
         modelId = await loadModel({
           modelSrc,
-          modelType: "embeddings",
+          modelType: "llamacpp-embedding",
         });
         this.resources.register("embeddings", modelId);
       }
@@ -181,7 +181,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
   ): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelType: "llm",
+      modelType: "llamacpp-completion",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
     this.resources.register("llm", modelId);
@@ -199,7 +199,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     }
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelType: "llm",
+      modelType: "llamacpp-completion",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
     this.resources.register("llm", modelId);
@@ -217,7 +217,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     }
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelType: "llm",
+      modelType: "llamacpp-completion",
       modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
     });
     this.resources.register("llm", modelId);

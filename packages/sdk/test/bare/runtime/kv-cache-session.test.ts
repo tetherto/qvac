@@ -42,10 +42,10 @@ async function loadSession() {
   const fs = await import("bare-fs");
   const os = await import("bare-os");
   const path = await import("bare-path");
-  const bareProcess = await import("bare-process");
+  const { default: env } = await import("bare-env");
 
   const testHome = fs.mkdtempSync(path.join(os.tmpdir(), "qvac-kvcache-"));
-  bareProcess.default.env["HOME"] = testHome;
+  env["HOME"] = testHome;
 
   const mod =
     await import("@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session");

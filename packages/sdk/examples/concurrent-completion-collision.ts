@@ -65,15 +65,15 @@ async function runCompletion(
 }
 
 function report(title: string, outcomes: Outcome[]): void {
-  console.log(`\n${title}`);
+  console.log(`\n▸ ${title}`);
   for (const o of outcomes) {
     if (o.ok) {
       const preview = o.text.replace(/\s+/g, " ").slice(0, 70);
-      console.log(`  ✅ ${o.label}: ${preview}${o.text.length > 70 ? "…" : ""}`);
+      console.log(`  ▸ ${o.label}: ${preview}${o.text.length > 70 ? "…" : ""}`);
     } else {
       const policy = o.code === 52420 ? " (rejected by policy)" : "";
       console.log(
-        `  ❌ ${o.label}: ${o.errorName}${o.code !== undefined ? ` [${o.code}]` : ""}${policy} — ${o.message}`,
+        `  ✖ ${o.label}: ${o.errorName}${o.code !== undefined ? ` [${o.code}]` : ""}${policy} — ${o.message}`,
       );
     }
   }
@@ -98,11 +98,11 @@ try {
   const rejected = sameModel.filter((o) => !o.ok).length;
   if (rejected === 0) {
     console.log(
-      "  → Both succeeded: the second was queued behind the first and ran when the slot freed (no 52420, no addon collision).",
+      "  ▸ Both succeeded: the second was queued behind the first and ran when the slot freed (no 52420, no addon collision).",
     );
   } else {
     console.log(
-      `  ⚠️  ${rejected}/2 failed — the FIFO admission queue should have serialized these. Check the completion policy.`,
+      `  ▸ ${rejected}/2 failed — the FIFO admission queue should have serialized these. Check the completion policy.`,
     );
   }
 
@@ -124,9 +124,9 @@ try {
   await unloadModel({ modelId: modelB, clearStorage: false });
 
   console.log(
-    `\nrejected-by-policy error available for instanceof checks: ${typeof RequestRejectedByPolicyError === "function"}`,
+    `\n▸ rejected-by-policy error available for instanceof checks: ${typeof RequestRejectedByPolicyError === "function"}`,
   );
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
