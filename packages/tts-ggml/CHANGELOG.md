@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.2] - 2026-06-19
 
+### Added
+
+- **Android GPU for Supertonic + Chatterbox (QVAC-20557).** Remove the `#ifdef __ANDROID__`
+  guards in `SupertonicModel`/`ChatterboxModel` that forced `useGPU=false`; `useGPU` now flows
+  to `tts-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which picks the GPU backend per
+  its per-vendor allowlist — Supertonic on Adreno (OpenCL) / Xclipse + Mali (Vulkan); Chatterbox
+  on Adreno/Xclipse, with Mali declined by policy (`allow_arm_mali=false`) and surfaced via the
+  new `gpuUnsupported` runtime stat. The `default-registry` baseline advances to `6fe4e2b` so the
+  new version resolves. Android gpu-smoke skips dropped (Supertonic strict; Chatterbox accepts a
+  flagged Mali→CPU fallback).
+
 ### Fixed
 
 - **QVAC-19557: Chatterbox iOS peak-memory OOM — cap the T3 context at
