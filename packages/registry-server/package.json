@@ -49,8 +49,8 @@
     "test:integration": "brittle-node tests/integration/*.test.js",
     "test:gguf": "node scripts/test-gguf-extraction.js",
     "test": "npm run test:unit && npm run test:integration",
-    "lint": "standard",
-    "lint:fix": "standard --fix"
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.998.0",
@@ -85,6 +85,8 @@
     "brittle": "^3.4.0",
     "dotenv": "^17.2.3",
     "hyperdb": "^6.7.0",
-    "standard": "^17.1.0"
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
   }
 }
