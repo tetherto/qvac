@@ -211,13 +211,10 @@ void LlamaModel::tuneConfigMap(
     }
   }
 
-  // TurboQuant / PolarQuant KV-cache types (tbq3_0 / tbq4_0 / pq3_0 / pq4_0,
-  // ship Vulkan + CPU implementations only. On the OpenCL backend
-  // the kernels don't exist; on Metal the standalone MUL_MAT pipelines are
-  // explicitly disabled. Silently letting the user proceed lets llama.cpp
-  // commit KV-cache tensors to a backend that can't run the ops on them,
-  // which then aborts in ggml_backend_sched_split_graph at model load.
-  // Surface a clean error here instead.
+  // Quantized KV-cache types are fragile on OpenCL: standard q-cache types can
+  // fail later during cache shifts, while TBQ/PQ kernels are not implemented.
+  // Surface a clean error here instead of letting llama.cpp commit KV-cache
+  // tensors to a backend that can't run the required ops.
 #if defined(__APPLE__)
   constexpr bool kIsMetal = true;
 #else
@@ -227,6 +224,10 @@ void LlamaModel::tuneConfigMap(
     auto isTurboQuantKvType = [](const std::string& v) {
       return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
     };
+    auto isQuantizedKvType = [&](const std::string& v) {
+      return isTurboQuantKvType(v) || v == "q4_0" || v == "q4_1" ||
+             v == "q5_0" || v == "q5_1" || v == "q8_0" || v == "iq4_nl";
+    };
     auto checkCacheType = [&](const char* hyphenKey,
                               const char* underscoreKey,
                               const char* side) {
@@ -235,20 +236,30 @@ void LlamaModel::tuneConfigMap(
         it = configFilemap.find(underscoreKey);
       if (it == configFilemap.end())
         return;
-      if (!isTurboQuantKvType(it->second))
+      if (isOpenCl) {
+        if (!isQuantizedKvType(it->second))
+          return;
+      } else if (!isTurboQuantKvType(it->second)) {
         return;
+      }
       const char* backendName = isOpenCl ? "OpenCL" : "Metal";
+      const char* typeName =
+          isTurboQuantKvType(it->second) ? "TurboQuant/PolarQuant"
+                                         : "quantized";
+      const char* alternatives =
+          isOpenCl ? "f32/f16/bf16"
+                   : "f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl";
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
-              "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant type "
-              "and is not supported on the %s backend (Vulkan and CPU only). "
-              "Either pick a different cache type (f32/f16/bf16/q4_0/q4_1/"
-              "q5_0/q5_1/q8_0/iq4_nl) or switch device to a Vulkan GPU or "
-              "CPU.\n",
+              "[LlamaModel] cache-type-%s=%s is a %s KV-cache type and is not "
+              "supported on the %s backend. Either pick a different cache "
+              "type (%s) or switch device to a Vulkan GPU or CPU.\n",
               side,
               it->second.c_str(),
-              backendName));
+              typeName,
+              backendName,
+              alternatives));
     };
     checkCacheType("cache-type-k", "cache_type_k", "k");
     checkCacheType("cache-type-v", "cache_type_v", "v");

@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
@@ -232,6 +233,44 @@ TEST_F(TuneConfigMapTest, NotOpenCl_NonBitnet_FlashAttnDefaultsOn) {
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
+}
+
+TEST_F(TuneConfigMapTest, OpenCl_RejectsStandardQuantizedKCache) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+
+  EXPECT_THROW(
+      LlamaModel::tuneConfigMap(
+          configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(TuneConfigMapTest, OpenCl_RejectsStandardQuantizedVCacheUnderscore) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache_type_v"] = "q4_0";
+
+  EXPECT_THROW(
+      LlamaModel::tuneConfigMap(
+          configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(TuneConfigMapTest, OpenCl_AllowsNonQuantizedCacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "f16";
+  configFilemap_["cache-type-v"] = "bf16";
+
+  EXPECT_NO_THROW(LlamaModel::tuneConfigMap(
+      configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true));
+}
+
+TEST_F(TuneConfigMapTest, NotOpenCl_AllowsStandardQuantizedCacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["cache-type-v"] = "q4_0";
+
+  EXPECT_NO_THROW(LlamaModel::tuneConfigMap(
+      configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/false));
 }
 
 // ---- Finetuning: flash-attn disabled for any architecture ----

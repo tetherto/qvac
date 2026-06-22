@@ -67,9 +67,8 @@ public:
   /// @param adrenoVersion Detected Adreno GPU version, if any.
   /// @param finetuneOverrides If set, finetuning mode is active with these
   /// context/batch params and GPU caps.
-  /// @param isOpenCl True when the chosen GPU backend is OpenCL; used to
-  /// disable flash-attn by default since it is not reliably supported on
-  /// the OpenCL backend.
+  /// @param isOpenCl True when the chosen GPU backend is OpenCL; used to reject
+  /// unsupported quantized KV-cache types.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
       const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
