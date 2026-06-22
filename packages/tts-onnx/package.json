@@ -11,8 +11,8 @@
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/chatterbox-tts.js english",
     "example:langdetect": "bare examples/chatterbox-langdetect-tts.js",
-    "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
-    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "lint": "prettier --check \"test/**/*.js\" \"*.js\" \"lib/*.js\" && lunte \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "format": "prettier --write \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:integration": "brittle-bare test/integration/addon.test.js",
@@ -91,7 +91,9 @@
     "cmake-vcpkg": "^1.1.0",
     "fflate": "^0.8.2",
     "husky": "^9.1.7",
-    "standard": "^17.0.0"
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
