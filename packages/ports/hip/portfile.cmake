@@ -36,8 +36,14 @@ else()
       file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/share/${_pkg}")
       foreach(_cfg "${_pkg}-config.cmake" "${_pkg}Config.cmake")
         if(EXISTS "${_d}/${_cfg}")
+          # Relocatable: resolve ROCm via $ENV{ROCM_PATH} at the CONSUMER's
+          # configure time, NOT the absolute build path. The binary cache would
+          # otherwise bake this build runner's $RUNNER_TEMP path (e.g.
+          # /opt/actions-runner-9/...) and break when the package is restored on
+          # a different runner. Consumers always have ROCM_PATH set (the
+          # require-ROCm gate enforces it).
           file(WRITE "${CURRENT_PACKAGES_DIR}/share/${_pkg}/${_cfg}"
-            "include(\"${_d}/${_cfg}\")\n")
+            "include(\"\$ENV{ROCM_PATH}/lib/cmake/${_pkg}/${_cfg}\")\n")
         endif()
       endforeach()
       foreach(_v "${_pkg}-config-version.cmake" "${_pkg}ConfigVersion.cmake")
