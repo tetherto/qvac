@@ -50,13 +50,7 @@ Run the quickstart script with Node.js:
 node quickstart.js
 ```
 
-Or with the [Bare](https://bare.pears.com) runtime (same script; the SDK installs a Node-compatible `process` global on Bare so `process.stdout` and `process.exit` work without importing `bare-process` in your own file):
-
-```bash
-bare quickstart.js
-```
-
-You still need Bare and the SDK’s **Bare peer dependencies** (including `bare-process` and the other `bare-*` packages listed for `@qvac/sdk`) installed in the project. Recent npm versions resolve peers when you run `npm i @qvac/sdk`; if resolution fails, install the peers your package manager reports as missing.
+Or with the [Bare](https://bare.pears.com) runtime. Running on Bare needs a little setup — a `process` global and plugin registration — so see [Running on Bare](#running-on-bare) below.
 </Step>
 
 </Steps>
@@ -65,8 +59,26 @@ You still need Bare and the SDK’s **Bare peer dependencies** (including `bare-
 
 Follow these instructions to run any example in this documentation:
 - All examples are self-contained, runnable JavaScript scripts. Use the `qvac-examples` workspace created in this quickstart to store and run them as you explore this documentation.
-- Run each example with the indicated compatible JavaScript environment. QVAC supports multiple environments (Node.js, Bare, and Expo). After you `import` from `@qvac/sdk`, Bare has a `process` global (via `bare-process`) for typical CLI patterns; some examples still use other Node-specific APIs (e.g. `fs` without Bare shims) and note their compatible environment.
+- Run each example with the indicated compatible JavaScript environment. QVAC supports multiple environments (Node.js, Bare, and Expo). The examples are written in Node style and run on Node.js or Bun directly; to run them on Bare, see [Running on Bare](#running-on-bare).
 - Some examples also provide a TypeScript version. If you want to run TS directly, install the required dev dependencies:
   ```bash
   npm i -D tsx typescript
   ```
+
+## Running on Bare
+
+To run an example on Bare:
+
+1. Provide a `process` global. Install `bare-process` and set it before using the SDK:
+   ```js
+   import process from "bare-process";
+   globalThis.process = process;
+   ```
+2. Register the plugins the example uses — Bare runs in-process and nothing auto-registers. See [Runtime registration on Bare](/configuration/plugins#runtime-registration-on-bare).
+
+Here is the quickstart adapted for Bare:
+
+```ts file=<rootDir>/packages/sdk/examples/quickstart.bare.ts title="quickstart.bare.ts" lineNumbers
+```
+
+For running QVAC on Bare in production, we recommend **[@qvac/bare-sdk](https://github.com/tetherto/qvac/tree/main/packages/bare-sdk)** — a slim, Bare-only assembly where you select addons and register plugins explicitly. It also sets up the bare module shims that examples using `fs` and similar modules rely on.

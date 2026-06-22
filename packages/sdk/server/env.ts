@@ -1,4 +1,4 @@
-import process from "bare-process";
+import env from "bare-env";
 import { isBareKit } from "which-runtime";
 import { z } from "zod";
 
@@ -18,26 +18,20 @@ let validatedEnv: WorkerEnv | null = null;
 export function initEnv(): { hasRPCConfig: boolean } {
   const defaultHomeDir =
     // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
-    process.env["SNAP_USER_COMMON"] ??
-    process.env["HOME"] ??
-    process.env["USERPROFILE"] ??
-    "/tmp";
+    env["SNAP_USER_COMMON"] ?? env["HOME"] ?? env["USERPROFILE"] ?? "/tmp";
   let envConfig: Record<string, string | undefined> = {
     HOME_DIR: defaultHomeDir,
   };
   let hasRPCConfig = false;
 
-  if (isBareKit && process.argv[0]) {
-    envConfig["HOME_DIR"] = process.argv[0];
+  if (isBareKit && Bare.argv[0]) {
+    envConfig["HOME_DIR"] = Bare.argv[0];
   }
 
   // Try to parse any argument as JSON config (fail gracefully)
-  if (process.argv[2]) {
+  if (Bare.argv[2]) {
     try {
-      const rpcArgs = JSON.parse(process.argv[2]) as Record<
-        string,
-        string
-      >;
+      const rpcArgs = JSON.parse(Bare.argv[2]) as Record<string, string>;
       envConfig = { ...envConfig, ...rpcArgs };
       hasRPCConfig = true;
     } catch {
@@ -58,7 +52,7 @@ export function getEnv() {
     initEnv();
   }
   return {
-    ...process.env,
+    ...env,
     ...validatedEnv!,
   };
 }

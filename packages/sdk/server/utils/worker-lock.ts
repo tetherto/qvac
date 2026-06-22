@@ -1,6 +1,6 @@
 import fs from "bare-fs";
 import path from "bare-path";
-import process from "bare-process";
+import os from "bare-os";
 import { getServerLogger } from "@/logging";
 import { getQvacPath } from "@/server/utils/qvac-paths";
 
@@ -19,7 +19,7 @@ function getLockFilePath(): string {
 
 function isProcessAlive(pid: number): boolean {
   try {
-    process.kill(pid, 0);
+    os.kill(pid, 0);
     return true;
   } catch {
     return false;
@@ -53,14 +53,14 @@ export function acquireWorkerLock(): void {
   }
 
   const content: LockFileContent = {
-    pid: process.pid,
+    pid: os.pid(),
     startedAt: new Date().toISOString(),
   };
 
   try {
     fs.mkdirSync(path.dirname(lockPath), { recursive: true });
     fs.writeFileSync(lockPath, JSON.stringify(content));
-    logger.debug(`Worker lock acquired (PID ${process.pid})`);
+    logger.debug(`Worker lock acquired (PID ${os.pid()})`);
   } catch (error) {
     logger.error(
       "Failed to write worker lock file:",
@@ -74,7 +74,7 @@ export function releaseWorkerLock(): void {
 
   try {
     const existing = readLockFile(lockPath);
-    if (existing && existing.pid === process.pid) {
+    if (existing && existing.pid === os.pid()) {
       fs.unlinkSync(lockPath);
       logger.debug("Worker lock released");
     }
