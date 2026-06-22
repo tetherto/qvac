@@ -57,6 +57,7 @@ ggml_backend_dev_t pickBestGpuDevice() {
 
   const size_t n = ggml_backend_dev_count();
   ggml_backend_dev_t fallbackGpu = nullptr;
+  ggml_backend_dev_t hipDev = nullptr;
 
   for (size_t i = 0; i < n; ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
@@ -117,11 +118,25 @@ ggml_backend_dev_t pickBestGpuDevice() {
         "vla_backend_selection: non-Adreno GPU accepted: " + desc +
             " (backend: " + backendName + ")");
 
+    // HIP/ROCm is preferred over other GPU backends on AMD hardware; Vulkan is
+    // the fallback. The ggml HIP backend reports its device as "ROCm%d".
+    const bool isHip = backendLower.find("rocm") != std::string::npos ||
+                       backendLower.find("hip") != std::string::npos;
+    if (isHip && hipDev == nullptr) {
+      hipDev = dev;
+    }
+
     if (fallbackGpu == nullptr) {
       fallbackGpu = dev;
     }
   }
 
+  if (hipDev != nullptr) {
+    QLOG_IF(
+        Priority::INFO,
+        "vla_backend_selection: preferring HIP/ROCm GPU (Vulkan is fallback)");
+    return hipDev;
+  }
   return fallbackGpu;
 }
 
