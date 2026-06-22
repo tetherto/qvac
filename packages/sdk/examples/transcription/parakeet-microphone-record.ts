@@ -29,16 +29,21 @@ try {
   const r = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
   if (r.error || r.status !== 0) throw new Error("FFmpeg not found");
 } catch {
-  console.error("FFmpeg is required. Install it and try again.");
+  console.error("✖ FFmpeg is required. Install it and try again.");
   process.exit(1);
 }
 
-console.log("Loading Parakeet model...");
+console.log("▸ Loading Parakeet model...");
 const modelId = await loadModel({
   modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
-  onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
+  onProgress: (p) => {
+    const mb = (n: number) => (n / 1e6).toFixed(1);
+    const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+    process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+    if (p.percentage >= 100) process.stderr.write("\n");
+  },
 });
-console.log("Model loaded.\n");
+console.log("▸ Model loaded.");
 
 const ffmpeg = startMicrophone({
   sampleRate: SAMPLE_RATE,
@@ -48,7 +53,7 @@ const ffmpeg = startMicrophone({
 let buffer = Buffer.alloc(0);
 let processing = false;
 
-console.log("Listening... speak and pause to see transcriptions.\n");
+console.log("▸ Listening... speak and pause to see transcriptions.");
 
 ffmpeg.stdout.on("data", (chunk: Buffer) => {
   buffer = Buffer.concat([buffer, chunk]);
@@ -62,13 +67,10 @@ ffmpeg.stdout.on("data", (chunk: Buffer) => {
       try {
         const text = await transcribe({ modelId, audioChunk });
         if (text.trim() && !text.includes("[No speech detected]")) {
-          console.log(`> ${text.trim()}`);
+          console.log(text.trim());
         }
       } catch (err) {
-        console.error(
-          "Transcription error:",
-          err instanceof Error ? err.message : err,
-        );
+        console.error("✖", err instanceof Error ? err.message : err);
       } finally {
         processing = false;
       }
@@ -77,10 +79,10 @@ ffmpeg.stdout.on("data", (chunk: Buffer) => {
 });
 
 async function cleanup() {
-  console.log("\n\nStopping...");
+  console.log("\n▸ Stopping...");
   ffmpeg.kill();
   await unloadModel({ modelId });
-  console.log("Done.");
+  console.log("▸ Done.");
 }
 
 process.on("SIGINT", () => void cleanup());

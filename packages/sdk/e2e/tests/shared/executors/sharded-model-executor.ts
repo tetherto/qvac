@@ -34,7 +34,7 @@ export class ShardedModelExecutor extends AbstractModelExecutor<typeof shardedMo
     try {
       const modelId = await loadModel({
         modelSrc: GTE_LARGE_FP16,
-        modelType: "embeddings",
+        modelType: "llamacpp-embedding",
       });
       await this.resources.register("embeddings", modelId);
       return ValidationHelpers.validate(modelId, expectation as Expectation);

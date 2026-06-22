@@ -9,10 +9,14 @@ try {
     modelSrc: LFM_TOOL_HF,
     modelType: "llamacpp-completion",
     modelConfig: { ctx_size: 4096, tools: true },
-    onProgress: (progress) =>
-      console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`✅ Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const history = [
     {
@@ -26,7 +30,7 @@ try {
     },
   ];
 
-  console.log("\n🤖 Streaming...\n");
+  console.log("\n▸ Streaming...\n");
 
   const result = completion({ modelId, history, stream: true, tools });
 
@@ -39,7 +43,7 @@ try {
   const toolsTask = (async () => {
     for await (const evt of result.toolCallStream) {
       console.log(
-        `\n→ ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
+        `\n▸ ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
       );
     }
   })();
@@ -48,17 +52,17 @@ try {
 
   const toolCalls: ToolCall[] = await result.toolCalls;
 
-  console.log("\n\n📋 Final tool calls:");
+  console.log("\n\n▸ Final tool calls:");
   if (toolCalls.length > 0) {
     for (const call of toolCalls) {
-      console.log(`  - ${call.name}(${JSON.stringify(call.arguments)})`);
+      console.log(`▸ ${call.name}(${JSON.stringify(call.arguments)})`);
     }
   } else {
-    console.log("  (none)");
+    console.log("▸ (none)");
   }
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
