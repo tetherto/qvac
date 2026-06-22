@@ -1,0 +1,43 @@
+name: "Setup ROCm (TheRock) for HIP cross-compile"
+description: >-
+  Installs the TheRock ROCm dist (gfx target) on a linux-x64 runner and exports
+  ROCM_PATH/HIP_PATH/PATH(bin)/VCPKG_KEEP_ENV_VARS/LD_LIBRARY_PATH so a consumer's
+  qvac-fabric hip-backend feature can cross-compile libqvac-ggml-hip.so. No AMD
+  GPU is required on the runner (compile-only, like nvcc for CUDA).
+
+inputs:
+  rocm-version:
+    description: "TheRock ROCm dist tarball version"
+    required: false
+    default: "7.13.0"
+  gfx:
+    description: "AMD GPU arch target (TheRock dist family)"
+    required: false
+    default: "gfx1151"
+
+runs:
+  using: composite
+  steps:
+    - name: Install ROCm SDK (TheRock dist)
+      shell: bash
+      env:
+        ROCM_VERSION: ${{ inputs.rocm-version }}
+        ROCM_GFX: ${{ inputs.gfx }}
+      run: |
+        url="https://repo.amd.com/rocm/tarball/therock-dist-linux-${ROCM_GFX}-${ROCM_VERSION}.tar.gz"
+        echo "Downloading $url"
+        curl -fsSL "$url" -o "$RUNNER_TEMP/rocm.tar.gz"
+        mkdir -p "$RUNNER_TEMP/rocm"
+        tar -xzf "$RUNNER_TEMP/rocm.tar.gz" -C "$RUNNER_TEMP/rocm"
+        hipcfg="$(find "$RUNNER_TEMP/rocm" -path '*/lib/cmake/hip/hip-config.cmake' | head -1)"
+        if [ -z "$hipcfg" ]; then echo "::error::ROCm hip-config.cmake not found after extract"; exit 1; fi
+        rocm_prefix="$(cd "$(dirname "$hipcfg")/../../.." && pwd)"
+        echo "ROCm prefix: $rocm_prefix"
+        # Only $prefix/bin on PATH (hipcc) — NOT lib/llvm/bin, whose bundled
+        # libc++ lacks __config_site and would hijack the system clang++ used for
+        # the regular C++/llama sources.
+        echo "ROCM_PATH=$rocm_prefix" >> "$GITHUB_ENV"
+        echo "HIP_PATH=$rocm_prefix" >> "$GITHUB_ENV"
+        echo "$rocm_prefix/bin" >> "$GITHUB_PATH"
+        echo "VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$rocm_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"

@@ -249,33 +249,10 @@ jobs:
           echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
 
       - if: ${{ inputs.include-rocm && matrix.platform == 'linux' && matrix.arch == 'x64' }}
-        name: Setup ROCm SDK for HIP cross-compile (gfx1151)
-        shell: bash
-        env:
-          ROCM_VERSION: ${{ inputs.rocm-version }}
-        run: |
-          # Compile-only: no AMD GPU is needed on the runner (hipcc cross-compiles
-          # the gfx1151 kernels, like nvcc for CUDA). Installs the TheRock ROCm
-          # dist (hipcc + rocBLAS/hipBLAS + gfx1151 libs). qvac-fabric's
-          # hip-backend feature detects ROCM_PATH and builds GGML_HIP; absent it,
-          # the build is fail-safe (Vulkan/CPU only).
-          url="https://repo.amd.com/rocm/tarball/therock-dist-linux-gfx1151-${ROCM_VERSION}.tar.gz"
-          echo "Downloading $url"
-          curl -fsSL "$url" -o "$RUNNER_TEMP/rocm.tar.gz"
-          mkdir -p "$RUNNER_TEMP/rocm"
-          tar -xzf "$RUNNER_TEMP/rocm.tar.gz" -C "$RUNNER_TEMP/rocm"
-          hipcfg="$(find "$RUNNER_TEMP/rocm" -path '*/lib/cmake/hip/hip-config.cmake' | head -1)"
-          if [ -z "$hipcfg" ]; then echo "::error::ROCm hip-config.cmake not found after extract"; exit 1; fi
-          rocm_prefix="$(cd "$(dirname "$hipcfg")/../../.." && pwd)"
-          echo "ROCm prefix: $rocm_prefix"
-          # Only $prefix/bin on PATH (hipcc) — NOT lib/llvm/bin, whose bundled
-          # libc++ lacks __config_site and would hijack the system clang++ used
-          # for the regular C++/llama sources.
-          echo "ROCM_PATH=$rocm_prefix" >> "$GITHUB_ENV"
-          echo "HIP_PATH=$rocm_prefix" >> "$GITHUB_ENV"
-          echo "$rocm_prefix/bin" >> "$GITHUB_PATH"
-          echo "VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=$rocm_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        name: Setup ROCm SDK for HIP cross-compile
+        uses: ./.github/actions/setup-rocm
+        with:
+          rocm-version: ${{ inputs.rocm-version }}
 
       - if: ${{ inputs.include-vulkan-sdk && matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path (Windows)

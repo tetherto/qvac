@@ -117,7 +117,10 @@ endif()
 # hard-fails, and at runtime a missing HIP module just isn't loaded (the DL
 # loader skips it) so BackendSelection falls back to Vulkan/CPU. Targets gfx1151
 # (Strix Halo / Radeon 8060S); the HIP compiler + ROCM_PATH come from the build env.
-if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_HIP_BACKEND)
+# linux-x64 only: AMD GPU hosts (Strix Halo / gfx1151) are x86_64, and the ROCm
+# dist is x64. On other arches (e.g. linux-arm64) HIP is skipped even if the
+# feature is requested — no ROCm requirement, no build break.
+if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND BUILD_GPU_BACKENDS AND BUILD_HIP_BACKEND)
   # DETERMINISTIC: requesting hip-backend REQUIRES a ROCm SDK at build time. We
   # must NOT silently skip when ROCm is absent — a host-dependent skip yields a
   # no-HIP package with the SAME vcpkg ABI as a real HIP build, which the binary

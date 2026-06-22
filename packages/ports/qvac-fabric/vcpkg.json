@@ -41,7 +41,7 @@
       "dependencies": [
         {
           "name": "hip",
-          "platform": "linux"
+          "platform": "linux & x64"
         }
       ]
     },
