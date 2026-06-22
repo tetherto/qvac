@@ -10,7 +10,8 @@
     "test": "bare test/coload.test.js",
     "coload": "bare test/coload.test.js",
     "combinations": "node scripts/coload-combinations.mjs",
-    "lint": "standard \"*.js\" \"test/**/*.js\" \"scripts/**/*.mjs\""
+    "lint": "prettier --check \"*.js\" \"test/**/*.js\" \"scripts/**/*.mjs\" && lunte \"*.js\" \"test/**/*.js\" \"scripts/**/*.mjs\"",
+    "format": "prettier --write \"*.js\" \"test/**/*.js\" \"scripts/**/*.mjs\""
   },
   "license": "Apache-2.0",
   "repository": {
@@ -21,7 +22,9 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-coload-smoke#readme",
   "devDependencies": {
-    "standard": "^17.0.0"
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
   },
   "dependencies": {
     "bare-path": "^3.0.0",
