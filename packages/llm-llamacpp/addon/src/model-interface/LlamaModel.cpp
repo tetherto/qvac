@@ -1189,7 +1189,8 @@ void LlamaModel::commonParamsParse(
     isOpenCl = chosenBackend.first == BackendType::GPU &&
                chosenBackend.second.find("opencl") != std::string::npos;
     isMetal = chosenBackend.first == BackendType::GPU &&
-              chosenBackend.second.find("metal") != std::string::npos;
+              (chosenBackend.second.find("metal") != std::string::npos ||
+               chosenBackend.second.rfind("mtl", 0) == 0);
   }
 
   tuneConfigMap(
