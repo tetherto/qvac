@@ -5,26 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0]
+## [0.3.1]
 
-### Changed
+### Added
 
-- **Breaking:** `files.embedder` is now a required constructor input. The
-  embedder weights path is supplied explicitly from JS instead of being
-  derived from a hardcoded `bci-embedder.bin` filename in the native addon.
-  The path flows from JS (`files.embedder` → `configurationParams.embedderPath`)
-  down to `BCIModel::loadEmbedderIfNeeded()`. `files.model` and
-  `files.embedder` no longer need to share a directory. The native side
-  still falls back to resolving `bci-embedder.bin` next to the model when
-  no `embedderPath` is supplied (e.g. direct addon usage), but the public
-  `BCIWhispercpp` class always requires and forwards `files.embedder`.
-
-  Migration: add `embedder` to the `files` object:
+- `files.embedder` — optional path to the embedder weights file. The
+  embedder location can now be supplied explicitly from JS instead of
+  always being derived from a hardcoded `bci-embedder.bin` filename next to
+  the GGML model. The path flows from JS (`files.embedder` →
+  `configurationParams.embedderPath`) down to
+  `BCIModel::loadEmbedderIfNeeded()`. Fully backward compatible: when
+  `files.embedder` is omitted, the native side falls back to resolving
+  `bci-embedder.bin` next to `files.model` (previous behaviour).
 
   ```js
-  // before
+  // default (unchanged) — embedder resolved next to the model
   new BCIWhispercpp({ files: { model } }, config)
-  // after
+  // explicit embedder location
   new BCIWhispercpp({ files: { model, embedder } }, config)
   ```
 

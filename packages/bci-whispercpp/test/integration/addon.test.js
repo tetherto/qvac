@@ -23,8 +23,10 @@ const { manifest, getSamplePath } = getTestPaths()
 const MODEL_PATH = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
   getModelPath('ggml-bci-windowed.bin')
 
-// The embedder weights are a required input. By convention they sit next to
-// the GGML model file (honouring any WHISPER_MODEL_PATH override).
+// Pass the embedder path explicitly to exercise the `files.embedder`
+// override. By convention it sits next to the GGML model file (honouring
+// any WHISPER_MODEL_PATH override); omitting it would fall back to the same
+// location natively.
 const EMBEDDER_PATH = path.join(path.dirname(MODEL_PATH), 'bci-embedder.bin')
 
 const hasModel = fs.existsSync(MODEL_PATH)

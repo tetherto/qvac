@@ -148,7 +148,7 @@ Both files are written to `models/` by default. All flags are optional:
 | `--last-window-layer` | `3` | Last encoder layer with windowed attention |
 | `--f32` | off | Use f32 for all tensors (avoids f16 precision loss, ~2x larger) |
 
-**Important:** Both files are required at runtime. Pass their paths via `files.model` and `files.embedder` (see [Usage](#usage)). They do not need to share a directory.
+**Important:** By default both files must be in the same directory at runtime — the addon resolves `bci-embedder.bin` next to the GGML model file and will fail if it is missing. To store the embedder elsewhere, pass an explicit path via `files.embedder` (see [Usage](#usage)).
 
 ## Usage
 
@@ -162,10 +162,7 @@ const BCIWhispercpp = require('@qvac/bci-whispercpp')
 
 ```js
 const bci = new BCIWhispercpp({
-  files: {
-    model: './models/ggml-bci-windowed.bin',
-    embedder: './models/bci-embedder.bin'   // required — embedder weights
-  },
+  files: { model: './models/ggml-bci-windowed.bin' },
   opts: { stats: true }            // optional — surfaces runtime stats on response.stats
 }, {
   whisperConfig: { language: 'en', temperature: 0.0 },
@@ -174,7 +171,16 @@ const bci = new BCIWhispercpp({
 })
 ```
 
-> Both `files.model` and `files.embedder` are required. They can live in any location — pass each path explicitly.
+> By default the companion `bci-embedder.bin` must sit next to `files.model` — the native addon resolves it relative to the model path and will fail to load otherwise. To keep the embedder in a different location, pass its path explicitly via `files.embedder`:
+>
+> ```js
+> const bci = new BCIWhispercpp({
+>   files: {
+>     model: './models/ggml-bci-windowed.bin',
+>     embedder: './weights/bci-embedder.bin' // optional override
+>   }
+> })
+> ```
 
 ### 2. Load the model
 
@@ -302,8 +308,8 @@ new BCIWhispercpp(args, config)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `files.model` | string | **Required.** Path to BCI GGML model file. |
-| `files.embedder` | string | **Required.** Path to the embedder weights file. |
+| `files.model` | string | **Required.** Path to BCI GGML model file. By default `bci-embedder.bin` must sit alongside it. |
+| `files.embedder` | string | Optional explicit path to the embedder weights file. Overrides the default lookup of `bci-embedder.bin` next to `files.model`. |
 | `logger` | object | Optional logger; wrapped in `@qvac/logging`. Defaults to a noop logger. |
 | `opts.stats` | boolean | When `true`, runtime stats are surfaced on `response.stats` for batch jobs. Default `false`. |
 
@@ -382,7 +388,7 @@ All errors thrown by this package are `QvacErrorAddonBCI` instances (extending `
 | `26006` | `INVALID_NEURAL_INPUT` | Batch input rejected by the addon |
 | `26007` | `JOB_ALREADY_RUNNING` | `transcribe()` called while a job is in flight |
 | `26008` | `MODEL_NOT_LOADED` | Inference called before `load()` or after `destroy()` |
-| `26009` | `MODEL_FILE_NOT_FOUND` | `files.model` missing or unreadable |
+| `26009` | `MODEL_FILE_NOT_FOUND` | `files.model` missing/unreadable, or `files.embedder` provided but missing/invalid |
 | `26010` | `BUFFER_LIMIT_EXCEEDED` | Neural signal buffer exceeded the addon limit |
 | `26011` | `FAILED_TO_START_JOB` | Addon refused to start the job |
 | `26012` | `INVALID_CONFIG` | Constructor / context configuration rejected |
