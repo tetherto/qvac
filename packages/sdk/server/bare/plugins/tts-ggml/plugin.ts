@@ -95,6 +95,18 @@ function createChatterboxModel(
     engine: TTSGgml.ENGINE_CHATTERBOX,
     files: { t3Model, s3genModel },
     ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
+    ...(config.streamChunkTokens !== undefined
+      ? { streamChunkTokens: config.streamChunkTokens }
+      : {}),
+    ...(config.streamFirstChunkTokens !== undefined
+      ? { streamFirstChunkTokens: config.streamFirstChunkTokens }
+      : {}),
+    ...(config.cfmSteps !== undefined ? { cfmSteps: config.cfmSteps } : {}),
+    ...(config.threads !== undefined ? { threads: config.threads } : {}),
+    ...(config.nGpuLayers !== undefined
+      ? { nGpuLayers: config.nGpuLayers }
+      : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
       language: config.language ?? "en",
       ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),

@@ -5,7 +5,6 @@ const path = require('bare-path')
 const proc = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
 const binding = require('../../binding')
-const FakeDL = require('../mocks/loader.fake.js')
 const {
   detectPlatform,
   setupJsLogger,
@@ -94,7 +93,6 @@ async function runMobilePerfCase (t, opts) {
 
     const constructorArgs = {
       files: { model: modelPath },
-      loader: new FakeDL({}),
       opts: { stats: true }
     }
 

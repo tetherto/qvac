@@ -27,6 +27,10 @@ try {
       ttsEngine: "chatterbox",
       language: "en",
       s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX.src,
+      streamChunkTokens: 25,
+      streamFirstChunkTokens: 10,
+      cfmSteps: 1,
+      threads: 8,
       ...(referenceAudioSrc ? { referenceAudioSrc } : {}),
     },
     onProgress: (p: ModelProgressUpdate) => {

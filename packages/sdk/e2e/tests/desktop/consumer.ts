@@ -262,6 +262,9 @@ resources.define("tts-chatterbox", {
     language: "en",
     useGPU: true,
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    cfmSteps: 1,
     referenceAudioSrc: path.resolve(
       process.cwd(),
       "assets/audio",
