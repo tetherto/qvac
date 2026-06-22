@@ -7,8 +7,8 @@
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
-    "lint": "standard --ignore \"addon/**\"",
-    "lint:fix": "standard --ignore \"addon/**\" --fix",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/MobileNetGraph.cpp",
     "test": "npm run test:integration",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
@@ -22,15 +22,6 @@
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test:dts": "tsc -p tsconfig.dts.json",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
-  },
-  "standard": {
-    "ignore": [
-      "addon/**",
-      "third-party/**",
-      "prebuilds/**",
-      "build/**",
-      "test/mobile/integration.auto.cjs"
-    ]
   },
   "files": [
     "binding.js",
@@ -61,7 +52,9 @@
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.0.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.2"
   },
   "dependencies": {
