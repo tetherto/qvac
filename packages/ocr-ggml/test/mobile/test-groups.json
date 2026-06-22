@@ -2,6 +2,7 @@
   "android": {
     "perf": [
       "runDoctrClinicalChemistryTest",
+      "runDoctrWarmTest",
       "runDoctrCtScanTest",
       "runDoctrLabResultsTest",
       "runDoctrLiverFunctionTest"
@@ -23,6 +24,7 @@
       "runCanvasSizeTest",
       "runConv1x1MulmatTest",
       "runCrnnBiasBroadcastTest",
+      "runDirectConvTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
       "runLargeImagesTest",
@@ -56,6 +58,7 @@
       "runCanvasSizeTest",
       "runConv1x1MulmatTest",
       "runCrnnBiasBroadcastTest",
+      "runDirectConvTest",
       "runImageFormatsTest",
       "runKernelPrecisionTest",
       "runLargeImagesTest",

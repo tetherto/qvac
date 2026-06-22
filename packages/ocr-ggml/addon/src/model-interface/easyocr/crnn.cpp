@@ -83,7 +83,8 @@ ggml_tensor* conv_bias_t(
       /*p1=*/p,
       /*d0=*/1,
       /*d1=*/1,
-      /*conv1x1_mulmat=*/weights.conv1x1_mulmat());
+      /*conv1x1_mulmat=*/weights.conv1x1_mulmat(),
+      /*use_direct_conv=*/weights.use_direct_conv());
 }
 
 template <class W>

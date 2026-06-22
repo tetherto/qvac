@@ -7,7 +7,7 @@ const ARCHIVE_URL =
 
 export const httpShardedEmbedLoad: TestDefinition = {
   testId: "http-sharded-embed-load",
-  params: { modelType: "embeddings", modelUrl: SHARDED_URL },
+  params: { modelType: "llamacpp-embedding", modelUrl: SHARDED_URL },
   expectation: { validation: "type", expectedType: "string" },
   suites: ["smoke"],
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
@@ -15,7 +15,7 @@ export const httpShardedEmbedLoad: TestDefinition = {
 
 export const httpShardedEmbedProgress: TestDefinition = {
   testId: "http-sharded-embed-progress",
-  params: { modelType: "embeddings", modelUrl: SHARDED_URL, trackProgress: true },
+  params: { modelType: "llamacpp-embedding", modelUrl: SHARDED_URL, trackProgress: true },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 120000 },
 };
@@ -23,7 +23,7 @@ export const httpShardedEmbedProgress: TestDefinition = {
 export const httpShardedEmbedInference: TestDefinition = {
   testId: "http-sharded-embed-inference",
   params: {
-    modelType: "embeddings",
+    modelType: "llamacpp-embedding",
     modelUrl: SHARDED_URL,
     text: "This is a test sentence for embedding generation using an HTTP sharded model.",
   },
@@ -34,14 +34,14 @@ export const httpShardedEmbedInference: TestDefinition = {
 
 export const httpArchiveEmbedLoad: TestDefinition = {
   testId: "http-archive-embed-load",
-  params: { modelType: "embeddings", modelUrl: ARCHIVE_URL },
+  params: { modelType: "llamacpp-embedding", modelUrl: ARCHIVE_URL },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
 };
 
 export const httpArchiveEmbedProgress: TestDefinition = {
   testId: "http-archive-embed-progress",
-  params: { modelType: "embeddings", modelUrl: ARCHIVE_URL, trackProgress: true },
+  params: { modelType: "llamacpp-embedding", modelUrl: ARCHIVE_URL, trackProgress: true },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
 };
@@ -49,7 +49,7 @@ export const httpArchiveEmbedProgress: TestDefinition = {
 export const httpArchiveEmbedInference: TestDefinition = {
   testId: "http-archive-embed-inference",
   params: {
-    modelType: "embeddings",
+    modelType: "llamacpp-embedding",
     modelUrl: ARCHIVE_URL,
     text: "This is a test sentence for embedding generation using an HTTP archive model.",
   },

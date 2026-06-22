@@ -270,7 +270,7 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
   }
 
   protected async triggerNmt(modelId: string): Promise<void> {
-    const r = translate({ modelId, text: "Hello world", modelType: "nmt", stream: false });
+    const r = translate({ modelId, text: "Hello world", modelType: "nmtcpp-translation", stream: false });
     await r.text;
   }
 

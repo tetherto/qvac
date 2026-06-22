@@ -36,11 +36,11 @@ const BYTES_PER_SAMPLE = 4; // f32le
 const CHUNK_SIZE = Math.floor(0.1 * SAMPLE_RATE) * BYTES_PER_SAMPLE; // 100ms chunks
 
 try {
-  console.log("=== transcribeStream file test ===");
-  console.log(`File: ${SAMPLE_FILE}`);
-  console.log(`Chunk size: ${CHUNK_SIZE} bytes (100ms)\n`);
+  console.log("▸ transcribeStream file test");
+  console.log(`▸ File: ${SAMPLE_FILE}`);
+  console.log(`▸ Chunk size: ${CHUNK_SIZE} bytes (100ms)`);
 
-  console.log("Loading model...");
+  console.log("▸ Loading model...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
     modelConfig: {
@@ -62,11 +62,11 @@ try {
       },
     },
   });
-  console.log(`Model loaded: ${modelId}\n`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
-  console.log("Opening live session...");
+  console.log("▸ Opening live session...");
   const session = await transcribeStream({ modelId, metadata: true });
-  console.log("Session open. Streaming audio...\n");
+  console.log("▸ Session open. Streaming audio...");
 
   const ffmpeg = spawn(
     "ffmpeg",
@@ -99,9 +99,9 @@ try {
   ffmpeg.on("close", () => {
     const durationSec = totalBytes / (SAMPLE_RATE * BYTES_PER_SAMPLE);
     console.log(
-      `Audio streamed: ${totalBytes} bytes (~${durationSec.toFixed(1)}s)`,
+      `▸ Audio streamed: ${totalBytes} bytes (~${durationSec.toFixed(1)}s)`,
     );
-    console.log("Waiting for transcription...\n");
+    console.log("▸ Waiting for transcription...");
     session.end();
   });
 
@@ -111,23 +111,22 @@ try {
     const start = (segment.startMs / 1000).toFixed(2);
     const end = (segment.endMs / 1000).toFixed(2);
     console.log(
-      `  [${segments.length}] [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text.trim()}`,
+      `▸ [${segments.length}] [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text.trim()}`,
     );
   }
 
-  console.log("\n=== Results ===");
-  console.log(`Segments: ${segments.length}`);
+  console.log(`\n▸ Segments: ${segments.length}`);
   if (segments.length > 0) {
-    console.log(`Transcript: ${segments.map((s) => s.text.trim()).join(" ")}`);
+    console.log(segments.map((s) => s.text.trim()).join(" "));
   } else {
-    console.log("WARNING: No transcription segments received!");
+    console.log("▸ No transcription segments received!");
   }
 
-  console.log("\nUnloading model...");
+  console.log("▸ Unloading model...");
   await unloadModel({ modelId });
-  console.log("Done.");
+  console.log("▸ Done.");
   process.exit(0);
 } catch (error) {
-  console.error("Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

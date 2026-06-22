@@ -377,6 +377,17 @@ jobs:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
 
+      # Static guard: fail the prebuild if the addon module is left with
+      # unresolvable engine symbols (the @qvac/tts-ggml@0.2.1 ggml_backend_is_cpu
+      # dlopen crash) -- caught here, off the artifact, before any device run.
+      # Export-leak findings stay warnings during rollout (enforce-exports
+      # defaults to false) until every ggml addon ships a symbols.map.
+      - name: Verify prebuild symbols
+        uses: ./.github/actions/verify-prebuild-symbols
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
+
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
