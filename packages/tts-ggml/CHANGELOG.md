@@ -5,7 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.2] - 2026-06-19
+
+### Fixed
+
+- **QVAC-19557: Chatterbox iOS peak-memory OOM — cap the T3 context at
+  4096 and store the KV cache as q8_0 by default.** tts-cpp allocates
+  the T3 KV cache up-front at the GGUF's full `n_ctx`; the Turbo GGUF
+  ships `n_ctx=8196`, which costs ~1.6 GB of f32 KV
+  (`n_embd(1024) × n_layer(24) × 8196 × 4 B × 2`) and pushed the iOS
+  QVAC SDK test process to a ~3.1 GB peak footprint (jetsam kill — the
+  `tts-chatterbox-*` e2e variants are currently skipped on iOS Device
+  Farm for exactly this).  The addon now passes
+  `EngineOptions::n_ctx = 4096` and `kv_cache_type = "q8_0"` (~210 MB
+  of KV for ≈160 s of generated audio per `synthesize()` call) unless
+  the host overrides them via the new `nCtx` / `kvCacheType`
+  constructor options.  `nCtx: 0` restores the uncapped context;
+  `kvCacheType: "f32"` restores the bit-exact pre-quantisation
+  behaviour; negative `nCtx` and unknown `kvCacheType` values are
+  rejected at construction.  Upstream validation
+  (qvac-ext-lib-whisper.cpp#43): Turbo greedy token sequences are
+  byte-identical across f32/f16/q8_0 on CPU and Metal, and Metal
+  decode is 20-30% faster from the KV bandwidth saving.
+
+### Changed
+
+- **`tts-cpp` pinned to `2026-06-19`** (`qvac-ext-lib-whisper.cpp` PR #43 on
+  top of master `b95ad447`) for `EngineOptions::kv_cache_type` and the streamed
+  (no host-staging) chatterbox GGUF loads. The Android `GGML_BACKEND_DL` symbol
+  routing (`ggml_backend_is_cpu` / `ggml_get_type_traits_cpu` → backend registry
+  shim + `ggml_quantize_chunk`) now comes from the `b95ad447` base via QVAC-20557
+  (PR #54), so this package no longer carries that fix itself.
 
 ## [0.3.1] - 2026-06-18
 
