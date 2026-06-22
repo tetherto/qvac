@@ -20,6 +20,7 @@ add_executable(
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
   test_tune_config_map.cpp
+  test_generation_params_apply.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
@@ -42,6 +43,7 @@ add_executable(
   test_continuous_batching_integration.cpp
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
+  test_reasoning_budget.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp

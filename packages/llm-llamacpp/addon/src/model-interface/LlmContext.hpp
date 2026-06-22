@@ -34,10 +34,11 @@ struct GenerationParams {
   // Mutually exclusive with `grammar` — the JS wrapper rejects requests
   // that set both. Mirrors the load-time `--json-schema` flag.
   std::optional<std::string> json_schema;
-  // Reasoning channel budget override. `-1` keeps reasoning on, `0` disables
-  // it for this request. Mirrors the load-time `reasoning-budget` config; the
-  // override is applied to `params_.reasoning_budget` for the duration of the
-  // request and restored on completion.
+  // Reasoning channel budget override. `-1` keeps reasoning unrestricted, `0`
+  // disables it, and positive values cap the reasoning channel at that many
+  // tokens. Mirrors the load-time `reasoning-budget` config; the override is
+  // applied to `params_.reasoning_budget` for the duration of the request and
+  // restored on completion.
   std::optional<int> reasoning_budget;
 
   [[nodiscard]] bool hasOverrides() const {

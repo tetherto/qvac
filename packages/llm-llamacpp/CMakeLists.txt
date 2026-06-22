@@ -172,7 +172,7 @@ if(BUILD_CLI)
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})
   # Set C++20 standard for std::views support
   target_compile_features(cli_tool PRIVATE cxx_std_20)
-  
+
   # Install ggml backends next to the CLI tool binary in build folder
   if((ANDROID OR UNIX) AND NOT APPLE)
     foreach(_backend ${GGML_AVAILABLE_BACKENDS})
@@ -190,7 +190,7 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
-  
+
   # Integration tests for model classes (includes backend selection tests)
   # Pass ENABLE_COVERAGE option to test subdirectory
   add_subdirectory(test/unit)
