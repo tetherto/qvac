@@ -48,6 +48,21 @@ on:
         type: boolean
         required: false
         default: false
+      include-rocm:
+        description: >-
+          Install the ROCm/HIP SDK (TheRock dist, gfx1151) on the linux-x64
+          build so a consumer's qvac-fabric hip-backend feature cross-compiles
+          libqvac-ggml-hip.so. No AMD GPU is needed on the runner (compile-only,
+          like CUDA). Only affects the linux-x64 job; everything else is
+          unchanged.
+        type: boolean
+        required: false
+        default: false
+      rocm-version:
+        description: "TheRock ROCm dist tarball version used when include-rocm is set"
+        type: string
+        required: false
+        default: "7.13.0"
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -232,6 +247,35 @@ jobs:
         shell: bash
         run: |
           echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
+
+      - if: ${{ inputs.include-rocm && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Setup ROCm SDK for HIP cross-compile (gfx1151)
+        shell: bash
+        env:
+          ROCM_VERSION: ${{ inputs.rocm-version }}
+        run: |
+          # Compile-only: no AMD GPU is needed on the runner (hipcc cross-compiles
+          # the gfx1151 kernels, like nvcc for CUDA). Installs the TheRock ROCm
+          # dist (hipcc + rocBLAS/hipBLAS + gfx1151 libs). qvac-fabric's
+          # hip-backend feature detects ROCM_PATH and builds GGML_HIP; absent it,
+          # the build is fail-safe (Vulkan/CPU only).
+          url="https://repo.amd.com/rocm/tarball/therock-dist-linux-gfx1151-${ROCM_VERSION}.tar.gz"
+          echo "Downloading $url"
+          curl -fsSL "$url" -o "$RUNNER_TEMP/rocm.tar.gz"
+          mkdir -p "$RUNNER_TEMP/rocm"
+          tar -xzf "$RUNNER_TEMP/rocm.tar.gz" -C "$RUNNER_TEMP/rocm"
+          hipcfg="$(find "$RUNNER_TEMP/rocm" -path '*/lib/cmake/hip/hip-config.cmake' | head -1)"
+          if [ -z "$hipcfg" ]; then echo "::error::ROCm hip-config.cmake not found after extract"; exit 1; fi
+          rocm_prefix="$(cd "$(dirname "$hipcfg")/../../.." && pwd)"
+          echo "ROCm prefix: $rocm_prefix"
+          # Only $prefix/bin on PATH (hipcc) — NOT lib/llvm/bin, whose bundled
+          # libc++ lacks __config_site and would hijack the system clang++ used
+          # for the regular C++/llama sources.
+          echo "ROCM_PATH=$rocm_prefix" >> "$GITHUB_ENV"
+          echo "HIP_PATH=$rocm_prefix" >> "$GITHUB_ENV"
+          echo "$rocm_prefix/bin" >> "$GITHUB_PATH"
+          echo "VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$rocm_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - if: ${{ inputs.include-vulkan-sdk && matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path (Windows)
