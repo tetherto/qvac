@@ -118,15 +118,22 @@ endif()
 # loader skips it) so BackendSelection falls back to Vulkan/CPU. Targets gfx1151
 # (Strix Halo / Radeon 8060S); the HIP compiler + ROCM_PATH come from the build env.
 if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_HIP_BACKEND)
-  if(DEFINED ENV{ROCM_PATH} AND EXISTS "$ENV{ROCM_PATH}/lib/cmake/hip/hip-config.cmake")
-    message(STATUS "qvac-fabric: hip-backend ON — ROCm found, building GGML_HIP (gfx1151)")
-    list(APPEND PLATFORM_OPTIONS
-      -DGGML_HIP=ON
-      -DAMDGPU_TARGETS=gfx1151
-      -DCMAKE_HIP_ARCHITECTURES=gfx1151)
-  else()
-    message(WARNING "qvac-fabric: hip-backend requested but no ROCm SDK found (ROCM_PATH) — skipping HIP backend; building Vulkan/CPU only")
+  # DETERMINISTIC: requesting hip-backend REQUIRES a ROCm SDK at build time. We
+  # must NOT silently skip when ROCm is absent — a host-dependent skip yields a
+  # no-HIP package with the SAME vcpkg ABI as a real HIP build, which the binary
+  # cache then conflates (cache poisoning: a no-ROCm build caches a no-HIP
+  # package that ROCm-equipped builds then restore). So ROCm present => HIP;
+  # ROCm absent => hard error (don't request hip-backend on a host without ROCm).
+  # The RUNTIME fail-safe is unchanged: an absent HIP module / non-AMD target is
+  # simply not loaded and BackendSelection falls back to Vulkan/CPU.
+  if(NOT (DEFINED ENV{ROCM_PATH} AND EXISTS "$ENV{ROCM_PATH}/lib/cmake/hip/hip-config.cmake"))
+    message(FATAL_ERROR "qvac-fabric: hip-backend feature requires a ROCm SDK — set ROCM_PATH to a ROCm/TheRock install containing lib/cmake/hip/hip-config.cmake. Do not request hip-backend on a host without ROCm.")
   endif()
+  message(STATUS "qvac-fabric: hip-backend ON — building GGML_HIP (gfx1151)")
+  list(APPEND PLATFORM_OPTIONS
+    -DGGML_HIP=ON
+    -DAMDGPU_TARGETS=gfx1151
+    -DCMAKE_HIP_ARCHITECTURES=gfx1151)
 endif()
 
 if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)

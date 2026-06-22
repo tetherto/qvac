@@ -4,10 +4,11 @@
 # vcpkg's find-root scoping. ROCm itself is NOT built here — it is a large,
 # system-installed SDK located via the ROCM_PATH env var.
 #
-# FAIL-SAFE: if no ROCm SDK is found this port still installs cleanly (empty),
-# so a build host without ROCm never breaks. qvac-fabric's portfile independently
-# re-checks for ROCm and skips GGML_HIP when it is absent, so the only effect of
-# "no ROCm" is a Vulkan/CPU-only build.
+# DETERMINISTIC: the hip-backend feature requires a ROCm SDK. If none is found
+# this port errors out rather than installing empty — a host-dependent "skip"
+# would let the vcpkg binary cache conflate a no-HIP build with a real HIP build
+# (identical ABI). Don't request hip-backend on a host without ROCm. The RUNTIME
+# fail-safe (Vulkan/CPU fallback when the HIP module/GPU is absent) is unaffected.
 set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
 set(VCPKG_POLICY_EMPTY_PACKAGE enabled)
 
@@ -19,9 +20,10 @@ elseif(EXISTS "/opt/rocm/lib/cmake/hip/hip-config.cmake")
 endif()
 
 if(_ROCM STREQUAL "")
-  message(WARNING
-    "hip port: no ROCm SDK found (set ROCM_PATH, or install to /opt/rocm) — "
-    "installing EMPTY; the HIP backend will be skipped downstream (fail-safe).")
+  message(FATAL_ERROR
+    "hip port: no ROCm SDK found — set ROCM_PATH to a ROCm/TheRock install "
+    "(containing lib/cmake/hip/hip-config.cmake). The hip-backend feature is "
+    "deterministic and requires ROCm at build time.")
 else()
   message(STATUS "hip port: forwarding ROCm CMake configs from ${_ROCM}")
   # Forward every <pkg>-config.cmake under the ROCm cmake dir via include() so
