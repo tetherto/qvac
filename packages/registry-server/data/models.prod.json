@@ -1586,6 +1586,66 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "CRAFT text detector (GGUF, EasyOCR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "detector",
+      "craft"
+    ],
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "Text recognizer - Latin gen-2 (GGUF, EasyOCR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "latin"
+    ],
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "DBNet text detector - MobileNetV3-Large (GGUF, docTR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "detector",
+      "doctr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mindee/doctr"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "CRNN text recognizer - MobileNetV3-Small (GGUF, docTR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "doctr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mindee/doctr"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
