@@ -1061,6 +1061,15 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
     return 0;
   }
 
+  if (hasRecurrentMemory_) {
+    // TODO: Re-enable tail-token removal for recurrent / hybrid SSM models
+    // once QVAC supports llama.cpp sequence checkpoint save + restore. Until
+    // then, partial `llama_memory_seq_rm` can fail because recurrent state
+    // does not keep full per-token history (for example Qwen3.5 with
+    // n_rs_seq=0).
+    return 0;
+  }
+
   clearSequenceMemory(modelCtx_.lctx, current_.pos - tokensToRemove, -1);
 
   // Decrement the token count by the number of tokens removed
