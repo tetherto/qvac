@@ -40,7 +40,21 @@ struct GenerationParams {
   // applied to `params_.reasoning_budget` for the duration of the request and
   // restored on completion.
   std::optional<int> reasoning_budget;
+  // Per-request override for the post-generation thinking-block KV
+  // cache compaction. Default-off at the context level; passing `true`
+  // here opts in for this request, `false` leaves the reasoning block
+  // in the cache. Throws `StatusError(InvalidArgument)` when set to
+  // `true` on a model with recurrent memory (SSM / hybrid SSM such as
+  // Qwen3.5). Restored at end-of-request.
+  std::optional<bool> remove_thinking_from_context;
 
+  // Reports overrides that need `applyGenerationParamsToContext` (sampler /
+  // common_params rebuild). Intentionally excludes
+  // `remove_thinking_from_context` — that toggle lives on `TextLlmContext`, not
+  // on `common_params`, and is applied directly via
+  // `setRemoveThinkingFromContext` on both the single- prompt and batch paths.
+  // Including it here would force a no-op `common_sampler_init` whenever it's
+  // the only override set.
   [[nodiscard]] bool hasOverrides() const {
     return n_predict || temp || top_p || top_k || frequency_penalty ||
            presence_penalty || repeat_penalty || seed || grammar ||
@@ -281,6 +295,14 @@ public:
    * Reset the slide counter to zero. Called at the start of each inference.
    */
   virtual void resetNSlides() = 0;
+
+  /**
+   * Number of `<think>` reasoning blocks compacted out of the KV
+   * cache during the most recent generation. 0 for contexts without
+   * reasoning channel support.
+   */
+  [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
+  virtual void resetThinkingBlockDiscards() {}
 
   /**
    * The load media method. It loads the media from memory buffer.

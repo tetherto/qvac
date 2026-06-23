@@ -17,7 +17,6 @@
     "standard": "^17.1.2"
   },
   "dependencies": {
-    "@qvac/dl-filesystem": "^0.1.2",
     "@qvac/embed-llamacpp": "file:../../",
     "bare-buffer": "^3.1.0",
     "bare-fs": "^4.1.6",

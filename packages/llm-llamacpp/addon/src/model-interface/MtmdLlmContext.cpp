@@ -120,6 +120,39 @@ MtmdLlmContext::MtmdLlmContext(
           "[MtmdLlm] Harmony detection: isHarmony=%d callToken=%d\n",
           isHarmonyModel_,
           harmonyCallToken_));
+
+  // Recurrent-memory detection: mirrors TextLlmContext so that opting
+  // into `remove_thinking_from_context` on a hybrid SSM (Qwen3.5/3.6)
+  // is rejected with a clear error rather than silently producing
+  // contaminated post-shift state.
+  hasRecurrentMemory_ = llama_model_is_recurrent(modelCtx_.model);
+  if (!hasRecurrentMemory_) {
+    const std::optional<std::string> arch =
+        qvac_lib_inference_addon_llama::utils::getModelArchitecture(
+            modelCtx_.model);
+    if (arch.has_value()) {
+      const std::string ssmKey = arch.value() + ".ssm.state_size";
+      char buffer[32] = {0};
+      if (llama_model_meta_val_str(
+              modelCtx_.model, ssmKey.c_str(), buffer, sizeof(buffer)) > 0) {
+        hasRecurrentMemory_ = true;
+      }
+    }
+  }
+
+  // EOS-inside-reasoning recovery is a Qwen3-specific workaround;
+  // gate it on the explicit Qwen3-family predicate so non-Qwen
+  // reasoning families (e.g. Gemma 4) don't inherit it. See
+  // TextLlmContext for the same gate.
+  {
+    const std::optional<std::string> arch =
+        qvac_lib_inference_addon_llama::utils::getModelArchitecture(
+            modelCtx_.model);
+    isQwen3ReasoningFamily_ =
+        arch.has_value() &&
+        qvac_lib_inference_addon_llama::utils::
+            isQwen3ReasoningFamilyArchitecture(arch.value());
+  }
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -230,6 +263,8 @@ void MtmdLlmContext::tokenizeChat(
       thinkingForcedOpen_
           ? getThinkingForcedOpenText(generationPrompt, thinkingStartTag)
           : std::string{};
+  configureReasoningTags(
+      thinkingStartTag, thinkingEndTag, thinkingForcedOpenText_);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(
@@ -478,6 +513,10 @@ void MtmdLlmContext::applyContextDiscard() {
     current_.pos = outcome.newNPast;
     current_.cacheTokens -= outcome.discarded;
     ++nSlides_;
+    // Recorded span positions are no longer valid after the shift;
+    // drop them rather than try to fix them up.
+    thinkSpan_.reset();
+    pendingThinkCloseCapture_ = false;
     QLOG_IF(
         Priority::DEBUG,
         string_format(
@@ -517,13 +556,27 @@ bool MtmdLlmContext::generateResponse(
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
 
-  if (thinkingForcedOpen_ && outputCallback) {
-    // MtmdLlmContext doesn't carry a reasoningState_ (no reasoning-aware EOS
-    // replacement on the multimodal path today), so unlike TextLlmContext we
-    // only prepend the visible reasoning opener and don't flip an
-    // inside_reasoning flag. If reasoning state is added here later, mirror
-    // TextLlmContext::generateResponse and set it true alongside this emit.
-    outputCallback(thinkingForcedOpenText_);
+  // Per-inference reset of reasoning detection state. Mirrors
+  // TextLlmContext::onPrefillComplete so consecutive generations don't
+  // inherit a stale `inside_reasoning` flag or span.
+  reasoningState_.inside_reasoning = false;
+  reasoningState_.recent_output_buffer.clear();
+  thinkSpan_.reset();
+  pendingThinkCloseCapture_ = false;
+
+  if (thinkingForcedOpen_) {
+    if (outputCallback) {
+      outputCallback(thinkingForcedOpenText_);
+    }
+    // Template force-opened the reasoning channel: the open marker
+    // tokens are already in the KV cache from prefill; record their
+    // span so `compactThinkSpan` can drop them at end-of-generation.
+    if (reasoningEnabled_) {
+      setOpenThinkSpan(
+          current_.pos -
+          static_cast<llama_pos>(reasoningState_.forcedOpenTokenCount));
+      reasoningState_.inside_reasoning = true;
+    }
   }
 
   if (stopGeneration_.load()) {
@@ -573,6 +626,28 @@ bool MtmdLlmContext::generateResponse(
       }
     }
 
+    // Reasoning channel detection. `current_.pos` here reflects the
+    // cache state BEFORE this token is committed (it's incremented in
+    // common_batch_add below), so the open-marker math mirrors
+    // TextLlmContext: the first marker piece is at
+    // `current_.pos - (openTokenCount - 1)`.
+    if (reasoningEnabled_) {
+      const bool wasInside = reasoningState_.inside_reasoning;
+      qvac_lib_inference_addon_llama::utils::updateReasoningBuffer(
+          tokenStr, reasoningState_);
+      const bool nowInside = reasoningState_.inside_reasoning;
+      if (!wasInside && nowInside) {
+        setOpenThinkSpan(
+            current_.pos -
+            static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
+      }
+      if (wasInside && !nowInside) {
+        // Defer end capture — the close-marker token has not yet been
+        // committed to the cache.
+        pendingThinkCloseCapture_ = true;
+      }
+    }
+
     bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
 
     if (isEos && isHarmonyModel_ && params_.use_jinja &&
@@ -588,6 +663,40 @@ bool MtmdLlmContext::generateResponse(
           outputCallback(callMarker);
         }
       }
+      flushPendingUtf8ToCallback(outputCallback);
+      break;
+    }
+
+    // EOS sampled while still inside the reasoning channel: substitute
+    // the cached close marker, decode it so the span end position gets
+    // recorded, then exit. Mirrors TextLlmContext single-prompt EOS
+    // handling. Without this, `compactThinkSpan()` would skip removal
+    // because `thinkSpan_->second` stays unset.
+    if (isEos && isQwen3ReasoningFamily_ && reasoningState_.inside_reasoning &&
+        reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
+      tokenId = reasoningState_.cached_close_tag_token;
+      tokenStr =
+          common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+      reasoningState_.inside_reasoning = false;
+      pendingThinkCloseCapture_ = true;
+
+      if (outputCallback) {
+        std::string completeChars = utf8Buffer_.addToken(tokenStr);
+        if (!completeChars.empty()) {
+          outputCallback(completeChars);
+        }
+      }
+
+      common_batch_clear(*batch);
+      common_batch_add(*batch, tokenId, current_.pos++, {seqId_}, true);
+      if (llama_decode(modelCtx_.lctx, *batch) != 0) {
+        const char* errorMsg =
+            "[MtmdLlm] failed to decode substituted reasoning close tag\n";
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(FailedToDecode), errorMsg);
+      }
+      ++current_.cacheTokens;
+      capturePendingThinkClose();
       flushPendingUtf8ToCallback(outputCallback);
       break;
     }
@@ -611,18 +720,56 @@ bool MtmdLlmContext::generateResponse(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
     ++current_.cacheTokens;
+    // Close-marker token (if any was sampled this iteration) is now
+    // committed; capture the span end.
+    capturePendingThinkClose();
   }
 
   if (nRemain == 0) {
     flushPendingUtf8ToCallback(outputCallback);
   }
+  // Drop the reasoning block from the KV cache if the caller opted
+  // in and a `<think>...</think>` (or model-equivalent) was emitted.
+  compactThinkSpan();
   return true;
 }
 
 std::function<void()>
 MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
-  return applyGenerationParamsToContext(
+  // Validate the recurrent-memory invariant BEFORE mutating any
+  // sampler / common params state. Mirrors TextLlmContext: if the
+  // toggle apply later threw on a hybrid SSM model, the partial
+  // sampler mutation would leak into subsequent requests.
+  if (overrides.remove_thinking_from_context &&
+      *overrides.remove_thinking_from_context && hasRecurrentMemory_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "remove_thinking_from_context is not supported on models with "
+        "recurrent memory (SSM / hybrid SSM such as Qwen3.5)");
+  }
+
+  auto restoreSampler = applyGenerationParamsToContext(
       params_, smpl_, modelCtx_.model, overrides);
+
+  const bool savedRemoveThinking = removeThinkingFromContext_;
+  bool toggled = false;
+  if (overrides.remove_thinking_from_context) {
+    removeThinkingFromContext_ = *overrides.remove_thinking_from_context;
+    toggled = true;
+  }
+
+  if (!toggled) {
+    return restoreSampler;
+  }
+
+  return [this,
+          restoreSampler = std::move(restoreSampler),
+          savedRemoveThinking]() {
+    restoreSampler();
+    removeThinkingFromContext_ = savedRemoveThinking;
+  };
 }
 
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }
@@ -663,6 +810,138 @@ void MtmdLlmContext::setNDiscarded(llama_pos nDiscarded) {
 
 int32_t MtmdLlmContext::getNSlides() const { return nSlides_; }
 void MtmdLlmContext::resetNSlides() { nSlides_ = 0; }
+
+int32_t MtmdLlmContext::getThinkingBlockDiscards() const {
+  return thinkingBlockDiscards_;
+}
+void MtmdLlmContext::resetThinkingBlockDiscards() {
+  thinkingBlockDiscards_ = 0;
+}
+
+void MtmdLlmContext::configureReasoningTags(
+    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& forcedOpenText) {
+  // Family-default tags act as both the fallback when the active chat
+  // template does not expose reasoning tags, and as the source for the
+  // Qwen-family single-token close marker used by EOS-inside-reasoning
+  // recovery. Resolved once so the lookup runs at most once per
+  // prompt render.
+  const std::optional<ReasoningTags> fallbackTags =
+      selectReasoningTagsForModel(modelCtx_.model);
+
+  const std::optional<ReasoningTags> reasoningTags =
+      selectReasoningTagSource(thinkingStartTag, thinkingEndTag, fallbackTags);
+
+  reasoningState_ = ReasoningState{};
+  reasoningEnabled_ = false;
+  if (!reasoningTags.has_value()) {
+    return;
+  }
+
+  std::string eosRecoveryCloseTag;
+  if (isQwen3ReasoningFamily_ && fallbackTags.has_value()) {
+    eosRecoveryCloseTag = fallbackTags->close;
+  }
+
+  const bool reasoningInitOk = initializeReasoningState(
+      modelCtx_.lctx,
+      reasoningState_,
+      *reasoningTags,
+      forcedOpenText,
+      eosRecoveryCloseTag);
+  if (reasoningInitOk) {
+    reasoningEnabled_ = true;
+    return;
+  }
+
+  QLOG_IF(
+      Priority::WARNING,
+      string_format(
+          "[MtmdLlm] reasoning detection disabled: first piece of open "
+          "marker '%s' is not a special token under this vocab\n",
+          reasoningTags->open.c_str()));
+}
+
+void MtmdLlmContext::setOpenThinkSpan(llama_pos start) {
+  // `start < 0` only for degenerate templates whose entire rendered
+  // prompt is the forced-open suffix; drop the span and leave the
+  // tokens in cache.
+  if (start < 0) {
+    return;
+  }
+  // Single-block policy: only the first `<think>...</think>` is tracked.
+  if (thinkSpan_.has_value()) {
+    return;
+  }
+  thinkSpan_ = std::make_pair(start, static_cast<llama_pos>(-1));
+}
+
+void MtmdLlmContext::capturePendingThinkClose() {
+  if (!pendingThinkCloseCapture_) {
+    return;
+  }
+  pendingThinkCloseCapture_ = false;
+  if (!removeThinkingFromContext_ || !thinkSpan_.has_value()) {
+    return;
+  }
+  if (thinkSpan_->second < 0) {
+    thinkSpan_->second = current_.pos;
+  }
+}
+
+void MtmdLlmContext::compactThinkSpan() {
+  if (!removeThinkingFromContext_ || !thinkSpan_.has_value()) {
+    thinkSpan_.reset();
+    return;
+  }
+  const llama_pos start = thinkSpan_->first;
+  const llama_pos end = thinkSpan_->second;
+  thinkSpan_.reset();
+
+  if (end < 0 || end <= start) {
+    return;
+  }
+
+  const CompactRangeOutcome outcome =
+      compactKvRange(modelCtx_.lctx, seqId_, start, end, current_.pos);
+  if (outcome.kind == CompactRangeOutcome::Kind::Compacted) {
+    current_.pos = outcome.newNPast;
+    // Multimodal cacheTokens tracks image tokens separately from text
+    // positions; the compacted range is text-only so cacheTokens drops
+    // by the same number of discarded tokens.
+    current_.cacheTokens -= outcome.discarded;
+    if (start < protectedPrefix_.pos) {
+      const llama_pos removedProtectedTokens =
+          std::min(outcome.discarded, protectedPrefix_.pos - start);
+      protectedPrefix_.pos = start;
+      protectedPrefix_.cacheTokens -= removedProtectedTokens;
+    }
+    if (tools_.enabled()) {
+      tools_.onSlide(outcome.discarded, start);
+    }
+    ++thinkingBlockDiscards_;
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "[MtmdLlm] thinking-block compaction: dropped %d tokens "
+            "[%d, %d), pos=%d, firstMsgTokens=%d\n",
+            outcome.discarded,
+            start,
+            end,
+            current_.pos,
+            protectedPrefix_.pos));
+  } else if (outcome.kind == CompactRangeOutcome::Kind::MemoryOperationFailed) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[MtmdLlm] thinking-block compaction failed: seqRm rejected "
+            "range [%d, %d) (pos=%d, seqId=%d)\n",
+            start,
+            end,
+            current_.pos,
+            seqId_));
+  }
+}
 
 void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
   if (media.empty()) {
@@ -736,12 +1015,17 @@ void MtmdLlmContext::resetState(bool resetStats) {
   current_ = {};
   protectedPrefix_ = {};
 
-  // On partial reset (resetStats=false), preserve nSlides_ so
-  // runtimeStats() can read the per-inference value.
-  // On full reset (resetStats=true), clear it along with perf stats.
+  // On partial reset (resetStats=false), preserve nSlides_ and
+  // thinkingBlockDiscards_ so runtimeStats() can read the per-
+  // inference values. On full reset (resetStats=true), clear them
+  // along with perf stats.
   if (resetStats) {
     nSlides_ = 0;
+    thinkingBlockDiscards_ = 0;
   }
+
+  thinkSpan_.reset();
+  pendingThinkCloseCapture_ = false;
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
