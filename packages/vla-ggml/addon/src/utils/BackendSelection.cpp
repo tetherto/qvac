@@ -120,6 +120,15 @@ ggml_backend_dev_t pickBestGpuDevice() {
 
     // HIP/ROCm is preferred over other GPU backends on AMD hardware; Vulkan is
     // the fallback. The ggml HIP backend reports its device as "ROCm%d".
+    //
+    // ASSUMPTION: a single AMD-GPU target (the Strix Halo / gfx1151 APU this
+    // backend ships for). Because pickBestGpuDevice() is the generic picker,
+    // returning the HIP device unconditionally below makes ROCm win over every
+    // other backend. On a mixed-vendor host (e.g. a discrete NVIDIA GPU via
+    // Vulkan + an AMD iGPU via ROCm) this would always pick the AMD iGPU even
+    // if the other device is faster. Revisit this preference (e.g. score by
+    // device, or scope it to the known APU) before HIP ships to multi-GPU
+    // configurations.
     const bool isHip = backendLower.find("rocm") != std::string::npos ||
                        backendLower.find("hip") != std::string::npos;
     if (isHip && hipDev == nullptr) {
