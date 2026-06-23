@@ -4,6 +4,8 @@ The CLI exposes an **OpenAI-compatible HTTP API** (`qvac serve openai`) so tools
 
 This document describes the supported routes and how to configure `serve.models` for each capability. For general CLI usage, see [README.md](../README.md).
 
+For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac serve`, `@qvac/opencode-plugin`, models.dev, layer ownership, and release choreography — see [Agent Integrations](../../../docs/architecture/AGENT-INTEGRATIONS.md). Use this file for CLI serve route/config details; use the agent integration reference when deciding whether behavior belongs in SDK, CLI, provider, plugin, docs, or models.dev.
+
 ## Implemented endpoints (today)
 
 | Method | Path | Notes |
