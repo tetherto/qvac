@@ -65,15 +65,6 @@ target_link_libraries(
     GTest::gmock
     GTest::gmock_main
 )
-
-if(WIN32)
-  target_link_libraries(
-    inference-tts-unit-test
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 bare_platform(_TTS_TEST_PLATFORM)
 bare_arch(_TTS_TEST_ARCH)
 set(_tts_onnx_prebuilds "${CMAKE_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/${_TTS_TEST_PLATFORM}-${_TTS_TEST_ARCH}")

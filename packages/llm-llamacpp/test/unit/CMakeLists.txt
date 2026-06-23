@@ -137,15 +137,6 @@ if(NOT WIN32)
       -fsanitize=address
   )
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    addon-test
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 # Copy ggml backend libraries next to the test executable
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})

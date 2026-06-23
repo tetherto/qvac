@@ -88,15 +88,6 @@ if(NOT WIN32)
       -fsanitize=address
   )
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    addon-test
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     add_custom_command(TARGET addon-test POST_BUILD

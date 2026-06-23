@@ -49,7 +49,7 @@ declare interface TTSGgmlFiles {
 declare interface TTSGgmlRuntimeConfig {
   /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored for Supertonic on desktop (Vulkan/CUDA) and Apple (Metal); forced to CPU on Android (Adreno) at the native engine boundary. */
+  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored on Apple (Metal), desktop (Vulkan/CUDA), and Android (Vulkan/OpenCL), where tts-cpp selects the backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali). */
   useGPU?: boolean
   /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
   outputSampleRate?: number
@@ -68,7 +68,7 @@ declare interface TTSGgmlOptions {
   voiceDir?: string
   /** RNG seed for CFM initial noise + SineGen excitation (Chatterbox) / vector-estimator latent (Supertonic). */
   seed?: number
-  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: pass 99 to offload on GPU-capable hosts (forced to CPU on Android). */
+  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: pass 99 to offload on GPU-capable hosts (including Android, per tts-cpp's per-vendor allowlist). */
   nGpuLayers?: number
   /** Chatterbox-only: cap on the T3 context length (prompt + generated speech tokens, 25 tokens ~= 1 s of audio).  The KV cache is allocated up-front at this length, so the cap directly bounds memory: the Turbo GGUF's native n_ctx=8196 costs ~1.6 GB of f32 KV, while the defaults (nCtx=4096 + kvCacheType "q8_0") cost ~210 MB for ~160 s of audio per synthesis call.  Pass 0 to use the GGUF's full context; negative values are rejected. */
   nCtx?: number
@@ -176,6 +176,8 @@ declare namespace TTSGgml {
     backendDevice?: number
     /** Stable numeric code for the active backend.  0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other-GPU. */
     backendId?: number
+    /** 1 when a GPU was present but the engine routed to CPU by policy (e.g. Chatterbox on ARM Mali, `allow_arm_mali=false`); 0 otherwise.  A CPU `backendDevice` with `gpuUnsupported === 1` is expected, not a regression. */
+    gpuUnsupported?: number
   }
 
   export interface TTSOutputChunk {

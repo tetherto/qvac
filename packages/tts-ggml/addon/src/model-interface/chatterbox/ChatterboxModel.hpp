@@ -151,6 +151,7 @@ private:
 
   int backendDevice_ = 0;
   int backendId_ = 0;
+  bool gpuUnsupported_ = false;
   std::string backendName_ = "CPU";
 
   mutable std::atomic_bool cancelRequested_{false};
