@@ -117,6 +117,16 @@ public:
   // build session opts from cfg_ when the JS caller doesn't override
   // them. Reads only; safe without holding engine_mutex_.
   int                 getSampleRate() const { return sample_rate_; }
+
+  // Active backend identity captured at load(); surfaced to JS via the addon's
+  // getBackendInfo(). getBackendId() codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan
+  // 4=OpenCL 99=other. getBackendDeviceClass(): 0=CPU 1=GPU.
+  int getBackendId() const { return backend_id_; }
+  int getBackendDeviceClass() const { return backend_device_; }
+  const std::string& getBackendName() const { return backend_name_; }
+  const std::string& getBackendDescription() const {
+    return backend_description_;
+  }
   int                 getStreamingChunkMs() const {
     return cfg_.streamingChunkMs > 0 ? cfg_.streamingChunkMs : 1000;
   }
@@ -299,6 +309,12 @@ private:
   int                                  backend_id_     = 0;
   int backend_gpu_unsupported_ = 0;
   std::string                          backend_name_   = "CPU";
+  // Human-readable GPU device name (e.g. "NVIDIA GeForce RTX 3090", "Apple
+  // M2 Pro") recovered from the ggml device registry at load(); empty on CPU
+  // or when ggml provides no description. Surfaced to JS via getBackendInfo()
+  // as the nvidia-smi-independent GPU-name fallback for the perf reporter
+  // (QVAC-20684).
+  std::string backend_description_;
 
   // ── Token / sentinel constants ─────────────────────────────────────────
   // The engine itself uses different vocab IDs internally; we surface only 
