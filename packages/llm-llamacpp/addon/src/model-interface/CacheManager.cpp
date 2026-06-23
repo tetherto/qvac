@@ -128,9 +128,18 @@ bool CacheManager::handleCache(
       string_format(
           "%s: Cache enabled with key '%s'\n", __func__, sessionPath_.c_str()));
 
-  bool loaded = loadCache();
-  cacheUsedInLastPrompt_ = true;
-  return loaded;
+  try {
+    bool loaded = loadCache();
+    if (!loaded) {
+      resetStateCallback_(true);
+    }
+    cacheUsedInLastPrompt_ = true;
+    return loaded;
+  } catch (...) {
+    resetStateCallback_(true);
+    invalidate();
+    throw;
+  }
 }
 
 bool CacheManager::loadCache() {
@@ -230,6 +239,22 @@ bool CacheManager::loadCache() {
               sessionPath_.c_str(),
               restoredNPast,
               expectedNPast));
+    }
+    const llama_pos restoredCacheTokens = static_cast<llama_pos>(
+        llama_memory_seq_token_count(mem, llmContext_->getSeqId()));
+    const auto expectedCacheTokens =
+        static_cast<llama_pos>(sessionMetadata.cacheTokens());
+    if (restoredCacheTokens != expectedCacheTokens) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          string_format(
+              "%s: cache file '%s' restored cacheTokens=%d, but metadata "
+              "expected cacheTokens=%d\n",
+              __func__,
+              sessionPath_.c_str(),
+              restoredCacheTokens,
+              expectedCacheTokens));
     }
     return true;
   }

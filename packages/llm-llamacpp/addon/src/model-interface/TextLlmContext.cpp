@@ -1075,48 +1075,70 @@ bool TextLlmContext::loadCache(
         "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
   }
 
-  if (tokenCount <= 1) {
-    return false;
-  }
-  if (sessionTokens[0] > llama_n_ctx(modelCtx_.lctx)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(ContextLengthExeeded),
-        "TextLlmContext::loadCache: cache '" + cacheKey +
-            "' exceeds current context size");
-  }
+  auto clearLoadedSequence = [this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[TextLlm] failed to clear sequence after invalid cache load\n");
+    }
+    nPast_ = 0;
+    firstMsgTokens_ = 0;
+    tools_.reset();
+  };
 
-  nPast_ = sessionTokens[0];
-  firstMsgTokens_ = sessionTokens[1];
-  // Clamp discard to the per-slot window (ctxCeiling), not the physical
-  // context: in batch mode the slot ceiling is ctx / n_parallel.
-  const llama_pos window = ctxCeiling();
-  if (configuredNDiscarded > window - firstMsgTokens_) {
-    nDiscarded_ = window - firstMsgTokens_ - 1;
-  } else {
-    nDiscarded_ = configuredNDiscarded;
-  }
+  try {
+    if (tokenCount <= 1) {
+      clearLoadedSequence();
+      return false;
+    }
+    const llama_pos metadataNPast = sessionTokens[0];
+    const llama_pos metadataFirstMsgTokens = sessionTokens[1];
+    if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(ContextLengthExeeded),
+          "TextLlmContext::loadCache: cache '" + cacheKey +
+              "' exceeds current context size");
+    }
 
-  auto* mem = llama_get_memory(modelCtx_.lctx);
-  if (mem == nullptr) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        "TextLlmContext::loadCache: llama memory is null after loading cache '" +
-            cacheKey + "'");
-  }
+    auto* mem = llama_get_memory(modelCtx_.lctx);
+    if (mem == nullptr) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          "TextLlmContext::loadCache: llama memory is null after loading "
+          "cache '" +
+              cacheKey + "'");
+    }
 
-  const llama_pos restoredNPast = llama_memory_seq_pos_max(mem, seqId_) + 1;
-  if (restoredNPast != nPast_) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "TextLlmContext::loadCache: cache '%s' restored nPast=%d, but "
-            "metadata expected nPast=%d",
-            cacheKey.c_str(),
-            restoredNPast,
-            nPast_));
+    const llama_pos restoredNPast = llama_memory_seq_pos_max(mem, seqId_) + 1;
+    if (restoredNPast != metadataNPast) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          string_format(
+              "TextLlmContext::loadCache: cache '%s' restored nPast=%d, but "
+              "metadata expected nPast=%d",
+              cacheKey.c_str(),
+              restoredNPast,
+              metadataNPast));
+    }
+
+    nPast_ = metadataNPast;
+    firstMsgTokens_ = metadataFirstMsgTokens;
+    // Clamp discard to the per-slot window (ctxCeiling), not the physical
+    // context: in batch mode the slot ceiling is ctx / n_parallel.
+    const llama_pos window = ctxCeiling();
+    if (configuredNDiscarded > window - firstMsgTokens_) {
+      nDiscarded_ = window - firstMsgTokens_ - 1;
+    } else {
+      nDiscarded_ = configuredNDiscarded;
+    }
+  } catch (...) {
+    clearLoadedSequence();
+    throw;
   }
   return true;
 }
