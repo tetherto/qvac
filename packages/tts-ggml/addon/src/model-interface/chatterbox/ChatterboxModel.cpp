@@ -148,11 +148,15 @@ constexpr float DEFAULT_SPEED = 0.85f;
 float defaultSpeedForLanguage(const std::string& language) {
   std::string lang;
   for (char c : language) {
-    if (c == '-' || c == '_') break;  // "en-US" -> "en"
-    lang.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    if (c == '-' || c == '_')
+      break; // "en-US" -> "en"
+    lang.push_back(
+        static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
   }
-  if (lang == "en") return 0.80f;  // baseline ~205 wpm -> ~164
-  if (lang == "it") return 0.72f;  // baseline ~226 wpm -> ~163
+  if (lang == "en")
+    return 0.80f; // baseline ~205 wpm -> ~164
+  if (lang == "it")
+    return 0.72f; // baseline ~226 wpm -> ~163
   return DEFAULT_SPEED;
 }
 
@@ -161,7 +165,6 @@ float defaultSpeedForLanguage(const std::string& language) {
 float chatterboxDefaultSpeedForLanguage(const std::string& language) {
   return defaultSpeedForLanguage(language);
 }
-
 
 ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
     : cfg_(std::move(config)) {
@@ -368,7 +371,8 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   // the concatenated output has no per-chunk seams.
   // Unset -> per-language default (Chatterbox is model-inherently fast);
   // an explicit value (including 1.0 for the raw model output) overrides.
-  const float speed = cfg_.speed.value_or(defaultSpeedForLanguage(cfg_.language));
+  const float speed =
+      cfg_.speed.value_or(defaultSpeedForLanguage(cfg_.language));
   const bool stretch = speedActive(speed);
 
   const auto tStart = std::chrono::steady_clock::now();
@@ -380,8 +384,11 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
           stretch ? std::make_shared<WsolaTimeStretch>(speed) : nullptr;
       result = engine->synthesize(
           text,
-          [&chunkCallback, stretcher](const float* pcm, std::size_t samples,
-                                      int chunkIndex, bool isLast) {
+          [&chunkCallback, stretcher](
+              const float* pcm,
+              std::size_t samples,
+              int chunkIndex,
+              bool isLast) {
             if (!stretcher) {
               chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
               return;

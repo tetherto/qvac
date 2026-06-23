@@ -178,7 +178,7 @@ TEST(ChatterboxValidate, SpeedZeroRejected) {
 
 TEST(ChatterboxValidate, ValidSpeedAccepted) {
   auto cfg = minimallyValidStubConfig();
-  cfg.speed = 0.8f;  // a typical "slow it down" value
+  cfg.speed = 0.8f; // a typical "slow it down" value
   // Stub files pass validation; load is deferred, so construction succeeds.
   std::unique_ptr<ChatterboxModel> m;
   EXPECT_NO_THROW(m = std::make_unique<ChatterboxModel>(cfg));
@@ -201,8 +201,9 @@ TEST(ChatterboxDefaultSpeed, EnglishSlowsDownFromBaseline) {
 }
 
 TEST(ChatterboxDefaultSpeed, ItalianSlowerThanEnglish) {
-  EXPECT_LT(chatterboxDefaultSpeedForLanguage("it"),
-            chatterboxDefaultSpeedForLanguage("en"));
+  EXPECT_LT(
+      chatterboxDefaultSpeedForLanguage("it"),
+      chatterboxDefaultSpeedForLanguage("en"));
 }
 
 TEST(ChatterboxDefaultSpeed, UnknownLanguageUsesConservativeDefault) {
@@ -210,8 +211,9 @@ TEST(ChatterboxDefaultSpeed, UnknownLanguageUsesConservativeDefault) {
 }
 
 TEST(ChatterboxDefaultSpeed, RegionSuffixIsNormalized) {
-  EXPECT_FLOAT_EQ(chatterboxDefaultSpeedForLanguage("en-US"),
-                  chatterboxDefaultSpeedForLanguage("en"));
+  EXPECT_FLOAT_EQ(
+      chatterboxDefaultSpeedForLanguage("en-US"),
+      chatterboxDefaultSpeedForLanguage("en"));
 }
 
 TEST(ChatterboxDefaultSpeed, AllDefaultsWithinValidatedRange) {

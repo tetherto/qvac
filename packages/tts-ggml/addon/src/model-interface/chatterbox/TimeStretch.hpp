@@ -34,15 +34,15 @@ namespace qvac::ttsggml::chatterbox {
  * across chunk boundaries, so streamed output has no per-chunk seams.
  */
 class WsolaTimeStretch {
- public:
-  explicit WsolaTimeStretch(float speed, int frameSize = 1024,
-                            int synthesisHop = 512, int searchRadius = 256)
-      : N_(frameSize),
-        Hs_(synthesisHop),
-        Ha_(std::max(1, static_cast<int>(std::lround(synthesisHop *
-                                                     static_cast<double>(speed))))),
-        search_(searchRadius),
-        window_(makeHann(frameSize)) {
+public:
+  explicit WsolaTimeStretch(
+      float speed, int frameSize = 1024, int synthesisHop = 512,
+      int searchRadius = 256)
+      : N_(frameSize), Hs_(synthesisHop),
+        Ha_(std::max(
+            1, static_cast<int>(
+                   std::lround(synthesisHop * static_cast<double>(speed))))),
+        search_(searchRadius), window_(makeHann(frameSize)) {
     target_.assign(static_cast<std::size_t>(N_), 0.0f);
   }
 
@@ -69,7 +69,7 @@ class WsolaTimeStretch {
     return out;
   }
 
- private:
+private:
   static std::vector<float> makeHann(int n) {
     std::vector<float> w(static_cast<std::size_t>(n));
     if (n == 1) {
@@ -77,8 +77,8 @@ class WsolaTimeStretch {
       return w;
     }
     for (int i = 0; i < n; ++i) {
-      w[static_cast<std::size_t>(i)] = 0.5f * (1.0f - std::cos(2.0f * PI * i /
-                                                              (n - 1)));
+      w[static_cast<std::size_t>(i)] =
+          0.5f * (1.0f - std::cos(2.0f * PI * i / (n - 1)));
     }
     return w;
   }
@@ -109,14 +109,17 @@ class WsolaTimeStretch {
     const long lo = std::max<long>(0, ideal - search_);
     const long hiCap = static_cast<long>(inLimit) - N_;
     const long hi = std::min<long>(ideal + search_, hiCap);
-    if (hi <= lo) return static_cast<std::size_t>(std::max<long>(0, std::min(ideal, hiCap)));
+    if (hi <= lo)
+      return static_cast<std::size_t>(
+          std::max<long>(0, std::min(ideal, hiCap)));
     long best = lo;
     float bestScore = -std::numeric_limits<float>::infinity();
     for (long a = lo; a <= hi; ++a) {
       float score = 0.0f;
       for (int k = 0; k < N_; ++k) {
-        score += inBuf_[static_cast<std::size_t>(a) + static_cast<std::size_t>(k)] *
-                 target_[static_cast<std::size_t>(k)];
+        score +=
+            inBuf_[static_cast<std::size_t>(a) + static_cast<std::size_t>(k)] *
+            target_[static_cast<std::size_t>(k)];
       }
       if (score > bestScore) {
         bestScore = score;
@@ -132,7 +135,8 @@ class WsolaTimeStretch {
     const std::size_t start = a + static_cast<std::size_t>(Hs_);
     for (int k = 0; k < N_; ++k) {
       const std::size_t idx = start + static_cast<std::size_t>(k);
-      target_[static_cast<std::size_t>(k)] = idx < inBuf_.size() ? inBuf_[idx] : 0.0f;
+      target_[static_cast<std::size_t>(k)] =
+          idx < inBuf_.size() ? inBuf_[idx] : 0.0f;
     }
   }
 
@@ -143,12 +147,14 @@ class WsolaTimeStretch {
     if (finalPass) {
       const std::size_t guard =
           inLenReal_ + static_cast<std::size_t>(N_ + search_ + Ha_) + 1;
-      if (inBuf_.size() < guard) inBuf_.resize(guard, 0.0f);
+      if (inBuf_.size() < guard)
+        inBuf_.resize(guard, 0.0f);
     }
 
     while (true) {
       if (firstFrame_) {
-        if (inBuf_.size() < static_cast<std::size_t>(N_)) break;  // need a full frame
+        if (inBuf_.size() < static_cast<std::size_t>(N_))
+          break; // need a full frame
         olaAddFrame(0);
         setTarget(0);
         anaIdeal_ = Ha_;
@@ -160,9 +166,10 @@ class WsolaTimeStretch {
       if (!finalPass) {
         const std::size_t needHi =
             static_cast<std::size_t>(anaIdeal_ + search_ + N_);
-        if (inBuf_.size() < needHi) break;  // wait for more input
+        if (inBuf_.size() < needHi)
+          break; // wait for more input
       } else if (anaIdeal_ >= static_cast<long>(inLenReal_)) {
-        break;  // consumed all real input
+        break; // consumed all real input
       }
 
       const std::size_t a = bestMatch(anaIdeal_, inBuf_.size());
@@ -181,7 +188,8 @@ class WsolaTimeStretch {
   std::vector<float> finalize(bool finalPass) {
     const std::size_t end = finalPass ? acc_.size() : outPos_;
     std::vector<float> out;
-    if (end <= emitted_) return out;
+    if (end <= emitted_)
+      return out;
     out.reserve(end - emitted_);
     for (std::size_t j = emitted_; j < end; ++j) {
       const float n = norm_[j];
@@ -200,7 +208,7 @@ class WsolaTimeStretch {
   const std::vector<float> window_;
 
   std::vector<float> inBuf_;
-  std::size_t inLenReal_ = 0;  // real fed length (excludes final-pass padding)
+  std::size_t inLenReal_ = 0; // real fed length (excludes final-pass padding)
   std::vector<float> target_;
 
   std::vector<float> acc_;
@@ -211,4 +219,4 @@ class WsolaTimeStretch {
   bool firstFrame_ = true;
 };
 
-}  // namespace qvac::ttsggml::chatterbox
+} // namespace qvac::ttsggml::chatterbox
