@@ -66,6 +66,125 @@ TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameRejectsOtherNames) {
   EXPECT_FALSE(isMedPsyBasename("NotMedPsy"));
 }
 
+TEST_F(ChatTemplateUtilsTest, IsGemma4ModelWithNullptr) {
+  EXPECT_FALSE(isGemma4Model(nullptr));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsGemma4BasenameEmpty) {
+  EXPECT_FALSE(isGemma4Basename(std::string_view{}));
+  EXPECT_FALSE(isGemma4Basename(""));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsGemma4BasenameAcceptsKnownPatterns) {
+  EXPECT_TRUE(isGemma4Basename("gemma-4"));
+  EXPECT_TRUE(isGemma4Basename("Gemma 4"));
+  EXPECT_TRUE(isGemma4Basename("Gemma 4 E2B it"));
+  EXPECT_TRUE(isGemma4Basename("google_gemma-4-E2B-it"));
+  EXPECT_TRUE(isGemma4Basename("GEMMA-4-E4B"));
+  EXPECT_TRUE(isGemma4Basename("gemma4"));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsGemma4BasenameRejectsOtherFamilies) {
+  EXPECT_FALSE(isGemma4Basename("Gemma 2"));
+  EXPECT_FALSE(isGemma4Basename("gemma-3"));
+  EXPECT_FALSE(isGemma4Basename("Qwen3"));
+  EXPECT_FALSE(isGemma4Basename("Llama-3.1"));
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForNullModelReturnsNullopt) {
+  EXPECT_FALSE(selectReasoningTagsForModel(nullptr).has_value());
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureQwen3Family) {
+  for (std::string_view arch : {"qwen3", "qwen3moe", "qwen35", "qwen35moe"}) {
+    const std::optional<ReasoningTags> tags =
+        selectReasoningTagsForArchitecture(std::string(arch));
+    ASSERT_TRUE(tags.has_value()) << "arch=" << arch;
+    EXPECT_EQ(tags->open, "<think>") << "arch=" << arch;
+    EXPECT_EQ(tags->close, "</think>") << "arch=" << arch;
+  }
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureRejectsOthers) {
+  // Unrelated arches.
+  EXPECT_FALSE(
+      selectReasoningTagsForArchitecture(std::string("llama")).has_value());
+  EXPECT_FALSE(
+      selectReasoningTagsForArchitecture(std::string("gemma3")).has_value());
+  EXPECT_FALSE(
+      selectReasoningTagsForArchitecture(std::string("gpt-oss")).has_value());
+  EXPECT_FALSE(selectReasoningTagsForArchitecture(std::nullopt).has_value());
+
+  // qwen3*-prefixed but not in the allow-list — explicit list (vs prefix
+  // match) ensures these don't silently inherit `<think>` reasoning.
+  EXPECT_FALSE(
+      selectReasoningTagsForArchitecture(std::string("qwen36")).has_value());
+  EXPECT_FALSE(
+      selectReasoningTagsForArchitecture(std::string("qwen3vl")).has_value());
+  EXPECT_FALSE(
+      selectReasoningTagsForArchitecture(std::string("qwen30")).has_value());
+}
+
+// `selectReasoningTagSource` is the single source of truth for the
+// "template-first, family-fallback" policy used by
+// `remove_thinking_from_context` detection. The tests below pin the
+// preference order so future refactors cannot silently drift back to
+// hardcoded family detection.
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourcePrefersTemplate) {
+  const ReasoningTags qwenFallback{.open = "<think>", .close = "</think>"};
+  const std::optional<ReasoningTags> result = selectReasoningTagSource(
+      "<custom_open>", "</custom_close>", qwenFallback);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->open, "<custom_open>");
+  EXPECT_EQ(result->close, "</custom_close>");
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourceFallsBackOnEmptyStart) {
+  const ReasoningTags fallback{.open = "<think>", .close = "</think>"};
+  const std::optional<ReasoningTags> result =
+      selectReasoningTagSource("", "</custom_close>", fallback);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->open, "<think>");
+  EXPECT_EQ(result->close, "</think>");
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourceFallsBackOnEmptyEnd) {
+  const ReasoningTags fallback{.open = "<think>", .close = "</think>"};
+  const std::optional<ReasoningTags> result =
+      selectReasoningTagSource("<custom_open>", "", fallback);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->open, "<think>");
+  EXPECT_EQ(result->close, "</think>");
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourceTemplateWithoutFallback) {
+  // Template-driven detection must work even when the model family has
+  // no entry in the hardcoded table (i.e. an as-yet-unsupported family
+  // whose chat template still exposes thinking tags).
+  const std::optional<ReasoningTags> result = selectReasoningTagSource(
+      "<custom_open>", "</custom_close>", std::nullopt);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->open, "<custom_open>");
+  EXPECT_EQ(result->close, "</custom_close>");
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourceNoTemplateNoFallback) {
+  EXPECT_FALSE(selectReasoningTagSource("", "", std::nullopt).has_value());
+}
+
+// Template tags that happen to match the family fallback exactly: the
+// returned ReasoningTags should still come from the template branch
+// (semantically: "the template wins"), not the fallback. This is a
+// behavioural assertion only, since the values are identical here.
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourceTemplateMatchesFallback) {
+  const ReasoningTags fallback{.open = "<think>", .close = "</think>"};
+  const std::optional<ReasoningTags> result =
+      selectReasoningTagSource("<think>", "</think>", fallback);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->open, "<think>");
+  EXPECT_EQ(result->close, "</think>");
+}
+
 TEST_F(
     ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
   EXPECT_TRUE(supportsToolsCompactForModelMetadata(std::string("qwen3")));
