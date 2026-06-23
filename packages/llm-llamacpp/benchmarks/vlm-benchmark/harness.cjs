@@ -379,7 +379,9 @@ function runModel (spec) {
       if (WARMUP_REPEATS > 0) {
         const guardOpts = isMobile ? { mode: 'probe', maxWaitMs: 6000, intervalMs: 800, window: 3 } : undefined
         const stability = await stabilityGuard(guardOpts)
-        process.stdout.write('[VLMBLOCK]' + JSON.stringify({ v: 2, scenario: SCENARIO_ID, source_id: SRC_ID, source_ref: SRC_REF, model: spec.label, device, block: 1, stability }) + '[/VLMBLOCK]\n')
+        // console.log (not process.stdout) — `bare` (desktop + mobile runtime) has no
+        // `process` global; markers go to stdout the same way emitRow does.
+        console.log('[VLMBLOCK]' + JSON.stringify({ v: 2, scenario: SCENARIO_ID, source_id: SRC_ID, source_ref: SRC_REF, model: spec.label, device, block: 1, stability }) + '[/VLMBLOCK]')
       }
 
       let ok = 0
