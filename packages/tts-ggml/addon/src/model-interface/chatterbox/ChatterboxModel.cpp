@@ -15,6 +15,7 @@
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/chatterbox/TimeStretch.hpp"
 
 namespace qvac::ttsggml::chatterbox {
 
@@ -123,6 +124,15 @@ std::vector<int16_t> pcmFloatToInt16(const std::vector<float>& pcm) {
   return pcmFloatToInt16(pcm.data(), pcm.size());
 }
 
+// A speed of 1.0 (or close enough that the WSOLA hop rounds to identity) is
+// a no-op — skip the time-stretch entirely so the default path is untouched.
+bool speedActive(float speed) {
+  return std::isfinite(speed) && std::abs(speed - 1.0f) > 1e-3f;
+}
+
+constexpr float MIN_SPEED = 0.25f;
+constexpr float MAX_SPEED = 4.0f;
+
 } // namespace
 
 ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
@@ -166,6 +176,20 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
         "ChatterboxModel: nCtx must be >= 0 (0 = use the GGUF's full "
         "context, > 0 = cap the T3 context / KV-cache length), got " +
             std::to_string(*cfg.nCtx));
+  }
+  // speed is a post-synthesis time-stretch factor (1.0 = unchanged, < 1
+  // slower, > 1 faster).  Bound it to a sane TTS range so a fat-fingered
+  // value can't request an absurd stretch (and reject <= 0 / NaN, which the
+  // WSOLA hop math can't represent).
+  if (cfg.speed.has_value()) {
+    const float s = *cfg.speed;
+    if (!std::isfinite(s) || s < MIN_SPEED || s > MAX_SPEED) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "ChatterboxModel: speed must be in [0.25, 4.0] (1.0 = unchanged, "
+          "< 1 slower, > 1 faster), got " +
+              std::to_string(s));
+    }
   }
   // Reject unknown KV dtypes at construction instead of inheriting
   // tts-cpp's warn-and-fall-back-to-f32, which would silently change
@@ -309,16 +333,48 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
       static_cast<bool>(chunkCallback) &&
       engine->options().stream_chunk_tokens > 0;
 
+  // Speaking-rate control.  Chatterbox's engine has no native rate knob, so
+  // we post-process the 24 kHz PCM with a pitch-preserving WSOLA stretch
+  // (see TimeStretch.hpp / ChatterboxConfig::speed).  In streaming mode a
+  // single stretcher instance threads the overlap-add state across chunks so
+  // the concatenated output has no per-chunk seams.
+  // Unset -> 1.0 (no rate change), preserving the raw model output for
+  // backward compatibility; callers opt in by passing an explicit speed.
+  const float speed = cfg_.speed.value_or(1.0f);
+  const bool stretch = speedActive(speed);
+
   const auto tStart = std::chrono::steady_clock::now();
+
+  // Streaming publishes its (already-stretched) audio per chunk via
+  // chunkCallback; sum the emitted samples here so the stats below use the
+  // real output length without re-stretching result.pcm.  The callback runs
+  // synchronously on this thread, so a plain counter is safe.
+  std::size_t streamedSamples = 0;
 
   tts_cpp::chatterbox::SynthesisResult result;
   try {
     if (wasStreaming) {
+      auto stretcher =
+          stretch ? std::make_shared<WsolaTimeStretch>(speed) : nullptr;
       result = engine->synthesize(
           text,
-          [&chunkCallback](const float* pcm, std::size_t samples,
-                           int chunkIndex, bool isLast) {
-            chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
+          [&chunkCallback, stretcher, &streamedSamples](
+              const float* pcm,
+              std::size_t samples,
+              int chunkIndex,
+              bool isLast) {
+            if (!stretcher) {
+              streamedSamples += samples;
+              chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
+              return;
+            }
+            std::vector<float> out = stretcher->feed(pcm, samples);
+            if (isLast) {
+              std::vector<float> tail = stretcher->flush();
+              out.insert(out.end(), tail.begin(), tail.end());
+            }
+            streamedSamples += out.size();
+            chunkCallback(pcmFloatToInt16(out), chunkIndex, isLast);
           });
     } else {
       result = engine->synthesize(text);
@@ -328,18 +384,30 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
                          std::string("engine.synthesize: ") + e.what());
   }
 
-  std::vector<int16_t> pcm = pcmFloatToInt16(result.pcm);
+  // Batch: build the PCM we return (stretched in-place if a speed is active).
+  // Streaming: the chunks were already published, so there is nothing to
+  // return — take the sample count straight from what the callback emitted
+  // rather than re-running a full-utterance WSOLA over result.pcm.
+  std::vector<int16_t> pcm;
+  std::size_t outSamples;
+  if (wasStreaming) {
+    outSamples = streamedSamples;
+  } else {
+    pcm = stretch ? pcmFloatToInt16(WsolaTimeStretch::apply(result.pcm, speed))
+                  : pcmFloatToInt16(result.pcm);
+    outSamples = pcm.size();
+  }
 
   const auto tEnd = std::chrono::steady_clock::now();
   const double elapsedSec =
       std::chrono::duration<double>(tEnd - tStart).count();
 
   totalTime_ = elapsedSec;
-  totalSamples_ = static_cast<int64_t>(pcm.size());
+  totalSamples_ = static_cast<int64_t>(outSamples);
   audioDurationMs_ = result.sample_rate > 0
-      ? (static_cast<double>(pcm.size()) * 1000.0 /
-         static_cast<double>(result.sample_rate))
-      : 0.0;
+                         ? (static_cast<double>(outSamples) * 1000.0 /
+                            static_cast<double>(result.sample_rate))
+                         : 0.0;
   realTimeFactor_ =
       audioDurationMs_ > 0 ? (elapsedSec * 1000.0) / audioDurationMs_ : 0.0;
   textLength_ = text.size();

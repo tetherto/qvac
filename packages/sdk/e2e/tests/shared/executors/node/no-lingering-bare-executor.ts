@@ -10,7 +10,7 @@ import {
   noLingeringBareSigterm,
   noLingeringBareClose,
   noLingeringBareIpcDisconnect,
-} from "../../no-lingering-bare-tests.js";
+} from "../../../no-lingering-bare-tests.js";
 
 type ShutdownMode = "sigterm" | "close" | "ipc-disconnect";
 
@@ -22,6 +22,7 @@ const POLL_INTERVAL_MS = 200;
 
 const consumerScriptPath = join(
   dirname(fileURLToPath(import.meta.url)),
+  "..",
   "..",
   "..",
   "utils",

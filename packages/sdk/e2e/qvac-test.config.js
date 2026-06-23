@@ -36,6 +36,16 @@ export default {
       include: ["./tests/**"],
       dependencies: "auto",
     },
+    electron: {
+      platforms: ["macos", "windows", "linux"],
+      entry: "./dist/tests/electron/consumer.js",
+      appDir: ".",
+      appName: "QVACSDKElectronE2E",
+      include: ["./dist/tests/**", "./fixtures/qvac.config.electron.json"],
+      dependencies: "auto",
+      packageManager: "npm",
+      packageScript: "package:electron",
+    },
     mobile: {
       platforms: ["ios", "android"],
       entry: "./dist/tests/mobile/consumer.js",

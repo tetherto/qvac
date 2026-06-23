@@ -12,6 +12,7 @@
     "example": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox-mtl": "bare examples/chatterbox-mtl-tts.js \"Hello from the multilingual Chatterbox engine.\"",
+    "example:chatterbox-adjust-speed": "bare examples/chatterbox-adjust-speed.js",
     "example:chatterbox-mtl-sweep": "bare examples/chatterbox-mtl-sweep-tts.js",
     "example:chatterbox-sentence-stream": "bare examples/chatterbox-sentence-stream-tts.js",
     "example:chatterbox-chunk-stream": "bare examples/chatterbox-chunk-stream-tts.js",
