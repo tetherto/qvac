@@ -35,9 +35,9 @@ std::string formatSeconds(float seconds) {
 
 ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     ParakeetModel& model,
-    std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> output_queue,
+    std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
     Config config)
-    : model_(model), output_queue_(std::move(output_queue)), config_(config) {
+    : model_(model), output_queue_(std::move(outputQueue)), config_(config) {
   if (model_.isSortformer()) {
     parakeet::SortformerStreamingOptions opts;
     opts.sample_rate    = config_.sampleRate;
@@ -57,9 +57,8 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     opts.spkcache_update_period = config_.spkCacheUpdatePeriod;
 
     diar_session_ = model_.createDuplexDiarizationSession(
-        opts,
-        [this](const parakeet::StreamingDiarizationSegment& seg) {
-          onDiarSegment_(seg);
+        opts, [this](const parakeet::StreamingDiarizationSegment& seg) {
+          onDiarSegment(seg);
         });
   } else {
     parakeet::StreamingOptions opts;
@@ -75,12 +74,11 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     opts.enable_energy_vad = config_.emitEnergyVad;
 
     asr_session_ = model_.createDuplexAsrSession(
-        opts, [this](const parakeet::StreamingSegment& seg) {
-          onAsrSegment_(seg);
-        });
+        opts,
+        [this](const parakeet::StreamingSegment& seg) { onAsrSegment(seg); });
   }
 
-  thread_ = std::thread([this]() { processLoop_(); });
+  thread_ = std::thread([this]() { processLoop(); });
 }
 
 ParakeetStreamingProcessor::~ParakeetStreamingProcessor() {
@@ -102,15 +100,16 @@ void ParakeetStreamingProcessor::appendAudio(std::vector<float>&& samples) {
 }
 
 void ParakeetStreamingProcessor::end() {
-  bool should_signal = false;
+  bool shouldSignal = false;
   {
     std::lock_guard<std::mutex> lk(mtx_);
     if (!ended_ && !cancelled_) {
       ended_        = true;
-      should_signal = true;
+      shouldSignal = true;
     }
   }
-  if (should_signal) cv_.notify_all();
+  if (shouldSignal)
+    cv_.notify_all();
   // join() runs at most once across end() / cancel() / dtor's cancel(),
   // even when they race on different threads. Without this guard the
   // loser observed thread_.joinable() == true and called join() on an
@@ -121,15 +120,15 @@ void ParakeetStreamingProcessor::end() {
 }
 
 void ParakeetStreamingProcessor::cancel() {
-  bool should_signal = false;
+  bool shouldSignal = false;
   {
     std::lock_guard<std::mutex> lk(mtx_);
     if (!cancelled_) {
       cancelled_    = true;
-      should_signal = true;
+      shouldSignal = true;
     }
   }
-  if (should_signal) {
+  if (shouldSignal) {
     try {
       if (asr_session_)  asr_session_->cancel();
       if (diar_session_) diar_session_->cancel();
@@ -142,7 +141,7 @@ void ParakeetStreamingProcessor::cancel() {
   });
 }
 
-void ParakeetStreamingProcessor::onAsrSegment_(
+void ParakeetStreamingProcessor::onAsrSegment(
     const parakeet::StreamingSegment& seg) {
   if (seg.text.empty() && !seg.is_eou_boundary) return;
   Transcript t;
@@ -155,7 +154,7 @@ void ParakeetStreamingProcessor::onAsrSegment_(
   seg_buffer_.push_back(std::move(t));
 }
 
-void ParakeetStreamingProcessor::onDiarSegment_(
+void ParakeetStreamingProcessor::onDiarSegment(
     const parakeet::StreamingDiarizationSegment& seg) {
   if (seg.speaker_id < 0) return;
   Transcript t;
@@ -170,7 +169,7 @@ void ParakeetStreamingProcessor::onDiarSegment_(
   seg_buffer_.push_back(std::move(t));
 }
 
-void ParakeetStreamingProcessor::emitPending_() {
+void ParakeetStreamingProcessor::emitPending() {
   if (seg_buffer_.empty()) return;
   std::vector<Transcript> batch;
   batch.swap(seg_buffer_);
@@ -183,7 +182,7 @@ void ParakeetStreamingProcessor::emitPending_() {
   }
 }
 
-void ParakeetStreamingProcessor::processLoop_() {
+void ParakeetStreamingProcessor::processLoop() {
   while (true) {
     std::vector<float> work;
     bool finalising = false;
@@ -225,7 +224,7 @@ void ParakeetStreamingProcessor::processLoop_() {
         }
         break;
       }
-      emitPending_();
+      emitPending();
     }
 
     if (finalising) {
@@ -238,7 +237,7 @@ void ParakeetStreamingProcessor::processLoop_() {
                  "ParakeetStreamingProcessor: finalize failed: ") +
                  e.what());
       }
-      emitPending_();
+      emitPending();
       break;
     }
   }
