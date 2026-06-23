@@ -646,7 +646,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
   common_batch_add(
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(modelCtx_.vocab) : eot,
-      nPast_++,
+      nPast_,
       {seqId_},
       true);
   if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -654,6 +654,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
   }
+  ++nPast_;
 }
 
 bool TextLlmContext::generateResponse(
@@ -708,7 +709,7 @@ bool TextLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, step.token, nPast_++, {seqId_}, true);
+    common_batch_add(*batch, step.token, nPast_, {seqId_}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -716,6 +717,7 @@ bool TextLlmContext::generateResponse(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    ++nPast_;
   }
 
   onGenerationFinished(outputCallback);
@@ -1314,12 +1316,14 @@ bool TextLlmContext::handleReasoningEOS(
 
   // Decode closing tag
   common_batch_clear(batch);
-  common_batch_add(batch, tokenId, nPast++, {seqId_}, true);
+  common_batch_add(batch, tokenId, nPast, {seqId_}, true);
   if (llama_decode(modelCtx_.lctx, batch) != 0) {
     QLOG_IF(
         Priority::ERROR,
         "[TextLlm] Failed to decode closing tag during replacement\n");
+    return true;
   }
+  ++nPast;
 
   // Close marker just committed — record span end before injecting
   // the trailing newlines (they are excluded from the span).
@@ -1334,14 +1338,16 @@ bool TextLlmContext::handleReasoningEOS(
     for (int i = 0; i < 2; i++) {
       common_batch_clear(batch);
       common_batch_add(
-          batch, reasoningState_.cached_newline_token, nPast++, {seqId_}, true);
+          batch, reasoningState_.cached_newline_token, nPast, {seqId_}, true);
 
       if (llama_decode(modelCtx_.lctx, batch) != 0) {
         QLOG_IF(
             Priority::ERROR,
             "[TextLlm] Failed to decode newline token during forced "
             "injection\n");
+        break;
       }
+      ++nPast;
 
       std::string newlineStr = common_token_to_piece(
           modelCtx_.lctx,
