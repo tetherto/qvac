@@ -108,3 +108,37 @@ TEST(WsolaTimeStretch, StreamingMatchesBatchExactly) {
     ASSERT_FLOAT_EQ(streamed[i], batch[i]) << "mismatch at sample " << i;
   }
 }
+
+TEST(WsolaTimeStretch, StreamingMemoryStaysBounded) {
+  // Stream a long signal in small chunks and confirm resident memory tracks
+  // O(chunk + window), not O(total duration): consumed input and emitted
+  // output prefixes must be dropped after each feed().
+  const auto in = sine(180.0f, 10.0f); // 240k samples @ 24 kHz
+  const float speed = 0.8f;
+  const std::size_t chunk = 2400; // ~0.1 s
+
+  WsolaTimeStretch streamer(speed);
+  std::vector<float> streamed;
+  std::size_t maxResident = 0;
+  for (std::size_t off = 0; off < in.size(); off += chunk) {
+    const std::size_t n = std::min(chunk, in.size() - off);
+    const auto part = streamer.feed(in.data() + off, n);
+    streamed.insert(streamed.end(), part.begin(), part.end());
+    maxResident = std::max(maxResident, streamer.residentSamples());
+  }
+  const auto tail = streamer.flush();
+  streamed.insert(streamed.end(), tail.begin(), tail.end());
+
+  // A non-compacting implementation would hold the whole utterance
+  // (~240k in + ~300k out). Bound generously at one chunk plus a few frames'
+  // worth of window/overlap; this is ~20x below the total.
+  EXPECT_LT(maxResident, static_cast<std::size_t>(16384))
+      << "resident memory grew with utterance length (compaction broken)";
+
+  // Compaction must not change the result.
+  const auto batch = WsolaTimeStretch::apply(in, speed);
+  ASSERT_EQ(streamed.size(), batch.size());
+  for (std::size_t i = 0; i < batch.size(); ++i) {
+    ASSERT_FLOAT_EQ(streamed[i], batch[i]) << "mismatch at sample " << i;
+  }
+}
