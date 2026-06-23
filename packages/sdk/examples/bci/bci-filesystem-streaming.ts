@@ -13,6 +13,7 @@ import {
   unloadModel,
   bciTranscribeStream,
   BCI_WINDOWED,
+  BCI_EMBEDDER,
 } from "@qvac/sdk";
 import { readFileSync } from "fs";
 
@@ -39,6 +40,7 @@ try {
   const modelId = await loadModel({
     modelSrc: BCI_WINDOWED,
     modelConfig: {
+      embedderModelSrc: BCI_EMBEDDER,
       whisperConfig: {
         language: "en",
         n_threads: 4,

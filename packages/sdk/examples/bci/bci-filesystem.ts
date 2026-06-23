@@ -7,7 +7,13 @@
  *
  * Usage: bun run examples/bci/bci-filesystem.ts <neural-bin-file-path>
  */
-import { loadModel, unloadModel, bciTranscribe, BCI_WINDOWED } from "@qvac/sdk";
+import {
+  loadModel,
+  unloadModel,
+  bciTranscribe,
+  BCI_WINDOWED,
+  BCI_EMBEDDER,
+} from "@qvac/sdk";
 
 const args = process.argv.slice(2);
 
@@ -25,6 +31,7 @@ try {
   const modelId = await loadModel({
     modelSrc: BCI_WINDOWED,
     modelConfig: {
+      embedderModelSrc: BCI_EMBEDDER,
       whisperConfig: {
         language: "en",
         n_threads: 4,

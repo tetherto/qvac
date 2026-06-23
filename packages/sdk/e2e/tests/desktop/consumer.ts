@@ -36,6 +36,7 @@ import {
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED,
+  BCI_EMBEDDER,
 } from "@qvac/sdk";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -323,6 +324,7 @@ resources.define("bci", {
   constant: BCI_WINDOWED,
   type: "bci-whispercpp-transcription",
   config: {
+    embedderModelSrc: BCI_EMBEDDER,
     whisperConfig: { language: "en", temperature: 0.0 },
     miscConfig: { caption_enabled: false },
     // Sample 2 (neural-not-too-controversial.bin) was recorded on session
