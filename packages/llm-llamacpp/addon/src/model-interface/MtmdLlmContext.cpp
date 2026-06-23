@@ -335,7 +335,7 @@ bool MtmdLlmContext::evalMessageWithTools(
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
       current_.pos = outcome.newNPast;
-      current_.cacheTokens -= outcome.discarded;
+      refreshCurrentCacheTokensFromMemory();
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
@@ -429,6 +429,19 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
   }
 }
 
+void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
+  auto* mem = llama_get_memory(modelCtx_.lctx);
+  if (mem == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(ContextSlideFailed),
+        "[MtmdLlm] llama memory is null while refreshing cache token count");
+  }
+
+  current_.cacheTokens =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId_));
+}
+
 void MtmdLlmContext::applyContextDiscard() {
   auto outcome = trySlideGeneration(
       lctx_,
@@ -440,7 +453,7 @@ void MtmdLlmContext::applyContextDiscard() {
       current_.cacheTokens);
   if (outcome.kind == ContextSlideOutcome::Kind::Slid) {
     current_.pos = outcome.newNPast;
-    current_.cacheTokens -= outcome.discarded;
+    refreshCurrentCacheTokensFromMemory();
     ++nSlides_;
     QLOG_IF(
         Priority::DEBUG,
@@ -748,9 +761,8 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   auto* mem = llama_get_memory(lctx_);
   llama_memory_seq_rm(mem, -1, current_.pos - tokensToRemove, -1);
 
-  // Decrement the token count by the number of tokens removed
   current_.pos -= tokensToRemove;
-  current_.cacheTokens -= std::min(tokensToRemove, current_.cacheTokens);
+  refreshCurrentCacheTokensFromMemory();
 
   // Note: The sampler doesn't have an "undo" function, so we leave it as is.
   // The sampler maintains its own history, but the removed tokens won't affect

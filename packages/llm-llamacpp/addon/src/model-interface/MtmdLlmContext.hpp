@@ -204,6 +204,7 @@ private:
 
   void flushPendingUtf8ToCallback(
       const std::function<void(const std::string&)>& outputCallback);
+  void refreshCurrentCacheTokensFromMemory();
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
 
