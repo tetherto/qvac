@@ -4,9 +4,10 @@
 # assembly gate runs on every PR via "SDK Pod Checks" (test:bare); this is the
 # heavy leg — it downloads models and needs native addon prebuilds — so it only
 # runs when:
-#   - "test-e2e-smoke" or "test-e2e-full" label applied, or
-#   - a PR targeting a release-* branch touches packages/sdk/ or packages/bare-sdk/.
-# bare-sdk has a single curated suite, so smoke and full run the same thing.
+#   - the "test-e2e-full" label is applied (bare-sdk rides along with the SDK
+#     full suite rather than keeping its own smoke/full split), or
+#   - a PR targeting a release-* branch touches packages/sdk/ or packages/bare-sdk/, or
+#   - dispatched manually (workflow_dispatch).
 #
 # Mirrors the SDK suite's gating (on-pr-test-sdk.yml): pull_request_target for
 # registry/secret access, with label-gate (a trusted member applied the
@@ -89,7 +90,7 @@ jobs:
           TARGET="${{ github.base_ref }}"
 
           if [ "$EVENT" = "labeled" ]; then
-            if [ "$LABEL" = "test-e2e-smoke" ] || [ "$LABEL" = "test-e2e-full" ]; then
+            if [ "$LABEL" = "test-e2e-full" ]; then
               echo "should-run=true" >> "$GITHUB_OUTPUT"
             else
               echo "::notice::Ignoring unrelated label: $LABEL"

@@ -11,7 +11,7 @@ Tests import the package by its published name (`@qvac/bare-sdk`, `@qvac/bare-sd
 | Lane | Script | Models / addons | Where it runs |
 |------|--------|-----------------|---------------|
 | Assembly gate | `test:bare` | none | every PR (cheap) |
-| Inference e2e | `test:bare:e2e` | downloads models, needs addon prebuilds | label-gated CI (`test-e2e-smoke` or `test-e2e-full`) |
+| Inference e2e | `test:bare:e2e` | downloads models, needs addon prebuilds | label-gated CI (`test-e2e-full`) |
 
 `test:bare` runs only `assembly.test.ts`: it confirms an SDK call before any `registerPlugin()` fails fast, with **no** addon install or model download.
 
@@ -47,4 +47,4 @@ Addons are installed with `--no-save` on purpose: `@qvac/bare-sdk` does not decl
 
 The assembly lane runs on every PR via the "SDK Pod Checks" rollup: `bare-sdk` is registered in `.github/sdk-pod-checks.json` with `tests_bare: true`, so the harness runs `test:bare`. Its `sdk-source:workspace` script (`scripts/build-sibling-sdk.mjs`) builds `../sdk/dist` first, which `bundle-from-sdk` copies from.
 
-The inference lane runs as a label-gated job in `.github/workflows/on-pr-bare-sdk-e2e.yml` on `qvac-ubuntu2204-x64-gpu` (Linux x64 prebuilds verified present; reuses the desktop model cache). It mirrors the SDK suite's gating (`on-pr-test-sdk.yml`): `pull_request_target` for registry access, guarded by `label-gate` (`verified`) + `authorize-pr` (`safe-to-test`), and runs when a `test-e2e-smoke` or `test-e2e-full` label is applied (or on a release-branch PR). The job checks out PR head, builds the sibling sdk, installs the addon prebuilds with `--no-save`, and runs `test:bare:e2e`.
+The inference lane runs as a label-gated job in `.github/workflows/on-pr-bare-sdk-e2e.yml` on `qvac-ubuntu2204-x64-gpu` (Linux x64 prebuilds verified present; reuses the desktop model cache). It mirrors the SDK suite's gating (`on-pr-test-sdk.yml`): `pull_request_target` for registry access, guarded by `label-gate` (`verified`) + `authorize-pr` (`safe-to-test`), and runs when the `test-e2e-full` label is applied (bare-sdk rides along with the SDK full suite rather than keeping its own smoke/full split), on a release-branch PR, or via manual `workflow_dispatch`. The job checks out PR head, builds the sibling sdk, installs the addon prebuilds with `--no-save`, and runs `test:bare:e2e`.
