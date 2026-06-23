@@ -439,7 +439,10 @@ bool MtmdLlmContext::evalMessageWithTools(
     if (stopGeneration_.load()) {
       llama_pos totalDelta = nPastLocal - current_.pos;
       current_.pos = nPastLocal;
-      removeLastNTokens(totalDelta);
+      const llama_pos removedTokens = removeLastNTokens(totalDelta);
+      if (removedTokens == 0 && totalDelta > 0) {
+        refreshCurrentCacheTokensFromMemory();
+      }
       stopGeneration_.store(false);
       return false;
     }
@@ -460,7 +463,7 @@ bool MtmdLlmContext::evalMessageWithTools(
     }
   }
   current_.pos = nPastLocal;
-  current_.cacheTokens += nTokens;
+  refreshCurrentCacheTokensFromMemory();
 
   if (isFirstMsg) {
     protectedPrefix_ = current_;
@@ -539,7 +542,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
   common_batch_add(
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(modelCtx_.vocab) : eot,
-      current_.pos++,
+      current_.pos,
       {seqId_},
       true);
   if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -547,6 +550,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
   }
+  ++current_.pos;
   ++current_.cacheTokens;
 }
 
@@ -627,8 +631,8 @@ bool MtmdLlmContext::generateResponse(
     }
 
     // Reasoning channel detection. `current_.pos` here reflects the
-    // cache state BEFORE this token is committed (it's incremented in
-    // common_batch_add below), so the open-marker math mirrors
+    // cache state BEFORE this token is committed (it's incremented after
+    // successful decode below), so the open-marker math mirrors
     // TextLlmContext: the first marker piece is at
     // `current_.pos - (openTokenCount - 1)`.
     if (reasoningEnabled_) {
@@ -688,13 +692,14 @@ bool MtmdLlmContext::generateResponse(
       }
 
       common_batch_clear(*batch);
-      common_batch_add(*batch, tokenId, current_.pos++, {seqId_}, true);
+      common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
       if (llama_decode(modelCtx_.lctx, *batch) != 0) {
         const char* errorMsg =
             "[MtmdLlm] failed to decode substituted reasoning close tag\n";
         throw qvac_errors::StatusError(
             ADDON_ID, toString(FailedToDecode), errorMsg);
       }
+      ++current_.pos;
       ++current_.cacheTokens;
       capturePendingThinkClose();
       flushPendingUtf8ToCallback(outputCallback);
@@ -711,7 +716,7 @@ bool MtmdLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, tokenId, current_.pos++, {seqId_}, true);
+    common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
 
     // eval the token
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -719,6 +724,7 @@ bool MtmdLlmContext::generateResponse(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    ++current_.pos;
     ++current_.cacheTokens;
     // Close-marker token (if any was sampled this iteration) is now
     // committed; capture the span end.
