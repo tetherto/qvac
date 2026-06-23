@@ -8,11 +8,12 @@ name: Weekend Mobile Report GC
 # NOT replace that: it only sweeps up issues that were clearly abandoned, so we
 # don't slowly accumulate untouched reports if a week gets missed.
 #
-# Policy (activity measured by issue `updated_at`, so any comment / label /
-# manual touch resets the clock):
-#   - untouched >= stale_days  -> add a `stale` label + a nudge comment
-#   - untouched >= close_days  -> close (state_reason: not_planned)
-#   - touched again while stale -> `stale` label removed automatically
+# Policy (inactivity measured from the last *human* timeline activity — this
+# job's own stale comment / label writes are ignored, exactly like
+# actions/stale, so the bot can never reset its own clock):
+#   - idle >= stale_days  -> add a `stale` label + a nudge comment
+#   - idle >= close_days  -> close (state_reason: not_planned)
+#   - human touches it while stale -> `stale` label removed automatically
 #
 # Defaults (stale 42d / close 60d) keep the normal manual review+close path
 # untouched and only catch genuinely forgotten issues. Run it manually with
@@ -53,12 +54,18 @@ jobs:
   gc:
     name: Sweep stale weekly-mobile-report issues
     runs-on: ubuntu-latest
+    # Paginated listForRepo + per-issue timeline reads and writes can hang on
+    # API trouble; bound the job (devops/github-actions.mdc § Failure handling).
+    timeout-minutes: 10
     steps:
       - name: Mark stale / close abandoned report issues
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
         env:
           LABEL: weekly-mobile-report
           STALE_LABEL: stale
+          # Login that this job's own writes (label add/remove, comments) appear
+          # as in the issue timeline — its activity is excluded from "idle".
+          BOT_ACTOR: github-actions[bot]
           STALE_DAYS: ${{ github.event.inputs.stale_days || '42' }}
           CLOSE_DAYS: ${{ github.event.inputs.close_days || '60' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
@@ -66,6 +73,7 @@ jobs:
           script: |
             const label = process.env.LABEL
             const staleLabel = process.env.STALE_LABEL
+            const botActor = process.env.BOT_ACTOR
             const staleDays = Number(process.env.STALE_DAYS)
             const closeDays = Number(process.env.CLOSE_DAYS)
             const dryRun = process.env.DRY_RUN === 'true'
@@ -79,6 +87,29 @@ jobs:
             const DAY_MS = 24 * 60 * 60 * 1000
             const now = Date.now()
             core.info(`GC config: label=${label} stale>=${staleDays}d close>=${closeDays}d dryRun=${dryRun}`)
+
+            // Idle time is measured from the last *human* timeline activity, not
+            // `issue.updated_at`: this job's own writes (the stale comment and
+            // the label add/remove) bump `updated_at`, which would un-stale an
+            // issue on the next run and stop it ever reaching close_days. We walk
+            // the timeline and ignore anything performed by botActor, mirroring
+            // how actions/stale ignores its own actions.
+            async function lastHumanActivityMs(issue) {
+              let last = new Date(issue.created_at).getTime()
+              const events = await github.paginate(
+                github.rest.issues.listEventsForTimeline,
+                { owner, repo, issue_number: issue.number, per_page: 100 }
+              )
+              for (const ev of events) {
+                const actor = ev.actor?.login || ev.user?.login
+                if (actor === botActor) continue       // our own GC writes don't count
+                const at = ev.created_at || ev.submitted_at
+                if (!at) continue
+                const ts = new Date(at).getTime()
+                if (ts > last) last = ts
+              }
+              return last
+            }
 
             // Make sure the `stale` label exists so addLabels can't 404.
             if (!dryRun) {
@@ -107,7 +138,7 @@ jobs:
               // Pull requests are also "issues" in the API; never touch them.
               if (issue.pull_request) continue
 
-              const ageDays = (now - new Date(issue.updated_at).getTime()) / DAY_MS
+              const ageDays = (now - await lastHumanActivityMs(issue)) / DAY_MS
               const isStale = issue.labels.some(l => (l.name || l) === staleLabel)
               const tag = `#${issue.number} (idle ${ageDays.toFixed(1)}d)`
 
