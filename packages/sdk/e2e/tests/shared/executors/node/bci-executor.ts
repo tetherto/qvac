@@ -6,8 +6,8 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
-import { bciTests } from "../../bci-tests.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
+import { bciTests } from "../../../bci-tests.js";
 
 // Feed the neural buffer to the duplex session in fixed-size chunks to
 // exercise the sliding-window driver across multiple writes.

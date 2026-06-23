@@ -49,7 +49,7 @@ npm init -y
 Install dependencies:
 
 ```bash
-npm i @qvac/dl-filesystem @qvac/llm-llamacpp bare-process
+npm i @qvac/llm-llamacpp bare-path bare-process
 ```
 </Step>
 
@@ -68,40 +68,36 @@ Create `index.js`:
 
 <WrapCode>
 
-```js title="index.js" lineNumbers'use strict'
+```js title="index.js" lineNumbers
+'use strict'
 
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const process = require('bare-process')
 
 async function main () {
   const modelName = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
-  const dirPath = './models'
+  const dirPath = path.resolve('./models')
+  const modelPath = path.join(dirPath, modelName)
 
-  // 1. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 2. Configuring model settings
-  const args = {
-    loader: fsDL,
-    opts: { stats: true },
-    logger: console,
-    diskPath: dirPath,
-    modelName
-  }
-
+  // 1. Configuring model settings
   const config = {
     device: 'gpu',
     gpu_layers: '999',
     ctx_size: '1024'
   }
 
-  // 3. Loading model
-  const model = new LlmLlamacpp(args, config)
+  // 2. Loading model
+  const model = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config,
+    logger: console,
+    opts: { stats: true }
+  })
   await model.load()
 
   try {
-    // 4. Running inference with conversation prompt
+    // 3. Running inference with conversation prompt
     const prompt = [
       {
         role: 'system',
@@ -139,9 +135,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 5. Cleaning up resources
+    // 4. Cleaning up resources
     await model.unload()
-    await fsDL.close()
   }
 }
 
@@ -173,45 +168,52 @@ bare index.js
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
 ```
 
-### 2. Create a Data Loader
+### 2. Create Local Model Paths
 
-Data Loaders abstract the way model files are accessed. Use a `FileSystemDataLoader` to load model files from your local file system. Models can be downloaded directly from HuggingFace.
+The addon reads GGUF files directly from disk. Download the model, then pass absolute local paths to `files.model`.
 
 ```js
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 
-const dirPath = './models'
+const dirPath = path.resolve('./models')
 const modelName = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
 
-const fsDL = new FilesystemDL({ dirPath })
+const modelPath = path.join(dirPath, modelName)
 ```
 
 ### 3. Create the `args` obj
 
 ```js
+// a minimal config; see step 4 for all available options
+const config = {
+  gpu_layers: '99',
+  ctx_size: '1024',
+  device: 'cpu'
+}
+
 const args = {
-  loader: fsDL,
+  files: {
+    model: [modelPath],
+    // projectionModel: path.join(dirPath, 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf') // for multimodal support pass the projection model path
+  },
+  config,
   opts: { stats: true },
-  logger: console,
-  diskPath: dirPath,
-  modelName,
-  // projectionModel: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf' // for multimodal support you need to pass the projection model name
+  logger: console
 }
 ```
 
 The `args` obj contains the following properties:
 
-* `loader`: The Data Loader instance from which the model file will be streamed.
-* `logger`: This property is used to create a `QvacLogger` instance, which handles all logging functionality. 
+* `files.model`: Required. An array of absolute paths to the GGUF model file(s) to load. For sharded models, provide every shard and companion file in order.
+* `files.projectionModel`: Optional. Absolute path to the projection model file. This is required for multimodal support.
+* `config`: The model configuration object.
+* `logger`: This property is used to create a `QvacLogger` instance, which handles all logging functionality.
 * `opts.stats`: This flag determines whether to calculate inference stats.
-* `diskPath`: The local directory where the model file will be downloaded to.
-* `modelName`: The name of model file in the Data Loader.
-* `projectionModel`: The name of the projection model file in the Data Loader. This is required for multimodal support.
 
 ### 4. Create the `config` obj
 
 The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-*All parameters must by strings.*
+*All parameters must be strings.*
 
 ```js
 // an example of possible configuration
@@ -257,7 +259,7 @@ const config = {
 ### 5. Create Model Instance
 
 ```js
-const model = new LlmLlamacpp(args, config)
+const model = new LlmLlamacpp(args)
 ```
 
 ### 6. Load Model
@@ -266,29 +268,7 @@ const model = new LlmLlamacpp(args, config)
 await model.load()
 ```
 
-_Optionally_ you can pass the following parameters to tweak the loading behaviour.
-* `close?`: This boolean value determines whether to close the Data Loader after loading. Defaults to `true`
-* `reportProgressCallback?`: A callback function which gets called periodically with progress updates. It can be used to display overall progress percentage.
-
-_For example:_
-
-```js
-await model.load(false, progress => process.stdout.write(`\rOverall Progress: ${progress.overallProgress}%`))
-```
-
-**Progress Callback Data**
-
-The progress callback receives an object with the following properties:
-
-| Property            | Type   | Description                             |
-|---------------------|--------|-----------------------------------------|
-| `action`            | string | Current operation being performed       |
-| `totalSize`         | number | Total bytes to be loaded                |
-| `totalFiles`        | number | Total number of files to process        |
-| `filesProcessed`    | number | Number of files completed so far        |
-| `currentFile`       | string | Name of file currently being processed  |
-| `currentFileProgress` | string | Percentage progress on current file     |
-| `overallProgress`   | string | Overall loading progress percentage     |
+Loads the model file(s) passed in `files.model` and activates the native addon. If a projection model was provided (`files.projectionModel`), it is loaded as part of the same step.
 
 ### 7. Run Inference
 
@@ -327,7 +307,6 @@ Unload the model when finished:
 ```javascript
 try {
   await model.unload()
-  await fsDL.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }

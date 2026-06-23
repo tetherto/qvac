@@ -2,12 +2,12 @@ import { transcribeStream } from "@qvac/sdk";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { TestResult } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
 import {
   runTranscribeStreamEventsTest,
   type TranscribeStreamEventsParams,
-} from "../../shared/transcribe-stream-events-runner.js";
-import { transcribeStreamEventsTests } from "../../transcribe-stream-events-tests.js";
+} from "../../transcribe-stream-events-runner.js";
+import { transcribeStreamEventsTests } from "../../../transcribe-stream-events-tests.js";
 
 interface BaseParams extends TranscribeStreamEventsParams {
   audioFileName: string;

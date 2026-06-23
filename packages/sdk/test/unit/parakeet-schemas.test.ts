@@ -73,10 +73,7 @@ test("parakeetLoadConfigSchema: still rejects truly unknown fields under .strict
   const result = parakeetLoadConfigSchema.safeParse({
     notAParakeetField: "anything",
   });
-  t.ok(
-    !result.success,
-    "non-legacy unknown fields remain strictly rejected",
-  );
+  t.ok(!result.success, "non-legacy unknown fields remain strictly rejected");
 });
 
 test("parakeetRuntimeConfigSchema: accepts streaming + AOSC knobs", (t) => {
@@ -92,6 +89,15 @@ test("parakeetRuntimeConfigSchema: accepts streaming + AOSC knobs", (t) => {
   });
   t.is(result.streaming, true);
   t.is(result.streamingSpkCacheLen, 188);
+});
+
+test("parakeetRuntimeConfigSchema: accepts backend loader directories", (t) => {
+  const result = parakeetRuntimeConfigSchema.parse({
+    backendsDir: "/tmp/qvac-backends",
+    openclCacheDir: "/tmp/qvac-opencl-cache",
+  });
+  t.is(result.backendsDir, "/tmp/qvac-backends");
+  t.is(result.openclCacheDir, "/tmp/qvac-opencl-cache");
 });
 
 test("parakeetRuntimeConfigSchema: rejects negative streamingSpkCacheLen", (t) => {
