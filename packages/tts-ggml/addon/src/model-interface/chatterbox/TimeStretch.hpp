@@ -164,8 +164,15 @@ private:
       }
 
       if (!finalPass) {
+        // Need enough input that BOTH reads for this frame hit only real
+        // samples (a ranges up to anaIdeal_ + search_):
+        //   olaAddFrame(a): in[a .. a+N_)
+        //   setTarget(a):   in[a+Hs_ .. a+Hs_+N_)   <- the +Hs_ read-ahead
+        // Gating on the larger setTarget extent keeps the similarity target
+        // from being zero-filled at a chunk boundary, so streamed output is
+        // bit-identical to batch (no seams).
         const std::size_t needHi =
-            static_cast<std::size_t>(anaIdeal_ + search_ + N_);
+            static_cast<std::size_t>(anaIdeal_ + search_ + Hs_ + N_);
         if (inBuf_.size() < needHi)
           break; // wait for more input
       } else if (anaIdeal_ >= static_cast<long>(inLenReal_)) {

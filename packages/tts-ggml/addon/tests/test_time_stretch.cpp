@@ -80,7 +80,7 @@ TEST(WsolaTimeStretch, PreservesPitchWhenSlowing) {
   EXPECT_NEAR(got, expected, 8);
 }
 
-TEST(WsolaTimeStretch, StreamingMatchesBatchLength) {
+TEST(WsolaTimeStretch, StreamingMatchesBatchExactly) {
   const auto in = sine(180.0f, 1.3f);
   const float speed = 0.8f;
 
@@ -98,10 +98,13 @@ TEST(WsolaTimeStretch, StreamingMatchesBatchLength) {
   const auto tail = streamer.flush();
   streamed.insert(streamed.end(), tail.begin(), tail.end());
 
-  // Both paths consume the same input at the same hop, so total length must
-  // agree to within a frame regardless of how the input was chunked.
-  EXPECT_NEAR(
-      static_cast<double>(streamed.size()),
-      static_cast<double>(batch.size()),
-      2048.0);
+  // Chunking must not change the result at all: the per-frame input gate
+  // ensures every frame (and its similarity target) sees real samples, never
+  // a zero-filled chunk-boundary tail. So streamed output is bit-identical to
+  // batch, not merely the same length. (A length-only check would miss the
+  // boundary-seam regression this guards against.)
+  ASSERT_EQ(streamed.size(), batch.size());
+  for (std::size_t i = 0; i < batch.size(); ++i) {
+    ASSERT_FLOAT_EQ(streamed[i], batch[i]) << "mismatch at sample " << i;
+  }
 }
