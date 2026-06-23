@@ -333,12 +333,12 @@ void MtmdLlmContext::tokenizeChat(
 
       if (resNoTools == 0) {
         tools_.onTokenize(
-            mtmd_helper_get_n_pos(chunks.ptr.get()),
-            mtmd_helper_get_n_pos(chunksNoTools.ptr.get()));
+            mtmd_helper_get_n_tokens(chunks.ptr.get()),
+            mtmd_helper_get_n_tokens(chunksNoTools.ptr.get()));
       }
     }
   } else {
-    tools_.onTokenize(mtmd_helper_get_n_pos(chunks.ptr.get()), 0);
+    tools_.onTokenize(mtmd_helper_get_n_tokens(chunks.ptr.get()), 0);
   }
 
   resetMedia();
