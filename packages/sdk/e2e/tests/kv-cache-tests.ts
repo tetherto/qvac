@@ -205,6 +205,7 @@ export const kvCacheRemoveThinkingCompaction: TestDefinition = {
     ],
   },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "tools", estimatedDurationMs: 180000 },
 };
 
