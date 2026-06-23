@@ -159,6 +159,7 @@ function normalizeDesktopRecord (report, sourceFile) {
     quant,
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
+    gpuModel: (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null,
     version: report.addonVersion || '',
     meanRtf: Number(rtf.mean),
     stddev: Number(rtf.stddev),
@@ -186,6 +187,7 @@ function normalizeManualRecord (record, sourceFile) {
     quant: record.quant || quantFromName(record.dirName) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    gpuModel: record.gpuModel || record.gpu_model || null,
     version: record.version || '',
     meanRtf: Number(record.meanRtf),
     stddev: Number(record.stddev),
@@ -279,6 +281,7 @@ function normalizeMobileRecords (report, sourceFile) {
       quant: values.quant || '',
       gpu: values.provider,
       backend: normalizeBackend(platformFamily, useGPU),
+      gpuModel: device.gpu || null,
       version: report.addonVersion || '',
       meanRtf: mean(values.rtf),
       stddev: stddev(values.rtf),
@@ -433,12 +436,12 @@ function renderMarkdown (records) {
 
   lines.push('## Parakeet Performance Findings')
   lines.push('')
-  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Notes |')
-  lines.push('|--------|--------|----------|-------|-------|-----|---------|----------|----------|-----|-----|----------------|-------|')
+  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | GPU Model | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Notes |')
+  lines.push('|--------|--------|----------|-------|-------|-----|---------|-----------|----------|----------|-----|-----|----------------|-------|')
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${record.gpuModel || '-'} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
     )
   }
 
@@ -477,6 +480,7 @@ function renderHtml (records) {
       record.quant || '-',
       record.gpu,
       record.backend,
+      record.gpuModel || '-',
       formatNumber(record.meanRtf),
       formatNumber(record.stddev),
       formatNumber(record.p50),
@@ -529,6 +533,7 @@ function renderHtml (records) {
     '        <th>Quant</th>',
     '        <th>GPU</th>',
     '        <th>Backend</th>',
+    '        <th>GPU Model</th>',
     '        <th>Mean RTF</th>',
     '        <th>± Stddev</th>',
     '        <th>P50</th>',

@@ -251,6 +251,8 @@ class TTSGgml {
       voiceDir,
       seed,
       nGpuLayers,
+      nCtx,
+      kvCacheType,
       threads,
       streamChunkTokens,
       streamFirstChunkTokens,
@@ -355,6 +357,8 @@ class TTSGgml {
     this._voiceDir = voiceDir
     this._seed = seed
     this._nGpuLayers = nGpuLayers
+    this._nCtx = nCtx
+    this._kvCacheType = kvCacheType
     this._threads = threads
     this._streamChunkTokens = streamChunkTokens
     this._streamFirstChunkTokens = streamFirstChunkTokens
@@ -413,9 +417,8 @@ class TTSGgml {
     // Default GPU off only when neither knob is set, for every engine. A
     // caller passing nGpuLayers alone keeps it (no silent conflict with the
     // JS-side default). Supertonic GPU intent now flows through to tts-cpp on
-    // GPU-capable hosts (Metal / Vulkan / CUDA); on Android it is forced back
-    // to CPU at the native engine boundary (SupertonicModel::loadLocked) until
-    // the Adreno OpenCL/Vulkan path stabilizes.
+    // GPU-capable hosts (Metal / Vulkan / CUDA), including Android, where
+    // tts-cpp picks the GPU backend per its per-vendor allowlist.
     if (this._config.useGPU === undefined && this._nGpuLayers == null) {
       this._config.useGPU = false
     }
@@ -802,6 +805,8 @@ class TTSGgml {
     }
     if (this._seed != null) params.seed = this._seed | 0
     if (this._nGpuLayers != null) params.nGpuLayers = this._nGpuLayers | 0
+    if (this._nCtx != null) params.nCtx = this._nCtx | 0
+    if (this._kvCacheType != null) params.kvCacheType = String(this._kvCacheType)
     if (this._threads != null) params.threads = this._threads | 0
     if (this._streamChunkTokens != null) params.streamChunkTokens = this._streamChunkTokens | 0
     if (this._streamFirstChunkTokens != null) {

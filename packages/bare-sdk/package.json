@@ -130,10 +130,6 @@
     }
   },
   "imports": {
-    "#polyfill-bare-globals": {
-      "bare": "./dist/_sdk/polyfills/bare-globals.js",
-      "default": "./dist/_sdk/polyfills/bare-globals.noop.js"
-    },
     "#rpc": "./dist/_sdk/client/rpc/bare-client.js"
   },
   "files": [
@@ -163,13 +159,14 @@
     "@qvac/registry-client": "^0.6.0",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.15.0",
+    "bare-env": "^3.0.0",
     "bare-fetch": "^3.0.1",
     "bare-fs": "^4.5.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
     "bare-path": "^3.0.1",
-    "bare-process": "^4.2.2",
     "bare-rpc": "^1.3.2",
+    "bare-signals": "^4.2.0",
     "bare-stream": "^2.7.0",
     "bare-zlib": "^1.3.1",
     "corestore": "^7.4.5",

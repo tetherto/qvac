@@ -13,12 +13,12 @@
 #include <string>
 #include <vector>
 
-#include <ggml-cpu.h>
 #include <ggml.h>
 #include <gguf.h>
 #include <gtest/gtest.h>
 
 #include "model-interface/pi05.hpp"
+#include "pi05_compute.hpp"
 #include "utils/safetensors_lite.hpp"
 
 namespace {
@@ -198,9 +198,7 @@ TEST(Pi05M3_3, SiglipFullTowerMatchesPytorch) {
   struct ggml_cgraph* gf =
       ggml_new_graph_custom(ctx_g, /*size=*/8192, /*grads=*/false);
   ggml_build_forward_expand(gf, out.head_out);
-  ASSERT_EQ(
-      ggml_graph_compute_with_ctx(ctx_g, gf, /*n_threads=*/4),
-      GGML_STATUS_SUCCESS);
+  ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
 
   // ── 4. Compare against vision.head_out[cam0]. ─────────────────────────
   ASSERT_EQ(

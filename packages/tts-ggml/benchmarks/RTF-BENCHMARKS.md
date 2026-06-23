@@ -161,7 +161,7 @@ and the prebuilds plumbing already live.
 |---|---|---|
 | linux / x64 | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu` (self-hosted) |
 | win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` (self-hosted) |
-| Android | cpu | **include_mobile** — AWS Device Farm (GPU disabled at the engine boundary today) |
+| Android | cpu | **include_mobile** — AWS Device Farm (this matrix runs CPU; GPU is opt-in via `useGPU`) |
 | iOS | cpu | **include_mobile** — AWS Device Farm |
 | darwin / arm64 | metal | **Manual** — hosted macOS Metal crashes ggml's encoder; drop JSON under `manual-results/` |
 | linux / x64 | cuda | **Manual** — not in the default tts-cpp backend cascade; drop JSON under `manual-results/` |
