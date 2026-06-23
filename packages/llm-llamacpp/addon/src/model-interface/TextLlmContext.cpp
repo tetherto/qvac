@@ -1095,8 +1095,26 @@ bool TextLlmContext::loadCache(
     nDiscarded_ = configuredNDiscarded;
   }
 
-  if (auto* mem = llama_get_memory(modelCtx_.lctx); mem != nullptr) {
-    llama_memory_seq_rm(mem, seqId_, nPast_, -1);
+  auto* mem = llama_get_memory(modelCtx_.lctx);
+  if (mem == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "TextLlmContext::loadCache: llama memory is null after loading cache '" +
+            cacheKey + "'");
+  }
+
+  const llama_pos restoredNPast = llama_memory_seq_pos_max(mem, seqId_) + 1;
+  if (restoredNPast != nPast_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "TextLlmContext::loadCache: cache '%s' restored nPast=%d, but "
+            "metadata expected nPast=%d",
+            cacheKey.c_str(),
+            restoredNPast,
+            nPast_));
   }
   return true;
 }
