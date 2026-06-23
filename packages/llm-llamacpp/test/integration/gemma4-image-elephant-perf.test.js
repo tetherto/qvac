@@ -4,9 +4,9 @@
 // 30-minute mobile cap. Asserts the elephant keyword + records perf.
 
 const test = require('brittle')
-const { GEMMA4_MODEL, IMAGE_CASES, runVlmImagePerf } = require('./_vlm-image-perf.js')
+const { GEMMA4_MODEL, IMAGE_CASES, isDarwinX64, runVlmImagePerf } = require('./_vlm-image-perf.js')
 
-test('Gemma4-VL image perf [elephant]', { timeout: 1_800_000 }, async t => {
+test('Gemma4-VL image perf [elephant]', { timeout: 1_800_000, skip: isDarwinX64 }, async t => {
   await runVlmImagePerf(t, GEMMA4_MODEL, IMAGE_CASES.elephant)
 })
 

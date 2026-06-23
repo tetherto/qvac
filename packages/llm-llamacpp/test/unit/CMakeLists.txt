@@ -20,6 +20,7 @@ add_executable(
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
   test_tune_config_map.cpp
+  test_generation_params_apply.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
@@ -30,7 +31,7 @@ add_executable(
   # Utility tests
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
-  test_qwen3_reasoning_utils.cpp
+  test_reasoning_utils.cpp
   test_qwen_template.cpp
   test_qwen3_tools_dynamic_template.cpp
   test_logging_macros.cpp
@@ -42,6 +43,7 @@ add_executable(
   test_continuous_batching_integration.cpp
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
+  test_reasoning_budget.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
@@ -58,7 +60,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
 )
@@ -135,15 +137,6 @@ if(NOT WIN32)
       -fsanitize=address
   )
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    addon-test
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 # Copy ggml backend libraries next to the test executable
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})

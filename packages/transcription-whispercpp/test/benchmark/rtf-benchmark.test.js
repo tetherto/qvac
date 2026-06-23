@@ -15,7 +15,6 @@ const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
 const binding = require('../../binding')
-const FakeDL = require('../mocks/loader.fake.js')
 const {
   detectPlatform,
   setupJsLogger,
@@ -220,7 +219,6 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
       files: {
         model: benchmarkSettings.modelPath
       },
-      loader: new FakeDL({}),
       opts: { stats: true }
     }
 

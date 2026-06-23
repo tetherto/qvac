@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.3.1]
+
+### Added
+
+- `files.embedder` — optional path to the embedder weights file. The
+  embedder location can now be supplied explicitly from JS instead of
+  always being derived from a hardcoded `bci-embedder.bin` filename next to
+  the GGML model. The path flows from JS (`files.embedder` →
+  `configurationParams.embedderPath`) down to
+  `BCIModel::loadEmbedderIfNeeded()`. Fully backward compatible: when
+  `files.embedder` is omitted, the native side falls back to resolving
+  `bci-embedder.bin` next to `files.model` (previous behaviour).
+
+  ```js
+  // default (unchanged) — embedder resolved next to the model
+  new BCIWhispercpp({ files: { model } }, config)
+  // explicit embedder location
+  new BCIWhispercpp({ files: { model, embedder } }, config)
+  ```
+
 ## [0.3.0]
 
 ### Changed

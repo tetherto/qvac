@@ -5,7 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.3.2] - 2026-06-19
+
+### Added
+
+- **Android GPU for Supertonic + Chatterbox (QVAC-20557).** Remove the `#ifdef __ANDROID__`
+  guards in `SupertonicModel`/`ChatterboxModel` that forced `useGPU=false`; `useGPU` now flows
+  to `tts-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which picks the GPU backend per
+  its per-vendor allowlist — Supertonic on Adreno (OpenCL) / Xclipse + Mali (Vulkan); Chatterbox
+  on Adreno/Xclipse, with Mali declined by policy (`allow_arm_mali=false`) and surfaced via the
+  new `gpuUnsupported` runtime stat. The `default-registry` baseline advances to `6fe4e2b` so the
+  new version resolves. Android gpu-smoke skips dropped (Supertonic strict; Chatterbox accepts a
+  flagged Mali→CPU fallback).
 
 ### Fixed
 

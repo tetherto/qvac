@@ -15,7 +15,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(inference-addon-llama C CXX)
 
@@ -92,7 +92,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
@@ -145,7 +145,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
@@ -172,7 +172,7 @@ if(BUILD_CLI)
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})
   # Set C++20 standard for std::views support
   target_compile_features(cli_tool PRIVATE cxx_std_20)
-  
+
   # Install ggml backends next to the CLI tool binary in build folder
   if((ANDROID OR UNIX) AND NOT APPLE)
     foreach(_backend ${GGML_AVAILABLE_BACKENDS})
@@ -190,16 +190,8 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
-  
+
   # Integration tests for model classes (includes backend selection tests)
   # Pass ENABLE_COVERAGE option to test subdirectory
   add_subdirectory(test/unit)
-endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${inference-addon-llama}
-    PRIVATE
-      msvcrt.lib
-  )
 endif()

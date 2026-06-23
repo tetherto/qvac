@@ -1,9 +1,11 @@
 import {
   loadModel,
   unloadModel,
+  translate,
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
   OCR_LATIN_RECOGNIZER_1,
+  BERGAMOT_EN_FR,
 } from "@qvac/sdk";
 import { ValidationHelpers, type TestResult } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
@@ -19,6 +21,7 @@ import {
   modelReloadAfterError,
   modelLoadInferredType,
   modelLoadMissingTypeStringSrc,
+  modelLifecycleNmt,
 } from "../../test-definitions.js";
 
 const modelLoadTests = [
@@ -33,6 +36,7 @@ const modelLoadTests = [
   modelReloadAfterError,
   modelLoadInferredType,
   modelLoadMissingTypeStringSrc,
+  modelLifecycleNmt,
 ] as const;
 
 export class ModelLoadingExecutor extends AbstractModelExecutor<
@@ -53,6 +57,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     [modelLoadInferredType.testId]: this.loadInferredType.bind(this),
     [modelLoadMissingTypeStringSrc.testId]:
       this.loadMissingTypeStringSrc.bind(this),
+    [modelLifecycleNmt.testId]: this.lifecycleNmt.bind(this),
   };
 
   async loadLlm(
@@ -248,5 +253,58 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
         error instanceof Error ? error.message : JSON.stringify(error);
       return ValidationHelpers.validate(errorMsg, expectation);
     }
+  }
+
+  async lifecycleNmt(
+    params: typeof modelLifecycleNmt.params,
+    expectation: typeof modelLifecycleNmt.expectation,
+  ): Promise<TestResult> {
+    const p = params as { text: string };
+
+    const modelId1 = await loadModel({
+      modelSrc: BERGAMOT_EN_FR,
+      modelType: "nmt",
+      modelConfig: { engine: "Bergamot", from: "en", to: "fr" },
+    });
+
+    const r1 = translate({
+      modelId: modelId1,
+      text: p.text,
+      modelType: "nmt",
+      stream: false,
+    });
+    const text1 = await (r1 as { text: Promise<string> }).text;
+    if (!text1 || text1.trim().length === 0) {
+      return { passed: false, output: "First translation returned empty text" };
+    }
+
+    await unloadModel({ modelId: modelId1 });
+
+    const modelId2 = await loadModel({
+      modelSrc: BERGAMOT_EN_FR,
+      modelType: "nmt",
+      modelConfig: { engine: "Bergamot", from: "en", to: "fr" },
+    });
+
+    const r2 = translate({
+      modelId: modelId2,
+      text: "Good morning, nice to meet you.",
+      modelType: "nmt",
+      stream: false,
+    });
+    const text2 = await (r2 as { text: Promise<string> }).text;
+    this.resources.register("bergamot-en-fr", modelId2);
+
+    if (!text2 || text2.trim().length === 0) {
+      return {
+        passed: false,
+        output: `First OK ("${text1}") but second translation after reload returned empty text`,
+      };
+    }
+
+    return ValidationHelpers.validate(
+      `Lifecycle OK: "${text1}" → unload → reload → "${text2}"`,
+      expectation,
+    );
   }
 }

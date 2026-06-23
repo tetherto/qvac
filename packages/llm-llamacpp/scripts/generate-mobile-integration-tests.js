@@ -9,9 +9,6 @@ const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 const groupsFile = path.join(mobileDir, 'test-groups.json')
-const mobileExcludedTests = new Set([
-  'continuous-batching.test.js'
-])
 
 // The benchmark-perf-*.test.js shards are generated, not committed (see
 // .gitignore), but the committed integration.auto.cjs references them. Enumerating
@@ -40,7 +37,6 @@ function getIntegrationFiles () {
 
   return fs.readdirSync(integrationDir)
     .filter(entry => entry.endsWith('.test.js'))
-    .filter(entry => !mobileExcludedTests.has(entry))
     .sort()
 }
 

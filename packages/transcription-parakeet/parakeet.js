@@ -253,6 +253,19 @@ class ParakeetInterface {
   }
 
   /**
+   * Backend the native engine resolved at load(): device class, ggml backend
+   * family, and the human-readable GPU name (e.g. "NVIDIA GeForce RTX 3090")
+   * recovered from the ggml device registry. The name is the
+   * nvidia-smi-independent fallback the perf reporter uses on CI runners.
+   * Returns `null` before the instance exists / after destroy.
+   * @returns {{ backendDevice: string, backendId: number, backendName: string, backendDescription: string }|null}
+   */
+  getBackendInfo () {
+    if (this._handle == null) return null
+    return this._binding.getBackendInfo(this._handle)
+  }
+
+  /**
    * Append audio data or end-of-job signal
    * @param {Object} data - data to append
    * @param {string} data.type - 'audio' or 'end of job'

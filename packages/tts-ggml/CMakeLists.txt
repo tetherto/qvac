@@ -15,7 +15,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(tts-ggml CXX C)
 
@@ -284,15 +284,6 @@ if(APPLE)
       "SHELL:-Wl,-force_load,${_qvac_clang_rtlib}"
   )
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${tts-ggml}
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 if(BUILD_TESTING)
   enable_testing()
   find_package(GTest CONFIG REQUIRED)
@@ -325,11 +316,6 @@ if(BUILD_TESTING)
       GTest::gmock_main
       tts-cpp::tts-cpp
   )
-
-  if(WIN32)
-    target_link_libraries(tts_ggml_tests PRIVATE msvcrt.lib)
-  endif()
-
   if(ENABLE_COVERAGE)
     # LLVM source-based coverage (clang).  Same flag set parakeet uses.
     target_compile_options(tts_ggml_tests PRIVATE

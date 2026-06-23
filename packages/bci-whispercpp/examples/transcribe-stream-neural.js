@@ -34,9 +34,10 @@ async function main () {
     console.error('Error: Model file not found: ' + modelPath)
     return
   }
+  const embedderPath = path.join(path.dirname(modelPath), 'bci-embedder.bin')
 
   const bci = new BCIWhispercpp({
-    files: { model: modelPath }
+    files: { model: modelPath, embedder: embedderPath }
   }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
