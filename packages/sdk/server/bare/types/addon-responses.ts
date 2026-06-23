@@ -62,6 +62,7 @@ export interface TranscribeStats {
   melSpecMs?: number;
   backendDevice?: number;
   backendId?: number;
+  gpuUnsupported?: number;
   gpuMemTotalMb?: number;
   gpuMemFreeMb?: number;
 }
