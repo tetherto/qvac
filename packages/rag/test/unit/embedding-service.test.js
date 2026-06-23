@@ -10,6 +10,7 @@ class MockEmbeddingFunction {
     this.shouldFail = false
   }
 
+  // lunte-disable-next-line require-await
   async call (text) {
     this.calls.push(text)
     if (this.shouldFail) {
@@ -275,7 +276,9 @@ test('EmbeddingService: should support generateEmbeddings with array input', asy
   t.alike(mockEmbeddingFunction.mock.calls[0], texts, 'Should pass array to embedding function')
 })
 
+// lunte-disable-next-line require-await
 test('EmbeddingService: Zod validation should reject invalid embedding outputs', async t => {
+  // lunte-disable-next-line require-await
   const invalidOutputFunction = async (text) => {
     if (Array.isArray(text)) {
       return ['not', 'numbers'] // Invalid: strings instead of number arrays

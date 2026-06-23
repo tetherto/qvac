@@ -17,6 +17,7 @@ function resetMocks () {
 }
 
 // Mock HTTP LLM Adapter's _makeHttpRequest method
+// lunte-disable-next-line require-await
 HttpLlmAdapter.prototype._makeHttpRequest = async function (requestBody) {
   if (mockConfig.simulateNetworkFailure) {
     throw new Error('Network request failed')
@@ -219,6 +220,7 @@ test('HttpLlmAdapter: run should handle LLM failure', async t => {
   }
 })
 
+// lunte-disable-next-line require-await
 test('HttpLlmAdapter: should use custom headers', async t => {
   resetMocks()
   const httpConfig = {

@@ -30,6 +30,7 @@ class IngestionService {
    * @param {ChunkOpts} [opts] - Optional chunking options to override the default.
    * @returns {Promise<Array<Doc>>} - Array of chunked documents with IDs and content.
    */
+  // lunte-disable-next-line require-await
   async chunk (input, opts = {}) {
     return this.chunkingService.chunkText(input, opts)
   }
@@ -63,6 +64,7 @@ class IngestionService {
    * @param {SaveEmbeddingsOpts} [opts] - Options for saving.
    * @returns {Promise<Array<SaveEmbeddingsResult>>} - Array of processing results.
    */
+  // lunte-disable-next-line require-await
   async saveEmbeddings (embeddedDocs, opts = {}) {
     const { onProgress, signal, dbOpts } = opts
 
@@ -180,6 +182,7 @@ class IngestionService {
    * @param {Array<string>} ids - The ids of the documents to be deleted.
    * @returns {Promise<boolean>} True if the embeddings were deleted
    */
+  // lunte-disable-next-line require-await
   async deleteEmbeddings (ids) {
     return this.dbAdapter.deleteEmbeddings(ids)
   }

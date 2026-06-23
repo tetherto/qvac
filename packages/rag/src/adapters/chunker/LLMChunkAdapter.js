@@ -45,6 +45,7 @@ class LLMChunkAdapter extends BaseChunkAdapter {
    * @param {LLMChunkOpts} opts - Chunking options.
    * @returns {Promise<Array<Doc>>} - Array of chunk objects with content and id.
    */
+  // lunte-disable-next-line require-await
   async chunkText (input, opts = {}) {
     try {
       this.validateInput(input)

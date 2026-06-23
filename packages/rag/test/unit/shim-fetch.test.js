@@ -24,7 +24,8 @@ test('fetch shim: throws QvacErrorRAG when no fetch implementation is available'
 test('fetch shim: delegates calls to globalThis.fetch when available', async t => {
   const original = globalThis.fetch
   let receivedArgs
-  globalThis.fetch = async function stub (...args) {
+  // lunte-disable-next-line require-await
+  globalThis.fetch = async function (...args) {
     receivedArgs = args
     return { ok: true, url: args[0] }
   }

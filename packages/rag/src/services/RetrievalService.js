@@ -28,6 +28,7 @@ class RetrievalService {
    * @param {string} text - The text to generate embeddings for.
    * @returns {Promise<Array<number>>} The embeddings.
    */
+  // lunte-disable-next-line require-await
   async generateEmbeddings (text) {
     return this.embeddingService.generateEmbeddings(text)
   }

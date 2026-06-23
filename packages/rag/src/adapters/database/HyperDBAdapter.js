@@ -506,6 +506,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {Hypercore} otherHypercore - The other hypercore to replicate with.
    * @returns {Promise<Object>} An object containing the two streams and a destroy function.
    */
+  // lunte-disable-next-line require-await
   async replicateWith (otherHypercore) {
     if (!this.isInitialized || !this.hypercore) {
       throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED })
@@ -978,6 +979,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @returns {Promise<Array>} The entries.
    * @private
    */
+  // lunte-disable-next-line require-await
   async _getAllEntries (snapshot, table) {
     return snapshot.find(table).toArray()
   }

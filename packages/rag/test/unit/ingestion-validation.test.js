@@ -8,13 +8,17 @@ const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
 function createMockDeps () {
   return {
     dbAdapter: {
+      // lunte-disable-next-line require-await
       saveEmbeddings: async () => []
     },
     chunkingService: {
+      // lunte-disable-next-line require-await
       chunkText: async () => []
     },
     embeddingService: {
+      // lunte-disable-next-line require-await
       generateEmbeddings: async () => [0.1, 0.2, 0.3],
+      // lunte-disable-next-line require-await
       generateEmbeddingsForDocs: async () => ({})
     }
   }

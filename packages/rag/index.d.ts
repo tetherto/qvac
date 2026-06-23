@@ -109,6 +109,24 @@ export interface IngestOpts {
   signal?: AbortSignal | undefined;
 }
 
+/**
+ * Abstract base class for LLM adapters.
+ */
+declare abstract class BaseLlmAdapter {
+  /**
+   * Run inference with the LLM using query and search results.
+   * @param query - The user query
+   * @param searchResults - Search results from the embedder
+   * @param opts - Additional options for the inference
+   * @returns The generated response (format depends on LLM adapter implementation)
+   */
+  abstract run(
+    query: string,
+    searchResults: SearchResult[],
+    opts?: InferOpts
+  ): Promise<any>;
+}
+
 export interface InferOpts extends SearchParams {
   llmAdapter?: BaseLlmAdapter;
   systemPrompt?: string;
@@ -214,24 +232,6 @@ declare abstract class BaseChunkAdapter {
     input: string | string[],
     opts?: BaseChunkOpts
   ): Promise<Doc[]>;
-}
-
-/**
- * Abstract base class for LLM adapters.
- */
-declare abstract class BaseLlmAdapter {
-  /**
-   * Run inference with the LLM using query and search results.
-   * @param query - The user query
-   * @param searchResults - Search results from the embedder
-   * @param opts - Additional options for the inference
-   * @returns The generated response (format depends on LLM adapter implementation)
-   */
-  abstract run(
-    query: string,
-    searchResults: SearchResult[],
-    opts?: InferOpts
-  ): Promise<any>;
 }
 
 /**

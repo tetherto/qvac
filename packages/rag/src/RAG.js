@@ -53,6 +53,7 @@ class RAG extends ReadyResource {
    * @param {ChunkOpts} [opts] - Optional chunking options to override the default.
    * @returns {Promise<Array<Doc>>} - Array of chunked documents with IDs and content.
    */
+  // lunte-disable-next-line require-await
   async chunk (input, opts = {}) {
     return this.chunkingService.chunkText(input, opts)
   }
@@ -62,6 +63,7 @@ class RAG extends ReadyResource {
    * @param {string} text - The text to generate embeddings for.
    * @returns {Promise<Array<number>>} The embeddings.
    */
+  // lunte-disable-next-line require-await
   async generateEmbeddings (text) {
     return this.embeddingService.generateEmbeddings(text)
   }
@@ -72,6 +74,7 @@ class RAG extends ReadyResource {
    * @param {GenerateEmbeddingsOpts} [opts] - Options for the embedding generation.
    * @returns {Promise<{[key: string]: Array<number>}>} A map of document IDs to their embeddings.
    */
+  // lunte-disable-next-line require-await
   async generateEmbeddingsForDocs (docs, opts = {}) {
     return this.retrievalService.generateEmbeddingsForDocs(docs, opts)
   }
@@ -83,6 +86,7 @@ class RAG extends ReadyResource {
    * @param {SaveEmbeddingsOpts} [opts] - Options for saving.
    * @returns {Promise<Array<SaveEmbeddingsResult>>} - Array of processing results.
    */
+  // lunte-disable-next-line require-await
   async saveEmbeddings (embeddedDocs, opts = {}) {
     return this.ingestionService.saveEmbeddings(embeddedDocs, opts)
   }
@@ -95,6 +99,7 @@ class RAG extends ReadyResource {
    * @param {IngestOpts} [opts] - Options for the ingestion pipeline.
    * @returns {Promise<{processed: Array<SaveEmbeddingsResult>, droppedIndices: Array<number>}>} - Processing results and dropped indices.
    */
+  // lunte-disable-next-line require-await
   async ingest (docs, embeddingModelId, opts = {}) {
     return this.ingestionService.ingest(docs, embeddingModelId, opts)
   }
@@ -104,6 +109,7 @@ class RAG extends ReadyResource {
    * @param {Array<string>} ids - The ids of the documents to be deleted.
    * @returns {Promise<boolean>} True if the embeddings were deleted
    */
+  // lunte-disable-next-line require-await
   async deleteEmbeddings (ids) {
     return this.ingestionService.deleteEmbeddings(ids)
   }
@@ -148,6 +154,7 @@ class RAG extends ReadyResource {
    * @param {SearchOpts} [params] - Parameters for search.
    * @returns {Promise<Array<SearchResult>>} The search results.
    */
+  // lunte-disable-next-line require-await
   async search (query, params = {}) {
     return this.retrievalService.search(query, params)
   }
@@ -187,6 +194,7 @@ class RAG extends ReadyResource {
    * Returns the persisted config including embeddingModelId.
    * @returns {Promise<BaseDBAdapterConfig|null>} The stored config or null if not configured
    */
+  // lunte-disable-next-line require-await
   async getDBConfig () {
     return this.dbAdapter.getConfig()
   }

@@ -22,6 +22,7 @@ class BaseChunkAdapter {
    * @returns {Promise<Array<Doc>>} - Array of Docs.
    * @throws {Error} - If chunking fails.
    */
+  // lunte-disable-next-line require-await
   async chunkText (input, opts = {}) {
     throw new QvacErrorRAG({ code: ERR_CODES.NOT_IMPLEMENTED })
   }
