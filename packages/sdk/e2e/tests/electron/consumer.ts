@@ -1,4 +1,15 @@
-import { createExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
+import * as os from "node:os";
+import {
+  ConsumerBase,
+  createExecutor,
+  SkipExecutor,
+  loadConfig,
+  loadTests,
+  buildMqttConnectionConfig,
+  createMqttClient,
+  startNodeMemoryPoller,
+  type TestDefinition,
+} from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -17,22 +28,15 @@ import {
   TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
   TTS_S3GEN_EN_CHATTERBOX,
   TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
+  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   PARAKEET_EOU_120M_V1_Q8_0,
-  SMOLVLA_LIBERO_VISION_Q8,
-  PI05_BASE_Q_AGGRESSIVE,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
   AFRICAN_4B_TRANSLATION_Q4_K_M,
-  FLUX_2_KLEIN_4B_Q4_0,
-  FLUX_2_KLEIN_4B_VAE,
-  QWEN3_4B_Q4_K_M,
-  SD_V2_1_1B_Q8_0,
-  REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED,
@@ -54,7 +58,6 @@ import { TranscriptionExecutor } from "../shared/executors/node/transcription-ex
 import { TranscribeStreamEventsExecutor } from "../shared/executors/node/transcribe-stream-events-executor.js";
 import { RagExecutor } from "../shared/executors/node/rag-executor.js";
 import { OcrExecutor } from "../shared/executors/node/ocr-executor.js";
-import { VlaExecutor } from "../shared/executors/vla-executor.js";
 import { ClassificationExecutor } from "../shared/executors/node/classification-executor.js";
 import { ConfigReloadExecutor } from "../shared/executors/node/config-reload-executor.js";
 import { NodeLoggingExecutor } from "../shared/executors/node/logging-executor.js";
@@ -68,12 +71,8 @@ import { ParakeetExecutor } from "../shared/executors/node/parakeet-executor.js"
 import { BciExecutor } from "../shared/executors/node/bci-executor.js";
 import { VisionExecutor } from "../shared/executors/node/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
-import { DelegatedInferenceExecutor } from "../shared/executors/node/delegated-inference-executor.js";
-import { NodeDiffusionExecutor } from "../shared/executors/node/diffusion-executor.js";
-import { FinetuneExecutor } from "../shared/executors/node/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
-import { NoLingeringBareExecutor } from "../shared/executors/node/no-lingering-bare-executor.js";
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
 import { NodeCancellationExecutor } from "../shared/executors/node/cancellation-executor.js";
 
@@ -83,12 +82,6 @@ const resources = new ResourceManager({
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: "llamacpp-completion",
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
-});
-
-resources.define("finetune-llm", {
-  constant: QWEN3_1_7B_INST_Q4,
   type: "llamacpp-completion",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
@@ -151,18 +144,6 @@ resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
   type: "onnx-ocr",
   config: { langList: ["en"] },
-});
-
-resources.define("vla", {
-  constant: SMOLVLA_LIBERO_VISION_Q8,
-  type: "ggml-vla",
-  config: { backend: "cpu" },
-});
-
-resources.define("vla-pi05", {
-  constant: PI05_BASE_Q_AGGRESSIVE,
-  type: "ggml-vla",
-  config: { backend: "cpu" },
 });
 
 // Classification ships bundled weights inside @qvac/classification-ggml,
@@ -253,7 +234,6 @@ resources.define("afriquegemma", {
   },
 });
 
-
 resources.define("tts-chatterbox", {
   constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
   type: "tts-ggml",
@@ -262,9 +242,6 @@ resources.define("tts-chatterbox", {
     language: "en",
     useGPU: true,
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
-    streamChunkTokens: 25,
-    streamFirstChunkTokens: 10,
-    cfmSteps: 1,
     referenceAudioSrc: path.resolve(
       process.cwd(),
       "assets/audio",
@@ -285,7 +262,7 @@ resources.define("tts-supertonic", {
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
+  constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
@@ -340,96 +317,20 @@ resources.define("vision", {
   },
 });
 
-resources.define("diffusion", {
-  constant: FLUX_2_KLEIN_4B_Q4_0,
-  type: "sdcpp-generation",
-  config: {
-    device: "gpu",
-    threads: 4,
-    prediction: "flux2_flow",
-    llmModelSrc: QWEN3_4B_Q4_K_M,
-    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
-  },
-});
-
-resources.define("diffusion-fa", {
-  constant: FLUX_2_KLEIN_4B_Q4_0,
-  type: "sdcpp-generation",
-  config: {
-    device: "gpu",
-    threads: 4,
-    prediction: "flux2_flow",
-    llmModelSrc: QWEN3_4B_Q4_K_M,
-    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
-    diffusion_fa: true,
-  },
-});
-
-resources.define("diffusion-fa-disabled", {
-  constant: FLUX_2_KLEIN_4B_Q4_0,
-  type: "sdcpp-generation",
-  config: {
-    device: "gpu",
-    threads: 4,
-    prediction: "flux2_flow",
-    llmModelSrc: QWEN3_4B_Q4_K_M,
-    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
-    diffusion_fa: false,
-  },
-});
-
-// Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
-resources.define("diffusion-esrgan", {
-  constant: SD_V2_1_1B_Q8_0,
-  type: "sdcpp-generation",
-  config: {
-    device: "gpu",
-    threads: 4,
-    prediction: "v",
-    vae_on_cpu: true,
-    upscaler: {
-      type: "esrgan",
-      model_src: REALESRGAN_X4PLUS_ANIME_6B,
-      tile_size: 128,
-    },
-  },
-});
-
-resources.define("upscaler", {
-  constant: REALESRGAN_X4PLUS_ANIME_6B,
-  type: "sdcpp-generation",
-  config: {
-    mode: "upscale",
-    upscaler: {
-      tile_size: 128,
-    },
-  },
-});
-
-resources.define("upscaler-cpu", {
-  constant: REALESRGAN_X4PLUS_ANIME_6B,
-  type: "sdcpp-generation",
-  config: {
-    mode: "upscale",
-    device: "cpu",
-    upscaler: {
-      tile_size: 64,
-    },
-  },
-});
-
 function readJsonConfig(configPath: string) {
   return JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
 }
 
-// Exercises registryDownloadMaxRetries + registryStreamTimeoutMs end-to-end (see config-tests.ts).
-function ensureDesktopE2EConfig() {
-  const fixturePath = path.resolve(process.cwd(), "fixtures/qvac.config.e2e.json");
+function ensureElectronE2EConfig() {
+  const electronFixturePath = path.resolve(process.cwd(), "fixtures/qvac.config.electron.json");
+  const e2eFixturePath = path.resolve(process.cwd(), "fixtures/qvac.config.e2e.json");
   const existingPath = process.env["QVAC_CONFIG_PATH"];
-  const fixtureConfig = readJsonConfig(fixturePath);
+  const electronFixtureConfig = readJsonConfig(electronFixturePath);
+  const e2eFixtureConfig = readJsonConfig(e2eFixturePath);
   const existingConfig = existingPath ? readJsonConfig(existingPath) : {};
   const mergedConfig = {
-    ...fixtureConfig,
+    ...electronFixtureConfig,
+    ...e2eFixtureConfig,
     ...existingConfig,
   };
   const generatedPath = path.resolve(process.cwd(), "qvac.config.e2e.generated.json");
@@ -439,24 +340,45 @@ function ensureDesktopE2EConfig() {
 
   if (existingPath) {
     console.log(
-      `📦 Desktop e2e config merged ${fixturePath} with ${existingPath}; using ${generatedPath}`,
+      `📦 Electron e2e config merged ${electronFixturePath}, ${e2eFixturePath}, and ${existingPath}; using ${generatedPath}`,
     );
   } else {
-    console.log(`📦 Desktop e2e config set to ${generatedPath}`);
+    console.log(`📦 Electron e2e config set to ${generatedPath}`);
   }
 }
 
 export async function bootstrap(filteredTests?: TestDefinition[]) {
-  ensureDesktopE2EConfig();
+  ensureElectronE2EConfig();
 
-  // `filteredTests` (when present) is the producer's post-filter test list
-  // delivered via register-ack; absence keeps the legacy "warm everything" path.
   const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
   await resources.downloadAllOnce(console.log, { allowedDeps });
 }
 
 export const executor = createExecutor({
   handlers: [
+    // Electron keeps the stable desktop/shared surface enabled, but excludes
+    // suites that are resource-heavy or incompatible with the packaged
+    // Electron worker lifecycle.
+    new SkipExecutor(
+      /^(diffusion-|addon-logging-diffusion$)/,
+      "Electron skips diffusion tests because image generation takes too long for the stable Electron pass",
+    ),
+    new SkipExecutor(
+      /^delegated-/,
+      "Electron skips delegated inference tests because provider startup and peer connectivity need separate packaged-app coverage",
+    ),
+    new SkipExecutor(
+      /^finetune-/,
+      "Electron skips finetune tests because training operations take too long for the stable Electron pass",
+    ),
+    new SkipExecutor(
+      /^no-lingering-bare-/,
+      "Electron skips no-lingering-bare tests because they spawn and terminate standalone Bare workers outside the packaged app lifecycle",
+    ),
+    new SkipExecutor(
+      /^vla-/,
+      "Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass",
+    ),
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
@@ -473,7 +395,6 @@ export const executor = createExecutor({
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
-    new VlaExecutor(resources),
     new ClassificationExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
@@ -486,12 +407,8 @@ export const executor = createExecutor({
     new BciExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
-    new DelegatedInferenceExecutor(),
-    new NodeDiffusionExecutor(resources),
-    new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
-    new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
   ],
@@ -500,3 +417,61 @@ export const executor = createExecutor({
     exportData: () => profiler.exportJSON(),
   },
 });
+
+export async function startElectronConsumer() {
+  const runId = process.env["QVAC_TEST_RUN_ID"];
+  const configDir = process.env["QVAC_TEST_CONFIG_DIR"];
+  const platform = process.env["QVAC_TEST_PLATFORM"] ?? "electron";
+  const mqttBrokerOverride = process.env["QVAC_TEST_MQTT_BROKER"];
+
+  if (!runId) {
+    throw new Error("QVAC_TEST_RUN_ID is required");
+  }
+  if (!configDir) {
+    throw new Error("QVAC_TEST_CONFIG_DIR is required");
+  }
+
+  const config = await loadConfig(configDir);
+  const testDefinitions = await loadTests(config, configDir);
+  const mqttConfig = buildMqttConnectionConfig(config);
+  if (mqttBrokerOverride) {
+    mqttConfig.brokerUrl = mqttBrokerOverride;
+  }
+
+  const consumerId = `consumer-${platform}-${os.hostname()}-${Date.now()}`;
+  const client = createMqttClient(mqttConfig, configDir, { clientId: consumerId });
+
+  if (executor.initProfiling) {
+    executor.initProfiling();
+    console.log("📈 Profiling enabled");
+  }
+
+  const memoryPoller = startNodeMemoryPoller({ client, runId, consumerId, platform });
+  if (memoryPoller) {
+    console.log("📈 Memory poller enabled (publishing rss to qvac/app-memory)");
+  }
+
+  const consumer = new ConsumerBase(
+    client,
+    consumerId,
+    platform,
+    runId,
+    executor,
+    {
+      log: (msg) => console.log(msg),
+      onBootstrap: bootstrap,
+      updateStats: () => {},
+      onShutdown: () => memoryPoller?.stop(),
+    },
+    testDefinitions,
+  );
+
+  consumer.setupMqttHandlers();
+
+  const shutdown = () => {
+    memoryPoller?.stop();
+    consumer.forceShutdown();
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}

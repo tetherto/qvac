@@ -158,6 +158,40 @@ TEST(ChatterboxValidate, NegativeNCtxRejected) {
   EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
 }
 
+TEST(ChatterboxValidate, SpeedBelowRangeRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.1f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, SpeedAboveRangeRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 8.0f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, SpeedZeroRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.0f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, ValidSpeedAccepted) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.8f; // a typical "slow it down" value
+  // Stub files pass validation; load is deferred, so construction succeeds.
+  std::unique_ptr<ChatterboxModel> m;
+  EXPECT_NO_THROW(m = std::make_unique<ChatterboxModel>(cfg));
+  EXPECT_NE(m, nullptr);
+}
+
+TEST(ChatterboxValidate, ConfigSpeedDefaultUnset) {
+  // Unset speed means "no rate change" (1.0) at synthesis time — the addon
+  // applies no per-language default, preserving raw-model backward compat.
+  ChatterboxConfig cfg;
+  EXPECT_FALSE(cfg.speed.has_value());
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  ChatterboxConfig -> tts_cpp EngineOptions mapping.
 // ─────────────────────────────────────────────────────────────────────
