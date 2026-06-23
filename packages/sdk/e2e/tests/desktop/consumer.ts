@@ -17,7 +17,7 @@ import {
   TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
   TTS_S3GEN_EN_CHATTERBOX,
   TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -285,7 +285,7 @@ resources.define("tts-supertonic", {
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",

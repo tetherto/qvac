@@ -659,8 +659,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     state_->batchScheduler_->resetRuntimeStats();
   }
 
-  // Reset per-inference slide counter so it doesn't leak across runs
+  // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetNSlides();
+  state_->llmContext_->resetThinkingBlockDiscards();
 
   for (const auto& media : prompt.media) {
     loadMedia(media);
@@ -880,6 +881,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
       {"contextSlides", stats.contextSlides},
+      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
 }
@@ -912,6 +914,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"promptTokens", promptTokens},
       {"contextSlides",
        static_cast<int64_t>(state_->llmContext_->getNSlides())},
+      {"thinkingBlockDiscards",
+       static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
 }
