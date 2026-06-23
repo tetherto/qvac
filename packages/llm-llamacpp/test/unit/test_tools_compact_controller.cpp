@@ -74,6 +74,22 @@ TEST(ToolsCompactControllerTest, ResetClearsAnchor) {
   EXPECT_EQ(controller.anchor(), -1);
 }
 
+TEST(ToolsCompactControllerTest, AnchorUsesLogicalPositionUnits) {
+  ToolsCompactController controller(ToolsCompactProfile{});
+
+  // Multimodal callers can have physical KV cells != logical positions. The
+  // controller's anchor is a llama position, so callers must pass position
+  // counts to both onTokenize() and onEvalComplete().
+  controller.onTokenize(
+      /*positionsWithTools=*/80,
+      /*positionsWithoutTools=*/60);
+  controller.onEvalComplete(
+      /*nPast=*/80,
+      /*totalTokensEvaled=*/80);
+
+  EXPECT_EQ(controller.anchor(), 60);
+}
+
 TEST(ToolsCompactControllerTest, ValidatePromptNoOpsWhenDisabled) {
   ToolsCompactController controller(std::nullopt);
   PromptLayout layout;

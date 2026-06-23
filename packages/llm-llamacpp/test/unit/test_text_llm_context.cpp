@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
@@ -16,6 +17,31 @@
 using test_common::getStatValue;
 
 namespace fs = std::filesystem;
+
+namespace {
+
+fs::path uniqueTextCachePath(const char* prefix) {
+  const auto id =
+      std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  return fs::temp_directory_path() /
+         (std::string(prefix) + "-" + std::to_string(id) + ".bin");
+}
+
+void removeCacheFile(const fs::path& path) {
+  if (fs::exists(path)) {
+    fs::remove(path);
+  }
+}
+
+llama_pos seqPosMax(LlamaModel& model, llama_seq_id seqId = 0) {
+  auto* mem = llama_get_memory(model.getContext());
+  if (mem == nullptr) {
+    return -1;
+  }
+  return llama_memory_seq_pos_max(mem, seqId);
+}
+
+} // namespace
 
 class TextLlmContextTest : public ::testing::Test {
 protected:
