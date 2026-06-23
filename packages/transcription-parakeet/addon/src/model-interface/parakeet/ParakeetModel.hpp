@@ -105,13 +105,13 @@ public:
   // emits a segment. Throws if the engine isn't loaded.
   std::unique_ptr<parakeet::StreamSession> createDuplexAsrSession(
       const parakeet::StreamingOptions& opts,
-      parakeet::StreamingCallback on_segment);
+      parakeet::StreamingCallback onSegment);
 
   // Same idea for Sortformer-flavoured GGUFs.
   std::unique_ptr<parakeet::SortformerStreamSession>
   createDuplexDiarizationSession(
       const parakeet::SortformerStreamingOptions& opts,
-      parakeet::SortformerSegmentCallback on_segment);
+      parakeet::SortformerSegmentCallback onSegment);
 
   // Cheap accessors used by the duplex processor (and unit tests) to
   // build session opts from cfg_ when the JS caller doesn't override
@@ -191,18 +191,25 @@ public:
       std::unique_ptr<std::basic_streambuf<char>>&& streambuf) override;
   void waitForLoadInitialization() override { load(); }
 
-  // Two streaming overloads. The ggml backend doesn't actually care about chunking; it
-  // just buffers the bytes until `completed=true`, then materialises them
-  // into a temp file on `load()`.
+  // Two streaming overloads. The ggml backend doesn't actually care about
+  // chunking; it just buffers the bytes until `completed=true`, then
+  // materialises them into a temp file on `load()`.
+  //
+  // These deliberately keep snake_case names: the natural camelBack
+  // (setWeightsForFile) would collide with the framework override declared
+  // above, so they are exempted from the identifier-naming check.
+  // NOLINTNEXTLINE(readability-identifier-naming)
   void set_weights_for_file(
       const std::string& filename, std::span<const uint8_t> contents,
       bool completed);
 
+  // NOLINTNEXTLINE(readability-identifier-naming)
   void set_weights_for_file(
       const std::string& filename,
       std::unique_ptr<std::basic_streambuf<char>> streambuf);
 
   template <typename T>
+  // NOLINTNEXTLINE(readability-identifier-naming)
   void set_weights_for_file(const std::string& filename, T&& contents) {}
 
   // ── Queries ────────────────────────────────────────────────────────────
@@ -229,8 +236,8 @@ private:
   std::filesystem::path                gguf_temp_path_;
   bool                                 gguf_completed_ = false;
 
-  std::filesystem::path                writeBufferToTempFile_();
-  void                                 cleanupTempFile_();
+  std::filesystem::path writeBufferToTempFile();
+  void cleanupTempFile();
 
   // ── State ──────────────────────────────────────────────────────────────
   ParakeetConfig                       cfg_;
@@ -254,11 +261,11 @@ private:
   // session_mutex_ guards the unique_ptrs against the data race between
   // cancel() (framework-callable from any thread, concurrent with
   // process()/unload()/reload()) and the lifecycle paths
-  // openStreamingSession_() / closeStreamingSession_() / endOfStream() /
+  // openStreamingSession() / closeStreamingSession() / endOfStream() /
   // ~ParakeetModel that .reset() them. cancel() copies the raw pointer
   // under the lock and invokes the engine's session-internal cancel()
   // (itself thread-safe with concurrent feed/finalize) without holding
-  // the lock further; closeStreamingSession_() moves ownership out under
+  // the lock further; closeStreamingSession() moves ownership out under
   // the lock and runs the destructor outside.
   mutable std::mutex                                 session_mutex_;
   std::unique_ptr<parakeet::StreamSession>           asr_session_;
@@ -290,6 +297,7 @@ private:
   //   0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
   int                                  backend_device_ = 0;
   int                                  backend_id_     = 0;
+  int backend_gpu_unsupported_ = 0;
   std::string                          backend_name_   = "CPU";
 
   // ── Token / sentinel constants ─────────────────────────────────────────
@@ -320,15 +328,15 @@ private:
   DiarizationConfig                    diarConfig_;
 
   // ── Sortformer head dispatch ───────────────────────────────────────────
-  std::string runSortformerProcess_(const Input& input);
+  std::string runSortformerProcess(const Input& input);
 
   // ── ASR head dispatch ──────────────────────────────────────────────────
-  std::string runAsrProcess_(const Input& input);
+  std::string runAsrProcess(const Input& input);
 
   // ── Streaming session helpers ──────────────────────────────────────────
   // Opens an ASR or Sortformer streaming session against the loaded engine
   // for the LEGACY framework path: called from load() when cfg_.streaming
-  // is true, then runStreamingProcess_() drives it via the framework's
+  // is true, then runStreamingProcess() drives it via the framework's
   // process() callback. The on_segment callback pushes a Transcript onto
   // pending_streaming_segments_ for the next process() call to drain into
   // output_ + on_segment_.
@@ -338,8 +346,8 @@ private:
   // and `ParakeetStreamingProcessor` (../ParakeetStreamingProcessor.hpp);
   // those own a separate session per addon instance and queue segments
   // directly into addonCpp->outputQueue without going through process().
-  void openStreamingSession_();
-  void closeStreamingSession_();
+  void openStreamingSession();
+  void closeStreamingSession();
 
   // process() drainage: streaming-session callbacks fire mid-feed (and
   // potentially from a different thread on finalize()), so we stash the
@@ -353,7 +361,7 @@ private:
   // spaces). Sentinel-string fallbacks ([No speech detected] etc.) are
   // applied when the session emitted nothing for the chunk so the
   // existing Transcript-shaped JS contract stays intact.
-  std::string runStreamingProcess_(const Input& input);
+  std::string runStreamingProcess(const Input& input);
 
   // ── Runtime stats (subset of legacy fields; we now derive most numbers
   //     from the Engine's own per-call timings) ────────────────────────

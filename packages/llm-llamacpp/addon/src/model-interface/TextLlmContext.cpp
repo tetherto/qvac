@@ -284,7 +284,34 @@ void TextLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  prompt = getPrompt(tmpls_.get(), inputs, &thinkingForcedOpen_);
+  std::string thinkingStartTag;
+  std::string thinkingEndTag;
+  std::string generationPrompt;
+  prompt = getPrompt(
+      tmpls_.get(),
+      inputs,
+      &thinkingForcedOpen_,
+      &thinkingStartTag,
+      &thinkingEndTag,
+      &generationPrompt);
+  thinkingForcedOpenText_ =
+      thinkingForcedOpen_
+          ? getThinkingForcedOpenText(generationPrompt, thinkingStartTag)
+          : std::string{};
+  if (configureReasoningBudgetSampling(
+          params_,
+          modelCtx_.lctx,
+          thinkingStartTag,
+          thinkingEndTag,
+          generationPrompt)) {
+    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
+    if (!smpl_) {
+      std::string errorMsg = string_format(
+          "[TextLlm] %s: failed to initialize sampling subsystem\n", __func__);
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+    }
+  }
 
   QLOG_IF(
       Priority::DEBUG,
@@ -598,12 +625,10 @@ bool TextLlmContext::generateResponse(
   assistantOutput_.clear();
   generationStarted_ = false;
 
-  // The chat template force-opened the reasoning channel in the prompt (e.g.
-  // Qwen3-style / DeepSeek-R1 templates end with "<think>\n"), so the model
-  // resumes generation INSIDE the reasoning block. (Gemma4's reasoning channel
-  // is model-emitted upstream and does not set this flag.)
+  // The chat template force-opened the reasoning channel in the prompt, so the
+  // model resumes generation inside the reasoning block.
   if (thinkingForcedOpen_ && outputCallback) {
-    outputCallback("<think>\n");
+    outputCallback(thinkingForcedOpenText_);
     reasoningState_.inside_reasoning = true;
   }
 
@@ -899,6 +924,8 @@ void TextLlmContext::resetState(bool resetStats) {
   forcedTokens_.clear();
   assistantOutput_.clear();
   generationStarted_ = false;
+  thinkingForcedOpen_ = false;
+  thinkingForcedOpenText_.clear();
 
   clearSequenceMemory(modelCtx_.lctx);
 

@@ -20,9 +20,9 @@ struct SupertonicConfig {
    *   - std::nullopt: unspecified, let the engine use its library default.
    *   - true:         if nGpuLayers unset, maps to nGpuLayers=99. Honored on
    *                   GPU-capable hosts (Metal on Apple, Vulkan/CUDA on
-   *                   desktop). On Android it is forced back to CPU in
-   *                   SupertonicModel::loadLocked() because Adreno
-   *                   OpenCL/Vulkan ggml graph compute is not yet stable.
+   *                   desktop, Vulkan/OpenCL on Android), delegated to
+   *                   tts-cpp's per-vendor allowlist (Adreno/Xclipse/Mali);
+   *                   it falls back to CPU on GPUs it can't drive.
    *   - false:        if nGpuLayers unset, forces nGpuLayers=0 (CPU).
    *
    * Conflicts with nGpuLayers (true + 0, or false + !=0) are rejected

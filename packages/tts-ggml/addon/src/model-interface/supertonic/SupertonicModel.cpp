@@ -13,9 +13,8 @@
 #include <tts-cpp/supertonic/engine.h>
 
 #include "addon/TTSErrors.hpp"
-#include "model-interface/BackendUtils.hpp"
 #include "inference-addon-cpp/Errors.hpp"
-#include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/BackendUtils.hpp"
 
 namespace qvac::ttsggml::supertonic {
 
@@ -25,7 +24,6 @@ using qvac_errors::createTTSError;
 using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
-namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) {
   tts_cpp::supertonic::EngineOptions opts;
@@ -127,9 +125,10 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
     }
   }
   // GPU execution is honored for Supertonic on GPU-capable hosts (Metal on
-  // Apple, Vulkan/CUDA on desktop). On Android it is still forced to CPU in
-  // loadLocked() below (Adreno OpenCL/Vulkan ggml graph compute is unstable);
-  // the cross-field conflict check above is the only hard rejection here.
+  // Apple, Vulkan/CUDA on desktop, Vulkan/OpenCL on Android). tts-cpp applies
+  // its per-vendor allowlist (Adreno/Xclipse/Mali) and falls back to CPU on
+  // GPUs it can't drive; the cross-field conflict check above is the only hard
+  // rejection here.
 }
 
 void SupertonicModel::load() {
@@ -151,24 +150,6 @@ void SupertonicModel::reload() {
 void SupertonicModel::loadLocked() {
   if (engine_) return;
 
-  // Force useGPU to false on Android until Vulkan (Mali) and OpenCL (Adreno)
-  // stabilize for the Supertonic graph.
-#ifdef __ANDROID__
-  {
-    const bool wantsGpu =
-        cfg_.useGpu.value_or(false) ||
-        (cfg_.nGpuLayers.has_value() && *cfg_.nGpuLayers != 0);
-    if (wantsGpu) {
-      QLOG(logger::Priority::WARNING,
-           "Supertonic: useGPU=true is currently ignored on Android "
-           "(GPU backends disabled at engine boundary pending Vulkan/Mali "
-           "and OpenCL/Adreno driver fixes); falling back to CPU.");
-    }
-    cfg_.useGpu     = false;
-    cfg_.nGpuLayers = 0;
-  }
-#endif
-
   try {
     engine_ = std::make_shared<tts_cpp::supertonic::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {
@@ -181,6 +162,7 @@ void SupertonicModel::loadLocked() {
   backendName_   = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
+  gpuUnsupported_ = engine_->gpu_unsupported();
 }
 
 void SupertonicModel::unloadLocked() {
@@ -273,6 +255,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats SupertonicModel::runtimeStats() const
   stats.emplace_back("totalSamples", totalSamples_);
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
+  stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
   return stats;
 }
 

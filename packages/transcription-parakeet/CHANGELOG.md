@@ -5,7 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Package-local vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.8.0]
+
+### Added
+
+- **Android GPU for Parakeet (QVAC-20556).** Remove the `#ifdef __ANDROID__`
+  guard in `ParakeetModel::load` that forced `useGPU=false`; `useGPU` now flows
+  to `parakeet-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which runs
+  the encoder on the GPU and selects the backend per its Adreno-tier / vendor
+  policy — Adreno 700+ on OpenCL (TDT decode routed to the host so the missing
+  `ARGMAX` kernel can't abort), Mali / Xclipse on Vulkan, with unsupported
+  tiers/vendors routed to CPU and surfaced via the new `gpuUnsupported` runtime
+  stat (`index.d.ts` `RuntimeStats.gpuUnsupported`). `CMakeLists.txt` now stages
+  the Vulkan/OpenCL MODULE `.so`s in the Android prebuild (reverses the [0.7.2]
+  CPU-only packaging), and the `default-registry` baseline advances to `6fe4e2b`
+  so the new version resolves. The Android gpu-smoke skips are dropped (GPU
+  asserted on Adreno/Mali; a policy CPU fallback flagged via `gpuUnsupported` is
+  accepted).
 
 ### Changed
 

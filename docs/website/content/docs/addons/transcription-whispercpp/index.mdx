@@ -51,7 +51,7 @@ npm init -y
 Install dependencies:
 
 ```bash
-npm i @qvac/dl-filesystem @qvac/transcription-whispercpp bare-fs bare-process
+npm i @qvac/transcription-whispercpp bare-fs bare-process
 ```
 </Step>
 
@@ -67,34 +67,31 @@ Create `index.js`:
 
 <WrapCode>
 
-```js title="index.js" lineNumbers'use strict'
+```js title="index.js" lineNumbers
+'use strict'
 
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
-const FilesystemDL = require('@qvac/dl-filesystem')
 
 async function main () {
-  const modelName = 'ggml-tiny.bin'
-  const dirPath = './models'
+  const modelsDir = './models'
   const audioFilePath = './my-audio.raw'
 
-  // 1. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 2. Constructor arguments
+  // 1. Constructor arguments — point directly at local model files
   const constructorArgs = {
-    modelName,
-    loader: fsDL,
-    diskPath: dirPath
+    files: {
+      model: path.join(modelsDir, 'ggml-tiny.bin'),
+      vadModel: path.join(modelsDir, 'ggml-silero-v5.1.2.bin')
+    },
+    opts: { stats: true }
   }
 
-  // 3. Configuration object
+  // 2. Configuration object
   const config = {
-    opts: { stats: true },
     whisperConfig: {
       audio_format: 's16le',
-      vad_model_path: './models/ggml-silero-v5.1.2.bin',
       vad_params: {
         threshold: 0.35,
         min_speech_duration_ms: 200,
@@ -107,11 +104,11 @@ async function main () {
     }
   }
 
-  // 4. Loading model
+  // 3. Loading model
   const model = new TranscriptionWhispercpp(constructorArgs, config)
   await model.load()
 
-  // 5. Running transcription
+  // 4. Running transcription
   const bitRate = 128000
   const bytesPerSecond = bitRate / 8
   const audioStream = fs.createReadStream(audioFilePath, { highWaterMark: bytesPerSecond })
@@ -139,9 +136,8 @@ async function main () {
     console.log('No transcription output received.')
   }
 
-  // 6. Cleaning up resources
+  // 5. Cleaning up resources
   await model.destroy()
-  await fsDL.close()
 }
 
 main().catch(err => {
@@ -162,24 +158,44 @@ bare index.js
 
 ## Usage
 
-### 1. Choose a Data Loader
+### 1. Provide Model Files
 
-First, select and instantiate a data loader that provides access to model files:
+The addon loads model weights directly from local file paths. Make sure the whisper model (and optional VAD model) already exist on disk, then pass their paths via the `files` field of the constructor arguments:
 
 ```javascript
-// Option A: Filesystem Data Loader - for local model files
-const FilesystemDL = require('@qvac/dl-filesystem')
-const fsDL = new FilesystemDL({
-  dirPath: './path/to/model/files' // Directory containing model weights and settings
-})
+const path = require('bare-path')
 
-// Option B: Hyperdrive Data Loader - for peer-to-peer distributed models
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
-// Key comes from the Model Registry (see below)
-const hdDL = new HyperDriveDL({
-  key: 'hd://<driveKey>',  // Hyperdrive key containing model files
-  store: corestore        // (Optional) A Corestore instance, If not provided, the Hyperdrive will use an in-memory store.
-})
+const constructorArgs = {
+  files: {
+    model: path.join('./models', 'ggml-tiny.bin'),           // whisper model weights
+    vadModel: path.join('./models', 'ggml-silero-v5.1.2.bin') // optional VAD model
+  }
+}
+```
+
+#### Fetching model files from the QVAC model registry
+
+If you don't want to stage files manually, use [`@qvac/registry-client`](https://www.npmjs.com/package/@qvac/registry-client) to download them to disk first, then pass the resulting paths to the constructor:
+
+```javascript
+const path = require('bare-path')
+const { QVACRegistryClient } = require('@qvac/registry-client')
+
+async function ensureModels (outputDir) {
+  const client = new QVACRegistryClient()
+  await client.ready()
+  try {
+    const modelPath = path.join(outputDir, 'ggml-tiny.bin')
+    await client.downloadModel(
+      'qvac_models_compiled/whisper/<date>/ggml-tiny.bin', // registry path
+      's3',                                                // registry source
+      { outputFile: modelPath, timeout: 600000 }
+    )
+    return { model: modelPath }
+  } finally {
+    await client.close()
+  }
+}
 ```
 
 ### 2. Configure Transcription Parameters
@@ -257,7 +273,7 @@ Between this minimal configuration and the example scripts you should have every
 **VAD Model:**
 - `ggml-silero-v5.1.2.bin` - Silero VAD model for voice activity detection
 
-Ensure model files are available in your chosen data loader source.
+Ensure the model files exist on disk before constructing the model.
 
 ### 4. Create Model Instance
 
@@ -266,7 +282,7 @@ Import the specific Whisper model class based on the installed package and insta
 ```javascript
 const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
 
-const model = new TranscriptionWhispercpp(args, config)
+const model = new TranscriptionWhispercpp(constructorArgs, config)
 ```
 
 Note : This import changes depending on the package installed.
@@ -282,7 +298,7 @@ try {
 
   // Advanced usage with progress tracking
   await model.load(
-          false,  // Don't close loader after loading
+          false,  // reserved flag, kept for forwarding compatibility
           (progress) => console.log(`Loading: ${progress.overallProgress}% complete`)
   )
 } catch (error) {
@@ -380,8 +396,6 @@ Always unload the model when finished to free up memory and resources:
 ```javascript
 try {
   await model.unload()
-  // If using Hyperdrive/Hyperbee, close the db instance if applicable
-  await db.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
@@ -409,7 +423,7 @@ const TranscriptionFfmpegAddon = require('@qvac/transcription-whispercpp/transcr
 
 When you instantiate `TranscriptionFfmpegAddon`, pass:
 
-* `loader`: your data loader instance
+* `files.model`: path to the whisper model file (with optional `files.vadModel`)
 * `params.decoder.audioFormat`: one of
   * `'decoded'` (raw PCM input - for pre-decoded audio files)
   * `'encoded'` | `'s16le'` | `'f32le'` | `'mp3'` | `'wav'` | `'m4a'` (for encoded audio files)

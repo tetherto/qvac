@@ -4,7 +4,8 @@
  */
 import fs from "bare-fs";
 import path from "bare-path";
-import process from "bare-process";
+import os from "bare-os";
+import env from "bare-env";
 import { validateConfig, type QvacConfig } from "./config-utils";
 import {
   ConfigFileInvalidError,
@@ -19,7 +20,7 @@ const SUPPORTED_CONFIG_FILE_EXTS = [".js", ".json"];
 const logger = getClientLogger();
 
 function findProjectRoot(): string {
-  return process.cwd();
+  return os.cwd();
 }
 
 function fileExists(filePath: string): boolean {
@@ -73,7 +74,7 @@ function findConfigFile(searchDir: string): string | undefined {
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- matches Node/Expo resolver signature
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
-  const configPath = process.env["QVAC_CONFIG_PATH"];
+  const configPath = env["QVAC_CONFIG_PATH"];
 
   if (configPath) {
     const normalizedPath = path.resolve(configPath);
