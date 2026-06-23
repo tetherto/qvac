@@ -319,4 +319,6 @@ public:
    *
    */
   virtual void resetMedia() {};
+
+  [[nodiscard]] llama_seq_id getSeqId() const { return 0; }
 };

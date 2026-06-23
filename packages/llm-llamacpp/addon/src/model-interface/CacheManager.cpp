@@ -206,7 +206,31 @@ bool CacheManager::loadCache() {
     }
 
     auto* mem = llama_get_memory(ctx);
-    llama_memory_seq_rm(mem, -1, sessionMetadata.nPast(), -1);
+    if (mem == nullptr) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          string_format(
+              "%s: llama memory is null after loading session file '%s'\n",
+              __func__,
+              sessionPath_.c_str()));
+    }
+
+    const llama_pos restoredNPast =
+        llama_memory_seq_pos_max(mem, llmContext_->getSeqId()) + 1;
+    const auto expectedNPast = static_cast<llama_pos>(sessionMetadata.nPast());
+    if (restoredNPast != expectedNPast) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          string_format(
+              "%s: cache file '%s' restored nPast=%d, but metadata expected "
+              "nPast=%d\n",
+              __func__,
+              sessionPath_.c_str(),
+              restoredNPast,
+              expectedNPast));
+    }
     return true;
   }
   return false;
