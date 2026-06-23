@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/ContinuousBatchScheduler.hpp"
+#include "model-interface/MultiRequestBatcher.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
 namespace {
@@ -80,6 +81,45 @@ TEST(RuntimeStatsRates, ResetClearsRates) {
   stats.reset();
   EXPECT_DOUBLE_EQ(stats.decodeTokensPerSecond(), 0.0);
   EXPECT_DOUBLE_EQ(stats.prefillTokensPerSecond(), 0.0);
+}
+
+// Minimal `Request` constructed only with the fields `accumulateSlot`
+// reads (`generatedTokens.size()` and `prefillTokenCount` — both zero
+// here because we're isolating the `thinkingDiscards` aggregation).
+Request makeStubRequest() {
+  return Request(/*rid=*/0, /*toks=*/{}, /*maxTokens=*/0);
+}
+
+// `thinkingDiscards` is the per-slot count of compacted reasoning blocks
+// the scheduler aggregates across all slots in a batch — this is the
+// counter that surfaces as `RuntimeStats.thinkingBlockDiscards` to the JS
+// side. The two tests below pin the sum semantics independent of any
+// driver.
+TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
+  RuntimeStatsSnapshot stats;
+  Request reqA = makeStubRequest();
+  Request reqB = makeStubRequest();
+  Request reqC = makeStubRequest();
+
+  // (nPast, nSlides, thinkingDiscards, req)
+  stats.accumulateSlot(
+      /*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/1, reqA);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/0, reqB);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/2, reqC);
+
+  EXPECT_EQ(stats.thinkingBlockDiscards, 3);
+}
+
+TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsThinkingDiscards) {
+  RuntimeStatsSnapshot stats;
+  Request req = makeStubRequest();
+  stats.accumulateSlot(0, 0, 5, req);
+  EXPECT_EQ(stats.thinkingBlockDiscards, 5);
+
+  stats.reset();
+  EXPECT_EQ(stats.thinkingBlockDiscards, 0);
 }
 
 } // namespace

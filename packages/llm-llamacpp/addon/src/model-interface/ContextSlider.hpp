@@ -107,3 +107,25 @@ ContextSlideOutcome trySlideGeneration(
     ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps(),
     llama_pos effectiveCtx = -1, llama_pos nCacheTokens = -1);
+
+/// Outcome of an in-place KV-cache range compaction.
+struct CompactRangeOutcome {
+  enum class Kind {
+    NoOp,                  // Empty / inverted range; cache untouched
+    Compacted,             // Range removed and tail shifted
+    MemoryOperationFailed, // seqRm rejected the request
+  };
+
+  Kind kind = Kind::NoOp;
+  llama_pos newNPast = 0;
+  llama_pos discarded = 0;
+};
+
+/// Drops `[startPos, endPos)` from `seqId`'s KV cache and shifts the tail
+/// `[endPos, nPast)` down. Pure primitive; the caller owns policy
+/// (overflow checks, `firstMsgTokens` / tools_compact accounting).
+/// Returns NoOp for empty / out-of-range inputs without touching the cache.
+CompactRangeOutcome compactKvRange(
+    llama_context* lctx, llama_seq_id seqId, llama_pos startPos,
+    llama_pos endPos, llama_pos nPast,
+    const IContextSliderOps& ops = defaultContextSliderOps());

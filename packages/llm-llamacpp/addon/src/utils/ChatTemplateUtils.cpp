@@ -1,6 +1,7 @@
 #include "ChatTemplateUtils.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <ranges>
 #include <string_view>
@@ -23,6 +24,10 @@ namespace {
 // `general.basename` GGUF metadata to identify MedPsy models.
 inline constexpr std::string_view MEDPSY_BASENAME_LOWER{"medpsy"};
 
+// Basename substrings used to identify Gemma 4 GGUFs by `general.basename`.
+inline constexpr std::array<std::string_view, 3> GEMMA4_BASENAME_MARKERS{
+    "gemma-4", "gemma 4", "gemma4"};
+
 std::string toLower(std::string_view value) {
   std::string lowered(value.size(), '\0');
   std::ranges::transform(value, lowered.begin(), [](unsigned char ch) {
@@ -42,6 +47,18 @@ bool isQwen3Architecture(std::string_view architecture) {
 bool isHarmonyArchitecture(std::string_view architecture) {
   return normalizeArchitecture(architecture) == "gpt-oss";
 }
+
+bool isGemma4Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "gemma4";
+}
+
+// Architectures in the Qwen3 family that emit `<think>`/`</think>`.
+// Broader than `isQwen3Architecture` (which is exact-match "qwen3" for
+// the tools_compact path) but deliberately narrower than the full
+// `qwen3*` HuggingFace lineage — explicit list keeps unrelated
+// `qwen3*`-named archs from silently inheriting the wrong tags.
+inline constexpr std::array<std::string_view, 4> QWEN3_REASONING_FAMILY_ARCHES{
+    "qwen3", "qwen3moe", "qwen35", "qwen35moe"};
 
 std::optional<std::string>
 readMetadataString(const ::llama_model* model, const char* key) {
@@ -101,12 +118,36 @@ bool isMedPsyModel(const ::llama_model* model) {
   return isMedPsyBasename(getModelBasename(model).value_or(""));
 }
 
+bool isGemma4Basename(std::string_view basename) {
+  if (basename.empty()) {
+    return false;
+  }
+  const std::string lowered = toLower(basename);
+  for (std::string_view marker : GEMMA4_BASENAME_MARKERS) {
+    if (lowered.find(marker) != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool isHarmonyModel(const ::llama_model* model) {
   if (model == nullptr) {
     return false;
   }
   std::optional<std::string> arch = getModelArchitecture(model);
   return arch.has_value() && isHarmonyArchitecture(arch.value());
+}
+
+bool isGemma4Model(const ::llama_model* model) {
+  if (model == nullptr) {
+    return false;
+  }
+  const std::optional<std::string> arch = getModelArchitecture(model);
+  if (arch.has_value() && isGemma4Architecture(arch.value())) {
+    return true;
+  }
+  return isGemma4Basename(getModelBasename(model).value_or(""));
 }
 
 llama_token getHarmonyCallToken(::llama_context* lctx) {
@@ -129,6 +170,51 @@ std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
     return std::nullopt;
   }
   return std::string("<tool_call>");
+}
+
+bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture) {
+  const std::string normalised = normalizeArchitecture(architecture);
+  return std::ranges::find(QWEN3_REASONING_FAMILY_ARCHES, normalised) !=
+         QWEN3_REASONING_FAMILY_ARCHES.end();
+}
+
+std::optional<ReasoningTags> selectReasoningTagsForArchitecture(
+    const std::optional<std::string>& architecture) {
+  if (architecture.has_value() &&
+      isQwen3ReasoningFamilyArchitecture(architecture.value())) {
+    return ReasoningTags{.open = "<think>", .close = "</think>"};
+  }
+  return std::nullopt;
+}
+
+std::optional<ReasoningTags> selectReasoningTagSource(
+    const std::string& templateThinkingStartTag,
+    const std::string& templateThinkingEndTag,
+    const std::optional<ReasoningTags>& fallbackTags) {
+  // Both template tags must be present to take effect; one without the
+  // other is ambiguous (we cannot detect a channel with only an open
+  // or only a close marker) and falls back to the model-family table.
+  if (!templateThinkingStartTag.empty() && !templateThinkingEndTag.empty()) {
+    return ReasoningTags{
+        .open = templateThinkingStartTag, .close = templateThinkingEndTag};
+  }
+  return fallbackTags;
+}
+
+std::optional<ReasoningTags>
+selectReasoningTagsForModel(const ::llama_model* model) {
+  if (model == nullptr) {
+    return std::nullopt;
+  }
+  const std::optional<ReasoningTags> archTags =
+      selectReasoningTagsForArchitecture(getModelArchitecture(model));
+  if (archTags.has_value()) {
+    return archTags;
+  }
+  if (isGemma4Model(model)) {
+    return ReasoningTags{.open = "<|channel>thought", .close = "<channel|>"};
+  }
+  return std::nullopt;
 }
 
 std::string getChatTemplateForModel(
