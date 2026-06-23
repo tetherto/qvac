@@ -17,7 +17,8 @@ opencode          # interactive — uses qvac/qwen3.5-9b by default
 opencode run "…"  # one-shot — works too (no startup race)
 ```
 
-That's it: no `provider` block, no second terminal, no `QVAC_MODEL=` prefix.
+The plugin registers the local `qvac` provider and selects `qvac/qwen3.5-9b`
+as the project model by default.
 
 ## How it works
 
@@ -39,7 +40,7 @@ Multiple OpenCode windows **share one serve** (the provider's `reuse` default):
 the detached runner owns the loaded model and reaps it a few minutes after the
 last session leaves, so a second window doesn't reload the model.
 
-## Model ids
+## Model selection
 
 You pick a friendly, models.dev-style id (`qwen3.5-9b`) and that exact id flows
 through the whole stack — OpenCode's model picker (`qvac/qwen3.5-9b`) and the
@@ -48,15 +49,21 @@ request `model` field. The verbose QVAC constant
 friendly-id → constant mapping lives in `@qvac/ai-sdk-provider`'s `qvacCatalog`,
 so every AI-SDK tool resolves the same ids.
 
-| models.dev id  | QVAC constant                     |
-| -------------- | --------------------------------- |
-| `qwen3.5-0.8b` | `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M`  |
-| `qwen3.5-2b`   | `QWEN3_5_2B_MULTIMODAL_Q4_K_M`    |
-| `qwen3.5-4b`   | `QWEN3_5_4B_MULTIMODAL_Q4_K_M`    |
-| `qwen3.5-9b`   | `QWEN3_5_9B_MULTIMODAL_Q4_K_M`    |
+The plugin accepts both friendly catalog ids and raw QVAC model constants. Use
+the strongest model your machine can keep warm; coding agents are far more
+sensitive to model quality than short chatbots are.
 
-Passing a raw constant also works (it normalizes back to the friendly id for
-display).
+| Model value | Use when | Notes |
+| --- | --- | --- |
+| `qwen3.5-9b` | You want the best friendly-id default and your machine can keep it warm. | Default. Loads `QWEN3_5_9B_MULTIMODAL_Q4_K_M`. |
+| `GPT_OSS_20B_INST_Q4_K_M` | You want a larger local text/code model for more demanding agent work. | Raw QVAC constant; appears in OpenCode as `qvac/GPT_OSS_20B_INST_Q4_K_M`. |
+| `GEMMA4_31B_MULTIMODAL_Q4_K_M` | You want the larger Gemma4 local model and have enough memory. | Raw QVAC constant; appears in OpenCode as `qvac/GEMMA4_31B_MULTIMODAL_Q4_K_M`. |
+| `qwen3.5-4b` | You need a smaller/faster model for lighter code questions or modest hardware. | Less reliable for tool-heavy workflows than 9B and larger models. |
+| `qwen3.5-2b` | You are smoke-testing the plugin/server path or using a low-memory machine. | Fast, but weak for real coding-agent work. |
+| `qwen3.5-0.8b` | You need the fastest health check or demo. | Not recommended for reliable tool use or code reasoning. |
+
+Friendly ids are easier to read and match the model picker. Raw constants give
+you access to other SDK chat models that are not yet in the friendly catalog.
 
 ## Options
 

@@ -5,8 +5,8 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
-import { parakeetTests } from "../../parakeet-tests.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
+import { parakeetTests } from "../../../parakeet-tests.js";
 
 export class ParakeetExecutor extends AbstractModelExecutor<
   typeof parakeetTests

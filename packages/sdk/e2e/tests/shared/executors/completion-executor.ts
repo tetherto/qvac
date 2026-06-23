@@ -30,6 +30,7 @@ interface GenerationParams {
   presence_penalty?: number;
   repeat_penalty?: number;
   reasoning_budget?: number;
+  remove_thinking_from_context?: boolean;
 }
 
 interface CompletionTestParams {

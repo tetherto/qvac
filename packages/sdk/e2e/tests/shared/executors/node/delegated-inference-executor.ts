@@ -9,18 +9,19 @@ import {
   LLAMA_3_2_1B_INST_Q4_0,
 } from "@qvac/sdk";
 import type { TestResult } from "@tetherto/qvac-test-suite";
-import { DelegatedInferenceExecutor as SharedDelegatedInferenceExecutor } from "../../shared/executors/delegated-inference-executor.js";
+import { DelegatedInferenceExecutor as SharedDelegatedInferenceExecutor } from "../delegated-inference-executor.js";
 import {
   delegatedE2ECompletion,
   delegatedE2EStreaming,
   delegatedE2ELoadedModelInfo,
-} from "../../delegated-inference-tests.js";
+} from "../../../delegated-inference-tests.js";
 
 const E2E_DELEGATION_TIMEOUT = 60_000;
 const E2E_PROVIDER_STARTUP_TIMEOUT = 60_000;
 
 const providerScriptPath = join(
   dirname(fileURLToPath(import.meta.url)),
+  "..",
   "..",
   "..",
   "utils",

@@ -6,10 +6,10 @@ import {
 import {
   CancellationExecutor,
   type TranscribeCancelParams,
-} from "../../shared/executors/cancellation-executor.js";
-import { cancelByRequestIdTranscribe } from "../../cancellation-tests.js";
+} from "../cancellation-executor.js";
+import { cancelByRequestIdTranscribe } from "../../../cancellation-tests.js";
 
-export class DesktopCancellationExecutor extends CancellationExecutor {
+export class NodeCancellationExecutor extends CancellationExecutor {
   protected override handlers = {
     ...this.buildSharedHandlers(),
     [cancelByRequestIdTranscribe.testId]: this.transcribeTargeted.bind(this),

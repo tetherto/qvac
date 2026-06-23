@@ -5,8 +5,8 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
-import { ocrTests } from "../../ocr-tests.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
+import { ocrTests } from "../../../ocr-tests.js";
 
 interface OcrParams {
   imageFileName: string;

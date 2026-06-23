@@ -5,9 +5,9 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
-import { visionTests } from "../../vision-tests.js";
-import { callWhenAddonIdle } from "../../shared/utils/addon-idle.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
+import { visionTests } from "../../../vision-tests.js";
+import { callWhenAddonIdle } from "../../utils/addon-idle.js";
 
 type VisionParams = {
   history: Array<{ role: string; content: string; attachments?: Array<{ path: string }> }>;
