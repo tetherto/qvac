@@ -35,7 +35,7 @@ int dominantPeriod(const std::vector<float>& x, int minLag, int maxLag) {
   for (int lag = minLag; lag <= maxLag; ++lag) {
     double acc = 0.0;
     for (std::size_t i = 0; i + lag < x.size(); ++i)
-      acc += x[i] * x[i + lag];
+      acc += static_cast<double>(x[i]) * static_cast<double>(x[i + lag]);
     if (acc > best) {
       best = acc;
       bestLag = lag;
