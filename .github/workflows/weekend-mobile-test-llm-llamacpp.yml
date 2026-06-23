@@ -119,7 +119,10 @@ jobs:
   report:
     name: Open weekly report issue
     needs: [android, ios]
-    if: always()
+    # Only the scheduled (weekly cron) run files a tracking issue. Manual
+    # workflow_dispatch runs are ad-hoc single-platform checks — their results
+    # are on the run Summary page, so we skip the issue to avoid noise.
+    if: always() && github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read

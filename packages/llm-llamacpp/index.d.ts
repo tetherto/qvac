@@ -74,8 +74,13 @@ export interface LlamaConfig {
   'cache-type-v'?: string
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
   openclCacheDir?: string
-  /** Reasoning channel budget. `-1` (default) leaves the model's reasoning channel on; `0` disables it. */
-  reasoning_budget?: -1 | 0 | '-1' | '0'
+  /**
+   * Reasoning channel budget. `-1` (default) leaves the model's reasoning
+   * channel on; `0` disables it; any positive integer caps the reasoning
+   * channel at that many tokens (the sampler force-emits `</think>` once
+   * the budget is exhausted).
+   */
+  reasoning_budget?: number | `${number}`
   /**
    * Number of concurrent sequence slots for continuous-batching (`--parallel` /
    * `n_parallel` in llama.cpp). Values `>= 2` activate the continuous-batch
@@ -157,11 +162,29 @@ export interface GenerationParams {
   json_schema?: string | Record<string, unknown>
   /**
    * Per-request reasoning channel budget. `-1` keeps the model's reasoning
-   * channel on; `0` disables it for this request. Equivalent to the load-time
+   * channel on; `0` disables it for this request; any positive integer caps
+   * the reasoning channel at that many tokens. Equivalent to the load-time
    * `reasoning_budget` config but scoped to a single `run()` call; the prior
    * value is restored afterwards.
    */
-  reasoning_budget?: -1 | 0
+  reasoning_budget?: number
+  /**
+   * When the model emits a reasoning block during generation (e.g.
+   * `<think>...</think>` for the Qwen3 family, `<|channel>thought ...
+   * <channel|>` for Gemma 4), drop those tokens from the KV cache at
+   * end-of-generation so subsequent turns do not accumulate reasoning
+   * history.
+   *
+   * Defaults to `false`. Set to `true` to drop reasoning tokens from
+   * the cache at end-of-generation. Supported on both text and
+   * multimodal contexts. No-op for models without a recognised
+   * reasoning channel.
+   *
+   * Throws when set to `true` on models with recurrent memory
+   * (SSM / hybrid SSM such as Qwen3.5) — `seq_rm + seq_add` leaves the
+   * SSM hidden state contaminated, so the feature is unsupported there.
+   */
+  remove_thinking_from_context?: boolean
 }
 
 export interface RunOptions {
@@ -204,6 +227,15 @@ export interface RuntimeStats {
   promptTokens: number
   /** Context-window slides for single requests, or the sum across completed batch slots. */
   contextSlides: number
+  /**
+   * Number of `<think>` (or model-equivalent) reasoning blocks dropped
+   * from the KV cache at end-of-generation by the
+   * `remove_thinking_from_context` feature. Per-inference for single
+   * requests; summed across completed slots for batch requests. 0 when
+   * the model has no recognised reasoning channel, when the feature
+   * was disabled per-request, or when no reasoning blocks were emitted.
+   */
+  thinkingBlockDiscards: number
   /**
    * Average active sequences decoded together during the last request,
    * including overlapping requests from other callers.

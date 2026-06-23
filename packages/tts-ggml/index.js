@@ -417,9 +417,8 @@ class TTSGgml {
     // Default GPU off only when neither knob is set, for every engine. A
     // caller passing nGpuLayers alone keeps it (no silent conflict with the
     // JS-side default). Supertonic GPU intent now flows through to tts-cpp on
-    // GPU-capable hosts (Metal / Vulkan / CUDA); on Android it is forced back
-    // to CPU at the native engine boundary (SupertonicModel::loadLocked) until
-    // the Adreno OpenCL/Vulkan path stabilizes.
+    // GPU-capable hosts (Metal / Vulkan / CUDA), including Android, where
+    // tts-cpp picks the GPU backend per its per-vendor allowlist.
     if (this._config.useGPU === undefined && this._nGpuLayers == null) {
       this._config.useGPU = false
     }

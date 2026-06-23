@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- New `getBackendInfo()` surfaces the active GPU hardware name. The native addon now captures `ggml_backend_dev_description()` for the resolved GPU device at `load()` (e.g. "NVIDIA GeForce RTX 3090", "Apple M2 Pro") and exposes it through `TranscriptionParakeet#getBackendInfo()` → `{ backendDevice, backendId, backendName, backendDescription }`. The RTF benchmark uses it as a fallback for `labels.gpuModel` on CI GPU runners where the host probe (nvidia-smi / procfs) can't see the device but the ggml CUDA/Vulkan/Metal backend still knows its name via `cudaGetDeviceProperties` / `VkPhysicalDeviceProperties` / `MTLDevice.name` (QVAC-21167).
+
+## [0.8.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Package-local vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.8.0]
+
+### Added
+
+- **Android GPU for Parakeet (QVAC-20556).** Remove the `#ifdef __ANDROID__`
+  guard in `ParakeetModel::load` that forced `useGPU=false`; `useGPU` now flows
+  to `parakeet-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which runs
+  the encoder on the GPU and selects the backend per its Adreno-tier / vendor
+  policy — Adreno 700+ on OpenCL (TDT decode routed to the host so the missing
+  `ARGMAX` kernel can't abort), Mali / Xclipse on Vulkan, with unsupported
+  tiers/vendors routed to CPU and surfaced via the new `gpuUnsupported` runtime
+  stat (`index.d.ts` `RuntimeStats.gpuUnsupported`). `CMakeLists.txt` now stages
+  the Vulkan/OpenCL MODULE `.so`s in the Android prebuild (reverses the [0.7.2]
+  CPU-only packaging), and the `default-registry` baseline advances to `6fe4e2b`
+  so the new version resolves. The Android gpu-smoke skips are dropped (GPU
+  asserted on Adreno/Mali; a policy CPU fallback flagged via `gpuUnsupported` is
+  accepted).
+
+### Changed
+
 - Bumped the `parakeet-cpp` `version>=` constraint to `2026-06-10` (whisper.cpp `1c75d6e9`), which refreshes the bundled `ggml-speech` to the current speech-branch tip `bec032cd`. The registry baseline is left unchanged. The `parakeet-cpp` C++ tree is unchanged since the previous `128dae42` pin, so this only moves `ggml-speech`; prebuilds and the desktop RTF benchmark now build against the latest speech stack (QVAC-20614).
 - Performance reports now surface the desktop GPU hardware name. `test/integration/helpers.js` injects `bare-subprocess` into the shared performance reporter's `configure()` so `_detectGpu()` can shell out to nvidia-smi / vulkaninfo / system_profiler and populate `device.gpu` (e.g. "NVIDIA RTX 4000 SFF Ada") on GPU desktop runners (QVAC-20499). Mobile (Device Farm) reports continue to leave `device.gpu` null — the device name is the proxy there.
 - RTF benchmark now reports GGML backends. `test/benchmark/rtf-benchmark.test.js` resolves the requested GPU backend family to the parakeet.cpp cascade (Metal on darwin/ios, Vulkan on linux/win32, Vulkan/OpenCL on android) instead of the stale ONNX names (coreml/nnapi/auto-gpu), and now captures the *actual* backend the engine ran on via `stats.backendId` / `stats.backendDevice` (`labels.activeBackend`, `summary.backendId`). `scripts/perf-report/aggregate-parakeet-rtf.js` GPU-backend coverage map updated to the GGML set (vulkan/metal/opencl/cuda).
