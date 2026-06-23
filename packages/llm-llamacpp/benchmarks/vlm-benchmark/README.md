@@ -88,17 +88,31 @@ and varies another.
 
 | | **two-models** | **several-sources** |
 |---|---|---|
-| Varies | the **model** | the **inference engine** |
+| Varies | the **model** | the **source** (build and/or engine) |
 | Holds fixed | the engine (default `addon`) | the model |
-| Compares | `MODEL_1` vs `MODEL_2` | `addon` vs `fabric-cli` vs `upstream-cli` |
-| Default example | Qwen3.5 mmproj-F16 vs mmproj-Q8 | Qwen3.5 + q8 mmproj across all three engines |
-| Targets | desktop + mobile, CPU + GPU | **desktop only** (Linux / macOS / Windows) — the CLIs are native binaries built per-OS; mobile runs an addon app, not arbitrary CLIs |
-| Headline metric | per-model quality + vision-encode time | per-engine quality (VQA + OCR) + encode/TTFT |
+| Compares | `MODEL_1` vs `MODEL_2` | any of: `addon@candidate` vs `addon@baseline` (build comparison) · `addon` vs `fabric-cli` vs `upstream-cli` (engine comparison) |
+| Default example | Qwen3.5 mmproj-F16 vs mmproj-Q8 | candidate addon (your branch) vs the published baseline — same model |
+| Targets | desktop + mobile, CPU + GPU | desktop (Linux/macOS/Windows) for all sources; mobile for the **addon** builds only (`addon@candidate`/`@baseline` run as separate Device Farm sessions) — the native `fabric`/`upstream` CLIs are desktop-only |
+| Headline metric | per-model quality + vision-encode time | per-source quality (VQA + OCR) + encode/TTFT |
 
 **two-models** compares the two complete VLMs configured as `MODEL_1` and `MODEL_2`.
 Each is a main LLM blob + an mmproj blob. They can be **two blobs/variants of the same
 model** (the default — Qwen3.5 with the projector at F16 vs Q8: same `llm`, different
 `mmproj`) or **two different models** (point the two `llm` blobs at different models).
+
+**several-sources** holds the model fixed and varies the **source** — what's running it.
+Two flavours, freely combined via `matrix_sources`:
+- **Build comparison (A2):** `addon@candidate` vs `addon@baseline`. The **candidate** is the
+  addon built from the dispatched `ref` (your branch / PR head / commit — see "Running it");
+  the **baseline** is the pinned published npm version (`config.defaultBaseline.npm`). This is
+  how you check, *before merge*, whether a change actually moved speed/quality. Desktop swaps
+  the freshly-built prebuild per source per run; mobile runs each build as its own Device Farm
+  session. Two sources → a clean 2-column report.
+- **Engine comparison:** `addon` vs `fabric-cli` vs `upstream-cli` — the same model across the
+  published addon and the two native llama.cpp CLIs (desktop-only, built from source per-OS).
+
+The report's **Details → "Sources — resolved versions"** table shows exactly what each column
+resolved to (e.g. `addon@candidate → git:<sha>`, `addon@baseline → npm:0.24.0`).
 The report labels the two columns from each model's `label`.
 
 ---
@@ -185,9 +199,18 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
    - several-sources mode always runs the committed `SOURCES_MODEL`.
 
 **2. Update the source versions.**
-   - **Builds under comparison:** `-f matrix_sources=addon,fabric@v8189.0.2,upstream@b8189`
-     (the CLI refs ride inside the tokens; `addon` = the published npm prebuild;
-     `addon@candidate`/`addon@baseline` are reserved until A2 lands).
+   - **Sources under comparison** (`several-sources` mode): `-f matrix_sources=…`, comma-sep:
+     - `addon` — the published npm prebuild.
+     - `addon@candidate` — the addon **built from the dispatched `ref`** (your branch / PR head /
+       commit). Triggers the `prebuild-candidate` build job; desktop swaps the built prebuild in,
+       mobile bundles it into its own session.
+     - `addon@baseline` — the pinned published version (`config.defaultBaseline.npm`), packed from npm.
+     - `fabric@<ref>` / `upstream@<ref>` — native llama.cpp CLIs built from source (desktop-only).
+     - **Candidate-vs-baseline** = `-f matrix_sources=addon@candidate,addon@baseline` (a clean
+       2-source build comparison; see the example below). The native-CLI steps run only when a
+       `fabric`/`upstream` token is present, so this stays addon-only.
+   - **Candidate ref** = the **`ref`** input (`-f ref=<branch|tag|commit-sha>`, default = the branch
+     the workflow runs on). This is what gets built as `addon@candidate`.
    - **Model version:** bump the pinned commit in `config.cjs` (`SHA.*` / the blob's
      `source.sha`) — or just dispatch the new URL via `matrix_models`.
    - **Fixture images:** stored in a fixture object store (URI configured in the
@@ -216,8 +239,10 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
 
 **6. Mobile devices × backends (AWS Device Farm).**
    - Dispatch: `-f matrix_mobile=s26,s25,pixel9,iphone16,iphone17,iphone17pro` tokens, each
-     optionally suffixed `-cpu`/`-gpu` (bare = both in one session). Empty = no mobile;
-     two-models only — ignored for several-sources (desktop-only).
+     optionally suffixed `-cpu`/`-gpu` (bare = both in one session). Empty = no mobile.
+     Runs for two-models, and for the **addon** builds of several-sources
+     (`addon@candidate`/`@baseline` → one Device Farm session each); the native
+     `fabric`/`upstream` CLI sources are desktop-only and skipped on mobile.
 
 **7. Task set** — `scenarios.cjs` defines one `default` set: the 5 VQA tasks
    (textvqa/vizwiz/gqa/docvqa/ai2d) + the OCR tasks (ocr-small/ocr-page). Quality is
@@ -237,12 +262,13 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
 | input | overrides | purpose |
 |---|---|---|
 | `run_matrix` | — | **must be true** to run the matrix at all |
+| `ref` | current branch | addon ref to test — branch / tag / **commit SHA**; built as `addon@candidate` (A2) |
 | `matrix_mode` | `config.mode` | `two-models` \| `several-sources` (every leg) |
 | `matrix_preset` | `config.defaultPreset` | `smoke` \| `cognitive` \| `ocr1page` \| `ocr5pages` \| `full` (every leg) |
 | `matrix_models` | `config.defaultModels` | catalog names / `[label=]<llm-url>\|<mmproj-url>[@ctx=N]` / `json:[…]` (CONTRACT.md §3) |
-| `matrix_sources` | — | builds under comparison: `addon` \| `fabric@<ref>` \| `upstream@<ref>` (`addon@candidate/baseline` reserved, A2) |
+| `matrix_sources` | — | sources to compare: `addon` \| `addon@candidate` \| `addon@baseline` \| `fabric@<ref>` \| `upstream@<ref>` |
 | `matrix_desktop` | — | desktop legs: `{linux,macos,macmini,windows}-{cpu,gpu}` (any subset) |
-| `matrix_mobile` | — | mobile legs: `{s26,s25,pixel9,iphone16,iphone17,iphone17pro}[-{cpu,gpu}]` (any subset; empty = none; two-models only) |
+| `matrix_mobile` | — | mobile legs: `{s26,s25,pixel9,iphone16,iphone17,iphone17pro}[-{cpu,gpu}]` (empty = none; two-models, or several-sources addon builds → one session per source) |
 | `matrix_samples` | preset `samplesPerTask` | override samples/task, every leg (empty = default) |
 | `mobile_timeout_min` | `config.mobileTimeoutMin` | mobile per-leg timeout (min) — raises the Device-Farm Mocha/Android per-test ceiling (≤120; empty = config, null config = 35/30 default) |
 
@@ -255,6 +281,26 @@ gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> \
   -f matrix_desktop=linux-cpu,linux-gpu,macos-gpu \
   -f matrix_mobile=s25-cpu,s25-gpu,iphone17
 ```
+
+**Example** — candidate-vs-baseline (A2): validate an *unmerged* change against the
+published build. `--ref` selects the **workflow** (must be a branch/tag that carries this
+A2 workflow); `-f ref` selects the **candidate** addon to build (branch, tag, or commit SHA):
+
+```bash
+gh workflow run benchmark-vlm-model-comparison.yml \
+  --ref qvac-19371-vlm-benchmark-improve \          # branch hosting the A2 workflow
+  -f run_matrix=true -f matrix_mode=several-sources \
+  -f matrix_sources=addon@candidate,addon@baseline \
+  -f ref=<branch|tag|commit-sha> \                  # the addon built as addon@candidate
+  -f matrix_models=qwen3.5-q8 -f matrix_preset=full \
+  -f matrix_desktop=linux-cpu
+```
+
+Notes: `-f ref` accepts any branch/tag/**commit SHA** reachable in the repo — a same-repo PR
+(use its head branch) or a fork PR (use its head **commit SHA**; fork branch *names* don't
+resolve in the base repo). `--ref` (the workflow host) must be a branch/tag — `workflow_dispatch`
+does not accept a bare SHA there. `prebuild-candidate` builds the **full platform matrix** from
+`ref`; a non-linux build failure gates the desktop legs (desktop-only build filter is a follow-up).
 
 **Locally** you can run the harness directly under `bare` (desktop) by exporting
 `QVAC_VLM_MATRIX=1` plus any `QVAC_VLM_*` overrides (`QVAC_VLM_MODE`, `QVAC_VLM_PRESET`,
@@ -362,7 +408,7 @@ All in `packages/llm-llamacpp/benchmarks/vlm-benchmark/` unless noted:
 | `config.cjs` | run-side source of truth: modes, presets, model catalog, sources, methodology |
 | `scenarios.cjs` | the task set (VQA + OCR) the benchmark runs — report-side owned |
 | `models.cjs` | `matrix_models` grammar → canonical model specs (any model via two URLs) |
-| `sources.cjs`, `methodology.cjs` | source tokens + measurement methodology helpers (A2/A3 build on these) |
+| `sources.cjs`, `methodology.cjs` | source tokens (incl. addon@candidate/@baseline prebuild resolution, A2) + measurement methodology helpers (A3 builds on these) |
 | `run-desktop.cjs` | desktop run driver scaffold + `--selfcheck` contract guard |
 | `combine.cjs` | combine driver: log discovery, host tagging, provenance, report render (descriptive — no accuracy gate) |
 | `vlm-matrix.test.js`, `harness.cjs` | harness (loads models, emits markers) |
