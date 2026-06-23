@@ -431,6 +431,18 @@ class TranscriptionParakeet {
     return this.addon?.status()
   }
 
+  /**
+   * Backend the native engine resolved at load(): device class (CPU/GPU), the
+   * ggml backend family, and the human-readable GPU name (e.g. "NVIDIA GeForce
+   * RTX 3090"). The name is recovered from the addon's ggml device registry,
+   * so it works on CI runners where nvidia-smi / procfs are unavailable.
+   * `null` before load / after unload.
+   * @returns {{ backendDevice: string, backendId: number, backendName: string, backendDescription: string }|null}
+   */
+  getBackendInfo () {
+    return this.addon?.getBackendInfo?.() ?? null
+  }
+
   async pause () {
     await this.addon?.pause()
   }

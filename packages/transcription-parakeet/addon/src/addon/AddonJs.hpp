@@ -131,6 +131,40 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+// Returns the backend the engine resolved at load() as a JS object:
+// `{ backendDevice, backendId, backendName, backendDescription }`. The
+// description is the human-readable GPU name (e.g. "NVIDIA GeForce RTX 3090")
+// recovered from the ggml device registry; it is the nvidia-smi-independent
+// fallback the perf reporter uses on CI runners where the host probes can't
+// see the GPU. Available after activate(); reports CPU/"" before load.
+inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto& parakeetModel =
+      dynamic_cast<ParakeetModel&>(instance.addonCpp->model.get());
+
+  const int deviceClass = parakeetModel.getBackendDeviceClass();
+  auto result = js::Object::create(env);
+  result.setProperty(
+      env,
+      "backendDevice",
+      js::String::create(env, std::string(deviceClass == 1 ? "GPU" : "CPU")));
+  result.setProperty(
+      env, "backendId", js::Number::create(env, parakeetModel.getBackendId()));
+  result.setProperty(
+      env,
+      "backendName",
+      js::String::create(env, parakeetModel.getBackendName()));
+  result.setProperty(
+      env,
+      "backendDescription",
+      js::String::create(env, parakeetModel.getBackendDescription()));
+  return result;
+}
+JSCATCH
+
 // ─── Duplex streaming entry points ────────────────────────────────────────
 // Mirrors transcription-whispercpp's StreamingProcessor wiring. Each
 // addon instance can host at most one active streaming session at a

@@ -70,7 +70,7 @@ public:
 
   ParakeetStreamingProcessor(
       ParakeetModel& model,
-      std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> output_queue,
+      std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
       Config config);
 
   ~ParakeetStreamingProcessor();
@@ -103,10 +103,10 @@ public:
   int    sampleRate()   const { return config_.sampleRate; }
 
 private:
-  void processLoop_();
-  void onAsrSegment_(const parakeet::StreamingSegment& seg);
-  void onDiarSegment_(const parakeet::StreamingDiarizationSegment& seg);
-  void emitPending_();
+  void processLoop();
+  void onAsrSegment(const parakeet::StreamingSegment& seg);
+  void onDiarSegment(const parakeet::StreamingDiarizationSegment& seg);
+  void emitPending();
 
   ParakeetModel& model_;
   std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> output_queue_;

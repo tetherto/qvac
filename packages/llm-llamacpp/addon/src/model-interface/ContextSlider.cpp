@@ -162,6 +162,23 @@ ContextSlideOutcome trySlidePrefill(
       effectiveCtx);
 }
 
+CompactRangeOutcome compactKvRange(
+    llama_context* lctx, llama_seq_id seqId, llama_pos startPos,
+    llama_pos endPos, llama_pos nPast, const IContextSliderOps& ops) {
+  if (endPos <= startPos || startPos < 0 || endPos > nPast) {
+    return {CompactRangeOutcome::Kind::NoOp, nPast, 0};
+  }
+
+  const llama_pos discarded = endPos - startPos;
+  auto mem = ops.memory(lctx);
+  if (!ops.seqRm(mem, seqId, startPos, endPos)) {
+    return {CompactRangeOutcome::Kind::MemoryOperationFailed, nPast, 0};
+  }
+  // llama_memory_seq_add is void / infallible by API contract.
+  ops.seqAdd(mem, seqId, endPos, nPast, -discarded);
+  return {CompactRangeOutcome::Kind::Compacted, nPast - discarded, discarded};
+}
+
 ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
     llama_pos firstMsgTokens, llama_pos nDiscarded,
