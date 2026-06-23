@@ -86,15 +86,15 @@ int64_t measureMs(Fn&& fn) {
 // pipeline compile splits into two prints) are buffered and flushed
 // together so QLOG sees one logical line per ggml line.
 
-std::mutex&        ggml_log_buf_mutex() {
+std::mutex& ggmlLogBufMutex() {
   static std::mutex m;
   return m;
 }
-std::string&       ggml_log_buf() {
+std::string& ggmlLogBuf() {
   static std::string buf;
   return buf;
 }
-ggml_log_level&    ggml_log_buf_level() {
+ggml_log_level& ggmlLogBufLevel() {
   static ggml_log_level lvl = GGML_LOG_LEVEL_INFO;
   return lvl;
 }
@@ -112,18 +112,18 @@ logger::Priority ggmlLevelToPriority(ggml_log_level level) {
 
 void ggmlLogTrampoline(ggml_log_level level, const char * text, void * /*user_data*/) {
   if (!text) return;
-  std::lock_guard<std::mutex> lk(ggml_log_buf_mutex());
-  if (level != GGML_LOG_LEVEL_CONT) ggml_log_buf_level() = level;
-  ggml_log_buf().append(text);
+  std::lock_guard<std::mutex> lk(ggmlLogBufMutex());
+  if (level != GGML_LOG_LEVEL_CONT)
+    ggmlLogBufLevel() = level;
+  ggmlLogBuf().append(text);
   // Flush whole lines as they arrive; ggml emits both `\n`-terminated
   // strings and bare fragments, so we drain every newline we see.
-  for (size_t nl = ggml_log_buf().find('\n');
-       nl != std::string::npos;
-       nl = ggml_log_buf().find('\n')) {
-    std::string line = ggml_log_buf().substr(0, nl);
-    ggml_log_buf().erase(0, nl + 1);
+  for (size_t nl = ggmlLogBuf().find('\n'); nl != std::string::npos;
+       nl = ggmlLogBuf().find('\n')) {
+    std::string line = ggmlLogBuf().substr(0, nl);
+    ggmlLogBuf().erase(0, nl + 1);
     if (line.empty()) continue;
-    QLOG(ggmlLevelToPriority(ggml_log_buf_level()), line);
+    QLOG(ggmlLevelToPriority(ggmlLogBufLevel()), line);
   }
 }
 
@@ -167,7 +167,7 @@ void ParakeetModel::initializeBackend() {
   installGgmlLogTrampolineOnce();
 }
 
-std::filesystem::path ParakeetModel::writeBufferToTempFile_() {
+std::filesystem::path ParakeetModel::writeBufferToTempFile() {
   if (gguf_buffer_.empty()) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -183,13 +183,13 @@ std::filesystem::path ParakeetModel::writeBufferToTempFile_() {
   std::ostringstream name;
   name << "qvac-parakeet-" << pid << "-" << when << ".gguf";
 
-  fs::path tmp_dir;
+  fs::path tmpDir;
   try {
-    tmp_dir = fs::temp_directory_path();
+    tmpDir = fs::temp_directory_path();
   } catch (...) {
-    tmp_dir = "/tmp";
+    tmpDir = "/tmp";
   }
-  fs::path out = tmp_dir / name.str();
+  fs::path out = tmpDir / name.str();
 
   std::ofstream f(out, std::ios::binary);
   if (!f) {
@@ -210,7 +210,7 @@ std::filesystem::path ParakeetModel::writeBufferToTempFile_() {
   return out;
 }
 
-void ParakeetModel::cleanupTempFile_() {
+void ParakeetModel::cleanupTempFile() {
   if (!gguf_temp_path_.empty()) {
     std::error_code ec;
     fs::remove(gguf_temp_path_, ec);
@@ -221,24 +221,12 @@ void ParakeetModel::cleanupTempFile_() {
 void ParakeetModel::load() {
   if (is_loaded_) return;
 
-  // Force useGPU to false in Android until Vulkan and OpenCL are stabilized
-#ifdef __ANDROID__
-  if (cfg_.useGPU) {
-    QLOG(
-        logger::Priority::WARNING,
-        "Parakeet: useGPU=true is currently ignored on Android "
-        "(GPU backends disabled at engine boundary pending Vulkan/Mali "
-        "and OpenCL/Adreno driver fixes); falling back to CPU.");
-    cfg_.useGPU = false;
-  }
-#endif
-
   QLOG(logger::Priority::INFO,
        "Loading Parakeet GGUF (modelType hint: " +
            std::to_string(static_cast<int>(cfg_.modelType)) + ")");
 
   modelLoadMs_ = measureMs([&] {
-    fs::path gguf_path;
+    fs::path ggufPath;
 
     // Two ways to source the GGUF:
     //   1. Caller streamed bytes via setWeightsForFile() -- we materialise
@@ -250,10 +238,10 @@ void ParakeetModel::load() {
     // the temp-file copy entirely. setWeightsForFile() bytes are the
     // fallback for callers that don't have direct filesystem access.
     if (!cfg_.modelPath.empty() && fs::exists(cfg_.modelPath)) {
-      gguf_path = cfg_.modelPath;
+      ggufPath = cfg_.modelPath;
     } else if (gguf_completed_ && !gguf_buffer_.empty()) {
-      gguf_temp_path_ = writeBufferToTempFile_();
-      gguf_path = gguf_temp_path_;
+      gguf_temp_path_ = writeBufferToTempFile();
+      ggufPath = gguf_temp_path_;
     } else {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
@@ -263,7 +251,7 @@ void ParakeetModel::load() {
 
     installGgmlLogTrampolineOnce();
     parakeet::EngineOptions eopts;
-    eopts.model_gguf_path = gguf_path.string();
+    eopts.model_gguf_path = ggufPath.string();
     // n_threads = 0 lets ggml pick hardware_concurrency, matching the
     // standalone CLI's default. cfg_.maxThreads is honoured only when
     // explicitly set non-zero.
@@ -325,13 +313,14 @@ void ParakeetModel::load() {
         engine_->backend_device() == parakeet::BackendDevice::GPU ? 1 : 0;
     backend_name_   = engine_->backend_name();
     backend_id_     = backendIdFromName(backend_name_);
+    backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
 
     QLOG(logger::Priority::INFO,
          std::string("Parakeet engine loaded; model_type=") + detected +
          " backend=" + backend_name_ +
          " (device=" + (backend_device_ == 1 ? "GPU" : "CPU") +
          ", id=" + std::to_string(backend_id_) + ")");
-    if (cfg_.useGPU && backend_device_ != 1) {
+    if (cfg_.useGPU && backend_device_ != 1 && !backend_gpu_unsupported_) {
       QLOG(logger::Priority::WARNING,
            "Parakeet: useGPU=true was requested but the active backend is CPU. "
            "The platform's GPU backend either isn't compiled in or refused to "
@@ -342,7 +331,7 @@ void ParakeetModel::load() {
 
   if (cfg_.streaming) {
     try {
-      openStreamingSession_();
+      openStreamingSession();
     } catch (const std::exception& e) {
       QLOG(logger::Priority::ERROR,
            std::string("Failed to open streaming session: ") + e.what());
@@ -370,14 +359,14 @@ void ParakeetModel::load() {
 }
 
 void ParakeetModel::unload() {
-  closeStreamingSession_();
+  closeStreamingSession();
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine_.reset();
   }
   is_loaded_     = false;
   is_warmed_up_  = false;
-  cleanupTempFile_();
+  cleanupTempFile();
 }
 
 void ParakeetModel::reload() {
@@ -443,7 +432,7 @@ void ParakeetModel::warmup() {
   if (is_warmed_up_ || !is_loaded_) return;
   Input silence(static_cast<size_t>(SAMPLE_RATE), 0.0f);
   try {
-    runAsrProcess_(silence);
+    runAsrProcess(silence);
   } catch (...) {
     // warmup failures are non-fatal
   }
@@ -481,7 +470,7 @@ void ParakeetModel::cancel() const {
   // also waits for processingSync.
   //
   // cancel() is documented as concurrent with process()/unload()/reload(),
-  // and openStreamingSession_() / closeStreamingSession_() / endOfStream() /
+  // and openStreamingSession() / closeStreamingSession() / endOfStream() /
   // ~ParakeetModel all .reset() the unique_ptrs from another thread.
   // Snapshot raw pointers under session_mutex_ so we don't race against a
   // concurrent .reset(); the engine's session-internal cancel() is itself
@@ -513,9 +502,9 @@ void ParakeetModel::set_weights_for_file(const std::string& filename,
     std::transform(s.begin(), s.end(), s.begin(), ::tolower);
     return s;
   }();
-  const bool is_gguf =
+  const bool isGguf =
       lower.size() >= 5 && lower.compare(lower.size() - 5, 5, ".gguf") == 0;
-  if (!is_gguf) {
+  if (!isGguf) {
     QLOG(logger::Priority::WARNING,
          "Parakeet ggml backend ignores non-GGUF weight file '" + filename + "'");
     if (completed) gguf_completed_ = true;
@@ -575,10 +564,10 @@ ParakeetModel::preprocessAudioData(const std::vector<uint8_t>& audioData,
         qvac_errors::general_error::InvalidArgument,
         "ParakeetModel::preprocessAudioData: only s16le PCM is supported");
   }
-  const size_t n_samples = audioData.size() / 2;
-  std::vector<float> out(n_samples);
+  const size_t nSamples = audioData.size() / 2;
+  std::vector<float> out(nSamples);
   constexpr float inv = 1.0f / 32768.0f;
-  for (size_t i = 0; i < n_samples; ++i) {
+  for (size_t i = 0; i < nSamples; ++i) {
     const int16_t s = static_cast<int16_t>(
         audioData[i * 2] | (audioData[i * 2 + 1] << 8));
     out[i] = static_cast<float>(s) * inv;
@@ -590,7 +579,7 @@ ParakeetModel::preprocessAudioData(const std::vector<uint8_t>& audioData,
 //  Engine dispatch
 // ─────────────────────────────────────────────────────────────────────────
 
-std::string ParakeetModel::runAsrProcess_(const Input& input) {
+std::string ParakeetModel::runAsrProcess(const Input& input) {
   if (input.empty()) return ERR_AUDIO_SHORT;
 
   parakeet::Engine* engine = nullptr;
@@ -621,7 +610,7 @@ std::string ParakeetModel::runAsrProcess_(const Input& input) {
   return result.text;
 }
 
-std::string ParakeetModel::runSortformerProcess_(const Input& input) {
+std::string ParakeetModel::runSortformerProcess(const Input& input) {
   if (input.empty()) return ERR_AUDIO_SHORT;
 
   parakeet::Engine* engine = nullptr;
@@ -659,10 +648,9 @@ std::string ParakeetModel::runSortformerProcess_(const Input& input) {
 //  Streaming session lifecycle
 // ─────────────────────────────────────────────────────────────────────────
 
-std::unique_ptr<parakeet::StreamSession>
-ParakeetModel::createDuplexAsrSession(
+std::unique_ptr<parakeet::StreamSession> ParakeetModel::createDuplexAsrSession(
     const parakeet::StreamingOptions& opts,
-    parakeet::StreamingCallback on_segment) {
+    parakeet::StreamingCallback onSegment) {
   parakeet::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
@@ -673,13 +661,13 @@ ParakeetModel::createDuplexAsrSession(
         qvac_errors::general_error::InternalError,
         "ParakeetModel::createDuplexAsrSession: engine not loaded");
   }
-  return engine->stream_start(opts, std::move(on_segment));
+  return engine->stream_start(opts, std::move(onSegment));
 }
 
 std::unique_ptr<parakeet::SortformerStreamSession>
 ParakeetModel::createDuplexDiarizationSession(
     const parakeet::SortformerStreamingOptions& opts,
-    parakeet::SortformerSegmentCallback on_segment) {
+    parakeet::SortformerSegmentCallback onSegment) {
   parakeet::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
@@ -690,10 +678,10 @@ ParakeetModel::createDuplexDiarizationSession(
         qvac_errors::general_error::InternalError,
         "ParakeetModel::createDuplexDiarizationSession: engine not loaded");
   }
-  return engine->diarize_start(opts, std::move(on_segment));
+  return engine->diarize_start(opts, std::move(onSegment));
 }
 
-void ParakeetModel::openStreamingSession_() {
+void ParakeetModel::openStreamingSession() {
   parakeet::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
@@ -702,7 +690,7 @@ void ParakeetModel::openStreamingSession_() {
   if (!engine) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InternalError,
-        "ParakeetModel::openStreamingSession_: engine not loaded");
+        "ParakeetModel::openStreamingSession: engine not loaded");
   }
 
   streaming_audio_seconds_ = 0.0;
@@ -797,22 +785,32 @@ void ParakeetModel::openStreamingSession_() {
   }
 }
 
-void ParakeetModel::closeStreamingSession_() {
+void ParakeetModel::closeStreamingSession() {
   // Snapshot-and-release pattern: take ownership of the unique_ptrs under
   // session_mutex_ so a concurrent cancel() can't observe a half-destroyed
   // session, then run the (potentially blocking) session->cancel() and
   // ~Session calls outside the lock.
-  std::unique_ptr<parakeet::StreamSession>           asr_to_destroy;
-  std::unique_ptr<parakeet::SortformerStreamSession> diar_to_destroy;
+  std::unique_ptr<parakeet::StreamSession> asrToDestroy;
+  std::unique_ptr<parakeet::SortformerStreamSession> diarToDestroy;
   {
     std::lock_guard<std::mutex> lk(session_mutex_);
-    asr_to_destroy  = std::move(asr_session_);
-    diar_to_destroy = std::move(diar_session_);
+    asrToDestroy = std::move(asr_session_);
+    diarToDestroy = std::move(diar_session_);
   }
-  if (asr_to_destroy)  { try { asr_to_destroy->cancel();  } catch (...) {} }
-  if (diar_to_destroy) { try { diar_to_destroy->cancel(); } catch (...) {} }
-  asr_to_destroy.reset();
-  diar_to_destroy.reset();
+  if (asrToDestroy) {
+    try {
+      asrToDestroy->cancel();
+    } catch (...) {
+    }
+  }
+  if (diarToDestroy) {
+    try {
+      diarToDestroy->cancel();
+    } catch (...) {
+    }
+  }
+  asrToDestroy.reset();
+  diarToDestroy.reset();
   {
     std::lock_guard<std::mutex> lk(streaming_mutex_);
     pending_streaming_segments_.clear();
@@ -821,7 +819,7 @@ void ParakeetModel::closeStreamingSession_() {
   streaming_finalized_     = false;
 }
 
-std::string ParakeetModel::runStreamingProcess_(const Input& input) {
+std::string ParakeetModel::runStreamingProcess(const Input& input) {
   if (input.empty()) return ERR_AUDIO_SHORT;
   if (streaming_finalized_) {
     QLOG(logger::Priority::WARNING,
@@ -906,9 +904,9 @@ std::string ParakeetModel::runStreamingProcess_(const Input& input) {
   // batches without resetting -- the duplex path owns its own
   // parakeet::StreamSession that is never closed mid-flight by the
   // framework.
-  closeStreamingSession_();
+  closeStreamingSession();
   try {
-    openStreamingSession_();
+    openStreamingSession();
   } catch (const std::exception& e) {
     QLOG(logger::Priority::WARNING,
          std::string("Failed to reopen streaming session: ") + e.what());
@@ -945,19 +943,19 @@ void ParakeetModel::process(const Input& input) {
     }
     try {
       throwIfCancelled();
-      const bool has_session =
+      const bool hasSession =
           (cfg_.modelType == ModelType::SORTFORMER ? diar_session_ != nullptr
                                                    : asr_session_ != nullptr);
-      if (cfg_.streaming && has_session) {
-        // runStreamingProcess_ drains the per-segment callback queue
+      if (cfg_.streaming && hasSession) {
+        // runStreamingProcess drains the per-segment callback queue
         // straight into output_ + on_segment_, so we must skip the
         // legacy single-Transcript push below.
-        text = runStreamingProcess_(input);
+        text = runStreamingProcess(input);
         streamed = true;
       } else if (cfg_.modelType == ModelType::SORTFORMER) {
-        text = runSortformerProcess_(input);
+        text = runSortformerProcess(input);
       } else {
-        text = runAsrProcess_(input);
+        text = runAsrProcess(input);
       }
       throwIfCancelled();
     } catch (const std::exception& e) {
@@ -972,7 +970,7 @@ void ParakeetModel::process(const Input& input) {
 
   if (streamed) {
     // Streaming path already pushed per-segment Transcripts during
-    // runStreamingProcess_'s drain. If the engine emitted nothing at
+    // runStreamingProcess's drain. If the engine emitted nothing at
     // all for this chunk (silence sentinel), emit a single placeholder
     // so the JS side still gets one Output per process() with an
     // unambiguous "no speech" signal -- matches legacy behaviour.
@@ -1070,6 +1068,8 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   // side reads them from runtimeStats() (a.k.a. response.stats).
   stats.emplace_back("backendDevice",       static_cast<int64_t>(backend_device_));
   stats.emplace_back("backendId",           static_cast<int64_t>(backend_id_));
+  stats.emplace_back(
+      "gpuUnsupported", static_cast<int64_t>(backend_gpu_unsupported_));
 
   // audioDurationMs derived from samples / sample_rate
   const double sr = sample_rate_ > 0

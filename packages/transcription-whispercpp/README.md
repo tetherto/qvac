@@ -1,6 +1,6 @@
 # transcription-whispercpp
 
-This library simplifies running inference with the Whisper transcription model within QVAC runtime applications. It provides an easy interface to load, execute, and manage Whisper inference instances, supporting multiple data sources (data loaders).
+This library simplifies running inference with the Whisper transcription model within QVAC runtime applications. It provides an easy interface to load, execute, and manage Whisper inference instances from local model files.
 
 **Note: This library now uses whisper.cpp for improved performance and compatibility. The previous MLC-based implementation has been replaced.**
 
@@ -10,7 +10,7 @@ This library simplifies running inference with the Whisper transcription model w
 - [Installation](#installation)
 - [Development](#development)
 - [Usage](#usage)
-  - [1. Choose a Data Loader](#1-choose-a-data-loader)
+  - [1. Provide Model Files](#1-provide-model-files)
   - [2. Configure Transcription Parameters](#2-configure-transcription-parameters)
   - [3. Define Model Files Configuration](#3-define-model-files-configuration)
   - [4. Create Model Instance](#4-create-model-instance)
@@ -243,19 +243,19 @@ The library provides a straightforward workflow for audio transcription:
 
 > **Heads up:** the package is intended to be used through `index.js`’s `TranscriptionWhispercpp` class. Advanced sections below document the native addon for completeness, but you rarely need them when integrating the published npm package.
 
-### 1. Choose a Data Loader
+### 1. Provide Model Files
 
-Data loaders abstract the way model files are accessed, whether from the filesystem, a network drive, or any other storage mechanism. More info about model registry and model builds in [resources](#resources).
+The addon loads model weights directly from local file paths. Make sure the whisper model (and optional VAD model) already exist on disk — either staged manually or fetched through the [model registry](#model-registry). More info about model registry and model builds in [resources](#resources).
 
-- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem)
-
-First, select and instantiate a data loader that provides access to model files:
+You pass the paths via the `files` field of the constructor arguments:
 
 ```javascript
-const FilesystemDL = require('@qvac/dl-filesystem')
-const fsDL = new FilesystemDL({
-  dirPath: './path/to/model/files' // Directory containing model weights and settings
-})
+const constructorArgs = {
+  files: {
+    model: './models/ggml-tiny.bin',           // whisper model weights
+    vadModel: './models/ggml-silero-v5.1.2.bin' // optional VAD model
+  }
+}
 ```
 
 ### 2. Configure Transcription Parameters
@@ -381,7 +381,7 @@ Import the specific Whisper model class based on the installed package and insta
 ```javascript
 const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
 
-const model = new TranscriptionWhispercpp(args, config)
+const model = new TranscriptionWhispercpp(constructorArgs, config)
 ```
 
 Note : This import changes depending on the package installed.
@@ -397,7 +397,7 @@ try {
 
   // Advanced usage with progress tracking
   await model.load(
-          false,  // Don't close loader after loading
+          false,  // reserved flag, kept for forwarding compatibility
           (progress) => console.log(`Loading: ${progress.overallProgress}% complete`)
   )
 } catch (error) {
@@ -516,7 +516,7 @@ bare examples/quickstart.js
 
 ### 3. Code Walkthrough
 
-See `examples/quickstart.js` for the full workflow (`TranscriptionWhispercpp` + filesystem loader), including streaming audio and cleanup.
+See `examples/quickstart.js` for the full workflow (`TranscriptionWhispercpp` loading model files from disk), including streaming audio and cleanup.
 
 ## Benchmarking
 

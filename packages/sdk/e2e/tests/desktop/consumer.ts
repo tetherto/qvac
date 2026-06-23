@@ -83,24 +83,24 @@ const resources = new ResourceManager({
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
 
 resources.define("finetune-llm", {
   constant: QWEN3_1_7B_INST_Q4,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
 
 resources.define("embeddings", {
   constant: GTE_LARGE_FP16,
-  type: "embeddings",
+  type: "llamacpp-embedding",
 });
 
 resources.define("whisper", {
   constant: WHISPER_TINY,
-  type: "whisper",
+  type: "whispercpp-transcription",
   config: {
     vadModelSrc: VAD_SILERO_5_1_2,
     audio_format: "f32le",
@@ -125,61 +125,61 @@ resources.define("whisper", {
 
 resources.define("tools", {
   constant: QWEN3_1_7B_INST_Q4,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { ctx_size: 4096, tools: true },
 });
 
 resources.define("tools-dynamic", {
   constant: QWEN3_1_7B_INST_Q4,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
 });
 
 resources.define("tools-qwen35", {
   constant: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { ctx_size: 4096, tools: true },
 });
 
 resources.define("tools-gemma4", {
   constant: GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { ctx_size: 4096, tools: true },
 });
 
 resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
-  type: "ocr",
+  type: "onnx-ocr",
   config: { langList: ["en"] },
 });
 
 resources.define("vla", {
   constant: SMOLVLA_LIBERO_VISION_Q8,
-  type: "vla",
+  type: "ggml-vla",
   config: { backend: "cpu" },
 });
 
 resources.define("vla-pi05", {
   constant: PI05_BASE_Q_AGGRESSIVE,
-  type: "vla",
+  type: "ggml-vla",
   config: { backend: "cpu" },
 });
 
 // Classification ships bundled weights inside @qvac/classification-ggml,
 // so no registry constant / pre-download is required.
 resources.define("classification", {
-  type: "classification",
+  type: "ggml-classification",
 });
 
 resources.define("sharded-embeddings", {
   constant: GTE_LARGE_335M_FP16_SHARD,
-  type: "embeddings",
+  type: "llamacpp-embedding",
   skipPreDownload: true,
 });
 
 resources.define("indictrans-en-hi", {
   constant: MARIAN_EN_HI_INDIC_200M_Q4_0,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "IndicTrans",
     from: "eng_Latn",
@@ -189,7 +189,7 @@ resources.define("indictrans-en-hi", {
 
 resources.define("indictrans-hi-en", {
   constant: MARIAN_HI_EN_INDIC_200M_Q4_0,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "IndicTrans",
     from: "hin_Deva",
@@ -199,7 +199,7 @@ resources.define("indictrans-hi-en", {
 
 resources.define("bergamot-en-fr", {
   constant: BERGAMOT_EN_FR,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "Bergamot",
     from: "en",
@@ -209,7 +209,7 @@ resources.define("bergamot-en-fr", {
 
 resources.define("bergamot-en-es", {
   constant: BERGAMOT_EN_ES,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "Bergamot",
     from: "en",
@@ -219,7 +219,7 @@ resources.define("bergamot-en-es", {
 
 resources.define("bergamot-es-it-pivot", {
   constant: BERGAMOT_ES_EN,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "Bergamot",
     from: "es",
@@ -234,12 +234,12 @@ resources.define("bergamot-es-it-pivot", {
 
 resources.define("salamandra", {
   constant: SALAMANDRATA_2B_INST_Q4,
-  type: "llm",
+  type: "llamacpp-completion",
 });
 
 resources.define("afriquegemma", {
   constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: "llm",
+  type: "llamacpp-completion",
   config: {
     tools: true,
     ctx_size: 2048,
@@ -256,12 +256,15 @@ resources.define("afriquegemma", {
 
 resources.define("tts-chatterbox", {
   constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  type: "tts",
+  type: "tts-ggml",
   config: {
     ttsEngine: "chatterbox",
     language: "en",
     useGPU: true,
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    cfmSteps: 1,
     referenceAudioSrc: path.resolve(
       process.cwd(),
       "assets/audio",
@@ -272,7 +275,7 @@ resources.define("tts-chatterbox", {
 
 resources.define("tts-supertonic", {
   constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: "tts",
+  type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
     language: "en",
@@ -283,7 +286,7 @@ resources.define("tts-supertonic", {
 
 resources.define("tts-supertonic-multilingual", {
   constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
-  type: "tts",
+  type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
     language: "es",
@@ -294,31 +297,31 @@ resources.define("tts-supertonic-multilingual", {
 
 resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_0_6B_V3_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_0_6B_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("parakeet-eou", {
   constant: PARAKEET_EOU_120M_V1_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("bci", {
   constant: BCI_WINDOWED,
-  type: "bci",
+  type: "bci-whispercpp-transcription",
   config: {
     whisperConfig: { language: "en", temperature: 0.0 },
     miscConfig: { caption_enabled: false },
@@ -330,7 +333,7 @@ resources.define("bci", {
 
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  type: "llm",
+  type: "llamacpp-completion",
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -339,7 +342,7 @@ resources.define("vision", {
 
 resources.define("diffusion", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
-  type: "diffusion",
+  type: "sdcpp-generation",
   config: {
     device: "gpu",
     threads: 4,
@@ -351,7 +354,7 @@ resources.define("diffusion", {
 
 resources.define("diffusion-fa", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
-  type: "diffusion",
+  type: "sdcpp-generation",
   config: {
     device: "gpu",
     threads: 4,
@@ -364,7 +367,7 @@ resources.define("diffusion-fa", {
 
 resources.define("diffusion-fa-disabled", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
-  type: "diffusion",
+  type: "sdcpp-generation",
   config: {
     device: "gpu",
     threads: 4,
@@ -378,7 +381,7 @@ resources.define("diffusion-fa-disabled", {
 // Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
 resources.define("diffusion-esrgan", {
   constant: SD_V2_1_1B_Q8_0,
-  type: "diffusion",
+  type: "sdcpp-generation",
   config: {
     device: "gpu",
     threads: 4,
@@ -394,7 +397,7 @@ resources.define("diffusion-esrgan", {
 
 resources.define("upscaler", {
   constant: REALESRGAN_X4PLUS_ANIME_6B,
-  type: "diffusion",
+  type: "sdcpp-generation",
   config: {
     mode: "upscale",
     upscaler: {
@@ -405,7 +408,7 @@ resources.define("upscaler", {
 
 resources.define("upscaler-cpu", {
   constant: REALESRGAN_X4PLUS_ANIME_6B,
-  type: "diffusion",
+  type: "sdcpp-generation",
   config: {
     mode: "upscale",
     device: "cpu",

@@ -1,16 +1,19 @@
-import process from "bare-process";
+import env from "bare-env";
 import Hyperswarm from "hyperswarm";
 import crypto from "bare-crypto";
 import { envSchema, type FirewallConfig } from "@/schemas/provide";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
-import { registerSwarm, unregisterSwarm } from "@/server/bare/runtime-lifecycle";
+import {
+  registerSwarm,
+  unregisterSwarm,
+} from "@/server/bare/runtime-lifecycle";
 import { getServerLogger } from "@/logging";
 import { Buffer } from "bare-buffer";
 
 const logger = getServerLogger();
 
 function getHyperswarmSeedBuffer() {
-  const parsedEnv = envSchema.safeParse(process.env);
+  const parsedEnv = envSchema.safeParse(env);
 
   if (parsedEnv.success) {
     return Buffer.from(parsedEnv.data.QVAC_HYPERSWARM_SEED, "hex");

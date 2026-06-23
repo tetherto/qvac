@@ -69,7 +69,7 @@ function expectsGpu () {
   )
 }
 
-function assertGpuBackend (t, engineTag, stats) {
+function assertGpuBackend (t, engineTag, stats, allowPolicyCpu = false) {
   if (!stats) {
     t.fail(`${engineTag}/GPU: no response.stats returned (cannot verify backend)`)
     return
@@ -81,6 +81,14 @@ function assertGpuBackend (t, engineTag, stats) {
 
   if (!expectsGpu()) {
     t.is(dev, 0, `${engineTag}/${platform}: backendDevice must be 0 (CPU) on platforms with no GPU wired in`)
+    return
+  }
+
+  // Engines tts-cpp declines on a given vendor (e.g. Chatterbox on Mali,
+  // allow_arm_mali=false) legitimately fall back to CPU and flag it via
+  // stats.gpuUnsupported. That is the correct result there, not a GPU regression.
+  if (allowPolicyCpu && dev === 0 && stats.gpuUnsupported) {
+    t.pass(`${engineTag}/${platform}: GPU present but declined by policy (gpuUnsupported=1); correctly using CPU`)
     return
   }
 
@@ -139,10 +147,6 @@ function recordSmoke (t, label, result, wallMs) {
 }
 
 test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') {
-    t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes')
-    return
-  }
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
 
@@ -176,7 +180,7 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox/GPU produced audio')
-    assertGpuBackend(t, 'Chatterbox', result.data.stats)
+    assertGpuBackend(t, 'Chatterbox', result.data.stats, /* allowPolicyCpu */ true)
     recordSmoke(t, 'chatterbox gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
@@ -184,15 +188,9 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
 })
 
 test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  // QVAC-19255 re-land: Supertonic GPU (Metal on Apple, Vulkan/CUDA on desktop)
-  // is consumed via tts-cpp@2026-06-05 (f7d4d6c overlay). Android (Adreno) is
-  // intentionally kept CPU-only at the engine boundary
-  // (SupertonicModel::loadLocked) because Adreno Vulkan/OpenCL ggml graph
-  // compute still aborts, so skip the GPU assertion there (mirrors Chatterbox).
-  if (platform === 'android') {
-    t.pass('Android: Supertonic GPU disabled at engine boundary pending Adreno Vulkan/OpenCL ggml fixes')
-    return
-  }
+  // Supertonic GPU: Metal on Apple, Vulkan/CUDA on desktop, Vulkan/OpenCL on
+  // Android (Adreno/Xclipse/Mali, validated under QVAC-20557 / tts-cpp 2026-06-18).
+  // The strict assertion runs on every GPU-capable platform including Android.
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
 

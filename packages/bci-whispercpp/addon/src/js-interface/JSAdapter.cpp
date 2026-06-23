@@ -115,6 +115,17 @@ BCIConfig JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env) {
     config.backendsDir = backendsDirJs.value().as<std::string>(env);
   }
 
+  // Top-level `configurationParams.embedderPath`. Read directly (like
+  // `backendsDir`) so the embedder weights location can be supplied from
+  // JS instead of being hardcoded relative to the model file. Consumed by
+  // `BCIModel::loadEmbedderIfNeeded()`; when absent the native side falls
+  // back to `bci-embedder.bin` next to the GGML model.
+  auto embedderPathJs =
+      jsObject.getOptionalProperty<String>(env, "embedderPath");
+  if (embedderPathJs.has_value()) {
+    config.embedderPath = embedderPathJs.value().as<std::string>(env);
+  }
+
   return config;
 }
 

@@ -589,7 +589,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
       text: params.text,
       from: params.from,
       to: params.to,
-      modelType: "llm",
+      modelType: "llamacpp-completion",
       stream: true,
     });
 

@@ -29,13 +29,7 @@ on:
         default: "tetherto/qvac"
       artifact-name-prefix:
         description: >-
-          Optional prefix for the per-matrix prebuild artifact name. The
-          merged artifact is always uploaded under the well-known name
-          `prebuilds`, but downstream mobile-integration test workflows
-          download per-matrix artifacts via glob patterns built from this
-          prefix (see PREBUILD_ARTIFACT_PREFIX in
-          integration-mobile-test-*.yml), so it must match the convention
-          expected by the consumer.
+          Optional prefix for the per-matrix prebuild artifact name. The merged artifact is always uploaded under the well-known name `prebuilds`, but downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer.
         type: string
         required: false
         default: ""
@@ -56,21 +50,13 @@ on:
         default: false
       extra-cmake-defines:
         description: >-
-          Additional cmake defines appended verbatim to `bare-make generate`
-          on every matrix entry. Space-separated. Example:
-          "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp
-          packages.
+          Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
         type: string
         required: false
         default: ""
       platform-cmake-defines:
         description: >-
-          Platform-conditional cmake defines, one entry per line in
-          `<platform>: <defines>` form. The matched platform's defines are
-          appended after `extra-cmake-defines`, so they can override common
-          defines if needed. Platforms without an entry contribute nothing.
-          Example:
-
+          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, so they can override common defines if needed. Platforms without an entry contribute nothing. Example: #magic___^_^___line
             platform-cmake-defines: |
               darwin: -D WHISPER_USE_METAL=ON
               ios: -D WHISPER_USE_METAL=ON
@@ -87,10 +73,7 @@ on:
         default: false
       setup-rust-toolchain:
         description: >-
-          Ensure a stable Rust toolchain plus the per-platform stdlib targets
-          required by native crates that ship Rust code (iOS / Android via
-          `rustup target add ...`). On Windows the action will bootstrap
-          rustup itself if it isn't already on PATH.
+          Ensure a stable Rust toolchain plus the per-platform stdlib targets required by native crates that ship Rust code (iOS / Android via `rustup target add ...`). On Windows the action will bootstrap rustup itself if it isn't already on PATH.
         type: boolean
         required: false
         default: false
@@ -210,6 +193,20 @@ jobs:
         run: |
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
+
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Configure CMake generator on Windows
+        shell: powershell
+        env:
+          INPUT_ARCH: ${{ matrix.arch }}
+        run: |
+          echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+          switch ($env:INPUT_ARCH) {
+            'x64'   { echo "CMAKE_GENERATOR_PLATFORM=x64"   >> $env:GITHUB_ENV }
+            'arm64' { echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV }
+            'x86'   { echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV }
+            default { Write-Host "Unknown arch '$env:INPUT_ARCH'; CMAKE_GENERATOR_PLATFORM left unset" }
+          }
 
       - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
@@ -360,9 +357,7 @@ jobs:
           $matches | Remove-Item -Force
 
       - name: Smoke check (tmp-*) package name & prebuilds listing
-        if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
-                || startsWith(github.ref_name, 'tmp-')
-                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
+        if: ${{ startsWith(github.ref, 'refs/heads/tmp-') || startsWith(github.ref_name, 'tmp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -376,6 +371,77 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
+
+      # Static guard: fail the prebuild if the addon module is left with
+      # unresolvable engine symbols (the @qvac/tts-ggml@0.2.1 ggml_backend_is_cpu
+      # dlopen crash) -- caught here, off the artifact, before any device run.
+      # Export-leak findings stay warnings during rollout (enforce-exports
+      # defaults to false) until every ggml addon ships a symbols.map.
+      - name: Verify prebuild symbols
+        uses: ./.github/actions/verify-prebuild-symbols
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
+
+      # Guards against regressing the static-runtime build: addons must link the
+      # static MSVC runtime, so the shipped .bare/.dll must not import the dynamic
+      # Visual C++ runtime (vcruntime140.dll / msvcp140.dll / ucrtbase.dll / the
+      # api-ms-win-crt-* UCRT forwarders). Re-introducing msvcrt.lib or a
+      # dynamic-CRT vcpkg triplet would make these appear and fail the build.
+      - name: Verify no dynamic C/C++ runtime dependency (Windows)
+        if: matrix.platform == 'win32'
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if (-not (Test-Path -Path "prebuilds" -PathType Container)) {
+            Write-Error "prebuilds/ does not exist; nothing to verify"
+            exit 1
+          }
+
+          # Prefer dumpbin on PATH; otherwise locate it via vswhere (installed
+          # alongside the MSVC build tools that the vcpkg build already requires).
+          $dumpbin = (Get-Command dumpbin -ErrorAction SilentlyContinue).Source
+          if (-not $dumpbin) {
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+            if (Test-Path $vswhere) {
+              $dumpbin = & $vswhere -latest -products * -find "**\dumpbin.exe" | Select-Object -First 1
+            }
+          }
+          if (-not $dumpbin) {
+            Write-Error "dumpbin.exe not found (checked PATH and vswhere)"
+            exit 1
+          }
+          Write-Output "Using dumpbin: $dumpbin"
+
+          # Dynamic C/C++ runtime import names that must never appear.
+          $forbidden = 'vcruntime\d', 'msvcp\d', 'msvcr\d', 'msvcrt\.dll', 'ucrtbase', 'api-ms-win-crt', 'concrt\d'
+
+          $binaries = Get-ChildItem -Path "prebuilds" -Recurse -File -Include *.bare, *.dll
+          if (-not $binaries) {
+            Write-Error "No .bare/.dll binaries found under prebuilds/"
+            exit 1
+          }
+
+          $violations = @()
+          foreach ($bin in $binaries) {
+            $deps = & $dumpbin /nologo /dependents $bin.FullName
+            foreach ($pattern in $forbidden) {
+              foreach ($hit in ($deps | Select-String -Pattern $pattern)) {
+                $violations += "{0} -> {1}" -f $bin.FullName, $hit.Line.Trim()
+              }
+            }
+            Write-Output ("checked: {0}" -f $bin.FullName)
+          }
+
+          if ($violations.Count -gt 0) {
+            Write-Output "::error::Dynamic C/C++ runtime dependency detected in Windows prebuilds:"
+            $violations | ForEach-Object { Write-Output $_ }
+            exit 1
+          }
+
+          Write-Output "OK: no dynamic C/C++ runtime dependency in Windows prebuilds"
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:

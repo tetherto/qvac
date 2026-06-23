@@ -17,9 +17,19 @@
 
 namespace tts_cpp::chatterbox {
 class Engine;
+struct EngineOptions;
 } // namespace tts_cpp::chatterbox
 
 namespace qvac::ttsggml::chatterbox {
+
+/**
+ * Test-only view of the ChatterboxConfig -> tts_cpp EngineOptions mapping
+ * (defaulted n_ctx cap, useGPU -> n_gpu_layers translation, ...).  The
+ * mapping itself lives in an anonymous namespace inside
+ * ChatterboxModel.cpp; production callers go through ChatterboxModel.
+ */
+tts_cpp::chatterbox::EngineOptions engineOptionsForTests(
+    const ChatterboxConfig& cfg);
 
 /**
  * IModel implementation that wraps the tts-cpp::tts-cpp static library
@@ -141,6 +151,7 @@ private:
 
   int backendDevice_ = 0;
   int backendId_ = 0;
+  bool gpuUnsupported_ = false;
   std::string backendName_ = "CPU";
 
   mutable std::atomic_bool cancelRequested_{false};
