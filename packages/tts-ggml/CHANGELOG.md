@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Chatterbox speaking-rate control (`speed`) (QVAC-21119).** New optional
+  `speed` config for the Chatterbox engine — a duration multiplier mirroring
+  Supertonic's `speed` (`< 1` slower, `> 1` faster), bounded to `[0.25, 4.0]`.
+  Chatterbox's engine exposes no native rate knob (its S3 speech tokens run at
+  a fixed 25 Hz and the utterance duration is emergent from the autoregressive
+  T3), so the addon applies it as a pitch-preserving WSOLA time-stretch on the
+  24 kHz PCM — functionally equivalent to ffmpeg's `atempo`, not a pitch shift.
+  Opt-in and backward compatible: when unset (or `1.0`) the raw model output is
+  left unchanged — no default slowdown. Works in both batch and native
+  streaming (one stretcher threads the overlap-add state across chunks for
+  seam-free output, with `O(chunk + window)` memory). Plumbed through
+  `ChatterboxConfig::speed`, `JSAdapter`, and `_buildChatterboxParams`
+  (mirroring Supertonic). New `examples/chatterbox-adjust-speed.js` (+
+  `example:chatterbox-adjust-speed` npm script), C++ WSOLA unit tests, and a JS
+  integration test.
+
+## Pull Requests
+
+- [#2782](https://github.com/tetherto/qvac/pull/2782) - QVAC-21119: add Chatterbox speaking-rate (`speed`) control
+
 ## [0.3.3] - 2026-06-22
 
 ### Changed

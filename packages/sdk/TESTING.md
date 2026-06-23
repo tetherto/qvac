@@ -8,7 +8,7 @@ The SDK test suite is split into three clearly separated buckets. Each bucket ha
 |--------|---------|-----------|----------|---------|
 | **Unit** | Bun / Node | brittle | `test/unit/` | `bun run test:unit` |
 | **Server (Bare)** | Bare | brittle | `test/bare/` | `bun run test:bare` |
-| **Client (consumer)** | Node (desktop) / RN (mobile) | @tetherto/qvac-test-suite | `e2e/` | See [below](#e2e--clientconsumer-e2e-tests) |
+| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @tetherto/qvac-test-suite | `e2e/` | See [below](#e2e--clientconsumer-e2e-tests) |
 
 ## Where new tests must land
 
@@ -44,7 +44,9 @@ Tests that exercise **server-side code requiring the Bare runtime** — addon pl
 
 ### `e2e/` — Client/consumer e2e tests
 
-Tests that exercise the **full SDK from the consumer perspective** — loadModel, completion, transcription, etc. These run on real devices (iOS, Android) and desktop via the `@tetherto/qvac-test-suite` framework.
+Tests that exercise the **full SDK from the consumer perspective** — loadModel, completion, transcription, etc.
+These run on desktop Node, packaged Electron apps, and real devices (iOS, Android) via the
+`@tetherto/qvac-test-suite` framework.
 
 **Belongs here if:**
 
@@ -52,6 +54,7 @@ Tests that exercise the **full SDK from the consumer perspective** — loadModel
 - Needs a running Bare worker process (server) behind the scenes
 - Validates end-to-end flows (download → load → inference → unload)
 - Tests mobile-specific or desktop-specific consumer behavior
+- Tests Electron packaged-app behavior, including `process.resourcesPath` worker/config resolution
 
 See [e2e/README.md](./e2e/README.md) for the full structure and local run instructions.
 

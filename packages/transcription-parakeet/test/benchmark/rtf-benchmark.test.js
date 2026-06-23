@@ -307,6 +307,17 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
     const loadStart = getTimeMs()
     await model.load()
 
+    // QVAC-20684: on CI GPU runners the host probe (nvidia-smi / procfs) often
+    // can't see the GPU, so fall back to the device name the loaded addon's
+    // ggml backend reports (CUDA / Vulkan / Metal expose it via the driver).
+    let backendGpuModel = null
+    try {
+      const info = model.getBackendInfo && model.getBackendInfo()
+      if (info && info.backendDevice === 'GPU' && info.backendDescription) {
+        backendGpuModel = info.backendDescription
+      }
+    } catch (_) { /* best-effort enrichment */ }
+
     // Warmup with silent audio to trigger full model initialisation.
     const silentAudio = new Float32Array(SAMPLE_RATE).fill(0)
     await runOnce(silentAudio).catch(() => null)
@@ -452,7 +463,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         device: benchmarkSettings.deviceLabel,
         backend: getRequestedBackendFamily(platformName, benchmarkSettings.useGPU, benchmarkSettings.backendHint),
         activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
-        gpuModel: _hwGpu(),
+        gpuModel: _hwGpu() || backendGpuModel,
         requestedBackend: benchmarkSettings.useGPU ? 'gpu' : 'cpu',
         label: benchmarkSettings.label
       },
