@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -134,37 +133,7 @@ bool speedActive(float speed) {
 constexpr float MIN_SPEED = 0.25f;
 constexpr float MAX_SPEED = 4.0f;
 
-// Conservative fallback for languages we haven't individually measured.
-constexpr float DEFAULT_SPEED = 0.85f;
-
-// Per-language default speaking-rate multiplier, applied when the caller
-// leaves ChatterboxConfig::speed unset (QVAC-21119).  Chatterbox is
-// model-inherently fast (~200+ wpm out of the box; the rate is emergent from
-// the fixed-25 Hz T3 token stream, not a streaming/cfmSteps artefact), so we
-// nudge it toward a natural ~155-165 wpm by default.  `en` and `it` are
-// measured; other languages get a mild conservative slowdown pending
-// per-language listening validation.  Any explicit `speed` (including 1.0 to
-// get the raw model output) overrides this.
-float defaultSpeedForLanguage(const std::string& language) {
-  std::string lang;
-  for (char c : language) {
-    if (c == '-' || c == '_')
-      break; // "en-US" -> "en"
-    lang.push_back(
-        static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-  }
-  if (lang == "en")
-    return 0.80f; // baseline ~205 wpm -> ~164
-  if (lang == "it")
-    return 0.72f; // baseline ~226 wpm -> ~163
-  return DEFAULT_SPEED;
-}
-
 } // namespace
-
-float chatterboxDefaultSpeedForLanguage(const std::string& language) {
-  return defaultSpeedForLanguage(language);
-}
 
 ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
     : cfg_(std::move(config)) {
@@ -369,10 +338,9 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   // (see TimeStretch.hpp / ChatterboxConfig::speed).  In streaming mode a
   // single stretcher instance threads the overlap-add state across chunks so
   // the concatenated output has no per-chunk seams.
-  // Unset -> per-language default (Chatterbox is model-inherently fast);
-  // an explicit value (including 1.0 for the raw model output) overrides.
-  const float speed =
-      cfg_.speed.value_or(defaultSpeedForLanguage(cfg_.language));
+  // Unset -> 1.0 (no rate change), preserving the raw model output for
+  // backward compatibility; callers opt in by passing an explicit speed.
+  const float speed = cfg_.speed.value_or(1.0f);
   const bool stretch = speedActive(speed);
 
   const auto tStart = std::chrono::steady_clock::now();

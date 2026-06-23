@@ -186,42 +186,10 @@ TEST(ChatterboxValidate, ValidSpeedAccepted) {
 }
 
 TEST(ChatterboxValidate, ConfigSpeedDefaultUnset) {
+  // Unset speed means "no rate change" (1.0) at synthesis time — the addon
+  // applies no per-language default, preserving raw-model backward compat.
   ChatterboxConfig cfg;
   EXPECT_FALSE(cfg.speed.has_value());
-}
-
-// ─────────────────────────────────────────────────────────────────────
-//  Per-language default speaking rate (applied when speed is unset).
-// ─────────────────────────────────────────────────────────────────────
-
-using qvac::ttsggml::chatterbox::chatterboxDefaultSpeedForLanguage;
-
-TEST(ChatterboxDefaultSpeed, EnglishSlowsDownFromBaseline) {
-  EXPECT_FLOAT_EQ(chatterboxDefaultSpeedForLanguage("en"), 0.80f);
-}
-
-TEST(ChatterboxDefaultSpeed, ItalianSlowerThanEnglish) {
-  EXPECT_LT(
-      chatterboxDefaultSpeedForLanguage("it"),
-      chatterboxDefaultSpeedForLanguage("en"));
-}
-
-TEST(ChatterboxDefaultSpeed, UnknownLanguageUsesConservativeDefault) {
-  EXPECT_FLOAT_EQ(chatterboxDefaultSpeedForLanguage("xx"), 0.85f);
-}
-
-TEST(ChatterboxDefaultSpeed, RegionSuffixIsNormalized) {
-  EXPECT_FLOAT_EQ(
-      chatterboxDefaultSpeedForLanguage("en-US"),
-      chatterboxDefaultSpeedForLanguage("en"));
-}
-
-TEST(ChatterboxDefaultSpeed, AllDefaultsWithinValidatedRange) {
-  for (const char* lang : {"en", "it", "es", "fr", "de", "xx"}) {
-    const float s = chatterboxDefaultSpeedForLanguage(lang);
-    EXPECT_GE(s, 0.25f) << lang;
-    EXPECT_LE(s, 4.0f) << lang;
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────

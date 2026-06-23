@@ -95,10 +95,9 @@ declare interface TTSGgmlOptions {
    * Supertonic: scales the engine's native duration predictor (0 -> GGUF default).
    * Chatterbox: the engine has no native rate control, so this is applied as a
    * pitch-preserving WSOLA time-stretch post-synthesis (functionally equivalent to
-   * ffmpeg `atempo`); bounded to [0.25, 4.0].  When omitted, Chatterbox applies a
-   * sane per-language default (the model is inherently fast, ~200+ wpm) so output
-   * lands at a natural pace; pass an explicit value (e.g. `1.0` for raw output) to
-   * override.
+   * ffmpeg `atempo`); bounded to [0.25, 4.0].  When omitted (or 1.0), the raw
+   * model output is left unchanged (no default slowdown); pass an explicit value
+   * to opt in.
    */
   speed?: number
   /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */

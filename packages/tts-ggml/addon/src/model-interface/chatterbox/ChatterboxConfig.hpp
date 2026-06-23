@@ -69,11 +69,9 @@ struct ChatterboxConfig {
    * `speed`):  outputDuration = synthesizedDuration / speed.  `speed < 1`
    * slows speech down, `> 1` speeds it up.
    *
-   * When UNSET, ChatterboxModel applies a per-language default (Chatterbox is
-   * model-inherently fast, ~200+ wpm; see chatterboxDefaultSpeedForLanguage)
-   * so consumers get a natural pace without having to override.  Pass an
-   * explicit value to override — including `1.0` for the raw, un-stretched
-   * model output.
+   * Unset (or 1.0) leaves the raw model output unchanged — no rate control is
+   * applied by default, for backward compatibility.  Callers opt in by passing
+   * an explicit value.
    *
    * Unlike Supertonic — which scales a native duration predictor inside the
    * engine — Chatterbox's engine exposes no speaking-rate control (its S3
