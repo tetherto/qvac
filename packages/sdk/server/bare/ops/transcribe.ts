@@ -25,10 +25,7 @@ import {
   toTranscribeSegment,
   type WhisperAddonSegment,
 } from "@/server/bare/utils/transcribe-metadata";
-import {
-  getRequestRegistry,
-  withRequestContext,
-} from "@/server/bare/runtime";
+import { getRequestRegistry, withRequestContext } from "@/server/bare/runtime";
 import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 
 export {
@@ -201,13 +198,17 @@ export async function* transcribe(
   const audioStream = await createAudioStream(params.audioChunk, audioFormat);
 
   const modelStart = nowMs();
-  const response = (await model.run(audioStream)) as unknown as TranscribeResponse;
+  const response = (await model.run(
+    audioStream,
+  )) as unknown as TranscribeResponse;
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break;
     requestLogger.debug("Streaming Transcription Update:", output);
 
-    const chunks = (Array.isArray(output) ? output : [output]) as WhisperAddonSegment[];
+    const chunks = (
+      Array.isArray(output) ? output : [output]
+    ) as WhisperAddonSegment[];
 
     if (metadata) {
       for (const chunk of chunks) {
@@ -219,9 +220,7 @@ export async function* transcribe(
     }
 
     const text = chunks
-      .filter(
-        (chunk) => !silenceMarker || !chunk.text.includes(silenceMarker),
-      )
+      .filter((chunk) => !silenceMarker || !chunk.text.includes(silenceMarker))
       .map((chunk) => chunk.text)
       .join("");
 
@@ -232,20 +231,51 @@ export async function* transcribe(
   const modelExecutionMs = nowMs() - modelStart;
 
   const stats: TranscribeStats = {
-    ...(response.stats?.audioDurationMs !== undefined && { audioDuration: response.stats.audioDurationMs }),
-    ...(response.stats?.realTimeFactor !== undefined && { realTimeFactor: response.stats.realTimeFactor }),
-    ...(response.stats?.tokensPerSecond !== undefined && { tokensPerSecond: response.stats.tokensPerSecond }),
-    ...(response.stats?.totalTokens !== undefined && { totalTokens: response.stats.totalTokens }),
-    ...(response.stats?.totalSegments !== undefined && { totalSegments: response.stats.totalSegments }),
-    ...(response.stats?.whisperEncodeMs !== undefined && { whisperEncodeTime: response.stats.whisperEncodeMs }),
-    ...(response.stats?.whisperDecodeMs !== undefined && { whisperDecodeTime: response.stats.whisperDecodeMs }),
-    ...(response.stats?.encoderMs !== undefined && { encoderTime: response.stats.encoderMs }),
-    ...(response.stats?.decoderMs !== undefined && { decoderTime: response.stats.decoderMs }),
-    ...(response.stats?.melSpecMs !== undefined && { melSpecTime: response.stats.melSpecMs }),
-    ...(response.stats?.backendDevice !== undefined && { backendDevice: response.stats.backendDevice }),
-    ...(response.stats?.backendId !== undefined && { backendId: response.stats.backendId }),
-    ...(response.stats?.gpuMemTotalMb !== undefined && { gpuMemTotalMb: response.stats.gpuMemTotalMb }),
-    ...(response.stats?.gpuMemFreeMb !== undefined && { gpuMemFreeMb: response.stats.gpuMemFreeMb }),
+    ...(response.stats?.audioDurationMs !== undefined && {
+      audioDuration: response.stats.audioDurationMs,
+    }),
+    ...(response.stats?.realTimeFactor !== undefined && {
+      realTimeFactor: response.stats.realTimeFactor,
+    }),
+    ...(response.stats?.tokensPerSecond !== undefined && {
+      tokensPerSecond: response.stats.tokensPerSecond,
+    }),
+    ...(response.stats?.totalTokens !== undefined && {
+      totalTokens: response.stats.totalTokens,
+    }),
+    ...(response.stats?.totalSegments !== undefined && {
+      totalSegments: response.stats.totalSegments,
+    }),
+    ...(response.stats?.whisperEncodeMs !== undefined && {
+      whisperEncodeTime: response.stats.whisperEncodeMs,
+    }),
+    ...(response.stats?.whisperDecodeMs !== undefined && {
+      whisperDecodeTime: response.stats.whisperDecodeMs,
+    }),
+    ...(response.stats?.encoderMs !== undefined && {
+      encoderTime: response.stats.encoderMs,
+    }),
+    ...(response.stats?.decoderMs !== undefined && {
+      decoderTime: response.stats.decoderMs,
+    }),
+    ...(response.stats?.melSpecMs !== undefined && {
+      melSpecTime: response.stats.melSpecMs,
+    }),
+    ...(response.stats?.backendDevice !== undefined && {
+      backendDevice: response.stats.backendDevice,
+    }),
+    ...(response.stats?.backendId !== undefined && {
+      backendId: response.stats.backendId,
+    }),
+    ...(response.stats?.gpuUnsupported !== undefined && {
+      gpuUnsupported: response.stats.gpuUnsupported,
+    }),
+    ...(response.stats?.gpuMemTotalMb !== undefined && {
+      gpuMemTotalMb: response.stats.gpuMemTotalMb,
+    }),
+    ...(response.stats?.gpuMemFreeMb !== undefined && {
+      gpuMemFreeMb: response.stats.gpuMemFreeMb,
+    }),
   };
 
   return buildStreamResult(modelExecutionMs, stats);
@@ -300,7 +330,11 @@ export async function* transcribeStream(
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
   requestId?: string,
-): AsyncGenerator<string | TranscribeSegment | TranscribeStreamEvent, void, void> {
+): AsyncGenerator<
+  string | TranscribeSegment | TranscribeStreamEvent,
+  void,
+  void
+> {
   // Same `kind: "transcribe"` as the unary variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
   // operation, so `cancel({ modelId, kind: "transcribe" })` cancels
