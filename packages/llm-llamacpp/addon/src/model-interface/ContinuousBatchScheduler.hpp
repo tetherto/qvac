@@ -64,6 +64,7 @@ struct SubmitRequest {
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
   int64_t contextSlides = 0;
+  int64_t thinkingBlockDiscards = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
 
@@ -78,7 +79,9 @@ struct RuntimeStatsSnapshot {
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
   /// Fold one completed slot's contribution into the running totals.
-  void accumulateSlot(int64_t nPast, int64_t nSlides, const Request& req);
+  void accumulateSlot(
+      int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
+      const Request& req);
 
   [[nodiscard]] double avgConcurrentSeq() const;
   [[nodiscard]] double elapsedMs() const;

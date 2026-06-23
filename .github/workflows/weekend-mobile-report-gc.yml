@@ -1,0 +1,194 @@
+name: Weekend Mobile Report GC
+
+# Backstop garbage collection for the weekly issues opened by
+# weekend-mobile-test-llm-llamacpp.yml (label: weekly-mobile-report).
+#
+# These report issues are meant to be triaged and closed BY HAND — closing one
+# is the signal that a human actually looked at that week's run. This job does
+# NOT replace that: it only sweeps up issues that were clearly abandoned, so we
+# don't slowly accumulate untouched reports if a week gets missed.
+#
+# Policy (inactivity measured from the last *human* timeline activity — this
+# job's own stale comment / label writes are ignored, exactly like
+# actions/stale, so the bot can never reset its own clock):
+#   - idle >= stale_days  -> add a `stale` label + a nudge comment
+#   - idle >= close_days  -> close (state_reason: not_planned)
+#   - human touches it while stale -> `stale` label removed automatically
+#
+# Defaults (stale 42d / close 60d) keep the normal manual review+close path
+# untouched and only catch genuinely forgotten issues. Run it manually with
+# dry_run=true to preview what it would do.
+
+on:
+  schedule:
+    # Mondays 08:00 UTC — a day after the Sunday weekend run, so a freshly
+    # opened report is never at risk and the sweep is predictable.
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      stale_days:
+        description: "Days of inactivity before an issue is marked stale"
+        type: string
+        required: false
+        default: "42"
+      close_days:
+        description: "Days of inactivity before an issue is closed"
+        type: string
+        required: false
+        default: "60"
+      dry_run:
+        description: "Log actions without modifying any issues"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: weekend-mobile-report-gc
+  cancel-in-progress: false
+
+jobs:
+  gc:
+    name: Sweep stale weekly-mobile-report issues
+    runs-on: ubuntu-latest
+    # Paginated listForRepo + per-issue timeline reads and writes can hang on
+    # API trouble; bound the job (devops/github-actions.mdc § Failure handling).
+    timeout-minutes: 10
+    steps:
+      - name: Mark stale / close abandoned report issues
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          LABEL: weekly-mobile-report
+          STALE_LABEL: stale
+          # Login that this job's own writes (label add/remove, comments) appear
+          # as in the issue timeline — its activity is excluded from "idle".
+          BOT_ACTOR: github-actions[bot]
+          STALE_DAYS: ${{ github.event.inputs.stale_days || '42' }}
+          CLOSE_DAYS: ${{ github.event.inputs.close_days || '60' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        with:
+          script: |
+            const label = process.env.LABEL
+            const staleLabel = process.env.STALE_LABEL
+            const botActor = process.env.BOT_ACTOR
+            const staleDays = Number(process.env.STALE_DAYS)
+            const closeDays = Number(process.env.CLOSE_DAYS)
+            const dryRun = process.env.DRY_RUN === 'true'
+
+            if (!Number.isFinite(staleDays) || !Number.isFinite(closeDays) || staleDays >= closeDays) {
+              core.setFailed(`Bad thresholds: stale_days=${staleDays} must be a number < close_days=${closeDays}`)
+              return
+            }
+
+            const { owner, repo } = context.repo
+            const DAY_MS = 24 * 60 * 60 * 1000
+            const now = Date.now()
+            core.info(`GC config: label=${label} stale>=${staleDays}d close>=${closeDays}d dryRun=${dryRun}`)
+
+            // Idle time is measured from the last *human* timeline activity, not
+            // `issue.updated_at`: this job's own writes (the stale comment and
+            // the label add/remove) bump `updated_at`, which would un-stale an
+            // issue on the next run and stop it ever reaching close_days. We walk
+            // the timeline and ignore anything performed by botActor, mirroring
+            // how actions/stale ignores its own actions.
+            async function lastHumanActivityMs(issue) {
+              let last = new Date(issue.created_at).getTime()
+              const events = await github.paginate(
+                github.rest.issues.listEventsForTimeline,
+                { owner, repo, issue_number: issue.number, per_page: 100 }
+              )
+              for (const ev of events) {
+                const actor = ev.actor?.login || ev.user?.login
+                if (actor === botActor) continue       // our own GC writes don't count
+                const at = ev.created_at || ev.submitted_at
+                if (!at) continue
+                const ts = new Date(at).getTime()
+                if (ts > last) last = ts
+              }
+              return last
+            }
+
+            // Make sure the `stale` label exists so addLabels can't 404.
+            if (!dryRun) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: staleLabel })
+              } catch (e) {
+                if (e.status === 404) {
+                  await github.rest.issues.createLabel({
+                    owner, repo, name: staleLabel, color: 'ededed',
+                    description: 'No activity for a while — candidate for GC'
+                  })
+                  core.info(`Created missing '${staleLabel}' label`)
+                } else {
+                  throw e
+                }
+              }
+            }
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: label, per_page: 100
+            })
+            core.info(`Found ${issues.length} open '${label}' issue(s)`)
+
+            let staled = 0, unstaled = 0, closed = 0
+            for (const issue of issues) {
+              // Pull requests are also "issues" in the API; never touch them.
+              if (issue.pull_request) continue
+
+              const ageDays = (now - await lastHumanActivityMs(issue)) / DAY_MS
+              const isStale = issue.labels.some(l => (l.name || l) === staleLabel)
+              const tag = `#${issue.number} (idle ${ageDays.toFixed(1)}d)`
+
+              if (ageDays >= closeDays) {
+                core.info(`CLOSE ${tag}`)
+                if (!dryRun) {
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: issue.number,
+                    body: `Auto-closed by report GC: no activity for ${closeDays}+ days. ` +
+                          `This is a hygiene backstop, not a verdict — reopen if it still needs triage.`
+                  })
+                  await github.rest.issues.update({
+                    owner, repo, issue_number: issue.number,
+                    state: 'closed', state_reason: 'not_planned'
+                  })
+                }
+                closed++
+              } else if (ageDays >= staleDays && !isStale) {
+                core.info(`STALE ${tag}`)
+                if (!dryRun) {
+                  await github.rest.issues.addLabels({
+                    owner, repo, issue_number: issue.number, labels: [staleLabel]
+                  })
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: issue.number,
+                    body: `Marked stale: no activity for ${staleDays}+ days. ` +
+                          `Will be auto-closed after ${closeDays} days of inactivity unless triaged ` +
+                          `(any comment or edit resets the clock).`
+                  })
+                }
+                staled++
+              } else if (ageDays < staleDays && isStale) {
+                // Activity resumed — drop the stale label.
+                core.info(`UNSTALE ${tag}`)
+                if (!dryRun) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner, repo, issue_number: issue.number, name: staleLabel
+                    })
+                  } catch (e) {
+                    if (e.status !== 404) throw e
+                  }
+                }
+                unstaled++
+              }
+            }
+
+            core.notice(`Report GC done: staled=${staled} unstaled=${unstaled} closed=${closed} (dryRun=${dryRun})`)
+            await core.summary
+              .addHeading('Weekend Mobile Report GC')
+              .addRaw(`label=\`${label}\`, stale>=${staleDays}d, close>=${closeDays}d, dryRun=${dryRun}`)
+              .addList([`marked stale: ${staled}`, `un-staled: ${unstaled}`, `closed: ${closed}`])
+              .write()

@@ -1,11 +1,14 @@
 #pragma once
 
 #include <atomic>
+#include <optional>
+#include <utility>
+#include <vector>
 
 #include <llama.h>
 
 #include "../utils/ChatTemplateUtils.hpp"
-#include "../utils/Qwen3ReasoningUtils.hpp"
+#include "../utils/ReasoningUtils.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
@@ -143,6 +146,11 @@ public:
   [[nodiscard]] int32_t getNSlides() const override;
   void resetNSlides() override;
 
+  [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
+  void resetThinkingBlockDiscards() override;
+
+  void setRemoveThinkingFromContext(bool value) override;
+
   /**
    * The reset state method. It resets the context.
    *
@@ -218,7 +226,10 @@ private:
       const std::vector<common_chat_tool>& tools,
       std::vector<llama_token>& inputTokens, bool isCacheLoaded);
 
-  bool handleQwen3ReasoningEOS(
+  // Replaces an EOS sampled while inside the reasoning channel with the
+  // model's single-token close marker and injects the trailing newlines.
+  // No-op (returns false) when the close marker is multi-token.
+  bool handleReasoningEOS(
       llama_token& tokenId, std::string& tokenStr, llama_batch& batch,
       llama_pos& nPast,
       const std::function<void(const std::string&)>& outputCallback);
@@ -236,6 +247,16 @@ private:
   llama_pos applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
+  // Reasoning-block KV-cache compaction helpers. Single-block policy:
+  // at most one `<think>...</think>` block is tracked per inference.
+  // `setOpenThinkSpan` is a no-op once a span has been captured.
+  void setOpenThinkSpan(llama_pos start);
+  void capturePendingThinkClose();
+  void compactThinkSpan();
+  void configureReasoningTags(
+      const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+      const std::string& forcedOpenText);
+
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
@@ -251,6 +272,7 @@ private:
   llama_pos firstMsgTokens_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
   int32_t nSlides_ = 0;
+  int32_t thinkingBlockDiscards_ = 0;
   bool pendingBatchFirstMsg_ = false;
   bool generationStarted_ = false;
   std::string assistantOutput_;
@@ -260,11 +282,17 @@ private:
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
 
-  // Reasoning state for Qwen3 models
-  qvac_lib_inference_addon_llama::utils::Qwen3ReasoningState reasoningState_;
+  // Reasoning channel detection state (Qwen3 / Gemma 4 / ...). Empty
+  // tags when the active model has no recognised channel.
+  qvac_lib_inference_addon_llama::utils::ReasoningState reasoningState_;
+  bool reasoningEnabled_ = false;
 
-  // Cache whether this is a Qwen3 model (checked once at load time)
-  bool isQwen3Model_ = false;
+  // True only for architectures in the Qwen3 reasoning family (qwen3,
+  // qwen3moe, qwen35, qwen35moe). Gates the EOS-inside-reasoning
+  // recovery (close-marker substitution + newline injection), which is
+  // a Qwen3-specific workaround. Detection / span tracking / KV
+  // compaction stay family-agnostic via `reasoningEnabled_`.
+  bool isQwen3ReasoningFamily_ = false;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;
@@ -275,6 +303,32 @@ private:
   // tags.
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
+
+  // Per-request toggle for the post-generation thinking-block KV
+  // cache compaction. Default-off (opt-in via `generationParams`); set
+  // by `applyGenerationParams`.
+  bool removeThinkingFromContext_ = false;
+
+  // True when the model uses recurrent memory (Mamba-style SSM layers
+  // or hybrid SSM + attention like Qwen3.5). Detected at construction
+  // via `llama_model_is_recurrent` plus an `<arch>.ssm.*` metadata
+  // probe. `setRemoveThinkingFromContext(true)` throws when this is
+  // true — `seq_rm + seq_add` succeeds on the attention KV but the SSM
+  // hidden state still carries the dropped tokens, so subsequent turns
+  // read contaminated state. Pure-attention models (Qwen3, Qwen3-MoE,
+  // Gemma 4, ...) are unaffected.
+  bool hasRecurrentMemory_ = false;
+
+  // [start, end) KV positions of the reasoning block emitted in this
+  // inference, if any. `end == -1` marks an open (still-being-emitted)
+  // span. Single-block policy: only the first `<think>...</think>` pair
+  // is tracked; later blocks (which no supported model currently emits)
+  // are ignored.
+  std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
+  // True when the close marker was detected but its token has not yet
+  // been committed to the KV cache; the next `onLogitsReady` records
+  // the end position once the commit has happened.
+  bool pendingThinkCloseCapture_ = false;
 
   std::atomic<bool> stopGeneration_ = false;
 };
