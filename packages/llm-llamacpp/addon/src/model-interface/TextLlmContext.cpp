@@ -1045,6 +1045,9 @@ void TextLlmContext::onGenerationCompletePolicy(
   const auto decision =
       tools_.onGenerationComplete(assistantOutput, nPast_, firstMsgTokens_);
   if (decision.trim) {
+    // Safe here: dynamic tools are only supported by Qwen3, which does not
+    // use recurrent memory, so tail removal does not hit the recurrent
+    // rollback limitation.
     removeLastNTokens(decision.tokensToRemoveFromTail);
     if (decision.clampFirstMsgTokensToNPast && firstMsgTokens_ > nPast_) {
       firstMsgTokens_ = nPast_;
