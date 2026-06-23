@@ -48,8 +48,9 @@ export default [
       },
     },
     rules: {
-      // Ignore Node.js subpath imports which the resolver can't handle
-      "import/no-unresolved": ["error", { ignore: ["^#"] }],
+      // Ignore subpath imports the resolver can't handle: Node.js `#` internals
+      // and `@qvac/sdk/*` self-references (resolved via package exports at build time).
+      "import/no-unresolved": ["error", { ignore: ["^#", "^@qvac/sdk/"] }],
 
       // Absolutely no `any`
       "@typescript-eslint/no-explicit-any": "error",

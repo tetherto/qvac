@@ -5,7 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-06-23
+
+### Added
+
+- **Chatterbox speaking-rate control (`speed`) (QVAC-21119).** New optional
+  `speed` config for the Chatterbox engine — a duration multiplier mirroring
+  Supertonic's `speed` (`< 1` slower, `> 1` faster), bounded to `[0.25, 4.0]`.
+  Chatterbox's engine exposes no native rate knob (its S3 speech tokens run at
+  a fixed 25 Hz and the utterance duration is emergent from the autoregressive
+  T3), so the addon applies it as a pitch-preserving WSOLA time-stretch on the
+  24 kHz PCM — functionally equivalent to ffmpeg's `atempo`, not a pitch shift.
+  Opt-in and backward compatible: when unset (or `1.0`) the raw model output is
+  left unchanged — no default slowdown. Works in both batch and native
+  streaming (one stretcher threads the overlap-add state across chunks for
+  seam-free output, with `O(chunk + window)` memory). Plumbed through
+  `ChatterboxConfig::speed`, `JSAdapter`, and `_buildChatterboxParams`
+  (mirroring Supertonic). New `examples/chatterbox-adjust-speed.js` (+
+  `example:chatterbox-adjust-speed` npm script), C++ WSOLA unit tests, and a JS
+  integration test.
+
+### Fixed
+
+- **Chunk-streaming saturation/clipping and per-chunk loudness "wobble" on the
+  Chatterbox Multilingual engine (QVAC-21118).** A low `cfmSteps` /
+  `streamCfmSteps` (1–2) under-integrated the model's standard 10-step CFM in
+  the chunk-streaming path, producing near-full-scale output (~99%, RMS 4–9×
+  hotter than batch) with a collapsing tail. The engine now floors the
+  streaming CFM step count to the model's `n_timesteps` for standard-CFM
+  models; Turbo's meanflow 2-step sampler and the batch step count are
+  unaffected. Consumes `tts-cpp` `2026-06-22` (`qvac-ext-lib-whisper.cpp`
+  PR #62).
+
+## Pull Requests
+
+- [#2782](https://github.com/tetherto/qvac/pull/2782) - QVAC-21119: add Chatterbox speaking-rate (`speed`) control
+- [#2777](https://github.com/tetherto/qvac/pull/2777) - QVAC-21118: consume tts-cpp 2026-06-22 (chunk-streaming CFM-step floor)
+
+## [0.3.3] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.3.2] - 2026-06-19
+
+### Added
+
+- **Android GPU for Supertonic + Chatterbox (QVAC-20557).** Remove the `#ifdef __ANDROID__`
+  guards in `SupertonicModel`/`ChatterboxModel` that forced `useGPU=false`; `useGPU` now flows
+  to `tts-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which picks the GPU backend per
+  its per-vendor allowlist — Supertonic on Adreno (OpenCL) / Xclipse + Mali (Vulkan); Chatterbox
+  on Adreno/Xclipse, with Mali declined by policy (`allow_arm_mali=false`) and surfaced via the
+  new `gpuUnsupported` runtime stat. The `default-registry` baseline advances to `6fe4e2b` so the
+  new version resolves. Android gpu-smoke skips dropped (Supertonic strict; Chatterbox accepts a
+  flagged Mali→CPU fallback).
 
 ### Fixed
 

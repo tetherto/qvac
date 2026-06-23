@@ -264,11 +264,17 @@ if(WIN32)
   target_compile_options(${my-consumer-addon} PRIVATE "/utf-8")
   target_compile_definitions(${my-consumer-addon} PUBLIC
       WIN32_LEAN_AND_MEAN NOMINMAX NOGDI)
-  target_link_libraries(${my-consumer-addon} PRIVATE msvcrt.lib)
 endif()
 ```
 
-**How `ocr-onnx` does it:** Uses the exact same Android (Vulkan + log) and Windows (/utf-8, lean headers, msvcrt.lib) blocks, plus Android-specific library stripping for OpenCV.
+> **Do not link `msvcrt.lib`.** The shared `vcpkg-overlays/triplets/{arm64,x64}-windows.cmake`
+> build dependencies with the static MSVC runtime, and the bare-make win32 toolchain
+> compiles the addon with the static runtime too. Linking `msvcrt.lib` (the dynamic
+> CRT import library) reintroduces a runtime dependency on `vcruntime140.dll` /
+> `msvcp140.dll`. Make sure the consumer addon also picks up the shared triplets via
+> `VCPKG_OVERLAY_TRIPLETS` (see `vcpkg-management.md`).
+
+**How `ocr-onnx` does it:** Uses the exact same Android (Vulkan + log) and Windows (/utf-8, lean headers) blocks, plus Android-specific library stripping for OpenCV.
 
 ---
 

@@ -9,7 +9,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 # Android STL configuration must be set before project()
 if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
@@ -114,12 +114,11 @@ target_compile_definitions(
     BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
 )
 
-if(WIN32)
-  target_link_libraries(
-    ${classification-ggml}
-    PRIVATE
-      msvcrt.lib
-  )
+# When ggml is built with GGML_BACKEND_DL=ON (gpu-backends on Linux/Android) the
+# backends are dlopen'd modules; tell the addon so load() uses the registry API
+# instead of the statically-linked ggml_backend_cpu_init().
+if(GGML_BACKEND_DL)
+  target_compile_definitions(${classification-ggml} PRIVATE GGML_BACKEND_DL)
 endif()
 
 if(BUILD_TESTING)

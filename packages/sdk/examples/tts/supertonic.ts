@@ -3,7 +3,7 @@ import {
   textToSpeech,
   unloadModel,
   type ModelProgressUpdate,
-  TTS_EN_SUPERTONIC_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
 } from "@qvac/sdk";
 import {
   createWav,
@@ -12,19 +12,19 @@ import {
   createWavHeader,
 } from "./utils";
 
-// Supertonic TTS (GGML): fast English synthesis with baked-in voices.
+// Supertonic 3 TTS (GGML): fast multilingual synthesis with baked-in voices.
 // Uses registry model constants — downloads automatically from QVAC Registry.
 const SUPERTONIC_SAMPLE_RATE = 44100;
 
 try {
   const modelId = await loadModel({
-    modelSrc: TTS_EN_SUPERTONIC_Q8_0,
+    modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
     modelConfig: {
       ttsEngine: "supertonic",
       language: "en",
       voice: "F1",
       ttsSpeed: 1.05,
-      ttsNumInferenceSteps: 5,
+      ttsNumInferenceSteps: 5
     },
     onProgress: (p: ModelProgressUpdate) => {
       const mb = (n: number) => (n / 1e6).toFixed(1);

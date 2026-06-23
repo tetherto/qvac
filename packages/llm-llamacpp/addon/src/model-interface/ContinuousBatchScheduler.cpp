@@ -277,6 +277,16 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       seqId,
       static_cast<llama_pos>(perSeqMaxTokens_));
 
+  // `applyGenerationParamsToContext` above resolves the sampling/n_predict/
+  // reasoning_budget overrides into `tmpParams` (which the driver copies),
+  // but `remove_thinking_from_context` is a TextLlmContext-level toggle that
+  // sits outside `common_params`. Apply it directly to the slot driver here.
+  // No restore needed: the driver is destroyed when the slot is freed.
+  if (request.overrides.remove_thinking_from_context) {
+    driver->setRemoveThinkingFromContext(
+        *request.overrides.remove_thinking_from_context);
+  }
+
   bool hasKvCacheContext = false;
   if (!request.cacheKey.empty()) {
     std::error_code ec;
@@ -506,6 +516,22 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       slot->driver->syncPosition(req->currentPos);
       const SequenceStepResult result = slot->driver->onLogitsReady(
           logitIdx, generatedAfterAccept, outputCallback);
+      // The batch path passes no `inlineDecodeBatch` to `onLogitsReady`, so
+      // the driver must not have advanced its KV position outside of the
+      // tokens the scheduler tracks via `Request::currentPos`. Fail loudly
+      // if a future driver change starts inline-decoding from this path,
+      // since the next `syncPosition` would silently desync KV positions.
+      if (result.decodedInline) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InternalError),
+            "ContinuousBatchScheduler::step: driver reported decodedInline "
+            "on the batch path (seqId " +
+                std::to_string(seqId) +
+                "); inline decoding is not supported by the batcher's "
+                "position tracking");
+      }
       if (result.discarded > 0) {
         batcher_.applySlide(seqId, result.discarded);
       }
@@ -605,9 +631,11 @@ void RuntimeStatsSnapshot::recordDecodeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t nSlides, const Request& req) {
+    int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
+    const Request& req) {
   cacheTokens += nPast;
   contextSlides += nSlides;
+  thinkingBlockDiscards += thinkingDiscards;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   promptTokens += static_cast<int64_t>(req.prefillTokenCount);
 }
@@ -819,11 +847,14 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
   int64_t nPast = 0;
   int64_t nSlides = 0;
+  int64_t thinkingDiscards = 0;
   if (slot.driver) {
     nPast = static_cast<int64_t>(slot.driver->getNPast());
     nSlides = static_cast<int64_t>(slot.driver->getNSlides());
+    thinkingDiscards =
+        static_cast<int64_t>(slot.driver->getThinkingBlockDiscards());
   }
-  stats_.accumulateSlot(nPast, nSlides, req);
+  stats_.accumulateSlot(nPast, nSlides, thinkingDiscards, req);
 }
 
 } // namespace qvac_lib_inference_addon_llama::batching

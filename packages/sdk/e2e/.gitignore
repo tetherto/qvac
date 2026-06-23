@@ -1,4 +1,5 @@
 build/
+out/
 .qvac-cache/
 qvac.config.json
 qvac.config.e2e.generated.json

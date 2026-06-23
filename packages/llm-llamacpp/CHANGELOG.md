@@ -1,4 +1,74 @@
 # Changelog
+## [0.29.2] - 2026-06-23
+
+This release adds opt-in KV-cache compaction of completed reasoning blocks, so callers can keep multi-turn context tight on models that emit a `<think>`-style channel. Detection is now driven by the active chat template's thinking tags, falling back to the hardcoded model-family table when the template does not expose them.
+
+### New APIs
+
+- `generationParams.remove_thinking_from_context` (boolean, default `false`). Opting in drops the model's reasoning block from the live KV cache at end of generation. Supported on text and multimodal contexts for models with a recognised reasoning channel. Throws `InvalidArgument` on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the post-shift hidden state would be contaminated.
+- `RuntimeStats.thinkingBlockDiscards`: integer count of reasoning blocks compacted out of the KV cache during the request. Aggregated across slots on the continuous-batching path.
+
+### Changed
+
+- Reasoning-channel detection and compaction now prefer the chat template's `thinking_start_tag` / `thinking_end_tag`, with the hardcoded Qwen3 / Gemma 4 tag table kept only as a fallback when the template does not expose tags. This keeps detection aligned with the active template and removes the need to add a new architecture entry for every reasoning model.
+- The forced-open span uses the exact template-emitted suffix when `thinking_forced_open` is set, replacing the previous hardcoded `<tag>\n` assumption.
+- The Qwen3-specific EOS-inside-reasoning recovery (close-marker substitution + trailing newlines) is now explicitly scoped to the Qwen3 reasoning family. Other families with a recognised channel keep detection / span tracking / compaction but do not inherit the Qwen3 recovery.
+
+## Pull Requests
+
+- [#2622](https://github.com/tetherto/qvac/pull/2622) - feat[api]: drop reasoning blocks from kv cache between turns
+
+## [0.29.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.29.0] - 2026-06-22
+
+This release makes reasoning-token budgets configurable per model load and per request, while improving how chat-template thinking markers are detected and streamed. It also tightens GPU backend validation so unsupported quantized KV-cache combinations fail early with clear errors instead of reaching backend-specific runtime failures.
+
+### Breaking Changes
+
+- TurboQuant and PolarQuant KV-cache types are now rejected during model configuration on OpenCL and Metal backends, where the required kernels are not available. Use CPU/Vulkan for TBQ/PQ KV-cache modes, or use standard KV-cache types such as `q4_0` and `q8_0` on OpenCL or Metal.
+
+### New APIs
+
+- `reasoning_budget` now accepts positive integer token caps in addition to the existing `-1` unrestricted and `0` disabled modes. Callers can set the cap at model load time or override it per request through generation params.
+
+### Changed
+
+- Reasoning-budget sampling now derives template-specific thinking start/end markers and generation prompts from the active chat template, so capped thinking output stays aligned with models that use custom `<think>`-style delimiters.
+- Flash attention now defaults on for supported non-BitNet, non-finetuning configurations, while preserving existing override behavior.
+
+### Fixed
+
+- Metal backend detection now recognizes runtime `mtl*` device names, so CPU-only Apple runs do not get treated as Metal while actual Metal devices still reject unsupported TBQ/PQ KV-cache modes.
+- Mobile and desktop LLM integration tests were adjusted for the new backend behavior and to reduce platform-specific flake in reasoning, cache, multimodal, and performance suites.
+
+## Pull Requests
+
+- [#2366](https://github.com/tetherto/qvac/pull/2366) - QVAC-20987 feat[api]: add llm reasoning budget caps
+
+## [0.28.0] - 2026-06-22
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `9341.0.0`, which enables `GGML_BACKEND_DL` dynamic backend loading on desktop Linux: the Vulkan GPU backend and runtime-dispatched CPU micro-architecture variants now load as standalone modules from `prebuilds`. No public API change.
+
+## Pull Requests
+
+- [#2733](https://github.com/tetherto/qvac/pull/2733) - QVAC-20827 feat[api]: GGML_BACKEND_DL desktop backends (Vulkan) across fabric consumers
+
 ## [0.27.0] - 2026-06-18
 
 ### Changed

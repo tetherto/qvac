@@ -38,7 +38,8 @@
     ],
     "funcShardB": [
       "runToolsCompactTest",
-      "runSlidingContextTest"
+      "runSlidingContextTest",
+      "runMtpTest"
     ],
     "funcShardC": [
       "runToolCallingTest",

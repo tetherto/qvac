@@ -100,7 +100,8 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl) {
+    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
+    bool isMetal) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -149,8 +150,7 @@ void LlamaModel::tuneConfigMap(
     configFilemap.erase("flash_attn");
     configFilemap["flash-attn"] = "on";
     QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] Enabling flash attention by default\n");
+        Priority::INFO, "[LlamaModel] Enabling flash attention by default\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
@@ -214,21 +214,17 @@ void LlamaModel::tuneConfigMap(
     }
   }
 
-  // TurboQuant / PolarQuant KV-cache types (tbq3_0 / tbq4_0 / pq3_0 / pq4_0,
-  // ship Vulkan + CPU implementations only. On the OpenCL backend
-  // the kernels don't exist; on Metal the standalone MUL_MAT pipelines are
-  // explicitly disabled. Silently letting the user proceed lets llama.cpp
-  // commit KV-cache tensors to a backend that can't run the ops on them,
-  // which then aborts in ggml_backend_sched_split_graph at model load.
-  // Surface a clean error here instead.
-#if defined(__APPLE__)
-  constexpr bool kIsMetal = true;
-#else
-  constexpr bool kIsMetal = false;
-#endif
-  if (isOpenCl || kIsMetal) {
+  // Quantized KV-cache types are fragile on OpenCL: standard q-cache types can
+  // fail later during cache shifts, while TBQ/PQ kernels are not implemented.
+  // Surface a clean error here instead of letting llama.cpp commit KV-cache
+  // tensors to a backend that can't run the required ops.
+  if (isOpenCl || isMetal) {
     auto isTurboQuantKvType = [](const std::string& v) {
       return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
+    };
+    auto isQuantizedKvType = [&](const std::string& v) {
+      return isTurboQuantKvType(v) || v == "q4_0" || v == "q4_1" ||
+             v == "q5_0" || v == "q5_1" || v == "q8_0" || v == "iq4_nl";
     };
     auto checkCacheType = [&](const char* hyphenKey,
                               const char* underscoreKey,
@@ -238,20 +234,30 @@ void LlamaModel::tuneConfigMap(
         it = configFilemap.find(underscoreKey);
       if (it == configFilemap.end())
         return;
-      if (!isTurboQuantKvType(it->second))
+      if (isOpenCl) {
+        if (!isQuantizedKvType(it->second))
+          return;
+      } else if (!isTurboQuantKvType(it->second)) {
         return;
+      }
       const char* backendName = isOpenCl ? "OpenCL" : "Metal";
+      const char* typeName = isTurboQuantKvType(it->second)
+                                 ? "TurboQuant/PolarQuant"
+                                 : "quantized";
+      const char* alternatives =
+          isOpenCl ? "f32/f16/bf16"
+                   : "f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl";
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
-              "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant type "
-              "and is not supported on the %s backend (Vulkan and CPU only). "
-              "Either pick a different cache type (f32/f16/bf16/q4_0/q4_1/"
-              "q5_0/q5_1/q8_0/iq4_nl) or switch device to a Vulkan GPU or "
-              "CPU.\n",
+              "[LlamaModel] cache-type-%s=%s is a %s KV-cache type and is not "
+              "supported on the %s backend. Either pick a different cache "
+              "type (%s) or switch device to a Vulkan GPU or CPU.\n",
               side,
               it->second.c_str(),
-              backendName));
+              typeName,
+              backendName,
+              alternatives));
     };
     checkCacheType("cache-type-k", "cache_type_k", "k");
     checkCacheType("cache-type-v", "cache_type_v", "v");
@@ -655,8 +661,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     state_->batchScheduler_->resetRuntimeStats();
   }
 
-  // Reset per-inference slide counter so it doesn't leak across runs
+  // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetNSlides();
+  state_->llmContext_->resetThinkingBlockDiscards();
 
   for (const auto& media : prompt.media) {
     loadMedia(media);
@@ -976,6 +983,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
       {"contextSlides", stats.contextSlides},
+      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
 }
@@ -1008,6 +1016,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"promptTokens", promptTokens},
       {"contextSlides",
        static_cast<int64_t>(state_->llmContext_->getNSlides())},
+      {"thinkingBlockDiscards",
+       static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
       {"avgConcurrentSeq", 1.0},
       {"draftAccepted", state_->llmContext_->getDraftAccepted()},
       {"draftTotal", state_->llmContext_->getDraftTotal()},
@@ -1219,6 +1229,7 @@ void LlamaModel::commonParamsParse(
   }
 
   bool isOpenCl = false;
+  bool isMetal = false;
   {
     using namespace backend_selection;
     const BackendType preferredBackend =
@@ -1285,6 +1296,9 @@ void LlamaModel::commonParamsParse(
 
     isOpenCl = chosenBackend.first == BackendType::GPU &&
                chosenBackend.second.find("opencl") != std::string::npos;
+    isMetal = chosenBackend.first == BackendType::GPU &&
+              (chosenBackend.second.find("metal") != std::string::npos ||
+               chosenBackend.second.rfind("mtl", 0) == 0);
   }
 
   tuneConfigMap(
@@ -1292,7 +1306,8 @@ void LlamaModel::commonParamsParse(
       metadata_,
       outAdrenoVersion,
       pendingFinetuneOverrides_,
-      isOpenCl);
+      isOpenCl,
+      isMetal);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {

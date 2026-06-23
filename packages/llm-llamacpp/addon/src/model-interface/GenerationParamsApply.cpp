@@ -30,9 +30,8 @@ void applyGenerationOverridesToSampling(
   setIf(overrides.repeat_penalty, sampling.penalty_repeat);
 
   // Forward reasoning_budget into the budget-sampler's token cap. The
-  // start/end/forced vectors were tokenized in the TextLlmContext ctor for
-  // Qwen3 models and survive the copy from params.sampling into the local
-  // override, so we only need to mutate the count here.
+  // template-specific start/end/forced vectors are refreshed after prompt
+  // formatting, where common_chat_params exposes the thinking tags.
   if (overrides.reasoning_budget) {
     const int budget = *overrides.reasoning_budget;
     if (budget > 0) {
