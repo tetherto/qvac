@@ -84,7 +84,7 @@
     "directory": "packages/tts-ggml"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-ggml#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/registry-client": "^0.4.0",

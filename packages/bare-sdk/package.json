@@ -9,7 +9,7 @@
     "directory": "packages/bare-sdk"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/bare-sdk#readme",
+  "homepage": "https://qvac.tether.io",
   "keywords": [
     "ai",
     "bare",

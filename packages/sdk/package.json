@@ -8,7 +8,7 @@
     "directory": "packages/sdk"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/sdk#readme",
+  "homepage": "https://qvac.tether.io",
   "keywords": [
     "ai",
     "bare",
