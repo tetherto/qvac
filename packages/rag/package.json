@@ -3,8 +3,8 @@
   "version": "0.6.4",
   "main": "index.js",
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
     "test:unit": "brittle-bare test/unit/*.test.js",
     "test:integration": "brittle-bare test/integration/*.test.js",
     "test": "npm run lint && npm run test:unit && npm run test:integration",
@@ -64,7 +64,7 @@
     "bare-path": "^3.0.0",
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
-    "standard": "^17.1.2",
+    "lunte": "^1.8.1",
     "test-tmp": "^1.4.0"
   },
   "dependencies": {
