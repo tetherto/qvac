@@ -390,7 +390,7 @@ bool MtmdLlmContext::evalMessageWithTools(
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
       current_.pos = outcome.newNPast;
-      current_.cacheTokens -= outcome.discarded;
+      refreshCurrentCacheTokensFromMemory();
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
@@ -484,6 +484,19 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
   }
 }
 
+void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
+  auto* mem = llama_get_memory(modelCtx_.lctx);
+  if (mem == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(ContextSlideFailed),
+        "[MtmdLlm] llama memory is null while refreshing cache token count");
+  }
+
+  current_.cacheTokens =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId_));
+}
+
 void MtmdLlmContext::applyContextDiscard() {
   constexpr llama_pos effectiveCtx = -1;
   auto outcome = trySlideGeneration(
@@ -498,7 +511,7 @@ void MtmdLlmContext::applyContextDiscard() {
       current_.cacheTokens);
   if (outcome.kind == ContextSlideOutcome::Kind::Slid) {
     current_.pos = outcome.newNPast;
-    current_.cacheTokens -= outcome.discarded;
+    refreshCurrentCacheTokensFromMemory();
     ++nSlides_;
     // Recorded span positions are no longer valid after the shift;
     // drop them rather than try to fix them up.
@@ -893,10 +906,7 @@ void MtmdLlmContext::compactThinkSpan() {
       compactKvRange(modelCtx_.lctx, seqId_, start, end, current_.pos);
   if (outcome.kind == CompactRangeOutcome::Kind::Compacted) {
     current_.pos = outcome.newNPast;
-    // Multimodal cacheTokens tracks image tokens separately from text
-    // positions; the compacted range is text-only so cacheTokens drops
-    // by the same number of discarded tokens.
-    current_.cacheTokens -= outcome.discarded;
+    refreshCurrentCacheTokensFromMemory();
     if (start < protectedPrefix_.pos) {
       const llama_pos removedProtectedTokens =
           std::min(outcome.discarded, protectedPrefix_.pos - start);
@@ -1059,9 +1069,8 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
 
   clearSequenceMemory(modelCtx_.lctx, current_.pos - tokensToRemove, -1);
 
-  // Decrement the token count by the number of tokens removed
   current_.pos -= tokensToRemove;
-  current_.cacheTokens -= std::min(tokensToRemove, current_.cacheTokens);
+  refreshCurrentCacheTokensFromMemory();
 
   // Note: The sampler doesn't have an "undo" function, so we leave it as is.
   // The sampler maintains its own history, but the removed tokens won't affect

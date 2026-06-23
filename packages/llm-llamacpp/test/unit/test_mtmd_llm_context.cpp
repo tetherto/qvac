@@ -1,4 +1,6 @@
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -15,6 +17,23 @@
 using test_common::getStatValue;
 
 namespace fs = std::filesystem;
+
+namespace {
+std::vector<uint8_t> readBinaryFile(const fs::path& path) {
+  std::ifstream stream(path, std::ios::binary);
+  return {
+      std::istreambuf_iterator<char>(stream),
+      std::istreambuf_iterator<char>()};
+}
+
+fs::path multimodalTestImagePath() {
+  const fs::path packageRelative = fs::path("media/fruitPlate.png");
+  if (fs::exists(packageRelative)) {
+    return packageRelative;
+  }
+  return fs::path("packages/llm-llamacpp/media/fruitPlate.png");
+}
+} // namespace
 
 class MtmdLlmContextTest : public ::testing::Test {
 protected:
@@ -255,6 +274,40 @@ TEST_F(MtmdLlmContextTest, MultimodalMessages) {
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
+}
+
+TEST_F(MtmdLlmContextTest, CacheTokensMatchesLlamaMemoryTokenCount) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Describe this image briefly."}])";
+  prompt.media.push_back(readBinaryFile(imagePath));
+
+  std::string output = model->processPrompt(prompt);
+  EXPECT_GE(output.length(), 0);
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+
+  const auto expectedCacheTokens =
+      static_cast<double>(llama_memory_seq_token_count(mem, 0));
+  const auto stats = model->runtimeStats();
+
+  EXPECT_EQ(getStatValue(stats, "CacheTokens"), expectedCacheTokens);
 }
 
 TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
