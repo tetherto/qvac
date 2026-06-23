@@ -456,6 +456,20 @@ runs:
 
           export GROUP_GREP_OUT="$GROUP_GREP"
 
+          # Per-shard perf gating: only enable perf extraction for groups
+          # whose name contains "Perf" (case-insensitive). Non-perf shards
+          # skip perf-extract.js entirely, avoiding the 48-round poll loop
+          # (~13 min on Android) that runs uselessly when no perf-report.json
+          # exists. The global ENABLES_PERF input is preserved as the ceiling
+          # — a shard can only enable perf if the workflow-level input allows it.
+          SHARD_ENABLES_PERF="false"
+          if [ "$ENABLES_PERF" = "true" ]; then
+            case "$GROUP_NAME" in
+              *[Pp]erf*) SHARD_ENABLES_PERF="true" ;;
+            esac
+          fi
+          export SHARD_ENABLES_PERF
+
           # Python rather than sed because PLATFORM_CAPS contains characters that
           # are awkward to escape in sed substitution syntax (newlines, &, |, /).
           python3 - <<'PY' > "$WDIO_CONFIG_PATH"
@@ -476,7 +490,7 @@ runs:
             "__ENABLE_CRASH_MONITOR__": os.environ["ENABLE_CRASH_MONITOR"],
             "__QVAC_PERF_RUNS__": os.environ.get("QVAC_PERF_RUNS", ""),
             "__QVAC_PERF_WARMUP_RUNS__": os.environ.get("QVAC_PERF_WARMUP_RUNS", ""),
-            "__ENABLES_PERF__": os.environ.get("ENABLES_PERF", "false"),
+            "__ENABLES_PERF__": os.environ.get("SHARD_ENABLES_PERF", "false"),
             "__AFTER_HOOK_EXTRA__": after_snippet,
         }
         for k, v in repl.items():

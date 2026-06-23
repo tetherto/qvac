@@ -76,7 +76,10 @@ async function pollUntilStable(browser, bundleId) {
   let stableRounds = 0;
   let bestJson = null;
 
-  for (let round = 0; round < 48; round++) {
+  // Cap at 6 rounds (~30s). The old limit of 48 (~4 min of shell calls,
+  // ~13 min wall-clock with API overhead) ran uselessly on non-perf shards.
+  // 6 rounds is enough for the app to finish writing if perf data exists.
+  for (let round = 0; round < 6; round++) {
     let found = false;
     for (const path of paths) {
       try {
