@@ -344,19 +344,6 @@ bool MtmdLlmContext::evalMessageWithTools(
               "message\n",
               outcome.discarded));
       break;
-    case ContextSlideOutcome::Kind::FullWipe:
-      current_.pos = outcome.newNPast;
-      current_.cacheTokens = current_.pos == protectedPrefix_.pos
-                                 ? protectedPrefix_.cacheTokens
-                                 : protectedPrefix_.cacheTokens + 1;
-      ++nSlides_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[MtmdLlm] Prefill step: wiped %d tokens after the first "
-              "message\n",
-              outcome.discarded));
-      break;
     case ContextSlideOutcome::Kind::Overflow: {
       std::string errorMsg = string_format(
           "[MtmdLlm] context overflow at prefill step (%d tokens, max "

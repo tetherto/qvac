@@ -372,16 +372,6 @@ bool TextLlmContext::evalMessageWithTools(
               "message\n",
               outcome.discarded));
       break;
-    case ContextSlideOutcome::Kind::FullWipe:
-      nPast_ = outcome.newNPast;
-      ++nSlides_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[TextLlm] Prefill step: wiped %d tokens after the first "
-              "message\n",
-              outcome.discarded));
-      break;
     case ContextSlideOutcome::Kind::Overflow: {
       std::string errorMsg = string_format(
           "[TextLlm] context overflow at prefill step (%ld tokens, max "
