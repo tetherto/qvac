@@ -24,18 +24,70 @@ export const TTS_CHATTERBOX_LANGUAGES = [
   "ko", // Korean
 ] as const;
 
-// Supertonic supported languages (subset of the Chatterbox set).
+// Supertonic supported languages (31, as of Supertonic 3). Earlier Supertonic
+// releases (1/2) only cover a subset, but validation is per-engine, not
+// per-model, so the enum reflects the engine's current full capability.
 export const TTS_SUPERTONIC_LANGUAGES = [
   "en", // English
-  "es", // Spanish
-  "fr", // French
-  "pt", // Portuguese
   "ko", // Korean
+  "ja", // Japanese
+  "ar", // Arabic
+  "bg", // Bulgarian
+  "cs", // Czech
+  "da", // Danish
+  "de", // German
+  "el", // Greek
+  "es", // Spanish
+  "et", // Estonian
+  "fi", // Finnish
+  "fr", // French
+  "hi", // Hindi
+  "hr", // Croatian
+  "hu", // Hungarian
+  "id", // Indonesian
+  "it", // Italian
+  "lt", // Lithuanian
+  "lv", // Latvian
+  "nl", // Dutch
+  "pl", // Polish
+  "pt", // Portuguese
+  "ro", // Romanian
+  "ru", // Russian
+  "sk", // Slovak
+  "sl", // Slovenian
+  "sv", // Swedish
+  "tr", // Turkish
+  "uk", // Ukrainian
+  "vi", // Vietnamese
+] as const;
+
+// Supertonic languages not already present in the Chatterbox set, used to keep
+// TTS_LANGUAGES a true union across engines without duplicates.
+const TTS_SUPERTONIC_ONLY_LANGUAGES = [
+  "ja", // Japanese
+  "bg", // Bulgarian
+  "cs", // Czech
+  "et", // Estonian
+  "hi", // Hindi
+  "hr", // Croatian
+  "hu", // Hungarian
+  "id", // Indonesian
+  "lt", // Lithuanian
+  "lv", // Latvian
+  "ro", // Romanian
+  "ru", // Russian
+  "sk", // Slovak
+  "sl", // Slovenian
+  "uk", // Ukrainian
+  "vi", // Vietnamese
 ] as const;
 
 // Union of all TTS-supported languages across engines. Kept for backwards
 // compatibility; prefer the engine-specific lists when validating a config.
-export const TTS_LANGUAGES = [...TTS_CHATTERBOX_LANGUAGES] as const;
+export const TTS_LANGUAGES = [
+  ...TTS_CHATTERBOX_LANGUAGES,
+  ...TTS_SUPERTONIC_ONLY_LANGUAGES,
+] as const;
 
 const ttsChatterboxLanguageSchema = z.enum(TTS_CHATTERBOX_LANGUAGES);
 const ttsSupertonicLanguageSchema = z.enum(TTS_SUPERTONIC_LANGUAGES);

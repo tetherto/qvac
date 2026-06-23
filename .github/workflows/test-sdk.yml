@@ -49,6 +49,10 @@ on:
         description: "Device Farm session timeout (minutes)"
         type: number
         default: 90
+      device-farm-start-timeout:
+        description: "Device Farm scheduling timeout before producer starts (minutes)"
+        type: number
+        default: 90
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
@@ -83,6 +87,9 @@ on:
         type: number
         default: 1200
       device-farm-timeout:
+        type: number
+        default: 90
+      device-farm-start-timeout:
         type: number
         default: 90
       desktop-platforms:
@@ -153,6 +160,7 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
       test-version: ${{ inputs.test-version || '' }}
@@ -176,6 +184,7 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
       test-version: ${{ inputs.test-version || '' }}

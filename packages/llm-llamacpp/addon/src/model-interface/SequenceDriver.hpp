@@ -53,6 +53,16 @@ public:
 
   [[nodiscard]] virtual int32_t getNSlides() const = 0;
 
+  [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
+
+  // Apply the per-request `remove_thinking_from_context` toggle to the
+  // driver. The single-prompt path goes through `applyGenerationParams`
+  // (which restores on scope exit); the batch path uses this setter
+  // directly because each slot has a fresh driver per request, so no
+  // restore is needed. Default no-op for drivers without compaction
+  // support.
+  virtual void setRemoveThinkingFromContext(bool value) { (void)value; }
+
   /// Reject prompts that violate per-sequence admission policy (size,
   /// layout, KV-cache state). Called once per `submit` before any state
   /// is mutated; a thrown `StatusError` aborts admission cleanly.
