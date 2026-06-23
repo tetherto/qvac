@@ -3,14 +3,9 @@
 const test = require('brittle')
 const process = require('bare-process')
 const QvacLogger = require('../..')
-const {
-  LOG_LEVELS,
-  LEVEL_PRIORITIES,
-  DEFAULT_LEVEL,
-  ENV_LOG_LEVEL
-} = require('../../constants')
+const { LOG_LEVELS, LEVEL_PRIORITIES, DEFAULT_LEVEL, ENV_LOG_LEVEL } = require('../../constants')
 
-function createDummy () {
+function createDummy() {
   const calls = []
   const logger = {}
   for (const m of ['error', 'warn', 'info', 'debug']) {
@@ -19,19 +14,19 @@ function createDummy () {
   return { logger, calls }
 }
 
-function createWithGetLevel (level) {
+function createWithGetLevel(level) {
   const { logger, calls } = createDummy()
   logger.getLevel = () => level
   return { logger, calls }
 }
 
-function createWithLevelProp (level) {
+function createWithLevelProp(level) {
   const { logger, calls } = createDummy()
   logger.level = level
   return { logger, calls }
 }
 
-function createWithLevelFn (level) {
+function createWithLevelFn(level) {
   const { logger, calls } = createDummy()
   logger.level = () => level
   return { logger, calls }
@@ -39,12 +34,12 @@ function createWithLevelFn (level) {
 
 // ––– Tests –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
-test('no-arg constructor → set log level to OFF', t => {
+test('no-arg constructor → set log level to OFF', (t) => {
   const log = new QvacLogger()
   t.is(log.getLevel(), LOG_LEVELS.OFF)
 })
 
-test('default level = DEFAULT_LEVEL when a logger is passed and level cannot be inferred', t => {
+test('default level = DEFAULT_LEVEL when a logger is passed and level cannot be inferred', (t) => {
   const { logger, calls } = createDummy()
   const log = new QvacLogger(logger)
   t.is(log.getLevel(), DEFAULT_LEVEL)
@@ -53,45 +48,45 @@ test('default level = DEFAULT_LEVEL when a logger is passed and level cannot be 
   log.warn('w')
   log.info('i')
   log.debug('d')
-  t.ok(calls.some(c => c[0] === 'error'))
-  t.ok(calls.some(c => c[0] === 'warn'))
-  t.ok(calls.some(c => c[0] === 'info'))
-  t.ok(calls.every(c => c[0] !== 'debug'))
+  t.ok(calls.some((c) => c[0] === 'error'))
+  t.ok(calls.some((c) => c[0] === 'warn'))
+  t.ok(calls.some((c) => c[0] === 'info'))
+  t.ok(calls.every((c) => c[0] !== 'debug'))
 })
 
-test('inherits level from logger.getLevel()', t => {
+test('inherits level from logger.getLevel()', (t) => {
   const { logger, calls } = createWithGetLevel(LOG_LEVELS.WARN)
   const log = new QvacLogger(logger)
   t.is(log.getLevel(), LOG_LEVELS.WARN)
   log.error('e')
   log.warn('w')
   log.info('i')
-  t.ok(calls.some(c => c[0] === 'error'))
-  t.ok(calls.some(c => c[0] === 'warn'))
-  t.ok(calls.every(c => c[0] !== 'info'))
+  t.ok(calls.some((c) => c[0] === 'error'))
+  t.ok(calls.some((c) => c[0] === 'warn'))
+  t.ok(calls.every((c) => c[0] !== 'info'))
 })
 
-test('inherits level from logger.level property', t => {
+test('inherits level from logger.level property', (t) => {
   const { logger, calls } = createWithLevelProp(LOG_LEVELS.ERROR)
   const log = new QvacLogger(logger)
   t.is(log.getLevel(), LOG_LEVELS.ERROR)
   log.error('e')
   log.warn('w')
-  t.ok(calls.some(c => c[0] === 'error'))
-  t.ok(calls.every(c => c[0] !== 'warn'))
+  t.ok(calls.some((c) => c[0] === 'error'))
+  t.ok(calls.every((c) => c[0] !== 'warn'))
 })
 
-test('inherits level from logger.level() function', t => {
+test('inherits level from logger.level() function', (t) => {
   const { logger, calls } = createWithLevelFn(LOG_LEVELS.ERROR)
   const log = new QvacLogger(logger)
   t.is(log.getLevel(), LOG_LEVELS.ERROR)
   log.error('e')
   log.warn('w')
-  t.ok(calls.some(c => c[0] === 'error'))
-  t.ok(calls.every(c => c[0] !== 'warn'))
+  t.ok(calls.some((c) => c[0] === 'error'))
+  t.ok(calls.every((c) => c[0] !== 'warn'))
 })
 
-test('getLevelReflects setLevel', t => {
+test('getLevelReflects setLevel', (t) => {
   const { logger } = createDummy()
   const log = new QvacLogger(logger)
   log.setLevel(LOG_LEVELS.DEBUG)
@@ -100,18 +95,18 @@ test('getLevelReflects setLevel', t => {
   t.is(log.getLevel(), LOG_LEVELS.ERROR)
 })
 
-test('setLevel invalid → throws', t => {
+test('setLevel invalid → throws', (t) => {
   const { logger } = createDummy()
   const log = new QvacLogger(logger)
   t.exception(() => log.setLevel('not-a-level'), /Invalid log level: not-a-level/)
 })
 
-test('constructor rejects logger missing methods', t => {
+test('constructor rejects logger missing methods', (t) => {
   // omit one or more of error/warn/info/debug
   t.exception(() => new QvacLogger({}), /Logger must implement method/)
 })
 
-test('per-level gating respects LEVEL_PRIORITIES', t => {
+test('per-level gating respects LEVEL_PRIORITIES', (t) => {
   const { logger, calls } = createDummy()
   const log = new QvacLogger(logger)
 
@@ -131,13 +126,13 @@ test('per-level gating respects LEVEL_PRIORITIES', t => {
       if (msgLevel === LOG_LEVELS.OFF) continue
 
       const shouldLog = LEVEL_PRIORITIES[msgLevel] <= LEVEL_PRIORITIES[level]
-      const found = calls.some(c => c[0] === msgLevel)
+      const found = calls.some((c) => c[0] === msgLevel)
       t.is(found, shouldLog, `at level=${level}, ${msgLevel} logged? ${shouldLog}`)
     }
   }
 })
 
-test('OFF level disables all logs', t => {
+test('OFF level disables all logs', (t) => {
   const { logger, calls } = createDummy()
   const log = new QvacLogger(logger)
   log.setLevel(LOG_LEVELS.OFF)
@@ -148,7 +143,7 @@ test('OFF level disables all logs', t => {
   t.is(calls.length, 0)
 })
 
-test('reads level from environment variable', t => {
+test('reads level from environment variable', (t) => {
   const existingLogLevel = process.env[ENV_LOG_LEVEL] ?? ''
   process.env.QVAC_LOG_LEVEL = LOG_LEVELS.DEBUG
 
@@ -157,14 +152,14 @@ test('reads level from environment variable', t => {
   t.is(log.getLevel(), LOG_LEVELS.DEBUG)
   log.info('info')
   log.debug('debug')
-  t.ok(calls.some(c => c[0] === 'info'))
-  t.ok(calls.some(c => c[0] === 'debug'))
+  t.ok(calls.some((c) => c[0] === 'info'))
+  t.ok(calls.some((c) => c[0] === 'debug'))
 
   // Restore original environment variable
   process.env.QVAC_LOG_LEVEL = existingLogLevel
 })
 
-test('environment variable takes precedence over logger level', t => {
+test('environment variable takes precedence over logger level', (t) => {
   const existingLogLevel = process.env[ENV_LOG_LEVEL] ?? ''
   process.env.QVAC_LOG_LEVEL = LOG_LEVELS.ERROR
 
@@ -173,8 +168,8 @@ test('environment variable takes precedence over logger level', t => {
   t.is(log.getLevel(), LOG_LEVELS.ERROR)
   log.info('info')
   log.error('error')
-  t.ok(calls.some(c => c[0] === 'error'))
-  t.ok(calls.every(c => c[0] !== 'info'))
+  t.ok(calls.some((c) => c[0] === 'error'))
+  t.ok(calls.every((c) => c[0] !== 'info'))
 
   // Restore original environment variable
   process.env.QVAC_LOG_LEVEL = existingLogLevel
