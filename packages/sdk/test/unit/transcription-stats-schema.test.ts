@@ -20,8 +20,20 @@ test("transcribeStatsSchema: backend/GPU fields are optional (CPU / parakeet pat
   const result = transcribeStatsSchema.parse({ realTimeFactor: 1.5 });
   t.absent(result.backendDevice);
   t.absent(result.backendId);
+  t.absent(result.gpuUnsupported);
   t.absent(result.gpuMemTotalMb);
   t.absent(result.gpuMemFreeMb);
+});
+
+test("transcribeStatsSchema: round-trips parakeet gpuUnsupported stat", (t) => {
+  const result = transcribeStatsSchema.parse({
+    backendDevice: 0,
+    backendId: 0,
+    gpuUnsupported: 1,
+  });
+  t.is(result.backendDevice, 0);
+  t.is(result.backendId, 0);
+  t.is(result.gpuUnsupported, 1);
 });
 
 test("transcribeStatsSchema: accepts the -1 no-accounting sentinel for gpu memory", (t) => {
@@ -36,7 +48,5 @@ test("transcribeStatsSchema: accepts the -1 no-accounting sentinel for gpu memor
 });
 
 test("transcribeStatsSchema: rejects non-numeric backend fields", (t) => {
-  t.exception(() =>
-    transcribeStatsSchema.parse({ backendId: "vulkan" }),
-  );
+  t.exception(() => transcribeStatsSchema.parse({ backendId: "vulkan" }));
 });
