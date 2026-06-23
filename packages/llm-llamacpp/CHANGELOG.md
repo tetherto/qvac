@@ -1,4 +1,23 @@
 # Changelog
+## [0.29.2] - 2026-06-23
+
+This release adds opt-in KV-cache compaction of completed reasoning blocks, so callers can keep multi-turn context tight on models that emit a `<think>`-style channel. Detection is now driven by the active chat template's thinking tags, falling back to the hardcoded model-family table when the template does not expose them.
+
+### New APIs
+
+- `generationParams.remove_thinking_from_context` (boolean, default `false`). Opting in drops the model's reasoning block from the live KV cache at end of generation. Supported on text and multimodal contexts for models with a recognised reasoning channel. Throws `InvalidArgument` on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the post-shift hidden state would be contaminated.
+- `RuntimeStats.thinkingBlockDiscards`: integer count of reasoning blocks compacted out of the KV cache during the request. Aggregated across slots on the continuous-batching path.
+
+### Changed
+
+- Reasoning-channel detection and compaction now prefer the chat template's `thinking_start_tag` / `thinking_end_tag`, with the hardcoded Qwen3 / Gemma 4 tag table kept only as a fallback when the template does not expose tags. This keeps detection aligned with the active template and removes the need to add a new architecture entry for every reasoning model.
+- The forced-open span uses the exact template-emitted suffix when `thinking_forced_open` is set, replacing the previous hardcoded `<tag>\n` assumption.
+- The Qwen3-specific EOS-inside-reasoning recovery (close-marker substitution + trailing newlines) is now explicitly scoped to the Qwen3 reasoning family. Other families with a recognised channel keep detection / span tracking / compaction but do not inherit the Qwen3 recovery.
+
+## Pull Requests
+
+- [#2622](https://github.com/tetherto/qvac/pull/2622) - feat[api]: drop reasoning blocks from kv cache between turns
+
 ## [0.29.1] - 2026-06-22
 
 ### Changed
