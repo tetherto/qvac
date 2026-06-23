@@ -1,4 +1,25 @@
 # Changelog
+## [0.30.0] - 2026-06-23
+
+This release lets callers opt in to dropping completed reasoning blocks from the llama.cpp context between turns. It reduces KV-cache pressure for supported pure-attention reasoning models while keeping recurrent-memory models protected from unsafe state shifts.
+
+### New APIs
+
+- `generationParams.remove_thinking_from_context` can now be set per request to remove completed reasoning spans from the native context after generation. The option is available for text, continuous-batching, and multimodal contexts, and `runtimeStats.thinkingBlockDiscards` reports whether a reasoning block was compacted during the most recent generation.
+
+### Changed
+
+- Reasoning span detection now uses chat-template-derived thinking tags when available, with model-family defaults as a fallback. This keeps compaction aligned with templates that expose custom reasoning delimiters.
+- Qwen3 EOS-inside-reasoning recovery is now scoped to Qwen3-family models and works in continuous batching without inline decoding, preserving the scheduler's position tracking.
+
+### Fixed
+
+- `remove_thinking_from_context` is rejected on recurrent-memory and hybrid SSM models such as Qwen3.5, where removing only attention KV entries would leave recurrent state contaminated by the dropped reasoning tokens.
+
+## Pull Requests
+
+- [#2622](https://github.com/tetherto/qvac/pull/2622) - QVAC-20770 feat[api]: drop reasoning blocks from kv cache between turns
+
 ## [0.29.1] - 2026-06-22
 
 ### Changed
