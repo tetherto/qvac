@@ -3,7 +3,7 @@ import {
   textToSpeech,
   unloadModel,
   type ModelProgressUpdate,
-  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
 } from "@qvac/sdk";
 import {
   createWav,
@@ -12,12 +12,12 @@ import {
   createWavHeader,
 } from "./utils";
 
-// Supertonic 2 TTS (GGML): multilingual synthesis (en/ko/es/pt/fr).
+// Supertonic 3 TTS (GGML): multilingual synthesis across 31 languages.
 const SUPERTONIC_SAMPLE_RATE = 44100;
 
 try {
   const modelId = await loadModel({
-    modelSrc: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+    modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
     modelConfig: {
       ttsEngine: "supertonic",
       language: "es",
