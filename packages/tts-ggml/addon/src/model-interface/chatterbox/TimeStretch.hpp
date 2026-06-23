@@ -134,11 +134,20 @@ private:
     float bestScore = -std::numeric_limits<float>::infinity();
     for (long a = lo; a <= hi; ++a) {
       const std::size_t inOff = static_cast<std::size_t>(a) - inBase_;
-      float score = 0.0f;
+      float dot = 0.0f;
+      float energy = 0.0f;
       for (int k = 0; k < N_; ++k) {
-        score += inBuf_[inOff + static_cast<std::size_t>(k)] *
-                 target_[static_cast<std::size_t>(k)];
+        const float s = inBuf_[inOff + static_cast<std::size_t>(k)];
+        dot += s * target_[static_cast<std::size_t>(k)];
+        energy += s * s;
       }
+      // Normalized cross-correlation: divide out the candidate frame's energy
+      // so the match favors the most similar waveform SHAPE, not merely the
+      // loudest offset. Raw correlation biases toward high-energy frames and
+      // smears amplitude transients (classic WSOLA normalizes). The target
+      // energy is constant across candidates, so it doesn't affect the argmax
+      // and is omitted.
+      const float score = dot / std::sqrt(energy + 1e-9f);
       if (score > bestScore) {
         bestScore = score;
         best = a;

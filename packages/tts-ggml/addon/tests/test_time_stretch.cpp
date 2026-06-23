@@ -80,6 +80,30 @@ TEST(WsolaTimeStretch, PreservesPitchWhenSlowing) {
   EXPECT_NEAR(got, expected, 8);
 }
 
+TEST(WsolaTimeStretch, PreservesPitchThroughAmplitudeTransient) {
+  // Fixed pitch with a strong amplitude ramp (quiet -> loud). Unnormalized
+  // correlation biases the match toward the loud region and smears
+  // periodicity; normalized cross-correlation tracks waveform shape, so the
+  // fundamental period survives across the whole (amplitude-varying)
+  // utterance. The pure-amplitude sine tests don't exercise this.
+  const int sr = kSampleRate;
+  const float freq = 200.0f; // period 120 samples
+  const auto n = static_cast<std::size_t>(1.0f * sr);
+  std::vector<float> in(n);
+  const float w = 2.0f * 3.14159265358979f * freq / static_cast<float>(sr);
+  for (std::size_t i = 0; i < n; ++i) {
+    const float env =
+        0.1f + 0.9f * (static_cast<float>(i) / static_cast<float>(n));
+    in[i] = env * std::sin(w * static_cast<float>(i));
+  }
+
+  const auto out = WsolaTimeStretch::apply(in, 0.7f);
+  for (const float s : out)
+    ASSERT_TRUE(std::isfinite(s));
+  const int expected = static_cast<int>(std::lround(sr / freq)); // 120
+  EXPECT_NEAR(dominantPeriod(out, expected - 40, expected + 40), expected, 8);
+}
+
 TEST(WsolaTimeStretch, StreamingMatchesBatchExactly) {
   const auto in = sine(180.0f, 1.3f);
   const float speed = 0.8f;
