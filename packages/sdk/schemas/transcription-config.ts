@@ -127,6 +127,8 @@ export const parakeetRuntimeConfigSchema = z.object({
   streamingChunkLeftContextMs: z.number().int().nonnegative().optional(),
   streamingChunkRightContextMs: z.number().int().nonnegative().optional(),
   streamingSpkCacheUpdatePeriod: z.number().int().positive().optional(),
+  backendsDir: z.string().optional(),
+  openclCacheDir: z.string().optional(),
 });
 
 // Parakeet's load-time config currently has no fields beyond the
