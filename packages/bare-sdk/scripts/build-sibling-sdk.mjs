@@ -1,10 +1,7 @@
 #!/usr/bin/env node
-// Build the sibling in-monorepo @qvac/sdk so `bundle-from-sdk` has a populated
-// ../sdk/dist to copy. Compile-only (tsc + alias resolution) — deliberately
-// skips the sdk's eslint gate so a bare-sdk-only PR isn't coupled to sdk lint
-// health, matching how packages/cli builds the sibling sdk. No-op outside the
-// monorepo (published consumers don't have ../sdk) and when dist is already
-// fresh.
+// Build the sibling @qvac/sdk so `bundle-from-sdk` has a populated ../sdk/dist
+// to copy. Compile-only (tsc + aliases, no eslint) so a bare-sdk PR isn't
+// coupled to sdk lint health. No-op outside the monorepo or when dist is fresh.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -85,8 +82,7 @@ if (alreadyBuilt()) {
 
 console.log("[build-sibling-sdk] Building sibling @qvac/sdk at", sdkDir);
 run("bun", ["install"]);
-// tsc + resolve-aliases only (the compile half of sdk's `build`), skipping
-// lint. bun's resolver hoists a typed bare-events so tsc type-checks cleanly.
+// Compile half of sdk's build (tsc + aliases), no lint.
 fs.rmSync(path.join(sdkDir, "dist"), { recursive: true, force: true });
 run(path.join(sdkDir, "node_modules", ".bin", "tsc"), ["--project", "tsconfig.json"]);
 run("bun", ["run", "postcompile:aliases"]);

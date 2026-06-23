@@ -11,15 +11,12 @@ import {
 import { loadResource, unloadAll } from "../_lib/resources.js";
 import { decodeWavToMonoF32, f32ToLeBytes } from "../_lib/wav-pcm.js";
 
-// bare-client duplex (createDuplexSession) shape — the one transport the other
-// e2e tests don't touch. Mirrors the e2e transcribe-stream runner: decode WAV ->
-// f32le mono, write speech + trailing silence to drive end-of-turn, read events
-// back. Tolerant assertion (events flowed + non-empty transcript) since ASR
-// output isn't byte-deterministic.
+// bare-client duplex (createDuplexSession) shape: write speech + trailing
+// silence to drive end-of-turn. Tolerant assertion since ASR isn't deterministic.
 const SAMPLE_RATE = 16000;
 const BYTES_PER_F32 = 4;
-// cwd-relative: the test scripts always run brittle-bare from the package
-// root. (import.meta-relative won't work — compiled JS lives in test/dist/.)
+// cwd-relative: scripts run brittle-bare from the package root, and compiled JS
+// lives in test/dist/ so import.meta wouldn't resolve to the source asset.
 const FIXTURE = path.resolve(
   process.cwd(),
   "test/bare/e2e/assets/two-speakers-16k.wav",

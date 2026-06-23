@@ -2,8 +2,7 @@ import test from "brittle";
 import { translate, BERGAMOT_EN_FR } from "@qvac/bare-sdk";
 import { loadResource, unloadAll } from "../_lib/resources.js";
 
-// Second addon (nmtcpp) end to end — proves more than the llama.cpp path runs
-// under the bare-client. en->fr is baked into the Bergamot model config.
+// Second addon (nmtcpp) over the bare-client; en->fr is baked into the Bergamot config.
 test("bare-sdk e2e: translation via the nmtcpp addon (en->fr)", async (t) => {
   t.teardown(unloadAll);
 

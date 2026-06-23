@@ -1,10 +1,5 @@
-/**
- * Minimal WAV (RIFF) decoder for the e2e test suite.
- *
- * Supports canonical PCM WAV: format code 1 (PCM), 16-bit signed, any channel
- * count and sample rate. Down-mixes to mono and converts to f32 in [-1, 1].
- * No node:* imports so it can run from both desktop and mobile executors.
- */
+// Minimal RIFF/WAV decoder: 16-bit PCM, any channels/rate, down-mixed to mono
+// f32 in [-1, 1].
 
 export interface DecodedPcm {
   sampleRate: number;
@@ -98,10 +93,7 @@ export function decodeWavToMonoF32(bytes: Uint8Array): DecodedPcm {
   return { sampleRate, numChannels, samplesMono };
 }
 
-/**
- * Pack a Float32Array as little-endian f32 bytes for transport over the
- * duplex transcribeStream session.
- */
+// Pack samples as little-endian f32 bytes for the duplex transcribeStream session.
 export function f32ToLeBytes(samples: Float32Array): Uint8Array {
   const out = new Uint8Array(samples.byteLength);
   const view = new DataView(out.buffer);

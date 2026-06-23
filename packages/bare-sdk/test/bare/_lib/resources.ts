@@ -21,9 +21,7 @@ export function ensurePlugins() {
 
 const loaded = new Map<string, string>();
 
-// Forwards the real loadModel options so the suite type-checks against the
-// public signature like a consumer would. loadModel handles the download on
-// cache miss — no separate downloadAsset needed.
+// Real LoadModelOptions so the suite type-checks against the public signature.
 export async function loadResource(key: string, options: LoadModelOptions) {
   const existing = loaded.get(key);
   if (existing) return existing;
@@ -35,8 +33,8 @@ export async function loadResource(key: string, options: LoadModelOptions) {
   return modelId;
 }
 
-// Never close here: autoClose runs cleanupForTerminate (clears plugins, kills
-// the swarm) and the shared worker can't be revived for the next test.
+// autoClose:false on purpose — autoClose runs terminal cleanupForTerminate
+// (kills the shared worker), so we close once in suite-teardown instead.
 export async function unloadAll() {
   for (const modelId of loaded.values()) {
     try {
@@ -48,8 +46,8 @@ export async function unloadAll() {
   loaded.clear();
 }
 
-// Close the worker once, after the suite — Bare keeps it alive across unloads,
-// so the event loop won't drain (and the run hangs) without this.
+// Bare keeps the worker alive across unloads; without this close the event
+// loop never drains and the run hangs.
 export async function closeWorker() {
   await close();
 }

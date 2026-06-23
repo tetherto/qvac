@@ -1,6 +1,5 @@
-// Symlink node_modules/@qvac/bare-sdk -> package root so the test suite imports
-// by published name, exercising the real exports/imports maps (incl. the #rpc
-// -> bare-client condition) like a consumer would. Idempotent.
+// Symlink node_modules/@qvac/bare-sdk -> package root so tests import by published
+// name, exercising the real exports + #rpc -> bare-client maps. Idempotent.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
