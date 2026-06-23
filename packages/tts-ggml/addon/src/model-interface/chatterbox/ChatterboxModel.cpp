@@ -131,11 +131,11 @@ bool speedActive(float speed) {
   return std::isfinite(speed) && std::abs(speed - 1.0f) > 1e-3f;
 }
 
-constexpr float kMinSpeed = 0.25f;
-constexpr float kMaxSpeed = 4.0f;
+constexpr float MIN_SPEED = 0.25f;
+constexpr float MAX_SPEED = 4.0f;
 
 // Conservative fallback for languages we haven't individually measured.
-constexpr float kDefaultSpeed = 0.85f;
+constexpr float DEFAULT_SPEED = 0.85f;
 
 // Per-language default speaking-rate multiplier, applied when the caller
 // leaves ChatterboxConfig::speed unset (QVAC-21119).  Chatterbox is
@@ -153,7 +153,7 @@ float defaultSpeedForLanguage(const std::string& language) {
   }
   if (lang == "en") return 0.80f;  // baseline ~205 wpm -> ~164
   if (lang == "it") return 0.72f;  // baseline ~226 wpm -> ~163
-  return kDefaultSpeed;
+  return DEFAULT_SPEED;
 }
 
 } // namespace
@@ -211,7 +211,7 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
   // WSOLA hop math can't represent).
   if (cfg.speed.has_value()) {
     const float s = *cfg.speed;
-    if (!std::isfinite(s) || s < kMinSpeed || s > kMaxSpeed) {
+    if (!std::isfinite(s) || s < MIN_SPEED || s > MAX_SPEED) {
       throw StatusError(
           general_error::InvalidArgument,
           "ChatterboxModel: speed must be in [0.25, 4.0] (1.0 = unchanged, "

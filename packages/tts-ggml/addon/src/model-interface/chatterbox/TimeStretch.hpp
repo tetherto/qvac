@@ -70,15 +70,15 @@ class WsolaTimeStretch {
   }
 
  private:
-  static std::vector<float> makeHann(int N) {
-    std::vector<float> w(static_cast<std::size_t>(N));
-    if (N == 1) {
+  static std::vector<float> makeHann(int n) {
+    std::vector<float> w(static_cast<std::size_t>(n));
+    if (n == 1) {
       w[0] = 1.0f;
       return w;
     }
-    for (int i = 0; i < N; ++i) {
-      w[static_cast<std::size_t>(i)] = 0.5f * (1.0f - std::cos(2.0f * kPi * i /
-                                                              (N - 1)));
+    for (int i = 0; i < n; ++i) {
+      w[static_cast<std::size_t>(i)] = 0.5f * (1.0f - std::cos(2.0f * PI * i /
+                                                              (n - 1)));
     }
     return w;
   }
@@ -191,7 +191,7 @@ class WsolaTimeStretch {
     return out;
   }
 
-  static constexpr float kPi = 3.14159265358979323846f;
+  static constexpr float PI = 3.14159265358979323846f;
 
   const int N_;
   const int Hs_;
