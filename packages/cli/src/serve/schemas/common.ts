@@ -221,6 +221,8 @@ export function extractGenerationParams (
 
   if (typeof body['reasoning_budget'] === 'boolean') {
     params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
+  } else if (body['reasoning_budget'] === -1 || body['reasoning_budget'] === 0) {
+    params.reasoning_budget = body['reasoning_budget']
   }
 
   return Object.keys(params).length > 0 ? params : undefined

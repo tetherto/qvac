@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -16,6 +17,7 @@
 
 #include <parakeet/parakeet.h>
 
+#include "ggml-backend.h"
 #include "ggml.h"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -44,6 +46,79 @@ int backendIdFromName(const std::string& name) {
   if (name.rfind("Vulkan", 0) == 0) return 3;
   if (name.rfind("OpenCL", 0) == 0) return 4;
   return 99;
+}
+
+// Maps a ggml backend *registry* name (e.g. "CUDA", "Vulkan", "Metal",
+// "OpenCL") to the same numeric family code as backendIdFromName, so the
+// device the engine selected can be matched against the ggml device registry
+// to recover its human-readable description.
+int backendIdFromRegName(std::string regName) {
+  std::transform(
+      regName.begin(), regName.end(), regName.begin(), [](unsigned char c) {
+        return std::tolower(c);
+      });
+  if (regName.rfind("metal", 0) == 0)
+    return 1;
+  if (regName.rfind("cuda", 0) == 0)
+    return 2;
+  if (regName.rfind("vulkan", 0) == 0)
+    return 3;
+  if (regName.rfind("opencl", 0) == 0)
+    return 4;
+  return 99;
+}
+
+// Human-readable description of the active GPU device (e.g.
+// "NVIDIA GeForce RTX 3090", "Apple M2 Pro"), recovered from the ggml device
+// registry after the engine has registered its backends. This is the fallback
+// the perf reporter uses on CI runners where nvidia-smi / procfs are
+// unavailable but the ggml backend (CUDA / Vulkan / Metal) still knows the
+// device name via cudaGetDeviceProperties / VkPhysicalDeviceProperties /
+// MTLDevice.name. Returns "" when the active backend is CPU or no GPU device
+// is registered. Best-effort on a multi-GPU host: prefers the first device
+// whose backend family matches what the engine reported, else the first
+// GPU/IGPU device.
+std::string captureBackendDescription(int backendId, int backendDevice) {
+  if (backendDevice != 1) {
+    return ""; // CPU backend: no GPU hardware name to report.
+  }
+
+  ggml_backend_dev_t firstGpu = nullptr;
+  const size_t devCount = ggml_backend_dev_count();
+  for (size_t i = 0; i < devCount; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    if (dev == nullptr) {
+      continue;
+    }
+    const enum ggml_backend_dev_type type = ggml_backend_dev_type(dev);
+    if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    if (firstGpu == nullptr) {
+      firstGpu = dev;
+    }
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
+    if (backendIdFromRegName(regName != nullptr ? regName : "") == backendId) {
+      const char* desc = ggml_backend_dev_description(dev);
+      if (desc != nullptr && desc[0] != '\0') {
+        return desc;
+      }
+      const char* devName = ggml_backend_dev_name(dev);
+      return (devName != nullptr) ? devName : "";
+    }
+  }
+
+  if (firstGpu != nullptr) {
+    const char* desc = ggml_backend_dev_description(firstGpu);
+    if (desc != nullptr && desc[0] != '\0') {
+      return desc;
+    }
+    const char* devName = ggml_backend_dev_name(firstGpu);
+    return (devName != nullptr) ? devName : "";
+  }
+  return "";
 }
 
 // HH:MM:SS.fff for Sortformer speaker-segment formatting
@@ -314,12 +389,16 @@ void ParakeetModel::load() {
     backend_name_   = engine_->backend_name();
     backend_id_     = backendIdFromName(backend_name_);
     backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
+    backend_description_ =
+        captureBackendDescription(backend_id_, backend_device_);
 
-    QLOG(logger::Priority::INFO,
-         std::string("Parakeet engine loaded; model_type=") + detected +
-         " backend=" + backend_name_ +
-         " (device=" + (backend_device_ == 1 ? "GPU" : "CPU") +
-         ", id=" + std::to_string(backend_id_) + ")");
+    QLOG(
+        logger::Priority::INFO,
+        std::string("Parakeet engine loaded; model_type=") + detected +
+            " backend=" + backend_name_ +
+            " (device=" + (backend_device_ == 1 ? "GPU" : "CPU") +
+            ", id=" + std::to_string(backend_id_) + ", gpu='" +
+            backend_description_ + "')");
     if (cfg_.useGPU && backend_device_ != 1 && !backend_gpu_unsupported_) {
       QLOG(logger::Priority::WARNING,
            "Parakeet: useGPU=true was requested but the active backend is CPU. "
