@@ -65,7 +65,6 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/translation-nmtcpp#readme",
   "devDependencies": {
-    "@qvac/dl-base": "^0.1.0",
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",

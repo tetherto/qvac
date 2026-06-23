@@ -13,109 +13,33 @@
 const process = require('bare-process')
 const TranslationNmtcpp = require('./index.js')
 const { TranslationInterface } = require('./marian.js')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
 
-const VERSION = '0.1.3'
+const VERSION = '0.1.4'
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 
-// Hyperdrive keys for different language pairs (from model registry)
-const MODEL_KEYS = {
-  'en-it': 'ac16424b000d6bde2ab717b0aea96b7ec5ae0abd5117ee768cc436d02bb7f298',
-  'en-de': '7b1d16235cd4dd9cc2c58d1fc1c41d65159aa4d2337169c6243a5bc8bf49689b',
-  'en-es': '8aa823831cc55f5c1cba2c046e98b53a0d32376267ca73d653294b8b114459a2',
-  'de-en': 'b4d1ab62f885d9814acfddc565761b607bf86a307c38430ec1dabfe1a92532af',
-  'de-es': 'f432152db25ebd86fa0e48cd12f27e67e5c052c9af99c7662939dc1d84792c3e',
-  'de-it': '06d26bdc965d548c156885ed105f8150618aaa11712579158e81f1d49735aaf6',
-  'es-de': 'ff6a02096c3e2f4e1aa7e4a75cb37aa851bc924c9d4af2b30b26431f1cb9d156',
-  'es-en': 'b96cf6c79119578b9f9a2206b19ce9686e95f31949ce62b24aef83fbdf4b0b08',
-  'es-it': 'b04ba8638fea5adff061aba9ccc671936ab8f7459346461f6c2010d4c7413254',
-  'it-de': '438cbda449f1ac258a2fdea55cfd1f9f83dfb0ea20103c1e5113906081eec4f5',
-  'it-en': '68778c8375fbb1e7f5c20b4e6087131206e9ddba1872655e20931b7e08fe3954',
-  'it-es': '1b78d8309f80fcda61d0291ed5dc755e10e46b39d7e7484083a3c6d20b86c679',
+// Supported OPUS/IndicTrans language pairs. Models are loaded from a local
+// GGML file (via --model or QVAC_MODEL_PATH); Bergamot mode (--bergamot) has
+// its own model discovery and ignores this list.
+const SUPPORTED_PAIRS = [
+  'en-it', 'en-de', 'en-es', 'de-en', 'de-es', 'de-it',
+  'es-de', 'es-en', 'es-it', 'it-de', 'it-en', 'it-es',
   // Portuguese pairs
-  'en-pt': '098cc786de52e61b8b543f0e0c2e16e054ff19b9f9aef41ec931191c939f8e12',
-  'pt-en': '821af2699a40bbec2f2fce6276f59c714285f13780cacae3f023cb44c6c6cad1',
-  // French pairs (use Firefox CDN fallback when Hyperdrive key unavailable)
-  'en-fr': '0000000000000000000000000000000000000000000000000000000000000000',
-  'fr-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'fr-de': '0000000000000000000000000000000000000000000000000000000000000000',
-  'fr-es': '0000000000000000000000000000000000000000000000000000000000000000',
-  'fr-it': '0000000000000000000000000000000000000000000000000000000000000000',
-  'de-fr': '0000000000000000000000000000000000000000000000000000000000000000',
-  'es-fr': '0000000000000000000000000000000000000000000000000000000000000000',
-  'it-fr': '0000000000000000000000000000000000000000000000000000000000000000',
-  // Additional language pairs (use with --model flag for local models)
-  'en-zh': '0000000000000000000000000000000000000000000000000000000000000000',
-  'zh-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-ar': '0000000000000000000000000000000000000000000000000000000000000000',
-  'ar-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-ja': '0000000000000000000000000000000000000000000000000000000000000000',
-  'ja-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-ko': '0000000000000000000000000000000000000000000000000000000000000000',
-  'ko-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-ru': '0000000000000000000000000000000000000000000000000000000000000000',
-  'ru-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-hi': '0000000000000000000000000000000000000000000000000000000000000000',
-  'hi-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-tr': '0000000000000000000000000000000000000000000000000000000000000000',
-  'tr-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-vi': '0000000000000000000000000000000000000000000000000000000000000000',
-  'vi-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-fa': '0000000000000000000000000000000000000000000000000000000000000000',
-  'fa-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-th': '0000000000000000000000000000000000000000000000000000000000000000',
-  'th-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-pl': '0000000000000000000000000000000000000000000000000000000000000000',
-  'pl-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-uk': '0000000000000000000000000000000000000000000000000000000000000000',
-  'uk-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-nl': '0000000000000000000000000000000000000000000000000000000000000000',
-  'nl-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-ro': '0000000000000000000000000000000000000000000000000000000000000000',
-  'ro-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-id': '0000000000000000000000000000000000000000000000000000000000000000',
-  'id-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-bn': '0000000000000000000000000000000000000000000000000000000000000000',
-  'bn-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-ur': '0000000000000000000000000000000000000000000000000000000000000000',
-  'ur-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-el': '0000000000000000000000000000000000000000000000000000000000000000',
-  'el-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-cs': '0000000000000000000000000000000000000000000000000000000000000000',
-  'cs-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-sv': '0000000000000000000000000000000000000000000000000000000000000000',
-  'sv-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-hu': '0000000000000000000000000000000000000000000000000000000000000000',
-  'hu-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-he': '0000000000000000000000000000000000000000000000000000000000000000',
-  'he-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-fi': '0000000000000000000000000000000000000000000000000000000000000000',
-  'fi-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-no': '0000000000000000000000000000000000000000000000000000000000000000',
-  'no-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-da': '0000000000000000000000000000000000000000000000000000000000000000',
-  'da-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-bg': '0000000000000000000000000000000000000000000000000000000000000000',
-  'bg-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-sk': '0000000000000000000000000000000000000000000000000000000000000000',
-  'sk-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-lt': '0000000000000000000000000000000000000000000000000000000000000000',
-  'lt-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-lv': '0000000000000000000000000000000000000000000000000000000000000000',
-  'lv-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-sl': '0000000000000000000000000000000000000000000000000000000000000000',
-  'sl-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-et': '0000000000000000000000000000000000000000000000000000000000000000',
-  'et-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-hr': '0000000000000000000000000000000000000000000000000000000000000000',
-  'hr-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-sr': '0000000000000000000000000000000000000000000000000000000000000000',
-  'sr-en': '0000000000000000000000000000000000000000000000000000000000000000',
-  'en-ca': '0000000000000000000000000000000000000000000000000000000000000000',
-  'ca-en': '0000000000000000000000000000000000000000000000000000000000000000'
-}
+  'en-pt', 'pt-en',
+  // French pairs
+  'en-fr', 'fr-en', 'fr-de', 'fr-es', 'fr-it', 'de-fr', 'es-fr', 'it-fr',
+  // Additional language pairs
+  'en-zh', 'zh-en', 'en-ar', 'ar-en', 'en-ja', 'ja-en', 'en-ko', 'ko-en',
+  'en-ru', 'ru-en', 'en-hi', 'hi-en', 'en-tr', 'tr-en', 'en-vi', 'vi-en',
+  'en-fa', 'fa-en', 'en-th', 'th-en', 'en-pl', 'pl-en', 'en-uk', 'uk-en',
+  'en-nl', 'nl-en', 'en-ro', 'ro-en', 'en-id', 'id-en', 'en-bn', 'bn-en',
+  'en-ur', 'ur-en', 'en-el', 'el-en', 'en-cs', 'cs-en', 'en-sv', 'sv-en',
+  'en-hu', 'hu-en', 'en-he', 'he-en', 'en-fi', 'fi-en', 'en-no', 'no-en',
+  'en-da', 'da-en', 'en-bg', 'bg-en', 'en-sk', 'sk-en', 'en-lt', 'lt-en',
+  'en-lv', 'lv-en', 'en-sl', 'sl-en', 'en-et', 'et-en', 'en-hr', 'hr-en',
+  'en-sr', 'sr-en', 'en-ca', 'ca-en'
+]
 
 function showHelp () {
   console.log(`
@@ -126,8 +50,8 @@ USAGE:
 
 DESCRIPTION:
   Translates text from stdin using QVAC NMT models. Reads one sentence per line
-  from stdin and outputs translations to stdout. By default, downloads models from
-  Hyperdrive. Use --model or QVAC_MODEL_PATH to use local GGML model files.
+  from stdin and outputs translations to stdout. A model must be provided via
+  --model or QVAC_MODEL_PATH (local GGML file), or via --bergamot (Firefox models).
 
 OPTIONS:
   -h, --help              Show this help message and exit
@@ -153,17 +77,14 @@ ARGUMENTS:
   <target_lang>           Target language code (e.g., en, de, es, it)
 
 SUPPORTED LANGUAGE PAIRS:
-  ${Object.keys(MODEL_KEYS).join(', ')}
+  ${SUPPORTED_PAIRS.join(', ')}
 
 ENVIRONMENT VARIABLES:
   QVAC_MODEL_PATH         Path to local GGML model file (alternative to --model)
   FIREFOX_MODELS_DIR      Directory for Bergamot models (alternative to --model-dir)
 
 EXAMPLES:
-  # Translate from English to Italian using Hyperdrive models
-  echo "Hello world" | bare nmt-cli en it
-
-  # Translate using a local model file
+  # Translate from English to Italian using a local model file
   echo "Hello world" | bare nmt-cli --model ./models/en-it.bin en it
 
   # Translate using Bergamot/Firefox model format
@@ -430,13 +351,11 @@ async function main () {
   const pairKey = `${srcLang}-${dstLang}`
 
   // Check if language pair is supported (skip for Bergamot mode which has its own model discovery)
-  if (!options.bergamot && !MODEL_KEYS[pairKey]) {
+  if (!options.bergamot && !SUPPORTED_PAIRS.includes(pairKey)) {
     console.error(`Error: Language pair '${pairKey}' is not supported`)
-    console.error('Supported pairs:', Object.keys(MODEL_KEYS).join(', '))
+    console.error('Supported pairs:', SUPPORTED_PAIRS.join(', '))
     process.exit(1)
   }
-
-  const hyperdriveKey = MODEL_KEYS[pairKey] || null
 
   // Read all input from stdin
   let inputText = ''
@@ -481,8 +400,8 @@ async function main () {
     let bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
 
     if (!bergamotModel) {
-      // Auto-download via Hyperdrive (primary) or Firefox CDN (fallback)
-      console.error(`[BERGAMOT] Model not found locally, attempting download...`)
+      // Auto-download from the Firefox Remote Settings CDN
+      console.error('[BERGAMOT] Model not found locally, attempting download...')
       try {
         const { ensureBergamotModelFiles } = require('./lib/bergamot-model-fetcher.js')
         const pairCode = `${srcLang}${dstLang}`
@@ -610,7 +529,7 @@ async function main () {
     return
   }
 
-  // Determine model path: CLI option > env var > Hyperdrive
+  // Determine model path: CLI option > env var (a local model is required)
   const localModelPath = options.model || process.env.QVAC_MODEL_PATH
 
   if (localModelPath) {
@@ -689,57 +608,12 @@ async function main () {
       process.exit(1)
     }
   } else {
-    // Load from Hyperdrive (default behavior)
-
-    // Initialize Hyperdrive DataLoader
-    const hdDL = new HyperDriveDL({
-      key: `hd://${hyperdriveKey}`
-    })
-
-    // Create model arguments
-    const modelArgs = {
-      loader: hdDL,
-      params: {
-        mode: 'full',
-        srcLang,
-        dstLang
-      },
-      diskPath: './qvac_models',
-      modelName: 'model.bin'
-    }
-
-    try {
-      // Translate each line with fresh model instance to prevent state accumulation
-      for (let i = 0; i < inputLines.length; i++) {
-        const line = inputLines[i]
-
-        try {
-          // Create fresh model instance for each sentence
-          const model = new TranslationNmtcpp(modelArgs, config)
-          await model.load()
-
-          const response = await model.run(line)
-          let translation = ''
-
-          await response
-            .onUpdate(chunk => {
-              translation += chunk
-            })
-            .await()
-
-          // Output translation (one line per input)
-          console.log(translation.trim())
-
-          // Clean up this model instance
-          await model.unload()
-        } catch (err) {
-          console.log('') // Output empty line on error
-        }
-      }
-    } finally {
-      // Clean up Hyperdrive loader
-      await hdDL.close()
-    }
+    // No local model available. Remote model loading (previously via Hyperdrive)
+    // has been removed — a model file must be supplied explicitly.
+    console.error(`Error: No model specified for '${pairKey}'.`)
+    console.error('Provide a local GGML model with --model <path> or QVAC_MODEL_PATH,')
+    console.error('or use --bergamot to load Firefox translation models.')
+    process.exit(1)
   }
 }
 
