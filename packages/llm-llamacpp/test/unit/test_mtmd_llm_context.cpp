@@ -13,6 +13,7 @@
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
 #include "test_common.hpp"
+#include "utils/ChatTemplateUtils.hpp"
 
 using test_common::getStatValue;
 
@@ -22,8 +23,7 @@ namespace {
 std::vector<uint8_t> readBinaryFile(const fs::path& path) {
   std::ifstream stream(path, std::ios::binary);
   return {
-      std::istreambuf_iterator<char>(stream),
-      std::istreambuf_iterator<char>()};
+      std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
 }
 
 fs::path multimodalTestImagePath() {
@@ -308,6 +308,47 @@ TEST_F(MtmdLlmContextTest, CacheTokensMatchesLlamaMemoryTokenCount) {
   const auto stats = model->runtimeStats();
 
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), expectedCacheTokens);
+}
+
+TEST_F(MtmdLlmContextTest, ToolsCompactAnchorUsesMultimodalPositions) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  config_files["tools_compact"] = "true";
+  config_files["tools"] = "true";
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const auto arch = qvac_lib_inference_addon_llama::utils::getModelArchitecture(
+      model->getModel());
+  if (!qvac_lib_inference_addon_llama::utils::
+          supportsToolsCompactForModelMetadata(arch)) {
+    GTEST_SKIP() << "multimodal test model does not support tools_compact";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.prefill = true;
+  prompt.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "What is in this image?"},)"
+      R"( {"type": "function", "name": "describe_image",)"
+      R"( "description": "Describe a user supplied image",)"
+      R"( "parameters": {"type": "object", "properties": {)"
+      R"( "caption": {"type": "string"}}, "required": ["caption"]}}])";
+  prompt.media.push_back(readBinaryFile(imagePath));
+
+  ASSERT_NO_THROW({ model->processPrompt(prompt); });
+  EXPECT_GT(model->getNPastBeforeTools(), 0)
+      << "tools_compact failed to anchor multimodal tools; this usually means "
+         "physical token counts were mixed with logical positions";
 }
 
 TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
