@@ -55,6 +55,20 @@ MtmdLlmContext::MtmdLlmContext(
         ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
   }
 
+  hasRecurrentMemory_ = llama_model_is_recurrent(model_);
+  if (!hasRecurrentMemory_) {
+    const std::optional<std::string> arch =
+        qvac_lib_inference_addon_llama::utils::getModelArchitecture(model_);
+    if (arch.has_value()) {
+      const std::string ssmKey = arch.value() + ".ssm.state_size";
+      char buffer[32] = {0};
+      if (llama_model_meta_val_str(
+              model_, ssmKey.c_str(), buffer, sizeof(buffer)) > 0) {
+        hasRecurrentMemory_ = true;
+      }
+    }
+  }
+
   if ((llama_model_chat_template(model_, nullptr) == nullptr) &&
       params_.chat_template.empty()) {
     QLOG_IF(
@@ -735,14 +749,16 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
     return 0;
   }
 
-  // Get the memory for KV cache manipulation
-  auto* mem = llama_get_memory(lctx_);
+  if (hasRecurrentMemory_) {
+    // TODO: Re-enable tail-token removal for recurrent / hybrid SSM models
+    // once QVAC supports llama.cpp sequence checkpoint save + restore. Until
+    // then, partial `llama_memory_seq_rm` can fail because recurrent state
+    // does not keep full per-token history (for example Qwen3.5 with
+    // n_rs_seq=0).
+    return 0;
+  }
 
-  // Remove the last N tokens from the KV cache
-  // llama_memory_seq_rm(memory, seq_id, start_pos, end_pos)
-  // seq_id = -1 means all sequences
-  // start_pos = n_past - tokensToRemove (the position to start removing from)
-  // end_pos = -1 means remove to the end
+  auto* mem = llama_get_memory(lctx_);
   llama_memory_seq_rm(mem, -1, current_.pos - tokensToRemove, -1);
 
   // Decrement the token count by the number of tokens removed
