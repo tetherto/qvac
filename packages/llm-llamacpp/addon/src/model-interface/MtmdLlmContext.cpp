@@ -384,7 +384,10 @@ bool MtmdLlmContext::evalMessageWithTools(
     if (stopGeneration_.load()) {
       llama_pos totalDelta = nPastLocal - current_.pos;
       current_.pos = nPastLocal;
-      removeLastNTokens(totalDelta);
+      const llama_pos removedTokens = removeLastNTokens(totalDelta);
+      if (removedTokens == 0 && totalDelta > 0) {
+        refreshCurrentCacheTokensFromMemory();
+      }
       stopGeneration_.store(false);
       return false;
     }
@@ -405,7 +408,7 @@ bool MtmdLlmContext::evalMessageWithTools(
     }
   }
   current_.pos = nPastLocal;
-  current_.cacheTokens += nTokens;
+  refreshCurrentCacheTokensFromMemory();
 
   if (isFirstMsg) {
     protectedPrefix_ = current_;
@@ -477,7 +480,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
   common_batch_add(
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab_) : eot,
-      current_.pos++,
+      current_.pos,
       {0},
       true);
   if (llama_decode(lctx_, *batch) != 0) {
@@ -485,6 +488,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
   }
+  ++current_.pos;
   ++current_.cacheTokens;
 }
 
@@ -576,7 +580,7 @@ bool MtmdLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, tokenId, current_.pos++, {0}, true);
+    common_batch_add(*batch, tokenId, current_.pos, {0}, true);
 
     // eval the token
     if (llama_decode(lctx_, *batch) != 0) {
@@ -584,6 +588,7 @@ bool MtmdLlmContext::generateResponse(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    ++current_.pos;
     ++current_.cacheTokens;
   }
 
