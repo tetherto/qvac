@@ -446,8 +446,13 @@ describe('extractGenerationParams (chat semantics)', () => {
     assert.equal(params.reasoning_budget, 0)
   })
 
-  it('ignores non-boolean reasoning_budget', () => {
-    const params = extractChat({ reasoning_budget: -1 })
+  it('extracts SDK-native numeric reasoning_budget', () => {
+    assert.equal(extractChat({ reasoning_budget: -1 })!.reasoning_budget, -1)
+    assert.equal(extractChat({ reasoning_budget: 0 })!.reasoning_budget, 0)
+  })
+
+  it('ignores unsupported numeric reasoning_budget values', () => {
+    const params = extractChat({ reasoning_budget: 1 })
     assert.equal(params, undefined)
   })
 

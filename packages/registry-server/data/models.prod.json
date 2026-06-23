@@ -1586,6 +1586,66 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "CRAFT text detector (GGUF, EasyOCR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "detector",
+      "craft"
+    ],
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "Text recognizer - Latin gen-2 (GGUF, EasyOCR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "latin"
+    ],
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "DBNet text detector - MobileNetV3-Large (GGUF, docTR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "detector",
+      "doctr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mindee/doctr"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "CRNN text recognizer - MobileNetV3-Small (GGUF, docTR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "doctr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mindee/doctr"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
@@ -12508,6 +12568,22 @@
     "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
   },
   {
+    "source": "https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF/resolve/33cc6944e40cb93e38332cd46b2a6e3c6acf081e/Qwen3.5-2B.mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 2B",
+    "quantization": "q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from mradermacher (the registry's unsloth Qwen3.5-2B repo ships only F16/BF16 mmproj). Same base Qwen3.5-2B model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 4B multimodal model",
@@ -12570,6 +12646,22 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF/resolve/1a5df2c0cba51dae8ac5888420360d8703707171/Qwen3.5-4B.mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 4B",
+    "quantization": "q8_0",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from mradermacher (the registry's unsloth Qwen3.5-4B repo ships only F16/BF16 mmproj). Same base Qwen3.5-4B model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF"
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
@@ -12808,5 +12900,293 @@
       "canary"
     ],
     "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "bf16",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq3_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq3_m",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq3_xxs-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq3_xxs",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq4_nl-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq4_nl",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq4_xs-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq4_xs",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q5_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "q5_k_m",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 1.7B medical and healthcare text-generation model from QVAC.",
+    "quantization": "q8_0",
+    "params": "1.7B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-1.7B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "bf16",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq3_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq3_m",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq3_xxs-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq3_xxs",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq4_nl-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq4_nl",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq4_xs-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "iq4_xs",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q5_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "q5_k_m",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MedPsy 4B medical and healthcare text-generation model from QVAC.",
+    "quantization": "q8_0",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "medical",
+      "healthcare",
+      "medpsy",
+      "qwen3",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
   }
 ]

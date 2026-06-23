@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.12.0] - 2026-06-22
+
+Windows prebuilds now ship without a dependency on the MSVC redistributable.
+Addons link the static Visual C++ runtime (`/MT`) via shared
+`vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`, and CMake no longer links
+`msvcrt.lib`, which had forced dynamic CRT imports. Per-package vcpkg overlays
+were consolidated into the monorepo `vcpkg-overlays/` tree. No public API change.
+
+### Changed
+
+- Windows `.bare` prebuilds no longer import `vcruntime140.dll`, `msvcp140.dll`,
+  or UCRT DLLs; CI verifies this with `dumpbin` on every Windows prebuild.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.11.2] - 2026-06-05
 
 This release restores caller control over where the diffusion text-conditioning path runs on macOS. It removes an Apple-specific override that forced the CLIP/text encoder path onto CPU.

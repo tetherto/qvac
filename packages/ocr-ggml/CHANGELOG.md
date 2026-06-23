@@ -4,6 +4,80 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.5.0] - 2026-06-22
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `9341.0.0`, which enables `GGML_BACKEND_DL` dynamic backend loading on desktop Linux: the Vulkan GPU backend and runtime-dispatched CPU micro-architecture variants now load as standalone modules from `prebuilds`. No public API change. (PR [#2733](https://github.com/tetherto/qvac/pull/2733))
+
+## [0.4.0] - 2026-06-19
+
+### Added
+- **DocTR now runs efficiently on Arm Mali / Immortalis GPUs via an automatic
+  CPU/Vulkan hybrid.** On Mali the DBNet detector's many `conv2d` dispatches are
+  pathologically slow under Vulkan, so a plain `backendDevice: 'vulkan'` request
+  on a Mali/Immortalis GPU now auto-routes **detection to the CPU** while keeping
+  **recognition on Vulkan** — no API change, detected from the GPU description at
+  load time. On a Pixel 9 Pro (Mali-G715) the `clinical_chemistry` page drops
+  from **11.86 s to 3.26 s cold / 2.72 s warm** GPU end-to-end (CI device-farm,
+  identical output — 12/12 clinical keywords, 203 boxes). Other GPUs (Adreno,
+  Xclipse, Apple/Metal) keep full-GPU detection and are unaffected.
+- **Recognition CPU+GPU work-stealing for DocTR** (auto-enabled on Mali): a CPU
+  feature-extractor instance claims crop chunks concurrently with the Vulkan
+  recognizer, with a double-buffered preprocess so chunk N+1 overlaps the
+  compute of chunk N. Paired with an LSTM GPU/CPU split, warm recognition lands
+  at ~0.88 s.
+- **Warm DocTR clinical profile test** (`doctr-warm.test.js`) — loads the
+  pipeline once and loops so steady-state inference is measured, guards 12/12
+  clinical keywords on every warm run, and records the fastest warm run to the
+  performance report. Asserts correctness only (no timing threshold).
+
+### Changed
+- **DocTR uses the fused `GGML_OP_CONV_2D` (direct conv) on Vulkan** for the
+  detection and recognition graphs, avoiding the per-conv `im2col` dispatch that
+  is slow on Mali; `im2col` + `mul_mat` is kept elsewhere (faster on the tuned
+  Metal GEMM). The choice is resolved automatically from the compute backend,
+  with `OCR_DOCTR_FUSED_CONV` as an A/B override.
+- **Backend-aware DocTR recognizer batch size** (32 on Vulkan) to cut per-crop
+  dispatch overhead.
+- No `qvac-fabric` change required — this builds against the registry version
+  (`8828.1.2`) already in use. The further Arm-CPU detection kernels (KleidiAI
+  i8mm) that would cut CPU detection below ~1 s land in a follow-up once they are
+  cut to the registry.
+
+## [0.3.0] - 2026-06-18
+
+### Added
+- **DocTR now runs end-to-end on Qualcomm Adreno GPUs via the OpenCL backend.**
+  The detection and recognition graphs use a backend-aware direct convolution
+  path (`ggml_conv_2d_direct`) on OpenCL, replacing the `im2col` f16×f16 GEMV
+  that dominated runtime on Adreno — detection drops from ~1.35 s to ~0.5–0.85 s
+  at identical accuracy (12/12 clinical-chemistry keywords; ~0.72 s warm total on
+  a Galaxy S25 / Adreno 830). Other backends keep the `im2col` path (faster on
+  Metal); the choice is resolved automatically from the compute backend, with
+  the `OCR_DOCTR_FUSED_CONV` env var as an override for A/B testing.
+
+### Changed
+- Updated the `qvac-fabric` vcpkg dependency to registry version `8828.1.2`,
+  which ships the OpenCL kernels DocTR needs to run end-to-end on Adreno instead
+  of aborting on an unsupported op: `CONV_2D_DW`, `POOL_2D`, `HARDSWISH`, and
+  `HARDSIGMOID`.
+
 ## [0.2.2] - 2026-06-15
 
 ### Changed

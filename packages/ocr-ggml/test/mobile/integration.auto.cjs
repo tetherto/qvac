@@ -91,6 +91,11 @@ async function runDoctrParamValidationTest (options = {}) { // eslint-disable-li
   return runIntegrationModule('../integration/doctr-param-validation.test.js', options)
 }
 
+async function runDoctrWarmTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDoctrWarmTest')) return __FILTERED
+  return runIntegrationModule('../integration/doctr-warm.test.js', options)
+}
+
 async function runErrorHandlingTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runErrorHandlingTest')) return __FILTERED
   return runIntegrationModule('../integration/error-handling.test.js', options)

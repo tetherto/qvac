@@ -44,7 +44,7 @@ export class MobileConfigReloadExecutor extends ModelAssetExecutor<typeof config
       const newConfig = p.newConfig ?? { language: p.newLanguage ?? "es" };
       const reloadedId = await loadModel({
         modelId: whisperModelId,
-        modelType: "whisper",
+        modelType: "whispercpp-transcription",
         modelConfig: newConfig,
       } as never);
 
@@ -65,7 +65,7 @@ export class MobileConfigReloadExecutor extends ModelAssetExecutor<typeof config
     try {
       const reloadedId = await loadModel({
         modelId: whisperModelId,
-        modelType: "whisper",
+        modelType: "whispercpp-transcription",
         modelConfig: { language: "fr" },
       } as never);
 
@@ -86,7 +86,7 @@ export class MobileConfigReloadExecutor extends ModelAssetExecutor<typeof config
     try {
       await loadModel({
         modelId: p.invalidModelId,
-        modelType: "whisper",
+        modelType: "whispercpp-transcription",
         modelConfig: { language: "en" },
       } as never);
       return { passed: false, output: "Expected error for invalid model ID" };
@@ -101,7 +101,7 @@ export class MobileConfigReloadExecutor extends ModelAssetExecutor<typeof config
     try {
       await loadModel({
         modelId: whisperModelId,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         modelConfig: { n_ctx: 2048 },
       } as never);
       return { passed: false, output: "Expected error for model type mismatch" };
@@ -117,7 +117,7 @@ export class MobileConfigReloadExecutor extends ModelAssetExecutor<typeof config
     try {
       await loadModel({
         modelId: whisperModelId,
-        modelType: "whisper",
+        modelType: "whispercpp-transcription",
         modelConfig: { language: p.newLanguage },
       } as never);
 
