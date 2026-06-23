@@ -377,6 +377,12 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
 
   const auto tStart = std::chrono::steady_clock::now();
 
+  // Streaming publishes its (already-stretched) audio per chunk via
+  // chunkCallback; sum the emitted samples here so the stats below use the
+  // real output length without re-stretching result.pcm.  The callback runs
+  // synchronously on this thread, so a plain counter is safe.
+  std::size_t streamedSamples = 0;
+
   tts_cpp::chatterbox::SynthesisResult result;
   try {
     if (wasStreaming) {
@@ -384,12 +390,13 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
           stretch ? std::make_shared<WsolaTimeStretch>(speed) : nullptr;
       result = engine->synthesize(
           text,
-          [&chunkCallback, stretcher](
+          [&chunkCallback, stretcher, &streamedSamples](
               const float* pcm,
               std::size_t samples,
               int chunkIndex,
               bool isLast) {
             if (!stretcher) {
+              streamedSamples += samples;
               chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
               return;
             }
@@ -398,6 +405,7 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
               std::vector<float> tail = stretcher->flush();
               out.insert(out.end(), tail.begin(), tail.end());
             }
+            streamedSamples += out.size();
             chunkCallback(pcmFloatToInt16(out), chunkIndex, isLast);
           });
     } else {
@@ -408,23 +416,30 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
                          std::string("engine.synthesize: ") + e.what());
   }
 
-  // For the batch path this is the audio we return; for the streaming path
-  // (chunks already published via chunkCallback) it is used only to derive
-  // the runtime stats below, so it must reflect the stretched duration too.
-  std::vector<int16_t> pcm =
-      stretch ? pcmFloatToInt16(WsolaTimeStretch::apply(result.pcm, speed))
-              : pcmFloatToInt16(result.pcm);
+  // Batch: build the PCM we return (stretched in-place if a speed is active).
+  // Streaming: the chunks were already published, so there is nothing to
+  // return — take the sample count straight from what the callback emitted
+  // rather than re-running a full-utterance WSOLA over result.pcm.
+  std::vector<int16_t> pcm;
+  std::size_t outSamples;
+  if (wasStreaming) {
+    outSamples = streamedSamples;
+  } else {
+    pcm = stretch ? pcmFloatToInt16(WsolaTimeStretch::apply(result.pcm, speed))
+                  : pcmFloatToInt16(result.pcm);
+    outSamples = pcm.size();
+  }
 
   const auto tEnd = std::chrono::steady_clock::now();
   const double elapsedSec =
       std::chrono::duration<double>(tEnd - tStart).count();
 
   totalTime_ = elapsedSec;
-  totalSamples_ = static_cast<int64_t>(pcm.size());
+  totalSamples_ = static_cast<int64_t>(outSamples);
   audioDurationMs_ = result.sample_rate > 0
-      ? (static_cast<double>(pcm.size()) * 1000.0 /
-         static_cast<double>(result.sample_rate))
-      : 0.0;
+                         ? (static_cast<double>(outSamples) * 1000.0 /
+                            static_cast<double>(result.sample_rate))
+                         : 0.0;
   realTimeFactor_ =
       audioDurationMs_ > 0 ? (elapsedSec * 1000.0) / audioDurationMs_ : 0.0;
   textLength_ = text.size();
