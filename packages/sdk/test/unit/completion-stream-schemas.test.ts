@@ -40,6 +40,27 @@ test("generationParamsSchema: rejects reasoning_budget other values", (t) => {
   t.is(generationParamsSchema.safeParse({ reasoning_budget: -2 }).success, false);
 });
 
+test("generationParamsSchema: accepts remove_thinking_from_context boolean", (t) => {
+  t.is(
+    generationParamsSchema.safeParse({ remove_thinking_from_context: true })
+      .success,
+    true,
+  );
+  t.is(
+    generationParamsSchema.safeParse({ remove_thinking_from_context: false })
+      .success,
+    true,
+  );
+});
+
+test("generationParamsSchema: rejects non-boolean remove_thinking_from_context", (t) => {
+  t.is(
+    generationParamsSchema.safeParse({ remove_thinking_from_context: 1 })
+      .success,
+    false,
+  );
+});
+
 test("toolDialectSchema: accepts qwen35 and gemma4", (t) => {
   t.is(toolDialectSchema.safeParse("qwen35").success, true);
   t.is(toolDialectSchema.safeParse("gemma4").success, true);

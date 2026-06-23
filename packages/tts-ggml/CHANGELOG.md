@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.4] - 2026-06-23
 
 ### Added
 
@@ -25,9 +25,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `example:chatterbox-adjust-speed` npm script), C++ WSOLA unit tests, and a JS
   integration test.
 
+### Fixed
+
+- **Chunk-streaming saturation/clipping and per-chunk loudness "wobble" on the
+  Chatterbox Multilingual engine (QVAC-21118).** A low `cfmSteps` /
+  `streamCfmSteps` (1–2) under-integrated the model's standard 10-step CFM in
+  the chunk-streaming path, producing near-full-scale output (~99%, RMS 4–9×
+  hotter than batch) with a collapsing tail. The engine now floors the
+  streaming CFM step count to the model's `n_timesteps` for standard-CFM
+  models; Turbo's meanflow 2-step sampler and the batch step count are
+  unaffected. Consumes `tts-cpp` `2026-06-22` (`qvac-ext-lib-whisper.cpp`
+  PR #62).
+
 ## Pull Requests
 
 - [#2782](https://github.com/tetherto/qvac/pull/2782) - QVAC-21119: add Chatterbox speaking-rate (`speed`) control
+- [#2777](https://github.com/tetherto/qvac/pull/2777) - QVAC-21118: consume tts-cpp 2026-06-22 (chunk-streaming CFM-step floor)
 
 ## [0.3.3] - 2026-06-22
 
