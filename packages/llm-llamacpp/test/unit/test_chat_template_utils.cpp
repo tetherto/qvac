@@ -361,7 +361,9 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
   const std::string prompt = getPrompt(
       tmpls.get(),
       inputs,
+      /*outFormat=*/nullptr,
       &thinkingForcedOpen,
+      /*outParser=*/nullptr,
       &thinkingStartTag,
       &thinkingEndTag,
       &generationPrompt);
