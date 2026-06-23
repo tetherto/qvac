@@ -487,7 +487,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
   common_batch_add(
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab_) : eot,
-      nPast_++,
+      nPast_,
       {0},
       true);
   if (llama_decode(lctx_, *batch) != 0) {
@@ -495,6 +495,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
   }
+  ++nPast_;
 }
 
 bool TextLlmContext::generateResponse(
@@ -597,7 +598,7 @@ bool TextLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, tokenId, nPast_++, {0}, true);
+    common_batch_add(*batch, tokenId, nPast_, {0}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
     if (llama_decode(lctx_, *batch) != 0) {
@@ -605,6 +606,7 @@ bool TextLlmContext::generateResponse(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    ++nPast_;
   }
 
   if (nRemain == 0) {
@@ -739,26 +741,30 @@ bool TextLlmContext::handleQwen3ReasoningEOS(
 
   // Decode closing tag
   common_batch_clear(batch);
-  common_batch_add(batch, tokenId, nPast++, {0}, true);
+  common_batch_add(batch, tokenId, nPast, {0}, true);
   if (llama_decode(lctx_, batch) != 0) {
     QLOG_IF(
         Priority::ERROR,
         "[TextLlm] Failed to decode closing tag during replacement\n");
+    return true;
   }
+  ++nPast;
 
   // Inject 2 newlines after closing tag
   if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
     for (int i = 0; i < 2; i++) {
       common_batch_clear(batch);
       common_batch_add(
-          batch, reasoningState_.cached_newline_token, nPast++, {0}, true);
+          batch, reasoningState_.cached_newline_token, nPast, {0}, true);
 
       if (llama_decode(lctx_, batch) != 0) {
         QLOG_IF(
             Priority::ERROR,
             "[TextLlm] Failed to decode newline token during forced "
             "injection\n");
+        break;
       }
+      ++nPast;
 
       std::string newlineStr = common_token_to_piece(
           lctx_, reasoningState_.cached_newline_token, params_.special);
