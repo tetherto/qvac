@@ -3,7 +3,7 @@ import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { Readable, type Writable } from "bare-stream";
 import fetch, { Headers } from "bare-fetch";
-import type { AbortSignal } from "bare-abort-controller";
+import { AbortController, type AbortSignal } from "bare-abort-controller";
 import { withTimeout } from "@/utils/withTimeout";
 import {
   getModelsCacheDir,
@@ -22,7 +22,7 @@ import {
   hasValidGGUFHeader,
 } from "@/server/utils";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
-import { getLifecycleState } from "@/server/bare/runtime-lifecycle";
+import { getLifecycleState, onResume } from "@/server/bare/runtime-lifecycle";
 import {
   createHttpDownloadKey,
   startOrJoinDownload,
@@ -556,13 +556,16 @@ const LIFECYCLE_WAIT_MAX_MS = 5 * 60_000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * A mid-stream socket/body error or a connection failure (HTTP status 0, no
- * response) is recoverable by resuming from the partial. A real HTTP status
- * (4xx/5xx), a cancellation, or a missing/unreadable body is not.
+ * A mid-stream socket/body error, a connection failure (HTTP status 0, no
+ * response), or our own resume-triggered abort is recoverable by resuming from
+ * the partial. A real HTTP status (4xx/5xx) or a missing/unreadable body is not.
+ *
+ * `DownloadCancelledError` is intentionally NOT excluded here: this is only
+ * reached after the caller's consumer-cancel gate, so a cancellation at this
+ * point is our per-attempt abort (resume interrupt), which must be retried.
  */
 function isResumableTransferError(error: unknown): boolean {
   if (
-    error instanceof DownloadCancelledError ||
     error instanceof NoResponseBodyError ||
     error instanceof ResponseBodyNotReadableError ||
     error instanceof PartialDownloadOfflineError
@@ -593,6 +596,11 @@ async function waitForLifecycleActive(signal?: AbortSignal): Promise<void> {
  * (mid-stream socket drop, or a dead socket after suspend/network loss) it
  * waits for the runtime to be active and re-issues the request, which resumes
  * from the on-disk partial via a Range header. No consumer-side babysitting.
+ *
+ * Each attempt runs on its own AbortController that is aborted either by the
+ * consumer `signal` (a real cancel — terminal) or by `resume()` (a proactive
+ * recovery — the in-flight socket is dead after a background, so abort and
+ * range-resume immediately instead of waiting for the stall watchdog).
  */
 async function performHttpDownloadWithResume(
   url: string,
@@ -605,16 +613,27 @@ async function performHttpDownloadWithResume(
 
   let attempt = 0;
   for (;;) {
+    const attemptController = new AbortController();
+    const forwardCancel = () => attemptController.abort();
+    if (signal) {
+      if (signal.aborted) attemptController.abort();
+      else signal.addEventListener("abort", forwardCancel, { once: true });
+    }
+    // resume() → abort this attempt so it range-resumes now, not after the stall.
+    const offResume = onResume(() => attemptController.abort());
+
     try {
       await performHttpDownload(
         url,
         modelPath,
         downloadKey,
         progressCallback,
-        signal,
+        attemptController.signal,
       );
       return;
     } catch (error) {
+      // A real consumer cancel is terminal; anything else (resume abort, stall,
+      // network error) is recoverable from the partial.
       if (signal?.aborted) {
         throw error instanceof DownloadCancelledError
           ? error
@@ -630,6 +649,9 @@ async function performHttpDownloadWithResume(
       );
       await waitForLifecycleActive(signal);
       await sleep(HTTP_RETRY_BASE_DELAY_MS * attempt);
+    } finally {
+      if (signal) signal.removeEventListener("abort", forwardCancel);
+      offResume();
     }
   }
 }
