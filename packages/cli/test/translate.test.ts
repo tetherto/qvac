@@ -446,8 +446,30 @@ describe('extractGenerationParams (chat semantics)', () => {
     assert.equal(params.reasoning_budget, 0)
   })
 
-  it('ignores non-boolean reasoning_budget', () => {
-    const params = extractChat({ reasoning_budget: -1 })
+  it('extracts SDK-native numeric reasoning_budget', () => {
+    assert.equal(extractChat({ reasoning_budget: -1 })!.reasoning_budget, -1)
+    assert.equal(extractChat({ reasoning_budget: 0 })!.reasoning_budget, 0)
+  })
+
+  it('ignores unsupported numeric reasoning_budget values', () => {
+    const params = extractChat({ reasoning_budget: 1 })
+    assert.equal(params, undefined)
+  })
+
+  it('extracts remove_thinking_from_context true', () => {
+    const params = extractChat({ remove_thinking_from_context: true })
+    assert.ok(params)
+    assert.equal(params.remove_thinking_from_context, true)
+  })
+
+  it('extracts remove_thinking_from_context false', () => {
+    const params = extractChat({ remove_thinking_from_context: false })
+    assert.ok(params)
+    assert.equal(params.remove_thinking_from_context, false)
+  })
+
+  it('ignores non-boolean remove_thinking_from_context', () => {
+    const params = extractChat({ remove_thinking_from_context: 1 })
     assert.equal(params, undefined)
   })
 

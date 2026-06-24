@@ -7,6 +7,7 @@ Last Update: Mar 4, 2026
 Related Documents & Links
 
 - [C4 Model Reference](https://c4model.com/)
+- [Agent Integrations](./AGENT-INTEGRATIONS.md) — AI SDK provider, OpenCode plugin, CLI serve, models.dev, layer ownership, and release workflow
 
 ---
 

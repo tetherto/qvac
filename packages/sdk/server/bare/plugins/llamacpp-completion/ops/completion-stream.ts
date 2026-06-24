@@ -45,11 +45,9 @@ import { getServerLogger } from "@/logging";
 import type { Logger } from "@/logging/types";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
 import { nowMs } from "@/profiling";
-import {
-  buildStreamResult,
-  hasDefinedValues,
-} from "@/profiling/model-execution";
+import { buildStreamResult } from "@/profiling/model-execution";
 import type { LlmStats } from "@/server/bare/types/addon-responses";
+import { normalizeCompletionStats } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stats";
 import fs from "bare-fs";
 
 const logger = getServerLogger();
@@ -380,32 +378,10 @@ async function* processModelResponse(
   }
 
   const responseWithStats = response as unknown as ResponseWithStats;
-  const stats: CompletionStats = {
-    ...(responseWithStats.stats?.TTFT !== undefined && {
-      timeToFirstToken: responseWithStats.stats.TTFT,
-    }),
-    ...(responseWithStats.stats?.TPS !== undefined && {
-      tokensPerSecond: responseWithStats.stats.TPS,
-    }),
-    ...(responseWithStats.stats?.CacheTokens !== undefined && {
-      cacheTokens: responseWithStats.stats.CacheTokens,
-    }),
-    ...(responseWithStats.stats?.promptTokens !== undefined && {
-      promptTokens: responseWithStats.stats.promptTokens,
-    }),
-    ...(responseWithStats.stats?.generatedTokens !== undefined && {
-      generatedTokens: responseWithStats.stats.generatedTokens,
-    }),
-    ...(responseWithStats.stats?.backendDevice !== undefined && {
-      backendDevice: responseWithStats.stats.backendDevice,
-    }),
-  };
+  const stats = normalizeCompletionStats(responseWithStats.stats);
 
   return {
-    ...buildStreamResult(
-      modelExecutionMs,
-      hasDefinedValues(stats) ? stats : undefined,
-    ),
+    ...buildStreamResult(modelExecutionMs, stats),
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
     producedTokens,

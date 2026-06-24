@@ -299,6 +299,7 @@ if(BUILD_TESTING)
       addon/tests/test_backend_utils.cpp
       addon/tests/test_chatterbox_config.cpp
       addon/tests/test_supertonic_config.cpp
+      addon/tests/test_time_stretch.cpp
       addon/tests/AddonCppTest.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp

@@ -17,7 +17,7 @@ import {
   TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
   TTS_S3GEN_EN_CHATTERBOX,
   TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -50,32 +50,32 @@ import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
-import { TranscriptionExecutor } from "./executors/transcription-executor.js";
-import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
-import { RagExecutor } from "./executors/rag-executor.js";
-import { OcrExecutor } from "./executors/ocr-executor.js";
+import { TranscriptionExecutor } from "../shared/executors/node/transcription-executor.js";
+import { TranscribeStreamEventsExecutor } from "../shared/executors/node/transcribe-stream-events-executor.js";
+import { RagExecutor } from "../shared/executors/node/rag-executor.js";
+import { OcrExecutor } from "../shared/executors/node/ocr-executor.js";
 import { VlaExecutor } from "../shared/executors/vla-executor.js";
-import { ClassificationExecutor } from "./executors/classification-executor.js";
-import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
-import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
+import { ClassificationExecutor } from "../shared/executors/node/classification-executor.js";
+import { ConfigReloadExecutor } from "../shared/executors/node/config-reload-executor.js";
+import { NodeLoggingExecutor } from "../shared/executors/node/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
-import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
-import { ParakeetExecutor } from "./executors/parakeet-executor.js";
-import { BciExecutor } from "./executors/bci-executor.js";
-import { VisionExecutor } from "./executors/vision-executor.js";
+import { ParakeetStreamExecutor } from "../shared/executors/node/parakeet-stream-executor.js";
+import { ParakeetExecutor } from "../shared/executors/node/parakeet-executor.js";
+import { BciExecutor } from "../shared/executors/node/bci-executor.js";
+import { VisionExecutor } from "../shared/executors/node/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
-import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
-import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
-import { FinetuneExecutor } from "./executors/finetune-executor.js";
+import { DelegatedInferenceExecutor } from "../shared/executors/node/delegated-inference-executor.js";
+import { NodeDiffusionExecutor } from "../shared/executors/node/diffusion-executor.js";
+import { FinetuneExecutor } from "../shared/executors/node/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
-import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
+import { NoLingeringBareExecutor } from "../shared/executors/node/no-lingering-bare-executor.js";
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
-import { DesktopCancellationExecutor } from "./executors/cancellation-executor.js";
+import { NodeCancellationExecutor } from "../shared/executors/node/cancellation-executor.js";
 
 const resources = new ResourceManager({
   downloadTarget: "desktop",
@@ -285,7 +285,7 @@ resources.define("tts-supertonic", {
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
@@ -477,7 +477,7 @@ export const executor = createExecutor({
     new ClassificationExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
-    new DesktopLoggingExecutor(resources),
+    new NodeLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
@@ -487,13 +487,13 @@ export const executor = createExecutor({
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new DesktopDiffusionExecutor(resources),
+    new NodeDiffusionExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
-    new DesktopCancellationExecutor(resources),
+    new NodeCancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

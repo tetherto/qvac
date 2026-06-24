@@ -38,6 +38,16 @@ test("transformLlmConfig: reasoning_budget=-1 survives", (t) => {
   t.is(result["reasoning_budget"], "-1");
 });
 
+test("transformLlmConfig: positive reasoning_budget survives as string token cap", (t) => {
+  const config = makeConfig({ reasoning_budget: 128 });
+  const result = transformLlmConfig(config);
+  t.is(
+    result["reasoning_budget"],
+    "128",
+    "positive reasoning_budget must be forwarded as string '128'",
+  );
+});
+
 test("transformLlmConfig: stop_sequences is renamed to reverse_prompt", (t) => {
   const config = makeConfig({ stop_sequences: ["</s>", "<|im_end|>"] });
   const result = transformLlmConfig(config);
