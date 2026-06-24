@@ -7,9 +7,37 @@ tocMaxDepth: 3
 
 ## Overview
 
-To connect the HTTP server to your tool, start both with compatible configuration. On the HTTP server side, use `qvac.config.json` to declare the models you want to provide. On the tool side, add QVAC as a custom OpenAI-compatible provider that points its base URL at the running server and references those same models.
+For OpenCode, use the published [`@qvac/opencode-plugin`](https://www.npmjs.com/package/@qvac/opencode-plugin). The plugin starts a local managed QVAC server for the project, registers the `qvac` provider, selects the default local model, and cleans up when OpenCode exits.
 
-Each tool is configured differently, but two things must always match between the two sides: the model name that the tool requests must be identical to an alias you declared in `serve.models`, and the tool's base URL must point to the address and port where the server is listening (`http://localhost:11434/v1` by default).
+Manual HTTP-server setup is still available for other OpenAI-compatible tools, or for OpenCode users who want to run `qvac serve openai` themselves. In that mode, the model name requested by the tool must match an alias declared in `serve.models`, and the tool's base URL must point to the running server (`http://localhost:11434/v1` by default).
+
+## OpenCode quickstart
+
+Add the plugin to your project's `opencode.json`:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@qvac/opencode-plugin"]
+}
+```
+
+Then run OpenCode normally:
+
+```bash
+opencode
+```
+
+The plugin uses `qvac/qwen3.5-9b` by default. Use that for the best friendly-id default. You can also choose a different model with the plugin tuple; for example, use the larger GPT-OSS 20B model for more demanding local agent work:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [["@qvac/opencode-plugin", { "model": "GPT_OSS_20B_INST_Q4_K_M" }]]
+}
+```
+
+See the [`@qvac/opencode-plugin` README](https://www.npmjs.com/package/@qvac/opencode-plugin) for friendly model ids, raw QVAC constants such as GPT-OSS and Gemma4, and advanced options.
 
 ## Compatible tools
 
@@ -28,7 +56,9 @@ The following tools have been verified to work as drop-in replacements by pointi
 
 ## Configure the HTTP server
 
-The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. And because coding agents fire concurrent requests, you should declare two chat aliases with equal context (see [Concurrent requests collide on a single model instance](#concurrent-requests-collide-on-a-single-model-instance)):
+Skip this section if you are using the OpenCode plugin above.
+
+The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. Coding agents need a larger context window than the server default, so set `ctx_size` explicitly:
 
 ```json title="qvac.config.json"
 {
@@ -42,14 +72,6 @@ The only QVAC-specific setting for connecting an AI tool is the `serve.models` b
           "reasoning_budget": 0,
           "tools": true
         }
-      },
-      "qwen3-8b-title": {
-        "model": "QWEN3_8B_INST_Q4_K_M",
-        "preload": true,
-        "config": {
-          "ctx_size": 16384,
-          "reasoning_budget": 0
-        }
       }
     }
   }
@@ -62,17 +84,19 @@ See [HTTP server](/cli/http-server) for how to install it, run it, and the other
 
 ## Configure the tool
 
+Skip this section if you are using the OpenCode plugin above.
+
 On the tool side, register QVAC as a custom OpenAI-compatible provider. The exact file and fields differ per tool, but every setup needs the same three things:
 
 - **Base URL** pointing at the running server (`http://localhost:11434/v1` by default).
 - **Model name(s)** that match the aliases declared in `serve.models`.
 - **API key** — the server does not validate it, but some clients refuse to send a request without an `Authorization` header, so set any non-empty value when required.
 
-Consult your tool's documentation for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The OpenCode recipe below is a concrete example of this pattern.
+Consult your tool's documentation for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The manual OpenCode recipe below is a concrete example of this pattern.
 
-### OpenCode
+### OpenCode manual provider
 
-Configure `opencode.json` with a full `qvac` provider block plus the `model` / `small_model` routing keys:
+If you are not using the plugin, configure `opencode.json` with a full `qvac` provider block and point it at the `qvac serve openai` instance you started yourself:
 
 ```json title="opencode.json"
 {
@@ -88,17 +112,11 @@ Configure `opencode.json` with a full `qvac` provider block plus the `model` / `
           "tool_call": true,
           "limit": { "context": 16384 },
           "modalities": { "input": ["text"], "output": ["text"] }
-        },
-        "qwen3-8b-title": {
-          "name": "Qwen3 8B (title)",
-          "limit": { "context": 16384 },
-          "modalities": { "input": ["text"], "output": ["text"] }
         }
       }
     }
   },
-  "model":       "qvac/qwen3-8b-chat",
-  "small_model": "qvac/qwen3-8b-title"
+  "model": "qvac/qwen3-8b-chat"
 }
 ```
 
@@ -120,17 +138,15 @@ The chat endpoint currently accepts and returns text only. Non-text content part
 
 If `qvac` is launched from a global install that cannot resolve `@qvac/sdk`, the serve config loader builds an **empty** model-constant registry and rejects every valid constant with `serve.models.<alias>: unknown model constant "QWEN3_8B_INST_Q4_K_M"`. Run `qvac serve` from a project where `@qvac/cli` and `@qvac/sdk` are installed together (or otherwise make `@qvac/sdk` resolvable from the CLI).
 
-### Concurrent requests collide on a single model instance
+### Same-model requests queue
 
-The underlying `llm-llamacpp` addon serializes inference per native model context and rejects concurrent requests rather than queuing them. The server log shows `Cannot set new job: a job is already set or being processed`; clients see `500 An internal error occurred`.
+The underlying `llm-llamacpp` addon runs one decode at a time per native model context. The HTTP server queues same-model completion requests, so a coding agent can point its main chat and utility calls at the same alias without failing on a native job-lock collision.
 
-Coding agents routinely fire concurrent requests — typically a main chat completion plus a "title generation" call for the conversation panel. _To get parallel inference you need two different model files loaded under two aliases_. The `qvac.config.json` above does exactly this: two `QWEN3_8B_INST_Q4_K_M` aliases (`qwen3-8b-chat` and `qwen3-8b-title`) loaded independently, then mapped to OpenCode's chat and utility model slots via `model` / `small_model`.
+Coding agents routinely fire concurrent requests — typically a main chat completion plus a title, summary, or compaction call. Those utility calls wait behind the active decode when they use the same alias. You can still configure a separate `small_model` alias if you want utility calls to avoid waiting, but it is no longer required for correctness.
 
 ### `ctx_size` defaults to 1024 — too small for agents
 
 The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat) or you'll see context fills and truncated responses well before the model misbehaves.
-
-OpenCode routes tool-heavy work to the `small_model` too, not just lightweight title generation, so a 4k secondary model overflows quickly. Give the secondary model **equal context** to the main one (both `16384` above) rather than a smaller title-only budget.
 
 ### `reasoning_budget: 0` to suppress `<think>` blocks
 

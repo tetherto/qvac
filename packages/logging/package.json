@@ -4,9 +4,11 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
-    "test": "npm run test:unit",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "test": "npm run lint && npm run format && npm run test:unit",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js"
   },
@@ -21,7 +23,9 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/logging#readme",
   "devDependencies": {
     "brittle": "^3.15.0",
-    "standard": "^17.1.2"
+    "lunte": "^1.8.1",
+    "prettier": "^3.8.4",
+    "prettier-config-holepunch": "^2.0.0"
   },
   "imports": {
     "./env": {

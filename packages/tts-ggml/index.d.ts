@@ -90,7 +90,15 @@ declare interface TTSGgmlOptions {
   steps?: number
   /** Alias for `steps` (cross-compat with `@qvac/tts-onnx`). */
   numInferenceSteps?: number
-  /** Supertonic: speech-rate factor.  0 -> GGUF default. */
+  /**
+   * Speech-rate / duration multiplier (1.0 = unchanged, &lt; 1 slower, &gt; 1 faster).
+   * Supertonic: scales the engine's native duration predictor (0 -> GGUF default).
+   * Chatterbox: the engine has no native rate control, so this is applied as a
+   * pitch-preserving WSOLA time-stretch post-synthesis (functionally equivalent to
+   * ffmpeg `atempo`); bounded to [0.25, 4.0].  When omitted (or 1.0), the raw
+   * model output is left unchanged (no default slowdown); pass an explicit value
+   * to opt in.
+   */
   speed?: number
   /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */
   noiseNpyPath?: string

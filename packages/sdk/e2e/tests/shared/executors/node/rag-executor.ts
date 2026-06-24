@@ -6,8 +6,8 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
-import { ragTests } from "../../rag-tests.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
+import { ragTests } from "../../../rag-tests.js";
 
 export class RagExecutor extends AbstractModelExecutor<typeof ragTests> {
   pattern = /^rag-/;

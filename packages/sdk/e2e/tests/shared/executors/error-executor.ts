@@ -26,6 +26,7 @@ interface GenerationParams {
   presence_penalty?: number;
   repeat_penalty?: number;
   reasoning_budget?: -1 | 0;
+  remove_thinking_from_context?: boolean;
 }
 
 interface ChatMessage {

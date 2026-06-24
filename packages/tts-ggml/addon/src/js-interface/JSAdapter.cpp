@@ -116,6 +116,7 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.nCtx                    = readOptionalInt(configurationParams, env, "nCtx");
   cfg.kvCacheType             = readOptionalString(configurationParams, env, "kvCacheType");
   cfg.outputSampleRate        = readOptionalInt(configurationParams, env, "outputSampleRate");
+  cfg.speed = readOptionalFloat(configurationParams, env, "speed");
   cfg.streamChunkTokens       = readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.streamFirstChunkTokens  = readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamCfmSteps          = readOptionalInt(configurationParams, env, "cfmSteps");

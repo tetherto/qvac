@@ -6,13 +6,13 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
-import { transcriptionTests } from "../../transcription-tests.js";
+import { AbstractModelExecutor } from "../abstract-model-executor.js";
+import { transcriptionTests } from "../../../transcription-tests.js";
 import {
   runMetadataStreamDuplex,
   validateSegments,
   type MetadataStreamOptions,
-} from "../../shared/transcription-segments.js";
+} from "../../transcription-segments.js";
 
 export class TranscriptionExecutor extends AbstractModelExecutor<
   typeof transcriptionTests

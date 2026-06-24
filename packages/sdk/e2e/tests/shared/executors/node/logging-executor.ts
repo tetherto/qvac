@@ -1,6 +1,6 @@
 import { ocr, transcribe } from "@qvac/sdk";
 import * as path from "node:path";
-import { LoggingExecutor } from "../../shared/executors/logging-executor.js";
+import { LoggingExecutor } from "../logging-executor.js";
 
 interface AudioParams { audioFileName: string }
 interface ImageParams { imageFileName: string }
@@ -12,7 +12,7 @@ const ASSETS_DIRS = {
 
 type AssetCategory = keyof typeof ASSETS_DIRS;
 
-export class DesktopLoggingExecutor extends LoggingExecutor {
+export class NodeLoggingExecutor extends LoggingExecutor {
   protected override triggerWhisper(modelId: string, params: AudioParams): Promise<void> {
     return this.runTranscribe(modelId, params);
   }
