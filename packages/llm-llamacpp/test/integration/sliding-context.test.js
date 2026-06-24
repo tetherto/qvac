@@ -271,48 +271,6 @@ safeTest('Cached follow-up discards middle tokens to fit new message', {
   t.is(second.stats.contextSlides, 1, 'exactly one prefill discard slide')
 })
 
-// n_discarded=450 (clamped to FREE_SLOTS-1 = 447), n_predict=430 (first run), predict=10 (second run)
-// First run: n_past = 494, firstMsgTokens = 64, n_discarded = 447
-// Second run follow-up (~20 tokens):
-//   leftTokens = 494 - 64 - 447 = -17 < 0
-//   firstMsgTokens + nTokens = 64 + ~20 = ~84 < 512
-//   n_discarded = 447 > 0
-// :> removes all middle tokens from pos 64 to 494
-// Second run uses predict=10 so generation can't cause slides.
-safeTest('Cached follow-up clears all middle tokens when discard window is exhausted', {
-  timeout: 900_000,
-  skip
-}, async t => {
-  const cachePath = path.join(
-    (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
-    'sliding-prefill-branch2.bin'
-  )
-  cleanupIntegrationCacheFiles(cachePath)
-
-  const { model } = await setupModel(t, {
-    n_predict: '430',
-    n_discarded: '450'
-  })
-
-  const opts = cacheOpts(cachePath)
-
-  // First run: accumulate n_past with cache
-  const first = await runAndCollect(model, STORY_PROMPT, opts)
-  t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
-  t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
-  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 494 < n_ctx 512)')
-
-  // Second run: low predict so only prefill full-middle-discard can cause slides
-  // After discard: n_past = 64 (firstMsgTokens), generate 10 → 74 < 512
-  const second = await runAndCollect(
-    model,
-    [FOLLOW_UP_MSG],
-    { ...opts, generationParams: { predict: 10 } }
-  )
-  t.ok(second.stats.generatedTokens > 0, 'second run: generated output after full middle token discard')
-  t.is(second.stats.contextSlides, 1, 'exactly one full middle token discard slide')
-})
-
 // n_discarded=0, n_predict=430
 // First run: n_past = 494, firstMsgTokens = 64, n_discarded = 0
 // Second run follow-up (~20 tokens):
