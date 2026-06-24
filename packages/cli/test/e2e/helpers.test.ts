@@ -9,6 +9,7 @@ import { collectSSE, multipart, assertError, type InjectResponse } from './helpe
 describe('e2e harness helpers', () => {
   it('collectSSE parses hijacked reply.raw SSE captured by app.inject', { timeout: 5000 }, async () => {
     const app = Fastify({ logger: false })
+    // lunte-disable-next-line require-await
     app.get('/sse', async (_req, reply) => {
       initSSE(reply)
       sendSSE(reply.raw, { a: 1 })

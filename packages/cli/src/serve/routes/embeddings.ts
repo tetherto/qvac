@@ -19,6 +19,7 @@ reported as 0 — the SDK \`embed()\` operation doesn't surface a token count.
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/embeddings', {
     schema: { body: embeddingsBody, tags: ['Embeddings'], summary: 'Generate embeddings', description: descriptions.embed },

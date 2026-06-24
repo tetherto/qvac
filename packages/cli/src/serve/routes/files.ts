@@ -48,6 +48,7 @@ will not serve stale bytes after the store has evicted the entry.
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/files', {
     schema: {
@@ -58,6 +59,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       consumes: ['multipart/form-data']
     },
     preValidation: multipartToBody
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const ctx = app.qvac
     const body = req.body
@@ -82,6 +84,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/v1/files', {
     schema: { tags: ['Files'], summary: 'List ephemeral files', description: descriptions.list }
+  // lunte-disable-next-line require-await
   }, async () => ({
     object: 'list' as const,
     data: app.qvac.ephemeralFiles.list().map(({ id, record }) => toOpenAIFile(id, record)),
@@ -90,6 +93,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/v1/files/:id', {
     schema: { params: fileIdParams, tags: ['Files'], summary: 'Get an ephemeral file', description: descriptions.getById }
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const id = decodeURIComponent(req.params.id)
     const record = app.qvac.ephemeralFiles.get(id)
@@ -99,6 +103,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/v1/files/:id/content', {
     schema: { params: fileIdParams, tags: ['Files'], summary: 'Get raw bytes of an ephemeral file', description: descriptions.getByIdContent }
+  // lunte-disable-next-line require-await
   }, async (req, reply) => {
     const id = decodeURIComponent(req.params.id)
     const record = app.qvac.ephemeralFiles.get(id)

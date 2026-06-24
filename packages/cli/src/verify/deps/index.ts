@@ -84,6 +84,7 @@ export function diffNativePackages (
   }
 }
 
+// lunte-disable-next-line require-await
 async function nativePackagesForLock (
   packageRoot: string,
   packages: LockfilePackage[]

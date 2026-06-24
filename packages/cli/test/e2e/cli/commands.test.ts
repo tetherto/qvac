@@ -6,6 +6,7 @@ import type { TestContext } from 'node:test'
 import { runCli } from '../helpers/cli.js'
 import { tempDir } from '../helpers/tmp.js'
 
+// lunte-disable-next-line require-await
 async function tmpProject (t: TestContext): Promise<string> {
   return tempDir(t, 'qvac-cli-cmd-')
 }

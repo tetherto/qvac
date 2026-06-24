@@ -423,6 +423,7 @@ describe('resolveInputReferenceImage', () => {
   it('rejects HTTP URL that returns a non-200 response', async () => {
     const ctx = makeCtxStub()
     await withMockFetch(
+      // lunte-disable-next-line require-await
       async () => ({ ok: false, status: 404 } as Response),
       async () => {
         await assert.rejects(
@@ -436,6 +437,7 @@ describe('resolveInputReferenceImage', () => {
   it('rejects HTTP URL when fetch throws a network error', async () => {
     const ctx = makeCtxStub()
     await withMockFetch(
+      // lunte-disable-next-line require-await
       async () => { throw new Error('ECONNREFUSED') },
       async () => {
         await assert.rejects(
@@ -450,6 +452,7 @@ describe('resolveInputReferenceImage', () => {
     const ctx = makeCtxStub()
     const timeoutErr = Object.assign(new Error('fetch timed out'), { name: 'TimeoutError' })
     await withMockFetch(
+      // lunte-disable-next-line require-await
       async () => { throw timeoutErr },
       async () => {
         await assert.rejects(
@@ -464,12 +467,15 @@ describe('resolveInputReferenceImage', () => {
     const ctx = makeCtxStub()
     const bigChunk = new Uint8Array(101 * 1024 * 1024)
     await withMockFetch(
+      // lunte-disable-next-line require-await
       async () => ({
         ok: true,
         status: 200,
         body: {
           getReader: () => ({
+            // lunte-disable-next-line require-await
             read: async () => ({ done: false, value: bigChunk }),
+            // lunte-disable-next-line require-await
             cancel: async () => {},
             releaseLock: () => {}
           })
@@ -487,12 +493,15 @@ describe('resolveInputReferenceImage', () => {
   it('rejects HTTP URL when body read throws an error', async () => {
     const ctx = makeCtxStub()
     await withMockFetch(
+      // lunte-disable-next-line require-await
       async () => ({
         ok: true,
         status: 200,
         body: {
           getReader: () => ({
+            // lunte-disable-next-line require-await
             read: async () => { throw new Error('stream error') },
+            // lunte-disable-next-line require-await
             cancel: async () => {},
             releaseLock: () => {}
           })
@@ -512,6 +521,7 @@ describe('tearDownJob', () => {
   it('aborts the controller and cancels the SDK request for in-progress jobs', () => {
     const cancelled: Array<{ requestId: string }> = []
     const ctx = makeCtxStub({
+      // lunte-disable-next-line require-await
       cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
     })
     const job = makeJob({ status: 'in_progress', requestId: 'req-abc' })
@@ -523,6 +533,7 @@ describe('tearDownJob', () => {
   it('skips cancel for completed jobs', () => {
     const cancelled: Array<{ requestId: string }> = []
     const ctx = makeCtxStub({
+      // lunte-disable-next-line require-await
       cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
     })
     const job = makeJob({ status: 'completed', requestId: 'req-abc', aviFileId: 'file-1' })
@@ -534,6 +545,7 @@ describe('tearDownJob', () => {
   it('skips cancel when requestId is not yet set', () => {
     const cancelled: Array<{ requestId: string }> = []
     const ctx = makeCtxStub({
+      // lunte-disable-next-line require-await
       cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
     })
     const job = makeJob({ status: 'queued', requestId: null })
@@ -552,6 +564,7 @@ describe('tearDownJob', () => {
 
   it('survives a rejecting cancelFn (no throw)', () => {
     const ctx = makeCtxStub({
+      // lunte-disable-next-line require-await
       cancelOverride: async () => { throw new Error('worker down') }
     })
     const job = makeJob({ status: 'in_progress', requestId: 'req-abc' })

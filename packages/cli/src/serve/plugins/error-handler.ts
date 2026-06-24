@@ -4,6 +4,7 @@ import { hasZodFastifySchemaValidationErrors, isResponseSerializationError } fro
 import { HttpError, errorType } from '../lib/http-error.js'
 import { sendSSE, endSSE } from '../lib/sse.js'
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsync = async (app) => {
   app.setErrorHandler((err: FastifyError, req, reply) => {
     const sseSentinel = req.routeOptions?.config?.sseSentinel ?? true

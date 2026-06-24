@@ -4,6 +4,7 @@ import { resolveModelAlias } from '../config.js'
 import type { QvacRequestModel } from '../lib/types.js'
 
 export function requireModel (category: string): preHandlerAsyncHookHandler {
+  // lunte-disable-next-line require-await
   return async function (req) {
     const body = req.body as Record<string, unknown> | undefined
     const modelName = typeof body?.['model'] === 'string' ? (body['model'] as string).trim() : ''

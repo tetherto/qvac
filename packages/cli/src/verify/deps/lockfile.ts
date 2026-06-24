@@ -82,10 +82,12 @@ function toGitPath (filePath: string, gitRoot: string): string {
   return path.relative(gitRoot, filePath).split(path.sep).join('/')
 }
 
+// lunte-disable-next-line require-await
 export async function findGitRoot (cwd: string): Promise<string> {
   return runGit(cwd, ['rev-parse', '--show-toplevel'])
 }
 
+// lunte-disable-next-line require-await
 export async function resolveGitRef (cwd: string, ref: string): Promise<string> {
   return runGit(cwd, ['rev-parse', '--verify', `${ref}^{commit}`])
 }

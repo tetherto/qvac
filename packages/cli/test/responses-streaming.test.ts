@@ -65,7 +65,7 @@ function fakeStreamCompletion (opts: {
     toolCalls: Promise.resolve(opts.toolCalls) as unknown as CompletionRun['toolCalls'],
     stats: Promise.resolve(opts.stats),
     tokenStream: gen(),
-    toolCallStream: (async function * empty (): AsyncGenerator<never> {})()
+    toolCallStream: (async function *(): AsyncGenerator<never> {})()
   }
 }
 

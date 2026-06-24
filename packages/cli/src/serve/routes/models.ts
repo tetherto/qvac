@@ -33,9 +33,11 @@ registry. Subsequent inference requests targeting this alias will return
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.get('/v1/models', {
     schema: { tags: ['Models'], summary: 'List ready models', description: descriptions.list }
+  // lunte-disable-next-line require-await
   }, async () => ({
     object: 'list' as const,
     data: app.qvac.registry.getReady().map(toModelObject)
@@ -43,6 +45,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/v1/models/:id', {
     schema: { params: modelIdParams, tags: ['Models'], summary: 'Get a model', description: descriptions.getById }
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const entry = app.qvac.registry.getEntry(decodeURIComponent(req.params.id))
     if (!entry || entry.state !== app.qvac.registry.STATES.READY) {

@@ -263,7 +263,7 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
     // Caller didn't pin width/height → backfill `size` from stats.
     const size = job.size.length > 0
       ? job.size
-      : (stats?.width != null && stats?.height != null ? `${stats.width}x${stats.height}` : '')
+      : (stats !== undefined && stats.width !== undefined && stats.height !== undefined ? `${stats.width}x${stats.height}` : '')
 
     // The abort check above already handles DELETE / eviction on the normal
     // path. The store-update return is a second check: if the job is gone we
@@ -380,6 +380,7 @@ async function serveContent (
     .send(mp4Buffer)
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/videos', {
     schema: {
@@ -416,7 +417,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     const job = ctx.videoJobsStore.create({
       model: alias,
       prompt: params.prompt,
-      size: params.width != null && params.height != null ? `${params.width}x${params.height}` : '',
+      size: params.width !== undefined && params.height !== undefined ? `${params.width}x${params.height}` : '',
       seconds: req.body.seconds ?? ''
     })
 
@@ -434,6 +435,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       description: descriptions.list,
       response: { 200: videoListResource }
     }
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const q = req.query
     const page = app.qvac.videoJobsStore.list({
@@ -458,6 +460,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       description: descriptions.retrieve,
       response: { 200: videoResource }
     }
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const job = app.qvac.videoJobsStore.get(req.params.id)
     if (!job) {
@@ -501,6 +504,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       description: descriptions.delete,
       response: { 200: deletedVideoResource }
     }
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const ctx = app.qvac
     const job = ctx.videoJobsStore.get(req.params.id)

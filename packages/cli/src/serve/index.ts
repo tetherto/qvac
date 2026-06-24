@@ -132,6 +132,7 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     transform: jsonSchemaTransform
   })
 
+  // lunte-disable-next-line require-await
   app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger())
 
   if (options.docs) {
@@ -167,12 +168,14 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     await app.register(authPlugin, { apiKey: options.apiKey })
   }
 
+  // lunte-disable-next-line require-await
   app.addHook('onRequest', async (req) => {
     if (!isIntrospectionPath(req.url)) {
       logger.info(`→ ${req.method} ${req.url.split('?')[0]}`)
     }
     ;(req as unknown as { qvacStart: number }).qvacStart = performance.now()
   })
+  // lunte-disable-next-line require-await
   app.addHook('onResponse', async (req, reply) => {
     if (isIntrospectionPath(req.url)) return
     const start = (req as unknown as { qvacStart?: number }).qvacStart

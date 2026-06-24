@@ -89,6 +89,7 @@ Same embedding-model resolution + mismatch rules as
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.get('/v1/vector_stores', {
     schema: {
@@ -117,6 +118,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       summary: 'Create a vector store',
       description: descriptions.create
     }
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const ctx = app.qvac
     const body = req.body

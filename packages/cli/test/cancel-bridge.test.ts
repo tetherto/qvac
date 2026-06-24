@@ -31,6 +31,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes()
     const cancels: { requestId: string }[] = []
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-1', makeLogger(), async (opts) => {
       cancels.push(opts)
     })
@@ -48,6 +49,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes({ writableEnded: true })
     let called = 0
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-2', makeLogger(), async () => {
       called++
     })
@@ -62,6 +64,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes()
     const logger = makeLogger()
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-3', logger, async () => {
       throw new Error('cancel race lost')
     })
@@ -79,6 +82,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes()
     let called = 0
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-4', makeLogger(), async () => {
       called++
     })

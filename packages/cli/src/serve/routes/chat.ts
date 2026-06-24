@@ -78,6 +78,7 @@ SDK provides it, otherwise from a whitespace split of the output.
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/chat/completions', {
     schema: { body: chatCompletionsBody, tags: ['Chat'], summary: 'Chat completion', description: descriptions.completion },

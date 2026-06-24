@@ -101,6 +101,7 @@ models whose endpoint category is \`speech\`.
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/audio/transcriptions', {
     schema: {
@@ -386,6 +387,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/v1/audio/voices', {
     schema: { tags: ['Audio'], summary: 'List TTS voices', description: descriptions.voices }
+  // lunte-disable-next-line require-await
   }, async () => {
     const speech = app.qvac.serveConfig.openai.audio.speech
     const data = collectVoices(speech.voices, speech.defaultVoice)
@@ -394,6 +396,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/v1/audio/models', {
     schema: { tags: ['Audio'], summary: 'List TTS models', description: descriptions.models }
+  // lunte-disable-next-line require-await
   }, async () => ({
     object: 'list' as const,
     data: app.qvac.registry

@@ -125,6 +125,7 @@ clients expecting raw completion semantics may see template-shaped output.
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/completions', {
     schema: { body: completionsBody, tags: ['Completions'], summary: 'Legacy text completion', description: descriptions.completion },

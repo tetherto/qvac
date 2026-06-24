@@ -74,7 +74,7 @@ function buildImageData (
     })
     const url = `${publicBaseUrl}/v1/files/${id}/content`
     const stored = ephemeralFiles.get(id)
-    if (stored?.expiresAtMs != null) {
+    if (stored !== null && stored.expiresAtMs !== null) {
       return { url, expires_at: Math.floor(stored.expiresAtMs / 1000) }
     }
     return { url }
@@ -142,7 +142,7 @@ async function runAndRespond (
     drainProgress()
   ])
 
-  if (stats?.seed != null) {
+  if (stats !== undefined && stats.seed !== undefined) {
     ctx.logger.info(`  ${logLabel} done images=${buffers.length} seed=${stats.seed} ms=${stats.totalGenerationMs ?? stats.totalWallMs ?? 0}`)
   } else {
     ctx.logger.info(`  ${logLabel} done images=${buffers.length} ms=${stats?.totalGenerationMs ?? stats?.totalWallMs ?? 0}`)
@@ -206,6 +206,7 @@ Same output / \`response_format=url\` / streaming caveats as
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/images/generations', {
     schema: {

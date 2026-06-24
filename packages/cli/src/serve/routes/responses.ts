@@ -10,16 +10,14 @@ import {
   responsesBody,
   responsesIdParams,
   responsesListInputItemsQuery,
-  RESPONSES_UNSUPPORTED_PARAMS
-} from '../schemas/responses.js'
-import { InvalidResponseFormatError, type GenerationParams, type ResponseFormat } from '../schemas/common.js'
-import {
+  RESPONSES_UNSUPPORTED_PARAMS,
   historyPrefixFromStoredResponse,
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
   toSdkResponsesArgs,
   UnsupportedToolTypeError
 } from '../schemas/responses.js'
+import { InvalidResponseFormatError, type GenerationParams, type ResponseFormat } from '../schemas/common.js'
 import { responseId as allocResponseId } from '../adapters/openai/responses-shape.js'
 import { RESPONSES_VOLATILE_STUB } from '../adapters/openai/responses-store.js'
 import { writeBlockingResponse, writeStreamingResponse, type ResponsesHandlerParams } from '../adapters/openai/response-writers.js'
@@ -82,10 +80,12 @@ and terminates **without** a \`[DONE]\` sentinel (per the spec).
 // by accident. Hijacked replies (POST streaming via initSSE, POST blocking
 // via writeBlockingResponse) bypass fastify and inject the header themselves
 // when writing raw response headers.
+// lunte-disable-next-line require-await
 async function markVolatile (_req: FastifyRequest, reply: FastifyReply): Promise<void> {
   reply.header(VOLATILE_HEADER, RESPONSES_VOLATILE_STUB)
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/responses', {
     schema: {
@@ -212,6 +212,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       description: descriptions.getById
     },
     onRequest: markVolatile
+  // lunte-disable-next-line require-await
   }, async (req, reply) => {
     const rec = app.qvac.responsesStore.get(req.params.id)
     if (!rec) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
@@ -226,6 +227,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       description: descriptions.deleteById
     },
     onRequest: markVolatile
+  // lunte-disable-next-line require-await
   }, async (req) => {
     const ok = app.qvac.responsesStore.delete(req.params.id)
     if (!ok) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
@@ -241,6 +243,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       description: descriptions.listInputItems
     },
     onRequest: markVolatile
+  // lunte-disable-next-line require-await
   }, async (req, reply) => {
     const opts: { limit?: number; after?: string } = {}
     if (req.query.limit !== undefined) opts.limit = req.query.limit
