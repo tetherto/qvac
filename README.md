@@ -17,6 +17,18 @@
 - **OpenAI-compatible API:** integrate with the broader AI ecosystem.
 - **Open source:** 100% free to use and modify — build on top, contribute back, be part of our community.
 
+## Where to start
+
+QVAC covers multiple capabilities. Use this table to find the right entry point for what you want to build.
+
+| Goal | Where to start |
+| :--- | :--- |
+| Run a local language model for text generation or chat | [Quickstart](#quickstart) below |
+| Use an OpenAI-compatible HTTP server with existing tools | Install `@qvac/cli`. It ships a server that follows the OpenAI API format, so tools like Open WebUI connect without changes |
+| Add speech recognition, text-to-speech, OCR, or translation | [Functionalities](#functionalities) below, then the capability pages at [docs.qvac.tether.io](https://docs.qvac.tether.io) |
+| Build semantic search or RAG (retrieval-augmented generation: answering questions from your own documents) | [Functionalities](#functionalities) below, then the RAG module docs at [docs.qvac.tether.io](https://docs.qvac.tether.io) |
+| Delegate inference to a stronger device you own over a direct P2P connection | [P2P capabilities](#p2p-capabilities) below |
+
 ## Usage
 
 QVAC is composed of JavaScript libraries and tools that converge in the JS SDK. _The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
@@ -79,6 +91,8 @@ catch (error) {
 ```bash
 node quickstart.js
 ```
+
+**What you will see:** the terminal first prints model download progress (a series of percentage logs from `onProgress`). Once the download completes, the model's response streams to the terminal token by token.
 
 ### Functionalities
 
