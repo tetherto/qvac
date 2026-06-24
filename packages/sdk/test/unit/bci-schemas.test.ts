@@ -30,10 +30,12 @@ test("bciConfigSchema: accepts the full nested config shape", (t) => {
     contextParams: { use_gpu: false, flash_attn: true },
     miscConfig: { caption_enabled: false },
     backendsDir: "/tmp/backends",
+    embedderModelSrc: "bci-embedder.bin",
   });
   t.is(result.whisperConfig?.language, "en");
   t.is(result.bciConfig?.day_idx, 1);
   t.is(result.miscConfig?.caption_enabled, false);
+  t.is(result.embedderModelSrc, "bci-embedder.bin");
 });
 
 test("bciConfigSchema: accepts day_idx -1 (mel passthrough)", (t) => {
