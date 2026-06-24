@@ -337,6 +337,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   }
   process.once('exit', onExit)
 
+  // lunte-disable-next-line require-await
   async function close (): Promise<void> {
     if (closed) return
     closed = true

@@ -31,6 +31,7 @@ test('createQvac forwards baseURL/apiKey/headers/fetch to the underlying call', 
   let capturedCustomHeader: string | undefined
   let capturedFetchCallCount = 0
 
+  // lunte-disable-next-line require-await
   const customFetch: typeof fetch = async (input, init) => {
     capturedFetchCallCount += 1
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
@@ -83,6 +84,7 @@ test('createQvac forwards baseURL/apiKey/headers/fetch to the underlying call', 
 
 test('createQvac without explicit baseURL uses DEFAULT_BASE_URL', async () => {
   let capturedUrl: string | undefined
+  // lunte-disable-next-line require-await
   const customFetch: typeof fetch = async (input) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
     capturedUrl = url
@@ -114,6 +116,7 @@ test('createQvac without explicit baseURL uses DEFAULT_BASE_URL', async () => {
 
 test('createQvac without explicit apiKey uses DEFAULT_API_KEY', async () => {
   let capturedAuth: string | undefined
+  // lunte-disable-next-line require-await
   const customFetch: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
     capturedAuth = headers.get('authorization') ?? undefined
