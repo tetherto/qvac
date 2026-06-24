@@ -82,16 +82,17 @@ test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
   t.is(r.success, true);
 });
 
-test("TTS_CHATTERBOX_LANGUAGES: exposes all 18 supported languages", (t) => {
-  t.is(TTS_CHATTERBOX_LANGUAGES.length, 18);
+test("TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages", (t) => {
+  t.is(TTS_CHATTERBOX_LANGUAGES.length, 22);
   const expected = [
     "en", "es", "fr", "de", "it", "pt", "nl", "pl", "tr",
     "sv", "da", "fi", "no", "el", "ms", "sw", "ar", "ko",
+    "he", "ru", "zh", "hi",
   ];
   t.alike([...TTS_CHATTERBOX_LANGUAGES], expected);
 });
 
-test("ttsChatterboxRuntimeConfigSchema: accepts all 18 chatterbox languages", (t) => {
+test("ttsChatterboxRuntimeConfigSchema: accepts all 22 chatterbox languages", (t) => {
   for (const language of TTS_CHATTERBOX_LANGUAGES) {
     const r = ttsChatterboxRuntimeConfigSchema.safeParse({
       ttsEngine: "chatterbox",
@@ -133,10 +134,10 @@ test("ttsSupertonicRuntimeConfigSchema: rejects chatterbox-only languages", (t) 
 test("ttsConfigSchema: accepts a chatterbox-only language for chatterbox", (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: "chatterbox",
-    language: "tr",
+    language: "he",
     s3genModelSrc: "s3:///example/s3gen.gguf",
   });
-  t.is(r.success, true, "chatterbox load config accepts 'tr'");
+  t.is(r.success, true, "chatterbox load config accepts 'he'");
 });
 
 test("ttsSupertonicRuntimeConfigSchema: strips removed ttsSupertonicMultilingual", (t) => {
