@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bci-whispercpp",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
   "engines": {
@@ -58,7 +58,7 @@
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/registry-client": "^0.6.0",
     "@types/node": "^22.15.3",
