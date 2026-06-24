@@ -7,7 +7,8 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
-  OCR_LATIN_RECOGNIZER_1,
+  OCR_CRAFT,
+  OCR_LATIN,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -148,9 +149,12 @@ resources.define("tools-gemma4", {
 });
 
 resources.define("ocr", {
-  constant: OCR_LATIN_RECOGNIZER_1,
-  type: "onnx-ocr",
-  config: { langList: ["en"] },
+  constant: OCR_LATIN,
+  type: "ggml-ocr",
+  // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time
+  // and downloaded on-device, making the first OCR test cold-start time out on
+  // mobile). Mirrors the whisper VAD companion-download pattern.
+  config: { langList: ["en"], detectorModelSrc: OCR_CRAFT },
 });
 
 resources.define("vla", {
