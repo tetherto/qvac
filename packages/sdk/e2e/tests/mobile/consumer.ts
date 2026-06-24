@@ -380,13 +380,7 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 export const executor = createExecutor({
   handlers: [
     // Mobile platform skips (before real executors -- first match wins)
-    skipTests([
-      "http-sharded-embed-load",
-      "http-sharded-embed-progress",
-      "http-archive-embed-load",
-      "http-archive-embed-progress",
-      "http-archive-embed-inference",
-    ], "HTTP test disabled on mobile (OOM)"),
+    new SkipExecutor(/^http-(?:sharded|archive)-embed-/, "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
