@@ -342,7 +342,7 @@ TEST_F(MtmdLlmContextTest, CacheTokensMatchesLlamaMemoryTokenCount) {
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), expectedCacheTokens);
 }
 
-TEST_F(MtmdLlmContextTest, Qwen35MultimodalUsesMoreCellsThanPositionSpan) {
+TEST_F(MtmdLlmContextTest, Qwen35MultimodalReportsMemoryTokenCountAndPosMax) {
   if (!hasValidQwen35Model()) {
     FAIL() << "Qwen3.5 multimodal model or projection file not found";
   }
@@ -361,6 +361,59 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalUsesMoreCellsThanPositionSpan) {
   prompt.input =
       R"([{"role": "user", "type": "media", "content": ""},)"
       R"( {"role": "user", "content": "Describe this image in one sentence."}])";
+  prompt.prefill = true;
+  prompt.media.push_back(readBinaryFile(imagePath));
+
+  std::string output = model->processPrompt(prompt);
+  EXPECT_TRUE(output.empty());
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+
+  const uint32_t sequenceCells = llama_memory_seq_token_count(mem, 0);
+  const uint32_t totalCells = llama_memory_seq_token_count(mem, -1);
+  const llama_pos posMax = llama_memory_seq_pos_max(mem, 0);
+  SCOPED_TRACE(
+      "sequenceCells=" + std::to_string(sequenceCells) +
+      ", totalCells=" + std::to_string(totalCells) +
+      ", posMax=" + std::to_string(posMax));
+
+  EXPECT_EQ(sequenceCells, 4034u);
+  EXPECT_EQ(totalCells, 4034u);
+  EXPECT_EQ(posMax, 91);
+
+  const auto stats = model->runtimeStats();
+  EXPECT_EQ(
+      getStatValue(stats, "CacheTokens"), static_cast<double>(sequenceCells));
+}
+
+TEST_F(
+    MtmdLlmContextTest,
+    Qwen35MultimodalGenerationWithCacheKeyKeepsMemoryAfterGeneration) {
+  if (!hasValidQwen35Model()) {
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  auto model = createQwen35Model();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-generation-cache.bin";
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Describe this image in one sentence."}])";
+  prompt.cacheKey = cachePath.string();
+  prompt.saveCacheToDisk = true;
   prompt.media.push_back(readBinaryFile(imagePath));
 
   std::string output = model->processPrompt(prompt);
@@ -369,17 +422,23 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalUsesMoreCellsThanPositionSpan) {
   auto* mem = llama_get_memory(model->getContext());
   ASSERT_NE(mem, nullptr);
 
-  const uint32_t cells = llama_memory_seq_token_count(mem, 0);
+  const uint32_t sequenceCells = llama_memory_seq_token_count(mem, 0);
+  const uint32_t totalCells = llama_memory_seq_token_count(mem, -1);
   const llama_pos posMax = llama_memory_seq_pos_max(mem, 0);
-  ASSERT_GE(posMax, 0);
+  SCOPED_TRACE(
+      "sequenceCells=" + std::to_string(sequenceCells) +
+      ", totalCells=" + std::to_string(totalCells) +
+      ", posMax=" + std::to_string(posMax));
 
-  const uint32_t span = static_cast<uint32_t>(posMax + 1);
-  EXPECT_GT(cells, span)
-      << "Qwen3.5 image embeddings should occupy more physical KV cells than "
-         "their logical decoder position span";
+  EXPECT_GT(sequenceCells, 4034u);
+  EXPECT_EQ(totalCells, sequenceCells);
+  EXPECT_GT(posMax, 91);
 
   const auto stats = model->runtimeStats();
-  EXPECT_EQ(getStatValue(stats, "CacheTokens"), static_cast<double>(cells));
+  EXPECT_EQ(
+      getStatValue(stats, "CacheTokens"), static_cast<double>(sequenceCells));
+
+  fs::remove(cachePath);
 }
 
 TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
