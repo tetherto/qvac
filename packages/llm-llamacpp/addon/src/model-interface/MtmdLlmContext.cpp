@@ -437,7 +437,7 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 }
 
 void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
-  auto* mem = llama_get_memory(modelCtx_.lctx);
+  auto* mem = llama_get_memory(lctx_);
   if (mem == nullptr) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -446,7 +446,7 @@ void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
   }
 
   current_.cacheTokens =
-      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId_));
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, 0));
 }
 
 void MtmdLlmContext::applyContextDiscard() {
