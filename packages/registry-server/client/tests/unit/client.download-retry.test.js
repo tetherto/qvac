@@ -119,6 +119,36 @@ test('downloadModel waits for the swarm to resume before retrying', async t => {
   )
 })
 
+test('downloadModel waits for a replication peer before retrying', async t => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient()
+  // No peers initially (network down); a peer shows up shortly after the failure.
+  client._core.peers = []
+
+  let attempt = 0
+  client._streamBlobToFile = async (blobs, core, pointer, filePath) => {
+    attempt++
+    client._events.push('attempt-' + attempt)
+    if (attempt === 1) {
+      setTimeout(() => { core.peers.push({}); client._events.push('peer-connected') }, 100)
+      throw requestTimeout()
+    }
+    await fs.promises.writeFile(filePath, COMPLETE)
+  }
+
+  await client.downloadModel('models/tiny.gguf', 's3', { outputFile, maxRetries: 3 })
+
+  const ev = client._events
+  t.is(attempt, 2, 'retried after a peer reconnected')
+  t.ok(ev.includes('peer-connected'), 'a peer reconnected during the wait')
+  t.ok(
+    ev.indexOf('peer-connected') < ev.indexOf('attempt-2'),
+    'retry waited until a peer was replicating the core'
+  )
+})
+
 test('downloadModel re-establishes peers before retrying after REQUEST_TIMEOUT', async t => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')

@@ -235,12 +235,33 @@ class QVACRegistryClient extends ReadyResource {
   }
 
   /**
+   * Blocks until at least one peer is replicating the core, so a retry after a
+   * network drop waits for the network to actually return instead of firing
+   * (and timing out) against zero peers and burning the retry budget. Bounded
+   * by RESUME_WAIT_MAX_MS. No-op when peer info is unavailable.
+   */
+  async _waitForPeers (core) {
+    if (!core || !Array.isArray(core.peers)) return
+    if (core.peers.length > 0) return
+
+    const start = Date.now()
+    while (core.peers.length === 0) {
+      if (Date.now() - start > RESUME_WAIT_MAX_MS) {
+        this.logger.warn('No peers after reconnect wait; retrying anyway')
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, RESUME_WAIT_POLL_MS))
+    }
+  }
+
+  /**
    * Re-establish peers for a blobs core before retrying a download. After the
    * app backgrounds (or the network drops) the swarm connection for this core
-   * is gone; this waits for the swarm to resume, then re-runs the join +
-   * findingPeers + update sequence and awaits it. Resume itself is cheap: the
-   * next attempt reuses the blocks already cached in the core (the output file
-   * is re-streamed from those blocks, not appended to).
+   * is gone; this waits for the swarm to resume and for a peer to be replicating
+   * the core, then re-runs the join + findingPeers + update sequence and awaits
+   * it. Resume itself is cheap: the next attempt reuses the blocks already
+   * cached in the core (the output file is re-streamed from those blocks, not
+   * appended to).
    */
   async _reconnectCore (core) {
     if (!core || !this.hyperswarm) return
@@ -258,6 +279,7 @@ class QVACRegistryClient extends ReadyResource {
     } finally {
       done()
     }
+    await this._waitForPeers(core)
     await core.update()
   }
 
