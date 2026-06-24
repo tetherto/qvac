@@ -375,8 +375,14 @@ function runModel (spec) {
       // After warming, wait for the machine to settle before the measured pass so
       // throttling state doesn't bias it. Bounded tight on mobile to stay under the
       // Device Farm per-test ceiling; emits a [VLMBLOCK] marker recording the wait.
+      //
+      // Desktop runs the guard OFF: thermal settle matters for the phone (and the
+      // self-hosted Mac mini, handled by run-desktop.cjs's own scheduler), but on the
+      // fresh CI desktop VMs there is no throttling to wait out — and the probe never
+      // stabilises on a contended runner, so the guard burned ~56 min there and blew
+      // the per-test ceiling. Warmup + median-over-repeats already cover desktop noise.
       if (WARMUP_REPEATS > 0) {
-        const guardOpts = isMobile ? { mode: 'probe', maxWaitMs: 6000, intervalMs: 800, window: 3 } : undefined
+        const guardOpts = isMobile ? { mode: 'probe', maxWaitMs: 6000, intervalMs: 800, window: 3 } : { mode: 'off' }
         const stability = await stabilityGuard(guardOpts)
         // console.log (not process.stdout) — `bare` (desktop + mobile runtime) has no
         // `process` global; markers go to stdout the same way emitRow does.

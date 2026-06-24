@@ -88,20 +88,30 @@ async function stabilityGuard (opts) {
   const start = Date.now()
   const recent = []
   let last = null
-  for (;;) {
-    last = probeOnce().ms
-    recent.push(last)
-    if (recent.length > o.window) recent.shift()
-    const waited = Date.now() - start
-    if (recent.length >= o.window) {
-      const mid = median(recent)
-      const spread = Math.max(...recent) - Math.min(...recent)
-      if (mid > 0 && (spread / mid) * 100 <= o.tolerancePct) {
-        return { kind: 'probe', value_ms: Math.round(mid), waited_ms: waited }
+  // Hard cap driven by the event loop, NOT an in-loop `Date.now() - start` check:
+  // under `bare` on a contended CI runner that delta failed to trip, so the guard ran
+  // ~56 min and blew the per-test ceiling. A setTimeout fires regardless of how
+  // Date.now() behaves inside the loop; the loop yields via sleep() each iteration, so
+  // the flag is observed within one interval (overshoot <= one probe + interval).
+  let capped = false
+  const timer = setTimeout(() => { capped = true }, o.maxWaitMs)
+  try {
+    for (;;) {
+      last = probeOnce().ms
+      recent.push(last)
+      if (recent.length > o.window) recent.shift()
+      if (recent.length >= o.window) {
+        const mid = median(recent)
+        const spread = Math.max(...recent) - Math.min(...recent)
+        if (mid > 0 && (spread / mid) * 100 <= o.tolerancePct) {
+          return { kind: 'probe', value_ms: Math.round(mid), waited_ms: Date.now() - start }
+        }
       }
+      if (capped) return { kind: 'probe', value_ms: last != null ? Math.round(last) : null, waited_ms: Date.now() - start }
+      await sleep(o.intervalMs)
     }
-    if (waited >= o.maxWaitMs) return { kind: 'probe', value_ms: last != null ? Math.round(last) : null, waited_ms: waited }
-    await sleep(o.intervalMs)
+  } finally {
+    clearTimeout(timer)
   }
 }
 
