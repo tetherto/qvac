@@ -129,8 +129,9 @@ export const vlaInvalidImgSize = createVlaTest(
     validation: 'function',
     fn: (result: unknown) => {
       const r = result as { rejected?: boolean; recoveryRan?: boolean; errorMsg?: string }
-      if (!r.rejected)
+      if (!r.rejected) {
         return { passed: false, output: 'expected run() to reject on img-size mismatch' }
+      }
       if (!/imgWidth|imgHeight|visionImageSize/i.test(r.errorMsg ?? '')) {
         return {
           passed: false,
@@ -277,8 +278,9 @@ export const vlaPi05InvalidImgSize = createVlaTest(
     validation: 'function',
     fn: (result: unknown) => {
       const r = result as { rejected?: boolean; recoveryRan?: boolean; errorMsg?: string }
-      if (!r.rejected)
+      if (!r.rejected) {
         return { passed: false, output: 'expected run() to reject on img-size mismatch' }
+      }
       if (!/imgWidth|imgHeight|visionImageSize/i.test(r.errorMsg ?? '')) {
         return {
           passed: false,

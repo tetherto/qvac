@@ -90,6 +90,7 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     }
   }
 
+  // lunte-disable-next-line require-await
   private async withDelegatedCompletion(
     history: Array<{ role: string; content: string }>,
     stream: boolean
@@ -134,6 +135,7 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     })
   }
 
+  // lunte-disable-next-line require-await
   async e2eCompletion(params: typeof delegatedE2ECompletion.params): Promise<TestResult> {
     return this.withDelegatedCompletion(
       params.history as Array<{ role: string; content: string }>,
@@ -141,6 +143,7 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     )
   }
 
+  // lunte-disable-next-line require-await
   async e2eStreaming(params: typeof delegatedE2EStreaming.params): Promise<TestResult> {
     return this.withDelegatedCompletion(
       params.history as Array<{ role: string; content: string }>,
@@ -148,6 +151,7 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     )
   }
 
+  // lunte-disable-next-line require-await
   async e2eLoadedModelInfo(): Promise<TestResult> {
     return this.withRemoteProvider(async ({ publicKey }) => {
       const modelId = await loadModel({

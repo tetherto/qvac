@@ -15,6 +15,7 @@ test('nmtPlugin.resolveConfig: IndicTrans config passes through without vocab re
   }
 
   const result = await nmtPlugin.resolveConfig!(config, {
+    // lunte-disable-next-line require-await
     resolveModelPath: async () => '/models/indictrans.bin',
     modelSrc: 's3:///indictrans.bin',
     modelType: 'nmtcpp-translation'
@@ -43,6 +44,7 @@ test('nmtPlugin.resolveConfig: Bergamot config strips vocab sources and delegate
 
   const resolvedPaths: string[] = []
   const result = await nmtPlugin.resolveConfig!(config, {
+    // lunte-disable-next-line require-await
     resolveModelPath: async (src) => {
       resolvedPaths.push(String(src))
       return `/resolved/${src}`

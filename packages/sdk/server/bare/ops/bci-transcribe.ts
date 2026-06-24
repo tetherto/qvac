@@ -63,6 +63,7 @@ interface BciStreamableModel {
   cancel(): Promise<void>
 }
 
+// lunte-disable-next-line require-await
 async function runBci(model: BciTranscribableModel, input: NeuralInput): Promise<BciAddonResponse> {
   switch (input.type) {
     case 'base64':

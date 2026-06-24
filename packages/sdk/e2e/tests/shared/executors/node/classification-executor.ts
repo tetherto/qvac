@@ -26,6 +26,7 @@ export class ClassificationExecutor extends AbstractModelExecutor<typeof classif
     })
   ) as never
 
+  // lunte-disable-next-line require-await
   private async ensureModel() {
     return this.resources.ensureLoaded('classification')
   }

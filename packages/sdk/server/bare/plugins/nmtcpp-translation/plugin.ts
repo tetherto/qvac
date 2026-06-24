@@ -135,6 +135,7 @@ export const nmtPlugin = definePlugin({
   addonPackage: ADDON_NMT,
   loadConfigSchema: nmtConfigBaseSchema,
 
+  // lunte-disable-next-line require-await
   async resolveConfig(
     cfg: Record<string, unknown>,
     ctx: ResolveContext

@@ -25,7 +25,7 @@ interface ModelDefinition {
 }
 
 function isModelConstant(value: unknown): value is ModelConstant {
-  if (value == null || typeof value !== 'object') return false
+  if (value === null || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
   return (
     typeof v.name === 'string' &&
@@ -47,7 +47,7 @@ function collectModelConstants(
   out: Map<string, ModelConstant>,
   seen: WeakSet<object>
 ): void {
-  if (value == null || typeof value !== 'object') return
+  if (value === null || typeof value !== 'object') return
   if (isModelConstant(value)) {
     if (!out.has(value.modelId)) out.set(value.modelId, value)
     return

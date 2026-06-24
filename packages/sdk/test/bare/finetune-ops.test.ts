@@ -40,10 +40,13 @@ test('startFinetune: propagates busy rejection from model.finetune()', async (t)
 
   registerModel(modelId, {
     model: {
+      // lunte-disable-next-line require-await
       finetune: async function () {
         throw busyError
       },
+      // lunte-disable-next-line require-await
       pause: async function () {},
+      // lunte-disable-next-line require-await
       cancel: async function () {}
     } as unknown as AnyModel,
     path: '/tmp/busy-model.gguf',
@@ -104,11 +107,14 @@ test('startFinetune: rejects explicit start when a pause checkpoint exists', asy
 
   registerModel(modelId, {
     model: {
+      // lunte-disable-next-line require-await
       finetune: async function () {
         finetuneCalls++
         throw new Error('finetune should not be called for explicit start')
       },
+      // lunte-disable-next-line require-await
       pause: async function () {},
+      // lunte-disable-next-line require-await
       cancel: async function () {}
     } as unknown as AnyModel,
     path: '/tmp/start-paused-model.gguf',
@@ -150,11 +156,14 @@ test('startFinetune: rejects explicit resume when no pause checkpoint exists', a
 
   registerModel(modelId, {
     model: {
+      // lunte-disable-next-line require-await
       finetune: async function () {
         finetuneCalls++
         throw new Error('finetune should not be called for idle resume')
       },
+      // lunte-disable-next-line require-await
       pause: async function () {},
+      // lunte-disable-next-line require-await
       cancel: async function () {}
     } as unknown as AnyModel,
     path: '/tmp/resume-idle-model.gguf',
@@ -188,6 +197,7 @@ test('startFinetune: rejects explicit resume when no pause checkpoint exists', a
   t.ok(caughtError instanceof CompletionFailedError)
 })
 
+// lunte-disable-next-line require-await
 test('getFinetuneState: returns idle when no pause checkpoint exists', async (t) => {
   clearRegistry()
   const modelId = 'finetune-state-idle-model'
@@ -195,10 +205,13 @@ test('getFinetuneState: returns idle when no pause checkpoint exists', async (t)
 
   registerModel(modelId, {
     model: {
+      // lunte-disable-next-line require-await
       finetune: async function () {
         throw new Error('finetune should not be called for getState')
       },
+      // lunte-disable-next-line require-await
       pause: async function () {},
+      // lunte-disable-next-line require-await
       cancel: async function () {}
     } as unknown as AnyModel,
     path: '/tmp/state-idle-model.gguf',
@@ -244,6 +257,7 @@ test('getFinetuneState: returns running while finetune is active', async (t) => 
 
   registerModel(modelId, {
     model: {
+      // lunte-disable-next-line require-await
       finetune: async function () {
         return {
           on() {
@@ -259,7 +273,9 @@ test('getFinetuneState: returns running while finetune is active', async (t) => 
           }
         }
       },
+      // lunte-disable-next-line require-await
       pause: async function () {},
+      // lunte-disable-next-line require-await
       cancel: async function () {}
     } as unknown as AnyModel,
     path: '/tmp/state-running-model.gguf',
@@ -323,6 +339,7 @@ test('finetune: omitted operation preserves automatic addon behavior', async (t)
 
   registerModel(modelId, {
     model: {
+      // lunte-disable-next-line require-await
       finetune: async function (options: { checkpointSaveDir?: string }) {
         finetuneCalls++
         receivedCheckpointDir = options.checkpointSaveDir
@@ -334,6 +351,7 @@ test('finetune: omitted operation preserves automatic addon behavior', async (t)
           removeListener() {
             return this
           },
+          // lunte-disable-next-line require-await
           async await() {
             return {
               op: 'finetune' as const,
@@ -346,7 +364,9 @@ test('finetune: omitted operation preserves automatic addon behavior', async (t)
           }
         }
       },
+      // lunte-disable-next-line require-await
       pause: async function () {},
+      // lunte-disable-next-line require-await
       cancel: async function () {}
     } as unknown as AnyModel,
     path: '/tmp/auto-model.gguf',
@@ -409,6 +429,7 @@ test('startFinetune: detaches progress listeners after completion', async (t) =>
       removeListenerCalls++
       return handle
     },
+    // lunte-disable-next-line require-await
     async await() {
       registeredListener?.(progress)
       return {
@@ -424,10 +445,13 @@ test('startFinetune: detaches progress listeners after completion', async (t) =>
 
   registerModel(modelId, {
     model: {
+      // lunte-disable-next-line require-await
       finetune: async function () {
         return handle
       },
+      // lunte-disable-next-line require-await
       pause: async function () {},
+      // lunte-disable-next-line require-await
       cancel: async function () {}
     } as unknown as AnyModel,
     path: '/tmp/listener-model.gguf',

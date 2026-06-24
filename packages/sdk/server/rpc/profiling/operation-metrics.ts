@@ -140,10 +140,12 @@ registerOperationMetrics<{ modelId?: string }, { stats?: CompletionStats }>({
   getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
   fromFinalChunk: (res) => {
     const gauges: Record<string, number> = {}
-    if (res.stats?.timeToFirstToken !== undefined)
+    if (res.stats?.timeToFirstToken !== undefined) {
       gauges['timeToFirstToken'] = res.stats.timeToFirstToken
-    if (res.stats?.tokensPerSecond !== undefined)
+    }
+    if (res.stats?.tokensPerSecond !== undefined) {
       gauges['tokensPerSecond'] = res.stats.tokensPerSecond
+    }
     if (res.stats?.cacheTokens !== undefined) gauges['cacheTokens'] = res.stats.cacheTokens
     const modelExecMs = readModelExecutionMs(res)
     if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
@@ -162,10 +164,12 @@ registerOperationMetrics<{ modelId?: string }, { stats?: TranslationStats }>({
     // Common stats
     if (res.stats?.totalTime !== undefined) gauges['totalTime'] = res.stats.totalTime
     if (res.stats?.totalTokens !== undefined) gauges['totalTokens'] = res.stats.totalTokens
-    if (res.stats?.tokensPerSecond !== undefined)
+    if (res.stats?.tokensPerSecond !== undefined) {
       gauges['tokensPerSecond'] = res.stats.tokensPerSecond
-    if (res.stats?.timeToFirstToken !== undefined)
+    }
+    if (res.stats?.timeToFirstToken !== undefined) {
       gauges['timeToFirstToken'] = res.stats.timeToFirstToken
+    }
     // NMT-specific
     if (res.stats?.decodeTime !== undefined) gauges['decodeTime'] = res.stats.decodeTime
     if (res.stats?.encodeTime !== undefined) gauges['encodeTime'] = res.stats.encodeTime
@@ -186,15 +190,18 @@ registerOperationMetrics<{ modelId?: string }, { stats?: TranscribeStats }>({
     // Common stats
     if (res.stats?.audioDuration !== undefined) gauges['audioDuration'] = res.stats.audioDuration
     if (res.stats?.realTimeFactor !== undefined) gauges['realTimeFactor'] = res.stats.realTimeFactor
-    if (res.stats?.tokensPerSecond !== undefined)
+    if (res.stats?.tokensPerSecond !== undefined) {
       gauges['tokensPerSecond'] = res.stats.tokensPerSecond
+    }
     if (res.stats?.totalTokens !== undefined) gauges['totalTokens'] = res.stats.totalTokens
     if (res.stats?.totalSegments !== undefined) gauges['totalSegments'] = res.stats.totalSegments
     // whisper-specific timings
-    if (res.stats?.whisperEncodeTime !== undefined)
+    if (res.stats?.whisperEncodeTime !== undefined) {
       gauges['whisperEncodeTime'] = res.stats.whisperEncodeTime
-    if (res.stats?.whisperDecodeTime !== undefined)
+    }
+    if (res.stats?.whisperDecodeTime !== undefined) {
       gauges['whisperDecodeTime'] = res.stats.whisperDecodeTime
+    }
     // parakeet-specific timings
     if (res.stats?.encoderTime !== undefined) gauges['encoderTime'] = res.stats.encoderTime
     if (res.stats?.decoderTime !== undefined) gauges['decoderTime'] = res.stats.decoderTime
@@ -244,8 +251,9 @@ registerOperationMetrics<{ modelId?: string }, { stats?: EmbedStats }>({
     const modelExecMs = readModelExecutionMs(res)
     if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
     if (res.stats?.totalTime !== undefined) gauges['totalTime'] = res.stats.totalTime
-    if (res.stats?.tokensPerSecond !== undefined)
+    if (res.stats?.tokensPerSecond !== undefined) {
       gauges['tokensPerSecond'] = res.stats.tokensPerSecond
+    }
     if (res.stats?.totalTokens !== undefined) gauges['totalTokens'] = res.stats.totalTokens
     return Object.keys(gauges).length > 0 ? gauges : undefined
   }
@@ -258,8 +266,9 @@ registerOperationMetrics<{ modelId?: string }, { stats?: OCRStats }>({
   fromFinalChunk: (res) => {
     const gauges: Record<string, number> = {}
     if (res.stats?.detectionTime !== undefined) gauges['detectionTime'] = res.stats.detectionTime
-    if (res.stats?.recognitionTime !== undefined)
+    if (res.stats?.recognitionTime !== undefined) {
       gauges['recognitionTime'] = res.stats.recognitionTime
+    }
     if (res.stats?.totalTime !== undefined) gauges['totalTime'] = res.stats.totalTime
     const modelExecMs = readModelExecutionMs(res)
     if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
@@ -292,8 +301,9 @@ registerOperationMetrics<{ modelId?: string }, { stats?: VideoStats }>({
     if (res.stats.generationMs !== undefined) gauges['generationMs'] = res.stats.generationMs
     if (res.stats.totalSteps !== undefined) gauges['totalSteps'] = res.stats.totalSteps
     if (res.stats.totalVideos !== undefined) gauges['totalVideos'] = res.stats.totalVideos
-    if (res.stats.totalVideoFrames !== undefined)
+    if (res.stats.totalVideoFrames !== undefined) {
       gauges['totalVideoFrames'] = res.stats.totalVideoFrames
+    }
     if (res.stats.videoFrames !== undefined) gauges['videoFrames'] = res.stats.videoFrames
     if (res.stats.fps !== undefined) gauges['fps'] = res.stats.fps
     return Object.keys(gauges).length > 0 ? gauges : undefined

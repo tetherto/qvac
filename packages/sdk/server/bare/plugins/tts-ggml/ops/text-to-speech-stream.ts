@@ -115,7 +115,7 @@ export async function* textToSpeechStream(
   )
 
   for await (const data of response.iterate()) {
-    if (data.outputArray == null) {
+    if (data.outputArray === null) {
       continue
     }
     const buf = Array.from(data.outputArray)

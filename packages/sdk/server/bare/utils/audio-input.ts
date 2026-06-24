@@ -10,6 +10,7 @@ import { AudioFileNotFoundError, InvalidAudioChunkError } from '@/utils/errors-s
  *
  * Shared by all transcription plugins (Whisper, Parakeet, etc.).
  */
+// lunte-disable-next-line require-await
 export async function createAudioStream(
   audioChunk: AudioInput,
   audioFormat: AudioFormat

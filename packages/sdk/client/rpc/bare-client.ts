@@ -5,13 +5,12 @@ import type {
   CanonicalModelType,
   ProfilingRequestMeta
 } from '@/schemas'
-import { normalizeModelType, PROFILING_KEY } from '@/schemas'
+import { normalizeModelType, PROFILING_KEY, createErrorResponse } from '@/schemas'
 import os from 'bare-os'
 import type { Readable } from 'bare-stream'
 import { registry } from '@/server/rpc/handler-registry'
 import type { HandlerEntry } from '@/server/rpc/handler-utils'
 import { handlerSupportsProgress, selectHandler } from '@/server/rpc/handler-selection'
-import { createErrorResponse } from '@/schemas'
 import { RPCNoHandlerError, RPCRequestNotSentError } from '@/utils/errors-client'
 import { initializeConfig } from '@/client/init-hooks'
 import { setSDKConfig } from '@/server/bare/registry/config-registry'

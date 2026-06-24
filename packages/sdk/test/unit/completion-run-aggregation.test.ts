@@ -112,6 +112,7 @@ test('buildFinalFromEvents: attaches handlers to event-derived tool calls', (t) 
     { type: 'toolCall', seq: 0, call },
     { type: 'completionDone', seq: 1 }
   ]
+  // lunte-disable-next-line require-await
   const handler = async (args: Record<string, unknown>) => `Hi ${args['name']}`
   const handlers: ToolHandlerMap = new Map([['greet', handler]])
 

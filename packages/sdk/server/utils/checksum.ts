@@ -4,6 +4,7 @@ import { nowMs } from '@/profiling'
 import type { DownloadHooks } from '@/server/rpc/handlers/load-model/types'
 import { type Buffer } from 'bare-buffer'
 
+// lunte-disable-next-line require-await
 export async function calculateFileChecksum(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     try {

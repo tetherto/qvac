@@ -114,6 +114,7 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
     }
   }
 
+  // lunte-disable-next-line require-await
   async invalidResponseType(
     _params: VerifyErrorCodesParams,
     expectation: Expectation
@@ -149,6 +150,7 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
     }
   }
 
+  // lunte-disable-next-line require-await
   async structuredErrorCode(
     _params: VerifyErrorCodesParams,
     expectation: Expectation

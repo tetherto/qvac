@@ -31,6 +31,7 @@ test('ttsPlugin resolveConfig: legacy ONNX Chatterbox shape throws LegacyTtsMode
 
   try {
     await ttsPlugin.resolveConfig!(legacyConfig, {
+      // lunte-disable-next-line require-await
       resolveModelPath: async () => '',
       modelSrc: 's3:///legacy/model',
       modelType: 'tts-ggml'

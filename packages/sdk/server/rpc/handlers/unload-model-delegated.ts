@@ -1,9 +1,12 @@
 import type { UnloadModelRequest, UnloadModelResponse } from '@/schemas'
-import { getModelEntry, unregisterModel } from '@/server/bare/registry/model-registry'
+import {
+  getModelEntry,
+  unregisterModel,
+  getRegistryStats
+} from '@/server/bare/registry/model-registry'
 import { getRPC } from '@/server/bare/delegate-rpc-client'
 import { send } from '@/server/rpc/delegate-transport'
 import { hasActiveProviders } from '@/server/bare/hyperswarm'
-import { getRegistryStats } from '@/server/bare/registry/model-registry'
 import { ModelIsDelegatedError } from '@/utils/errors-server'
 import { getServerLogger } from '@/logging'
 

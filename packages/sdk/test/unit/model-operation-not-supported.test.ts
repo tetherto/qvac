@@ -41,6 +41,7 @@ test('dispatch: throws ModelOperationNotSupportedError with bundle-aware suggest
     addonPackage: '@qvac/test-addon',
     loadConfigSchema: z.object({}),
     createModel: function () {
+      // lunte-disable-next-line require-await
       return { model: { load: async function () {} } }
     },
     handlers: {
@@ -59,6 +60,7 @@ test('dispatch: throws ModelOperationNotSupportedError with bundle-aware suggest
     addonPackage: '@qvac/test-addon',
     loadConfigSchema: z.object({}),
     createModel: function () {
+      // lunte-disable-next-line require-await
       return { model: { load: async function () {} } }
     },
     handlers: {

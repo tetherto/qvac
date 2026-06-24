@@ -20,7 +20,7 @@ import {
   type LlmConfig,
   type LlmConfigInput
 } from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
+import { createStreamLogger, registerAddonLogger, getServerLogger } from '@/logging'
 import { expandGGUFIntoShards } from '@/server/utils'
 import { completion } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stream'
 import { finetune } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
@@ -32,7 +32,6 @@ import { createCompletionNormalizer } from '@/server/utils/completion-normalizer
 import { detectToolDialect } from '@/server/utils/tool-integration'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { getServerLogger } from '@/logging'
 import { ContextOverflowError } from '@/utils/errors-server'
 import {
   isAddonContextOverflowError,

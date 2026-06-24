@@ -717,6 +717,7 @@ async function downloadShardedFilesToFilesystem(
   return getShardPath(hyperdriveKey, allFiles[0]!)
 }
 
+// lunte-disable-next-line require-await
 export async function downloadModelFromHyperdrive(
   hyperdriveKey: string,
   modelFileName: string,

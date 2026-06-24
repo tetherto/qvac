@@ -2,6 +2,7 @@ import type { FinetuneProgressResponse, FinetuneRequest, FinetuneResult } from '
 import { dispatchPluginReply } from '@/server/rpc/handlers/plugin-dispatch'
 import { startFinetune } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
 
+// lunte-disable-next-line require-await
 export async function handleFinetune(
   request: FinetuneRequest,
   progressCallback?: (update: FinetuneProgressResponse) => void

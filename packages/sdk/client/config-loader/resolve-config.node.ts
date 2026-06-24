@@ -114,6 +114,7 @@ async function loadTsConfig(filePath: string): Promise<QvacConfig> {
 }
 
 /** Load and validate a config file at an explicit path (used by RPC init and commands). */
+// lunte-disable-next-line require-await
 export async function loadConfigFromPath(configPath: string): Promise<QvacConfig> {
   const ext = path.extname(configPath).toLowerCase()
 

@@ -254,6 +254,7 @@ async function withMockClassificationPlugin<T>(
     loadConfigSchema: classificationConfigSchema,
     skipPrimaryModelPathValidation: true,
     createModel: function () {
+      // lunte-disable-next-line require-await
       return { model: { load: async function () {} } }
     },
     handlers: {
@@ -351,6 +352,7 @@ async function withRegisteredClassificationModel<T>(
 ): Promise<T> {
   const modelId = `test-classify-${Math.random().toString(36).slice(2, 10)}`
   const fakeModel = {
+    // lunte-disable-next-line require-await
     load: async function () {},
     classify: options.classifyImpl
   } as unknown as AnyModel
@@ -375,6 +377,7 @@ test('classify op: decodes base64 image and forwards bytes to model.classify', a
 
   await withRegisteredClassificationModel(
     {
+      // lunte-disable-next-line require-await
       classifyImpl: async function (image, opts) {
         observedImage = image
         observedOpts = opts
@@ -405,6 +408,7 @@ test('classify op: forwards topK/width/height/channels when provided', async fun
 
   await withRegisteredClassificationModel(
     {
+      // lunte-disable-next-line require-await
       classifyImpl: async function (_image, opts) {
         observedOpts = opts
         return []
@@ -432,6 +436,7 @@ test('classify op: forwards topK/width/height/channels when provided', async fun
 test('classify op: throws when loaded model does not support classify()', async function (t) {
   const modelId = `test-classify-noop-${Math.random().toString(36).slice(2, 10)}`
   registerModel(modelId, {
+    // lunte-disable-next-line require-await
     model: { load: async function () {} } as unknown as AnyModel,
     path: '',
     config: {},

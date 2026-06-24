@@ -75,6 +75,7 @@ test('defineHandler: still works for non-duplex handlers', (t) => {
     requestSchema,
     responseSchema,
     streaming: false,
+    // lunte-disable-next-line require-await
     handler: async function (_request) {
       return { ok: true }
     }
@@ -114,6 +115,7 @@ test('TranscribeStreamSession: interface includes destroy()', (t) => {
     },
     [Symbol.asyncIterator]() {
       return {
+        // lunte-disable-next-line require-await
         async next() {
           return { done: true as const, value: undefined }
         }
@@ -143,6 +145,7 @@ test('TranscribeStreamSession: destroy() tears down both streams', (t) => {
     },
     [Symbol.asyncIterator]() {
       return {
+        // lunte-disable-next-line require-await
         async next() {
           return { done: true as const, value: undefined }
         }
@@ -183,6 +186,7 @@ test('BciTranscribeStreamSession: interface includes requestId and destroy()', (
     },
     [Symbol.asyncIterator]() {
       return {
+        // lunte-disable-next-line require-await
         async next() {
           return { done: true as const, value: undefined }
         }
@@ -378,6 +382,7 @@ test('duplex integration: server error propagates as error response', async (t) 
   )
 })
 
+// lunte-disable-next-line require-await
 test('duplex integration: session single-use iteration guard', async (t) => {
   let consumed = false
   const fakeResponses = (async function* () {

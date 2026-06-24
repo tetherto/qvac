@@ -65,7 +65,7 @@ export async function* textToSpeech(
     if (!stream) {
       let completeBuffer: number[] = []
       for await (const data of response.iterate()) {
-        if (data.outputArray != null) {
+        if (data.outputArray !== null) {
           completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
         }
       }
@@ -76,7 +76,7 @@ export async function* textToSpeech(
     }
 
     for await (const data of response.iterate()) {
-      if (data.outputArray == null) continue
+      if (data.outputArray === null) continue
       const buf = Array.from(data.outputArray)
       if (buf.length === 0) continue
       yield {

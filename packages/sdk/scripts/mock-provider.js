@@ -21,6 +21,9 @@ swarm.on('connection', (conn) => {
   console.log(`📡 New connection established from: ${conn.remotePublicKey?.toString('hex')}`)
 
   // Create RPC instance on the Hyperswarm connection
+  // The instance is retained for its lifetime; it handles requests via the
+  // callback and must not be GC'd, so the binding is intentionally unused.
+  // lunte-disable-next-line no-unused-vars
   const rpc = new RPC(conn, async (req) => {
     try {
       const message = JSON.parse(req.data.toString())

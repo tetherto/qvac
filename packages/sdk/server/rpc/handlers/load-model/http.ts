@@ -407,6 +407,7 @@ async function performHttpDownload(
   }
 }
 
+// lunte-disable-next-line require-await
 export async function downloadModelFromHttp(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
@@ -514,6 +515,7 @@ export async function downloadModelFromHttp(
   return applyJoinedDownloadStats(result, hooks)
 }
 
+// lunte-disable-next-line require-await
 async function downloadShardedModelFromHttp(
   shardUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
@@ -640,6 +642,7 @@ async function downloadShardedModelFromHttp(
   return applyJoinedDownloadStats(result, hooks)
 }
 
+// lunte-disable-next-line require-await
 async function downloadShardedModelFromArchive(
   archiveUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,

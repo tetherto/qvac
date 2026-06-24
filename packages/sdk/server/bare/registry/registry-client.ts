@@ -38,6 +38,7 @@ function isFdLockError(error: unknown): boolean {
   return false
 }
 
+// lunte-disable-next-line require-await
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -95,6 +96,7 @@ async function initRegistryClient(): Promise<QVACRegistryClient> {
   throw lastError
 }
 
+// lunte-disable-next-line require-await
 export async function getRegistryClient(): Promise<QVACRegistryClient> {
   if (registryClient) {
     logger.debug('Registry client reused')

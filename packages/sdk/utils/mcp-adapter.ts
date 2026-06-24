@@ -54,6 +54,7 @@ function convertMcpToolToTool(mcpTool: {
 }
 
 function createMcpToolHandler(client: McpClient, toolName: string): ToolHandler {
+  // lunte-disable-next-line require-await
   return async (args: Record<string, unknown>) => {
     return client.callTool({ name: toolName, arguments: args })
   }

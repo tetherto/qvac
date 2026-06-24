@@ -136,7 +136,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
       }
 
       const timeLabel =
-        stats.totalTime != null
+        stats.totalTime !== null
           ? `totalTime: ${stats.totalTime}ms`
           : `ttft: ${stats.timeToFirstToken}ms, tps: ${stats.tokensPerSecond?.toFixed(1)}`
       return {

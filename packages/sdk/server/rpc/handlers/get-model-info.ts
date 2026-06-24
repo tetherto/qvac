@@ -110,6 +110,7 @@ export async function handleGetModelInfo(
   }
 }
 
+// lunte-disable-next-line require-await
 async function handleShardedModel(
   cacheKey: string,
   shardMetadata: readonly {
@@ -251,6 +252,7 @@ async function checkCacheStatus(
   return result
 }
 
+// lunte-disable-next-line require-await
 async function handleSingleFileModel(
   registryPath: string,
   expectedSize: number,

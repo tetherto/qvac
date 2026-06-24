@@ -1,13 +1,13 @@
 // ESM script to rewrite TS path aliases (e.g. "@/..." ) to relative paths in dist
 // Run after `tsc` emits JS. Uses `tsconfig.json` paths + outDir to compute targets.
 
-import { promises as fsp } from 'fs'
-import fs from 'fs'
+import fs, { promises as fsp } from 'fs'
 import path from 'path'
 import ts from 'typescript'
 
 const projectRoot = process.cwd()
 
+// lunte-disable-next-line require-await
 async function readTsConfigJson(filePath) {
   const result = ts.readConfigFile(filePath, (p) => fs.readFileSync(p, 'utf8'))
   if (result.error) {
@@ -76,8 +76,8 @@ function matchPathMapping(specifier, pathsMap) {
 
 function toJsCandidate(distRoot, sourceRel, targetExtension = '.js') {
   // sourceRel is like './server/rpc' or './index.ts'
-  let withoutDot = sourceRel.startsWith('./') ? sourceRel.slice(2) : sourceRel
-  let distCandidate = path.join(distRoot, withoutDot)
+  const withoutDot = sourceRel.startsWith('./') ? sourceRel.slice(2) : sourceRel
+  const distCandidate = path.join(distRoot, withoutDot)
 
   const tryFiles = []
   if (distCandidate.endsWith('.ts') || distCandidate.endsWith('.tsx')) {

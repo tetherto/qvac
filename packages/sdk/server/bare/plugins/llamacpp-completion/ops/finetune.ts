@@ -197,6 +197,7 @@ export function getFinetuneState(params: FinetuneGetStateRequest): FinetuneResul
   }
 }
 
+// lunte-disable-next-line require-await
 export async function finetune(
   request: FinetuneRequest,
   onProgress?: (progress: FinetuneProgress) => void

@@ -290,6 +290,7 @@ export function createKvCacheSession(
     return makeHandle(cachePath, registryKey)
   }
 
+  // lunte-disable-next-line require-await
   async function beginTurn(input: BeginTurnInput): Promise<TurnHandle> {
     if (input.kind === 'custom') return beginCustom(input)
     return beginAuto(input)

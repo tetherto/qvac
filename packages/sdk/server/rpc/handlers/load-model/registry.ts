@@ -252,6 +252,7 @@ async function downloadShardedFilesFromRegistry(
   return getShardPath(cacheKey, firstShardFilename)
 }
 
+// lunte-disable-next-line require-await
 export async function downloadModelFromRegistry(
   registryPath: string,
   registrySource: string,

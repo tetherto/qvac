@@ -13,6 +13,7 @@ function readImageBytes(name: string): Uint8Array {
 
 export class NodeDiffusionExecutor extends SharedDiffusionExecutor {
   // Resolve string filenames declared in test params to bytes via Node fs.
+  // lunte-disable-next-line require-await
   protected override async resolveParams(p: DiffusionParams): Promise<DiffusionParams> {
     const out: DiffusionParams = { ...p }
 

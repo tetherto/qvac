@@ -267,7 +267,7 @@
     "expo-device": "^8.0.10",
     "expo-file-system": "^19.0.21",
     "husky": "^9.1.7",
-    "lunte": "^1.8.1",
+    "lunte": "^1.8.2",
     "pear-pipe": "^1.0.6",
     "prettier": "^3.8.4",
     "prettier-config-holepunch": "^2.0.0",

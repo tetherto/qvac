@@ -153,6 +153,7 @@ export const ttsPlugin = definePlugin({
   addonPackage: ADDON_TTS,
   loadConfigSchema: ttsConfigSchema,
 
+  // lunte-disable-next-line require-await
   async resolveConfig(cfg: Record<string, unknown>, ctx: ResolveContext) {
     const { ttsEngine } = cfg as { ttsEngine?: string }
 

@@ -13,6 +13,7 @@ function makeValidPlugin(modelType: string): QvacPlugin {
     addonPackage: `@qvac/test-${modelType}`,
     loadConfigSchema: z.object({}),
     createModel() {
+      // lunte-disable-next-line require-await
       return { model: { load: async function () {} } }
     },
     handlers: {
@@ -20,6 +21,7 @@ function makeValidPlugin(modelType: string): QvacPlugin {
         requestSchema: z.object({}),
         responseSchema: z.object({ ok: z.boolean() }),
         streaming: false,
+        // lunte-disable-next-line require-await
         handler: async function () {
           return { ok: true }
         }
@@ -79,6 +81,7 @@ test('plugins([invalid]) throws validation error (fail-fast)', function (t) {
       displayName: '',
       addonPackage: '@qvac/test-broken',
       createModel() {
+        // lunte-disable-next-line require-await
         return { model: { load: async function () {} } }
       },
       handlers: {}

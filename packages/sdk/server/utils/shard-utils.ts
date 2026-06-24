@@ -90,6 +90,7 @@ export function parsePatternBasedShardUrl(shardUrl: string): {
  * @returns Path to the created tensors.txt file
  * @throws If not a sharded model or extraction fails
  */
+// lunte-disable-next-line require-await
 export async function extractTensorsFromShards(
   shardDir: string,
   shardFilename: string

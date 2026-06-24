@@ -2,9 +2,8 @@ import RPC from 'bare-rpc'
 import spawn, { type ChildProcess as BareChildProcess } from 'bare-runtime/spawn'
 import type { Duplex, DuplexEvents } from 'bare-stream'
 import { randomBytes } from 'node:crypto'
-import { existsSync, unlinkSync } from 'node:fs'
+import fs, { existsSync, unlinkSync } from 'node:fs'
 import { createServer } from 'node:net'
-import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -468,6 +467,7 @@ function rejectOnAbort(signal: AbortSignal): Promise<never> {
   })
 }
 
+// lunte-disable-next-line require-await
 export async function getRPC() {
   return ensureRPC()
 }

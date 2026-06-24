@@ -109,6 +109,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
 
   // Subclasses override this to resolve string filenames in init_image /
   // init_images / image to Uint8Array bytes via their platform's filesystem.
+  // lunte-disable-next-line require-await
   protected async resolveParams(p: DiffusionParams): Promise<DiffusionParams> {
     return p
   }
@@ -180,7 +181,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
       const finalStats = await stats
 
       const hasOutputs = buffers.length > 0
-      const hasStats = finalStats != null
+      const hasStats = finalStats !== null
       const hasProgress = ticks.length > 0
       const progressValid = ticks.every(
         (t) =>
@@ -223,6 +224,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
 
   // Compare img2img vs same-seed/prompt baseline with init_image dropped.
   // If the server silently drops init_image, byte delta collapses and this fails.
+  // lunte-disable-next-line require-await
   async img2imgVsTxt2imgBaseline(params: DiffusionParams): Promise<TestResult> {
     if (params.seed === undefined) {
       return {
@@ -238,6 +240,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
 
   // Compare fusion vs same-seed/prompt baseline with init_images dropped.
   // If the addon silently ignores init_images, byte delta collapses and this fails.
+  // lunte-disable-next-line require-await
   async fusionFlux2Basic(params: DiffusionParams): Promise<TestResult> {
     if (params.seed === undefined) {
       return {
@@ -396,8 +399,9 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     if (p.batch_count !== undefined) params.batch_count = p.batch_count
     if (p.vae_tiling !== undefined) params.vae_tiling = p.vae_tiling
     if (p.increase_ref_index !== undefined) params.increase_ref_index = p.increase_ref_index
-    if (p.auto_resize_ref_image !== undefined)
+    if (p.auto_resize_ref_image !== undefined) {
       params.auto_resize_ref_image = p.auto_resize_ref_image
+    }
     if (p.lora !== undefined) params.lora = p.lora
     if (p.strength !== undefined) params.strength = p.strength
     if (p.upscale !== undefined) params.upscale = p.upscale

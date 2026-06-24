@@ -68,6 +68,7 @@ function findConfigFile(searchDir: string): string | undefined {
  * 3. SDK defaults
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- matches Node/Expo resolver signature
+// lunte-disable-next-line require-await
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
   const configPath = env['QVAC_CONFIG_PATH']
 

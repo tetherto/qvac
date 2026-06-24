@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { z } from 'zod'
-import { clearPlugins, registerPlugin } from '@/server/plugins'
+import { clearPlugins, registerPlugin, getPlugin, hasPlugin } from '@/server/plugins'
 import {
   registerModel,
   unregisterModel,
@@ -15,7 +15,6 @@ import {
   PluginResponseValidationFailedError
 } from '@/utils/errors-server'
 import { SDK_SERVER_ERROR_CODES, ModelType, type QvacPlugin } from '@/schemas'
-import { getPlugin, hasPlugin } from '@/server/plugins'
 
 let idCounter = 0
 function makeId(prefix: string) {
@@ -32,6 +31,7 @@ test('registerPlugin: rejects invalid plugin definitions (fail-fast)', function 
     addonPackage: '@qvac/test-addon',
     createModel: function () {
       return {
+        // lunte-disable-next-line require-await
         model: { load: async function () {} }
       }
     },
@@ -40,6 +40,7 @@ test('registerPlugin: rejects invalid plugin definitions (fail-fast)', function 
         requestSchema: z.object({}),
         responseSchema: z.object({ ok: z.boolean() }),
         streaming: false,
+        // lunte-disable-next-line require-await
         handler: async function () {
           return { ok: true }
         }
@@ -73,6 +74,7 @@ test('pluginInvokeStream: validates streamed chunks against responseSchema', asy
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
+        // lunte-disable-next-line require-await
         model: { load: async function () {} }
       }
     },
@@ -152,6 +154,7 @@ test('registerPlugin: accepts valid plugin and retrieves it', function (t) {
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
+        // lunte-disable-next-line require-await
         model: { load: async function () {} }
       }
     },
@@ -160,6 +163,7 @@ test('registerPlugin: accepts valid plugin and retrieves it', function (t) {
         requestSchema: z.object({}),
         responseSchema: z.object({ ok: z.boolean() }),
         streaming: false,
+        // lunte-disable-next-line require-await
         handler: async function () {
           return { ok: true }
         }
@@ -191,6 +195,7 @@ test('registerPlugin: rejects duplicate modelType registration', function (t) {
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
+        // lunte-disable-next-line require-await
         model: { load: async function () {} }
       }
     },
@@ -234,6 +239,7 @@ test('registerPlugin: rejects alias as modelType', function (t) {
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
+        // lunte-disable-next-line require-await
         model: { load: async function () {} }
       }
     },

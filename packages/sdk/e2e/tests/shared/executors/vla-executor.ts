@@ -40,6 +40,7 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
     })
   ) as never
 
+  // lunte-disable-next-line require-await
   private async ensureModel(dep: string) {
     return this.resources.ensureLoaded(dep)
   }

@@ -52,8 +52,9 @@ export class RegistryExecutor extends AbstractModelExecutor<typeof registryTests
       const entry = models[0]!
       const required = ['name', 'registryPath', 'registrySource', 'modelId', 'addon', 'engine']
       const missing = required.filter((f) => (entry as Record<string, unknown>)[f] === undefined)
-      if (missing.length > 0)
+      if (missing.length > 0) {
         return { passed: false, output: `Missing fields: ${missing.join(', ')}` }
+      }
     }
 
     return ValidationHelpers.validate(models, exp)
@@ -95,8 +96,9 @@ export class RegistryExecutor extends AbstractModelExecutor<typeof registryTests
       const mismatches = fields.filter(
         (f) => String(listEntry![f]) !== String((model as Record<string, unknown>)[f])
       )
-      if (mismatches.length > 0)
+      if (mismatches.length > 0) {
         return { passed: false, output: `Mismatches: ${mismatches.join(', ')}` }
+      }
     }
 
     return ValidationHelpers.validate(model.name, exp)

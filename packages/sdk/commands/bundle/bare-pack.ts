@@ -28,6 +28,7 @@ function resolveBarePackBin(): string | null {
   }
 }
 
+// lunte-disable-next-line require-await
 export async function runBarePack(options: RunBarePackOptions): Promise<void> {
   const { entryPath, outputPath, hosts, importsMapPath, deferModules, quiet, logger } = options
 

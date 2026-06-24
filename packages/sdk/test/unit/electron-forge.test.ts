@@ -164,6 +164,7 @@ function makeFakeCommands() {
   return {
     calls,
     commands: {
+      // lunte-disable-next-line require-await
       bundleSdk: async (opts: { hosts?: string[] }) => {
         calls.bundleHosts = opts.hosts ?? null
         return {
@@ -174,6 +175,7 @@ function makeFakeCommands() {
           manifestPath: '/fake/qvac/addons.manifest.json'
         }
       },
+      // lunte-disable-next-line require-await
       verifyBundle: async (opts: { hosts?: string[] }) => {
         calls.verifyHosts = opts.hosts ?? null
         return { issues: [], addons: [] }
@@ -208,9 +210,11 @@ test('runBundleAndVerify: defaults to host arch when hosts is null', async (t) =
 
 test('runBundleAndVerify: bundleSdk failure is wrapped in QvacForgePluginError', async (t) => {
   const commands = {
+    // lunte-disable-next-line require-await
     bundleSdk: async () => {
       throw new Error('bare-pack exploded')
     },
+    // lunte-disable-next-line require-await
     verifyBundle: async () => ({ issues: [], addons: [] }),
     hasErrors: () => false,
     formatVerifyBundleResult: () => ''

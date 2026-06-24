@@ -13,6 +13,7 @@ function createTimeoutPromise(timeoutMs: number): Promise<never> {
  * Wraps a promise with an optional timeout
  * If no timeout is provided, returns the original promise unchanged
  */
+// lunte-disable-next-line require-await
 export async function withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
   if (timeoutMs === undefined) {
     return promise

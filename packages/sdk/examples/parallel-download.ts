@@ -31,13 +31,13 @@ try {
       assetSrc: asset.src,
       onProgress: (progress) => {
         const t = timers[asset.name]!
-        if (t.firstProgress == null) {
+        if (t.firstProgress === null) {
           t.firstProgress = now()
           console.log(
             `▸ [${asset.name}] first progress at ${((t.firstProgress - wallStart) / 1000).toFixed(1)}s — ${progress.percentage}%`
           )
         }
-        if (progress.percentage === 100 && t.end == null) {
+        if (progress.percentage === 100 && t.end === null) {
           t.end = now()
           console.log(`▸ [${asset.name}] done at ${((t.end - wallStart) / 1000).toFixed(1)}s`)
         }
@@ -58,8 +58,8 @@ try {
     const status = result.status === 'fulfilled' ? 'OK' : 'FAILED'
     const reason = result.status === 'rejected' ? ` — ${result.reason}` : ''
     const timeToFirst =
-      t.firstProgress != null ? `${((t.firstProgress - t.start) / 1000).toFixed(1)}s` : 'N/A'
-    const total = t.end != null ? `${((t.end - t.start) / 1000).toFixed(1)}s` : 'N/A'
+      t.firstProgress !== null ? `${((t.firstProgress - t.start) / 1000).toFixed(1)}s` : 'N/A'
+    const total = t.end !== null ? `${((t.end - t.start) / 1000).toFixed(1)}s` : 'N/A'
 
     console.log(`▸ ${status} ${asset.name}: first-progress=${timeToFirst}, total=${total}${reason}`)
   }

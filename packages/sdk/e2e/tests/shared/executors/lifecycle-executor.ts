@@ -152,8 +152,9 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
       } catch (error) {
         lastError = error
       }
-      if (i < maxAttempts - 1)
+      if (i < maxAttempts - 1) {
         await new Promise((r) => setTimeout(r, ENSURE_ACTIVE_BACKOFF_BASE_MS * (i + 1)))
+      }
     }
     const reason = lastError ? formatError(lastError) : `last observed state: "${lastState}"`
     throw new Error(

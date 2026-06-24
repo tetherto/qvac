@@ -1,6 +1,5 @@
-import { promises as fsPromises } from 'bare-fs'
+import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import fs from 'bare-fs'
 import { createGunzip } from 'bare-zlib'
 import tarStream from 'tar-stream'
 import {
@@ -50,6 +49,7 @@ function isModelFile(entryName: string) {
   return ALLOWED_MODEL_EXTENSIONS.some((ext) => basename.toLowerCase().endsWith(ext))
 }
 
+// lunte-disable-next-line require-await
 async function isGzip(archivePath: string) {
   return new Promise<boolean>((resolve, reject) => {
     const stream = fs.createReadStream(archivePath, { start: 0, end: 2 })
@@ -98,6 +98,7 @@ async function extractArchive(archivePath: string, extractDir: string, signal?: 
   await extractTarStream(archivePath, extractDir, isGzipped, signal)
 }
 
+// lunte-disable-next-line require-await
 export async function extractTarStream(
   archivePath: string,
   extractDir: string,

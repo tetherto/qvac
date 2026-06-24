@@ -55,10 +55,12 @@ test('embed: cancel-by-requestId routes through registry and rejects with Infere
     stats: { total_time_ms: 1, tokens_per_second: 1, total_tokens: 1 }
   }
   const model = {
+    // lunte-disable-next-line require-await
     async run() {
       return response
     },
     addon: {
+      // lunte-disable-next-line require-await
       async cancel() {
         addonCancelCalls++
       }
@@ -127,10 +129,12 @@ test('embed: cancel-by-modelId+kind aborts the in-flight embed', async (t) => {
     stats: { total_time_ms: 1, tokens_per_second: 1, total_tokens: 1 }
   }
   const model = {
+    // lunte-disable-next-line require-await
     async run() {
       return response
     },
     addon: {
+      // lunte-disable-next-line require-await
       async cancel() {}
     }
   }
@@ -186,10 +190,12 @@ test("embed: in-flight request is registered with kind='embeddings'", async (t) 
     stats: { total_time_ms: 1, tokens_per_second: 1, total_tokens: 1 }
   }
   const model = {
+    // lunte-disable-next-line require-await
     async run() {
       return response
     },
     addon: {
+      // lunte-disable-next-line require-await
       async cancel() {}
     }
   }
@@ -245,6 +251,7 @@ test('translate (NMT): cancel-by-modelId+kind aborts the batch path', async (t) 
     stats: { totalTime: 1, totalTokens: 1 }
   }
   const model = {
+    // lunte-disable-next-line require-await
     async run() {
       return response
     },
@@ -254,6 +261,7 @@ test('translate (NMT): cancel-by-modelId+kind aborts the batch path', async (t) 
       return text.map((s) => `t:${s}`)
     },
     addon: {
+      // lunte-disable-next-line require-await
       async cancel() {
         addonCancelCalls++
       }
@@ -312,9 +320,11 @@ test("translate: in-flight request is registered with kind='translate'", async (
     stats: { totalTime: 1 }
   }
   const model = {
+    // lunte-disable-next-line require-await
     async run() {
       return response
     },
+    // lunte-disable-next-line require-await
     async runBatch(text: string[]) {
       return text.map((s) => `t:${s}`)
     }
@@ -383,13 +393,16 @@ test('transcribe (whisper): cancel-by-requestId exits loop and runs restorePromp
     stats: {}
   }
   const model = {
+    // lunte-disable-next-line require-await
     async run() {
       return response
     },
+    // lunte-disable-next-line require-await
     async reload() {
       reloadCalls++
     },
     addon: {
+      // lunte-disable-next-line require-await
       async cancel() {
         addonCancelCalls++
       }
@@ -459,16 +472,20 @@ test('finetune: cancel-by-requestId calls model.cancel() and runs clearFinetuneR
     removeListener() {
       return handle
     },
+    // lunte-disable-next-line require-await
     async await() {
       return awaitGate
     }
   }
 
   const model = {
+    // lunte-disable-next-line require-await
     async finetune() {
       return handle
     },
+    // lunte-disable-next-line require-await
     async pause() {},
+    // lunte-disable-next-line require-await
     async cancel() {
       modelCancelCalls++
       releaseAwait({ op: 'finetune', status: 'COMPLETED' })

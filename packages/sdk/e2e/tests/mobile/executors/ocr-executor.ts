@@ -20,8 +20,9 @@ export class MobileOcrExecutor extends ModelAssetExecutor<typeof ocrTests> {
   protected handlers = Object.fromEntries(
     ocrTests.map((test) => {
       if (test.testId.endsWith('-stats')) return [test.testId, this.withStats.bind(this)]
-      if (test.testId.endsWith('-block-structure'))
+      if (test.testId.endsWith('-block-structure')) {
         return [test.testId, this.blockStructure.bind(this)]
+      }
       return [test.testId, this.generic.bind(this)]
     })
   ) as never

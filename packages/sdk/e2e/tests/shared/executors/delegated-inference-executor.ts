@@ -174,6 +174,7 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
     }
   }
 
+  // lunte-disable-next-line require-await
   async heartbeatProvider(): Promise<TestResult> {
     return this.withProvider(async ({ publicKey }) => {
       try {
@@ -204,6 +205,7 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
     })
   }
 
+  // lunte-disable-next-line require-await
   async cancelDelegatedDownload(): Promise<TestResult> {
     return this.withProvider(async ({ publicKey }) => {
       // 0.11.0 cancel surface is requestId-based; delegated routing is

@@ -14,22 +14,30 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
 
   protected handlers = Object.fromEntries(
     kvCacheTests.map((test) => {
-      if (test.testId === 'kv-cache-delete-and-reuse')
+      if (test.testId === 'kv-cache-delete-and-reuse') {
         return [test.testId, this.deleteAndReuse.bind(this)]
-      if (test.testId === 'kv-cache-session-switch')
+      }
+      if (test.testId === 'kv-cache-session-switch') {
         return [test.testId, this.sessionSwitch.bind(this)]
-      if (test.testId === 'kv-cache-different-system-prompts')
+      }
+      if (test.testId === 'kv-cache-different-system-prompts') {
         return [test.testId, this.differentSystemPrompts.bind(this)]
-      if (test.testId === 'kv-cache-stats-verification')
+      }
+      if (test.testId === 'kv-cache-stats-verification') {
         return [test.testId, this.statsVerification.bind(this)]
-      if (test.testId === 'kv-cache-remove-thinking-compaction')
+      }
+      if (test.testId === 'kv-cache-remove-thinking-compaction') {
         return [test.testId, this.removeThinkingCompaction.bind(this)]
-      if (test.testId === 'kv-cache-tools-sequential-save')
+      }
+      if (test.testId === 'kv-cache-tools-sequential-save') {
         return [test.testId, this.toolsSequentialSave.bind(this)]
-      if (test.testId === 'kv-cache-tools-dynamic-reuse')
+      }
+      if (test.testId === 'kv-cache-tools-dynamic-reuse') {
         return [test.testId, this.toolsDynamicReuse.bind(this)]
-      if (test.testId === 'kv-cache-cancel-then-new-prompt')
+      }
+      if (test.testId === 'kv-cache-cancel-then-new-prompt') {
         return [test.testId, this.cancelThenNewPrompt.bind(this)]
+      }
       if (
         test.testId.startsWith('kv-cache-delete-') ||
         test.testId === 'kv-cache-hypercore-deletion'

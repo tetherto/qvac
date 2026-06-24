@@ -45,6 +45,7 @@ function resolvePluginHandler(modelId: string, handlerName: string) {
   return { modelType, plugin, handlerDef }
 }
 
+// lunte-disable-next-line require-await
 export async function handlePluginInvoke(
   request: PluginInvokeRequest
 ): Promise<PluginInvokeResponse> {

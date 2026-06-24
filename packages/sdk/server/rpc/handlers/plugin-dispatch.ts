@@ -63,11 +63,13 @@ function resolvePluginHandler<TRequest, TResponse>(
   }
 }
 
+// lunte-disable-next-line require-await
 export async function dispatchPluginReply<TRequest, TResponse>(
   modelId: string,
   handlerName: string,
   request: TRequest
 ): Promise<TResponse> {
+  // lunte-disable-next-line require-await
   return profileReplyHandler({ op: handlerName, request }, async () => {
     const { result, streaming } = resolvePluginHandler<TRequest, TResponse>(
       modelId,

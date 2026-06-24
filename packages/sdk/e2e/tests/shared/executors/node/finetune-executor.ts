@@ -143,6 +143,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       let pausePromise: Promise<FinetuneResult> | null = null
       const initialProgressPromise = this.collectProgress(
         initialHandle.progressStream,
+        // lunte-disable-next-line require-await
         async (update) => {
           if (!pauseRequested && update.global_steps >= pauseAfterGlobalSteps) {
             pauseRequested = true

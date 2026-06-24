@@ -9,6 +9,7 @@ export class NodeCancellationExecutor extends CancellationExecutor {
     [cancelByRequestIdTranscribe.testId]: this.transcribeTargeted.bind(this)
   } as never
 
+  // lunte-disable-next-line require-await
   async transcribeTargeted(
     params: TranscribeCancelParams,
     _expectation: Expectation

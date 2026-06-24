@@ -119,10 +119,12 @@ async function beginRagContext(
   return ctx
 }
 
+// lunte-disable-next-line require-await
 export async function handleRag(
   request: RagRequest,
   onProgress?: (update: RagProgressUpdate) => void
 ): Promise<RagResponse> {
+  // lunte-disable-next-line require-await
   return profileReplyHandler({ op: 'rag', request }, async () =>
     handleRagInternal(request, onProgress)
   )

@@ -873,6 +873,7 @@ async function withMockDiffusionPlugin<T>(
     addonPackage: '@qvac/diffusion-cpp',
     loadConfigSchema: sdcppConfigSchema,
     createModel: function () {
+      // lunte-disable-next-line require-await
       return { model: { load: async function () {} } }
     },
     handlers: {
@@ -1348,9 +1349,11 @@ async function withRegisteredDiffusionModel<T>(
 ): Promise<T> {
   const modelId = `test-diffusion-${Math.random().toString(36).slice(2, 10)}`
   const fakeModel = {
+    // lunte-disable-next-line require-await
     load: async function () {},
     run:
       options.runImpl ??
+      // lunte-disable-next-line require-await
       async function () {
         return {
           iterate: async function* () {
@@ -1377,6 +1380,7 @@ test('diffusion op: upscale: true forwards verbatim to model.run (addon owns mis
   let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function (params: unknown) {
         observed = params as { upscale?: unknown }
         return {
@@ -1406,6 +1410,7 @@ test('diffusion op: upscale: { repeats } forwards verbatim to model.run', async 
   let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function (params: unknown) {
         observed = params as { upscale?: unknown }
         return {
@@ -1434,6 +1439,7 @@ test('diffusion op: upscale: false is normalized to undefined before reaching th
   let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function (params: unknown) {
         observed = params as { upscale?: unknown }
         return {
@@ -1463,6 +1469,7 @@ test('diffusion op: upscale omitted forwards undefined to the addon', async func
   let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function (params: unknown) {
         observed = params as { upscale?: unknown }
         return {

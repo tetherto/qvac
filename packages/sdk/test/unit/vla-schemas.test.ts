@@ -456,6 +456,7 @@ async function withMockVlaPlugin<T>(
     addonPackage: '@qvac/vla-ggml',
     loadConfigSchema: vlaConfigSchema,
     createModel: function () {
+      // lunte-disable-next-line require-await
       return { model: { load: async function () {} } }
     },
     handlers: {
@@ -491,6 +492,7 @@ async function withMockVlaPlugin<T>(
 test('vla plugin: registers and dispatches vlaRun', async function (t) {
   const actions = encodeBase64(new Uint8Array(new Float32Array([0.1, 0.2, 0.3]).buffer))
   await withMockVlaPlugin(
+    // lunte-disable-next-line require-await
     async function () {
       return {
         actions,
@@ -499,6 +501,7 @@ test('vla plugin: registers and dispatches vlaRun', async function (t) {
         stats: { total_ms: 42 }
       }
     },
+    // lunte-disable-next-line require-await
     async function () {
       throw new Error('hparams not exercised in this test')
     },
@@ -531,9 +534,11 @@ test('vla plugin: dispatches vlaHparams', async function (t) {
     visionImageSize: 512
   }
   await withMockVlaPlugin(
+    // lunte-disable-next-line require-await
     async function () {
       throw new Error('run not exercised in this test')
     },
+    // lunte-disable-next-line require-await
     async function () {
       return { hparams: hp, backendName: 'CPU' }
     },
@@ -566,6 +571,7 @@ async function withRegisteredVlaModel<T>(
 ): Promise<T> {
   const modelId = `test-vla-${Math.random().toString(36).slice(2, 10)}`
   const fakeModel = {
+    // lunte-disable-next-line require-await
     load: async function () {},
     run: options.runImpl,
     hparams: options.hparams,
@@ -590,9 +596,11 @@ test('vlaRun op: decodes base64 inputs and forwards typed arrays to model.run', 
   const expectedActions = new Float32Array([0.5, -0.25, 1.0])
   await withRegisteredVlaModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function (input: unknown) {
         observedInput = input as Record<string, unknown>
         return {
+          // lunte-disable-next-line require-await
           await: async () => ({
             actions: expectedActions,
             stats: { total_ms: 100 }
@@ -645,9 +653,11 @@ test('vlaRun op: forwards optional noise when provided', async function (t) {
   let observedInput: Record<string, unknown> | undefined
   await withRegisteredVlaModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function (input: unknown) {
         observedInput = input as Record<string, unknown>
         return {
+          // lunte-disable-next-line require-await
           await: async () => ({ actions: new Float32Array([0]) })
         }
       },
@@ -678,9 +688,11 @@ test('vlaRun op: omits noise when not provided', async function (t) {
   let observedInput: Record<string, unknown> | undefined
   await withRegisteredVlaModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function (input: unknown) {
         observedInput = input as Record<string, unknown>
         return {
+          // lunte-disable-next-line require-await
           await: async () => ({ actions: new Float32Array([0]) })
         }
       },
@@ -717,6 +729,7 @@ test("vlaGetHparams op: returns the model's hparams + backend", async function (
   }
   await withRegisteredVlaModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function () {
         throw new Error('run not exercised')
       },
@@ -743,6 +756,7 @@ test('vlaGetHparams op: surfaces π₀.₅ numCameras + stateInputMode', async f
   }
   await withRegisteredVlaModel(
     {
+      // lunte-disable-next-line require-await
       runImpl: async function () {
         throw new Error('run not exercised')
       },

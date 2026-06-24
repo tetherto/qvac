@@ -31,6 +31,7 @@ function registerFinetunePlugin() {
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
+        // lunte-disable-next-line require-await
         model: { load: async function () {} },
         loader: {}
       }
@@ -102,6 +103,7 @@ test('handleFinetune: wraps progress callbacks for start requests', async (t) =>
       removeListenerCalls++
       return handle
     },
+    // lunte-disable-next-line require-await
     async await() {
       registeredListener?.(progress)
       return {
@@ -113,10 +115,13 @@ test('handleFinetune: wraps progress callbacks for start requests', async (t) =>
   }
 
   registerFinetuneModel(modelId, {
+    // lunte-disable-next-line require-await
     finetune: async function () {
       return handle
     },
+    // lunte-disable-next-line require-await
     pause: async function () {},
+    // lunte-disable-next-line require-await
     cancel: async function () {}
   } as unknown as AnyModel)
 
@@ -180,6 +185,7 @@ test('handleFinetune: wraps progress callbacks for omitted-operation requests', 
       t.is(cb, registeredListener)
       return handle
     },
+    // lunte-disable-next-line require-await
     async await() {
       registeredListener?.(progress)
       return {
@@ -194,10 +200,13 @@ test('handleFinetune: wraps progress callbacks for omitted-operation requests', 
   }
 
   registerFinetuneModel(modelId, {
+    // lunte-disable-next-line require-await
     finetune: async function () {
       return handle
     },
+    // lunte-disable-next-line require-await
     pause: async function () {},
+    // lunte-disable-next-line require-await
     cancel: async function () {}
   } as unknown as AnyModel)
 
@@ -234,6 +243,7 @@ test('handleFinetune: dispatches start requests without progress callbacks', asy
 
   registerFinetunePlugin()
   registerFinetuneModel(modelId, {
+    // lunte-disable-next-line require-await
     finetune: async function () {
       return {
         on() {
@@ -242,6 +252,7 @@ test('handleFinetune: dispatches start requests without progress callbacks', asy
         removeListener() {
           return this
         },
+        // lunte-disable-next-line require-await
         async await() {
           return {
             op: 'finetune' as const,
@@ -254,7 +265,9 @@ test('handleFinetune: dispatches start requests without progress callbacks', asy
         }
       }
     },
+    // lunte-disable-next-line require-await
     pause: async function () {},
+    // lunte-disable-next-line require-await
     cancel: async function () {}
   } as unknown as AnyModel)
 
@@ -288,10 +301,13 @@ test('handleFinetune: dispatches getState requests through plugin reply handler'
 
   registerFinetunePlugin()
   registerFinetuneModel(modelId, {
+    // lunte-disable-next-line require-await
     finetune: async function () {
       throw new Error('finetune should not be called for getState')
     },
+    // lunte-disable-next-line require-await
     pause: async function () {},
+    // lunte-disable-next-line require-await
     cancel: async function () {}
   } as unknown as AnyModel)
 
@@ -326,12 +342,15 @@ test('handleFinetune: dispatches pause requests through plugin reply handler', a
 
   registerFinetunePlugin()
   registerFinetuneModel(modelId, {
+    // lunte-disable-next-line require-await
     finetune: async function () {
       throw new Error('finetune should not be called for pause')
     },
+    // lunte-disable-next-line require-await
     pause: async function () {
       pauseCalls++
     },
+    // lunte-disable-next-line require-await
     cancel: async function () {}
   } as unknown as AnyModel)
 

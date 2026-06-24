@@ -75,6 +75,7 @@ function cleanupDelegationPeer(options?: DelegateOptions, error?: unknown): void
   cleanupStaleConnection(options.peerKey)
 }
 
+// lunte-disable-next-line require-await
 export async function send<T extends Request>(
   request: T,
   rpc: RPC,

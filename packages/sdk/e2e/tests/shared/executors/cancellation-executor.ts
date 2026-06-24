@@ -499,10 +499,12 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
     }
   }
 
+  // lunte-disable-next-line require-await
   async embedBroad(params: EmbedParams, _expectation: Expectation): Promise<TestResult> {
     return this.embedRun(params, 'broad')
   }
 
+  // lunte-disable-next-line require-await
   async embedTargeted(params: EmbedParams, _expectation: Expectation): Promise<TestResult> {
     return this.embedRun(params, 'requestId')
   }

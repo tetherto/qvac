@@ -20,8 +20,9 @@ function coerceParamValue(raw: string, schema?: { type?: string }): unknown {
     case 'integer': {
       if (trimmed.length === 0) throw new Error(`invalid integer value: ""`)
       const n = Number(trimmed)
-      if (Number.isNaN(n) || !Number.isInteger(n))
+      if (Number.isNaN(n) || !Number.isInteger(n)) {
         throw new Error(`invalid integer value: "${trimmed}"`)
+      }
       return n
     }
     case 'boolean': {

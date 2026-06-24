@@ -13,6 +13,7 @@ function makeId(prefix: string): string {
 async function withRegisteredVideoModel<T>(
   runImpl: (params: unknown) => Promise<unknown>,
   body: (modelId: string) => Promise<T>,
+  // lunte-disable-next-line require-await
   cancelImpl: () => Promise<void> = async function () {}
 ) {
   const [{ registerModel, unregisterModel }, { ModelType }] = await Promise.all([
@@ -21,6 +22,7 @@ async function withRegisteredVideoModel<T>(
   ])
   const modelId = makeId('test-video')
   const fakeModel = Object.create(VideoStableDiffusion.prototype) as Record<string, unknown>
+  // lunte-disable-next-line require-await
   fakeModel['load'] = async function () {}
   fakeModel['run'] = runImpl
   fakeModel['cancel'] = cancelImpl
@@ -43,6 +45,7 @@ test('video op: decodes base64 inputs, forwards mode, and emits stream responses
   let observed: Record<string, unknown> | undefined
 
   await withRegisteredVideoModel(
+    // lunte-disable-next-line require-await
     async function (params: unknown) {
       observed = params as Record<string, unknown>
       return {
@@ -102,6 +105,7 @@ test('video op: forwards img2vid init_image and strength to model.run', async fu
   let observed: Record<string, unknown> | undefined
 
   await withRegisteredVideoModel(
+    // lunte-disable-next-line require-await
     async function (params: unknown) {
       observed = params as Record<string, unknown>
       return {
@@ -145,6 +149,7 @@ test('video op: broad cancel routes through registry and calls model.cancel', as
   const requestId = makeId('video-req')
 
   await withRegisteredVideoModel(
+    // lunte-disable-next-line require-await
     async function () {
       return {
         stats: {
@@ -188,6 +193,7 @@ test('video op: broad cancel routes through registry and calls model.cancel', as
       await gen.next()
       t.is(getRequestRegistry().get(requestId), null, 'registry slot was freed')
     },
+    // lunte-disable-next-line require-await
     async function () {
       cancelCalls++
     }

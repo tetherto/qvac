@@ -3,6 +3,7 @@ import {
   hyperdriveUrlSchema,
   registryUrlSchema,
   SUPPORTED_ARCHIVE_EXTENSIONS,
+  modelInputToSrcSchema,
   type ModelProgressUpdate
 } from '@/schemas'
 import {
@@ -31,7 +32,6 @@ import {
 } from '@/utils/errors-server'
 import { validateAndJoinPath } from '@/server/utils/path-security'
 import { getServerLogger } from '@/logging'
-import { modelInputToSrcSchema } from '@/schemas'
 
 type ResolveMode = 'base' | 'stats'
 
@@ -245,6 +245,7 @@ export async function resolveModelPath(
   return result.path
 }
 
+// lunte-disable-next-line require-await
 export async function resolveModelPathWithStats(
   modelSrc: unknown,
   progressCallback?: (progress: ModelProgressUpdate) => void,

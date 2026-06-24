@@ -76,6 +76,7 @@ test('kv-cache-session: beginTurn primes the cache on first use, reuses on secon
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
     let primeCallCount = 0
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (cachePath: string) => {
       primeCallCount++
       writeFakeCache(cachePath)
@@ -121,6 +122,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }
@@ -168,6 +170,7 @@ test('kv-cache-session: rollback wipes all three layers atomically', async (t) =
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }
@@ -204,6 +207,7 @@ test('kv-cache-session: rollback tolerates a missing on-disk file', async (t) =>
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }
@@ -245,6 +249,7 @@ test('kv-cache-session: double-rollback is idempotent', async (t) => {
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }
@@ -270,6 +275,7 @@ test('kv-cache-session: dropStaleSavedCount forgets the count without touching t
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }
@@ -308,6 +314,7 @@ test('kv-cache-session: deleteKvCacheState({ kvCacheKey }) wipes every layer for
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }
@@ -344,6 +351,7 @@ test('kv-cache-session: deleteKvCacheState({ all: true }) wipes everything', asy
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }
@@ -408,6 +416,7 @@ test('kv-cache-session: beginTurn throws if prime closure resolves but no cache 
     const configHash = mod.generateConfigHash('sys', [])
 
     let observedPath: string | null = null
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (cachePath: string) => {
       observedPath = cachePath
       // Resolve cleanly without touching disk — simulates the
@@ -458,6 +467,7 @@ test('kv-cache-session: beginTurn throws and removes the empty file when prime r
     const configHash = mod.generateConfigHash('sys', [])
 
     let observedPath: string | null = null
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (cachePath: string) => {
       observedPath = cachePath
       fs.mkdirSync(path.dirname(cachePath), { recursive: true })
@@ -507,6 +517,7 @@ test('kv-cache-session: commitTurn rolls back if the addon did not persist the f
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
+    // lunte-disable-next-line require-await
     const primeIfMissing = async (p: string) => {
       writeFakeCache(p)
     }

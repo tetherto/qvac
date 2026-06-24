@@ -100,6 +100,7 @@ test('defineHandler: preserves cancel field on the returned definition', (t) => 
     requestSchema: z.object({ modelId: z.string() }),
     responseSchema: z.object({ ok: z.boolean() }),
     streaming: false,
+    // lunte-disable-next-line require-await
     handler: async () => ({ ok: true }),
     cancel: { scope: 'model', hard: true }
   })

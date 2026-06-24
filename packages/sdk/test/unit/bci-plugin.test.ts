@@ -67,6 +67,7 @@ function makeResolveContext() {
   const ctx: ResolveContext = {
     modelSrc: 'ggml-bci-windowed.bin',
     modelType: 'bci-whispercpp-transcription',
+    // lunte-disable-next-line require-await
     resolveModelPath: async function (src) {
       return `/resolved/${typeof src === 'string' ? src : src.modelId}`
     }

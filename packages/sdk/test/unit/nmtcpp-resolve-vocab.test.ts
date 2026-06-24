@@ -20,6 +20,7 @@ function makeCtx(overrides: Partial<ResolveContext> & { modelSrc: string }): {
   const calls: MockResolveCall[] = []
   const ctx: ResolveContext = {
     modelType: 'nmtcpp-translation',
+    // lunte-disable-next-line require-await
     resolveModelPath: async (src: ModelSrcInput) => {
       calls.push({ src })
       // Echo back a plausible "downloaded" path to keep the resolver happy.
@@ -144,6 +145,7 @@ test('resolveBergamotVocab: throws when vocab cannot be derived (no overrides, u
   const { ctx } = makeCtx({ modelSrc: 'https://example.com/model.bin' })
 
   await t.exception(
+    // lunte-disable-next-line require-await
     async () => resolveBergamotVocab(bergamotConfig, ctx, undefined, undefined, undefined),
     ModelLoadFailedError,
     'unsupported source with no override raises ModelLoadFailedError'
@@ -203,6 +205,7 @@ test('resolveBergamotVocab: pivot throws when pivot vocab cannot be derived', as
   }
 
   await t.exception(
+    // lunte-disable-next-line require-await
     async () => resolveBergamotVocab(bergamotConfig, ctx, undefined, undefined, pivotModel),
     ModelLoadFailedError,
     'unsupported pivot source raises ModelLoadFailedError'

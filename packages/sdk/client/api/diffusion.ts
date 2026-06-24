@@ -143,7 +143,7 @@ export function diffusion(params: DiffusionClientParams): DiffusionResult {
         ) {
           const parsed = diffusionStreamResponseSchema.parse(response)
 
-          if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
+          if (parsed.step !== null && parsed.totalSteps !== null && parsed.elapsedMs !== null) {
             progressQueue.push({
               step: parsed.step,
               totalSteps: parsed.totalSteps,
