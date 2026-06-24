@@ -138,7 +138,6 @@ TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
 
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
-      kSeqId,
       ContextUsage{/*pos=*/100, /*cacheTokens=*/350},
       ContextUsage{/*pos=*/20, /*cacheTokens=*/80},
       ContextUsage{/*pos=*/10, /*cacheTokens=*/80},
@@ -151,7 +150,7 @@ TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
   EXPECT_EQ(outcome.discarded, 40);
 
   ASSERT_EQ(ops.seqRmCalls().size(), 1u);
-  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 20, 60}));
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{0, 20, 60}));
   ASSERT_EQ(ops.seqAddCalls().size(), 1u);
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 60);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 100);
