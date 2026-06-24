@@ -67,7 +67,7 @@
     "format:fix": "prettier --write .",
     "check-models": "tsx ./models/update-models/index.ts --check",
     "update-models": "tsx ./models/update-models/index.ts",
-    "test": "tsx --test test/*.test.ts",
+    "check": "npm run lint && npm run format && npm run typecheck",
     "test:unit": "tsx --test test/*.test.ts"
   },
   "peerDependencies": {
