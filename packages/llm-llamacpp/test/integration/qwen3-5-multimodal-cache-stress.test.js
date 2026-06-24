@@ -22,6 +22,7 @@ const skipStress = !forceStress && !isLinuxX64
 
 const CTX_SIZE = 8192
 const N_DISCARDED = 256
+const PREFILL_CANCEL_DELAY_MS = 1500
 
 const QWEN35_MODEL = {
   modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
@@ -31,6 +32,11 @@ const QWEN35_MODEL = {
 const QWEN35_MMPROJ = {
   modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
   downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+}
+
+const SYSTEM_PROMPT = {
+  role: 'system',
+  content: 'You are a visual chat assistant. Answer plainly and keep going until the requested list is complete.'
 }
 
 function createLogger () {
@@ -57,7 +63,6 @@ function repeatWord (word, count) {
 
 function makeImageTurn (imageBytes) {
   return [
-    { role: 'system', content: 'You are a visual chat assistant. Answer plainly and keep going until the requested list is complete.' },
     { role: 'user', type: 'media', content: imageBytes },
     {
       role: 'user',
@@ -68,12 +73,18 @@ function makeImageTurn (imageBytes) {
 
 function makePrefillPressureTurn (cacheTokens) {
   const freeSlots = Math.max(0, CTX_SIZE - toNumber(cacheTokens))
-  const wordCount = Math.max(512, Math.min(4600, freeSlots + Math.floor(N_DISCARDED / 2)))
+  const wordCount = Math.max(96, Math.min(4600, freeSlots + Math.floor(N_DISCARDED / 4)))
   return makeLongTextTurn(wordCount)
 }
 
-function makeCancelPrefillTurn () {
-  return makeLongTextTurn(96)
+function makeCancelPrefillTurn (imageBytes) {
+  return [
+    { role: 'user', type: 'media', content: imageBytes },
+    {
+      role: 'user',
+      content: 'Use this second image as part of the cached conversation, then stop if cancellation is requested.'
+    }
+  ]
 }
 
 function makeLongTextTurn (wordCount) {
@@ -166,13 +177,19 @@ async function cancelResponse (addon, response) {
   await addon.cancel()
 }
 
-async function runAndCancelImmediately (addon, prompt, runOptions = {}) {
+async function runAndCancelDuringPrefill (addon, prompt, runOptions = {}) {
   const response = await addon.run(prompt, runOptions)
-  await cancelResponse(addon, response)
+  const cancelTimer = setTimeout(() => {
+    cancelResponse(addon, response).catch(err => {
+      console.error('cancel during prefill failed:', err)
+    })
+  }, PREFILL_CANCEL_DELAY_MS)
   try {
     await response.await()
   } catch (err) {
     if (!isCancellationError(err)) throw err
+  } finally {
+    clearTimeout(cancelTimer)
   }
   return response.stats || {}
 }
@@ -214,6 +231,19 @@ function assertCachedStats (t, stats, label) {
   t.ok(cacheTokens <= CTX_SIZE, `${label}: CacheTokens should stay within ctx (${cacheTokens} <= ${CTX_SIZE})`)
 }
 
+function assertCanceledPrefillKeptTokens (t, beforeStats, afterStats) {
+  const beforeCacheTokens = toNumber(beforeStats.CacheTokens)
+  const afterCacheTokens = toNumber(afterStats.CacheTokens)
+  const slideDiscard = toNumber(afterStats.contextSlides) * N_DISCARDED
+  const baselineAfterSlides = beforeCacheTokens - slideDiscard
+
+  t.ok(
+    afterCacheTokens > baselineAfterSlides,
+    'cancel during prefill keeps evaluated tokens in cache after slide adjustment ' +
+    `(${beforeCacheTokens} - ${slideDiscard} -> ${afterCacheTokens}, slides=${afterStats.contextSlides || 0})`
+  )
+}
+
 safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   timeout: 2_400_000,
   skip: skipStress
@@ -234,6 +264,19 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   })
 
   const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true }
+
+  const systemPrefill = await runAndCollect(
+    addon,
+    [SYSTEM_PROMPT],
+    {
+      ...cacheOpts,
+      prefill: true
+    }
+  )
+  t.is(systemPrefill.text, '', 'system prefill emits no text')
+  t.is(toNumber(systemPrefill.stats.generatedTokens), 0, 'system prefill reports zero generated tokens')
+  assertCachedStats(t, systemPrefill.stats, 'system prefill')
+  t.ok(fs.existsSync(cachePath), 'system prefill saved cache to disk')
 
   const first = await runAndCollect(
     addon,
@@ -262,6 +305,40 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   t.ok(toNumber(prefillSlide.stats.contextSlides) > 0, `prefill stress run triggered context sliding (${prefillSlide.stats.contextSlides})`)
   assertCachedStats(t, prefillSlide.stats, 'prefill stress run')
 
+  const canceledPrefillStats = await runAndCancelDuringPrefill(
+    addon,
+    makeCancelPrefillTurn(imageBytes),
+    {
+      ...cacheOpts,
+      prefill: true
+    }
+  )
+  assertCanceledPrefillKeptTokens(t, prefillSlide.stats, canceledPrefillStats)
+
+  const afterPrefillCancel = await runAndCollect(
+    addon,
+    [{ role: 'user', content: 'After the canceled prefill, answer with one short sentence.' }],
+    {
+      ...cacheOpts,
+      generationParams: { predict: 64 }
+    }
+  )
+  t.ok(afterPrefillCancel.text.length > 0, 'chat recovered after cancel during prefill')
+  assertCachedStats(t, afterPrefillCancel.stats, 'after prefill cancel')
+
+  const decodePressure = await runAndCollect(
+    addon,
+    makePrefillPressureTurn(afterPrefillCancel.stats.CacheTokens),
+    {
+      ...cacheOpts,
+      prefill: true
+    }
+  )
+  t.is(decodePressure.text, '', 'decode pressure prefill emits no text')
+  t.is(toNumber(decodePressure.stats.generatedTokens), 0, 'decode pressure prefill reports zero generated tokens')
+  t.ok(toNumber(decodePressure.stats.contextSlides) > 0, `decode pressure prefill triggered context sliding (${decodePressure.stats.contextSlides})`)
+  assertCachedStats(t, decodePressure.stats, 'decode pressure prefill')
+
   const decodeSlide = await runAndCollect(
     addon,
     makeShortDecodeTurn(),
@@ -274,27 +351,6 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   t.ok(toNumber(decodeSlide.stats.generatedTokens) > 0, 'decode stress run reports generated tokens')
   t.ok(toNumber(decodeSlide.stats.contextSlides) > 0, `decode stress run triggered generation sliding (${decodeSlide.stats.contextSlides})`)
   assertCachedStats(t, decodeSlide.stats, 'decode stress run')
-
-  const canceledPrefillStats = await runAndCancelImmediately(
-    addon,
-    makeCancelPrefillTurn(),
-    {
-      ...cacheOpts,
-      prefill: true
-    }
-  )
-  t.ok(toNumber(canceledPrefillStats.CacheTokens) >= 0, 'cancel during prefill returned sane stats')
-
-  const afterPrefillCancel = await runAndCollect(
-    addon,
-    [{ role: 'user', content: 'After the canceled prefill, answer with one short sentence.' }],
-    {
-      ...cacheOpts,
-      generationParams: { predict: 64 }
-    }
-  )
-  t.ok(afterPrefillCancel.text.length > 0, 'chat recovered after cancel during prefill')
-  assertCachedStats(t, afterPrefillCancel.stats, 'after prefill cancel')
 
   const canceledDecode = await runAndCancelAfterFirstChunk(
     addon,
