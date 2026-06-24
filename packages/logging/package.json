@@ -20,7 +20,7 @@
     "directory": "packages/logging"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/logging#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "brittle": "^3.15.0",
     "lunte": "^1.8.1",
