@@ -43,6 +43,7 @@
     "lint:fix": "lunte --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "check": "npm run lint && npm run format",
     "test": "npx tsx --test test/*.test.ts",
     "test:unit": "npx tsx --test test/*.test.ts",
     "test:e2e": "npm run test:e2e:js",
