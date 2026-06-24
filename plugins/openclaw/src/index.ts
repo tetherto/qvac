@@ -2,6 +2,8 @@ import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry'
 
 import { registerQvacProvider } from './provider-config.js'
 
+export { createQvacServeModels, resolveOptions } from './provider-config.js'
+
 const configProperties = {
   model: { type: 'string', description: 'QVAC catalog model id to preload and use by default.' },
   host: { type: 'string', description: 'Loopback host for qvac serve.' },

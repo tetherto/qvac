@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
+import pluginEntry, { createQvacServeModels, resolveOptions } from '../src/index.ts'
+
 interface PackageJson {
   readonly openclaw?: {
     readonly extensions?: readonly string[]
@@ -32,6 +34,20 @@ test('package.json declares the OpenClaw runtime extension entrypoint', () => {
   const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as PackageJson
 
   assert.deepEqual(packageJson.openclaw?.extensions, ['./dist/index.js'])
+})
+
+test('package entrypoint exports the plugin and serve config helpers', () => {
+  assert.equal(typeof pluginEntry, 'object')
+  assert.deepEqual(createQvacServeModels(resolveOptions())['qwen3.5-9b'], {
+    model: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M',
+    preload: true,
+    default: true,
+    config: {
+      ctx_size: 32768,
+      reasoning_budget: -1,
+      tools: true
+    }
+  })
 })
 
 test('openclaw.plugin.json declares static QVAC model catalog rows', () => {
