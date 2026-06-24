@@ -13,14 +13,28 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileAutoFile = path.join(repoRoot, 'test', 'mobile', 'integration.auto.cjs')
 
+// QVAC-20557 DIAGNOSTIC (DO NOT MERGE): mirror generate-mobile-integration-tests.js's
+// MOBILE_DIAG_SUBSET so validation expects the same restricted set.  Empty
+// array => validate against the full suite (the shipped behaviour).  Revert
+// to `[]` before merging.
+const MOBILE_DIAG_SUBSET = [
+  'chatterbox-tone-cpu-mtl.test.js',
+  'chatterbox-tone-cpu-turbo.test.js'
+]
+
 function getIntegrationTestFiles () {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
+  const all = fs.readdirSync(integrationDir)
     .filter(f => f.endsWith('.test.js'))
     .sort()
+
+  if (MOBILE_DIAG_SUBSET.length > 0) {
+    return all.filter(f => MOBILE_DIAG_SUBSET.includes(f))
+  }
+  return all
 }
 
 function getGeneratedIntegrationRefs (content) {
