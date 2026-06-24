@@ -119,7 +119,7 @@ target_link_libraries(
     GTest::gmock_main
 )
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT APPLE)
   target_link_libraries(
     addon-test
     PRIVATE
