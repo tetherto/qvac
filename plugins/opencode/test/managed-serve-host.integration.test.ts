@@ -103,8 +103,9 @@ test('managed serve host exposes proxy endpoints and shuts down cleanly', {
       QVAC_READY_TIMEOUT_MS: String(timeoutMs),
       QVAC_UPSTREAM_TIMEOUT_MS: process.env['QVAC_UPSTREAM_TIMEOUT_MS'] ?? '300000'
     },
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe']
   })
+  child.stdin.end()
   const stderr: Buffer[] = []
   child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
 
