@@ -209,6 +209,17 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
      - **Candidate-vs-baseline** = `-f matrix_sources=addon@candidate,addon@baseline` (a clean
        2-source build comparison; see the example below). The native-CLI steps run only when a
        `fabric`/`upstream` token is present, so this stays addon-only.
+     - **⚠ Engine version parity — REQUIRED before an `addon` vs `fabric`/`upstream` comparison.**
+       It is only apples-to-apples when every source shares the same llama.cpp build. The addon's
+       engine is the `qvac-fabric` vcpkg pin (`packages/llm-llamacpp/vcpkg.json` `version>=`; the
+       MAJOR is the llama.cpp build number, e.g. `8828.1.0` → 8828); the CLIs carry it in their
+       tag (`v8189.0.2` / `b8189` → 8189). **Before dispatching, confirm they match** by running
+       `node benchmarks/vlm-benchmark/version-guard.cjs "<matrix_sources>"` (e.g. `"addon,fabric@v8189.0.2"`).
+       CI runs this guard automatically and **fails the run on a mismatch**; align the refs to the
+       same build, or override an intentional cross-version run with repo var
+       `VLM_ALLOW_VERSION_MISMATCH=1`. A SHA-pinned CLI ref (A5) can't be auto-checked — it only
+       warns, so verify that commit's build by hand. (Build comparisons — `addon@candidate` vs
+       `addon@baseline` — are the same engine, so parity always holds there.)
    - **Candidate ref** = the **`ref`** input (`-f ref=<branch|tag|commit-sha>`, default = the branch
      the workflow runs on). This is what gets built as `addon@candidate`.
    - **Model version:** bump the pinned commit in `config.cjs` (`SHA.*` / the blob's
@@ -444,6 +455,7 @@ All in `packages/llm-llamacpp/benchmarks/vlm-benchmark/` unless noted:
 | `scenarios.cjs` | the task set (VQA + OCR) the benchmark runs — report-side owned |
 | `models.cjs` | `matrix_models` grammar → canonical model specs (any model via two URLs) |
 | `sources.cjs`, `methodology.cjs` | source tokens (incl. addon@candidate/@baseline prebuild resolution, A2) + measurement methodology helpers (A3 builds on these) |
+| `version-guard.cjs` | pre-flight llama.cpp engine-parity guard for several-sources: derives each source's build (addon = `qvac-fabric` vcpkg pin; CLI = ref), fails on a mismatch (CI step; also runnable locally) |
 | `run-desktop.cjs` | desktop run driver scaffold + `--selfcheck` contract guard |
 | `combine.cjs` | combine driver: log discovery, host tagging, provenance, report render (descriptive — no accuracy gate) |
 | `vlm-matrix.test.js`, `harness.cjs` | harness (loads models, emits markers) |
