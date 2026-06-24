@@ -101,7 +101,7 @@ function normalizeBackend (platformName, useGPU, backendHint) {
     case 'win32':
       return 'directml'
     case 'android':
-      return 'nnapi'
+      return 'vulkan'
     case 'linux':
       return 'vulkan'
     default:
