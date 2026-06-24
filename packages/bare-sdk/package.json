@@ -90,9 +90,9 @@
       "types": "./dist/_sdk/server/bare/plugins/tts-ggml/plugin.d.ts",
       "import": "./dist/_sdk/server/bare/plugins/tts-ggml/plugin.js"
     },
-    "./onnx-ocr/plugin": {
-      "types": "./dist/_sdk/server/bare/plugins/onnx-ocr/plugin.d.ts",
-      "import": "./dist/_sdk/server/bare/plugins/onnx-ocr/plugin.js"
+    "./ggml-ocr/plugin": {
+      "types": "./dist/_sdk/server/bare/plugins/ggml-ocr/plugin.d.ts",
+      "import": "./dist/_sdk/server/bare/plugins/ggml-ocr/plugin.js"
     },
     "./sdcpp-generation/plugin": {
       "types": "./dist/_sdk/server/bare/plugins/sdcpp-generation/plugin.d.ts",

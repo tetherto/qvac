@@ -11,7 +11,7 @@ export const PLUGIN_ADDONS = new Set([
   "@qvac/transcription-parakeet",
   "@qvac/translation-nmtcpp",
   "@qvac/tts-ggml",
-  "@qvac/ocr-onnx",
+  "@qvac/ocr-ggml",
   "@qvac/diffusion-cpp",
   "@qvac/vla-ggml",
   "@qvac/classification-ggml",
