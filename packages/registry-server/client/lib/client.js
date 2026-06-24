@@ -209,6 +209,30 @@ class QVACRegistryClient extends ReadyResource {
     return { core, blobs }
   }
 
+  /**
+   * Re-establish peers for a blobs core before retrying a download. After the
+   * app suspends/resumes (or the network drops), the swarm connection for this
+   * core is gone; re-running the join + findingPeers + update sequence and
+   * awaiting it lets the next attempt resume from the cached blocks instead of
+   * immediately timing out against a dead swarm.
+   */
+  async _reconnectCore (core) {
+    if (!core || !this.hyperswarm) return
+
+    this.logger.debug('Re-establishing peers before download retry', {
+      discoveryKey: IdEnc.normalize(core.discoveryKey)
+    })
+
+    const done = core.findingPeers()
+    this.hyperswarm.join(core.discoveryKey, { client: true, server: false })
+    try {
+      await this.hyperswarm.flush()
+    } finally {
+      done()
+    }
+    await core.update()
+  }
+
   async downloadModel (path, source, options = {}) {
     this._validateString(path, 'path')
     this._validateString(source, 'source')
@@ -266,7 +290,11 @@ class QVACRegistryClient extends ReadyResource {
           {
             maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
-            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            // Wait for peers to reconnect before retrying so the retry doesn't
+            // immediately time out again against a dead swarm (e.g. after the
+            // app suspended and resumed). The partial on disk and the blocks
+            // already cached in the core are preserved across the retry.
+            beforeRetry: () => this._reconnectCore(core),
             logger: this.logger
           }
         )
@@ -398,7 +426,9 @@ class QVACRegistryClient extends ReadyResource {
           {
             maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
-            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            // Wait for peers to reconnect before retrying (see downloadModel).
+            // The partial and the core's cached blocks are preserved.
+            beforeRetry: () => this._reconnectCore(core),
             logger: this.logger
           }
         )
