@@ -20,7 +20,7 @@ class RAG extends ReadyResource {
    * @param {ChunkOpts} [config.chunkOpts] - Optional chunking options for document processing.
    * @param {Logger} [config.logger] - Optional logger instance
    */
-  constructor ({ llm, embeddingFunction, dbAdapter, chunker, chunkOpts = {}, logger }) {
+  constructor({ llm, embeddingFunction, dbAdapter, chunker, chunkOpts = {}, logger }) {
     super()
     if (!embeddingFunction) throw new QvacErrorRAG({ code: ERR_CODES.EMBEDDING_FUNCTION_REQUIRED })
     if (!dbAdapter) throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_REQUIRED })
@@ -54,7 +54,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<Array<Doc>>} - Array of chunked documents with IDs and content.
    */
   // lunte-disable-next-line require-await
-  async chunk (input, opts = {}) {
+  async chunk(input, opts = {}) {
     return this.chunkingService.chunkText(input, opts)
   }
 
@@ -64,7 +64,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<Array<number>>} The embeddings.
    */
   // lunte-disable-next-line require-await
-  async generateEmbeddings (text) {
+  async generateEmbeddings(text) {
     return this.embeddingService.generateEmbeddings(text)
   }
 
@@ -75,7 +75,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<{[key: string]: Array<number>}>} A map of document IDs to their embeddings.
    */
   // lunte-disable-next-line require-await
-  async generateEmbeddingsForDocs (docs, opts = {}) {
+  async generateEmbeddingsForDocs(docs, opts = {}) {
     return this.retrievalService.generateEmbeddingsForDocs(docs, opts)
   }
 
@@ -87,7 +87,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<Array<SaveEmbeddingsResult>>} - Array of processing results.
    */
   // lunte-disable-next-line require-await
-  async saveEmbeddings (embeddedDocs, opts = {}) {
+  async saveEmbeddings(embeddedDocs, opts = {}) {
     return this.ingestionService.saveEmbeddings(embeddedDocs, opts)
   }
 
@@ -100,7 +100,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<{processed: Array<SaveEmbeddingsResult>, droppedIndices: Array<number>}>} - Processing results and dropped indices.
    */
   // lunte-disable-next-line require-await
-  async ingest (docs, embeddingModelId, opts = {}) {
+  async ingest(docs, embeddingModelId, opts = {}) {
     return this.ingestionService.ingest(docs, embeddingModelId, opts)
   }
 
@@ -110,7 +110,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<boolean>} True if the embeddings were deleted
    */
   // lunte-disable-next-line require-await
-  async deleteEmbeddings (ids) {
+  async deleteEmbeddings(ids) {
     return this.ingestionService.deleteEmbeddings(ids)
   }
 
@@ -120,7 +120,7 @@ class RAG extends ReadyResource {
    * @param {InferOpts} [opts] - Options for inference and search.
    * @returns {Promise<any>} The generated response (format depends on LLM adapter) or null if no context found.
    */
-  async infer (query, { llmAdapter = this.llmAdapter, signal, ...opts } = {}) {
+  async infer(query, { llmAdapter = this.llmAdapter, signal, ...opts } = {}) {
     if (signal?.aborted) {
       throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
     }
@@ -155,7 +155,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<Array<SearchResult>>} The search results.
    */
   // lunte-disable-next-line require-await
-  async search (query, params = {}) {
+  async search(query, params = {}) {
     return this.retrievalService.search(query, params)
   }
 
@@ -164,7 +164,7 @@ class RAG extends ReadyResource {
    * @param {BaseChunkAdapter} chunker - The chunker instance.
    * @param {ChunkOpts} [chunkOpts] - The options for the chunking.
    */
-  setChunker (chunker, chunkOpts = {}) {
+  setChunker(chunker, chunkOpts = {}) {
     this.chunkingService.setChunker(chunker, chunkOpts)
   }
 
@@ -172,7 +172,7 @@ class RAG extends ReadyResource {
    * Sets the default LLM for the RAG.
    * @param {BaseLlmAdapter} llm - The LLM instance or adapter.
    */
-  setLlm (llmAdapter) {
+  setLlm(llmAdapter) {
     if (!llmAdapter || !(llmAdapter instanceof BaseLlmAdapter)) {
       throw new QvacErrorRAG({ code: ERR_CODES.LLM_REQUIRED })
     }
@@ -185,7 +185,7 @@ class RAG extends ReadyResource {
    * @param {ReindexOpts} [opts] - Options for reindexing.
    * @returns {Promise<ReindexResult>}
    */
-  reindex (opts) {
+  reindex(opts) {
     return this.dbAdapter.reindex(opts)
   }
 
@@ -195,7 +195,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<BaseDBAdapterConfig|null>} The stored config or null if not configured
    */
   // lunte-disable-next-line require-await
-  async getDBConfig () {
+  async getDBConfig() {
     return this.dbAdapter.getConfig()
   }
 
@@ -204,7 +204,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<void>}
    * @private
    */
-  async _open () {
+  async _open() {
     this.logger.info('Initializing RAG...')
     await this.dbAdapter.ready()
     this.logger.info('RAG ready')
@@ -215,7 +215,7 @@ class RAG extends ReadyResource {
    * @returns {Promise<void>}
    * @private
    */
-  async _close () {
+  async _close() {
     this.logger.info('Closing RAG...')
     await this.dbAdapter.close()
     this.logger.debug('RAG closed')
