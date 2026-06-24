@@ -187,19 +187,43 @@ void MtmdLlmContext::initVisionContext() {
   // overridable via image_max_tokens config.
   if (mparams.image_max_tokens <= 0) {
     static constexpr int kQwenVlDefaultImageMaxTokens = 2048;
-    gguf_init_params gp = {};
-    gp.no_alloc = true;
-    if (gguf_context* gc = gguf_init_from_file(clipPath, gp)) {
-      const int64_t keyId = gguf_find_key(gc, "clip.projector_type");
-      if (keyId >= 0 && gguf_get_kv_type(gc, keyId) == GGUF_TYPE_STRING) {
-        const std::string projType = gguf_get_val_str(gc, keyId);
-        // matches qwen2vl_merger / qwen2.5vl_merger / qwen3vl_merger
-        if (projType.rfind("qwen", 0) == 0 &&
-            projType.find("vl") != std::string::npos) {
+    // Respect an explicit image_min_tokens floor. mtmd converts both knobs into
+    // min/max pixel budgets and throws when max_pixels < min_pixels, so if the
+    // caller asked for at least as many tokens as our default cap, injecting
+    // the default max would make a min-only config fail to load. Leave the
+    // budget to the caller / model default in that case.
+    if (mparams.image_min_tokens < kQwenVlDefaultImageMaxTokens) {
+      gguf_init_params gp = {};
+      gp.no_alloc = true;
+      if (gguf_context* gc = gguf_init_from_file(clipPath, gp)) {
+        // Mirror mtmd's projector-type resolution: it reads clip.projector_type
+        // first and, for mixed vision+audio mmprojs, falls back to
+        // clip.vision.projector_type. Reading only the generic key would miss
+        // Qwen Omni vision encoders (e.g. Qwen3-Omni stores its vision merger
+        // under the vision key), silently leaving them on the uncapped path.
+        auto readProjType = [&](const char* key) -> std::string {
+          const int64_t id = gguf_find_key(gc, key);
+          if (id >= 0 && gguf_get_kv_type(gc, id) == GGUF_TYPE_STRING) {
+            return gguf_get_val_str(gc, id);
+          }
+          return {};
+        };
+        std::string projType = readProjType("clip.projector_type");
+        if (projType.empty()) {
+          projType = readProjType("clip.vision.projector_type");
+        }
+        // Qwen vision mergers: qwen2vl_merger / qwen2.5vl_merger /
+        // qwen3vl_merger. Plus qwen2.5o, the Qwen2.5-Omni combined projector,
+        // which mtmd resolves to the Qwen2.5-VL vision merger for the vision
+        // modality.
+        const bool isQwenVlMerger = projType.rfind("qwen", 0) == 0 &&
+                                    projType.find("vl") != std::string::npos;
+        const bool isQwenOmni = projType == "qwen2.5o";
+        if (isQwenVlMerger || isQwenOmni) {
           mparams.image_max_tokens = kQwenVlDefaultImageMaxTokens;
         }
+        gguf_free(gc);
       }
-      gguf_free(gc);
     }
   }
   ctxVision_.reset(mtmd_init_from_file(clipPath, modelCtx_.model, mparams));
