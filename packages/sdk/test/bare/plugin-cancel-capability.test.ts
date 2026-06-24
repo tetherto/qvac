@@ -40,7 +40,7 @@ test(
       import("@/server/bare/plugins/parakeet-transcription/plugin"),
       import("@/server/bare/plugins/nmtcpp-translation/plugin"),
       import("@/server/bare/plugins/tts-ggml/plugin"),
-      import("@/server/bare/plugins/onnx-ocr/plugin"),
+      import("@/server/bare/plugins/ggml-ocr/plugin"),
       import("@/server/bare/plugins/sdcpp-generation/plugin"),
       import("@/server/bare/plugins/ggml-vla/plugin"),
       import("@/server/bare/plugins/ggml-classification/plugin"),

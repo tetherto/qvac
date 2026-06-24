@@ -87,7 +87,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED]: {
     name: "MODEL_TYPE_REQUIRED",
     message:
-      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
+      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
   },
   [SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH]: {
     name: "MODEL_SRC_TYPE_MISMATCH",
