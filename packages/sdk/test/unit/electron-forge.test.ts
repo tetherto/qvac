@@ -25,19 +25,19 @@ setLogLevel("off");
 test("diffAddons: required is subset → exclusions are the diff", (t) => {
   const installed = [
     "@qvac/llm-llamacpp",
-    "@qvac/ocr-onnx",
+    "@qvac/ocr-ggml",
     "@qvac/embed-llamacpp",
   ];
   const required = ["@qvac/llm-llamacpp"];
   const result = diffAddons(installed, required).sort();
-  t.alike(result, ["@qvac/embed-llamacpp", "@qvac/ocr-onnx"]);
+  t.alike(result, ["@qvac/embed-llamacpp", "@qvac/ocr-ggml"]);
 });
 
 test("diffAddons: empty required → all installed are exclusions", (t) => {
-  const installed = ["@qvac/llm-llamacpp", "@qvac/ocr-onnx"];
+  const installed = ["@qvac/llm-llamacpp", "@qvac/ocr-ggml"];
   t.alike(diffAddons(installed, []).sort(), [
     "@qvac/llm-llamacpp",
-    "@qvac/ocr-onnx",
+    "@qvac/ocr-ggml",
   ]);
 });
 
@@ -56,12 +56,12 @@ test("diffAddons: empty installed → no exclusions", (t) => {
 
 test("createIgnore: composes with user function (user OR addon OR mobile prebuild OR out/)", (t) => {
   const userFn = (filePath: string) => filePath.includes("/.git/");
-  const ignore = createIgnore(["@qvac/ocr-onnx"], userFn);
+  const ignore = createIgnore(["@qvac/ocr-ggml"], userFn);
 
   t.is(typeof ignore, "function", "function input → function output");
   t.ok(ignore("/x/.git/HEAD"), "user fn match");
   t.ok(
-    ignore("/x/node_modules/@qvac/ocr-onnx/package.json"),
+    ignore("/x/node_modules/@qvac/ocr-ggml/package.json"),
     "excluded addon match",
   );
   t.ok(
@@ -85,7 +85,7 @@ test("createIgnore: composes with user function (user OR addon OR mobile prebuil
 
 test("createIgnore: composes with user array", (t) => {
   const userPattern = /^\/secret\//;
-  const ignore = createIgnore(["@qvac/ocr-onnx"], [userPattern]);
+  const ignore = createIgnore(["@qvac/ocr-ggml"], [userPattern]);
 
   t.ok(Array.isArray(ignore), "array input → array output");
   t.ok(
@@ -94,7 +94,7 @@ test("createIgnore: composes with user array", (t) => {
   );
   t.ok(
     ignore.some((re: RegExp) =>
-      re.test("/x/node_modules/@qvac/ocr-onnx/package.json"),
+      re.test("/x/node_modules/@qvac/ocr-ggml/package.json"),
     ),
     "excluded addon pattern present",
   );

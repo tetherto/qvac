@@ -15,12 +15,13 @@ import {
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import { hyperdriveUrlSchema } from "@/schemas/load-model";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { ONNXOcr } from "@qvac/ocr-onnx";
-import { ocr } from "@/server/bare/plugins/onnx-ocr/ops/ocr-stream";
+import ocrAddonLogging from "@qvac/ocr-ggml/addonLogging";
+import { OcrGgml } from "@qvac/ocr-ggml";
+import { ocr } from "@/server/bare/plugins/ggml-ocr/ops/ocr-stream";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
-import { OCR_CRAFT_DETECTOR } from "@/models/registry";
+import { OCR_CRAFT } from "@/models/registry";
 
-const OCR_DETECTOR_FILENAME = "detector_craft.onnx";
+const OCR_DETECTOR_FILENAME = "craft_mlt_25k.gguf";
 
 function deriveDetectorSource(modelSrc: string): string | undefined {
   if (modelSrc.startsWith("pear://")) {
@@ -28,7 +29,7 @@ function deriveDetectorSource(modelSrc: string): string | undefined {
     return `pear://${key}/${OCR_DETECTOR_FILENAME}`;
   }
   if (modelSrc.startsWith("registry://")) {
-    return OCR_CRAFT_DETECTOR.src;
+    return OCR_CRAFT.src;
   }
   return undefined;
 }
@@ -39,19 +40,20 @@ function createOCRModel(
     recognizerPath: string,
     ocrConfig: OCRConfig,
 ) {
-  const logger = createStreamLogger(modelId, ModelType.onnxOcr);
-  registerAddonLogger(modelId, ModelType.onnxOcr, logger);
+  const logger = createStreamLogger(modelId, ModelType.ggmlOcr);
+  registerAddonLogger(modelId, ModelType.ggmlOcr, logger);
 
   const params = {
     pathDetector: detectorPath,
     pathRecognizer: recognizerPath,
     langList: ocrConfig.langList || ["en"],
-    useGPU: ocrConfig.useGPU ?? true,
-    ...(ocrConfig.timeout !== undefined && { timeout: ocrConfig.timeout }),
-    ...(ocrConfig.pipelineMode !== undefined && {
-      pipelineMode: ocrConfig.pipelineMode,
+    ...(ocrConfig.pipelineType !== undefined && {
+      pipelineType: ocrConfig.pipelineType,
     }),
     ...(ocrConfig.magRatio !== undefined && { magRatio: ocrConfig.magRatio }),
+    ...(ocrConfig.canvasSize !== undefined && {
+      canvasSize: ocrConfig.canvasSize,
+    }),
     ...(ocrConfig.defaultRotationAngles !== undefined && {
       defaultRotationAngles: ocrConfig.defaultRotationAngles,
     }),
@@ -64,11 +66,12 @@ function createOCRModel(
     ...(ocrConfig.recognizerBatchSize !== undefined && {
       recognizerBatchSize: ocrConfig.recognizerBatchSize,
     }),
-    ...(ocrConfig.decodingMethod !== undefined && {
-      decodingMethod: ocrConfig.decodingMethod,
+    ...(ocrConfig.nThreads !== undefined && { nThreads: ocrConfig.nThreads }),
+    ...(ocrConfig.backendDevice !== undefined && {
+      backendDevice: ocrConfig.backendDevice,
     }),
-    ...(ocrConfig.straightenPages !== undefined && {
-      straightenPages: ocrConfig.straightenPages,
+    ...(ocrConfig.gpuDevice !== undefined && {
+      gpuDevice: ocrConfig.gpuDevice,
     }),
   };
 
@@ -78,15 +81,14 @@ function createOCRModel(
     opts: { stats: true },
   };
 
-   
-  const model = new ONNXOcr(args);
+  const model = new OcrGgml(args);
 
   return model;
 }
 
 export const ocrPlugin = definePlugin({
-  modelType: ModelType.onnxOcr,
-  displayName: "OCR (ONNX)",
+  modelType: ModelType.ggmlOcr,
+  displayName: "OCR (GGML)",
   addonPackage: ADDON_OCR,
   loadConfigSchema: ocrConfigSchema,
 
@@ -135,7 +137,7 @@ export const ocrPlugin = definePlugin({
       requestSchema: ocrStreamRequestSchema,
       responseSchema: ocrStreamResponseSchema,
       streaming: true,
-      // ONNX OCR does not expose a cancel surface — SDK falls back
+      // GGML OCR does not expose a cancel surface — SDK falls back
       // to soft-cancel.
       cancel: { scope: "none" },
 
@@ -168,5 +170,10 @@ export const ocrPlugin = definePlugin({
         }
       },
     }),
+  },
+
+  logging: {
+    module: ocrAddonLogging,
+    namespace: ModelType.ggmlOcr,
   },
 });

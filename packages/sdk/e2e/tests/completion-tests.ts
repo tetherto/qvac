@@ -10,7 +10,8 @@ interface GenerationParams {
   frequency_penalty?: number;
   presence_penalty?: number;
   repeat_penalty?: number;
-  reasoning_budget?: -1 | 0;
+  reasoning_budget?: number;
+  remove_thinking_from_context?: boolean;
 }
 
 type ResponseFormat =
@@ -589,6 +590,16 @@ export const completionReasoningBudgetUnrestricted = createCompletionTest(
   { validation: "type", expectedType: "string" },
 );
 
+export const completionRemoveThinkingFromContext = createCompletionTest(
+  "completion-remove-thinking-from-context",
+  {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { remove_thinking_from_context: true, predict: 32 },
+  },
+  { validation: "type", expectedType: "string" },
+);
+
 // Validates that stopReason "length" is emitted when the token budget is
 // exhausted before EOS. Uses a tiny predict budget against a prompt that
 // would produce far more tokens if unconstrained.
@@ -679,6 +690,7 @@ export const completionTests = [
   completionResponseFormatWithToolsRejected,
   completionReasoningBudgetDisabled,
   completionReasoningBudgetUnrestricted,
+  completionRemoveThinkingFromContext,
   completionStats,
   completionStopReasonLength,
 ];
