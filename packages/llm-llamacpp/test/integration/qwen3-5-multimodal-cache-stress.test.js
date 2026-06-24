@@ -39,6 +39,13 @@ const SYSTEM_PROMPT = {
   content: 'You are a visual chat assistant. Answer plainly and keep going until the requested list is complete.'
 }
 
+const NO_CACHE_SEPARATOR_PROMPT = [
+  {
+    role: 'user',
+    content: 'This is an unrelated no-cache separator prompt. Reply with ok.'
+  }
+]
+
 function createLogger () {
   return {
     info: (...args) => console.info(...args),
@@ -244,6 +251,15 @@ function assertCanceledPrefillKeptTokens (t, beforeStats, afterStats) {
   )
 }
 
+async function runNoCacheSeparator (t, addon, label) {
+  const result = await runAndCollect(addon, NO_CACHE_SEPARATOR_PROMPT, {
+    generationParams: { predict: 16 }
+  })
+
+  t.ok(result.text.length > 0, `${label}: no-cache separator generated output`)
+  t.is(toNumber(result.stats.CacheTokens), 0, `${label}: no-cache separator cleared in-memory cache`)
+}
+
 safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   timeout: 2_400_000,
   skip: skipStress
@@ -277,6 +293,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   t.is(toNumber(systemPrefill.stats.generatedTokens), 0, 'system prefill reports zero generated tokens')
   assertCachedStats(t, systemPrefill.stats, 'system prefill')
   t.ok(fs.existsSync(cachePath), 'system prefill saved cache to disk')
+  await runNoCacheSeparator(t, addon, 'after system prefill')
 
   const first = await runAndCollect(
     addon,
@@ -291,6 +308,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   t.ok(toNumber(first.stats.CacheTokens) > 4000, `first turn cached Qwen3.5 image cells (${first.stats.CacheTokens})`)
   assertCachedStats(t, first.stats, 'first multimodal turn')
   t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
+  await runNoCacheSeparator(t, addon, 'after first multimodal turn')
 
   const prefillSlide = await runAndCollect(
     addon,
@@ -304,6 +322,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   t.is(toNumber(prefillSlide.stats.generatedTokens), 0, 'prefill stress run reports zero generated tokens')
   t.ok(toNumber(prefillSlide.stats.contextSlides) > 0, `prefill stress run triggered context sliding (${prefillSlide.stats.contextSlides})`)
   assertCachedStats(t, prefillSlide.stats, 'prefill stress run')
+  await runNoCacheSeparator(t, addon, 'after prefill stress run')
 
   const canceledPrefillStats = await runAndCancelDuringPrefill(
     addon,
@@ -314,6 +333,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
     }
   )
   assertCanceledPrefillKeptTokens(t, prefillSlide.stats, canceledPrefillStats)
+  await runNoCacheSeparator(t, addon, 'after canceled prefill')
 
   const afterPrefillCancel = await runAndCollect(
     addon,
@@ -325,6 +345,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   )
   t.ok(afterPrefillCancel.text.length > 0, 'chat recovered after cancel during prefill')
   assertCachedStats(t, afterPrefillCancel.stats, 'after prefill cancel')
+  await runNoCacheSeparator(t, addon, 'after prefill-cancel recovery')
 
   const decodePressure = await runAndCollect(
     addon,
@@ -338,6 +359,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   t.is(toNumber(decodePressure.stats.generatedTokens), 0, 'decode pressure prefill reports zero generated tokens')
   t.ok(toNumber(decodePressure.stats.contextSlides) > 0, `decode pressure prefill triggered context sliding (${decodePressure.stats.contextSlides})`)
   assertCachedStats(t, decodePressure.stats, 'decode pressure prefill')
+  await runNoCacheSeparator(t, addon, 'after decode pressure prefill')
 
   const decodeSlide = await runAndCollect(
     addon,
@@ -351,6 +373,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   t.ok(toNumber(decodeSlide.stats.generatedTokens) > 0, 'decode stress run reports generated tokens')
   t.ok(toNumber(decodeSlide.stats.contextSlides) > 0, `decode stress run triggered generation sliding (${decodeSlide.stats.contextSlides})`)
   assertCachedStats(t, decodeSlide.stats, 'decode stress run')
+  await runNoCacheSeparator(t, addon, 'after decode stress run')
 
   const canceledDecode = await runAndCancelAfterFirstChunk(
     addon,
@@ -361,6 +384,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
     }
   )
   t.ok(canceledDecode.chunkCount > 0, 'cancel during decoding happened after at least one chunk')
+  await runNoCacheSeparator(t, addon, 'after canceled decode')
 
   const afterDecodeCancel = await runAndCollect(
     addon,
