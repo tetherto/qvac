@@ -33,7 +33,7 @@
     "url": "git+https://github.com/tetherto/qvac.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/cli#readme",
+  "homepage": "https://qvac.tether.io",
   "scripts": {
     "prepublishOnly": "node scripts/check-publish-ready.cjs",
     "build": "rm -rf dist && tsc",

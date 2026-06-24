@@ -59,6 +59,6 @@
     "directory": "packages/decoder-audio"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/decoder-audio#readme",
+  "homepage": "https://qvac.tether.io",
   "types": "index.d.ts"
 }

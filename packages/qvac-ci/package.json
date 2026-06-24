@@ -41,7 +41,7 @@
     "url": "git+https://github.com/tetherto/qvac.git",
     "directory": "packages/qvac-ci"
   },
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-ci#readme",
+  "homepage": "https://qvac.tether.io",
   "dependencies": {
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1"
