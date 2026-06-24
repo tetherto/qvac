@@ -7,15 +7,20 @@ description: "Deletes document embeddings from the RAG vector database.
 ---
 
 ```typescript
-function ragDeleteEmbeddings(params: { ids: string[]; modelId?: string; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragDeleteEmbeddings(params: infer): Promise
 ```
+
+## Description
+
+Deletes document embeddings from the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ ids: string[]; modelId?: string; workspace?: string \}` | ✓ | The parameters for deleting embeddings |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | `infer` | ✓ | The parameters for deleting embeddings |
 
 ## Returns
 
@@ -25,13 +30,7 @@ Promise
 
 
 
-## Throws
-
-| Error | When |
-| --- | --- |
-| `When the operation fails or workspace doesn't exist` |  |
-
-## Example
+## Examples
 
 ```typescript
 await ragDeleteEmbeddings({

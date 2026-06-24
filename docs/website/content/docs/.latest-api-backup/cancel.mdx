@@ -5,14 +5,18 @@ description: "Cancels an ongoing operation."
 ---
 
 ```typescript
-function cancel(params: { modelId: string; operation: "inference" } | { clearCache?: boolean; downloadKey: string; operation: "downloadAsset" } | { operation: "rag"; workspace?: string }): Promise
+function cancel(params: infer): Promise
 ```
+
+## Description
+
+Cancels an ongoing operation.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; operation: "inference" \} | \{ clearCache?: boolean; downloadKey: string; operation: "downloadAsset" \} | \{ operation: "rag"; workspace?: string \}` | ✓ | The parameters for the cancellation |
+| `params` | `infer` | ✓ | The parameters for the cancellation |
 
 ## Returns
 
@@ -22,13 +26,7 @@ Promise
 
 
 
-## Throws
-
-| Error | When |
-| --- | --- |
-| `When the response type is invalid or when the cancellation fails` |  |
-
-## Example
+## Examples
 
 ```typescript
 // Cancel inference

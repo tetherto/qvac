@@ -19,45 +19,28 @@ async function downloadModel (url, filename) {
   console.log(`Downloading ${filename}...`)
 
   return new Promise((resolve, reject) => {
-    let resolved = false
-    const safeResolve = (val) => { if (!resolved) { resolved = true; resolve(val) } }
-    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
-
     const fileStream = fs.createWriteStream(modelPath)
-
-    fileStream.on('error', (err) => {
-      fileStream.destroy()
-      fs.unlink(modelPath, () => safeReject(err))
-    })
+    let downloaded = 0
 
     const req = https.request(url, response => {
-      if ([301, 302, 307, 308].includes(response.statusCode)) {
+      if (response.statusCode === 301 || response.statusCode === 302) {
         fileStream.destroy()
         req.destroy()
         response.destroy()
-        fs.unlink(modelPath, (unlinkErr) => {
-          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-            return safeReject(unlinkErr)
-          }
-
-          const redirectUrl = new URL(response.headers.location, url).href
-
-          downloadModel(redirectUrl, filename)
-            .then(safeResolve).catch(safeReject)
-        })
-        return
+        fs.unlink(modelPath, () => {})
+        return downloadModel(response.headers.location, filename)
+          .then(resolve).catch(reject)
       }
 
       if (response.statusCode !== 200) {
         fileStream.destroy()
         req.destroy()
         response.destroy()
-        fs.unlink(modelPath, () => safeReject(new Error(`Download failed: ${response.statusCode}`)))
-        return
+        fs.unlink(modelPath, () => {})
+        return reject(new Error(`Download failed: ${response.statusCode}`))
       }
 
       const total = parseInt(response.headers['content-length'], 10)
-      let downloaded = 0
 
       response.on('data', chunk => {
         downloaded += chunk.length
@@ -69,21 +52,20 @@ async function downloadModel (url, filename) {
         }
       })
 
-      response.on('error', (err) => {
-        fileStream.destroy()
-        fs.unlink(modelPath, () => safeReject(err))
-      })
-
       response.pipe(fileStream)
       fileStream.on('close', () => {
+        fileStream.destroy()
+        req.destroy()
+        response.destroy()
         console.log('\nDownload complete!')
-        safeResolve([filename, modelDir])
+        resolve([filename, modelDir])
       })
     })
 
     req.on('error', err => {
       fileStream.destroy()
-      fs.unlink(modelPath, () => safeReject(err))
+      req.destroy()
+      fs.unlink(modelPath, () => reject(err))
     })
 
     req.end()

@@ -5,15 +5,18 @@ description: "Invoke a non-streaming plugin handler."
 ---
 
 ```typescript
-function invokePlugin(options: InvokePluginOptions, rpcOptions?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function invokePlugin(options: InvokePluginOptions): Promise
 ```
+
+## Description
+
+Invoke a non-streaming plugin handler.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `options` | `InvokePluginOptions` | ✓ | No description |
-| `rpcOptions` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
 
 ## Returns
 

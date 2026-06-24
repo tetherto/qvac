@@ -39,7 +39,12 @@ async function downloadFile (url, dest) {
             return safeReject(unlinkErr)
           }
 
-          const redirectUrl = new URL(response.headers.location, url).href
+          let redirectUrl = response.headers.location
+          // Handle relative redirects
+          if (redirectUrl.startsWith('/')) {
+            const originalUrl = new URL(url)
+            redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
+          }
 
           downloadFile(redirectUrl, dest)
             .then(safeResolve)

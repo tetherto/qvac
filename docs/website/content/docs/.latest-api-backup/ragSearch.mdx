@@ -8,15 +8,21 @@ doesn't exist, returns an empty array."
 ---
 
 ```typescript
-function ragSearch(params: { modelId: string; n?: number; query: string; topK?: number; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragSearch(params: input): Promise
 ```
+
+## Description
+
+Searches for similar documents in the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
+doesn't exist, returns an empty array.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; n?: number; query: string; topK?: number; workspace?: string \}` | ✓ | The parameters for searching |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | `input` | ✓ | The parameters for searching |
 
 ## Returns
 
@@ -26,13 +32,7 @@ Promise
 
 
 
-## Throws
-
-| Error | When |
-| --- | --- |
-| `When the operation fails` |  |
-
-## Example
+## Examples
 
 ```typescript
 const results = await ragSearch({
