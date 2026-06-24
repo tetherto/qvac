@@ -78,7 +78,8 @@
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest"
+      "runQwen35ImageHighResAuroraPerfTest",
+      "runQwen35MultimodalCacheStressTest"
     ]
   },
   "iosWeekly": {
@@ -98,7 +99,8 @@
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest"
+      "runQwen35ImageHighResAuroraPerfTest",
+      "runQwen35MultimodalCacheStressTest"
     ]
   }
 }
