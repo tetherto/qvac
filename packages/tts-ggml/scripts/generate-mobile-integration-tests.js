@@ -14,14 +14,29 @@ const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 
+// QVAC-20557 DIAGNOSTIC (DO NOT MERGE): restrict the device-farm run to the
+// 12 kHz-tone diagnostic tests so each gets its own ~7.5-min module budget
+// and we get a fast, focused answer.  Empty array => run the full suite (the
+// shipped behaviour).  validate-mobile-tests.js applies the SAME filter so
+// the generated file stays in sync.  Revert to `[]` before merging.
+const MOBILE_DIAG_SUBSET = [
+  'chatterbox-tone-cpu-mtl.test.js',
+  'chatterbox-tone-cpu-turbo.test.js'
+]
+
 function getIntegrationFiles () {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
+  const all = fs.readdirSync(integrationDir)
     .filter(entry => entry.endsWith('.test.js'))
     .sort()
+
+  if (MOBILE_DIAG_SUBSET.length > 0) {
+    return all.filter(entry => MOBILE_DIAG_SUBSET.includes(entry))
+  }
+  return all
 }
 
 function toFunctionName (fileName) {
