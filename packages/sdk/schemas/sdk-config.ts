@@ -59,7 +59,7 @@ export const deviceConfigDefaultsSchema = z
       .optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.ttsGgml]: z.record(z.string(), z.unknown()).optional(),
-    [ModelType.onnxOcr]: ocrConfigSchema.partial().optional(),
+    [ModelType.ggmlOcr]: ocrConfigSchema.partial().optional(),
     [ModelType.sdcppGeneration]: sdcppConfigSchema.partial().optional(),
     [ModelType.ggmlVla]: vlaConfigSchema.partial().optional(),
     // Alias keys (user-friendly)
