@@ -509,19 +509,18 @@ jobs:
           aws s3 sync s3://tether-ai-dev/vlm-benchmark/ benchmarks/vlm-benchmark/fixture/
           echo "fixture images:"; ls benchmarks/vlm-benchmark/fixture/
 
-      # Fail fast BEFORE the matrix run and the (expensive) native-CLI build if the
-      # sources don't share one llama.cpp build — an engine comparison across different
-      # builds isn't apples-to-apples. addon's engine = the qvac-fabric vcpkg pin;
-      # fabric/upstream = their refs. Override for an intentional cross-version run by
-      # setting the repo variable VLM_ALLOW_VERSION_MISMATCH=1 (no workflow input — the
-      # dispatch is already at the 10-input cap). SHA-pinned CLI refs only warn.
-      - name: Check llama.cpp engine version parity (several-sources)
+      # Advisory: log each source's llama.cpp build before the run so a cross-version
+      # comparison is visible up front. Same build is the default expectation; a mismatch
+      # is allowed (sometimes exactly what's being benchmarked) and NEVER fails the run —
+      # the consolidated report carries a warning banner instead. addon's engine = the
+      # qvac-fabric vcpkg pin; fabric/upstream = their refs (a SHA-pinned ref can't be
+      # derived → warns).
+      - name: Check llama.cpp engine version parity (several-sources, advisory)
         if: inputs.matrix_mode == 'several-sources'
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
           QVAC_VLM_SOURCES: ${{ inputs.matrix_sources }}
-          QVAC_VLM_ALLOW_VERSION_MISMATCH: ${{ vars.VLM_ALLOW_VERSION_MISMATCH }}
         run: node benchmarks/vlm-benchmark/version-guard.cjs
 
       - name: Run VLM matrix

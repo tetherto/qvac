@@ -16,8 +16,10 @@
 //         b8189 → 8189). A 40-char commit SHA (A5) does NOT — it can't be auto-verified,
 //         so it is reported as a WARNING (not a hard failure).
 //
-// Behaviour: a derivable mismatch exits non-zero. Set QVAC_VLM_ALLOW_VERSION_MISMATCH=1
-// for an INTENTIONAL cross-version run. Usage:
+// Behaviour: ADVISORY — never blocks. A cross-version comparison is allowed (sometimes it's
+// exactly what you want to benchmark); the same build is just the DEFAULT expectation. On a
+// mismatch this prints a warning and the consolidated report carries a banner, so the gap is
+// visible up front and in the results — without failing the run. Usage:
 //   node version-guard.cjs "addon,fabric@v8189.0.2"      (or reads QVAC_VLM_SOURCES)
 
 const fs = require('fs')
@@ -76,23 +78,19 @@ function evaluate (sourcesRaw) {
 
 function main () {
   const sourcesRaw = process.argv[2] || process.env.QVAC_VLM_SOURCES || ''
-  const allow = /^(1|true|yes)$/i.test(String(process.env.QVAC_VLM_ALLOW_VERSION_MISMATCH || ''))
   const r = evaluate(sourcesRaw)
   for (const l of r.lines) console.log(l)
   if (r.mismatch) {
-    console.error(`\n✗ VERSION MISMATCH: sources do not share one llama.cpp build (found ${r.distinct.join(', ')}).`)
-    console.error('  An engine comparison across different llama.cpp builds is not apples-to-apples.')
-    console.error('  Align the refs (e.g. fabric/upstream tag to the addon\'s qvac-fabric build, or vice versa),')
-    console.error('  or set QVAC_VLM_ALLOW_VERSION_MISMATCH=1 for an intentional cross-version run.')
-    if (allow) { console.error('\n  → QVAC_VLM_ALLOW_VERSION_MISMATCH set: continuing despite mismatch.'); return }
-    process.exit(1)
+    console.log(`\n⚠ CROSS-VERSION comparison: sources do not share one llama.cpp build (found ${r.distinct.join(', ')}).`)
+    console.log('  Allowed (sometimes intended) — NOT a failure; the report flags it. For an apples-to-apples')
+    console.log('  engine comparison, pin every source to the same build (e.g. fabric/upstream tag → the')
+    console.log('  addon\'s qvac-fabric build).')
+  } else if (r.warn) {
+    console.log('\n⚠ A source is pinned to a commit SHA — its build is not derivable from the ref;')
+    console.log('  parity could not be auto-verified. Confirm manually that the SHA matches the others.')
+  } else {
+    console.log('\n✓ all sources share llama.cpp build ' + (r.distinct[0] != null ? r.distinct[0] : '(single source / nothing to compare)') + '.')
   }
-  if (r.warn) {
-    console.log('\n⚠ Some sources are pinned to a commit SHA — build number is not derivable from the ref;')
-    console.log('  parity could not be auto-verified for those. Confirm manually that the SHA matches the others.')
-    return
-  }
-  console.log('\n✓ all sources share llama.cpp build ' + (r.distinct[0] != null ? r.distinct[0] : '(single source / nothing to compare)') + '.')
 }
 
 if (require.main === module) main()

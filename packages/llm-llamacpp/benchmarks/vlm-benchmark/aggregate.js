@@ -24,6 +24,13 @@ try {
   for (const it of (FIXTURE.items || [])) GOLD_BY_ID[it.id] = it.gold
 } catch (_) {}
 
+// Engine-version parity check (several-sources). Best-effort: derives each source's
+// llama.cpp build from its id (addon = qvac-fabric vcpkg pin; CLI = ref) so the report
+// can warn when an engine comparison spans different builds. Loaded defensively so
+// aggregate still works if the module/vcpkg.json isn't present.
+let VERSION_GUARD = null
+try { VERSION_GUARD = require('./version-guard.cjs') } catch (_) {}
+
 const ARTICLES = new Set(['a', 'an', 'the'])
 const PUNCT = /[;/[\]"{}()=+\\_\-><@`,?!.]/g
 
@@ -340,6 +347,23 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   if (severalSources) {
     // Comparison axis is the engine; one column per source.
     const sources = [...new Set(rows.map(r => r.cell))].sort()
+    // Engine-version parity: a cross-version comparison is allowed (sometimes the point),
+    // but the deltas then reflect the llama.cpp build gap, not only the engine — so flag it
+    // loudly here. Builds come from the source ids; SHA-pinned refs can't be derived.
+    if (VERSION_GUARD) {
+      try {
+        const vg = VERSION_GUARD.evaluate(sources.join(','))
+        if (vg.mismatch) {
+          const desc = vg.entries.map(e => `${e.id} = ${e.engine.replace(' (addon)', '')} ${e.build == null ? '?' : e.build}`).join(', ')
+          L.push(`> ⚠️ **Cross-version comparison — sources do NOT share one llama.cpp build** (${desc}). ` +
+            'The deltas below reflect the version gap as well as the engine; pin every source to the same ' +
+            'build for an apples-to-apples engine comparison. (Intentional cross-version runs are fine — heads-up only.)\n')
+        } else if (vg.warn) {
+          L.push('> ⚠️ **Engine version unverified** — a source is pinned to a commit SHA, so its llama.cpp ' +
+            'build could not be derived; confirm it matches the others for an apples-to-apples comparison.\n')
+        }
+      } catch (_) {}
+    }
     L.push(`Inference engines on the same model: **${sources.join(', ')}**.\n`)
     L.push('### Quality — overall % per source\n')
     L.push('| Platform · device | ' + sources.join(' | ') + ' |')

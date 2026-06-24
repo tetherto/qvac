@@ -209,16 +209,17 @@ Walk it top-to-bottom. Steps 1–2 (model + source versions) decide *what* is me
      - **Candidate-vs-baseline** = `-f matrix_sources=addon@candidate,addon@baseline` (a clean
        2-source build comparison; see the example below). The native-CLI steps run only when a
        `fabric`/`upstream` token is present, so this stays addon-only.
-     - **⚠ Engine version parity — REQUIRED before an `addon` vs `fabric`/`upstream` comparison.**
-       It is only apples-to-apples when every source shares the same llama.cpp build. The addon's
-       engine is the `qvac-fabric` vcpkg pin (`packages/llm-llamacpp/vcpkg.json` `version>=`; the
-       MAJOR is the llama.cpp build number, e.g. `8828.1.0` → 8828); the CLIs carry it in their
-       tag (`v8189.0.2` / `b8189` → 8189). **Before dispatching, confirm they match** by running
+     - **Engine version parity — the default expectation for an `addon` vs `fabric`/`upstream`
+       comparison.** It is only apples-to-apples when every source shares the same llama.cpp build.
+       The addon's engine is the `qvac-fabric` vcpkg pin (`packages/llm-llamacpp/vcpkg.json`
+       `version>=`; the MAJOR is the llama.cpp build number, e.g. `8828.1.0` → 8828); the CLIs carry
+       it in their tag (`v8189.0.2` / `b8189` → 8189). Check before dispatching with
        `node benchmarks/vlm-benchmark/version-guard.cjs "<matrix_sources>"` (e.g. `"addon,fabric@v8189.0.2"`).
-       CI runs this guard automatically and **fails the run on a mismatch**; align the refs to the
-       same build, or override an intentional cross-version run with repo var
-       `VLM_ALLOW_VERSION_MISMATCH=1`. A SHA-pinned CLI ref (A5) can't be auto-checked — it only
-       warns, so verify that commit's build by hand. (Build comparisons — `addon@candidate` vs
+       A **cross-version run is allowed** — sometimes it's exactly what you want to benchmark — so the
+       guard **never fails the run**; CI runs it as an advisory log and the **consolidated report shows a
+       warning banner** whenever the sources don't share a build, so the gap is never silently compared.
+       To get an apples-to-apples engine comparison, pin every source to the same build. A SHA-pinned CLI
+       ref (A5) can't be auto-derived — it only warns. (Build comparisons — `addon@candidate` vs
        `addon@baseline` — are the same engine, so parity always holds there.)
    - **Candidate ref** = the **`ref`** input (`-f ref=<branch|tag|commit-sha>`, default = the branch
      the workflow runs on). This is what gets built as `addon@candidate`.
