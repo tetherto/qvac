@@ -390,6 +390,24 @@ bool MtmdLlmContext::evalMessageWithTools(
       // be restored without corrupting recurrent state.
       const llama_pos removedTokens = removeLastNTokens(totalDelta);
       if (removedTokens == 0 && totalDelta > 0) {
+        // [TODO] Replace this metadata resync in the next PR with real
+        // checkpoint save/restore rollback. This branch means rollback did not
+        // remove the partially evaluated prompt, which is expected for
+        // Qwen3VL hybrid/recurrent memory until checkpoint restore exists.
+        //
+        // The subtle case is cancellation between mtmd chunks: the image chunk
+        // has already returned from mtmd_helper_eval_chunk_single(), so
+        // nPastLocal has been advanced to the next chunk's cursor by the
+        // Qwen3VL M-RoPE span (max(nx, ny)). But the following text chunk has
+        // not run yet. llama memory currently contains only the committed image
+        // KV cells, whose normal sequence position is the image chunk's pos.t;
+        // the image x/y coordinates are stored as extended metadata and are not
+        // reported by llama_memory_seq_pos_max().
+        //
+        // If we save nPastLocal as cache metadata here, disk reload can fail
+        // because the saved nPast is ahead of the positions actually restored
+        // from llama memory. Persist the memory-derived position until proper
+        // rollback can restore the exact pre-cancel state.
         auto* mem = llama_get_memory(lctx_);
         if (mem == nullptr) {
           throw qvac_errors::StatusError(
