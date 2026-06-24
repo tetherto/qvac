@@ -1,0 +1,13 @@
+[
+  "runImageElephantTest",
+  "runImageFruitPlateTest",
+  "runImageHighResAuroraTest",
+  "runBitnetTest",
+  "runToolCallingTest",
+  "runGemma4ImageElephantPerfTest",
+  "runGemma4ImageFruitPlatePerfTest",
+  "runGemma4ImageHighResAuroraPerfTest",
+  "runQwen35ImageElephantPerfTest",
+  "runQwen35ImageFruitPlatePerfTest",
+  "runQwen35ImageHighResAuroraPerfTest"
+]

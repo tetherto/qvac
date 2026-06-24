@@ -1,0 +1,29 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-fabric",
+      "version>=": "9341.0.0",
+      "default-features": false,
+      "features": [
+        "gpu-backends"
+      ]
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.2.1"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    },
+    "stb"
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

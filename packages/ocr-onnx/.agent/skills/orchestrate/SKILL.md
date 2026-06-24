@@ -160,8 +160,8 @@ If no CI needed or no reviewer fixes, proceed to reporting.
 3. **Create the PR** using `gh pr create`:
    - **Title**: `<ticket> <prefix>[tags]: <task-title-summary>` (following commit format from CLAUDE.md)
    - **Body**: Generate based on PR type:
-     - For addon packages: follow the format from `/addon-pr-description`
-     - For SDK packages: follow the format from `/sdk-pr-create`
+     - For addon packages: follow the format from `/qv-addon-pr-create`
+     - For SDK packages: follow the format from `/qv-sdk-pr-create`
      - Include: what changed, why, test plan, link to Asana task
    - **Base**: `main`
    - Example:

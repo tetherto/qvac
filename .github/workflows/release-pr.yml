@@ -1,0 +1,73 @@
+name: Release PR (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      bump:
+        description: Version bump type
+        required: true
+        type: string
+      preid:
+        description: Pre-release identifier
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: lts/*
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+          PREID: ${{ inputs.preid }}
+        run: |
+          PREID_ARG=${{ inputs.preid != '' && format('--preid={0}', inputs.preid) || '' }}
+          NEW_VERSION=$(npm version "$BUMP" $PREID_ARG --no-git-tag-version)
+          echo "version=${NEW_VERSION#v}" >> "$GITHUB_OUTPUT"
+          echo "branch=release/v${NEW_VERSION#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Update lockfile
+        run: |
+          if [ -f package-lock.json ]; then
+            npm install --ignore-scripts --package-lock-only
+          fi
+
+      - name: Create branch and push
+        run: |
+          git checkout -b ${{ steps.bump.outputs.branch }}
+          git add package.json
+          [ -f package-lock.json ] && git add package-lock.json
+          git commit -m "Release: v${{ steps.bump.outputs.version }}"
+          git push origin ${{ steps.bump.outputs.branch }}
+
+      - name: Open Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "Release: v${{ steps.bump.outputs.version }}" \
+            --body "Bumps version to \`v${{ steps.bump.outputs.version }}\`" \
+            --base main \
+            --head ${{ steps.bump.outputs.branch }}

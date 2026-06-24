@@ -1,0 +1,6 @@
+dist/
+node_modules/
+bun.lock
+package-lock.json
+*.tsbuildinfo
+.npmrc

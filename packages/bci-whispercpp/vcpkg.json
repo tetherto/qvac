@@ -1,0 +1,44 @@
+{
+  "name": "bci-whispercpp",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.2.1"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["opencl", "vulkan"],
+      "platform": "android"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["vulkan"],
+      "platform": "!(osx | ios | android)"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["metal"],
+      "platform": "osx | ios"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build C++ unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "name": "whisper-cpp",
+      "version": "1.8.5",
+      "port-version": 5
+    }
+  ]
+}

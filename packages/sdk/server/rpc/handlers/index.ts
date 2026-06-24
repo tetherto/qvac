@@ -3,7 +3,10 @@ import { handleDownloadAsset } from "./download-asset";
 import { handleLoadModel } from "./load-model";
 import { handleUnloadModel } from "./unload-model";
 import { handleEmbed } from "./embed";
+import { handleTranscribe } from "./transcribe";
 import { handleTranscribeStream } from "./transcribe-stream";
+import { handleBciTranscribe } from "./bci-transcribe";
+import { handleBciTranscribeStream } from "./bci-transcribe-stream";
 import { provideHandler } from "./provideHandler";
 import { stopProvideHandler } from "./stopProvideHandler";
 import { handleTranslate } from "./translate";
@@ -12,25 +15,37 @@ import { handleRag } from "./rag";
 import { cancelHandler } from "./cancelHandler";
 import { handleDeleteCache } from "./delete-cache";
 import { handleTextToSpeech } from "./text-to-speech";
+import { handleTextToSpeechStream } from "./text-to-speech-stream";
 import { handleGetModelInfo } from "./get-model-info";
+import { handleGetLoadedModelInfo } from "./get-loaded-model-info";
+import { handleFinetune } from "./finetune";
 import { handleOCRStream } from "./ocr-stream";
-import { handlePing } from "./ping";
+import { handleHeartbeat } from "./heartbeat";
+import { handleDiffusionStream } from "./diffusion-stream";
+import { handleVideoStream } from "./video-stream";
+import { handleUpscaleStream } from "./upscale-stream";
 import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
 import {
   handleModelRegistryList,
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "./registry";
+import { handleSuspend } from "./suspend";
+import { handleResume } from "./resume";
+import { handleState } from "./state";
 
 export const handlers = {
-  ping: handlePing,
+  heartbeat: handleHeartbeat,
   completionStream: handleCompletionStream,
   downloadAsset: handleDownloadAsset,
   deleteCache: handleDeleteCache,
   loadModel: handleLoadModel,
   unloadModel: handleUnloadModel,
   embed: handleEmbed,
+  transcribe: handleTranscribe,
   transcribeStream: handleTranscribeStream,
+  bciTranscribe: handleBciTranscribe,
+  bciTranscribeStream: handleBciTranscribeStream,
   provide: provideHandler,
   stopProvide: stopProvideHandler,
   translate: handleTranslate,
@@ -38,11 +53,20 @@ export const handlers = {
   rag: handleRag,
   cancel: cancelHandler,
   textToSpeech: handleTextToSpeech,
+  textToSpeechStream: handleTextToSpeechStream,
   getModelInfo: handleGetModelInfo,
+  getLoadedModelInfo: handleGetLoadedModelInfo,
+  finetune: handleFinetune,
   ocrStream: handleOCRStream,
+  diffusionStream: handleDiffusionStream,
+  videoStream: handleVideoStream,
+  upscaleStream: handleUpscaleStream,
   pluginInvoke: handlePluginInvoke,
   pluginInvokeStream: handlePluginInvokeStream,
   modelRegistryList: handleModelRegistryList,
   modelRegistrySearch: handleModelRegistrySearch,
   modelRegistryGetModel: handleModelRegistryGetModel,
+  suspend: handleSuspend,
+  resume: handleResume,
+  state: handleState,
 };

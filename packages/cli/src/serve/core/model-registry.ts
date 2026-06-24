@@ -1,3 +1,5 @@
+import type { ModelConstant } from '@qvac/sdk'
+
 const STATES = {
   IDLE: 'idle',
   LOADING: 'loading',
@@ -10,7 +12,7 @@ export type ModelState = typeof STATES[keyof typeof STATES]
 
 export interface ModelEntry {
   id: string
-  src: string
+  modelSrc: string | ModelConstant
   sdkType: string
   endpointCategory: string
   config: Record<string, unknown>
@@ -23,11 +25,40 @@ export interface ModelEntry {
 export interface ServeConfig {
   models: Map<string, ResolvedModelEntry>
   defaults: Map<string, string>
+  /**
+   * Externally reachable origin for this server (e.g. "https://api.example.com").
+   * Required to mint absolute URLs in image-generation responses when
+   * `response_format=url`. Trailing slash is stripped on parse.
+   */
+  publicBaseUrl: string | null
+  openai: OpenAIServeOptions
+}
+
+export interface OpenAIServeOptions {
+  audio: {
+    speech: {
+      defaultVoice: string | null
+      /**
+       * Maps an OpenAI `voice` string to a `serve.models` alias. Each alias can
+       * carry its own TTS `config` (e.g. Chatterbox `referenceAudioSrc`, Supertonic
+       * `ttsVoiceStyleSrc`). When set, this is tried before `${model}-${voice}` and
+       * before the bare `model` alias. Keys are normalized to lowercase when parsed.
+       */
+      voices: Record<string, string> | null
+      /**
+       * Maximum allowed character length of `input`. Requests above this are
+       * rejected with `400 input_too_long` before any synthesis runs (the
+       * route otherwise buffers the full WAV in memory — DoS vector).
+       * `null` disables the cap. Defaults to OpenAI's documented 4096.
+       */
+      maxInputChars: number | null
+    }
+  }
 }
 
 export interface ResolvedModelEntry {
   alias: string
-  src: string
+  modelSrc: string | ModelConstant
   sdkType: string
   endpointCategory: string
   isDefault: boolean
@@ -41,7 +72,7 @@ export interface ModelRegistry {
   getAll: () => ModelEntry[]
   getReady: () => ModelEntry[]
   register: (alias: string, opts: {
-    src: string
+    modelSrc: string | ModelConstant
     sdkType: string
     endpointCategory: string
     config: Record<string, unknown>
@@ -69,7 +100,7 @@ export function createModelRegistry (): ModelRegistry {
   }
 
   function register (alias: string, opts: {
-    src: string
+    modelSrc: string | ModelConstant
     sdkType: string
     endpointCategory: string
     config: Record<string, unknown>
@@ -79,7 +110,7 @@ export function createModelRegistry (): ModelRegistry {
 
     const entry: ModelEntry = {
       id: alias,
-      src: opts.src,
+      modelSrc: opts.modelSrc,
       sdkType: opts.sdkType,
       endpointCategory: opts.endpointCategory,
       config: opts.config,

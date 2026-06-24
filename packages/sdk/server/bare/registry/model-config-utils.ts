@@ -11,16 +11,25 @@ import {
   whisperConfigSchema,
   parakeetRuntimeConfigSchema,
 } from "@/schemas/transcription-config";
+import { bciConfigSchema } from "@/schemas/bci-config";
 import { ocrConfigSchema } from "@/schemas/ocr";
+import { sdcppConfigSchema } from "@/schemas/sdcpp-config";
+import { vlaConfigSchema } from "@/schemas/vla";
+import { classificationConfigSchema } from "@/schemas/classification";
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: "llm",
   [ModelType.llamacppEmbedding]: "embeddings",
   [ModelType.whispercppTranscription]: "whisper",
+  [ModelType.bciWhispercppTranscription]: "bci",
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
-  [ModelType.onnxOcr]: "ocr",
+  [ModelType.ttsGgml]: "tts",
+  [ModelType.ggmlOcr]: "ocr",
+  [ModelType.sdcppGeneration]: "diffusion",
+  [ModelType.ggmlVla]: "vla",
+  [ModelType.ggmlClassification]: "classification",
 };
 
 export const MODEL_CONFIG_SCHEMAS: Partial<
@@ -29,8 +38,12 @@ export const MODEL_CONFIG_SCHEMAS: Partial<
   [ModelType.llamacppCompletion]: llmConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
+  [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
-  [ModelType.onnxOcr]: ocrConfigSchema,
+  [ModelType.ggmlOcr]: ocrConfigSchema,
+  [ModelType.sdcppGeneration]: sdcppConfigSchema,
+  [ModelType.ggmlVla]: vlaConfigSchema,
+  [ModelType.ggmlClassification]: classificationConfigSchema,
 };
 
 // Ordered general → specific (later patterns override earlier)
@@ -104,9 +117,7 @@ export function getDefaultsFromPattern(
   if (!defaults) {
     const aliasKey = CANONICAL_TO_ALIAS[modelType];
     if (aliasKey && aliasKey in pattern.defaults) {
-      defaults = pattern.defaults[aliasKey as keyof typeof pattern.defaults] as
-        | Record<string, unknown>
-        | undefined;
+      defaults = pattern.defaults[aliasKey as keyof typeof pattern.defaults];
     }
   }
 

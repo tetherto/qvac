@@ -1,0 +1,170 @@
+{#- Render the entire API summary as a single MDX page.
+    Receives: { functions: ApiFunction[], objects?: ApiObject[],
+                errors: { client: ErrorEntry[], server: ErrorEntry[] },
+                versionLabel: string, scopeSummary: string }
+    Filters: escapeTableLight, firstSentence, stripFence -#}
+---
+title: API Summary — {{ versionLabel }}
+description: One-page reference of all public functions and objects exported by @qvac/sdk
+---
+
+> Auto-generated from `.d.ts` declarations and TSDoc comments.
+>
+> For per-parameter and per-field details, hover symbols in your IDE or open
+> `node_modules/@qvac/sdk/dist`. This page is intentionally a high-level index.
+>
+> **Fields shown**: description, signature, throws, examples, deprecation.
+> **Fields intentionally omitted**: parameter descriptions, return field descriptions
+> (covered by IDE hover and `.d.ts` declarations).
+>
+> **Scope**: {{ scopeSummary }}.
+
+---
+
+## Functions
+
+{% for fn in functions %}
+### `{{ fn.name }}`
+
+{% if fn.deprecated %}
+> ⚠️ **Deprecated**: {{ fn.deprecated }}
+
+{% endif %}
+{% if fn.overloads and fn.overloads.length > 1 %}
+Has {{ fn.overloads.length }} overloads.
+
+{% for ov in fn.overloads %}
+#### Overload {{ loop.index }}{% if ov.label %} — {{ ov.label }}{% endif %}
+
+{% if ov.deprecated %}
+> ⚠️ **Deprecated**: {{ ov.deprecated }}
+
+{% endif %}
+{% if ov.description %}
+{{ ov.description }}
+
+{% endif %}
+**Signature**:
+
+```ts
+{{ ov.signature }}
+```
+
+{% if ov.throws and ov.throws.length > 0 %}
+**Throws**:
+
+{% for t in ov.throws %}
+- `{{ t.error }}` — {{ t.description or "—" }}
+{% endfor %}
+
+{% endif %}
+{% if ov.examples and ov.examples.length > 0 %}
+{% if ov.examples.length > 1 %}**Examples**:{% else %}**Example**:{% endif %}
+
+{% for ex in ov.examples %}
+```ts
+{{ ex | stripFence }}
+```
+
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% else %}
+{% if fn.description %}
+{{ fn.description }}
+
+{% endif %}
+**Signature**:
+
+```ts
+{{ fn.signature }}
+```
+
+{% if fn.throws and fn.throws.length > 0 %}
+**Throws**:
+
+{% for t in fn.throws %}
+- `{{ t.error }}` — {{ t.description or "—" }}
+{% endfor %}
+
+{% endif %}
+{% if fn.examples and fn.examples.length > 0 %}
+{% if fn.examples.length > 1 %}**Examples**:{% else %}**Example**:{% endif %}
+
+{% for ex in fn.examples %}
+```ts
+{{ ex | stripFence }}
+```
+
+{% endfor %}
+{% endif %}
+{% endif %}
+---
+
+{% endfor %}
+{% if objects and objects.length > 0 %}
+## Objects
+
+{% for obj in objects %}
+### `{{ obj.name }}`
+
+{% if obj.description %}
+{{ obj.description }}
+
+{% endif %}
+{% if obj.objectSignature %}
+**Shape**:
+
+```ts
+{{ obj.objectSignature }}
+```
+
+{% endif %}
+{% if obj.methods and obj.methods.length > 0 %}
+**Methods**:
+
+{% for m in obj.methods %}
+- **`{{ m.name }}({% if m.parameters and m.parameters.length > 0 %}{% for p in m.parameters %}{{ p.name }}{% if not p.required %}?{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %})`** — {{ (m.summary or m.description or "—") | firstSentence | escapeTableLight }}
+{% endfor %}
+
+{% endif %}
+{% if obj.examples and obj.examples.length > 0 %}
+{% if obj.examples.length > 1 %}**Examples**:{% else %}**Example**:{% endif %}
+
+{% for ex in obj.examples %}
+```ts
+{{ ex | stripFence }}
+```
+
+{% endfor %}
+{% endif %}
+---
+
+{% endfor %}
+{% endif %}
+## Errors
+
+Public error codes thrown across the SDK. Catch via `instanceof QvacErrorBase`
+and read `error.code` / `error.cause`. Code ranges:
+50,001–52,000 (client) and 52,001–54,000 (server).
+
+{% if errors.client and errors.client.length > 0 %}
+### Client errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+{% for e in errors.client %}
+| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTableLight or "—" }} |
+{% endfor %}
+
+{% endif %}
+{% if errors.server and errors.server.length > 0 %}
+### Server errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+{% for e in errors.server %}
+| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTableLight or "—" }} |
+{% endfor %}
+
+{% endif %}

@@ -6,55 +6,46 @@ import {
   profiler,
 } from "@qvac/sdk";
 
-const topicHex = process.argv[2];
-if (!topicHex) {
-  console.error("❌ Usage: bun run consumer-profiled.ts <topic> <publicKey>");
-  process.exit(1);
-}
-
-const providerPublicKey = process.argv[3];
+const providerPublicKey = process.argv[2];
 if (!providerPublicKey) {
-  console.error("❌ Usage: bun run consumer-profiled.ts <topic> <publicKey>");
+  console.error("✖ Usage: bun run consumer-profiled.ts <providerPublicKey>");
   process.exit(1);
 }
 
 try {
   profiler.enable({ mode: "verbose", includeServerBreakdown: true });
-  console.log("✓ Profiler enabled");
+  console.log("▸ Profiler enabled");
 
-  console.log(`\n📡 Topic: ${topicHex}`);
-  console.log(`🔑 Provider: ${providerPublicKey}\n`);
+  console.log(`\n▸ Provider: ${providerPublicKey}\n`);
 
-  console.log("→ Loading model (delegated, unary)...");
+  console.log("▸ Loading model (delegated, unary)...");
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     delegate: {
-      topic: topicHex,
       providerPublicKey,
-      timeout: 30_000,
+      timeout: 60_000,
     },
   });
-  console.log(`✓ Model loaded: ${modelId}\n`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
-  console.log("→ Running completion (delegated, streamed)...");
+  console.log("▸ Running completion (delegated, streamed)...");
   const response = completion({
     modelId,
     history: [{ role: "user", content: "Say hello in exactly 5 words." }],
     stream: true,
   });
 
-  process.stdout.write("  Response: ");
+  console.log("▸ Response:");
   for await (const token of response.tokenStream) {
     process.stdout.write(token);
   }
   await response.stats;
-  console.log("\n✓ Completion done\n");
+  console.log("\n▸ Completion done\n");
 
-  console.log("=== Profiler Summary ===");
+  console.log("▸ Profiler Summary");
   console.log(profiler.exportSummary());
 
-  console.log("=== Profiler Table ===");
+  console.log("▸ Profiler Table");
   console.log(profiler.exportTable());
 
   // Look for delegation-specific metrics
@@ -64,7 +55,7 @@ try {
   );
 
   if (delegationMetrics.length > 0) {
-    console.log("=== Delegation Metrics ===");
+    console.log("▸ Delegation Metrics");
     for (const key of delegationMetrics) {
       const agg = json.aggregates[key];
       if (agg) {
@@ -72,14 +63,14 @@ try {
       }
     }
   } else {
-    console.log("⚠️  No delegation-specific metrics found");
+    console.log("▸ No delegation-specific metrics found");
     console.log("    (delegation profiling may need to be triggered)");
   }
 
   profiler.disable();
   void close();
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   profiler.disable();
   process.exit(1);
 }

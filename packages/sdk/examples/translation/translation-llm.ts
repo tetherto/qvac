@@ -8,9 +8,11 @@ import {
 try {
   const modelId = await loadModel({
     modelSrc: SALAMANDRATA_2B_INST_Q4,
-    modelType: "llm",
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
@@ -21,21 +23,22 @@ try {
     text: engText,
     from: "en",
     to: "it",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     stream: false,
   });
 
-  // With autodetection
+  const translatedTextExplicit = await resultExplicit.text;
+
+  // With autodetection (must await previous translate — LLM addon runs one job at a time)
   const espText = "Hola, como estas?";
   const resultAutodetect = translate({
     modelId,
     text: espText,
     to: "en",
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     stream: false,
   });
 
-  const translatedTextExplicit = await resultExplicit.text;
   const translatedTextAutodetect = await resultAutodetect.text;
 
   console.log(`Explicit source: ${engText} -> "${translatedTextExplicit}"`);
@@ -45,6 +48,6 @@ try {
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

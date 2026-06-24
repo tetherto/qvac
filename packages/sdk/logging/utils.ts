@@ -1,9 +1,15 @@
-import { LEVEL_PRIORITIES } from "@qvac/logging/constants";
+import { LEVEL_PRIORITIES, LOG_LEVELS } from "@qvac/logging/constants";
 import type { LogLevel } from "@qvac/logging";
 import stringify from "fast-safe-stringify";
 import type { Request } from "@/schemas";
 
 export function isLevelEnabled(messageLevel: LogLevel, currentLevel: LogLevel) {
+  // "off" suppresses every emission (console, streams, and transports alike),
+  // even though its priority sits above the real levels.
+  if (currentLevel === LOG_LEVELS.OFF || messageLevel === LOG_LEVELS.OFF) {
+    return false;
+  }
+
   const messagePriority = LEVEL_PRIORITIES[messageLevel];
   const currentPriority = LEVEL_PRIORITIES[currentLevel];
 
@@ -61,7 +67,7 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
   if ("modelId" in request) summary["modelId"] = request["modelId"];
 
   // Only summarize requests with large payloads
-  if (request.type === "transcribeStream") {
+  if (request.type === "transcribe") {
     const chunk = request["audioChunk"];
     summary["audioChunk"] = `[${chunk.type}: ${chunk.value.length} bytes]`;
     return summary;
@@ -114,5 +120,5 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
   }
 
   // All other requests - return full request (no large payloads)
-  return request as unknown as Record<string, unknown>;
+  return request;
 }

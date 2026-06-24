@@ -1,7 +1,4 @@
-import EmbedLlamacpp, {
-  type GGMLConfig,
-  type Loader as EmbedLoader,
-} from "@qvac/embed-llamacpp";
+import EmbedLlamacpp, { type GGMLConfig } from "@qvac/embed-llamacpp";
 import embedAddonLogging from "@qvac/embed-llamacpp/addonLogging";
 import {
   definePlugin,
@@ -15,11 +12,12 @@ import {
   type PluginModelResult,
   type EmbedConfig,
 } from "@/schemas";
-import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
-import { asLoader } from "@/server/bare/utils/loader-adapter";
+import { createStreamLogger, registerAddonLogger, getServerLogger } from "@/logging";
+import { expandGGUFIntoShards } from "@/server/utils";
 import { embed } from "@/server/bare/ops/embed";
+import { forwardModelExecution } from "@/profiling/model-execution";
+import { isMobile } from "@/server/bare/registry/runtime-context-registry";
+import { stripMultiGpuKeys } from "@/server/utils/multi-gpu-mobile";
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
@@ -51,8 +49,20 @@ function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
         : embedConfig.mainGpu;
   }
 
+  if (embedConfig.splitMode) {
+    config["split-mode"] = embedConfig.splitMode;
+  }
+
+  if (embedConfig.tensorSplit) {
+    config["tensor-split"] = embedConfig.tensorSplit;
+  }
+
   if (typeof embedConfig.verbosity === "number") {
     config.verbosity = `${embedConfig.verbosity}`;
+  }
+
+  if (embedConfig.openclCacheDir) {
+    config.openclCacheDir = embedConfig.openclCacheDir;
   }
 
   return config;
@@ -63,25 +73,30 @@ function createEmbeddingsModel(
   modelPath: string,
   embedConfig: EmbedConfig,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.llamacppEmbedding);
   registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger);
 
   const config = transformEmbedConfig(embedConfig);
 
-  const args = {
-    loader: asLoader<EmbedLoader>(loader),
-    opts: { stats: true },
+  if (isMobile()) {
+    const stripped = stripMultiGpuKeys(config);
+    if (stripped.length > 0) {
+      getServerLogger().warn(
+        `[${ModelType.llamacppEmbedding}:${modelId}] Multi-GPU parameters (${stripped.join(", ")}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`,
+      );
+    }
+  }
+
+  const modelFiles = expandGGUFIntoShards(modelPath);
+
+  const model = new EmbedLlamacpp({
+    files: { model: modelFiles },
+    config,
     logger,
-    diskPath: dirPath,
-    modelName: basePath,
-    modelPath,
-  };
+    opts: { stats: true },
+  });
 
-  const model = new EmbedLlamacpp(args, config);
-
-  return { model, loader };
+  return { model };
 }
 
 export const embeddingsPlugin = definePlugin({
@@ -93,13 +108,13 @@ export const embeddingsPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig;
 
-    const { model, loader } = createEmbeddingsModel(
+    const { model } = createEmbeddingsModel(
       params.modelId,
       params.modelPath,
       embedConfig,
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {
@@ -107,18 +122,25 @@ export const embeddingsPlugin = definePlugin({
       requestSchema: embedRequestSchema,
       responseSchema: embedResponseSchema,
       streaming: false,
+      // Model-wide hard cancel via `addon.cancel()` on the llama.cpp
+      // embedding addon. Compute is interrupted when fired.
+      cancel: { scope: "model", hard: true },
 
       handler: async function (request) {
-        const embedding = await embed({
-          modelId: request.modelId,
-          text: request.text,
-        });
+        const embedResult = await embed(
+          {
+            modelId: request.modelId,
+            text: request.text,
+          },
+          request.requestId,
+        );
 
-        return {
+        return forwardModelExecution({
           type: "embed" as const,
           success: true,
-          embedding,
-        };
+          embedding: embedResult.embedding,
+          ...(embedResult.stats && { stats: embedResult.stats }),
+        }, embedResult);
       },
     }),
   },

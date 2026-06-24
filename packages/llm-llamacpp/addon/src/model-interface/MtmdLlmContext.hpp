@@ -1,0 +1,287 @@
+#pragma once
+
+#include <atomic>
+#include <optional>
+
+#include <llama.h>
+#include <llama/mtmd/mtmd.h>
+
+#include "../utils/ReasoningUtils.hpp"
+#include "../utils/UTF8TokenBuffer.hpp"
+#include "ContextSlider.hpp"
+#include "LlmContext.hpp"
+#include "ToolsCompactController.hpp"
+#include "inference-addon-cpp/Logger.hpp"
+
+class MtmdLlmContext : public LlmContext {
+public:
+  /**
+   * The constructor.
+   *
+   * @param params - the parameters.
+   * @param _llama_init - The result of initializing/loading the model using
+   * .gguf file(s)
+   * @param tools - reference to the tools compact controller
+   */
+  MtmdLlmContext(
+      common_params& commonParams, common_init_result_ptr llamaInit,
+      ToolsCompactController& tools);
+
+  /**
+   * The destructor.
+   */
+  ~MtmdLlmContext() override = default;
+  MtmdLlmContext(const MtmdLlmContext&) = delete;
+  MtmdLlmContext& operator=(const MtmdLlmContext&) = delete;
+  MtmdLlmContext(MtmdLlmContext&&) = delete;
+  MtmdLlmContext& operator=(MtmdLlmContext&&) = delete;
+
+  /**
+   * The eval message method. It evaluates the message.
+   *
+   * @param chatMsgs - chat messages.
+   * @param is_cache_loaded - whether the cache is loaded.
+   * @param prefill - whether to only prefill context without generation setup.
+   * @return - true if successful, false if inference is stopped.
+   */
+  bool evalMessage(
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+      bool prefill) override;
+
+  /**
+   * The eval message with tools method. It evaluates the message with tools and
+   * updates the context.
+   *
+   * @param chatMsgs - chat messages.
+   * @param tools - tools.
+   * @param isCacheLoaded - whether the cache is loaded.
+   * @param prefill - whether to only prefill context without generation setup.
+   * @return - true if successful, false if inference is stopped.
+   */
+  bool evalMessageWithTools(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+      bool prefill) override;
+
+  /**
+   * The generate response method. It generates the response.
+   *
+   * @param output_callback - the output callback.
+   * @return - true if successful, false if context overflow.
+   */
+  bool generateResponse(
+      const std::function<void(const std::string&)>& outputCallback) override;
+
+  std::function<void()>
+  applyGenerationParams(const GenerationParams& overrides) override;
+
+  /**
+   * The stop method. It stops the model inference.
+   */
+  void stop() override;
+
+  /**
+   * The get context method. It returns the context.
+   *
+   * @return - the context.
+   */
+  llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return modelCtx_.model; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
+
+  /**
+   * The get n_past method. It returns the n_past.
+   *
+   * @return - the n_past.
+   */
+  [[nodiscard]] llama_pos getNPast() const override;
+
+  /**
+   * The set n_past method. It sets the n_past.
+   *
+   * @param n_past - the n_past.
+   */
+  void setNPast(llama_pos nPast) override;
+
+  [[nodiscard]] llama_pos getCacheTokens() const override;
+  void setCacheTokens(llama_pos cacheTokens) override;
+
+  /**
+   * The get first msg tokens method. It returns the first msg tokens.
+   *
+   * @return - the first msg tokens.
+   */
+  [[nodiscard]] llama_pos getFirstMsgTokens() const override;
+
+  /**
+   * The set first msg tokens method. It sets the first msg tokens.
+   *
+   * @param first_msg_tokens - the first msg tokens.
+   */
+  void setFirstMsgTokens(llama_pos firstMsgTokens) override;
+
+  [[nodiscard]] llama_pos getFirstMsgCacheTokens() const override;
+  void setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) override;
+
+  /**
+   * The set n_discarded method. It sets the n_discarded.
+   *
+   * @param nDiscarded - the number of tokens to discard.
+   */
+  void setNDiscarded(llama_pos nDiscarded) override;
+
+  [[nodiscard]] int32_t getNSlides() const override;
+  void resetNSlides() override;
+
+  [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
+  void resetThinkingBlockDiscards() override;
+
+  /**
+   * The load media method. It loads the media from memory buffer.
+   *
+   * @param media - the media memory buffer.
+   */
+  void loadMedia(const std::vector<uint8_t>& media) override;
+
+  /**
+   * The load media method. It loads the media from file.
+   *
+   * @param fname - the file name.
+   */
+  void loadMedia(const std::string& fname) override;
+
+  /**
+   * The reset state method. It resets the context.
+   *
+   */
+  void resetState(bool resetStats) override;
+
+  /**
+   * Remove the last N tokens from the model context.
+   * This decrements n_past and removes the tokens from the KV cache.
+   *
+   * @param count - the number of tokens to remove
+   * @return the actual number of tokens removed (may be less than requested if
+   * not enough tokens exist)
+   */
+  llama_pos removeLastNTokens(llama_pos count) override;
+
+  /**
+   * The reset media method. It resets the media.
+   *
+   */
+  void resetMedia() override;
+
+private:
+  /**
+   * The check antiprompt method. It checks the antiprompt.
+   *
+   * @return - true if the antiprompt is found, false otherwise.
+   */
+  bool checkAntiprompt();
+
+  /**
+   * The tokenize chat method. It tokenizes the chat.
+   *
+   * @param chatMsgs - chat messages.
+   * @param tools - tools.
+   * @param chunks - output chunks.
+   * @param isCacheLoaded - whether the cache is loaded.
+   */
+  void tokenizeChat(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
+      bool isCacheLoaded);
+
+  /**
+   * The init vision context method. It initializes the vision context.
+   *
+   */
+  void initVisionContext();
+
+  void flushPendingUtf8ToCallback(
+      const std::function<void(const std::string&)>& outputCallback);
+  void applyContextDiscard();
+  void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
+
+  // Reasoning-block KV-cache compaction helpers. Single-block policy:
+  // at most one `<think>...</think>` block is tracked per inference.
+  // `setOpenThinkSpan` is a no-op once a span has been captured.
+  void setOpenThinkSpan(llama_pos start);
+  void capturePendingThinkClose();
+  void compactThinkSpan();
+  void configureReasoningTags(
+      const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+      const std::string& forcedOpenText);
+
+  ToolsCompactController& tools_;
+  common_init_result_ptr llamaInit_;
+  mtmd::context_ptr ctxVision_;
+  LlmModelContext modelCtx_;
+  CommonSamplerPtr smpl_;
+
+  common_params params_;
+  common_chat_templates_ptr tmpls_;
+  std::vector<llama_token> antipromptTokens_;
+
+  mtmd::bitmaps bitmaps_;
+  ContextUsage current_;
+  ContextUsage protectedPrefix_;
+  llama_pos nDiscarded_ = 0;
+  int32_t nSlides_ = 0;
+
+  // UTF-8 token buffer for handling incomplete emoji sequences
+  qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
+  bool isHarmonyModel_ = false;
+  llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
+
+  // Force-opens the reasoning channel in the prompt suffix. The text mirrors
+  // the template-specific visible reasoning opener so consumers see balanced
+  // tags.
+  bool thinkingForcedOpen_ = false;
+  std::string thinkingForcedOpenText_;
+
+  // Reasoning channel detection state (Qwen3 / Gemma 4 / ...). Empty
+  // tags when the active model has no recognised channel.
+  qvac_lib_inference_addon_llama::utils::ReasoningState reasoningState_;
+  bool reasoningEnabled_ = false;
+
+  // True only for architectures in the Qwen3 reasoning family. Gates
+  // the EOS-inside-reasoning recovery (close-marker substitution),
+  // which is the historical Qwen3-specific workaround. Detection /
+  // span tracking / KV compaction stay family-agnostic via
+  // `reasoningEnabled_`. In practice no multimodal model is in the
+  // Qwen3 family today, so this gate keeps the recovery dormant on
+  // the multimodal path until a Qwen3-family vision model ships.
+  bool isQwen3ReasoningFamily_ = false;
+
+  // True when the model uses recurrent memory (Mamba-style SSM layers
+  // or hybrid SSM + attention). Detected at construction. Opting in to
+  // `remove_thinking_from_context` on such models throws from
+  // `applyGenerationParams` to avoid SSM hidden-state contamination.
+  bool hasRecurrentMemory_ = false;
+
+  // Per-request toggle for the post-generation thinking-block KV
+  // cache compaction. Default-off (opt-in via `generationParams`); set
+  // by `applyGenerationParams`.
+  bool removeThinkingFromContext_ = false;
+
+  // [start, end) KV positions of the reasoning block emitted in this
+  // inference. `end == -1` marks an open (still-being-emitted) span.
+  std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
+  bool pendingThinkCloseCapture_ = false;
+
+  int32_t thinkingBlockDiscards_ = 0;
+
+  std::atomic<bool> stopGeneration_ = false;
+};

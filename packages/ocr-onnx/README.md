@@ -1,6 +1,6 @@
-# qvac-lib-inference-addon-onnx-ocr-fasttext
+# @qvac/ocr-onnx
 
-[![Build Status](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/actions/workflows/on-pr.yaml/badge.svg)](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/actions/workflows/on-pr.yaml)
+[![Build Status](https://github.com/tetherto/qvac/actions/workflows/on-pr-ocr-onnx.yml/badge.svg)](https://github.com/tetherto/qvac/actions/workflows/on-pr-ocr-onnx.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![npm version](https://img.shields.io/npm/v/@qvac/ocr-onnx.svg)](https://www.npmjs.com/package/@qvac/ocr-onnx)
 
@@ -88,8 +88,8 @@ Before building, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone git@github.com:tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git
-   cd qvac-lib-inference-addon-onnx-ocr-fasttext
+   git clone https://github.com/tetherto/qvac.git
+   cd qvac/packages/ocr-onnx
    ```
 
 2. **Install dependencies**:
@@ -109,14 +109,14 @@ This command will:
 
 ### Verifying the Build
 
-After building, verify everything works by running the Hyperdrive example:
+After building, verify everything works by running the registry example:
 
 ```bash
-bare examples/example.hd.js
+bare examples/example.registry.js
 ```
 
 This example will:
-- Download the detector and recognizer models from Hyperdrive (cached locally in `models/hd/`)
+- Download the detector and recognizer models from the registry (cached locally)
 - Load the OCR model
 - Run text recognition on a test image
 - Display the detected text with confidence scores
@@ -127,7 +127,7 @@ The `examples/` folder contains several examples to help you get started:
 
 | Example | Description |
 |---------|-------------|
-| `example.hd.js` | Downloads models from Hyperdrive and runs OCR |
+| `example.registry.js` | Downloads models from registry and runs OCR |
 | `example.fs.js` | Basic OCR using local model files |
 | `exampleGPU.fs.js` | OCR with GPU acceleration enabled |
 | `example.logger.js` | OCR with custom logging |
@@ -424,4 +424,4 @@ This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENS
 
 ## Support
 
-For questions, bug reports, or feature requests, please [open an issue](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/issues) on GitHub.
+For questions, bug reports, or feature requests, please [open an issue](https://github.com/tetherto/qvac/issues) on GitHub.

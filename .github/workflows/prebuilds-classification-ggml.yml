@@ -1,0 +1,51 @@
+# Build-only workflow. Publishing lives in on-merge-classification-ggml.yml.
+name: Prebuilds (GGML Classification)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/classification-ggml"
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/classification-ggml"
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: classification-ggml-
+      # classification-ggml builds the GGML_BACKEND_DL fabric (gpu-backends), so
+      # the build host needs the Vulkan SDK (incl. glslc) to compile the
+      # ggml-vulkan module from source on cache-miss — same as the other
+      # gpu-backends consumers (vla/embed/llm/nmtcpp/ocr). The consumer-side
+      # find_dependency(Vulkan) is separately removed under DL by qvac-fabric
+      # 8828.0.2#5, but the fabric's own Vulkan backend build still needs it.
+      include-vulkan-sdk: true
+    secrets: inherit

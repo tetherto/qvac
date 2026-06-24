@@ -1,0 +1,310 @@
+import {
+  loadModel,
+  unloadModel,
+  translate,
+  LLAMA_3_2_1B_INST_Q4_0,
+  GTE_LARGE_FP16,
+  OCR_LATIN,
+  BERGAMOT_EN_FR,
+} from "@qvac/sdk";
+import { ValidationHelpers, type TestResult } from "@tetherto/qvac-test-suite";
+import { AbstractModelExecutor } from "./abstract-model-executor.js";
+import {
+  modelLoadLlm,
+  modelLoadEmbedding,
+  modelLoadOcr,
+  modelLoadInvalid,
+  modelUnload,
+  modelLoadConcurrent,
+  modelReloadLlm,
+  modelSwitchLlm,
+  modelReloadAfterError,
+  modelLoadInferredType,
+  modelLoadMissingTypeStringSrc,
+  modelLifecycleNmt,
+} from "../../test-definitions.js";
+
+const modelLoadTests = [
+  modelLoadLlm,
+  modelLoadEmbedding,
+  modelLoadOcr,
+  modelLoadInvalid,
+  modelUnload,
+  modelLoadConcurrent,
+  modelReloadLlm,
+  modelSwitchLlm,
+  modelReloadAfterError,
+  modelLoadInferredType,
+  modelLoadMissingTypeStringSrc,
+  modelLifecycleNmt,
+] as const;
+
+export class ModelLoadingExecutor extends AbstractModelExecutor<
+  typeof modelLoadTests
+> {
+  pattern = /^model-(?!info-)/;
+
+  protected handlers = {
+    [modelLoadLlm.testId]: this.loadLlm.bind(this),
+    [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
+    [modelLoadOcr.testId]: this.loadOcr.bind(this),
+    [modelLoadInvalid.testId]: this.loadInvalid.bind(this),
+    [modelUnload.testId]: this.unload.bind(this),
+    [modelLoadConcurrent.testId]: this.loadConcurrent.bind(this),
+    [modelReloadLlm.testId]: this.reloadLlm.bind(this),
+    [modelSwitchLlm.testId]: this.switchLlm.bind(this),
+    [modelReloadAfterError.testId]: this.reloadAfterError.bind(this),
+    [modelLoadInferredType.testId]: this.loadInferredType.bind(this),
+    [modelLoadMissingTypeStringSrc.testId]:
+      this.loadMissingTypeStringSrc.bind(this),
+    [modelLifecycleNmt.testId]: this.lifecycleNmt.bind(this),
+  };
+
+  async loadLlm(
+    params: typeof modelLoadLlm.params,
+    expectation: typeof modelLoadLlm.expectation,
+  ): Promise<TestResult> {
+    const modelId = await loadModel({
+      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+      modelType: "llamacpp-completion",
+      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+    });
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async loadEmbedding(
+    params: typeof modelLoadEmbedding.params,
+    expectation: typeof modelLoadEmbedding.expectation,
+  ): Promise<TestResult> {
+    const modelId = await loadModel({
+      modelSrc: GTE_LARGE_FP16,
+      modelType: "llamacpp-embedding",
+    });
+    this.resources.register("embeddings", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async loadOcr(
+    params: typeof modelLoadOcr.params,
+    expectation: typeof modelLoadOcr.expectation,
+  ): Promise<TestResult> {
+    const modelId = await loadModel({
+      modelSrc: OCR_LATIN,
+      modelType: "ggml-ocr",
+      modelConfig: { langList: ["en"] },
+    });
+    this.resources.register("ocr", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async loadInvalid(
+    params: typeof modelLoadInvalid.params,
+    expectation: typeof modelLoadInvalid.expectation,
+  ): Promise<TestResult> {
+    try {
+      await loadModel({
+        modelSrc: params.modelPath,
+        modelType: params.modelType as "llamacpp-completion",
+      });
+      return {
+        passed: false,
+        output: "Should have thrown error for invalid path",
+      };
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      if (
+        errorMsg.includes("failed to locate") ||
+        errorMsg.includes("invalid") ||
+        errorMsg.includes("not found")
+      ) {
+        return { passed: true, output: errorMsg };
+      }
+      return ValidationHelpers.validate(errorMsg, expectation);
+    }
+  }
+
+  async unload(
+    params: typeof modelUnload.params,
+    expectation: typeof modelUnload.expectation,
+  ): Promise<TestResult> {
+    const llmModelId = this.resources.getModelId("llm");
+    if (!llmModelId) {
+      return { passed: false, output: "No model loaded to unload" };
+    }
+    await unloadModel({
+      modelId: llmModelId,
+      clearStorage: params.shouldClearStorage || false,
+    });
+    this.resources.unregister(llmModelId);
+    return ValidationHelpers.validate(
+      `Model ${llmModelId} unloaded successfully`,
+      expectation,
+    );
+  }
+
+  async loadConcurrent(
+    params: typeof modelLoadConcurrent.params,
+    expectation: typeof modelLoadConcurrent.expectation,
+  ): Promise<TestResult> {
+    const modelIds: string[] = [];
+    for (const model of params.models) {
+      const modelSrc =
+        model.constant === "LLAMA_3_2_1B_INST_Q4_0"
+          ? LLAMA_3_2_1B_INST_Q4_0
+          : GTE_LARGE_FP16;
+
+      let modelId: string;
+      if (model.type === "llamacpp-completion") {
+        modelId = await loadModel({
+          modelSrc,
+          modelType: "llamacpp-completion",
+          modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+        });
+        this.resources.register("llm", modelId);
+      } else {
+        modelId = await loadModel({
+          modelSrc,
+          modelType: "llamacpp-embedding",
+        });
+        this.resources.register("embeddings", modelId);
+      }
+      modelIds.push(modelId);
+    }
+    return ValidationHelpers.validate(modelIds, expectation);
+  }
+
+  async reloadLlm(
+    params: typeof modelReloadLlm.params,
+    expectation: typeof modelReloadLlm.expectation,
+  ): Promise<TestResult> {
+    const modelId = await loadModel({
+      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+      modelType: "llamacpp-completion",
+      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+    });
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async switchLlm(
+    params: typeof modelSwitchLlm.params,
+    expectation: typeof modelSwitchLlm.expectation,
+  ): Promise<TestResult> {
+    const existing = this.resources.getModelId("llm");
+    if (existing) {
+      await unloadModel({ modelId: existing });
+      this.resources.unregister(existing);
+    }
+    const modelId = await loadModel({
+      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+      modelType: "llamacpp-completion",
+      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+    });
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async reloadAfterError(
+    params: typeof modelReloadAfterError.params,
+    expectation: typeof modelReloadAfterError.expectation,
+  ): Promise<TestResult> {
+    const existing = this.resources.getModelId("llm");
+    if (existing) {
+      await unloadModel({ modelId: existing });
+      this.resources.unregister(existing);
+    }
+    const modelId = await loadModel({
+      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+      modelType: "llamacpp-completion",
+      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+    });
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async loadInferredType(
+    params: typeof modelLoadInferredType.params,
+    expectation: typeof modelLoadInferredType.expectation,
+  ): Promise<TestResult> {
+    const modelId = await loadModel({
+      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+    });
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async loadMissingTypeStringSrc(
+    params: typeof modelLoadMissingTypeStringSrc.params,
+    expectation: typeof modelLoadMissingTypeStringSrc.expectation,
+  ): Promise<TestResult> {
+    try {
+      await loadModel({
+        modelSrc: params.modelPath,
+      } as unknown as Parameters<typeof loadModel>[0]);
+      return {
+        passed: false,
+        output: "Should have thrown ModelTypeRequiredError for plain-string modelSrc without modelType",
+      };
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      return ValidationHelpers.validate(errorMsg, expectation);
+    }
+  }
+
+  async lifecycleNmt(
+    params: typeof modelLifecycleNmt.params,
+    expectation: typeof modelLifecycleNmt.expectation,
+  ): Promise<TestResult> {
+    const p = params as { text: string };
+
+    const modelId1 = await loadModel({
+      modelSrc: BERGAMOT_EN_FR,
+      modelType: "nmt",
+      modelConfig: { engine: "Bergamot", from: "en", to: "fr" },
+    });
+
+    const r1 = translate({
+      modelId: modelId1,
+      text: p.text,
+      modelType: "nmt",
+      stream: false,
+    });
+    const text1 = await (r1 as { text: Promise<string> }).text;
+    if (!text1 || text1.trim().length === 0) {
+      return { passed: false, output: "First translation returned empty text" };
+    }
+
+    await unloadModel({ modelId: modelId1 });
+
+    const modelId2 = await loadModel({
+      modelSrc: BERGAMOT_EN_FR,
+      modelType: "nmt",
+      modelConfig: { engine: "Bergamot", from: "en", to: "fr" },
+    });
+
+    const r2 = translate({
+      modelId: modelId2,
+      text: "Good morning, nice to meet you.",
+      modelType: "nmt",
+      stream: false,
+    });
+    const text2 = await (r2 as { text: Promise<string> }).text;
+    this.resources.register("bergamot-en-fr", modelId2);
+
+    if (!text2 || text2.trim().length === 0) {
+      return {
+        passed: false,
+        output: `First OK ("${text1}") but second translation after reload returned empty text`,
+      };
+    }
+
+    return ValidationHelpers.validate(
+      `Lifecycle OK: "${text1}" → unload → reload → "${text2}"`,
+      expectation,
+    );
+  }
+}

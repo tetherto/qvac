@@ -12,7 +12,14 @@ export function createBareKitRPCServer() {
   return new RPC(IPC, handleRequest);
 }
 
-export function createIPCClient(socketPath: string) {
+export interface IPCClientOptions {
+  onDisconnect?: () => void;
+}
+
+export function createIPCClient(
+  socketPath: string,
+  options?: IPCClientOptions,
+) {
   logger.info(`Connecting to IPC socket at ${socketPath}`);
   const socket = connect(socketPath);
 
@@ -24,5 +31,10 @@ export function createIPCClient(socketPath: string) {
     logger.error("IPC client connection error:", err);
   });
 
-  return new RPC(socket as unknown as Duplex<DuplexEvents>, handleRequest);
+  socket.on("close", () => {
+    logger.warn("IPC socket closed — parent process likely terminated");
+    options?.onDisconnect?.();
+  });
+
+  return new RPC(socket, handleRequest);
 }

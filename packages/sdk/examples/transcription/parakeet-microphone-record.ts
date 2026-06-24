@@ -1,87 +1,59 @@
+/**
+ * Microphone → Parakeet batch transcription (chunked `transcribe`).
+ *
+ * Usage:
+ *   bun run examples/transcription/parakeet-microphone-record.ts
+ *
+ * Captures 3 s s16le chunks from the microphone and sends each to `transcribe`
+ * with the TDT model. Press Ctrl+C to stop.
+ *
+ * Requirements: FFmpeg installed, microphone access.
+ */
 import {
   loadModel,
   unloadModel,
-  transcribeStream,
-  PARAKEET_TDT_ENCODER_FP32,
-  PARAKEET_TDT_ENCODER_DATA_FP32,
-  PARAKEET_TDT_DECODER_FP32,
-  PARAKEET_TDT_VOCAB,
-  PARAKEET_TDT_PREPROCESSOR_FP32,
+  transcribe,
+  PARAKEET_TDT_0_6B_V3_Q8_0,
 } from "@qvac/sdk";
-import { spawn, spawnSync } from "child_process";
-import { platform } from "os";
+import { spawnSync } from "child_process";
+import { startMicrophone } from "../audio/mic-input";
 
-function checkFFmpeg() {
-  const result = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
-  if (result.error || result.status !== 0) {
-    throw new Error("FFmpeg is required but not found in PATH.");
-  }
+const SAMPLE_RATE = 16000;
+const BYTES_PER_SAMPLE = 2; // s16le
+const CHUNK_DURATION_S = 3;
+const CHUNK_SIZE = SAMPLE_RATE * BYTES_PER_SAMPLE * CHUNK_DURATION_S;
+
+// ── Main ──
+
+try {
+  const r = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  if (r.error || r.status !== 0) throw new Error("FFmpeg not found");
+} catch {
+  console.error("✖ FFmpeg is required. Install it and try again.");
+  process.exit(1);
 }
 
-function getAudioDevice(): string {
-  switch (platform()) {
-    case "darwin":
-      return ":0";
-    case "linux":
-      return "default";
-    case "win32":
-      // Change as per your system
-      return "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}";
-    default:
-      throw new Error(`Unsupported platform: ${platform()}`);
-  }
-}
-
-function getAudioInputArgs(): string[] {
-  switch (platform()) {
-    case "darwin":
-      return ["-f", "avfoundation", "-i", getAudioDevice()];
-    case "linux":
-      return ["-f", "pulse", "-i", getAudioDevice()];
-    case "win32":
-      return ["-f", "dshow", "-i", getAudioDevice()];
-    default:
-      throw new Error(`Unsupported platform: ${platform()}`);
-  }
-}
-
-checkFFmpeg();
-
-console.log("Loading Parakeet model...");
+console.log("▸ Loading Parakeet model...");
 const modelId = await loadModel({
-  modelSrc: PARAKEET_TDT_ENCODER_FP32,
-  modelType: "parakeet",
-  modelConfig: {
-    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
-    parakeetEncoderDataSrc: PARAKEET_TDT_ENCODER_DATA_FP32,
-    parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
-    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  onProgress: (p) => {
+    const mb = (n: number) => (n / 1e6).toFixed(1);
+    const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+    process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+    if (p.percentage >= 100) process.stderr.write("\n");
   },
-  onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
 });
-console.log("Model loaded. Speak into your microphone (Ctrl+C to stop):\n");
+console.log("▸ Model loaded.");
 
-const ffmpeg = spawn(
-  "ffmpeg",
-  [
-    ...getAudioInputArgs(),
-    "-ar",
-    "16000",
-    "-ac",
-    "1",
-    "-sample_fmt",
-    "s16",
-    "-f",
-    "s16le",
-    "pipe:1",
-  ],
-  { stdio: ["ignore", "pipe", "ignore"] },
-);
+const ffmpeg = startMicrophone({
+  sampleRate: SAMPLE_RATE,
+  format: "s16le",
+});
 
-const CHUNK_SIZE = 96000; // ~3s of 16kHz 16-bit mono
 let buffer = Buffer.alloc(0);
 let processing = false;
+
+console.log("▸ Listening... speak and pause to see transcriptions.");
 
 ffmpeg.stdout.on("data", (chunk: Buffer) => {
   buffer = Buffer.concat([buffer, chunk]);
@@ -93,16 +65,12 @@ ffmpeg.stdout.on("data", (chunk: Buffer) => {
 
     void (async () => {
       try {
-        for await (const text of transcribeStream({ modelId, audioChunk })) {
-          if (text.trim() && !text.includes("[No speech detected]")) {
-            process.stdout.write(text);
-          }
+        const text = await transcribe({ modelId, audioChunk });
+        if (text.trim() && !text.includes("[No speech detected]")) {
+          console.log(text.trim());
         }
       } catch (err) {
-        console.error(
-          "Transcription error:",
-          err instanceof Error ? err.message : err,
-        );
+        console.error("✖", err instanceof Error ? err.message : err);
       } finally {
         processing = false;
       }
@@ -111,10 +79,10 @@ ffmpeg.stdout.on("data", (chunk: Buffer) => {
 });
 
 async function cleanup() {
-  console.log("\n\nStopping...");
+  console.log("\n▸ Stopping...");
   ffmpeg.kill();
   await unloadModel({ modelId });
-  console.log("Done.");
+  console.log("▸ Done.");
 }
 
 process.on("SIGINT", () => void cleanup());

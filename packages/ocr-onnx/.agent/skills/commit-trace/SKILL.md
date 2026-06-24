@@ -58,7 +58,7 @@ git tag --contains <sha>
 ```
 
 Filter to tags relevant to this package. Tag naming conventions in this repo:
-- `llamacpp-llm-v0.12.1` for `@qvac/llm-llamacpp` (package `qvac-lib-infer-llamacpp-llm`)
+- `llamacpp-llm-v0.12.1` for `@qvac/llm-llamacpp` (package `llm-llamacpp`)
 - `ocr-onnx-v0.2.0` for `@qvac/ocr-onnx`
 - `whispercpp-v0.5.0` for `@qvac/transcription-whispercpp`
 - Tags vary per package — match by inspecting existing tags for the package

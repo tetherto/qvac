@@ -53,14 +53,14 @@ Every addon package uses two registries configured in `vcpkg-configuration.json`
   "default-registry": {
     "kind": "git",
     "baseline": "<commit-sha>",
-    "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   }
 }
 ```
 
-Hosts QVAC-specific packages: `qvac-fabric`, `qvac-lib-inference-addon-cpp`, `qvac-lint-cpp`, `onnxruntime`, `whisper-cpp`, `tokenizers-cpp`, `bergamot-translator`, `sentencepiece`, `ssplit`, and others.
+Hosts QVAC-specific packages: `qvac-fabric`, `inference-addon-cpp`, `lint-cpp`, `onnxruntime`, `whisper-cpp`, `tokenizers-cpp`, `bergamot-translator`, `sentencepiece`, `ssplit`, and others.
 
-**Authentication**: Requires `GH_TOKEN` (GitHub PAT) with read access to `tetherto/qvac-registry-vcpkg`. In CI, git credentials are configured automatically. Locally, SSH key access to the repo is needed (note the `git@github.com:` URL).
+**Authentication**: Requires `GH_TOKEN` (GitHub PAT) with read access to `tetherto/qvac-registry-vcpkg`. In CI, git credentials are configured automatically. Locally, HTTPS access works with token-based auth or credential helpers.
 
 ### 2. Microsoft Upstream Registry
 
@@ -195,20 +195,47 @@ The `cmake-vcpkg` npm package provides 15 standard triplets:
 | `arm64-windows` | Windows ARM64 |
 | `x64-windows` | Windows x64 |
 
-### Custom Override Triplets
+### Shared Override Triplets (monorepo root `vcpkg-overlays/`)
 
-Packages can override standard triplets for specific build requirements. Override triplets are prepended to the triplet search path in CMake:
+Triplets and toolchain files that are identical across addons live in a single
+shared folder at the repo root instead of being copied into every package. The
+folder is deliberately **not** named `vcpkg/`: CI uses a workspace-root `vcpkg/`
+directory for the macOS vcpkg clone and the files-based binary cache, so a
+committed `vcpkg/` would collide with it.
 
-```cmake
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+```
+vcpkg-overlays/
+  toolchains/linux-clang.cmake   # unversioned clang/clang++ + vcpkg linux.cmake
+  triplets/
+    arm64-linux.cmake            # libc++ / -fPIC / static libs
+    x64-linux.cmake
+    arm64-windows.cmake          # static CRT + static libs (see below)
+    x64-windows.cmake
 ```
 
-#### LLM / Embed — Clang-19 Toolchain
+Packages reference the shared folder via a monorepo-relative path. These files
+are build-time only (they are not in `package.json#files`, so they never ship to
+npm), so the relative path always resolves inside the monorepo checkout.
 
-Location: `packages/qvac-lib-infer-llamacpp-llm/vcpkg/triplets/`
+`VCPKG_OVERLAY_TRIPLETS` accepts a `;`-separated list and the **first** directory
+containing a given triplet name wins, which enables layering:
 
-Custom `x64-linux.cmake` and `arm64-linux.cmake` that enforce:
-- clang-19 compiler via custom toolchain file
+```cmake
+# Most addons: shared triplets only
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+
+# Addons that need package-specific overrides: local first, shared second
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+```
+
+#### Linux — Clang Toolchain (shared)
+
+`vcpkg-overlays/triplets/{arm64,x64}-linux.cmake` + `vcpkg-overlays/toolchains/linux-clang.cmake`
+enforce:
+- Unversioned `clang` / `clang++` compiler via the shared toolchain file
+  (the LLVM major is pinned globally by `.github/actions/setup-llvm` in CI;
+  on dev machines, `update-alternatives` should point `clang`/`clang++` at
+  the matching major — currently 22)
 - Static linking (`VCPKG_LIBRARY_LINKAGE static`)
 - libc++ stdlib (`-stdlib=libc++`)
 - Position-independent code (`-fPIC`)
@@ -223,18 +250,51 @@ set(VCPKG_CXX_FLAGS "-fPIC -stdlib=libc++")
 set(VCPKG_LINKER_FLAGS "-stdlib=libc++")
 ```
 
+#### Windows — Static Runtime (shared)
+
+`vcpkg-overlays/triplets/{arm64,x64}-windows.cmake` build dependencies with the **static**
+MSVC runtime so addons do not acquire a runtime dependency on the dynamic Visual
+C++ runtime (`vcruntime140.dll` / `msvcp140.dll`). This matches the bare-make
+win32 toolchain, which compiles the addon itself with
+`CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded..."`.
+
+```cmake
+set(VCPKG_TARGET_ARCHITECTURE x64)  # or arm64
+set(VCPKG_CRT_LINKAGE static)
+set(VCPKG_LIBRARY_LINKAGE static)
+set(VCPKG_BUILD_TYPE release)
+set(VCPKG_CXX_FLAGS "/wd4709")
+set(VCPKG_C_FLAGS "/wd4709")
+```
+
+> Because the runtime is now static, addons must **not** link `msvcrt.lib`
+> (the dynamic CRT import library) — doing so reintroduces the dynamic runtime
+> dependency the static triplet removes.
+
+#### Package-Local Override Triplets
+
+Triplets that genuinely differ from the shared defaults stay in the package's own
+`vcpkg/triplets/` (listed first in `VCPKG_OVERLAY_TRIPLETS` so they win):
+
+- **parakeet / tts-onnx**: a `x64-linux.cmake` variant that adds `-Wno-array-bounds`,
+  plus their macOS/iOS triplets. Local linux triplets chainload the shared
+  toolchain via `${CMAKE_CURRENT_LIST_DIR}/../../../../vcpkg-overlays/toolchains/linux-clang.cmake`.
+- **ocr-onnx**: its own `{arm64,x64}-linux.cmake` plus macOS/iOS/Android triplets.
+- **onnx**: keeps `vcpkg-override-triplets/triplets/` (apple/unix/android), layered
+  ahead of the shared folder.
+
 #### ONNX Packages — Release-Only Triplets
 
-Location: `packages/ocr-onnx/vcpkg-override-triplets/triplets/` (and similar for TTS, Parakeet)
+Location: `packages/onnx/vcpkg-override-triplets/triplets/` and the local
+`vcpkg/triplets/` of `ocr-onnx`, `tts-onnx`, `transcription-parakeet`.
 
-Custom triplets for ONNX-based packages that set `VCPKG_BUILD_TYPE release` to halve build time and disk usage:
+These local triplets set `VCPKG_BUILD_TYPE release` to halve build time and disk
+usage, and platform-specific deployment targets (e.g., iOS 13.3):
 
 ```cmake
 set(VCPKG_BUILD_TYPE release)
 set(VCPKG_LIBRARY_LINKAGE static)
 ```
-
-Platform-specific triplets also set deployment targets (e.g., iOS 13.3) and architecture details.
 
 ## Overlay Ports
 
@@ -248,7 +308,7 @@ Overlay ports let a package override a registry port with a local version. They 
 
 ### qvac-fabric Local Dev Pattern (LLM / Embed)
 
-Location: `packages/qvac-lib-infer-llamacpp-llm/vcpkg/ports/qvac-fabric/`
+Location: `packages/llm-llamacpp/vcpkg/ports/qvac-fabric/`
 
 When developing against a local build of `qvac-fabric` (the llama.cpp fork):
 1. The overlay port's `portfile.cmake` points to a local source directory (e.g., `/home/olya/claude_folders/addons_folders/fabric/qvac-fabric-llm.cpp`)
@@ -261,7 +321,7 @@ When developing against a local build of `qvac-fabric` (the llama.cpp fork):
 
 ### NMT Overlay Ports (7 ports)
 
-Location: `packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/`
+Location: `packages/translation-nmtcpp/vcpkg-overlays/`
 
 NMT has the most overlay ports of any package, each building a specific fork or patched version:
 
@@ -299,21 +359,21 @@ The llama.cpp fork maintained in `qvac-registry-vcpkg`. This is the core LLM inf
 - Platform-specific backends: Metal (macOS/iOS), Vulkan (Linux/Android), CPU fallback
 - Current version: `7248.1.2+` (version tracks llama.cpp upstream commits)
 
-### qvac-lib-inference-addon-cpp
+### inference-addon-cpp
 
 Shared C++ addon framework providing the JS<->C++ binding interface (`JsInterface.hpp`).
 
 - Used by: all addon packages
 - Current version: `1.1.2`
-- Provides: `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")`
+- Provides: `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")`
 
-### qvac-lint-cpp
+### lint-cpp
 
 Shared C++ linting configuration (`.clang-format`, `.clang-tidy`).
 
 - Used by: all addon packages
 - Current version: `1.4.4`
-- Provides: `find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)`
+- Provides: `find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)`
 
 ### onnxruntime
 
@@ -345,7 +405,7 @@ env:
 This stores compiled vcpkg packages as files in a local directory, which is then cached using `actions/cache`:
 
 ```yaml
-- uses: actions/cache@v4
+- uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
   with:
     path: ${{ env.WORKDIR }}/vcpkg/cache
     key: vcpkg-<platform>-<arch>-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
@@ -399,8 +459,9 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-# Optional: prepend custom triplets
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+# Prepend the shared monorepo triplets (add a local "vcpkg/triplets" entry
+# before this one if the package needs its own overrides)
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(<project-name> C CXX)
 ```
@@ -416,8 +477,8 @@ find_package(GTest CONFIG REQUIRED)
 
 # find_path for header-only or non-config packages
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
 ```
 
 ### Linux-Specific Linking
@@ -497,7 +558,7 @@ If ONNX Runtime symbols conflict at runtime:
 
 If `bare-make generate` fails with git authentication errors:
 - Verify `GH_TOKEN` is set and has read access to `tetherto/qvac-registry-vcpkg`
-- For local dev with SSH: verify `git@github.com:tetherto/qvac-registry-vcpkg.git` is accessible
+- For local dev with SSH: verify `https://github.com/tetherto/qvac-registry-vcpkg.git` is accessible
 - In CI: check that the `.npmrc` setup step and git credential configuration ran successfully
 - Set `GIT_TERMINAL_PROMPT=0` to prevent hanging on auth prompts
 
@@ -511,15 +572,19 @@ If a package can't be resolved:
 
 ## Package Reference Table
 
-| Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
+All addons use the shared root `vcpkg-overlays/triplets` (linux clang + static-CRT windows).
+The "Local Triplet Overrides" column lists package-specific triplets layered ahead
+of the shared ones.
+
+| Addon Package | vcpkg Dependencies | Overlay Ports | Local Triplet Overrides |
 |--------------|-------------------|---------------|-----------------|
-| `qvac-lib-infer-llamacpp-llm` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `qvac-lib-infer-llamacpp-embed` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `ocr-onnx` | onnxruntime (platform EPs), opencv4, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only |
-| `qvac-lib-infer-onnx-tts` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |
-| `qvac-lib-infer-parakeet` | onnxruntime, qvac-lib-inference-addon-cpp | None | Release-only |
-| `qvac-lib-infer-onnx` | onnxruntime (platform EPs), qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
-| `qvac-lib-infer-whispercpp` | whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
-| `qvac-lib-infer-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
-| `qvac-lib-inference-addon-cpp` | qvac-lint-cpp | None | None |
-| `qvac-lint-cpp` | (none — self-contained) | None | None |
+| `llm-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | None (shared only) |
+| `embed-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, opencl (Android) | qvac-fabric (local dev) | None (shared only) |
+| `ocr-onnx` | onnxruntime (platform EPs), opencv4, inference-addon-cpp, lint-cpp | None | linux + macOS/iOS/Android (release-only) |
+| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, inference-addon-cpp, lint-cpp | None | x64-linux variant + macOS/iOS (release-only) |
+| `transcription-parakeet` | onnxruntime, inference-addon-cpp | None | x64-linux variant + macOS/iOS (release-only) |
+| `onnx` | onnxruntime (platform EPs), inference-addon-cpp, lint-cpp | None | `vcpkg-override-triplets/` (apple/unix/android) |
+| `transcription-whispercpp` | whisper-cpp, inference-addon-cpp, lint-cpp | None | None (shared only) |
+| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, inference-addon-cpp, lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None (shared only) |
+| `inference-addon-cpp` | lint-cpp | None | None |
+| `lint-cpp` | (none — self-contained) | None | None |

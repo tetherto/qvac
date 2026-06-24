@@ -1,0 +1,50 @@
+{
+  "id": "liver-function-test-lft",
+  "description": "Liver function test (LFT) biochemistry report from Diagnostic Point Pathology Labs — structured table with investigation names, observed values, units, and biological reference intervals",
+  "image": "liver_function_test.png",
+
+  "required_keywords": [
+    "Diagnostic Point",
+    "Pathology Labs",
+    "SARVODAYA HOSPITAL",
+    "Investigation",
+    "Observed Value",
+    "Unit",
+    "Biological Ref interval",
+    "BIOCHEMISTRY",
+    "LIVER FUNCTION TEST",
+    "LFT",
+    "BILIRUBIN TOTAL",
+    "CONJUGATED",
+    "UNCONJUGATED",
+    "SGOT",
+    "SGPT",
+    "ALKALINE PHOSPHATASE",
+    "TOTAL PROTEIN",
+    "ALBUMIN",
+    "GLOBULIN",
+    "RATIO",
+    "GAMMAT-GT",
+    "Specimen",
+    "SERUM",
+    "END OF REPORT",
+    "mg/dl",
+    "IU/L",
+    "gm/dl"
+  ],
+
+  "key_values": [
+    { "key": "BILIRUBIN TOTAL", "value": "9.42" },
+    { "key": "CONJUGATED", "value": "7.79" },
+    { "key": "UNCONJUGATED", "value": "1.63" },
+    { "key": "SGOT", "value": "162" },
+    { "key": "SGPT", "value": "86" },
+    { "key": "ALKALINE PHOSPHATASE", "value": "396" },
+    { "key": "TOTAL PROTEIN", "value": "6.2" },
+    { "key": "ALBUMIN", "value": "3.7" },
+    { "key": "GLOBULIN", "value": "2.5" },
+    { "key": "GAMMAT-GT", "value": "263" }
+  ],
+
+  "reference_text": "Diagnostic Point Pathology Labs EQUIPPED WITH COMPUTERISED AUTO CHEMISTRY, BLOOD GAS & HAEMATOLOGY ANALYSERS 101, 102, 107, 108, 109, 1st Floor, Agarwal Tower, Pkt. O & P Mkt. Dilshad Garden, Delhi-95 SARVODAYA HOSPITAL KJ-7, Kavi Nagar, Ghaziabad (U.P.) Dr. (Capt) Atul Kapila (Retd.) MD Path Regn No. MCI 3456 Investigation Observed Value Unit Biological Ref interval BIOCHEMISTRY LIVER FUNCTION TEST (LFT) BILIRUBIN TOTAL 9.42 H mg/dl 0.30 - 1.20 CONJUGATED (D. BILIRUBIN) 7.79 H mg/dL 0.00 - 0.30 UNCONJUGATED (I.D.BILIRUBIN) 1.63 H mg/dl 0.00 - 0.70 SGOT 162 H IU/L 0.00 - 46.00 SGPT 86 H IU/L 0.00 - 49.00 ALKALINE PHOSPHATASE 396 H U/L 42.00 - 128.00 TOTAL PROTEIN 6.2 gm/dl 6.20 - 8.00 ALBUMIN 3.7 L gm/dl 3.60 - 5.40 GLOBULIN 2.5 gm/dl 1.50 - 3.60 A/G RATIO 1.48 1.0 - 2.0 GAMMAT-GT 263 H IU/L 11.00 - 50.00 Specimen SERUM END OF REPORT FACILITIES FOR HORMONES ASSAYS, FNAC, HISTOPATHOLOGY, BONE MARROW ASPIRATION & BIOPSY WITH MICRO PHOTOGRAPHS NOTE ABOVE MENTIONED FINDINGS ARE A PROFESSIONAL AND NOT A FINAL DIAGNOSIS, ALL LABORATORY TESTS & OTHER INVESTIGATION RESULTS ARE TO BE CORELATED CLINIC-PATHOLOGICALLY, DISCREPANCIES, IF ANY, NECESSITATE REVIEW/REPEAT OF THE TESTS NOT VALID FOR LEGAL PURPOSE CLINICAL CORELATION IS MANDATORY"
+}

@@ -1,0 +1,1307 @@
+---
+title: HTTP server
+description: Run a local HTTP server that exposes an OpenAI-compatible API.
+schemaType: TechArticle
+tocMaxDepth: 3
+---
+
+## Overview
+
+To run the server, install the `@qvac/cli` npm package — it depends on `@qvac/sdk` directly, so the SDK is installed automatically. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls. As a result, any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can point to `http://localhost:11434/v1/` and work without changes.
+
+## AI capabilities
+
+At the moment, the HTTP server supports the following QVAC AI capabilities:
+* Text generation — via [Chat](#chat) (`/v1/chat/completions`), [Responses](#responses) (`/v1/responses`, modern), or [Legacy completions](#legacy-completions) (`/v1/completions`).
+* [Text embeddings](#embeddings) — via `/v1/embeddings`.
+* RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
+* [Image generation](#images) — via `/v1/images/generations` and `/v1/images/edits`.
+* [Video generation](#videos) — via `/v1/videos`.
+* Transcription — via [Audio](#audio) (`/v1/audio/transcriptions`).
+* Text-to-speech — via [Audio](#audio) (`/v1/audio/speech`).
+* Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
+
+## Running the server
+
+<Steps>
+<Step>
+Install the CLI globally (this also installs `@qvac/sdk` as a transitive dependency):
+
+```bash
+npm install -g @qvac/cli
+```
+
+See [Installation](/installation) for environment-specific instructions of the SDK (e.g., Linux Vulkan runtime, Windows GPU drivers).
+</Step>
+
+<Step>
+Create the `qvac.config.*` file at the root of your project declaring which models the server can load. For example:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "my-llm": {
+        "model": "QWEN3_600M_INST_Q4",
+        "default": true,
+        "config": { "ctx_size": 8192 }
+      }
+    }
+  }
+}
+```
+</Step>
+
+<Step>
+Start the server:
+
+```bash
+qvac serve openai
+```
+</Step>
+
+<Step>
+Send a request:
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+</Step>
+</Steps>
+
+## Configuration
+
+Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/configuration#serveconfig).
+
+<Card href="/cli/http-server/connection" title="Connect AI tools">
+  Learn how to use the HTTP server as a local model provider for AI tools that support OpenAI-compatible API.
+</Card>
+
+### Example
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "my-llm": {
+        "model": "QWEN3_600M_INST_Q4",
+        "default": true,
+        "preload": true,
+        "config": { "ctx_size": 8192, "tools": true }
+      },
+      "my-embed": {
+        "model": "GTE_LARGE_FP16",
+        "default": true
+      },
+      "whisper": {
+        "model": "WHISPER_TINY",
+        "default": true,
+        "preload": true,
+        "config": { "language": "en", "strategy": "greedy" }
+      }
+    }
+  }
+}
+```
+
+- **`model`**: SDK model constant name (e.g., `QWEN3_600M_INST_Q4`). The server resolves it to a download source and addon type automatically.
+- **`default`**: when `true`, marks this model as the default for its endpoint category. This does not make the server auto-select the model for requests that omit `model`.
+- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded on first request (cold start). Defaults to `true` for constant model entries.
+- **`config`**: model config overrides passed to the underlying addon. Same options as [`modelConfig` in `loadModel()`](/reference/api#loadmodel).
+
+<Callout type="warn">
+`default` field **does not** act as a fallback when an API request omits `model`. Requests must still include a `model` field; otherwise, the server returns `400`.
+</Callout>
+
+## Integration
+
+To create a client, you can use any OpenAI-compatible AI SDK provider, such as [Vercel AI SDK](https://ai-sdk.dev). For a better developer experience, use our npm package `@qvac/ai-sdk-provider`.
+
+<Card href="/cli/http-server/integration" title="Use @qvac/ai-sdk-provider">
+  Vercel AI SDK provider for QVAC: introspection of supported models, automatic configuration, branded export, and more.
+</Card>
+
+## CLI
+
+```
+qvac serve openai [options]
+  -c, --config <path>          Config file path (default: auto-detect qvac.config.*)
+  -p, --port <number>          Port to listen on (default: 11434)
+  -H, --host <address>         Host to bind to (default: 127.0.0.1)
+  --model <alias>              Model alias to preload (repeatable, must be in config)
+  --api-key <key>              Require Bearer token authentication
+  --cors                       Enable CORS headers
+  --docs                       Mount Swagger UI at /docs (auto-enables CORS)
+  --public-base-url <url>      Externally reachable origin (required for image response_format=url)
+  -v, --verbose                Detailed output
+```
+
+## API
+
+All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-reference) request and response format. Base path: `/v1`.
+
+### Endpoints
+
+| Resource | Method | Path |
+| --- | --- | --- |
+| [OpenAPI](#openapi--swagger-ui) | `GET` | [`/openapi.json`](#openapi--swagger-ui) |
+| | `GET` | [`/docs`](#openapi--swagger-ui) |
+| [Models](#models) | `GET` | [`/v1/models`](#get-v1models) |
+| | `GET` | [`/v1/models/:id`](#get-v1modelsid) |
+| | `DELETE` | [`/v1/models/:id`](#delete-v1modelsid) |
+| [Chat](#chat) | `POST` | [`/v1/chat/completions`](#post-v1chatcompletions) |
+| [Responses](#responses) | `POST` | [`/v1/responses`](#post-v1responses) |
+| | `GET` | [`/v1/responses/:id`](#get-v1responsesid) |
+| | `DELETE` | [`/v1/responses/:id`](#delete-v1responsesid) |
+| | `GET` | [`/v1/responses/:id/input_items`](#get-v1responsesidinput_items) |
+| [Legacy completions](#legacy-completions) | `POST` | [`/v1/completions`](#post-v1completions) |
+| [Embeddings](#embeddings) | `POST` | [`/v1/embeddings`](#post-v1embeddings) |
+| [Audio](#audio) | `POST` | [`/v1/audio/transcriptions`](#post-v1audiotranscriptions) |
+| | `POST` | [`/v1/audio/translations`](#post-v1audiotranslations) |
+| | `POST` | [`/v1/audio/speech`](#post-v1audiospeech) |
+| | `GET` | [`/v1/audio/voices`](#get-v1audiovoices) |
+| | `GET` | [`/v1/audio/models`](#get-v1audiomodels) |
+| [Images](#images) | `POST` | [`/v1/images/generations`](#post-v1imagesgenerations) |
+| | `POST` | [`/v1/images/edits`](#post-v1imagesedits) |
+| [Files](#files) | `POST` | [`/v1/files`](#post-v1files) |
+| | `GET` | [`/v1/files`](#get-v1files) |
+| | `GET` | [`/v1/files/:id`](#get-v1filesid) |
+| | `GET` | [`/v1/files/:id/content`](#get-v1filesidcontent) |
+| [Vector stores](#vector-stores) | `GET` | [`/v1/vector_stores`](#get-v1vector_stores) |
+| | `POST` | [`/v1/vector_stores`](#post-v1vector_stores) |
+| | `GET` | [`/v1/vector_stores/:id`](#get-v1vector_storesid) |
+| | `POST` | [`/v1/vector_stores/:id`](#post-v1vector_storesid) |
+| | `DELETE` | [`/v1/vector_stores/:id`](#delete-v1vector_storesid) |
+| | `POST` | [`/v1/vector_stores/:id/search`](#post-v1vector_storesidsearch) |
+| | `POST` | [`/v1/vector_stores/:id/files`](#post-v1vector_storesidfiles) |
+| [Videos](#videos) | `POST` | [`/v1/videos`](#post-v1videos) |
+| | `GET` | [`/v1/videos`](#get-v1videos) |
+| | `GET` | [`/v1/videos/:id`](#get-v1videosid) |
+| | `GET` | [`/v1/videos/:id/content`](#get-v1videosidcontent) |
+| | `DELETE` | [`/v1/videos/:id`](#delete-v1videosid) |
+
+<Callout type="info">
+All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the request body at **100 MB**.
+</Callout>
+
+### Models
+
+Inspect and unload models registered in `serve.models`.
+
+#### `GET /v1/models`
+
+List all loaded models.
+
+```bash
+curl http://localhost:11434/v1/models
+```
+
+Response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "my-llm", "object": "model", "created": 1718000000, "owned_by": "qvac" }
+  ]
+}
+```
+
+#### `GET /v1/models/:id`
+
+Get details of a specific loaded model.
+
+```bash
+curl http://localhost:11434/v1/models/my-llm
+```
+
+#### `DELETE /v1/models/:id`
+
+Unload a model, releasing its resources.
+
+```bash
+curl -X DELETE http://localhost:11434/v1/models/my-llm
+```
+
+Response:
+
+```json
+{ "id": "my-llm", "object": "model", "deleted": true }
+```
+
+### Chat
+
+OpenAI-compatible chat completions backed by any alias whose endpoint category is `chat` in `serve.models`.
+
+#### `POST /v1/chat/completions`
+
+Generate a chat completion. Supports both blocking and streaming (SSE) modes, tool/function calling, structured output, and per-request generation parameters.
+
+**Blocking request:**
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "temperature": 0.7,
+    "max_tokens": 256
+  }'
+```
+
+**Streaming request (server-sent events):**
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "stream": true
+  }'
+```
+
+**Tool calling:**
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "What is the weather in London?"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": { "location": { "type": "string" } },
+          "required": ["location"]
+        }
+      }
+    }]
+  }'
+```
+
+#### Message content
+
+`messages[].content` accepts both the plain string form and the OpenAI **array-of-parts** form (`[{ "type": "text", "text": "…" }, …]`) that modern clients such as Cline and Open WebUI send. Parts of type `text` are concatenated into a single string; non-text parts (`image_url`, `input_audio`, `file`) are **silently dropped** — the chat surface is text-only and vision is out of scope. Both shapes below are valid:
+
+```jsonc
+// string form
+{ "role": "user", "content": "Describe a sunset." }
+
+// array form (non-text parts ignored)
+{ "role": "user", "content": [{ "type": "text", "text": "Describe a sunset." }] }
+```
+
+#### Generation parameters
+
+The following OpenAI parameters are forwarded to the model on each request:
+
+| OpenAI parameter | SDK parameter | Description |
+| --- | --- | --- |
+| `temperature` | `temp` | Sampling temperature |
+| `max_tokens` | `predict` | Maximum tokens to generate |
+| `max_completion_tokens` | `predict` | Alias for `max_tokens` |
+| `top_p` | `top_p` | Nucleus sampling threshold |
+| `seed` | `seed` | Random seed for deterministic output |
+| `frequency_penalty` | `frequency_penalty` | Penalize frequent tokens |
+| `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
+| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not accept a numeric token budget. |
+
+#### Structured output (`response_format`)
+
+`response_format.type` accepts `text` (default), `json_object`, and `json_schema`. When `json_schema` is used, the request must also carry `json_schema.schema` (a JSON Schema object) and may include `json_schema.name` and `json_schema.strict`.
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "Pick a color."}],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "color",
+        "schema": {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"]
+        }
+      }
+    }
+  }'
+```
+
+<Callout type="warn">
+Structured output (`json_object` / `json_schema`) cannot be combined with `tools`. Sending both returns `400 invalid_response_format`.
+</Callout>
+
+#### Unsupported parameters
+
+The following OpenAI parameters are accepted but ignored (a warning is logged): `n`, `logprobs`, `stop`, `top_logprobs`, `logit_bias`, `parallel_tool_calls`, `stream_options`.
+
+#### Response: `finish_reason` and token usage
+
+Each choice carries a `finish_reason` that reflects how generation actually ended:
+
+| `finish_reason` | When |
+| --- | --- |
+| `stop` | The model reached a natural end-of-sequence or a stop sequence. |
+| `length` | Generation was truncated because it hit `max_tokens` / `max_completion_tokens` (the SDK's token budget was exhausted). |
+| `tool_calls` | The model emitted one or more function/tool calls. |
+
+`usage.prompt_tokens` is reported as `0` (the SDK does not yet expose a prompt token count). `usage.completion_tokens` comes from the SDK completion stats (`generatedTokens`) when available, falling back to a whitespace word count of the output. The same accounting is shared across `/v1/chat/completions`, `/v1/completions`, and `/v1/responses`, so token counts no longer drift between blocking and streaming paths. In streaming mode the `usage` object is attached to the final SSE chunk (for plain completions; tool-call streams end on a `tool_calls` chunk).
+
+<Callout type="warn">
+If inference fails mid-stream, the request surfaces a `502 inference_failed` error instead of returning a partial `200`.
+</Callout>
+
+### Responses
+
+OpenAI-compatible Responses API. Supports blocking, SSE streaming, retrieval by id, and `previous_response_id` chaining for multi-turn conversations. Backed by the same chat models registered under `serve.models` (any alias whose endpoint category is `chat`).
+
+#### `POST /v1/responses`
+
+Create a response.
+
+**Blocking request:**
+
+```bash
+curl http://localhost:11434/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "input": "Say hello.",
+    "store": true
+  }'
+```
+
+**Streaming request (SSE):**
+
+```bash
+curl http://localhost:11434/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "input": "Say hello.",
+    "stream": true
+  }'
+```
+
+**Multi-turn via `previous_response_id`:**
+
+```bash
+curl http://localhost:11434/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "input": "and now?",
+    "previous_response_id": "resp_..."
+  }'
+```
+
+The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_tokens` / `max_tokens`, `frequency_penalty`, `presence_penalty`, `reasoning_budget`) and the same `response_format` rules as `/v1/chat/completions` apply.
+
+<Callout type="warn">
+**Volatile state.** Stored responses live in process memory only — there is no disk or P2P persistence. They expire on server restart, after the per-entry TTL (1 h by default), or when the LRU cap (256 entries) evicts them. Each response carries the `X-QVAC-Stub: responses-volatile` header. Pass `store: false` in the request body to skip persistence entirely.
+</Callout>
+
+When generation is truncated because it hit `max_output_tokens` / `max_tokens`, the response is returned with `status: "incomplete"` and `incomplete_details.reason: "max_output_tokens"` — the Responses-API analogue of chat's `finish_reason: "length"`. `usage.output_tokens` uses the same SDK-stats accounting as the other chat-category routes (`input_tokens` is `0`).
+
+The following Responses-API features are intentionally rejected with `400`: `conversation`, `background: true`, and built-in tools (`web_search`, `file_search`, `code_interpreter`). `function`-typed tools work normally.
+
+#### `GET /v1/responses/:id`
+
+Retrieve a previously stored response by id.
+
+```bash
+curl http://localhost:11434/v1/responses/resp_abc123
+```
+
+#### `DELETE /v1/responses/:id`
+
+Delete a stored response.
+
+```bash
+curl -X DELETE http://localhost:11434/v1/responses/resp_abc123
+```
+
+#### `GET /v1/responses/:id/input_items`
+
+Paginate the original `input` items of a stored response. Accepts `limit` and `after` query parameters.
+
+```bash
+curl "http://localhost:11434/v1/responses/resp_abc123/input_items?limit=20"
+```
+
+### Legacy completions
+
+Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with older OpenAI clients and SDKs that have not migrated to `/v1/chat/completions`. Backed by the same chat-category models — any alias registered with endpoint category `chat` in `serve.models` serves both endpoints with no extra configuration.
+
+#### `POST /v1/completions`
+
+Generate a text completion from a raw prompt.
+
+**Blocking, single prompt:**
+
+```bash
+curl http://localhost:11434/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompt":"Say hello in one word.","max_tokens":16}'
+```
+
+**Streaming (single prompt only):**
+
+```bash
+curl http://localhost:11434/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompt":"Say hello in one word.","stream":true}'
+```
+
+**Multi-prompt fan-out (blocking only):**
+
+```bash
+curl http://localhost:11434/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompt":["Reply with alpha.","Reply with beta."],"max_tokens":8}'
+```
+
+#### Prompt input rules
+
+- **String** or **single-element string array** — blocking JSON or SSE streaming. Response object is `text_completion` with `cmpl-` ids and `choices[0].text`.
+- **String array of length ≥ 2** (multi-prompt) — fanned out sequentially as N independent completions and returned in `choices` with matching `index`. Blocking only; combining with `"stream": true` returns `400 unsupported_streaming`. If any single prompt fails, the whole request aborts (no partial results).
+- **Token-id prompts** (`number[]`, `number[][]`) and **empty / missing prompts** return `400 invalid_prompt`.
+
+<Callout type="info">
+**Chat-template caveat.** The prompt is wrapped as a single `{ role: 'user' }` chat turn before being fed to the SDK, so the model's chat template (system prompt, role tags) still runs on every call. Legacy clients that expect raw text-completion semantics (no system prompt, no role formatting around the prompt) will see template-shaped output. Use `/v1/chat/completions` directly if you need explicit control over message structure.
+</Callout>
+
+The same generation parameters as `/v1/chat/completions` are accepted. The following OpenAI fields are accepted and ignored (warning logged): `logprobs`, `echo`, `best_of`, `suffix`, `stop`, `logit_bias`, `stream_options`, `user`, `response_format`, and `n` when greater than `1`.
+
+`choices[].finish_reason` follows the same rules as [Chat](#response-finish_reason-and-token-usage): `stop` for a natural end, `length` when output is truncated by `max_tokens`. Token usage uses the same SDK-stats accounting; for multi-prompt requests, `usage` aggregates `completion_tokens` across every prompt.
+
+### Embeddings
+
+Generate vector embeddings backed by any alias whose endpoint category is `embedding`.
+
+#### `POST /v1/embeddings`
+
+Generate text embeddings. Accepts a single string or a batch of strings.
+
+**Single input:**
+
+```bash
+curl http://localhost:11434/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-embed",
+    "input": "The quick brown fox"
+  }'
+```
+
+**Batch input:**
+
+```bash
+curl http://localhost:11434/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-embed",
+    "input": ["First sentence", "Second sentence"]
+  }'
+```
+
+Response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "object": "embedding", "index": 0, "embedding": [0.012, -0.034] }
+  ],
+  "model": "my-embed",
+  "usage": { "prompt_tokens": 0, "total_tokens": 0 }
+}
+```
+
+<Callout type="info">
+`encoding_format` (only `float` is supported) and `dimensions` are accepted but ignored.
+</Callout>
+
+### Audio
+
+Transcription, translation, and text-to-speech endpoints. Transcription and translation use `multipart/form-data`; speech accepts JSON and returns binary audio.
+
+#### `POST /v1/audio/transcriptions`
+
+Transcribe audio using Whisper or Parakeet models. Uses `multipart/form-data`. Returns text in the source language.
+
+**JSON response (default):**
+
+```bash
+curl http://localhost:11434/v1/audio/transcriptions \
+  -F "file=@audio.wav" \
+  -F "model=whisper" \
+  -F "response_format=json"
+```
+
+Response: `{ "text": "transcribed text here" }`
+
+**Plain text response:**
+
+```bash
+curl http://localhost:11434/v1/audio/transcriptions \
+  -F "file=@audio.wav" \
+  -F "model=whisper" \
+  -F "response_format=text"
+```
+
+**With prompt** (Whisper uses it as `initial_prompt`):
+
+```bash
+curl http://localhost:11434/v1/audio/transcriptions \
+  -F "file=@audio.wav" \
+  -F "model=whisper" \
+  -F "prompt=President Kennedy speech about space exploration"
+```
+
+##### Parameters
+
+| Parameter | Description | Required |
+| --- | --- | --- |
+| `file` | Audio file to transcribe. | Yes |
+| `model` | Model alias (must be in config). | Yes |
+| `response_format` | `json` (default) or `text`. | No |
+| `prompt` | Optional prompt forwarded to the model. | No |
+
+Unsupported `response_format` values (`srt`, `vtt`, `verbose_json`) return a `400` error.
+
+<Callout type="info">
+`language` and `temperature` are accepted but currently only configurable at model load time (via `serve.models` config), not per-request. A warning is logged when these are sent. `temperature` is parsed as a **number** per the OpenAI spec (e.g. `temperature=0.0`); the same applies to `/v1/audio/translations`.
+</Callout>
+
+#### `POST /v1/audio/translations`
+
+Translate audio into **English** text. Maps to Whisper's translate task (not "transcribe then run a text translator"). Uses `multipart/form-data`.
+
+```bash
+curl http://localhost:11434/v1/audio/translations \
+  -F "file=@sample.wav" \
+  -F "model=whisper-translate" \
+  -F "response_format=json"
+```
+
+Response: `{ "text": "..." }` for `json`; raw UTF-8 body for `text`.
+
+##### Parameters
+
+| Parameter | Description | Required |
+| --- | --- | --- |
+| `file` | Audio file to translate. | Yes |
+| `model` | Alias whose endpoint category is `audio-translation` (see below). | Yes |
+| `response_format` | `json` (default) or `text`. `srt`, `vtt`, `verbose_json` return `400`. | No |
+| `prompt` | Optional Whisper initial-prompt. | No |
+
+The `language` field is **not supported** — output is always English. Use `/v1/audio/transcriptions` if you need non-English text.
+
+##### Registering a translation model
+
+Use the virtual SDK type **`whispercpp-audio-translation`** in `serve.models`. The CLI resolves it to the `whispercpp-transcription` engine and forces `translate: true` on the load-time `modelConfig`. You can register the same Whisper weights twice — once for transcription, once for translation:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "whisper-transcribe": { "model": "WHISPER_EN_TINY_Q8_0", "preload": true },
+      "whisper-translate": {
+        "model": "WHISPER_EN_TINY_Q8_0",
+        "type": "whispercpp-audio-translation",
+        "preload": true
+      }
+    }
+  }
+}
+```
+
+#### `POST /v1/audio/speech`
+
+OpenAI-compatible text-to-speech, backed by the SDK's `textToSpeech` capability (Chatterbox or Supertonic). Body is JSON, response body is binary audio.
+
+```bash
+curl http://localhost:11434/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC."}' \
+  --output speech.wav
+```
+
+##### Loaded model
+
+Register a TTS model in `serve.models` with `type: "tts"` (and typically `preload: true` to avoid cold-start latency):
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "my-tts": {
+        "src": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
+        "type": "tts",
+        "preload": true,
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "ttsTokenizerSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
+          "ttsSpeechEncoderSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/speech_encoder.onnx",
+          "ttsEmbedTokensSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/embed_tokens.onnx",
+          "ttsConditionalDecoderSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/conditional_decoder.onnx",
+          "ttsLanguageModelSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/language_model.onnx",
+          "referenceAudioSrc": "./voices/alloy-ref.wav"
+        }
+      }
+    }
+  }
+}
+```
+
+<Callout type="info">
+**Drop-in for OpenAI clients:** alias an OpenAI TTS model name (`tts-1`, `gpt-4o-mini-tts`) to your loaded TTS model so SDKs that hard-code the OpenAI name work without code change.
+</Callout>
+
+##### Voice → model alias
+
+OpenAI clients select a voice via the `voice` field. QVAC TTS engines bind voice character to **load-time** config — Chatterbox uses `referenceAudioSrc`; Supertonic uses `ttsVoiceStyleSrc`. The route resolves the backing model in this order:
+
+1. **`serve.openai.audio.speech.voices[voice]`** — explicit map from an OpenAI voice string to a `serve.models` alias (case-insensitive). When matched, the request's `model` field is not used for routing.
+2. **`serve.models[model + "-" + voice]`** — hyphen alias (e.g. `my-tts-alloy`).
+3. **`serve.models[model]`** — bare model alias.
+4. None of the above — `404 model_not_found`.
+
+When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoice`** is used (defaults to `"alloy"`). Set it to `null` to make `voice` strictly required.
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "openai": {
+      "audio": {
+        "speech": {
+          "defaultVoice": "alloy",
+          "voices": {
+            "alloy": "tts-chatter-alloy",
+            "echo": "tts-chatter-echo"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+##### Request
+
+| Field | Description | Required |
+| --- | --- | --- |
+| `model` | Alias, resolved as described above. | Yes |
+| `input` | Non-empty string, capped at `serve.openai.audio.speech.maxInputChars` (default `4096`; set to `null` to disable). | Yes |
+| `voice` | Voice id; defaults to `defaultVoice`. | No |
+| `response_format` | `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. | No |
+
+The encoded formats (`mp3`, `opus`, `aac`, `flac`) are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`. When ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`); unknown values return `400 invalid_response_format`. The default stays `wav` so synthesis works on hosts without ffmpeg. `speed`, `instructions`, and `stream_format` are accepted but ignored — dropped fields are echoed back in the `X-QVAC-Ignored-Params` response header.
+
+##### Response
+
+The response body is binary audio. Headers always include:
+
+| Header | Description |
+| --- | --- |
+| `Content-Type` | `audio/wav` (`wav`); `audio/L16; rate=<sr>; channels=1` (RFC 2586, `pcm`); `audio/mpeg` (`mp3`); `audio/ogg` (`opus`); `audio/aac` (`aac`); `audio/flac` (`flac`). |
+| `Content-Length` | Total bytes. |
+| `X-Audio-Sample-Rate` | Native sample rate of the model output (e.g. `24000` for Chatterbox, `44100` for Supertonic). **Only sent for `wav`/`pcm`** — encoded containers carry their own rate metadata. |
+| `X-Audio-Channels` | Always `1` (mono). Only sent for `wav`/`pcm`. |
+| `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`. |
+
+The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
+
+#### `GET /v1/audio/voices`
+
+Lists the configured TTS voices — the OpenAI `voice` names mapped under `serve.openai.audio.speech.voices` plus the configured `defaultVoice`. Used by clients such as Open WebUI's voice selector. QVAC enforces no fixed voice catalog, so callers may also send any `voice` string that resolves via a `{model}-{voice}` alias.
+
+The response carries both a flat `voices` array (consumed by Open WebUI) and an OpenAI-style `data` array:
+
+```json
+{
+  "object": "list",
+  "voices": ["alloy", "echo"],
+  "data": [
+    { "id": "alloy", "object": "audio.voice", "model": "tts-chatter-alloy" },
+    { "id": "echo", "object": "audio.voice", "model": "tts-chatter-echo" }
+  ]
+}
+```
+
+#### `GET /v1/audio/models`
+
+Lists loaded (READY) text-to-speech models — the speech-capable subset of [`/v1/models`](#get-v1models), filtered to models whose endpoint category is `speech`. Same `{ object: "list", data: [...] }` shape, with each entry shaped like a `/v1/models` entry. Used by Open WebUI's TTS model selector.
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "tts-chatter-alloy", "object": "model", "created": 1718000000, "owned_by": "qvac" }
+  ]
+}
+```
+
+### Images
+
+Text-to-image and image-to-image endpoints backed by any alias whose endpoint category is `image` (built-in addons that resolve to this category are `diffusion` and `sdcpp-generation`).
+
+#### `POST /v1/images/generations`
+
+Text-to-image generation backed by the SDK's `diffusion()` primitive.
+
+```bash
+curl http://localhost:11434/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-diffusion",
+    "prompt": "a watercolor cat at golden hour",
+    "size": "1024x1024",
+    "n": 1
+  }'
+```
+
+Response:
+
+```json
+{
+  "created": 1718000000,
+  "output_format": "png",
+  "size": "1024x1024",
+  "data": [{ "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }]
+}
+```
+
+##### Loaded model
+
+Register an alias whose endpoint category is `image` (built-in addons that resolve to this category are `diffusion` and `sdcpp-generation`):
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "my-diffusion": {
+        "model": "SD_V2_1_1B_Q8_0",
+        "preload": true,
+        "config": { "prediction": "v" }
+      }
+    }
+  }
+}
+```
+
+<Callout type="info">
+**Drop-in for OpenAI clients:** alias an OpenAI image-model name (`gpt-image-2`, `dall-e-2`) to your loaded diffusion model.
+</Callout>
+
+##### `response_format`: `b64_json` (default) or `url`
+
+- **`b64_json`** (default) — `data[].b64_json` carries the inline base64 PNG. No server-side state.
+- **`url`** — requires `--public-base-url <origin>` (or `serve.publicBaseUrl` in the config). The image is stored in the in-memory ephemeral files store and `data[].url` resolves to `${publicBaseUrl}/v1/files/{id}/content`. Each item also carries `expires_at` (Unix seconds) so clients know exactly when the URL stops working.
+
+```bash
+qvac serve openai --public-base-url "https://api.example.com"
+```
+
+```bash
+curl https://api.example.com/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-diffusion","prompt":"a watercolor cat","response_format":"url"}'
+```
+
+```json
+{
+  "created": 1718000000,
+  "output_format": "png",
+  "data": [
+    {
+      "url": "https://api.example.com/v1/files/file-abcd/content",
+      "expires_at": 1718003600
+    }
+  ]
+}
+```
+
+##### Streaming (`stream: true`)
+
+The response is `text/event-stream` and emits one `image_generation.completed` event per generated image (always carrying inline `b64_json`, regardless of the requested `response_format`), then `[DONE]`.
+
+The SDK does not surface intermediate image bytes (only step ticks via `progressStream`), so `image_generation.partial_image` events are not produced. This matches OpenAI's documented behavior for `partial_images: 0`.
+
+##### Hard fails (`400`)
+
+The server is intentionally loud about every OpenAI image-API field it cannot honor without producing the wrong bytes:
+
+| `error.code` | Trigger |
+| --- | --- |
+| `unsupported_response_format` | `response_format=url` requested but the server is not configured with `--public-base-url`. |
+| `invalid_response_format` | Anything other than `b64_json` / `url`. |
+| `unsupported_output_format` | `output_format` other than `png`. |
+| `unsupported_output_compression` | `output_compression` is set (only meaningful with jpeg/webp, which are not emitted). |
+| `unsupported_background` | `background=transparent\|opaque\|auto` (no alpha-channel control). |
+| `missing_prompt` / `missing_model` | Required fields absent. |
+| `invalid_size` | `size` is not `WIDTHxHEIGHT` (multiples of 8) or `auto`. |
+| `invalid_n` | `n` is not a positive integer. |
+
+<Callout type="warn">
+**Validation order.** For `/v1/images/generations` and `/v1/images/edits`, the server resolves the model **before** running the per-param checks above. A request with an unknown `model` therefore returns `404 model_not_found` even when `response_format`, `output_format`, `output_compression`, or `background` would otherwise be rejected with a `400`. Multipart-shape checks on edits (`missing_image`, `mask_not_supported`) still fire before model resolution since they are inherent to the request shape.
+</Callout>
+
+The following OpenAI fields are accepted and silently ignored (warning logged) because they are advisory: `quality`, `style`, `moderation`, `partial_images`, `user`, `input_fidelity`.
+
+<Callout type="info">
+Validation error response envelopes now include the failing-field path in the `message` to make debugging easier. The `error.code` values are unchanged and continue to match the documented error contracts.
+</Callout>
+
+#### `POST /v1/images/edits`
+
+Image-to-image (img2img) edits. Uses `multipart/form-data`. Shares the same validation, response shape, and `response_format` rules as `/v1/images/generations`.
+
+```bash
+curl http://localhost:11434/v1/images/edits \
+  -F "image=@input.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=oil painting style, warm lighting" \
+  -F "strength=0.65"
+```
+
+##### Multipart fields
+
+| Field | Description |
+| --- | --- |
+| `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
+| `model`, `prompt` | Same as JSON variants. **Required.** |
+| `size` | `WIDTHxHEIGHT` (multiples of 8) or `auto`. |
+| `n` | Positive integer. |
+| `seed` | Integer. |
+| `strength` | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric returns `400 invalid_strength`. |
+| `response_format` | `b64_json` (default) or `url` (requires `--public-base-url`). |
+| `stream` | When `true`, response is `text/event-stream` (see Streaming above). |
+
+<Callout type="warn">
+`mask` / `mask[]` is rejected with `400 mask_not_supported`. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image.
+</Callout>
+
+### Files
+
+The `/v1/files` endpoints expose an **in-memory** ephemeral file store used as the backing storage for image `url` responses and for vector-store ingestion. There is no disk or P2P persistence; entries are evicted by TTL or capacity.
+
+#### `POST /v1/files`
+
+Upload bytes (multipart).
+
+```bash
+curl http://localhost:11434/v1/files \
+  -F "file=@notes.txt" \
+  -F "purpose=assistants"
+```
+
+Response:
+
+```json
+{
+  "object": "file",
+  "id": "file-abc123",
+  "bytes": 4321,
+  "created_at": 1718000000,
+  "filename": "notes.txt",
+  "purpose": "assistants",
+  "status": "uploaded"
+}
+```
+
+#### `GET /v1/files`
+
+List files currently held in memory.
+
+#### `GET /v1/files/:id`
+
+Retrieve file metadata.
+
+#### `GET /v1/files/:id/content`
+
+Return the raw bytes with the stored `Content-Type` (used by image `response_format=url`).
+
+#### Eviction
+
+Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first eviction. Every eviction logs a `warn` line with the reason (`ttl` / `max_files` / `max_bytes`). Files are also removed automatically when attached to a vector store via `POST /v1/vector_stores/:id/files`. `GET /v1/files/:id/content` sets `Cache-Control: private, max-age=<seconds-until-eviction>` so downstream proxies cannot serve bytes the store has dropped.
+
+### Vector stores
+
+OpenAI-compatible vector-store endpoints backed by the SDK's RAG primitives. Each vector store maps 1:1 to a RAG workspace.
+
+#### `GET /v1/vector_stores`
+
+List all stores (merged with on-disk RAG workspaces).
+
+#### `POST /v1/vector_stores`
+
+Create a new store.
+
+#### `GET /v1/vector_stores/:id`
+
+Retrieve store metadata.
+
+#### `POST /v1/vector_stores/:id`
+
+Update `name`, `expires_after`, or `metadata`.
+
+#### `DELETE /v1/vector_stores/:id`
+
+Delete the store and the underlying RAG workspace.
+
+#### `POST /v1/vector_stores/:id/search`
+
+Embed `query` and run top-K similarity search.
+
+#### `POST /v1/vector_stores/:id/files`
+
+Attach a previously-uploaded `/v1/files` entry (UTF-8 text content).
+
+**End-to-end ingest + search:**
+
+```bash
+curl http://localhost:11434/v1/vector_stores \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-docs"}'
+
+curl http://localhost:11434/v1/files \
+  -F "file=@notes.txt" \
+  -F "purpose=assistants"
+
+curl http://localhost:11434/v1/vector_stores/vs_my-docs/files \
+  -H "Content-Type: application/json" \
+  -d '{"file_id":"file-abc123"}'
+
+curl http://localhost:11434/v1/vector_stores/vs_my-docs/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"what is in the notes?","max_num_results":4}'
+```
+
+#### Embedding model resolution
+
+Search and ingest both pick an embedding model from `serve.models`:
+
+1. If exactly one alias has `default: true` and endpoint category `embedding`, it is used.
+2. If only one embedding alias is configured at all, it is used.
+3. If multiple embedding aliases are configured and none is flagged as default, the request fails with `400 ambiguous_embedding_model`.
+4. If no embedding alias is configured, the request fails with `400 no_embedding_model_configured`.
+
+Once a vector store has been ingested with a particular embedding model, subsequent ingest or search calls must resolve to the **same** alias — otherwise the request fails with `400 embedding_model_mismatch`. To switch embeddings, create a new vector store.
+
+#### File ingest constraints
+
+- Files attached via `POST /v1/vector_stores/:id/files` must be **UTF-8 text** (e.g. `.txt`, `.md`, `.json`). Binary uploads (PDF / PNG / DOCX) are rejected with `400 unsupported_file_type` — no built-in document conversion is performed.
+- Once attached, the file is removed from the in-memory file store. The chunks are persisted by the underlying RAG workspace; only the original `file_id` and `filename` are kept as attribution metadata so search hits can carry them.
+
+#### Search results
+
+Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each chunk's `attributes` include the originating `file_id` and `filename` when they were attached through the file flow.
+
+### Videos
+
+OpenAI-compatible **async** video generation backed by the SDK's `video()`. Creating a job returns immediately with `status: "queued"`; the generation runs in the background. Poll for status, then download the bytes.
+
+Two modes are supported:
+
+- **txt2vid** — JSON body with `prompt` only. No image needed.
+- **img2vid** — include `input_reference` as a multipart file field (OpenAI SDK `Uploadable`), or JSON `{ image_url }` (base64 data URI or HTTP(S) URL), or JSON `{ file_id }` (file uploaded via `POST /v1/files`). Mode is inferred automatically.
+
+The OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
+
+#### Loaded model
+
+Register an alias whose endpoint category is `video` using the virtual SDK type **`sdcpp-video`** (it resolves to the `sdcpp-generation` addon with `mode: "video"`). Nested model-source fields (`t5XxlModelSrc`, `vaeModelSrc`, `clipLModelSrc`, …) accept SDK constant names, which the P2P registry resolves to downloadable weights:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "wan-t2v": {
+        "src": "WAN2_1_T2V_1_3B_FP16",
+        "type": "sdcpp-video",
+        "preload": true,
+        "config": {
+          "t5XxlModelSrc": "UMT5_XXL_FP16",
+          "vaeModelSrc": "WAN_2_1_COMFYUI_REPACKAGED_VAE",
+          "offload_to_cpu": true
+        }
+      },
+      "wan-i2v": {
+        "src": "WAN2_1_I2V_14B_Q4_K_M",
+        "type": "sdcpp-video",
+        "preload": true,
+        "config": {
+          "t5XxlModelSrc": "UMT5_XXL_FP16",
+          "vaeModelSrc": "WAN_2_1_COMFYUI_REPACKAGED_VAE",
+          "clipVisionModelSrc": "CLIP_VISION_H",
+          "offload_to_cpu": true
+        }
+      }
+    }
+  }
+}
+```
+
+<Callout type="info">
+**img2vid needs a vision encoder.** Image-to-video (sending `input_reference`) only works on a model loaded with `clipVisionModelSrc` (OpenCLIP ViT-H/14) — e.g. the `wan-i2v` alias above (WAN 2.1 I2V). A txt2vid-only model such as `wan-t2v` cannot animate a reference image.
+</Callout>
+
+Clients select the model by passing the alias key (or its `src` string) in the request `model` field. There is no separate videos aliasing block — to be a drop-in for OpenAI SDK clients (`client.videos.create(...)`, which defaults to `model: "sora-2"`), name the alias after the OpenAI model the client sends (e.g. `"sora-2"`).
+
+#### `POST /v1/videos`
+
+Create a generation job. Accepts `application/json` (txt2vid or img2vid via `{ image_url }` / `{ file_id }`) **or** `multipart/form-data` (img2vid via a binary `input_reference` file field — this is what the OpenAI SDK sends when given a local `File`/`Blob`).
+
+Returns `200` with the `Video` resource at `status: "queued"`.
+
+**Text-to-video (txt2vid)** — JSON body with `prompt`, no reference image:
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan-t2v",
+    "prompt": "a colorful bird flapping its wings in a sunny garden",
+    "size": "480x832",
+    "seconds": "2",
+    "fps": 16,
+    "steps": 30,
+    "cfg_scale": 6.0,
+    "flow_shift": 3.0,
+    "negative_prompt": "blurry, low quality, static",
+    "seed": 42
+  }'
+```
+
+**Image-to-video (img2vid)** — animate a reference image. Supply `input_reference` in any of three forms (the job switches to img2vid mode automatically). Use a model whose weights include a vision encoder, e.g. WAN 2.1 I2V (`clipVisionModelSrc`).
+
+Multipart file field (what the OpenAI SDK sends for a local `File`/`Blob`):
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -F "model=wan-i2v" \
+  -F "prompt=the cat slowly turns its head and blinks" \
+  -F "input_reference=@cat.png" \
+  -F "strength=0.6" \
+  -F "size=480x832" \
+  -F "seconds=2"
+```
+
+JSON with a base64 data URI or HTTP(S) URL (≤ 100 MB, 30 s fetch timeout):
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan-i2v",
+    "prompt": "the cat slowly turns its head and blinks",
+    "input_reference": { "image_url": "data:image/png;base64,iVBORw0KGgo..." },
+    "strength": 0.6
+  }'
+```
+
+JSON referencing a file previously uploaded via `POST /v1/files`:
+
+```bash
+curl http://localhost:11434/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan-i2v",
+    "prompt": "the cat slowly turns its head and blinks",
+    "input_reference": { "file_id": "file-abc123" }
+  }'
+```
+
+##### Request fields
+
+| Field | Description | Required |
+| --- | --- | --- |
+| `model` | Alias declared under `serve.models` (endpoint category `video`). | Yes |
+| `prompt` | Text prompt, 1–32000 characters. | Yes |
+| `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 16. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
+| `seconds` | Target duration as a **string** (e.g. `"2"`; OpenAI uses `"4"` / `"8"` / `"12"`). Mapped together with `fps` to the addon's `video_frames` (rounded to the nearest `4k+1`). | No |
+| `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. | No |
+| `steps` | QVAC extension. Diffusion sampler step count. | No |
+| `seed` | QVAC extension. Random seed; the SDK picks one when omitted. | No |
+| `negative_prompt` | QVAC extension. Negative prompt for the sampler. | No |
+| `cfg_scale` | QVAC extension. Classifier-free guidance scale (Wan range ~5–8). | No |
+| `flow_shift` | QVAC extension. Flow-matching shift; Wan 2.1 T2V needs `3.0` for visible motion. | No |
+| `input_reference` | img2vid reference image. Multipart file field, JSON `{ image_url }` (data URI or HTTP(S) URL, ≤ 100 MB / 30 s), or JSON `{ file_id }`. When present the job runs in img2vid mode; omit for txt2vid. | No |
+| `strength` | QVAC extension. img2vid denoise strength `[0, 1]`. Only meaningful with `input_reference`. | No |
+
+<Callout type="info">
+**img2vid via `input_reference`** — supply the reference image as a multipart file field named `input_reference` (OpenAI SDK `Uploadable`), or as JSON `{ "image_url": "data:image/jpeg;base64,..." }` (data URI or HTTP(S) URL up to 100 MB), or as JSON `{ "file_id": "file-…" }` (file uploaded via `POST /v1/files`). Omit `input_reference` entirely for txt2vid.
+</Callout>
+
+The `Video` resource returned by `POST` (and by `GET /v1/videos/:id`):
+
+```json
+{
+  "id": "video_8f3a…",
+  "object": "video",
+  "model": "wan-t2v",
+  "status": "queued",
+  "progress": 0,
+  "created_at": 1748800000,
+  "completed_at": null,
+  "expires_at": 253402300799,
+  "prompt": "a colorful bird flapping its wings in a sunny garden",
+  "size": "480x832",
+  "seconds": "2",
+  "remixed_from_video_id": null,
+  "error": null
+}
+```
+
+`progress` is a monotonic 0–100 high-water mark. `expires_at` is a far-future sentinel — the resource itself has no TTL; the **rendered bytes** expire in the ephemeral file store (after which `/content` returns `410 video_expired`).
+
+#### `GET /v1/videos/:id`
+
+Poll job status. `status` cycles `queued` → `in_progress` → `completed` / `failed`. Returns the same `Video` resource shape.
+
+```bash
+curl http://localhost:11434/v1/videos/video_abc123
+```
+
+#### `GET /v1/videos/:id/content`
+
+Download the rendered bytes (only valid once `status` is `completed`).
+
+```bash
+curl http://localhost:11434/v1/videos/video_abc123/content --output out.mp4
+```
+
+- **Default container** is `video/mp4` (fragmented MP4) **when `ffmpeg` is on the server's `PATH` at startup**; otherwise it falls back to `video/avi` (the SDK's native MJPG-AVI) and logs a warning once.
+- **`?format=mp4`** forces MP4. With no ffmpeg available this returns `503 transcode_unavailable` — omit `?format` or use `?format=avi`.
+- **`?format=avi`** forces the native MJPG-AVI and never transcodes.
+- The MP4 transcode is **lazy and cached**: the first fetch after completion may take a few seconds; later fetches serve the cached bytes.
+- **`?variant`** other than `video` (e.g. `thumbnail`, `spritesheet`) returns `501 unsupported_variant` — those assets are not rendered.
+
+#### `GET /v1/videos`
+
+List jobs, newest first by default. Cursor pagination via `limit` (default `20`, max `100`), `order` (`asc` / `desc`, default `desc`), and `after`. **In-memory only** — a restart clears the list, and old jobs are dropped once the 256-entry cap is reached.
+
+```json
+{
+  "object": "list",
+  "data": [ { "id": "video_8f3a…", "object": "video", "status": "completed" } ],
+  "first_id": "video_8f3a…",
+  "last_id": "video_8f3a…",
+  "has_more": false
+}
+```
+
+#### `DELETE /v1/videos/:id`
+
+Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
+
+```json
+{ "id": "video_abc123", "object": "video.deleted", "deleted": true }
+```
+
+#### Errors
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `missing_prompt` / `missing_model` | Required field absent. |
+| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` with multiples of 16. |
+| 400 | `invalid_seconds` | `seconds` is not a positive-integer string. |
+| 400 | `invalid_input_reference` | `input_reference` was sent but the image could not be resolved (malformed data URI, invalid base64, unknown `file_id`, fetch failure, or larger than 100 MB). |
+| 400 | `invalid_strength` | `strength` is not a number in `[0, 1]`. |
+| 400 | `invalid_model_type` | Alias is not a `video` model. |
+| 404 | `model_not_found` | `model` alias is not declared under `serve.models`. |
+| 404 | `video_not_found` | Unknown job id. |
+| 409 | `video_not_ready` | `/content` requested before the job is `completed` (response carries `Retry-After`). |
+| 409 | `video_failed` | Generation failed. |
+| 410 | `video_expired` | Rendered bytes have been evicted from the ephemeral store. |
+| 501 | `unsupported_variant` | `?variant` other than `video`. |
+| 502 | `transcode_failed` | ffmpeg failed or timed out (retry with `?format=avi`). |
+| 503 | `transcode_unavailable` | `?format=mp4` requested but ffmpeg is not on the server's `PATH`. |
+| 503 | `model_not_ready` | Model not loaded yet. |
+
+### Request cancellation
+
+When an HTTP client disconnects before a response finishes (closes the connection or aborts the request), the server cancels the in-flight inference for that request instead of letting it run to completion — freeing the model to serve the next call. This applies to both blocking and streaming requests across the inference routes (`/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/audio/*`).
+
+Video jobs are asynchronous and are not tied to the creating connection; cancel them explicitly with `DELETE /v1/videos/{id}` (see [Videos](#videos)).
+
+### Authentication
+
+By default, the server accepts unauthenticated requests on `127.0.0.1`. To require a Bearer token, run the server with the `--api-key` flag:
+
+```bash
+qvac serve openai --api-key my-secret-token
+```
+
+Clients must then include the token in the `Authorization` header:
+
+```bash
+curl http://localhost:11434/v1/models \
+  -H "Authorization: Bearer my-secret-token"
+```
+
+Requests without a valid token receive a `401` response.
+
+<Callout type="warn">
+**`--api-key` and image `response_format=url`:** browsers do not attach `Authorization` headers to `<img src="...">` requests, so URLs returned by `/v1/images/generations` and `/v1/images/edits` cannot render directly when bearer auth is enabled. Either run the server without `--api-key` for URL mode, or have the client fetch the bytes itself (with the `Authorization` header) and re-host them. The simpler workaround is to use `response_format=b64_json` instead.
+</Callout>
+
+### OpenAPI & Swagger UI
+
+The server exposes a machine-readable OpenAPI 3.1.0 document derived from the same schemas it uses to validate requests, so the spec is always in sync with the running server.
+
+#### `GET /openapi.json`
+
+Always exposed (no flag required). Returns the full OpenAPI 3.1.0 document as JSON.
+
+```bash
+curl http://localhost:11434/openapi.json
+```
+
+Each operation in the document carries `summary`, `tags`, a full markdown `description`, the request body schema, and the response schema. Tags group endpoints by domain (Chat, Completions, Embeddings, Responses, Audio, Images, Files, Vector Stores, Models).
+
+#### `GET /docs`
+
+Swagger UI, opt-in via the `--docs` flag. Off by default to keep the production surface minimal.
+
+```bash
+qvac serve openai --docs
+open http://localhost:11434/docs
+```
+
+`--docs` automatically enables CORS so the Swagger UI's "Try it out" button works (the spec's `servers` URL rarely matches the browser origin — for example, `localhost` vs `127.0.0.1`, or a port-forwarded host). Servers started without `--docs` still need `--cors` to opt in explicitly.
+
+#### Emit the spec without starting the server
+
+The CLI command `qvac openai spec` emits the same document without binding a port. Useful for piping into offline documentation generators or for shipping a stable spec file with your project.
+
+```bash
+qvac openai spec                       # JSON → stdout (pipe-safe)
+qvac openai spec -o spec.json          # write JSON to file
+qvac openai spec --yaml                # YAML → stdout
+qvac openai spec --yaml -o spec.yaml   # write YAML to file
+```
+
+Pairs cleanly with offline doc generators:
+
+```bash
+qvac openai spec --yaml > openapi.yaml
+npx @redocly/cli build-docs openapi.yaml -o api.html
+```

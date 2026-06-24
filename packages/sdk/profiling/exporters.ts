@@ -105,41 +105,43 @@ function formatNumber(n: number): string {
 
 type MetricType = "duration" | "bytes" | "throughput" | "number";
 
-function detectMetricType(metricName: string): MetricType {
-  const lowerName = metricName.toLowerCase();
-  
+const METRIC_TYPE_REGISTRY: Record<string, MetricType> = {
+  // Exceptions that patterns can't infer correctly
+  timeToFirstToken: "duration",
+  totalSegments: "number",
+  totalSamples: "number",
+};
+
+function inferMetricTypeFromPattern(lowerName: string): MetricType {
   if (lowerName.includes("bps") || lowerName.includes("speed")) {
     return "throughput";
   }
-  
   if (lowerName.includes("bytes") || lowerName.includes("downloaded") || lowerName.includes("size")) {
     return "bytes";
   }
-  
   if (
     lowerName.endsWith("time") ||
     lowerName.endsWith("ms") ||
     lowerName.endsWith("duration") ||
     lowerName.includes("ttfb") ||
     lowerName.includes("latency") ||
-    lowerName.includes("wait") ||
     lowerName.includes("overhead") ||
-    lowerName.includes("parse") ||
-    lowerName.includes("stringify") ||
-    lowerName.includes("validation") ||
-    lowerName.includes("execution") ||
-    lowerName.includes("serialization") ||
-    lowerName.includes("connection")
+    lowerName.includes("execution")
   ) {
     return "duration";
   }
-  
-  if (lowerName.includes("count") || lowerName.includes("token")) {
+  if (lowerName.includes("count") || lowerName.includes("tokens") || lowerName.includes("factor")) {
     return "number";
   }
-  
   // Default to duration for unknown metrics (most profiling is timing)
   return "duration";
+}
+
+function detectMetricType(metricName: string): MetricType {
+  if (METRIC_TYPE_REGISTRY[metricName]) {
+    return METRIC_TYPE_REGISTRY[metricName];
+  }
+  return inferMetricTypeFromPattern(metricName.toLowerCase());
 }
 
 function formatMetricValue(value: number, metricName: string): string {
@@ -171,7 +173,7 @@ export function exportTable(): string {
     return "No profiling data recorded.";
   }
 
-  const metricWidth = 40;
+  const metricWidth = 48;
   const numWidth = 12;
 
   const header = [

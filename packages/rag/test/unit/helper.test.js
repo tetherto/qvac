@@ -173,6 +173,23 @@ test('generateId: should generate multiple unique IDs', t => {
   t.is(ids.size, count, 'All generated IDs should be unique')
 })
 
+test('generateId: should fall back to #crypto when global crypto is unusable', t => {
+  const original = globalThis.crypto
+  const cryptoShim = require('../../src/shims/crypto')
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+  globalThis.crypto = cryptoShim
+  try {
+    t.ok(uuidPattern.test(generateId()), 'Generated ID should match UUID v4 pattern')
+  } finally {
+    if (original === undefined) {
+      delete globalThis.crypto
+    } else {
+      globalThis.crypto = original
+    }
+  }
+})
+
 test('normalizeDocs: comprehensive mixed scenario', t => {
   const docs = [
     'String document 1',

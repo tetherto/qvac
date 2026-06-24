@@ -73,7 +73,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       // Display stats
       const stats = response.stats || {}
       t.comment(`${label} Native addon stats: ` + JSON.stringify(stats))
-      t.comment(formatOCRPerformanceMetrics(`[OCR] ${label}`, stats, outputTexts))
+      t.comment(formatOCRPerformanceMetrics(`[OCR] ${label}`, stats, outputTexts, { skipReport: true }))
 
       t.pass(`${label} OCR basic test completed successfully`)
     } catch (e) {

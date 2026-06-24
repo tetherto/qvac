@@ -1,0 +1,25 @@
+---
+title: {{ pageTitle }}
+description: {{ pageDescription }}
+---
+
+{% for section in overrides %}
+## {{ section.heading }}
+
+{{ section.content }}
+
+{% endfor %}
+{% if overrides.length > 0 %}
+---
+
+{% endif %}
+{% for v in versions %}
+## v{{ v.version }}
+
+{% for entry in v.packages %}
+### @qvac/{{ entry.pkg }}
+
+{{ entry.body }}
+
+{% endfor %}
+{% endfor %}

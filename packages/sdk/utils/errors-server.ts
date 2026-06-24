@@ -1,6 +1,24 @@
 import { QvacErrorBase } from "@qvac/error";
 import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
+import type { CompletionStats, ToolCallWithCall } from "@/schemas";
 import { createErrorOptions } from "./errors-base";
+
+/**
+ * Partial completion payload attached to `InferenceCancelledError` when a
+ * cancel hits mid-stream. Mirrors the named fields on `CompletionFinal`
+ * so callers who want the partial output can read `.partial.text`,
+ * `.partial.toolCalls`, `.partial.stats` directly without reaching for
+ * a `Partial<CompletionFinal>` import.
+ *
+ * Fields are all optional: a same-tick cancel-before-begin races every
+ * event; a cancel after the first content chunk carries `text` but no
+ * `stats`; a cancel after a tool-call frame carries both.
+ */
+export interface InferenceCancelledPartial {
+  text?: string;
+  toolCalls?: ToolCallWithCall[];
+  stats?: CompletionStats;
+}
 
 // ============== Model Registry Errors ==============
 
@@ -155,12 +173,24 @@ export class TtsReferenceAudioRequiredError extends QvacErrorBase {
   }
 }
 
-export class ParakeetArtifactsRequiredError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
+export class LegacyParakeetModelDeprecatedError extends QvacErrorBase {
+  constructor(legacyFields: readonly string[], cause?: unknown) {
     super(
       createErrorOptions(
-        SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED,
-        details ? [details] : undefined,
+        SDK_SERVER_ERROR_CODES.LEGACY_PARAKEET_MODEL_DEPRECATED,
+        [legacyFields.join(", ")],
+        cause,
+      ),
+    );
+  }
+}
+
+export class LegacyTtsModelDeprecatedError extends QvacErrorBase {
+  constructor(legacyFields: readonly string[], cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LEGACY_TTS_MODEL_DEPRECATED,
+        [legacyFields.join(", ")],
         cause,
       ),
     );
@@ -255,6 +285,60 @@ export class CompletionFailedError extends QvacErrorBase {
   }
 }
 
+/**
+ * Thrown when the prompt exceeds the loaded model's configured context
+ * window — distinct from a generic `CompletionFailedError` so consumers
+ * can drive UX (truncate, summarize, or surface a "increase ctx_size /
+ * start a new thread" CTA) instead of treating it as an opaque failure.
+ *
+ * Carries the addon-reported prompt size and the model's context window
+ * when the addon's error message includes them (the C++ overflow paths
+ * in `TextLlmContext.cpp` and `MtmdLlmContext.cpp` format both numbers
+ * into the message; the bare `processPromptImpl: context overflow`
+ * fallback in `LlamaModel.cpp` carries neither — both fields are
+ * therefore optional). `modelId` is supplied by the server-side handler
+ * that wraps the addon error.
+ *
+ * Round-trips the RPC boundary via the typed-error reconstructor in
+ * `client/rpc/rpc-error.ts`, so `err instanceof ContextOverflowError`
+ * works on the consumer side.
+ */
+export class ContextOverflowError extends QvacErrorBase {
+  readonly promptTokens?: number;
+  readonly ctxSize?: number;
+  readonly modelId?: string;
+
+  constructor(
+    promptTokens?: number,
+    ctxSize?: number,
+    modelId?: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW,
+        [
+          promptTokens !== undefined ? String(promptTokens) : "",
+          ctxSize !== undefined ? String(ctxSize) : "",
+          modelId ?? "",
+        ],
+        cause,
+      ),
+    );
+    if (promptTokens !== undefined) this.promptTokens = promptTokens;
+    if (ctxSize !== undefined) this.ctxSize = ctxSize;
+    if (modelId !== undefined) this.modelId = modelId;
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return {
+      ...(this.promptTokens !== undefined && { promptTokens: this.promptTokens }),
+      ...(this.ctxSize !== undefined && { ctxSize: this.ctxSize }),
+      ...(this.modelId !== undefined && { modelId: this.modelId }),
+    };
+  }
+}
+
 export class AttachmentNotFoundError extends QvacErrorBase {
   constructor(path: string, cause?: unknown) {
     super(
@@ -279,11 +363,174 @@ export class CancelFailedError extends QvacErrorBase {
   }
 }
 
+export class RequestIdConflictError extends QvacErrorBase {
+  readonly requestId: string;
+
+  constructor(requestId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REQUEST_ID_CONFLICT,
+        [requestId],
+        cause,
+      ),
+    );
+    this.requestId = requestId;
+  }
+
+  /**
+   * Surface typed fields on the RPC error envelope so the client-side
+   * reconstructor in `client/rpc/rpc-error.ts` can rebuild this exact
+   * class on the consumer side. Without this, `err instanceof
+   * RequestIdConflictError` would always be `false` after the error
+   * crosses the worker boundary.
+   */
+  toErrorResponseFields(): Record<string, unknown> {
+    return { requestId: this.requestId };
+  }
+}
+
+export class RequestNotFoundError extends QvacErrorBase {
+  readonly requestId: string;
+
+  constructor(requestId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REQUEST_NOT_FOUND,
+        [requestId],
+        cause,
+      ),
+    );
+    this.requestId = requestId;
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { requestId: this.requestId };
+  }
+}
+
+/**
+ * Thrown by `await RequestRegistry.begin(...)` when a registered concurrency
+ * policy refuses the request. Under the default queue policy a same-model
+ * request waits FIFO rather than rejecting, so this fires on the bounded-queue
+ * cases: an explicit `onOverflow: "reject"`, the per-model queue-depth cap, or
+ * a `queueTimeoutMs` elapsing while waiting for a slot. Distinct from
+ * `RequestIdConflictError`, which only fires on UUID collisions.
+ */
+export class RequestRejectedByPolicyError extends QvacErrorBase {
+  readonly requestId: string;
+  readonly kind: string;
+  readonly modelId: string;
+  readonly reason: string;
+
+  constructor(
+    requestId: string,
+    kind: string,
+    modelId: string,
+    reason: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY,
+        [requestId, kind, modelId, reason],
+        cause,
+      ),
+    );
+    this.requestId = requestId;
+    this.kind = kind;
+    this.modelId = modelId;
+    this.reason = reason;
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return {
+      requestId: this.requestId,
+      kind: this.kind,
+      modelId: this.modelId,
+      reason: this.reason,
+    };
+  }
+}
+
+/**
+ * Thrown when a long-running inference request was cancelled before
+ * completion. The `events` stream on `CompletionRun` ends normally with
+ * `stopReason: "cancelled"` on the last `completionDone`, but the
+ * promise-aggregates on the same run (`final` / `text` / `toolCalls` /
+ * `stats`) reject with this error so callers can't accidentally treat a
+ * cancelled run as a successful one.
+ *
+ * Carries:
+ *  - `requestId` — correlates with `run.requestId` so callers know which
+ *    in-flight request was cancelled when they fan out multiple cancels.
+ *  - `partial` — whatever the aggregator accumulated up to the cancel
+ *    point. Optional fields so consumers can opt into "show partial":
+ *
+ *      try { await run.text } catch (err) {
+ *        if (err instanceof InferenceCancelledError) {
+ *          renderPartial(err.partial.text);
+ *        }
+ *      }
+ *
+ * The error is constructed client-side in
+ * `client/api/completion-stream.ts` when the wire stream ends with
+ * `stopReason: "cancelled"` — the partial payload comes from the
+ * client's own event aggregator. The class lives in `errors-server.ts`
+ * (and is re-exported from the package root) because the *semantic*
+ * origin of the cancel is server-side, and other handlers
+ * (embeddings, transcribe, …) will reuse the same class once their
+ * cancel surface lands.
+ */
+export class InferenceCancelledError extends QvacErrorBase {
+  readonly requestId: string;
+  readonly partial: InferenceCancelledPartial;
+
+  constructor(
+    requestId: string,
+    partial: InferenceCancelledPartial = {},
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED,
+        [requestId],
+        cause,
+      ),
+    );
+    this.requestId = requestId;
+    this.partial = partial;
+  }
+}
+
+export class AsyncDisposeUnavailableError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.ASYNC_DISPOSE_UNAVAILABLE,
+        [],
+        cause,
+      ),
+    );
+  }
+}
+
 export class TextToSpeechFailedError extends QvacErrorBase {
   constructor(details?: string, cause?: unknown) {
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class TextToSpeechStreamFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED,
         details ? [details] : undefined,
         cause,
       ),
@@ -312,6 +559,42 @@ export class ModelTypeMismatchError extends QvacErrorBase {
         cause,
       ),
     );
+  }
+}
+
+export class ModelOperationNotSupportedError extends QvacErrorBase {
+  readonly modelId: string;
+  readonly modelType: string;
+  readonly operation: string;
+  readonly supportedOperations: readonly string[];
+  readonly suggestedModelTypes: readonly string[];
+
+  constructor(
+    modelId: string,
+    modelType: string,
+    operation: string,
+    supportedOperations: readonly string[],
+    suggestedModelTypes: readonly string[],
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED,
+        [
+          modelId,
+          modelType,
+          operation,
+          supportedOperations.join(", "),
+          suggestedModelTypes.join(", "),
+        ],
+        cause,
+      ),
+    );
+    this.modelId = modelId;
+    this.modelType = modelType;
+    this.operation = operation;
+    this.supportedOperations = supportedOperations;
+    this.suggestedModelTypes = suggestedModelTypes;
   }
 }
 
@@ -952,6 +1235,43 @@ export class PluginDefinitionInvalidError extends QvacErrorBase {
         SDK_SERVER_ERROR_CODES.PLUGIN_DEFINITION_INVALID,
         [modelType, details],
         cause,
+      ),
+    );
+  }
+}
+
+// ============== Lifecycle Errors ==============
+
+export class LifecycleSuspendFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LIFECYCLE_SUSPEND_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class LifecycleResumeFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LIFECYCLE_RESUME_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class LifecycleOperationBlockedError extends QvacErrorBase {
+  constructor(requestType: string, lifecycleState: string) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LIFECYCLE_OPERATION_BLOCKED,
+        [requestType, lifecycleState],
       ),
     );
   }

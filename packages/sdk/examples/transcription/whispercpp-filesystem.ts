@@ -13,13 +13,12 @@ if (!args[0]) {
 const audioFilePath = args[0];
 
 try {
-  console.log("🎤 Starting Whisper transcription example...");
+  console.log("▸ Starting Whisper transcription example...");
 
   // Load the Whisper model
-  console.log("📥 Loading Whisper model...");
+  console.log("▸ Loading Whisper model...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
-    modelType: "whisper",
     modelConfig: {
       audio_format: "f32le",
       // Sampling strategy
@@ -55,25 +54,44 @@ try {
         gpu_device: 0,
       },
     },
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`✅ Whisper model loaded with ID: ${modelId}`);
+  console.log(`▸ Whisper model loaded with ID: ${modelId}`);
 
-  // Perform transcription
-  console.log("🎧 Transcribing audio...");
-  const text = await transcribe({ modelId, audioChunk: audioFilePath });
+  // Perform transcription with per-segment metadata
+  console.log("▸ Transcribing audio...");
+  const segments = await transcribe({
+    modelId,
+    audioChunk: audioFilePath,
+    metadata: true,
+  });
 
-  console.log("📝 Transcription result:");
-  console.log(text);
+  console.log("▸ Transcription result:");
+  for (const segment of segments) {
+    const start = (segment.startMs / 1000).toFixed(2);
+    const end = (segment.endMs / 1000).toFixed(2);
+    console.log(
+      `  [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text}`,
+    );
+  }
+  console.log(
+    `\nFull transcript: ${segments
+      .map((s) => s.text)
+      .join("")
+      .trim()}`,
+  );
 
   // Unload the model when done
-  console.log("🧹 Unloading Whisper model...");
+  console.log("▸ Unloading Whisper model...");
   await unloadModel({ modelId });
-  console.log("✅ Whisper model unloaded successfully");
+  console.log("▸ Whisper model unloaded successfully");
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

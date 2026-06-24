@@ -11,6 +11,7 @@ import {
   PluginModelTypeReservedError,
 } from "@/utils/errors-server";
 import { createAddonLoggerCallback } from "@/logging/addon";
+import { formatZodError } from "@/utils/zod-error";
 
 const plugins = new Map<string, QvacPlugin>();
 
@@ -27,11 +28,10 @@ function validatePluginDefinition(plugin: QvacPlugin): void {
   const result = pluginDefinitionRuntimeSchema.safeParse(plugin);
   if (result.success) return;
 
-  const details = result.error.issues
-    .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-    .join(", ");
-
-  throw new PluginDefinitionInvalidError(getModelTypeForError(plugin), details);
+  throw new PluginDefinitionInvalidError(
+    getModelTypeForError(plugin),
+    formatZodError(result.error),
+  );
 }
 
 export function registerPlugin(plugin: QvacPlugin): void {
@@ -67,6 +67,12 @@ export function registerPlugin(plugin: QvacPlugin): void {
     loggingModule.setLogger(
       createAddonLoggerCallback(plugin.logging.namespace),
     );
+  }
+}
+
+export function registerPlugins(pluginList: readonly QvacPlugin[]): void {
+  for (const plugin of pluginList) {
+    registerPlugin(plugin);
   }
 }
 

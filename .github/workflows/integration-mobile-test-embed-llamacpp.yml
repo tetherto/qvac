@@ -1,0 +1,218 @@
+name: Mobile Integration Tests (Embed)
+
+# Migrated to .github/actions/run-mobile-integration-tests in
+# QVAC-18168 follow-up: rollout to remaining 9 mobile addons.
+#
+# Embed uses single-pool scheduling (one Device Farm run per platform
+# against the addon's own pool — no dual-flagship split, no sharding).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      package:
+        description: "Full NPM package spec to test (optional for workflow_call)"
+        type: string
+        required: false
+      test_groups:
+        description: "JSON array of {name,grep} overrides. When set, the run is a perf benchmark batch (perf collection + the benchmark shard set) instead of the auto-detected test-groups.json shards. Default empty preserves normal mobile-integration behaviour."
+        type: string
+        required: false
+        default: ""
+      job_timeout_minutes:
+        description: "Override the build-and-test job timeout (minutes). Default 120; raised by Benchmark Performance where a batch needs more headroom."
+        type: number
+        required: false
+        default: 120
+      artifact_suffix:
+        description: "Suffix appended to the perf-report artifact name (before the platform segment) so multiple benchmark batches in one run don't collide. Default empty keeps the existing name."
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      package:
+        description: "Full NPM package spec to test"
+        type: string
+        required: true
+        default: '@qvac/embed-llamacpp@latest'
+
+jobs:
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    timeout-minutes: ${{ inputs.job_timeout_minutes || 120 }}
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-22.04
+            runner: qvac-ubuntu2204-x64
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    steps:
+      - name: Validate Dispatch Inputs
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        run: |
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+            exit 1
+          fi
+
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: addon/packages/embed-llamacpp
+        run: npm run test:mobile:validate || true
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: 'packages/embed-llamacpp'
+          addon-npm-name: '@qvac/embed-llamacpp'
+          prebuild-artifact-prefix: 'llama-cpp-'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
+      # committed — they are generated from test/integration/_benchmark-matrix.js.
+      # Only a benchmark batch (test_groups set) needs them: regenerate after
+      # setup (which provisions Node) but before the bundle is built, then
+      # hard-fail if any are missing so the Device Farm app can't be built
+      # without them. Normal mobile runs (no test_groups) skip this.
+      - name: Generate benchmark shards
+        if: inputs.test_groups != ''
+        working-directory: addon/packages/embed-llamacpp
+        run: |
+          npm run generate:benchmark-shards
+          node scripts/generate-benchmark-shards.js --assert-shards
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: 'packages/embed-llamacpp'
+          addon-npm-name: '@qvac/embed-llamacpp'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: 'packages/embed-llamacpp'
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          # Perf collection + the benchmark shard group only for a benchmark
+          # batch; normal mobile runs keep perf off and auto-detect test-groups.
+          enables-perf: ${{ inputs.test_groups != '' && 'true' || 'false' }}
+          test-groups: ${{ inputs.test_groups }}
+
+      - name: Schedule Device Farm test run
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: 'single-pool'
+
+      - name: Monitor Device Farm test run
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform }}
+          addon-npm-name: '@qvac/embed-llamacpp'
+          enables-perf: ${{ inputs.test_groups != '' && 'true' || 'false' }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      # Benchmark batches only: pull the per-device perf-report.json the on-device
+      # runner emitted out of the Device Farm customer artifacts and upload it
+      # under a batch-suffixed name so the Benchmark Performance summarize job can
+      # aggregate every batch. Normal mobile runs (no test_groups) skip this.
+      - name: Extract & upload addon perf report (embed)
+        if: always() && !cancelled() && inputs.test_groups != '' && steps.schedule.outputs.run-count != '0' && steps.schedule.outputs.run-count != ''
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          merge: 'true'
+          unzip-customer-artifacts: 'true'
+          artifact-name: perf-report-llamacpp-embed-${{ inputs.artifact_suffix }}${{ matrix.platform }}-${{ github.run_number }}
+
+      - name: Comment results on PR
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: '@qvac/embed-llamacpp'
+          platform: ${{ matrix.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}

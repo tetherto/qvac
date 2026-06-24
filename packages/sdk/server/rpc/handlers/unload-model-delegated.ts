@@ -14,11 +14,11 @@ export async function handleUnloadModelDelegated(
 ): Promise<UnloadModelResponse> {
   const entry = getModelEntry(request.modelId);
 
-  if (!entry?.isDelegated || !entry.delegated) {
+  if (!entry?.isDelegated) {
     throw new ModelIsDelegatedError(request.modelId);
   }
 
-  const { topic, providerPublicKey, timeout } = entry.delegated;
+  const { providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
 
   unregisterModel(request.modelId);
 
@@ -27,11 +27,11 @@ export async function handleUnloadModelDelegated(
       `Sending delegated unload for model ${request.modelId} to provider: ${providerPublicKey}`,
     );
 
-    const rpc = await getRPC(topic, providerPublicKey, { timeout });
+    const rpc = await getRPC(providerPublicKey, { timeout, healthCheckTimeout });
     await send(
       { type: "unloadModel" as const, modelId: request.modelId, clearStorage: false },
       rpc,
-      { timeout },
+      { timeout, peerKey: providerPublicKey },
     );
 
     logger.info(`Delegated model ${request.modelId} unloaded on provider`);

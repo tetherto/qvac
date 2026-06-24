@@ -17,116 +17,214 @@ JavaScript Dependencies
   @qvac/error@0.1.1
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
-  b4a@1.7.4
+  b4a@1.8.1
     https://github.com/holepunchto/b4a
   bare-addon-resolve@1.10.0
     https://github.com/holepunchto/bare-addon-resolve
+  bare-ansi-escapes@2.2.3
+    https://github.com/holepunchto/bare-ansi-escapes
+  bare-assert@1.2.0
+    https://github.com/holepunchto/bare-assert
+  bare-buffer@3.6.0
+    https://github.com/holepunchto/bare-buffer
+  bare-crypto@1.13.7
+    https://github.com/holepunchto/bare-crypto
+  bare-dns@2.1.4
+    https://github.com/holepunchto/bare-dns
   bare-events@2.4.2
     https://github.com/holepunchto/bare-events
-  bare-events@2.8.2
+  bare-events@2.8.3
     https://github.com/holepunchto/bare-events
-  bare-fs@4.5.4
+  bare-fetch@3.0.1
+    https://github.com/holepunchto/bare-fetch
+  bare-form-data@1.2.2
+    https://github.com/holepunchto/bare-form-data
+  bare-fs@4.7.1
     https://github.com/holepunchto/bare-fs
-  bare-module-resolve@1.12.1
+  bare-http-parser@1.1.4
+    https://github.com/holepunchto/bare-http-parser
+  bare-http1@4.5.6
+    https://github.com/holepunchto/bare-http1
+  bare-https@3.0.0
+    https://github.com/holepunchto/bare-https
+  bare-inspect@3.1.4
+    https://github.com/holepunchto/bare-inspect
+  bare-mime@1.0.0
+    https://github.com/holepunchto/bare-mime
+  bare-module-resolve@1.12.2
     https://github.com/holepunchto/bare-module-resolve
-  bare-os@3.6.2
+  bare-net@2.3.1
+    https://github.com/holepunchto/bare-net
+  bare-os@3.9.1
     https://github.com/holepunchto/bare-os
   bare-path@3.0.0
     https://github.com/holepunchto/bare-path
-  bare-semver@1.0.2
+  bare-pipe@4.1.5
+    https://github.com/holepunchto/bare-pipe
+  bare-semver@1.0.3
     https://github.com/holepunchto/bare-semver
-  bare-stream@2.7.0
+  bare-stream@2.13.1
     https://github.com/holepunchto/bare-stream
-  bare-url@2.3.2
+  bare-tcp@2.2.13
+    https://github.com/holepunchto/bare-tcp
+  bare-tls@3.1.5
+    https://github.com/holepunchto/bare-tls
+  bare-type@1.1.0
+    https://github.com/holepunchto/bare-type
+  bare-url@2.4.3
     https://github.com/holepunchto/bare-url
-  blind-relay@1.4.0
+  bare-zlib@1.3.3
+    https://github.com/holepunchto/bare-zlib
+  blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
-  compact-encoding@2.18.0
-    https://github.com/compact-encoding/compact-encoding
+  compact-encoding@3.1.0
+    https://github.com/holepunchto/compact-encoding
+  compact-encoding-bitfield@1.1.0
+    https://github.com/compact-encoding/compact-encoding-bitfield
+  compact-encoding-net@1.3.0
+    https://github.com/compact-encoding/compact-encoding-net
+  device-file@2.3.1
+    https://github.com/holepunchto/device-file
   events-universal@1.0.1
     https://github.com/holepunchto/events-universal
+  fd-lock@2.1.1
+    https://github.com/holepunchto/fd-lock
+  fs-native-extensions@1.5.0
+    https://github.com/holepunchto/fs-native-extensions
+  hypercore-errors@1.5.0
+    https://github.com/holepunchto/hypercore-errors
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
-  hyperschema@1.19.1
+  hypercore-storage@2.9.0
+    https://github.com/holepunchto/hypercore-storage
+  hyperdb@6.7.0
+    https://github.com/holepunchto/hyperdb
+  hyperdht-address@1.1.1
+    https://github.com/holepunchto/hyperdht-address
+  hyperschema@1.21.0
     https://github.com/holepunchto/hyperschema
+  index-encoder@3.5.0
+    https://github.com/holepunchto/index-encoder
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
+  quickbit-native@2.4.8
+    https://github.com/holepunchto/quickbit-native
+  rache@1.0.0
+    https://github.com/holepunchto/rache
+  refcounter@1.0.0
+    https://github.com/holepunchto/refcounter
   require-addon@1.2.0
     https://github.com/holepunchto/require-addon
+  resource-on-exit@1.0.0
+    https://github.com/holepunchto/bare-teardown
+  rocksdb-native@3.15.1
+    https://github.com/holepunchto/rocksdb-native
+  scope-lock@1.2.4
+    https://github.com/holepunchto/scope-lock
+  simdle-native@1.3.9
+    https://github.com/holepunchto/simdle-native
   text-decoder@1.2.7
     https://github.com/holepunchto/text-decoder
   udx-native@1.19.2
     https://github.com/holepunchto/udx-native
   unslab@1.3.0
     https://github.com/holepunchto/unslab
-  which-runtime@1.3.2
+  which-runtime@1.4.0
     https://github.com/holepunchto/which-runtime
 
 --- isc (ISC License) ---
 
   bits-to-bytes@1.3.0
     https://github.com/holepunchto/bits-to-bytes
-  compact-encoding-bitfield@1.0.0
-    https://github.com/compact-encoding/compact-encoding-bitfield
-  compact-encoding-net@1.2.0
-    https://github.com/compact-encoding/compact-encoding-net
   nanoassert@2.0.0
     https://github.com/emilbayes/nanoassert
   noise-curve-ed@2.1.0
     https://github.com/chm-diederichs/noise-curve-ed
+  quickbit-universal@2.2.0
+    https://github.com/holepunchto/quickbit-universal
+  simdle-universal@1.1.2
+    https://github.com/holepunchto/simdle-universal
 
 --- mit (MIT License) ---
 
-  bogon@1.2.0
+  big-sparse-array@1.0.3
+    https://github.com/mafintosh/big-sparse-array
+  bogon@1.3.0
     https://github.com/mafintosh/bogon
-  dht-rpc@6.26.1
-    https://github.com/mafintosh/dht-rpc
+  codecs@3.1.0
+    https://github.com/mafintosh/codecs
+  debounceify@1.1.0
+    https://github.com/mafintosh/debounceify
+  dht-rpc@6.27.0
+    https://github.com/holepunchto/dht-rpc
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
+  flat-tree@1.13.0
+    https://github.com/mafintosh/flat-tree
   generate-object-property@2.0.0
     https://github.com/mafintosh/generate-object-property
   generate-string@1.0.1
     https://github.com/mafintosh/generate-string
-  hypercore-crypto@3.6.1
+  hyperbee@2.27.3
+    https://github.com/holepunchto/hyperbee
+  hypercore@11.30.2
+    https://github.com/holepunchto/hypercore
+  hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.29.0
+  hyperdht@6.32.0
     https://github.com/holepunchto/hyperdht
+  is-options@1.0.2
+    https://github.com/mafintosh/is-options
   is-property@1.0.2
     https://github.com/mikolalysenko/is-property
   kademlia-routing-table@1.0.6
     https://github.com/mafintosh/kademlia-routing-table
+  llm-splitter@0.2.0
+    https://github.com/nearform/llm-splitter
+  mutexify@1.4.0
+    https://github.com/mafintosh/mutexify
   nat-sampler@1.0.1
     https://github.com/mafintosh/nat-sampler
-  protomux@3.10.1
-    https://github.com/mafintosh/protomux
+  protocol-buffers-encodings@1.2.0
+    https://github.com/mafintosh/protocol-buffers-encodings
+  protomux@3.11.0
+    https://github.com/holepunchto/protomux
   queue-tick@1.0.1
     https://github.com/mafintosh/queue-tick
+  random-array-iterator@1.0.0
+    https://github.com/mafintosh/random-array-iterator
   ready-resource@1.2.0
     https://github.com/holepunchto/ready-resource
   record-cache@1.2.0
     https://github.com/mafintosh/record-cache
-  safety-catch@1.0.2
+  resolve-reject-promise@1.1.0
+    https://github.com/mafintosh/resolve-reject-promise
+  safety-catch@1.0.3
     https://github.com/mafintosh/safety-catch
   signal-promise@1.0.3
     https://github.com/mafintosh/signal-promise
-  sodium-native@5.0.10
+  signed-varint@2.0.1
+    https://github.com/dominictarr/signed-varint
+  sodium-native@5.1.0
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream
   sodium-universal@5.0.1
     https://github.com/holepunchto/sodium-universal
-  streamx@2.23.0
+  streamx@2.25.0
     https://github.com/mafintosh/streamx
+  teex@1.0.1
+    https://github.com/mafintosh/teex
   time-ordered-set@2.0.1
     https://github.com/mafintosh/time-ordered-set
   timeout-refresh@2.0.1
     https://github.com/mafintosh/timeout-refresh
-  uuid-random@1.3.2
-    https://github.com/jchook/uuid-random
+  varint@5.0.0
+    https://github.com/chrisdickinson/varint
   xache@1.2.1
     https://github.com/mafintosh/xache
   z32@1.1.0
     https://github.com/mafintosh/z32
-  zod@4.3.6
+  zod@4.4.3
     https://github.com/colinhacks/zod
 

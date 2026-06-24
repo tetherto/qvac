@@ -13,7 +13,8 @@ export {
   type RagWorkspaceInfo,
 } from "@/server/bare/rag-hyperdb/rag-workspace-manager";
 export {
-  registerRagOperation,
-  unregisterRagOperation,
-  cancelRagOperation,
+  getActiveRagRequest,
+  setActiveRagRequest,
+  clearActiveRagRequest,
+  getWorkspaceKey,
 } from "@/server/bare/rag-hyperdb/rag-operation-manager";

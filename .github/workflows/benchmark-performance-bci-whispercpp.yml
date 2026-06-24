@@ -1,0 +1,14 @@
+name: Benchmark Performance (BCI Whispercpp)
+
+# Stub workflow on main so it can be dispatched from feature branches.
+# The real implementation lives on the bci-whispercpp feature branch.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op stub
+        run: echo "Stub workflow on main; real implementation lives on the bci-whispercpp feature branch."

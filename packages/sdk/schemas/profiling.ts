@@ -16,6 +16,11 @@ export const DELEGATION_BREAKDOWN_KEY = Symbol.for("@qvac/sdk:delegation-breakdo
  */
 export const OPERATION_EVENT_KEY = Symbol.for("@qvac/sdk:operation-event");
 
+/**
+ * Symbol key for attaching model execution timing.
+ */
+export const MODEL_EXECUTION_KEY = Symbol.for("@qvac/sdk:model-execution");
+
 export const profilerModeSchema = z.enum(["summary", "verbose"]);
 
 /**
@@ -71,9 +76,23 @@ export const profilingResponseMetaSchema = z.object({
 });
 
 export const perCallProfilingSchema = z.object({
-  enabled: z.boolean().optional(),
-  includeServerBreakdown: z.boolean().optional(),
-  mode: profilerModeSchema.optional(),
+  enabled: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable profiling for this call only; when omitted, the SDK-level profiler configuration applies.",
+    ),
+  includeServerBreakdown: z
+    .boolean()
+    .optional()
+    .describe(
+      "Include server-side timing breakdown in the profiling payload.",
+    ),
+  mode: profilerModeSchema
+    .optional()
+    .describe(
+      'Profiling detail level: `"summary"` aggregates only, `"verbose"` retains recent events.',
+    ),
 });
 
 export type ProfilingResponseMeta = z.infer<typeof profilingResponseMetaSchema>;

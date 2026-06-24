@@ -2,10 +2,12 @@ import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { unregisterModel } from "@/server/bare/registry/model-registry";
 import { unregisterAllLoggingStreams } from "@/server/bare/registry/logging-stream-registry";
+import { clearFinetuneRuntimeState } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { unregisterAddonLogger, getServerLogger } from "@/logging";
 import { type UnloadModelParams, unloadModelParamsSchema } from "@/schemas";
 import { ModelNotLoadedError } from "@/utils/errors-server";
 import { detectShardedModel } from "@/server/utils";
+import { getClearStorageTarget } from "@/server/utils/cache/paths";
 
 const logger = getServerLogger();
 
@@ -17,27 +19,30 @@ export async function unloadModel(params: UnloadModelParams) {
     throw new ModelNotLoadedError(modelId);
   }
 
-  if (entry.local?.loader) {
-    await entry.local.loader.close();
-  }
+  clearFinetuneRuntimeState(modelId);
 
-  if (entry.local?.model && entry.local.model.unload) {
-    await entry.local.model.unload();
-  }
-  if (clearStorage && entry.local?.path) {
-    const modelPath = entry.local.path;
-    const modelFileName = path.basename(modelPath);
-    const shardInfo = detectShardedModel(modelFileName);
+  if (!entry.isDelegated) {
+    if (entry.local.model.unload) {
+      await entry.local.model.unload();
+    }
 
-    if (shardInfo.isSharded) {
-      // Delete entire shard directory
-      const shardDir = path.dirname(modelPath);
-      await fsPromises.rm(shardDir, { recursive: true, force: true });
-      logger.info(`Sharded model storage cleared: ${shardDir}`);
-    } else {
-      // Delete single file
-      await fsPromises.rm(modelPath, { recursive: true, force: true });
-      logger.info(`Model storage cleared: ${modelPath}`);
+    if (clearStorage && entry.local.path) {
+      const modelPath = entry.local.path;
+      const modelFileName = path.basename(modelPath);
+      const shardInfo = detectShardedModel(modelFileName);
+
+      if (shardInfo.isSharded) {
+        const shardDir = path.dirname(modelPath);
+        await fsPromises.rm(shardDir, { recursive: true, force: true });
+        logger.info(`Sharded model storage cleared: ${shardDir}`);
+      } else {
+        const target = getClearStorageTarget(modelPath);
+        await fsPromises.rm(target.path, {
+          recursive: target.kind === "directory",
+          force: true,
+        });
+        logger.info(`Model storage cleared (${target.kind}): ${target.path}`);
+      }
     }
   }
 

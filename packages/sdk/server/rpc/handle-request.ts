@@ -9,27 +9,42 @@ import {
 import { nowMs } from "@/profiling";
 import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import type RPC from "bare-rpc";
-import { sendErrorResponse } from "@/server/error-handlers";
 import {
-  RPCNoDataReceivedError,
+  sendErrorResponse,
+  sendStreamErrorResponse,
+} from "@/server/error-handlers";
+import {
   RPCUnknownRequestTypeError,
+  PluginHandlerTypeMismatchError,
 } from "@/utils/errors-server";
 import { registry } from "./handler-registry";
+import type { HandlerEntry } from "./handler-utils";
 import {
   executeHandler,
+  executeDuplexHandler,
   handleInitConfig,
   isInitConfigMessage,
+  handleShutdown,
+  isShutdownMessage,
 } from "./handler-utils";
 import { createServerProfiler, type ServerProfiler } from "./profiling";
+import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
+import { shouldUseStreamErrorTransport } from "./transport-selector";
 
 export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
   let profiler: ServerProfiler | undefined;
   let validationStart = 0;
+  let rawRequest: Record<string, unknown> | undefined;
+  let entry: HandlerEntry | undefined;
 
   try {
     const rawData = req.data?.toString();
+
+    // Duplex stream request: metadata arrives as the first chunk on the
+    // request stream (client used createRequestStream instead of send).
     if (!rawData) {
-      throw new RPCNoDataReceivedError();
+      await handleDuplexRequest(req);
+      return;
     }
 
     // Timing runs unconditionally since we can't know if client
@@ -44,7 +59,23 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
       return;
     }
 
+    // Handle internal pre-terminate cleanup signal (bypasses schema). Lets
+    // the client tear addons down while the JS env is still alive so static
+    // js_ref_t state doesn't survive into the next worklet's isolate.
+    if (isShutdownMessage(jsonData)) {
+      await handleShutdown(req);
+      return;
+    }
+
     const { data: cleanData, profilingMeta } = extractProfilingMeta(jsonData);
+
+    if (cleanData && typeof cleanData === "object") {
+      rawRequest = cleanData as Record<string, unknown>;
+      const rawType = rawRequest["type"];
+      if (typeof rawType === "string") {
+        entry = registry[rawType];
+      }
+    }
 
     profiler = createServerProfiler(profilingMeta);
     profiler.markRequestParsed(jsonParseMs);
@@ -56,7 +87,9 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     profiler.markRequestValidated(nowMs() - validationStart);
     validationStart = 0;
 
-    const entry = registry[request.type];
+    assertLifecycleAllowed(request);
+
+    entry = registry[request.type];
     if (!entry) {
       throw new RPCUnknownRequestTypeError(request.type);
     }
@@ -66,7 +99,12 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     if (profiler && validationStart > 0) {
       profiler.markRequestValidated(nowMs() - validationStart);
     }
-    sendErrorResponse(req, error, profiler);
+
+    if (shouldUseStreamErrorTransport(entry, rawRequest)) {
+      sendStreamErrorResponse(req.createResponseStream(), error, profiler);
+    } else {
+      sendErrorResponse(req, error, profiler);
+    }
   }
 }
 
@@ -76,7 +114,7 @@ function attachProfilingMetaToRequest(
 ): void {
   if (!profilingMeta) return;
 
-  Object.defineProperty(request as Record<string, unknown>, PROFILING_KEY, {
+  Object.defineProperty(request, PROFILING_KEY, {
     value: profilingMeta,
     enumerable: false,
     configurable: true,
@@ -99,6 +137,70 @@ function extractProfilingMeta(data: unknown): {
     data: rest,
     profilingMeta: meta as ProfilingRequestMeta | undefined,
   };
+}
+
+async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
+  const inputStream = req.createRequestStream();
+  const outputStream = req.createResponseStream();
+  let profiler: ServerProfiler | undefined;
+
+  try {
+    const firstChunk = await new Promise<Buffer>((resolve, reject) => {
+      const onData = (data: unknown) => {
+        inputStream.off("error", onError);
+        inputStream.pause();
+        resolve(data as Buffer);
+      };
+      const onError = (err: unknown) => {
+        inputStream.off("data", onData);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      };
+      inputStream.once("data", onData);
+      inputStream.once("error", onError);
+    });
+
+    const parseStart = nowMs();
+    const jsonData: unknown = JSON.parse(firstChunk.toString());
+    const jsonParseMs = nowMs() - parseStart;
+
+    const { data: cleanData, profilingMeta } = extractProfilingMeta(jsonData);
+    profiler = createServerProfiler(profilingMeta);
+    profiler.markRequestParsed(jsonParseMs);
+
+    const validationStart = nowMs();
+    const processedData = applyDeviceDefaultsToRequest(cleanData);
+    const request: Request = requestSchema.parse(processedData);
+    attachProfilingMetaToRequest(request, profilingMeta);
+    profiler.markRequestValidated(nowMs() - validationStart);
+
+    assertLifecycleAllowed(request);
+
+    const entry = registry[request.type];
+
+    if (!entry) {
+      throw new RPCUnknownRequestTypeError(request.type);
+    }
+
+    if (entry.type !== "duplex") {
+      throw new PluginHandlerTypeMismatchError(
+        request.type,
+        "duplex",
+        entry.type,
+      );
+    }
+
+    await executeDuplexHandler(
+      req,
+      request,
+      entry,
+      inputStream,
+      outputStream,
+      profiler,
+    );
+  } catch (error) {
+    inputStream.destroy();
+    sendStreamErrorResponse(outputStream, error, profiler);
+  }
 }
 
 /**

@@ -1,0 +1,1146 @@
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+
+#include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/RuntimeStats.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackCpp.hpp>
+#include <inference-addon-cpp/queue/OutputQueue.hpp>
+#include <llama.h>
+
+#include "addon/AddonCpp.hpp"
+#include "addon/BertErrors.hpp"
+#include "model-interface/BertModel.hpp"
+#include "model-interface/logging.hpp"
+#include "test_common.hpp"
+
+namespace fs = std::filesystem;
+using namespace qvac_lib_inference_addon_cpp::logger;
+
+// Test fixtures intentionally hold members directly and many tests assert
+// against literal sample values; the noisy clang-tidy checks below add no
+// value in a unit-test context.
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,
+// readability-magic-numbers,
+// readability-function-cognitive-complexity,
+// cppcoreguidelines-non-private-member-variables-in-classes,
+// bugprone-unchecked-optional-access)
+
+namespace {
+double getStatValue(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& stat : stats) {
+    if (stat.first == key) {
+      return std::visit(
+          [](const auto& value) -> double {
+            if constexpr (std::is_same_v<
+                              std::decay_t<decltype(value)>,
+                              double>) {
+              return value;
+            } else if constexpr (std::is_same_v<
+                                     std::decay_t<decltype(value)>,
+                                     int64_t>) {
+              return static_cast<double>(value);
+            } else {
+              return 0.0;
+            }
+          },
+          stat.second);
+    }
+  }
+  return 0.0;
+}
+} // namespace
+
+inline BertModel*
+getModelFromAddon(qvac_lib_inference_addon_cpp::AddonCpp* addon) {
+  auto& modelInterface = addon->model.get();
+  return dynamic_cast<BertModel*>(&modelInterface);
+}
+
+class BertEmbeddingsTest : public ::testing::Test {};
+
+TEST_F(BertEmbeddingsTest, ConstructorWithValidLayout) {
+  std::vector<float> data(std::size_t{10} * 5);
+  for (std::size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<float>(i);
+  }
+
+  BertEmbeddings::Layout layout{.embeddingCount = 10, .embeddingSize = 5};
+  BertEmbeddings embeddings(std::move(data), layout);
+
+  EXPECT_EQ(embeddings.size(), 10);
+  EXPECT_EQ(embeddings.embeddingSize(), 5);
+}
+
+TEST_F(BertEmbeddingsTest, SingleEmbedding) {
+  std::vector<float> data{1.0F, 2.0F, 3.0F};
+  BertEmbeddings::Layout layout{.embeddingCount = 1, .embeddingSize = 3};
+  BertEmbeddings embeddings(std::move(data), layout);
+
+  EXPECT_EQ(embeddings.size(), 1);
+  EXPECT_EQ(embeddings.embeddingSize(), 3);
+
+  auto embedding = embeddings[0];
+  EXPECT_EQ(embedding.size(), 3);
+  EXPECT_FLOAT_EQ(embedding[0], 1.0F);
+  EXPECT_FLOAT_EQ(embedding[1], 2.0F);
+  EXPECT_FLOAT_EQ(embedding[2], 3.0F);
+}
+
+TEST_F(BertEmbeddingsTest, MultipleEmbeddings) {
+  std::vector<float> data{1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F};
+  BertEmbeddings::Layout layout{.embeddingCount = 2, .embeddingSize = 3};
+  BertEmbeddings embeddings(std::move(data), layout);
+
+  EXPECT_EQ(embeddings.size(), 2);
+  EXPECT_EQ(embeddings.embeddingSize(), 3);
+
+  auto embedding0 = embeddings[0];
+  EXPECT_EQ(embedding0.size(), 3);
+  EXPECT_FLOAT_EQ(embedding0[0], 1.0F);
+  EXPECT_FLOAT_EQ(embedding0[1], 2.0F);
+  EXPECT_FLOAT_EQ(embedding0[2], 3.0F);
+
+  auto embedding1 = embeddings[1];
+  EXPECT_EQ(embedding1.size(), 3);
+  EXPECT_FLOAT_EQ(embedding1[0], 4.0F);
+  EXPECT_FLOAT_EQ(embedding1[1], 5.0F);
+  EXPECT_FLOAT_EQ(embedding1[2], 6.0F);
+}
+
+TEST_F(BertEmbeddingsTest, EmptyEmbeddings) {
+  std::vector<float> data;
+  BertEmbeddings::Layout layout{.embeddingCount = 0, .embeddingSize = 0};
+  BertEmbeddings embeddings(std::move(data), layout);
+
+  EXPECT_EQ(embeddings.size(), 0);
+  EXPECT_EQ(embeddings.embeddingSize(), 0);
+}
+
+TEST_F(BertEmbeddingsTest, AccessAllEmbeddings) {
+  const std::size_t count = 5;
+  const std::size_t size = 4;
+  std::vector<float> data(count * size);
+  for (std::size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<float>(i);
+  }
+
+  BertEmbeddings::Layout layout{.embeddingCount = count, .embeddingSize = size};
+  BertEmbeddings embeddings(std::move(data), layout);
+
+  for (std::size_t i = 0; i < count; ++i) {
+    auto embedding = embeddings[i];
+    EXPECT_EQ(embedding.size(), size);
+    for (std::size_t j = 0; j < size; ++j) {
+      EXPECT_FLOAT_EQ(embedding[j], static_cast<float>((i * size) + j));
+    }
+  }
+}
+
+TEST_F(BertEmbeddingsTest, LargeEmbeddings) {
+  const std::size_t count = 100;
+  const std::size_t size = 768;
+  std::vector<float> data(count * size);
+  for (std::size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<float>(i) * 0.001F;
+  }
+
+  BertEmbeddings::Layout layout{.embeddingCount = count, .embeddingSize = size};
+  BertEmbeddings embeddings(std::move(data), layout);
+
+  EXPECT_EQ(embeddings.size(), count);
+  EXPECT_EQ(embeddings.embeddingSize(), size);
+
+  auto embedding = embeddings[50];
+  EXPECT_EQ(embedding.size(), size);
+  EXPECT_FLOAT_EQ(embedding[0], 50.0F * size * 0.001F);
+}
+
+class BertModelTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+    backendDir = fs::path(TEST_BINARY_DIR);
+#else
+    backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+    test_backends_dir = backendDir.string();
+    qvac_lib_infer_llamacpp_embed::logging::g_verbosityLevel = Priority::ERROR;
+
+    // Try multiple possible locations for the model file
+    std::vector<fs::path> possiblePaths = {
+        // From workspace root
+        fs::path{"models/unit-test/test-model.gguf"},
+        // From build/test/unit (go up 3 levels)
+        fs::path{"../../../models/unit-test/test-model.gguf"},
+        // Absolute path from backendDir location
+        backendDir.parent_path().parent_path().parent_path() / "models" /
+            "unit-test" / "test-model.gguf",
+        // From current working directory
+        fs::current_path() / "models" / "unit-test" / "test-model.gguf"};
+
+    test_model_path = "";
+    for (const auto& path : possiblePaths) {
+      if (fs::exists(path)) {
+        test_model_path = fs::absolute(path).string();
+        break;
+      }
+    }
+
+    // If still not found, use relative path as last resort
+    if (test_model_path.empty()) {
+      test_model_path = "models/unit-test/test-model.gguf";
+    }
+  }
+
+  void TearDown() override {
+    qvac_lib_infer_llamacpp_embed::logging::g_verbosityLevel = Priority::ERROR;
+  }
+
+  std::string test_backends_dir;
+  std::string test_model_path;
+
+  std::string getValidModelPath() { return test_model_path; }
+  static std::string getInvalidModelPath() { return "nonexistent_model.gguf"; }
+};
+
+TEST_F(BertModelTest, IsLoadedBeforeInit) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  EXPECT_FALSE(model.isLoaded());
+}
+
+TEST_F(BertModelTest, InitializeBackend) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  EXPECT_NO_THROW(model.initializeBackend(test_backends_dir));
+}
+
+TEST_F(BertModelTest, InitializeBackendWithEmptyDir) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  EXPECT_NO_THROW(model.initializeBackend(""));
+}
+
+TEST_F(BertModelTest, ResetMethod) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  EXPECT_NO_THROW(model.reset());
+}
+
+TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto stats = model.runtimeStats();
+  // RuntimeStats is a vector of key-value pairs
+  // Before processing, it should contain model configuration stats
+  EXPECT_GE(stats.size(), 0);
+
+  // Verify stats structure - should have batch_size and context_size if model
+  // is loaded
+  bool hasBatchSize = false;
+  bool hasContextSize = false;
+  bool hasTrainedContextSize = false;
+  for (const auto& stat : stats) {
+    if (stat.first == "batch_size") {
+      hasBatchSize = true;
+    }
+    if (stat.first == "context_size") {
+      hasContextSize = true;
+    }
+    if (stat.first == "trained_context_size") {
+      hasTrainedContextSize = true;
+    }
+  }
+  // These should be present if model is loaded
+  EXPECT_TRUE(hasBatchSize);
+  EXPECT_TRUE(hasContextSize);
+  EXPECT_TRUE(hasTrainedContextSize);
+  EXPECT_EQ(
+      getStatValue(stats, "context_size"),
+      static_cast<double>(llama_n_ctx(model.getCtx())));
+  EXPECT_EQ(
+      getStatValue(stats, "trained_context_size"),
+      static_cast<double>(llama_model_n_ctx_train(model.getModel())));
+  double backendDevice = getStatValue(stats, "backendDevice");
+  EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
+}
+
+TEST_F(BertModelTest, DefaultContextSizeMatchesTrainedContext) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(
+      static_cast<int>(llama_n_ctx(model.getCtx())),
+      llama_model_n_ctx_train(model.getModel()));
+}
+
+TEST_F(BertModelTest, ContextSizeAboveTrainingContextIsCapped) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"ctx_size", "999999"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(
+      static_cast<int>(llama_n_ctx(model.getCtx())),
+      llama_model_n_ctx_train(model.getModel()));
+}
+
+TEST_F(BertModelTest, DefaultContextSizeDoesNotWarnWhenUnconfigured) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"verbosity", "1"}};
+
+  testing::internal::CaptureStdout();
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  const std::string output = testing::internal::GetCapturedStdout();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(output.find("requested ctx_size"), std::string::npos);
+}
+
+TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  // Process some input to generate stats
+  std::string prompt = "Test prompt for stats";
+  model.encodeHostF32(prompt);
+
+  auto stats = model.runtimeStats();
+  EXPECT_GT(stats.size(), 0);
+
+  // After processing, should have performance stats
+  bool hasTotalTokens = false;
+  bool hasTotalTime = false;
+  for (const auto& stat : stats) {
+    if (stat.first == "total_tokens") {
+      hasTotalTokens = true;
+    }
+    if (stat.first == "total_time_ms") {
+      hasTotalTime = true;
+    }
+  }
+  EXPECT_TRUE(hasTotalTokens);
+  EXPECT_TRUE(hasTotalTime);
+  double backendDevice = getStatValue(stats, "backendDevice");
+  EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
+}
+
+TEST_F(BertModelTest, ConstructorWithInvalidPath) {
+  std::string invalidPath = getInvalidModelPath();
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  EXPECT_NO_THROW({
+    BertModel model(invalidPath, config);
+    EXPECT_FALSE(model.isLoaded());
+  });
+}
+
+TEST_F(BertModelTest, ConstructorWithEmptyConfig) {
+  std::string invalidPath = getInvalidModelPath();
+  std::unordered_map<std::string, std::string> config;
+
+  EXPECT_NO_THROW({
+    BertModel model(invalidPath, config);
+    EXPECT_FALSE(model.isLoaded());
+  });
+}
+
+TEST_F(BertModelTest, ConstructorWithBackendsDir) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  EXPECT_NO_THROW({
+    BertModel model(getValidModelPath(), config, test_backends_dir);
+    EXPECT_FALSE(model.isLoaded());
+  });
+}
+
+TEST_F(BertModelTest, ModelLoadsSuccessfully) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  EXPECT_TRUE(model.isLoaded());
+  EXPECT_NE(model.getModel(), nullptr);
+  EXPECT_NE(model.getCtx(), nullptr);
+}
+
+TEST_F(BertModelTest, ModelFailsToLoadWithInvalidPath) {
+  std::string invalidPath = getInvalidModelPath();
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(invalidPath, config);
+  model.initializeBackend(test_backends_dir);
+
+  // waitForLoadInitialization() throws an exception when model file doesn't
+  // exist
+  using namespace qvac_lib_infer_llamacpp_embed::errors;
+  EXPECT_THROW({ model.waitForLoadInitialization(); }, std::runtime_error);
+
+  EXPECT_FALSE(model.isLoaded());
+}
+
+TEST_F(BertModelTest, EncodeHostF32SingleString) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::string prompt = "Hello world";
+  BertEmbeddings embeddings = model.encodeHostF32(prompt);
+
+  EXPECT_EQ(embeddings.size(), 1);
+  EXPECT_GT(embeddings.embeddingSize(), 0);
+  EXPECT_EQ(embeddings[0].size(), embeddings.embeddingSize());
+
+  // Verify embedding values are not all zeros
+  bool hasNonZero = false;
+  for (float val : embeddings[0]) {
+    if (val != 0.0F) {
+      hasNonZero = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(hasNonZero);
+}
+
+TEST_F(BertModelTest, EncodeHostF32MultipleStrings) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::vector<std::string> prompts = {
+      "Hello world", "Test embedding", "Another prompt"};
+  BertEmbeddings embeddings = model.encodeHostF32(prompts);
+
+  EXPECT_EQ(embeddings.size(), 3);
+  EXPECT_GT(embeddings.embeddingSize(), 0);
+
+  // Verify each embedding has correct size
+  for (std::size_t i = 0; i < embeddings.size(); ++i) {
+    EXPECT_EQ(embeddings[i].size(), embeddings.embeddingSize());
+  }
+
+  // Verify embeddings are different (not identical)
+  if (embeddings.size() >= 2) {
+    bool areDifferent = false;
+    for (std::size_t j = 0; j < embeddings[0].size(); ++j) {
+      if (embeddings[0][j] != embeddings[1][j]) {
+        areDifferent = true;
+        break;
+      }
+    }
+    EXPECT_TRUE(areDifferent);
+  }
+}
+
+TEST_F(BertModelTest, EncodeHostF32EmptyString) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::string prompt;
+  BertEmbeddings embeddings = model.encodeHostF32(prompt);
+
+  EXPECT_EQ(embeddings.size(), 1);
+  EXPECT_GT(embeddings.embeddingSize(), 0);
+}
+
+TEST_F(BertModelTest, EncodeHostF32Sequences) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::vector<std::string> sequences = {"First sequence", "Second sequence"};
+  BertEmbeddings embeddings = model.encodeHostF32Sequences(sequences);
+
+  EXPECT_EQ(embeddings.size(), 2);
+  EXPECT_GT(embeddings.embeddingSize(), 0);
+
+  for (std::size_t i = 0; i < embeddings.size(); ++i) {
+    EXPECT_EQ(embeddings[i].size(), embeddings.embeddingSize());
+  }
+}
+
+TEST_F(BertModelTest, EncodeHostF32SequencesEmpty) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::vector<std::string> sequences;
+  BertEmbeddings embeddings = model.encodeHostF32Sequences(sequences);
+
+  EXPECT_EQ(embeddings.size(), 0);
+  EXPECT_GT(embeddings.embeddingSize(), 0);
+}
+
+TEST_F(BertModelTest, ProcessWithStringInput) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  // Use AddonCpp interface
+  auto instance = qvac_lib_inference_addon_embed::createInstance(
+      std::string(getValidModelPath()),
+      std::move(config),
+      std::string(test_backends_dir));
+
+  instance.addon->activate();
+
+  auto* model = getModelFromAddon(instance.addon.get());
+  if (model != nullptr && !model->isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::string input = "Process this text";
+  instance.addon->runJob(input);
+
+  auto maybeEmbeddings =
+      instance.outputHandler->tryPop(std::chrono::seconds(30));
+
+  ASSERT_TRUE(maybeEmbeddings.has_value())
+      << "Timeout waiting for embeddings output";
+
+  const auto& embeddings = maybeEmbeddings.value();
+
+  EXPECT_EQ(embeddings.size(), 1);
+  EXPECT_GT(embeddings.embeddingSize(), 0);
+  EXPECT_EQ(embeddings[0].size(), embeddings.embeddingSize());
+}
+
+TEST_F(BertModelTest, ProcessWithVectorInput) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  // Use AddonCpp interface
+  auto instance = qvac_lib_inference_addon_embed::createInstance(
+      std::string(getValidModelPath()),
+      std::move(config),
+      std::string(test_backends_dir));
+
+  instance.addon->activate();
+
+  auto* model = getModelFromAddon(instance.addon.get());
+  if (model != nullptr && !model->isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::vector<std::string> input = {"First", "Second", "Third"};
+  instance.addon->runJob(input);
+
+  auto maybeEmbeddings =
+      instance.outputHandler->tryPop(std::chrono::seconds(30));
+
+  ASSERT_TRUE(maybeEmbeddings.has_value())
+      << "Timeout waiting for embeddings output";
+
+  const auto& embeddings = maybeEmbeddings.value();
+
+  EXPECT_EQ(embeddings.size(), 3);
+  EXPECT_GT(embeddings.embeddingSize(), 0);
+
+  for (std::size_t i = 0; i < embeddings.size(); ++i) {
+    EXPECT_EQ(embeddings[i].size(), embeddings.embeddingSize());
+  }
+}
+
+TEST_F(BertModelTest, ContextOverflowSingleString) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  // Get model's context size
+  const llama_model* llamaModel = model.getModel();
+  int nCtxTrain = llama_model_n_ctx_train(llamaModel);
+
+  // Create a string that will exceed context size when tokenized
+  // "Hello world " is approximately 2-3 tokens, so repeat many times
+  int repeatCount = (nCtxTrain / 2) + 100; // Ensure we exceed the limit
+  std::string longString = "Hello world ";
+  for (int i = 0; i < repeatCount; ++i) {
+    longString += "Hello world ";
+  }
+
+  using namespace qvac_lib_infer_llamacpp_embed::errors;
+  EXPECT_THROW({ model.encodeHostF32(longString); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  const llama_model* llamaModel = model.getModel();
+  int nCtxTrain = llama_model_n_ctx_train(llamaModel);
+
+  // Create a string that will exceed context size
+  int repeatCount = (nCtxTrain / 2) + 100;
+  std::string longString = "Hello world ";
+  for (int i = 0; i < repeatCount; ++i) {
+    longString += "Hello world ";
+  }
+
+  std::vector<std::string> prompts = {
+      "Normal prompt", longString, "Another normal"};
+
+  using namespace qvac_lib_infer_llamacpp_embed::errors;
+  EXPECT_THROW({ model.encodeHostF32(prompts); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, ContextOverflowSequences) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  const llama_model* llamaModel = model.getModel();
+  int nCtxTrain = llama_model_n_ctx_train(llamaModel);
+
+  // Create a string that will exceed context size
+  int repeatCount = (nCtxTrain / 2) + 100;
+  std::string longString = "Hello world ";
+  for (int i = 0; i < repeatCount; ++i) {
+    longString += "Hello world ";
+  }
+
+  std::vector<std::string> sequences = {"Normal sequence", longString};
+
+  using namespace qvac_lib_infer_llamacpp_embed::errors;
+  EXPECT_THROW(
+      { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForPrompts) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  // Configure a runtime context smaller than the model's trained context so we
+  // can verify validation triggers on the runtime ctx, not the trained ctx.
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"ctx_size", "256"}, {"batch_size", "256"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  const int runtimeCtx = static_cast<int>(llama_n_ctx(model.getCtx()));
+  const int trainedCtx = llama_model_n_ctx_train(model.getModel());
+  ASSERT_LT(runtimeCtx, trainedCtx);
+
+  // Build an input that overflows the runtime ctx but stays under the trained
+  // ctx, so only the runtime-ctx check can catch it.
+  std::string longString = "Hello world ";
+  for (int i = 0; i < 200; ++i) {
+    longString += "Hello world ";
+  }
+
+  EXPECT_THROW({ model.encodeHostF32(longString); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForSequences) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"ctx_size", "256"}, {"batch_size", "256"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  const int runtimeCtx = static_cast<int>(llama_n_ctx(model.getCtx()));
+  const int trainedCtx = llama_model_n_ctx_train(model.getModel());
+  ASSERT_LT(runtimeCtx, trainedCtx);
+
+  std::string longString = "Hello world ";
+  for (int i = 0; i < 200; ++i) {
+    longString += "Hello world ";
+  }
+
+  std::vector<std::string> sequences = {"Normal sequence", longString};
+
+  EXPECT_THROW(
+      { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, StreamingSingleGgufAppliesContextCap) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+
+  std::unique_ptr<std::filebuf> filebuf = std::make_unique<std::filebuf>();
+  ASSERT_NE(
+      filebuf->open(getValidModelPath(), std::ios::in | std::ios::binary),
+      nullptr);
+  filebuf->pubseekpos(0, std::ios::in);
+  std::unique_ptr<std::basic_streambuf<char>> sb(std::move(filebuf));
+
+  const std::string filename =
+      fs::path(getValidModelPath()).filename().string();
+  model.setWeightsForFile(filename, std::move(sb));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(
+      static_cast<int>(llama_n_ctx(model.getCtx())),
+      llama_model_n_ctx_train(model.getModel()));
+}
+
+TEST_F(BertModelTest, ProcessWithContextOverflow) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  const llama_model* llamaModel = model.getModel();
+  int nCtxTrain = llama_model_n_ctx_train(llamaModel);
+
+  int repeatCount = (nCtxTrain / 2) + 100;
+  std::string longString = "Hello world ";
+  for (int i = 0; i < repeatCount; ++i) {
+    longString += "Hello world ";
+  }
+
+  BertModel::Input variantInput = longString;
+
+  using namespace qvac_lib_infer_llamacpp_embed::errors;
+  EXPECT_THROW({ model.process(variantInput); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  // Use AddonCpp interface
+  auto instance = qvac_lib_inference_addon_embed::createInstance(
+      std::string(getValidModelPath()),
+      std::move(config),
+      std::string(test_backends_dir));
+
+  instance.addon->activate();
+
+  auto* model = getModelFromAddon(instance.addon.get());
+  if (model != nullptr && !model->isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  // Process multiple times to verify addon state is maintained
+  for (int i = 0; i < 3; ++i) {
+    std::string prompt = "Test prompt " + std::to_string(i);
+    instance.addon->runJob(prompt);
+
+    auto maybeEmbeddings =
+        instance.outputHandler->tryPop(std::chrono::seconds(30));
+
+    ASSERT_TRUE(maybeEmbeddings.has_value())
+        << "Timeout waiting for embeddings output on job " << i;
+
+    auto embeddings = std::any_cast<BertEmbeddings>(maybeEmbeddings.value());
+
+    EXPECT_EQ(embeddings.size(), 1);
+    EXPECT_GT(embeddings.embeddingSize(), 0);
+  }
+}
+
+TEST_F(BertModelTest, PreprocessPrompt) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::string prompt = "Line 1\nLine 2\nLine 3";
+  std::vector<std::string> preprocessed = model.preprocessPrompt(prompt);
+
+  EXPECT_GT(preprocessed.size(), 0);
+  // Preprocessing should split by newlines
+  EXPECT_GE(preprocessed.size(), 1);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeNone) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "none";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeLayer) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "layer";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+  }
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "row";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_ROW);
+  }
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeCaseInsensitive) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "LAYER";
+
+  EXPECT_NO_THROW({
+    BertModel model(getValidModelPath(), config);
+    model.initializeBackend(test_backends_dir);
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeUnderscoreVariant) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split_mode"] = "layer";
+
+  EXPECT_NO_THROW({
+    BertModel model(getValidModelPath(), config);
+    model.initializeBackend(test_backends_dir);
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(BertModelTest, CpuFallbackClearsGpuSplitParams) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "cpu";
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "50,50";
+  config["main-gpu"] = "0";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  EXPECT_EQ(backendDevice, 0.0);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "invalid_value";
+
+  EXPECT_THROW(
+      {
+        BertModel model(getValidModelPath(), config);
+        model.initializeBackend(test_backends_dir);
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeBothKeysRejects) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "layer";
+  config["split_mode"] = "layer";
+
+  EXPECT_THROW(
+      {
+        BertModel model(getValidModelPath(), config);
+        model.initializeBackend(test_backends_dir);
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, CancelMidDecode_ThrowsJobCancelled) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  using namespace qvac_lib_inference_addon_cpp;
+
+  std::unique_ptr<BertModel> model = std::make_unique<BertModel>(
+      getValidModelPath(),
+      std::unordered_map<std::string, std::string>{{"device", "cpu"}},
+      test_backends_dir);
+
+  std::shared_ptr<out_handl::CppQueuedOutputHandler<BertEmbeddings>>
+      embeddingHandler =
+          std::make_shared<out_handl::CppQueuedOutputHandler<BertEmbeddings>>();
+  std::shared_ptr<out_handl::CppQueuedOutputHandler<Output::Error>>
+      errorHandler =
+          std::make_shared<out_handl::CppQueuedOutputHandler<Output::Error>>();
+
+  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>> handlers;
+  handlers.add(embeddingHandler);
+  handlers.add(errorHandler);
+  std::unique_ptr<OutputCallBackCpp> callback =
+      std::make_unique<OutputCallBackCpp>(std::move(handlers));
+
+  std::unique_ptr<AddonCpp> addon =
+      std::make_unique<AddonCpp>(std::move(callback), std::move(model));
+  addon->activate();
+
+  constexpr int kSequenceCount = 64;
+  std::vector<std::string> sequences(kSequenceCount);
+  for (int i = 0; i < kSequenceCount; ++i) {
+    sequences[i] =
+        "Long passage number " + std::to_string(i) +
+        " with enough text to keep the model busy during decode so that "
+        "the cancel signal fires while llama_decode is in progress.";
+  }
+
+  addon->runJob(std::any(sequences));
+  std::this_thread::sleep_for(std::chrono::milliseconds{50});
+  addon->cancelJob();
+
+  std::optional<Output::Error> maybeError =
+      errorHandler->tryPop(std::chrono::seconds(10));
+
+  if (!maybeError.has_value()) {
+    std::optional<BertEmbeddings> maybeResult =
+        embeddingHandler->tryPop(std::chrono::seconds(1));
+    if (maybeResult.has_value()) {
+      GTEST_SKIP()
+          << "Cancel arrived after decode completed — no error to verify "
+             "(model too fast for this batch size)";
+    }
+    FAIL() << "Neither error nor result received within timeout";
+  }
+
+  const std::string errorMsg = maybeError.value();
+
+  EXPECT_EQ(errorMsg, "Job cancelled")
+      << "Mid-decode cancel must surface 'Job cancelled', not a generic "
+         "decode error like 'Failed to get sequence embeddings'. "
+         "Got: "
+      << errorMsg;
+}
+
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,
+// readability-magic-numbers,
+// readability-function-cognitive-complexity,
+// cppcoreguidelines-non-private-member-variables-in-classes,
+// bugprone-unchecked-optional-access)

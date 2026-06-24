@@ -1,15 +1,21 @@
 import type {
   Request,
   Response,
-  QvacConfig,
   RuntimeContext,
   CanonicalModelType,
+  ProfilingRequestMeta,
 } from "@/schemas";
-import { normalizeModelType } from "@/schemas";
+import { normalizeModelType, PROFILING_KEY } from "@/schemas";
 import os from "bare-os";
-import { handlers } from "@/server/rpc/handlers";
+import type { Readable } from "bare-stream";
+import { registry } from "@/server/rpc/handler-registry";
+import type { HandlerEntry } from "@/server/rpc/handler-utils";
 import {
-  PearWorkerEntryRequiredError,
+  handlerSupportsProgress,
+  selectHandler,
+} from "@/server/rpc/handler-selection";
+import { createErrorResponse } from "@/schemas";
+import {
   RPCNoHandlerError,
   RPCRequestNotSentError,
 } from "@/utils/errors-client";
@@ -18,62 +24,42 @@ import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
-import { getClientLogger } from "@/logging";
-import { getAllPlugins } from "@/server/plugins";
-import { initializeWorkerCore } from "@/server/worker-core";
+import {
+  initializeWorkerCore,
+  cleanupForTerminate,
+} from "@/server/worker-core";
+import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
+import { ensurePluginsRegistered } from "@/client/rpc/ensure-worker-ready";
 
-const logger = getClientLogger();
-
-/**
- * Load worker entry to register plugins before any SDK calls.
- *
- * If plugins are already registered (e.g., by a Pear worker bootstrap),
- * skip loading the default worker but still initialize worker core.
- *
- * NOTE: For Pear apps, the fallback (loading default worker) cannot work.
- *
- * The default worker is intentionally excluded from `pear stage --compact`
- * to enable tree-shaking of unused built-in plugins. When a Pear app tries
- * to dynamically import it at runtime, the path resolves to a pear:// URL.
- * The default worker imports built-in plugins, which load native addons
- * (.bare files). Native addons cannot be loaded from pear:// URLs, causing
- * UNSUPPORTED_PROTOCOL errors.
- *
- * Instead, we detect Pear runtime and throw a clear error directing users
- * to use the generated worker entry (qvac/worker.pear.entry.mjs).
- *
- * The fallback only works in non-Pear environments.
- */
-async function loadWorkerEntry() {
+async function ensureWorkerReady() {
   initializeWorkerCore();
-
-  if (getAllPlugins().length > 0) {
-    logger.info("📦 Plugins already registered, worker core initialized");
-    return;
-  }
-
-  const { isPear } = await import("which-runtime");
-  if (isPear) {
-    throw new PearWorkerEntryRequiredError("qvac/worker.pear.entry.mjs");
-  }
-
-  // Fallback: load default worker (all built-in plugins)
-  logger.info("📦 Loading default worker (all built-in plugins)");
-  const workerPath = "../../server/" + "worker.js";
-  await import(workerPath);
+  await ensurePluginsRegistered();
 }
-
-let workerEntryLoaded = false;
 
 // Handler function types
 type Handler =
-  | ((req: Request) => Promise<Response>)
-  | ((req: Request) => AsyncGenerator<Response>);
+  | ((
+      req: Request,
+      arg?: ((update: Response) => void) | DirectHandlerOptions,
+    ) => Promise<Response> | Response)
+  | ((
+      req: Request,
+      arg?: ((update: Response) => void) | DirectHandlerOptions,
+    ) => AsyncGenerator<Response>);
 
-// Get the handler for a request type
-function getHandler(type: string): Handler | undefined {
-  const handler = handlers[type as keyof typeof handlers];
-  return typeof handler === "function" ? (handler as Handler) : undefined;
+type HandlerResult = Promise<Response> | Response | AsyncGenerator<Response>;
+
+interface DirectHandlerOptions {
+  progressCallback?: (update: Response) => void;
+  profilingMeta?: ProfilingRequestMeta;
+}
+
+function getHandlerEntry(type: string): HandlerEntry {
+  const entry = registry[type];
+  if (!entry) {
+    throw new RPCNoHandlerError(type);
+  }
+  return entry;
 }
 
 function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
@@ -91,95 +77,132 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
   const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {};
   const configWithDefaults = resolveModelConfig(canonicalType, rawConfig);
 
-  return { ...request, modelConfig: configWithDefaults } as T;
+  return { ...request, modelConfig: configWithDefaults };
+}
+
+function getProfilingMetaFromRequest(
+  request: Request,
+): ProfilingRequestMeta | undefined {
+  if (PROFILING_KEY in request) {
+    return (request as Record<string, unknown>)[
+      PROFILING_KEY
+    ] as ProfilingRequestMeta;
+  }
+  return undefined;
+}
+
+function createDelegatedOptions(
+  request: Request,
+  progressCallback?: (update: Response) => void,
+): DirectHandlerOptions | undefined {
+  const profilingMeta = getProfilingMetaFromRequest(request);
+  if (!profilingMeta && !progressCallback) {
+    return undefined;
+  }
+
+  const options: DirectHandlerOptions = {};
+  if (progressCallback) {
+    options.progressCallback = progressCallback;
+  }
+  if (profilingMeta) {
+    options.profilingMeta = profilingMeta;
+  }
+  return options;
+}
+
+function executeDirectHandler(
+  request: Request,
+  handler: HandlerEntry["handler"],
+  isDelegated: boolean,
+): HandlerResult {
+  const directHandler = handler as Handler;
+  if (isDelegated) {
+    return directHandler(request, createDelegatedOptions(request));
+  }
+  return directHandler(request);
+}
+
+function isAsyncGenerator(
+  result: HandlerResult,
+): result is AsyncGenerator<Response> {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    Symbol.asyncIterator in result
+  );
+}
+
+async function* streamWithProgress(
+  request: Request,
+  handler: HandlerEntry["handler"],
+  isDelegated: boolean,
+) {
+  const queue: Response[] = [];
+  const errors: Error[] = [];
+  let done = false;
+  function progressCallback(update: Response) {
+    queue.push(update);
+  }
+  const directHandler = handler as Handler;
+
+  Promise.resolve(
+    directHandler(
+      request,
+      isDelegated
+        ? createDelegatedOptions(request, progressCallback)
+        : progressCallback,
+    ) as Promise<Response> | Response,
+  )
+    .then((final) => {
+      queue.push(final);
+      done = true;
+    })
+    .catch((error: Error) => {
+      errors.push(error);
+      done = true;
+    });
+
+  while (!done || queue.length > 0) {
+    if (queue.length > 0) {
+      yield queue.shift()!;
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  const handlerError = errors[0];
+  if (handlerError) {
+    throw handlerError;
+  }
 }
 
 export async function send<T extends Request>(request: T): Promise<Response> {
-  const handler = getHandler(request.type);
-  if (!handler) throw new RPCNoHandlerError(request.type);
+  assertLifecycleAllowed(request);
 
   const processedRequest = applyDeviceDefaultsToLoadModel(request);
-  return (await handler(processedRequest)) as Response;
+  const entry = getHandlerEntry(processedRequest.type);
+  const { handler, isDelegated } = selectHandler(entry, processedRequest);
+  return (await executeDirectHandler(
+    processedRequest,
+    handler,
+    isDelegated,
+  )) as Response;
 }
 
 async function* stream<T extends Request>(request: T) {
-  const handler = getHandler(request.type);
-  if (!handler) throw new RPCNoHandlerError(request.type);
+  assertLifecycleAllowed(request);
 
-  // Special handling for loadModel with progress
-  if (
-    request.type === "loadModel" &&
-    "withProgress" in request &&
-    request.withProgress
-  ) {
-    const processedRequest = applyDeviceDefaultsToLoadModel(request);
+  const processedRequest = applyDeviceDefaultsToLoadModel(request);
+  const entry = getHandlerEntry(processedRequest.type);
+  const { handler, isDelegated } = selectHandler(entry, processedRequest);
 
-    async function* streamWithProgress() {
-      const queue: Response[] = [];
-      let done = false;
-
-      const loadModelHandler = handler as (
-        req: Request,
-        callback: (update: Response) => void,
-      ) => Promise<Response>;
-      loadModelHandler(processedRequest, (update) => queue.push(update))
-        .then((final) => {
-          queue.push(final);
-          done = true;
-        })
-        .catch((error) => {
-          done = true;
-          throw error;
-        });
-
-      while (!done || queue.length > 0) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-      }
-    }
-
-    yield* streamWithProgress();
-  } else if (
-    request.type === "downloadAsset" &&
-    "withProgress" in request &&
-    request.withProgress
-  ) {
-    async function* streamWithProgress() {
-      const queue: Response[] = [];
-      let done = false;
-
-      const downloadAssetHandler = handler as (
-        req: Request,
-        callback: (update: Response) => void,
-      ) => Promise<Response>;
-      downloadAssetHandler(request, (update) => queue.push(update))
-        .then((final) => {
-          queue.push(final);
-          done = true;
-        })
-        .catch((error) => {
-          done = true;
-          throw error;
-        });
-
-      while (!done || queue.length > 0) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-      }
-    }
-
-    yield* streamWithProgress();
+  if (handlerSupportsProgress(entry, processedRequest)) {
+    yield* streamWithProgress(processedRequest, handler, isDelegated);
   } else {
-    const result = handler(request);
+    const result = executeDirectHandler(processedRequest, handler, isDelegated);
 
     // Check if the handler returns a Promise or AsyncGenerator
-    if (Symbol.asyncIterator in result) {
+    if (isAsyncGenerator(result)) {
       // It's an AsyncGenerator
       yield* result;
     } else {
@@ -218,11 +241,32 @@ function createMockRPCRequest() {
             runtimeContext?: RuntimeContext;
           };
           if (initData.config) {
-            setSDKConfig(initData.config as QvacConfig);
+            setSDKConfig(initData.config);
           }
           if (initData.runtimeContext) {
             setRuntimeContext(initData.runtimeContext);
           }
+          return Buffer.from(JSON.stringify({ success: true }));
+        } catch (error) {
+          return Buffer.from(
+            JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
+      }
+
+      // Handle special pre-terminate cleanup signal. In direct mode the
+      // bare runtime is the host JS context, so we run cleanup but never
+      // exit the process here.
+      if (
+        typeof requestData === "object" &&
+        "type" in requestData &&
+        requestData.type === "__shutdown__"
+      ) {
+        try {
+          await cleanupForTerminate();
           return Buffer.from(JSON.stringify({ success: true }));
         } catch (error) {
           return Buffer.from(
@@ -252,11 +296,13 @@ function createMockRPCRequest() {
 
 let configInitialized = false;
 
+// No child worker on Bare-direct — `#rpc` interface stub.
+export function getWorkerLifeSignal(): AbortSignal | null {
+  return null;
+}
+
 export async function getRPC() {
-  if (!workerEntryLoaded) {
-    await loadWorkerEntry();
-    workerEntryLoaded = true;
-  }
+  await ensureWorkerReady();
 
   const mockRPC = {
     request() {
@@ -268,7 +314,7 @@ export async function getRPC() {
   if (!configInitialized) {
     const runtimeContext: RuntimeContext = {
       runtime: "bare",
-      platform: os.platform() as "darwin" | "linux" | "win32",
+      platform: os.platform(),
     };
     await initializeConfig(mockRPC, resolveConfig, runtimeContext);
     configInitialized = true;
@@ -277,6 +323,48 @@ export async function getRPC() {
   return mockRPC;
 }
 
-export function close() {
-  // noop
+export async function close() {
+  await cleanupForTerminate();
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function createDuplexSession(payload: string, _commandId: number) {
+  await getRPC();
+
+  const { PassThrough } = await import("bare-stream");
+  const request = JSON.parse(payload) as Request;
+
+  assertLifecycleAllowed(request);
+
+  const entry = registry[request.type];
+  if (!entry || entry.type !== "duplex") {
+    throw new RPCNoHandlerError(request.type);
+  }
+
+  const inputStream = new PassThrough();
+  const outputStream = new PassThrough();
+
+  const duplexHandler = entry.handler as (
+    req: Request,
+    stream: Readable,
+  ) => AsyncGenerator<Response>;
+
+  void (async () => {
+    try {
+      for await (const response of duplexHandler(request, inputStream)) {
+        outputStream.write(JSON.stringify(response) + "\n", "utf-8");
+      }
+    } catch (error) {
+      inputStream.destroy();
+      const errorResponse = createErrorResponse(error);
+      outputStream.write(JSON.stringify(errorResponse) + "\n", "utf-8");
+    } finally {
+      outputStream.end();
+    }
+  })();
+
+  return {
+    requestStream: inputStream,
+    responseStream: outputStream,
+  };
 }

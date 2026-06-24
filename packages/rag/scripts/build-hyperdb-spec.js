@@ -1,3 +1,4 @@
+const fs = require('bare-fs')
 const path = require('bare-path')
 const HyperDB = require('hyperdb/builder')
 const Hyperschema = require('hyperschema')
@@ -131,6 +132,7 @@ function buildRAGDatabase (schemaDir = SCHEMA_DIR, dbDir = DB_DIR) {
   })
 
   HyperDB.toDisk(db)
+  removeUnusedRuntimeImport(path.join(dbDir, 'index.js'))
 
   console.log('✅ RAG HyperDB specification built successfully!')
   console.log(`📁 Schema saved to: ${schemaDir}`)
@@ -138,4 +140,16 @@ function buildRAGDatabase (schemaDir = SCHEMA_DIR, dbDir = DB_DIR) {
   console.log('\n📝 IMPORTANT: Generated hyperspec files have been manually converted to use dynamic imports')
   console.log('   This prevents static dependency resolution when HyperDBAdapter is not used.')
   console.log('   If you regenerate specs, you\'ll need to manually convert static requires to dynamic imports.')
+}
+
+function removeUnusedRuntimeImport (indexPath) {
+  const content = fs.readFileSync(indexPath, 'utf8')
+  const updated = content.replace(
+    "const { IndexEncoder, c, b4a } = require('hyperdb/runtime')",
+    "const { IndexEncoder, b4a } = require('hyperdb/runtime')"
+  )
+
+  if (updated !== content) {
+    fs.writeFileSync(indexPath, updated)
+  }
 }

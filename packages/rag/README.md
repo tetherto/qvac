@@ -16,21 +16,6 @@ A JavaScript library for Retrieval-Augmented Generation (RAG) within the QVAC ec
 
 ## Installation
 
-Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@qvac:registry=https://registry.npmjs.org/
-//registry.npmjs.org/:_authToken={NPM_TOKEN}
-```
-
-This configuration ensures secure access to NPM Packages when installing scoped packages.
-
 ```bash
 npm install @qvac/rag
 ```
@@ -45,6 +30,9 @@ Each pluggable adapter has specific dependency requirements. Choose the adapters
 
 ```bash
 npm install corestore hyperdb hyperschema
+
+# Browser/RN environments without Node-style crypto.createHash
+npm install crypto-browserify
 ```
 
 **`BaseDBAdapter`** - Custom database interface
@@ -64,7 +52,7 @@ npm install @qvac/llm-llamacpp
 # No additional dependencies. See example in `examples/direct-rag.js`
 
 # Option 2: Through runtime manager. See example in `examples/quickstart.js`
-npm install @tetherto/qvac-lib-rt @tetherto/qvac-lib-router-inference @tetherto/qvac-lib-manager-inference
+npm install @qvac/rt @qvac/router-inference @qvac/manager-inference
 ```
 
 **`HttpLlmAdapter`** - HTTP API integration (OpenAI, Anthropic, etc.)
@@ -90,7 +78,7 @@ npm install @qvac/embed-llamacpp
 # No additional dependencies. See example in `examples/direct-rag.js`
 
 # Option 2: Through runtime manager. See example in `examples/quickstart.js`
-npm install @tetherto/qvac-lib-rt @tetherto/qvac-lib-router-inference @tetherto/qvac-lib-manager-inference
+npm install @qvac/rt @qvac/router-inference @qvac/manager-inference
 ```
 
 **Custom Embedding Functions** - Any service you prefer
@@ -125,7 +113,7 @@ npm install @qvac/rag
 npm install corestore hyperdb hyperschema
 
 # LLM: QvacLlmAdapter
-npm install @tetherto/qvac-lib-rt @tetherto/qvac-lib-router-inference @tetherto/qvac-lib-manager-inference @qvac/llm-llamacpp
+npm install @qvac/rt @qvac/router-inference @qvac/manager-inference @qvac/llm-llamacpp
 
 # Embedding: QVAC Embedding Addon
 npm install @qvac/embed-llamacpp
@@ -158,7 +146,7 @@ npm install @qvac/rag
 
 **Installation Strategy:**
 
-- **Minimal production bundle**: Only 3 core dependencies (`@qvac/error`, `ready-resource`, `uuid-random`)
+- **Minimal production bundle**: Small core dependency set; adapter dependencies are loaded only when their code paths are used
 - **Tests work out of the box**: Adapter deps included in `devDependencies` for seamless testing
 - **Production efficiency**: Use `npm install --omit=dev` to exclude testing dependencies
 - **Pick and choose**: Install only the adapter dependencies you actually need

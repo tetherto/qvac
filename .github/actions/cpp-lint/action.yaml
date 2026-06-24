@@ -28,7 +28,7 @@ runs:
   using: composite
   steps:
     - name: Checkout PR head and target
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       with:
         repository: ${{ inputs.repository }}
         ref: ${{ inputs.ref }}
@@ -40,13 +40,13 @@ runs:
       run: git config --global --add url."https://${{ inputs.pat-token }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: 18
 
     - name: Restore npm cache
       id: cache-npm
-      uses: actions/cache@v5
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         key: npm-${{ runner.os }}-${{ hashFiles('**/package.json') }}
         path: ~/.npm
@@ -81,7 +81,7 @@ runs:
       run: mkdir -p vcpkg/cache
  
     - name: Get vcpkg cache
-      uses: actions/cache@v5
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         key: linux-x64-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
         path: vcpkg/cache
@@ -92,7 +92,7 @@ runs:
       continue-on-error: true
       shell: bash
       run: |
-        npm install -g bare-make
+        npm install -g --force bare-make
 
     - name: Install vulkan
       continue-on-error: true
@@ -102,6 +102,9 @@ runs:
         sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
         sudo apt update
         sudo apt install vulkan-sdk
+
+    - name: Setup LLVM
+      uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
 
     - name: Generate build system
       continue-on-error: true
@@ -114,24 +117,21 @@ runs:
           echo "bare-make not installed, skipping"
           exit 0
         fi
-        bare-make generate
+        bare-make generate -D BUILD_TESTING=ON
 
     - name: Check C++ files format
       continue-on-error: true
       shell: bash
+      env:
+        TARGET_SHA: ${{ inputs.target_sha }}
+        PR_HEAD_SHA: ${{ inputs.pr_head_sha }}
       run: |
-        TARGET_SHA=${{ inputs.target_sha }}
-        PR_HEAD_SHA=${{ inputs.pr_head_sha }}
         if [ -z "$TARGET_SHA" ] || [ -z "$PR_HEAD_SHA" ]; then
           echo "No target or head SHA specified, skipping format check."
           exit 0
         fi
-    
-        wget https://apt.llvm.org/llvm.sh
-        chmod +x llvm.sh
-        sudo ./llvm.sh 19 all
-    
-        OUTPUT=$(git-clang-format-19 --binary clang-format-19 --diff $TARGET_SHA $PR_HEAD_SHA 2>&1)
+
+        OUTPUT=$(git-clang-format --binary clang-format --diff "$TARGET_SHA" "$PR_HEAD_SHA" 2>&1)
         EXIT_CODE=$?
         if [ $EXIT_CODE -ne 0 ]; then
           if echo "$OUTPUT" | grep -q "no modified files to format"; then

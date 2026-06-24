@@ -1,0 +1,39 @@
+openapi: 3.0.0
+info:
+  title: mini
+  version: '1'
+paths:
+  /chat/completions:
+    post:
+      tags:
+        - Chat
+      operationId: createChatCompletion
+      x-oaiMeta:
+        group: chat
+  /embeddings:
+    post:
+      tags:
+        - Embeddings
+  /models:
+    get:
+      tags:
+        - Models
+  /files:
+    get:
+      tags:
+        - Files
+    post:
+      tags:
+        - Files
+  /files/{file_id}:
+    get:
+      tags:
+        - Files
+  /assistants:
+    post:
+      tags:
+        - Assistants
+  /experimental/widgets:
+    post:
+      tags:
+        - NewlyAddedThing

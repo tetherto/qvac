@@ -1,0 +1,42 @@
+@qvac/classification-ggml
+Copyright 2026 Tether Operations Limited
+
+This product includes software developed by Tether Operations Limited
+(https://tether.io/).
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this file except in compliance with the License. You may obtain
+a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+================================================================================
+
+This product bundles the following third-party components:
+
+--------------------------------------------------------------------------------
+ggml — a tensor library for machine learning
+Copyright (c) 2022-2025 Georgi Gerganov
+Licensed under the MIT License.
+Source: https://github.com/ggerganov/ggml
+
+--------------------------------------------------------------------------------
+stb_image.h / stb_image_resize2.h — Sean Barrett's public-domain image library
+Licensed under the MIT License / Public Domain (dual).
+Source: https://github.com/nothings/stb
+
+--------------------------------------------------------------------------------
+MobileNetV3-Small (Howard et al., 2019) — reference architecture
+Weights shipped in this package are a 3-class fine-tune of the PyTorch /
+torchvision reference model. Original torchvision model and code are
+Copyright (c) Meta Platforms / PyTorch Contributors, BSD-3-Clause licensed.
+Paper: "Searching for MobileNetV3" (arXiv:1905.02244).
+
+The fine-tuned weight file (weights/mobilenetv3_3class_v3_fp16.gguf) is
+released under the Apache-2.0 license, same as this package.

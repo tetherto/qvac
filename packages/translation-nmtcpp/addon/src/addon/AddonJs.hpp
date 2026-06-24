@@ -1,0 +1,234 @@
+#pragma once
+
+#include <algorithm>
+#include <iterator>
+#include <vector>
+
+#include <inference-addon-cpp/JsInterface.hpp>
+#include <inference-addon-cpp/JsUtils.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/addon/AddonJs.hpp>
+#include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
+#include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+
+#include "model-interface/PivotTranslationModel.hpp"
+#include "model-interface/TranslationModel.hpp"
+
+namespace {
+using namespace qvac_lib_inference_addon_cpp;
+static std::unordered_map<
+    std::string, std::variant<double, int64_t, std::string>>
+getConfigMap( // NOLINT(readability-static-definition-in-anonymous-namespace)
+    js_env_t* env, js::Object configurationParams, const char* propertyName) {
+  auto configOpt =
+      configurationParams.getOptionalProperty<js::Object>(env, propertyName);
+  std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
+      configMap;
+
+  if (!configOpt.has_value()) {
+    return configMap;
+  }
+
+  auto config = configOpt.value();
+  js_value_t* configKeys; // NOLINT(cppcoreguidelines-init-variables)
+  JS(js_get_property_names(env, config, &configKeys));
+
+  js::Array configKeysArray(env, configKeys);
+  uint32_t configKeysSz = configKeysArray.size(env);
+
+  bool hasPivotModel = false;
+  while (configKeysSz > 0) {
+    configKeysSz--;
+    js_value_t* key; // NOLINT(cppcoreguidelines-init-variables)
+    JS(js_get_element(env, configKeys, configKeysSz, &key));
+    auto value = // NOLINT(readability-qualified-auto)
+        config.getProperty(env, key);
+
+    std::string keyString = // NOLINT(hicpp-use-auto,modernize-use-auto)
+        js::String::fromValue(key).as<std::string>(env);
+
+    std::transform( // NOLINT(modernize-use-ranges)
+        keyString.begin(),
+        keyString.end(),
+        keyString.begin(),
+        [](unsigned char chr) { return std::tolower(chr); });
+    if (keyString == "pivotmodel") {
+      hasPivotModel = true; // NOLINT(clang-analyzer-deadcode.DeadStores)
+      continue;
+    }
+    if (js::is<js::Boolean>(env, value)) {
+      // Map booleans to int64 {0,1} so downstream config readers can treat
+      // them uniformly (TranslationModel::setConfig reads "use_gpu" this way).
+      auto jsBool = js::Boolean{env, value};
+      configMap[keyString] = static_cast<int64_t>(jsBool.as<bool>(env) ? 1 : 0);
+    } else if (
+        js::is<js::Int32>(env, value) || js::is<js::Uint32>(env, value) ||
+        js::is<js::BigInt>(env, value)) {
+      auto jsNumber = js::Number{env, value};
+      configMap[keyString] = jsNumber.as<int64_t>(env);
+    } else if (js::is<js::Number>(env, value)) {
+      auto jsNumber = js::Number{env, value};
+      configMap[keyString] = jsNumber.as<double>(env);
+    } else if (js::is<js::String>(env, value)) {
+      auto jsString = js::String::fromValue(value);
+      configMap[keyString] = jsString.as<std::string>(env);
+    } else {
+      std::string msg = "Expected boolean, numeric or string value for config "
+                        "key '" +
+                        keyString + "' but got a different type";
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument, msg);
+    }
+  }
+
+  return configMap;
+}
+
+} // namespace
+namespace qvac_lib_inference_addon_nmt {
+
+inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+
+  auto configurationParamsJs = args.getJsObject(1, "config");
+  auto modelConfig = getConfigMap(env, configurationParamsJs, "config");
+
+  auto modelConfigJs =
+      configurationParamsJs.getProperty<js::Object>(env, "config");
+  auto pivotModelConfigJs =
+      modelConfigJs.getOptionalProperty<js::Object>(env, "pivotModel");
+
+  std::unique_ptr<qvac_lib_inference_addon_cpp::model::IModel> model;
+
+  auto modelPathJs =
+      configurationParamsJs.getOptionalProperty<js::String>(env, "path");
+
+  std::string modelPath =
+      modelPathJs ? modelPathJs.value().as<std::string>(env) : "";
+  // Checking for pivot translation
+  if (pivotModelConfigJs.has_value()) {
+    auto secondModelPathJs =
+        pivotModelConfigJs->getOptionalProperty<js::String>(env, "path");
+    std::string secondModelPath =
+        secondModelPathJs ? secondModelPathJs.value().as<std::string>(env) : "";
+
+    auto pivotModelConfig =
+        getConfigMap(env, pivotModelConfigJs.value(), "config");
+
+    auto pivotTranslationModel = std::make_unique<PivotTranslationModel>(
+        modelPath, modelConfig, secondModelPath, pivotModelConfig);
+    model = std::move(pivotTranslationModel);
+  } else {
+    auto translationModel =
+        std::make_unique<qvac_lib_inference_addon_nmt::TranslationModel>(
+            modelPath);
+
+    translationModel->setConfig(modelConfig);
+    translationModel->load();
+
+    model = std::move(translationModel);
+  }
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+
+  outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
+  outHandlers.add(make_shared<out_handl::JsStringArrayOutputHandler>());
+
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon =
+      std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
+
+  return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+inline js_value_t*
+getActiveBackendName(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  // The shared AddonCpp stores the model as IModel& — getActiveBackendName()
+  // only lives on TranslationModel. A downcast failure means the active model
+  // is PivotTranslationModel (Bergamot), which is CPU-only by design.
+  auto& model = instance.addonCpp->model.get();
+  auto* translationModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(&model);
+  if (translationModel != nullptr) {
+    return js::String::create(
+        env, translationModel->getActiveBackendName().c_str());
+  }
+  auto* pivotModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::PivotTranslationModel*>(
+          &model);
+  std::string name = (pivotModel != nullptr && pivotModel->isLoaded())
+                         ? std::string("Bergamot-CPU")
+                         : std::string("Unloaded");
+  return js::String::create(env, name.c_str());
+}
+JSCATCH
+
+inline js_value_t*
+getActiveBackendDescription(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto& model = instance.addonCpp->model.get();
+  auto* translationModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(&model);
+  if (translationModel != nullptr) {
+    return js::String::create(
+        env, translationModel->getActiveBackendDescription().c_str());
+  }
+  return js::String::create(env, "");
+}
+JSCATCH
+
+inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto [type, jsInput] = JsInterface::getInput(args);
+
+  std::any anyInput;
+  if (type == "text") {
+    anyInput = js::String(env, jsInput).as<std::string>(env);
+  } else if (type == "sequences") {
+    auto vectorOfJsValues =
+        js::Array(env, jsInput).as<std::vector<js_value_t*>>(env);
+    std::vector<std::string> inputSequence;
+    inputSequence.reserve(vectorOfJsValues.size());
+
+    std::transform( // NOLINT(modernize-use-ranges)
+        vectorOfJsValues.begin(),
+        vectorOfJsValues.end(),
+        std::back_inserter(inputSequence),
+        [&env](js_value_t* const stringValue) {
+          return js::String(env, stringValue).as<std::string>(env);
+        });
+
+    anyInput = inputSequence;
+  }
+
+  if (!anyInput.has_value()) {
+    throw StatusError(general_error::InvalidArgument, type);
+  }
+
+  return instance.runJob(std::move(anyInput));
+}
+JSCATCH
+
+} // namespace qvac_lib_inference_addon_nmt

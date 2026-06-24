@@ -1,0 +1,164 @@
+---
+title: Integrate with the OpenAI-compatible server
+description: Use the npm package @qvac/ai-sdk-provider to create a client for the HTTP server.
+schemaType: HowTo
+tocMaxDepth: 3
+---
+
+## Overview
+
+The npm package `@qvac/ai-sdk-provider` is a thin wrapper around [@ai-sdk/openai-compatible](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that provides a better developer experience when integrating with the QVAC OpenAI-compatible API.
+
+_At the moment, its main advantage is providing introspection of the models supported by QVAC for each API operation._ In addition, it provides branded exports, automatic configuration, and a discoverable handle for the [models.dev](https://models.dev) catalog, allowing QVAC to appear in `/connect` for [OpenCode](https://opencode.ai) and other catalog consumers.
+
+<Callout type="info">
+This page is for building a new client. If you want to connect an existing OpenAI-compatible tool (OpenCode, Cline, Aider, Continue, Roo) to the server, see [Connect with the OpenAI-compatible API](/cli/http-server/connection).
+</Callout>
+
+## Installation
+
+Install the package along with its peer dependencies:
+
+```bash
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible
+```
+
+## Usage
+
+* **Existing server:** create a provider instance and point it to an already running QVAC HTTP server by passing `baseURL`.
+* **Managed server:** let `@qvac/ai-sdk-provider` start and manage a QVAC HTTP server instance for you.
+
+### Existing server
+
+Create a provider instance and pass `baseURL` to connect it to an existing HTTP server instance; then send an inference request:
+
+```js
+import { createQvac } from '@qvac/ai-sdk-provider'
+import { streamText } from 'ai'
+
+const qvac = createQvac({
+  baseURL: 'http://localhost:11434/v1', // match your HTTP server
+  apiKey: 'qvac'                         // any non-empty value; HTTP server does not validate it
+})
+
+const { textStream } = streamText({
+  model: qvac('qwen3-600m'),
+  prompt: 'Write a haiku about local-first AI.'
+})
+
+for await (const chunk of textStream) {
+  process.stdout.write(chunk)
+}
+```
+
+The provider exposes the same surface as the [Vercel AI SDK provider](https://ai-sdk.dev):
+
+```
+qvac('qwen3-600m')                     // language model (chat)
+qvac.chatModel('qwen3-600m')           // explicit chat model
+qvac.completionModel('qwen3-600m')     // legacy completion model
+qvac.textEmbeddingModel('embed-gemma') // text embeddings
+qvac.imageModel('flux-schnell')        // image generation
+```
+
+### Managed server
+
+Create a provider instance with the models and configuration you want to use. The provider uses them to start and manage an HTTP server instance for you. In this mode `createQvac` is asynchronous and returns a `Promise<ManagedQvacProvider>`:
+
+```ts
+import { createQvac } from '@qvac/ai-sdk-provider'
+import { streamText } from 'ai'
+
+// Spawns (or reuses) a shared `qvac serve` on a free port, then resolves.
+await using qvac = await createQvac({
+  mode: 'managed',
+  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 32768, reasoning_budget: 0 } }]
+})
+
+const { textStream } = streamText({ model: qvac('QWEN3_8B_INST_Q4_K_M'), prompt: 'Hello!' })
+for await (const chunk of textStream) process.stdout.write(chunk)
+// Leaving the `await using` scope detaches this process from the serve.
+```
+
+The spawned server is **shared and reused** across processes that request the same model set, and shuts down automatically once no consumer remains for `serveIdleTimeout` (default 5 minutes). `provider.baseURL` / `provider.port` / `provider.pid` expose the live server coordinates. Managed mode requires the optional `@qvac/cli` peer dependency.
+
+<Callout type="info">
+Liveness is tracked by the process that called `createQvac`, not by HTTP traffic. A tool that connects directly to `baseURL` only keeps the server warm while that resolving process stays alive.
+</Callout>
+
+## Model metadata
+
+`@qvac/ai-sdk-provider` ships QVAC model metadata, _so you can introspect models without making an HTTP call to /v1/models._ For example:
+
+```ts
+import { models, allModels } from '@qvac/ai-sdk-provider'
+
+models.QWEN3_4B_INST_Q4_K_M.endpointCategory  // 'chat' (compile-time known)
+models.WHISPER_EN_TINY_Q8_0.endpointCategory  // 'transcription'
+
+for (const m of allModels) {
+  console.log(`${m.name} (${m.endpointCategory}, ${m.expectedSize} bytes)`)
+}
+```
+
+Each constant satisfies `ModelConstant<TEndpoint>` where `TEndpoint` is one of:
+
+```ts
+type EndpointCategory =
+  | 'chat'
+  | 'embedding'
+  | 'transcription'
+  | 'audio-translation'
+  | 'translation'
+  | 'speech'
+  | 'ocr'
+  | 'image'
+```
+
+## API
+
+### `createQvac(options?: QvacOptions): QvacProvider | Promise<ManagedQvacProvider>`
+
+Factory returning a branded Vercel AI SDK provider. Wraps `createOpenAICompatible` with QVAC defaults.
+
+In the default **external** mode it is synchronous and returns a `QvacProvider`:
+
+```ts
+interface QvacExternalOptions {
+  mode?: 'external'                      // default
+  baseURL?: string                       // default: see Default base URL
+  apiKey?: string                        // default: 'qvac'
+  headers?: Record<string, string>       // default: {}
+  fetch?: typeof fetch                   // default: globalThis.fetch
+}
+```
+
+With `mode: 'managed'` it is asynchronous and returns a `Promise<ManagedQvacProvider>` that spawns/reuses a `qvac serve` for you (see [Managed mode](#managed-mode-auto-spawn-the-server)):
+
+```ts
+interface QvacManagedOptions {
+  mode: 'managed'
+  models: (string | { name: string; config?: Record<string, unknown>; preload?: boolean; default?: boolean })[]
+  servePort?: number                     // default: auto-allocate a free port
+  serveHost?: string                     // default: '127.0.0.1'
+  serveStartTimeout?: number             // ms; default: 180000
+  serveBinPath?: string                  // default: resolve @qvac/cli
+  reuse?: boolean                        // share a matching serve; default: true (false if servePort is pinned)
+  serveIdleTimeout?: number              // ms a shared serve lingers after its last consumer; default: 300000
+  apiKey?: string
+  headers?: Record<string, string>
+  fetch?: typeof fetch
+}
+```
+
+### `qvac`
+
+A default `createQvac()` instance with all defaults. Convenient for quick scripts; explicit `createQvac({ baseURL })` is recommended.
+
+<Callout type="warn" title="Default provider port does not match HTTP server's default port.">
+The provider defaults to `http://127.0.0.1:11435/v1`, while `qvac serve openai` listens on `11434` by default. This mismatch is intentional — `11434` collides with Ollama, so the provider ships a placeholder port until the CLI default is changed. Until then, **always pass `baseURL` explicitly** when calling `createQvac({ baseURL })`, matching the port your `qvac serve openai` instance is bound to (e.g. `http://127.0.0.1:11434/v1` for the CLI default).
+</Callout>
+
+### `models`, `allModels`, `ModelConstant`, `EndpointCategory`
+
+Re-exported model metadata. See [Model metadata](#model-metadata).

@@ -1,0 +1,36 @@
+.vs/
+build/
+model/
+store/
+models/
+node_modules/
+prebuilds/
+package-lock.json
+.cache/
+.npmrc
+
+test/unit/all.js
+test/integration/all.js
+
+__pycache__/
+.pytest_cache/
+poetry.lock
+.idea/
+
+# Added by lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp
+
+# Benchmarks
+benchmarks/results/
+benchmarks/client/benchmark_results/
+benchmarks/client/venv/
+benchmarks/server/server.log
+benchmarks/server/store/
+benchmarks/server/models/
+benchmarks/performance/models/
+benchmarks/performance/resolved-models.json
+benchmarks/performance/results/
+benchmarks/document-throughput/results/
+*.log

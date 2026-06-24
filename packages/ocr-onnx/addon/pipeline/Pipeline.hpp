@@ -9,8 +9,8 @@
 #include <stack>
 #include <vector>
 
-#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/RuntimeStats.hpp>
 
 #include "StepBoundingBox.hpp"
 #include "StepDetectionInference.hpp"

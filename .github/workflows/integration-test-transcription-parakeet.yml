@@ -1,0 +1,283 @@
+name: Run Integration Tests (Parakeet)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/transcription-parakeet@1.0.0)"
+        required: true
+        type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-* artifacts)"
+        required: false
+        type: boolean
+        default: false
+
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        type: boolean
+        required: false
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-* artifacts)"
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 60
+    continue-on-error: true
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64
+            no_gpu: 'true'
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64-gpu
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            no_gpu: 'true'
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+            no_gpu: 'true'
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+            no_gpu: 'true'
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64
+            no_gpu: 'true'
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: |
+          npm install
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      - run: mkdir -p "${{ runner.temp }}/transcription-parakeet"
+        shell: bash
+      - run: mkdir -p "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
+        shell: bash
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/transcription-parakeet
+          merge-multiple: true
+
+      - if: ${{ !inputs.prebuild_package }}
+        shell: bash
+        run: cp -r "${{ runner.temp }}/transcription-parakeet"/* "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ runner.temp }}/transcription-parakeet
+        shell: bash
+        run: |
+          npm pack ${{ inputs.prebuild_package }}
+          tar -xzf *.tgz
+          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
+
+      - name: Rename prebuilds from tetherto_ to qvac_ prefix
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        shell: bash
+        run: |
+          find prebuilds -depth -name 'tetherto_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^tetherto_/qvac_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Cache Parakeet GGUF models
+        id: model-cache
+        if: runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: transcription-parakeet
+          paths: packages/transcription-parakeet/models
+          hash-files-glob: .github/workflows/integration-test-transcription-parakeet.yml
+          enable-cross-os: 'false'
+
+      # Stage both quantisations the RTF benchmark matrix sweeps:
+      #   q8_0 (2026-05-11 prefix) — desktop default, best WER per byte.
+      #   q4_0 (2026-05-27 prefix) — the mobile-shippable quant, benchmarked
+      #     on desktop too so the perf report can compare quants side by side.
+      # The recursive --include grabs whichever q4_0 builds the registry
+      # publishes (tdt / eou / sortformer today); a model type without a
+      # published q4_0 is simply absent and its matrix entry no-ops.
+      - name: Download Parakeet GGUFs from QVAC registry (q8_0 + q4_0)
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/ models/ \
+            --recursive --exclude "*" --include "*.q8_0.gguf"
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/ models/ \
+            --recursive --exclude "*" --include "*.q4_0.gguf"
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf models/
+          ls -lh models/
+
+      - name: Run integration test
+        if: ${{ inputs.run_integration_tests != false }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      # RTF benchmark leg (run_rtf_benchmarks=true, set by
+      # benchmark-performance-transcription-parakeet.yml). Runs the matrix
+      # runner once per (modelType, useGPU) combo and writes per-config JSON
+      # under benchmarks/results/, uploaded as rtf-results-parakeet-* for the
+      # orchestrator's summarize job. GPU (Vulkan) combos run only on
+      # GPU-capable runners; CPU combos run everywhere. Skipped on normal
+      # integration runs.
+      - name: Run RTF benchmark
+        if: ${{ inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu || 'false' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          QVAC_PARAKEET_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_PARAKEET_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+        run: |
+          set -euo pipefail
+          # Quant sweep: q8_0 for all four model types; q4_0 for the three
+          # types the registry publishes a q4_0 build for (tdt / eou /
+          # sortformer — there is no ctc q4_0). CPU-only runners run the CPU
+          # legs; GPU runners additionally run the Vulkan GPU legs.
+          if [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false}]'
+          else
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false},{"modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]'
+          fi
+          node scripts/run-rtf-benchmark-matrix.js
+
+      # The matrix runner deliberately process.exit(0)s on PARTIAL failure (one
+      # model-type/backend shouldn't sink the whole leg). But a run that produced
+      # ZERO artifacts means every entry failed and must still fail loudly —
+      # mirrors the "Verify benchmark output exists" gate in
+      # benchmark-rtf-tts-ggml.yml.
+      - name: Verify RTF benchmark output exists
+        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: |
+          set -euo pipefail
+          results_dir="benchmarks/results"
+          mkdir -p "$results_dir"
+          # Count via a bash glob rather than `find`: on the Windows runner
+          # `find` resolves to C:\Windows\System32\find.exe (a text-search
+          # tool), which rejects the POSIX args and exits 2 — failing the step
+          # under `set -o pipefail` even though the artifacts exist. nullglob
+          # makes the array empty (not a literal pattern) when nothing matches.
+          shopt -s nullglob
+          rtf_files=("$results_dir"/rtf-benchmark-*.json)
+          rtf_count=${#rtf_files[@]}
+          echo "rtf-benchmark-*.json produced: $rtf_count"
+          ls -la "$results_dir" || true
+          if [ "$rtf_count" -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::scripts/run-rtf-benchmark-matrix.js produced zero rtf-benchmark-*.json files on ${{ matrix.runner || matrix.os }}. Every benchmark entry failed — check the matrix runner log above for model-fetch failures, prebuild path issues, or per-entry crashes."
+            exit 1
+          fi
+
+      - name: Upload RTF benchmark results
+        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-parakeet-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: packages/transcription-parakeet/benchmarks/results/rtf-benchmark-*.json
+          if-no-files-found: warn
+          retention-days: 30

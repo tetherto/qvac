@@ -1,0 +1,40 @@
+---
+description: documentation website - source code and content
+globs: docs/website/**
+alwaysApply: false
+---
+
+# Documentation Website
+
+## Language
+
+All generated text MUST be written in English.
+
+## Project Context
+
+QVAC is an OSS ecosystem for developers building local AI applications and systems.
+
+`docs/website` is the developer portal for QVAC project. 
+
+The goal of this context (chat) is to improve this website. This includes: the website source code AND all the resources we provide for our developer-users to be capable of using QVAC — references, tutorials, learning materials, code examples, templates, starter kits, etc.
+
+## Repository Layout
+
+`docs/website/` contains website source code and WITHIN it, `docs/website/content/` contains all content (resources) in MDX files.
+
+## Tech Stack
+
+- **Framework:** Next.js + Fumadocs
+- **Output:** 100% static site. At build time, all HTML pages are generated into `docs/website/out/` and then served from a CDN. There is no server-side runtime.
+
+## Scope of Work
+
+The goal of this context is one of the following or both:
+
+1. Improve website source code: changes to components, configuration, styling, or build pipeline under `docs/website/`
+2. Generate new content: create or update pages under `docs/website/content/`
+
+## Environments
+
+- Production: https://docs.qvac.tether.io
+- Staging: https://docs.qvac.tether.su

@@ -1,6 +1,6 @@
 {
   "include": ["**/*"],
-  "exclude": ["node_modules", "dist", "tests-qvac", "test"],
+  "exclude": ["node_modules", "dist", "e2e", "test"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "target": "ES2022",
@@ -13,6 +13,9 @@
     "baseUrl": ".",
     "paths": {
       "@qvac/sdk": ["./index.ts"],
+      "@qvac/sdk/llamacpp-completion/plugin": [
+        "./server/bare/plugins/llamacpp-completion/plugin.ts"
+      ],
       "@/*": ["./*"]
     },
     "outDir": "./dist",

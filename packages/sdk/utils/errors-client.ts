@@ -89,6 +89,30 @@ export class OCRFailedError extends QvacErrorBase {
   }
 }
 
+export class ModelTypeRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelSrcTypeMismatchError extends QvacErrorBase {
+  constructor(inferred: string, resolved: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH,
+        [inferred, resolved],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== RPC Communication Errors ==============
 
 export class RPCNoHandlerError extends QvacErrorBase {
@@ -133,6 +157,51 @@ export class RPCConnectionFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED,
         [details],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RPCInitTimeoutError extends QvacErrorBase {
+  constructor(timeoutMs: number, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT,
+        [timeoutMs],
+        cause,
+      ),
+    );
+  }
+}
+
+export class WorkerCrashedError extends QvacErrorBase {
+  public readonly exitCode: number | null;
+  public readonly exitSignal: NodeJS.Signals | null;
+
+  constructor(
+    exitCode: number | null,
+    exitSignal: NodeJS.Signals | null,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.WORKER_CRASHED,
+        [String(exitCode), String(exitSignal)],
+        cause,
+      ),
+    );
+    this.exitCode = exitCode;
+    this.exitSignal = exitSignal;
+  }
+}
+
+export class WorkerShutdownError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN,
+        undefined,
         cause,
       ),
     );
@@ -251,6 +320,96 @@ export class PearWorkerEntryRequiredError extends QvacErrorBase {
   }
 }
 
+export class WorkerPluginsNotRegisteredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED,
+        [],
+        cause,
+      ),
+    );
+  }
+}
+
+export class BundleVerificationFailedError extends QvacErrorBase {
+  constructor(bundlePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED,
+        [bundlePath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class BarePackNotInstalledError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class BarePackError extends QvacErrorBase {
+  constructor(
+    exitCode: number,
+    entryPath: string,
+    outputPath: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR,
+        [exitCode, entryPath, outputPath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class InvalidPluginSpecifierError extends QvacErrorBase {
+  constructor(specifiers: string[], cause?: unknown) {
+    const list = specifiers.map((s) => `  - ${s}`).join("\n");
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER,
+        [list],
+        cause,
+      ),
+    );
+  }
+}
+
+export class BareImportsMapNotFoundError extends QvacErrorBase {
+  constructor(sdkName: string, expectedPath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BARE_IMPORTS_MAP_NOT_FOUND,
+        [sdkName, expectedPath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class BareRuntimeBinaryNotFoundError extends QvacErrorBase {
+  constructor(platform: string, arch: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND,
+        [platform, arch],
+        cause,
+      ),
+    );
+  }
+}
+
 export class ConfigFileNotFoundError extends QvacErrorBase {
   constructor(searchPaths: string, cause?: unknown) {
     super(
@@ -299,6 +458,18 @@ export class ConfigValidationFailedError extends QvacErrorBase {
   }
 }
 
+export class RequestValidationFailedError extends QvacErrorBase {
+  constructor(errors: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED,
+        [errors],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Operation Errors (Client-side wrappers for server operations) ==============
 // These are used by client API to throw errors based on server responses
 // They reference server error codes but are thrown on client side
@@ -332,6 +503,18 @@ export class TranscriptionFailedError extends QvacErrorBase {
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.TRANSCRIPTION_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class TextToSpeechStreamFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED,
         details ? [details] : undefined,
         cause,
       ),

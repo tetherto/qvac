@@ -1,0 +1,30 @@
+{
+  "_comment": "Compact 'summary-only' template (same shape as the mobile log extractor produces). Useful when you don't want to run the full brittle test harness. Rename to .json to activate. Filenames ending in .json.example are skipped by the aggregator on purpose.",
+  "schemaVersion": 2,
+  "platform": "linux-x64",
+  "platformName": "linux",
+  "arch": "x64",
+  "engine": "supertonic",
+  "modelType": "supertonic",
+  "variant": "q4",
+  "useGPU": true,
+  "backendHint": "rocm",
+  "deviceLabel": "local-rocm-box",
+  "runnerLabel": "manual",
+  "numThreads": null,
+  "correlation": {
+    "githubRunId": "",
+    "githubSha": "",
+    "githubActor": "",
+    "githubWorkflow": "manual-local"
+  },
+  "summary": {
+    "rtf":    { "mean": 0.38, "p50": 0.37, "p95": 0.42, "stddev": 0.015, "count": 5 },
+    "wallMs": { "mean": 980, "p50": 960, "p95": 1020, "count": 5 },
+    "tokensPerSecond": { "mean": 120.4, "p50": 121.0, "p95": 125.0, "count": 5 },
+    "coldRtf": 0.52,
+    "modelLoadMs": 210,
+    "peakRssBytes": 0,
+    "noisy": false
+  }
+}

@@ -7,6 +7,8 @@ import {
   parakeetConfigSchema,
 } from "./transcription-config";
 import { ocrConfigSchema } from "./ocr";
+import { sdcppConfigSchema } from "./sdcpp-config";
+import { vlaConfigSchema } from "./vla";
 import { runtimeContextSchema } from "./runtime-context";
 
 // Alias keys for user convenience (maps to canonical types)
@@ -18,6 +20,8 @@ const AliasKeys = {
   parakeet: "parakeet",
   tts: "tts",
   ocr: "ocr",
+  diffusion: "diffusion",
+  vla: "vla",
 } as const;
 
 /**
@@ -54,8 +58,10 @@ export const deviceConfigDefaultsSchema = z
       .partial()
       .optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
-    [ModelType.onnxTts]: z.record(z.string(), z.unknown()).optional(),
-    [ModelType.onnxOcr]: ocrConfigSchema.partial().optional(),
+    [ModelType.ttsGgml]: z.record(z.string(), z.unknown()).optional(),
+    [ModelType.ggmlOcr]: ocrConfigSchema.partial().optional(),
+    [ModelType.sdcppGeneration]: sdcppConfigSchema.partial().optional(),
+    [ModelType.ggmlVla]: vlaConfigSchema.partial().optional(),
     // Alias keys (user-friendly)
     [AliasKeys.llm]: llmConfigBaseSchema.optional(),
     [AliasKeys.embeddings]: embedConfigBaseSchema.optional(),
@@ -64,6 +70,8 @@ export const deviceConfigDefaultsSchema = z
     [AliasKeys.nmt]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.tts]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.ocr]: ocrConfigSchema.partial().optional(),
+    [AliasKeys.diffusion]: sdcppConfigSchema.partial().optional(),
+    [AliasKeys.vla]: vlaConfigSchema.partial().optional(),
   })
   .partial();
 
@@ -107,15 +115,15 @@ export const qvacConfigSchema = z.object({
 
   /**
    * Global log level for all SDK loggers.
-   * Options: "error", "warn", "info", "debug"
+   * Options: "error", "warn", "info", "debug", "off".
    * Defaults to "info".
    */
   loggerLevel: logLevelSchema.optional(),
 
   /**
-   * Enable or disable console output for SDK loggers.
-   * When false, logs are only sent to streams/transports, not printed to console.
-   * Defaults to true.
+   * Print SDK logs to the console.
+   * When false, logs still reach streams and transports but are not printed.
+   * Defaults to false; set to true to see SDK logs on the console.
    */
   loggerConsoleOutput: z.boolean().optional(),
 
@@ -133,6 +141,24 @@ export const qvacConfigSchema = z.object({
    * Defaults to 10000 (10 seconds).
    */
   httpConnectionTimeoutMs: z.number().int().positive().optional(),
+
+  /**
+   * Maximum number of retry attempts for registry (P2P) downloads on timeout.
+   * When a download times out due to a P2P connection stall, the SDK will
+   * automatically retry up to this many times before failing.
+   * Defaults to 3.
+   */
+  registryDownloadMaxRetries: z.number().int().min(0).optional(),
+
+  /**
+   * Timeout in milliseconds for registry (P2P) download streams.
+   * Controls how long the SDK will wait on a stalled Hypercore block before
+   * triggering a REQUEST_TIMEOUT and (optionally) retrying. Raise this on
+   * slow or high-latency connections where the default triggers spurious
+   * retries / failures.
+   * Defaults to 60000 (60 seconds).
+   */
+  registryStreamTimeoutMs: z.number().int().positive().optional(),
 
   /**
    * Device-specific config defaults.
@@ -154,6 +180,19 @@ export const qvacConfigSchema = z.object({
    * ```
    */
   deviceDefaults: z.array(devicePatternSchema).optional(),
+
+  /**
+   * List of plugin specifiers to include in the worker bundle.
+   * Each entry must end with /plugin (e.g. "@qvac/sdk/llamacpp-completion/plugin").
+   * When omitted, all built-in plugins are included.
+   */
+  plugins: z.array(z.string()).optional(),
+
+  /**
+   * Bare runtime version for native addon ABI verification during bundling.
+   * When omitted, verify auto-detects from node_modules (bare-runtime, then bare).
+   */
+  bareRuntimeVersion: z.string().optional(),
 });
 
 export type QvacConfig = z.infer<typeof qvacConfigSchema>;

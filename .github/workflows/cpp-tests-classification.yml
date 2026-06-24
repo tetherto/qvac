@@ -1,0 +1,127 @@
+name: CPP Tests (GGML Classification)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/classification-ggml"
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/classification-ggml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-cpp:
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64
+
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
+
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Setup build host (github-hosted runners only)
+        if: runner.environment == 'github-hosted'
+        uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - if: matrix.platform == 'linux'
+        name: Set Vulkan SDK Path on Linux
+        shell: bash
+        # classification-ggml builds the GGML_BACKEND_DL fabric (gpu-backends);
+        # building the ggml-vulkan module from source needs the Vulkan SDK,
+        # pre-installed on the self-hosted qvac runner at /opt/vulkansdk. (The
+        # consumer-side find_dependency(Vulkan) is removed under DL by
+        # qvac-fabric 8828.0.2#5, but the fabric's Vulkan build still needs it.)
+        run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
+
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        with:
+          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
+
+      - name: Setup Apple Clang
+        if: ${{ matrix.platform == 'darwin' }}
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install --ignore-scripts
+
+      - name: Build C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:build
+
+      - name: Run C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:run

@@ -34,7 +34,6 @@ try {
   // Load model with integrated logging
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 2048,
       temp: 0.7,
@@ -71,9 +70,9 @@ try {
   logger.info("Model unloaded successfully");
 
   // Show user where logs were saved
-  console.log(`\n📄 All logs (including model internals) saved to: ${logFile}`);
-  console.log("You can inspect the file to see detailed model operation logs!");
+  console.log(`▸ Logs saved to ${logFile}`);
+  console.log("▸ Inspect it to see detailed model operation logs");
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

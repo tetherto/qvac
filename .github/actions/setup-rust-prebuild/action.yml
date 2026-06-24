@@ -1,0 +1,60 @@
+name: Setup Rust toolchain for prebuilds
+description: >-
+  Ensure a stable Rust toolchain is available and add per-target stdlib for
+  the current matrix entry. On Windows the action bootstraps rustup itself
+  if it isn't already installed; macOS and Linux runners are assumed to ship
+  rustup preinstalled (true for current GitHub-hosted images).
+
+inputs:
+  platform:
+    description: Build platform (linux, android, darwin, ios, win32)
+    required: true
+  arch:
+    description: Build architecture (x64, arm64)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - if: ${{ runner.os == 'Windows' }}
+      name: Install Rust via rustup if missing (Windows)
+      shell: powershell
+      run: |
+        if (Get-Command rustup -ErrorAction SilentlyContinue) {
+          Write-Host "Rust already installed"
+          rustup default stable
+        } else {
+          Write-Host "Installing Rust via rustup..."
+          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile $env:TEMP\rustup-init.exe
+          & $env:TEMP\rustup-init.exe -y --default-toolchain stable
+          $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+          echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+        }
+        rustc --version
+        cargo --version
+
+    - if: ${{ inputs.platform == 'ios' && inputs.arch == 'arm64' }}
+      name: Add Rust targets for iOS arm64 (device + simulator)
+      shell: bash
+      run: |
+        rustup default stable
+        rustup target add aarch64-apple-ios
+        rustup target add aarch64-apple-ios-sim
+        rustup target list --installed
+
+    - if: ${{ inputs.platform == 'ios' && inputs.arch == 'x64' }}
+      name: Add Rust target for iOS x64 (simulator)
+      shell: bash
+      run: |
+        rustup default stable
+        rustup target add x86_64-apple-ios
+        rustup target list --installed
+
+    - if: ${{ inputs.platform == 'android' }}
+      name: Add Rust targets for Android
+      shell: bash
+      run: |
+        rustup default stable
+        rustup target add aarch64-linux-android
+        rustup target add armv7-linux-androideabi
+        rustup target list --installed

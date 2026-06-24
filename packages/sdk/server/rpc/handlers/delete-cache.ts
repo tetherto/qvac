@@ -1,23 +1,29 @@
 import type { DeleteCacheRequest, DeleteCacheResponse } from "@/schemas";
-import { deleteCache as deleteCacheUtil } from "@/server/bare/ops/kv-cache-utils";
+import { deleteKvCacheState } from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
+/**
+ * RPC handler for `deleteCache(...)`. The three KV-cache bookkeeping
+ * layers (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`)
+ * are private to `kv-cache-session.ts`; this handler delegates to that
+ * module's single administrative entry point (`deleteKvCacheState`).
+ * The handler must have **zero** direct references to
+ * `fsPromises.unlink`, the `initializedCaches` set, or the
+ * `cachedMessageCounts` map.
+ */
 export async function handleDeleteCache(
   request: DeleteCacheRequest,
 ): Promise<DeleteCacheResponse> {
   try {
     if ("all" in request && request.all) {
-      await deleteCacheUtil({ all: true });
+      await deleteKvCacheState({ all: true });
     } else if ("kvCacheKey" in request) {
-      const params: { kvCacheKey: string; modelId?: string } = {
+      await deleteKvCacheState({
         kvCacheKey: request.kvCacheKey,
-      };
-      if (request.modelId !== undefined) {
-        params.modelId = request.modelId;
-      }
-      await deleteCacheUtil(params);
+        ...(request.modelId !== undefined && { modelId: request.modelId }),
+      });
     }
 
     return {

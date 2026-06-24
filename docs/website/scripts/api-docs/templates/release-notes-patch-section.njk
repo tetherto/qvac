@@ -1,0 +1,12 @@
+{#- Render a single patch's section to be inserted directly after the
+    minor block of an existing release-notes series page. Mirrors the
+    per-package layout of `release-notes-page.njk` but emits NO
+    frontmatter — caller stitches it in. -#}
+## v{{ version }}
+
+{% for entry in packages %}
+### @qvac/{{ entry.pkg }}
+
+{{ entry.body }}
+
+{% endfor %}

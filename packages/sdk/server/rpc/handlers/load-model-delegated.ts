@@ -12,10 +12,7 @@ import {
   stream,
   type DelegateOptions,
 } from "@/server/rpc/delegate-transport";
-import {
-  getRPC,
-  cleanupStaleConnection,
-} from "@/server/bare/delegate-rpc-client";
+import { getRPC } from "@/server/bare/delegate-rpc-client";
 import { handleLoadModel } from "./load-model";
 import {
   ModelLoadFailedError,
@@ -42,9 +39,9 @@ export async function handleLoadModelDelegated(
 
   const { delegate } = request;
   const {
-    topic,
     providerPublicKey,
     timeout,
+    healthCheckTimeout,
     fallbackToLocal,
     forceNewConnection,
   } = delegate;
@@ -54,9 +51,9 @@ export async function handleLoadModelDelegated(
       `📤 Sending delegated loadModel request to provider: ${providerPublicKey}${timeout ? `, timeout: ${timeout}ms` : ""}${forceNewConnection ? " (forcing new connection)" : ""}`,
     );
 
-    // Create RPC instance for this HyperSwarm peer
-    const rpc = await getRPC(topic, providerPublicKey, {
+    const rpc = await getRPC(providerPublicKey, {
       timeout,
+      healthCheckTimeout,
       forceNewConnection,
     });
 
@@ -123,15 +120,17 @@ export async function handleLoadModelDelegated(
       `delegated-${Date.now()}`;
 
     const delegateOptions: {
-      topic: string;
       providerPublicKey: string;
       timeout?: number;
+      healthCheckTimeout?: number;
     } = {
-      topic,
       providerPublicKey,
     };
     if (timeout !== undefined) {
       delegateOptions.timeout = timeout;
+    }
+    if (healthCheckTimeout !== undefined) {
+      delegateOptions.healthCheckTimeout = healthCheckTimeout;
     }
 
     if (isModelLoaded(modelId)) {
@@ -163,9 +162,6 @@ export async function handleLoadModelDelegated(
     return result;
   } catch (error) {
     logger.error("Error in delegated load model:", error);
-
-    // Clean up stale RPC so next attempt creates a fresh connection
-    cleanupStaleConnection(providerPublicKey);
 
     if (fallbackToLocal) {
       logger.info(

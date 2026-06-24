@@ -72,7 +72,7 @@ function matchPathMapping(specifier, pathsMap) {
         specifier.length - suffix.length,
       );
       for (const target of targets) {
-        candidates.push(target.replace("*", middle));
+        candidates.push(target.replaceAll("*", middle));
       }
     }
   }

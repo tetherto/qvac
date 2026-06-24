@@ -13,13 +13,13 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
 import { glob } from "glob";
 import ts from "typescript";
 
 const DOCS_DIR = process.cwd();
 const MONOREPO_ROOT = path.resolve(DOCS_DIR, "../..");
-const LATEST_CONTENT = path.join(DOCS_DIR, "content", "docs", "(latest)");
+const DOCS_CONTENT = path.join(DOCS_DIR, "content", "docs");
 const SDK_DIR = path.join(MONOREPO_ROOT, "packages", "sdk");
 
 const FILE_REF_RE = /file=<rootDir>\/([\S]+)/g;
@@ -44,7 +44,14 @@ interface CodeBlock {
 }
 
 async function findMdxFiles(): Promise<string[]> {
-  return glob("**/*.mdx", { cwd: LATEST_CONTENT, absolute: true });
+  // Versioned API summary / release-notes snapshots are excluded — their
+  // examples are frozen and shouldn't be re-validated against the current
+  // SDK source tree.
+  return glob("**/*.mdx", {
+    cwd: DOCS_CONTENT,
+    absolute: true,
+    ignore: ["reference/api/v*.mdx", "reference/release-notes/v*.mdx"],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -142,11 +149,18 @@ async function checkPrebuild(): Promise<CheckResult> {
   }
 
   const outDir = path.join(SDK_DIR, "dist", "examples");
-  const filePaths = tsFiles.map((f) => path.join(examplesDir, f)).join(" ");
-  const cmd = `npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir "${examplesDir}" --outDir "${outDir}" ${filePaths}`;
+  const tscArgs = [
+    "tsc",
+    "--noCheck", "--noResolve", "--skipLibCheck",
+    "--module", "ESNext",
+    "--target", "ESNext",
+    "--rootDir", examplesDir,
+    "--outDir", outDir,
+    ...tsFiles.map((f) => path.join(examplesDir, f)),
+  ];
 
   try {
-    execSync(cmd, { cwd: DOCS_DIR, stdio: "pipe", timeout: 60_000 });
+    execFileSync("npx", tscArgs, { cwd: DOCS_DIR, stdio: "pipe", timeout: 60_000 });
   } catch (err: unknown) {
     const e = err as { stdout?: Buffer; stderr?: Buffer };
     const output = [e.stdout?.toString(), e.stderr?.toString()].filter(Boolean).join("\n").slice(0, 500);

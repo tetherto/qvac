@@ -10,12 +10,18 @@ export const SDK_CLIENT_ERROR_CODES = {
   INVALID_TOOLS_ARRAY: 50005,
   INVALID_TOOL_SCHEMA: 50006,
   OCR_FAILED: 50007,
+  MODEL_TYPE_REQUIRED: 50008,
+  MODEL_SRC_TYPE_MISMATCH: 50009,
+  REQUEST_VALIDATION_FAILED: 50010,
 
   // RPC Communication Errors (50,200-50,399)
   RPC_NO_HANDLER: 50200,
   RPC_REQUEST_NOT_SENT: 50201,
   RPC_RESPONSE_STREAM_NOT_CREATED: 50202,
   RPC_CONNECTION_FAILED: 50203,
+  RPC_INIT_TIMEOUT: 50204,
+  WORKER_CRASHED: 50205,
+  WORKER_SHUTDOWN: 50206,
 
   // Provider/Delegation Errors (50,400-50,599)
   PROVIDER_START_FAILED: 50400,
@@ -34,6 +40,13 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_VALIDATION_FAILED: 50605,
   PEAR_WORKER_ENTRY_REQUIRED: 50606,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
+  WORKER_PLUGINS_NOT_REGISTERED: 50608,
+  BUNDLE_VERIFICATION_FAILED: 50609,
+  BARE_PACK_NOT_INSTALLED: 50610,
+  BARE_PACK_ERROR: 50611,
+  INVALID_PLUGIN_SPECIFIER: 50612,
+  BARE_IMPORTS_MAP_NOT_FOUND: 50613,
+  BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800,
@@ -71,6 +84,20 @@ const clientErrorDefinitions: ErrorCodesMap = {
     message: (details?: string) =>
       `OCR operation failed${details ? `: ${details}` : ""}`,
   },
+  [SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED]: {
+    name: "MODEL_TYPE_REQUIRED",
+    message:
+      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
+  },
+  [SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH]: {
+    name: "MODEL_SRC_TYPE_MISMATCH",
+    message: (inferred: string, resolved: string) =>
+      `modelSrc describes "${inferred}", but modelType resolves to "${resolved}". Omit modelType to infer it automatically, or pass a matching modelType.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED]: {
+    name: "REQUEST_VALIDATION_FAILED",
+    message: (errors: string) => `Invalid request:\n${errors}`,
+  },
 
   // RPC Communication Errors (50,200-50,399)
   [SDK_CLIENT_ERROR_CODES.RPC_NO_HANDLER]: {
@@ -89,6 +116,21 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED]: {
     name: "RPC_CONNECTION_FAILED",
     message: (details: string) => `RPC connection failed: ${details}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT]: {
+    name: "RPC_INIT_TIMEOUT",
+    message: (timeoutMs: number) =>
+      `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`,
+  },
+  [SDK_CLIENT_ERROR_CODES.WORKER_CRASHED]: {
+    name: "WORKER_CRASHED",
+    message: (code: string, signal: string) =>
+      `Bare worker exited mid-request (code=${code}, signal=${signal}) — in-flight calls were aborted`,
+  },
+  [SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN]: {
+    name: "WORKER_SHUTDOWN",
+    message: () =>
+      `SDK is shutting down — in-flight RPC call aborted`,
   },
 
   // Provider/Delegation Errors (50,400-50,599)
@@ -156,6 +198,41 @@ const clientErrorDefinitions: ErrorCodesMap = {
     message: (workerEntry: string) =>
       `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`,
   },
+  [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
+    name: "WORKER_PLUGINS_NOT_REGISTERED",
+    message: () =>
+      "No plugins registered in the worker. On Bare, register the plugins you need with `plugins([...])` (or `registerPlugin(...)`) before the first SDK call — import each from its subpath, e.g. `@qvac/sdk/llamacpp-completion/plugin`. For direct Bare usage we recommend the dedicated `@qvac/bare-sdk` package. See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare",
+  },
+  [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
+    name: "BUNDLE_VERIFICATION_FAILED",
+    message: (bundlePath: string) =>
+      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED]: {
+    name: "BARE_PACK_NOT_INSTALLED",
+    message:
+      "bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack",
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR]: {
+    name: "BARE_PACK_ERROR",
+    message: (exitCode: number, entryPath: string, outputPath: string) =>
+      `bare-pack exited with code ${exitCode}\n\n  Entry file: ${entryPath}\n  Output file: ${outputPath}\n\n  Run bare-pack manually for more details.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER]: {
+    name: "INVALID_PLUGIN_SPECIFIER",
+    message: (specifiers: string) =>
+      `Invalid plugin specifiers (must end with /plugin):\n${specifiers}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_IMPORTS_MAP_NOT_FOUND]: {
+    name: "BARE_IMPORTS_MAP_NOT_FOUND",
+    message: (sdkName: string, expectedPath: string) =>
+      `bare-imports.json not found.\n\n  Expected at: ${expectedPath}\n\n  Make sure ${sdkName} is installed in your project.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND]: {
+    name: "BARE_RUNTIME_BINARY_NOT_FOUND",
+    message: (platform: string, arch: string) =>
+      `Could not load the Bare runtime binary for ${platform}-${arch}. The platform package "bare-runtime-${platform}-${arch}" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \`pnpm add bare-runtime-${platform}-${arch}\`) or by installing with npm or bun. See https://github.com/tetherto/qvac/issues/1492`,
+  },
 
   // Profiler Errors (50,800-50,899)
   [SDK_CLIENT_ERROR_CODES.PROFILER_INVALID_CAPACITY]: {
@@ -165,6 +242,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
   },
 };
 
-addCodes(clientErrorDefinitions, { name: "qvac-sdk-client", version: "1.1.0" });
+addCodes(clientErrorDefinitions, { name: "qvac-sdk-client", version: "1.2.0" });
 
 export { clientErrorDefinitions as SDK_CLIENT_ERROR_DEFINITIONS };

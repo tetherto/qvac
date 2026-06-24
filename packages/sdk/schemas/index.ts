@@ -2,20 +2,34 @@
 export * from "./archive";
 export * from "./cancel";
 export * from "./completion-stream";
-export * from "./tools";
+export * from "./completion-event";
+export {
+  toolSchema,
+  toolCallSchema,
+  toolCallErrorSchema,
+  TOOLS_MODE,
+  type Tool,
+  type ToolCall,
+  type ToolCallError,
+  type ToolCallWithCall,
+  type ToolsMode,
+} from "./tools";
 export * from "./delegate";
 export * from "./delete-cache";
 export * from "./download-asset";
 export * from "./embed";
+export * from "./finetune";
 export * from "./load-model";
 export * from "./reload-config";
 export * from "./logging-stream";
 export * from "./provide";
 export * from "./stop-provide";
 export * from "./unload-model";
-export * from "./ping";
+export * from "./heartbeat";
 export * from "./common";
 export * from "./transcription";
+export * from "./bci";
+export * from "./bci-config";
 export * from "./translate";
 export * from "./translation-config";
 export * from "./llamacpp-config";
@@ -24,10 +38,17 @@ export * from "./text-to-speech";
 export * from "./error";
 export * from "./rag";
 export * from "./ocr";
+export * from "./sdcpp-config";
+export * from "./vla";
+export * from "./classification";
 export * from "./shard";
+export * from "./suspend";
+export * from "./resume";
+export * from "./state";
 export { SDK_CLIENT_ERROR_CODES } from "./sdk-errors-client";
 export { SDK_SERVER_ERROR_CODES } from "./sdk-errors-server";
 export { REGISTRY_ERROR_CODES } from "./sdk-errors-registry";
+export { ERR_CODES as RAG_ERROR_CODES } from "@qvac/rag/errors";
 export {
   qvacConfigSchema,
   deviceMatchSchema,
@@ -43,6 +64,7 @@ export {
   PROFILING_TRAILER_KEY,
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
+  MODEL_EXECUTION_KEY,
   profilerModeSchema,
   serverBreakdownSchema,
   delegationBreakdownSchema,
@@ -60,6 +82,7 @@ export {
 } from "./profiling";
 export { runtimeContextSchema, type RuntimeContext } from "./runtime-context";
 export * from "./get-model-info";
+export * from "./get-loaded-model-info";
 export * from "./model-src-utils";
 export * from "./json-schema";
 export { type McpClient, type McpClientInput } from "./mcp-adapter";

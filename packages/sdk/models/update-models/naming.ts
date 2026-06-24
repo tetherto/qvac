@@ -139,6 +139,8 @@ function generateBaseName(input: BaseNameInput): string {
   switch (addon) {
     case "whisper":
       return generateWhisperName(input);
+    case "bci":
+      return generateBciName(input);
     case "vad":
       return generateVadName(input);
     case "nmt":
@@ -153,6 +155,8 @@ function generateBaseName(input: BaseNameInput): string {
       return generateOcrName(input);
     case "parakeet":
       return generateParakeetName(input);
+    case "diffusion":
+      return generateDiffusionName(input);
     default:
       return cleanPart(input.filename.replace(/\.\w+$/, ""));
   }
@@ -213,6 +217,15 @@ function generateWhisperName({
   return `WHISPER_${nameParts.map(cleanPart).join("_")}`;
 }
 
+function generateBciName({ filename, quantization }: BaseNameInput): string {
+  // Strip the engine/format prefix and a leading "BCI" token so role names
+  // like "bci-embedder.bin" / "ggml-bci-windowed.bin" become EMBEDDER /
+  // WINDOWED before we re-prefix with BCI_.
+  const role = cleanPart(filename.replace(/\.\w+$/, "")).replace(/^BCI_?/, "");
+  const nameParts = [role, quantization].filter((p) => p && p !== "");
+  return `BCI_${nameParts.map(cleanPart).join("_")}`;
+}
+
 function generateVadName({
   filename,
   tagType,
@@ -239,9 +252,6 @@ function generateNmtName(input: BaseNameInput): string {
     lowerFilename.includes("indictrans")
   ) {
     return generateNmtIndictransName(input);
-  }
-  if (lowerPath.includes("opus") || lowerFilename.includes("opus")) {
-    return generateNmtOpusName(input);
   }
   if (lowerPath.includes("bergamot") || lowerFilename.includes("bergamot")) {
     return generateNmtBergamotName(input);
@@ -278,34 +288,6 @@ function generateNmtIndictransName({
     (p) => p && p !== "",
   );
   return `MARIAN_${nameParts.map(cleanPart).join("_")}`;
-}
-
-function generateNmtOpusName({
-  filename,
-  quantization,
-  tagExtra,
-}: BaseNameInput): string {
-  const langMatch = filename.match(/-([a-z]{2,3})-([a-z]{2,3})\./i);
-  let langPair = "";
-  if (langMatch) {
-    langPair = `${langMatch[1]!.toUpperCase()}_${langMatch[2]!.toUpperCase()}`;
-  } else {
-    const tagLang = tagExtra || "";
-    if (tagLang.match(/^[a-z]{2}-[a-z]{2}$/i)) {
-      const [src, tgt] = tagLang.split("-");
-      langPair = `${src!.toUpperCase()}_${tgt!.toUpperCase()}`;
-    }
-  }
-
-  if (!langPair) {
-    const roaMatch = filename.match(/-([a-z]{2,3})-([a-z]{2,3})-f16/i);
-    if (roaMatch) {
-      langPair = `${roaMatch[1]!.toUpperCase()}_${roaMatch[2]!.toUpperCase()}`;
-    }
-  }
-
-  const nameParts = [langPair, quantization].filter((p) => p && p !== "");
-  return `MARIAN_OPUS_${nameParts.map(cleanPart).join("_")}`;
 }
 
 function generateNmtBergamotName({ filename }: BaseNameInput): string {
@@ -444,6 +426,40 @@ function generateOcrName({
   return `OCR_${nameParts.map(cleanPart).join("_")}`;
 }
 
+function generateDiffusionName({
+  filename,
+  modelName,
+  quantization,
+  params,
+  tags,
+}: BaseNameInput): string {
+  // VAE / auxiliary models (tagged "vae" instead of "generation")
+  if (tags.includes("vae")) {
+    const name = modelName || "SD";
+    return `${cleanPart(name)}_VAE`;
+  }
+
+  // Extract family name from filename
+  let family = filename
+    .replace(/\.\w+$/, "")
+    .replace(/^stable-diffusion-xl/i, "SDXL")
+    .replace(/^stable-diffusion/i, "SD");
+
+  // Strip trailing params (e.g. "-4b") and quant (e.g. "-Q8_0") from family
+  // to avoid duplication since they're appended separately
+  if (params) {
+    const paramsEsc = params.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    family = family.replace(new RegExp(`[-_]${paramsEsc}[-_].*$`, "i"), "");
+  }
+  if (quantization) {
+    const quantEsc = quantization.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    family = family.replace(new RegExp(`[-_]${quantEsc}$`, "i"), "");
+  }
+
+  const nameParts = [family, params, quantization].filter((p) => p && p !== "");
+  return nameParts.map(cleanPart).join("_");
+}
+
 function generateParakeetName({
   filename,
   lowerPath,
@@ -451,19 +467,37 @@ function generateParakeetName({
 }: BaseNameInput): string {
   const lower = filename.toLowerCase();
 
-  // Detect model variant from registry path
   let variant = "";
-  if (lowerPath.includes("parakeet-tdt") || lowerPath.includes("parakeet/")) {
-    variant = "TDT";
-  } else if (lowerPath.includes("parakeet-ctc")) {
-    variant = "CTC";
-  } else if (lowerPath.includes("eou") || lowerPath.includes("parakeet-rs")) {
-    variant = "EOU";
-  } else if (lowerPath.includes("sortformer")) {
+  if (lower.includes("sortformer") || lower.includes("diar_streaming")) {
     variant = "SORTFORMER";
+  } else if (lower.includes("ctc") || lowerPath.includes("parakeet-ctc")) {
+    variant = "CTC";
+  } else if (lower.includes("eou") || lowerPath.includes("parakeet-rs")) {
+    variant = "EOU";
+  } else if (lower.includes("tdt") || lowerPath.includes("parakeet-tdt")) {
+    variant = "TDT";
   }
 
-  // Detect file role from filename
+  if (lower.endsWith(".gguf")) {
+    const paramsMatch = filename.match(
+      /(?:^|[-_])(\d+(?:\.\d+)?[mb])(?=[-_.])/i,
+    );
+    const versionMatch = filename.match(/[-_]v(\d+(?:\.\d+)?)/i);
+    const speakerMatch = filename.match(/(\d+spk)/i);
+    const paramsHint = paramsMatch ? paramsMatch[1]! : "";
+    const versionHint = versionMatch ? `V${versionMatch[1]!}` : "";
+    const speakerHint = speakerMatch ? speakerMatch[1]! : "";
+
+    const nameParts = [
+      variant,
+      paramsHint,
+      speakerHint,
+      versionHint,
+      quantization,
+    ].filter((p) => p && p !== "");
+    return `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
+  }
+
   let fileRole = "";
   if (lower.includes("encoder") && (lower.endsWith(".data") || lower.endsWith(".onnx.data"))) {
     fileRole = "ENCODER_DATA";

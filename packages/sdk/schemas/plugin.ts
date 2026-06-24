@@ -2,6 +2,24 @@ import { z } from "zod";
 import type { ModelSrcInput } from "./model-src-utils";
 
 /**
+ * Granularity at which the addon can cancel.
+ *  - `"request"` — addon cancels a specific in-flight `requestId`.
+ *  - `"model"` — addon cancels whatever is running on the model.
+ *  - `"none"` — no addon cancel surface; SDK falls back to soft-cancel
+ *    (stop yielding, drop result; the C++ work runs to completion).
+ */
+export type PluginHandlerCancelScope = "request" | "model" | "none";
+
+export interface PluginHandlerCancel {
+  scope: PluginHandlerCancelScope;
+  /**
+   * `true` — `addon.cancel()` interrupts compute; otherwise it's
+   * best-effort. Only meaningful for `scope: "model" | "request"`.
+   */
+  hard?: boolean;
+}
+
+/**
  * Definition for a plugin handler with explicit Zod schemas.
  * Each handler must define its request/response schemas for validation.
  */
@@ -12,12 +30,44 @@ export interface PluginHandlerDefinition<
   requestSchema: TRequest;
   responseSchema: TResponse;
   streaming: boolean;
-  /** The handler function - receives validated request, returns validated response */
+  duplex?: boolean;
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
-      ? (request: I) => Promise<O> | AsyncGenerator<O>
+      ? (
+          request: I,
+          inputStream?: AsyncIterable<Buffer>,
+        ) => Promise<O> | AsyncGenerator<O>
       : never
     : never;
+  /**
+   * Cancel surface this handler advertises. Omitting is equivalent
+   * to `{ scope: "none" }` (soft-cancel fallback).
+   */
+  cancel?: PluginHandlerCancel;
+}
+
+/**
+ * Variant of `PluginHandlerDefinition` for duplex handlers where
+ * `inputStream` is guaranteed to be present. Use with `defineDuplexHandler`.
+ */
+export interface DuplexPluginHandlerDefinition<
+  TRequest extends z.ZodType = z.ZodType,
+  TResponse extends z.ZodType = z.ZodType,
+> {
+  requestSchema: TRequest;
+  responseSchema: TResponse;
+  streaming: true;
+  duplex: true;
+  handler: TRequest extends z.ZodType<infer I>
+    ? TResponse extends z.ZodType<infer O>
+      ? (
+          request: I,
+          inputStream: AsyncIterable<Buffer>,
+        ) => AsyncGenerator<O>
+      : never
+    : never;
+  /** See `PluginHandlerDefinition.cancel`. */
+  cancel?: PluginHandlerCancel;
 }
 
 /**
@@ -36,6 +86,7 @@ export interface PluginHandlerDefinition<
  * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
  * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
  * - `detectorModelPath` - OCR detector model
+ * - `embedderPath` - BCI whisper.cpp embedder weights
  *
  * Custom plugins can define their own artifact keys.
  */
@@ -58,7 +109,6 @@ export interface PluginModel {
 
 export interface PluginModelResult {
   model: PluginModel;
-  loader: unknown;
 }
 
 export interface PluginLogging {
@@ -161,7 +211,14 @@ export type PluginInvokeStreamResponse = z.infer<
 
 /**
  * Helper function to define a plugin with full type inference.
- * This is an identity function that provides type checking.
+ *
+ * Identity function whose only role is to constrain `plugin` to the
+ * `QvacPlugin` shape so consumers get accurate autocompletion and type
+ * errors for plugin manifests without having to write an explicit type
+ * annotation.
+ *
+ * @param plugin - The plugin manifest to register.
+ * @returns The same `plugin` value, typed as the caller's `T`.
  */
 export function definePlugin<T extends QvacPlugin>(plugin: T): T {
   return plugin;
@@ -169,7 +226,14 @@ export function definePlugin<T extends QvacPlugin>(plugin: T): T {
 
 /**
  * Helper function to define a handler with full type inference.
- * This is an identity function that provides type checking.
+ *
+ * Identity function whose only role is to constrain `definition` to a
+ * `PluginHandlerDefinition<TRequest, TResponse>` so the Zod request /
+ * response schemas flow through to the handler body without an explicit
+ * type annotation on the caller side.
+ *
+ * @param definition - The plugin handler definition (request/response schemas and handler function).
+ * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
  */
 export function defineHandler<
   TRequest extends z.ZodType,
@@ -178,6 +242,28 @@ export function defineHandler<
   definition: PluginHandlerDefinition<TRequest, TResponse>,
 ): PluginHandlerDefinition<TRequest, TResponse> {
   return definition;
+}
+
+/**
+ * Helper function to define a duplex (bidirectional streaming) handler with full type inference.
+ *
+ * Identity function whose only role is to constrain `definition` to a
+ * `DuplexPluginHandlerDefinition` and cast it to the unified
+ * `PluginHandlerDefinition` shape. This bridges TS function-parameter
+ * contravariance so duplex handlers can be registered alongside unary ones.
+ *
+ * @param definition - The duplex plugin handler definition (request/response schemas and streaming handler function).
+ * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
+ */
+export function defineDuplexHandler<
+  TRequest extends z.ZodType,
+  TResponse extends z.ZodType,
+>(
+  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>,
+): PluginHandlerDefinition<TRequest, TResponse> {
+  // The duplex flag guarantees inputStream is always
+  // provided at call time; the cast bridges TS function-param contravariance.
+  return definition as unknown as PluginHandlerDefinition<TRequest, TResponse>;
 }
 
 // ============================================
@@ -194,12 +280,23 @@ const zodSchemaLikeRuntimeSchema = z
   })
   .catchall(z.unknown());
 
+const pluginHandlerCancelRuntimeSchema = z
+  .object({
+    scope: z.enum(["request", "model", "none"], {
+      error: "cancel.scope must be 'request', 'model', or 'none'",
+    }),
+    hard: z.boolean().optional(),
+  })
+  .catchall(z.unknown());
+
 export const pluginHandlerDefinitionRuntimeSchema = z
   .object({
     requestSchema: zodSchemaLikeRuntimeSchema,
     responseSchema: zodSchemaLikeRuntimeSchema,
     streaming: z.boolean({ error: "streaming must be a boolean" }),
+    duplex: z.boolean().optional(),
     handler: functionRuntimeSchema,
+    cancel: pluginHandlerCancelRuntimeSchema.optional(),
   })
   .catchall(z.unknown());
 
@@ -253,6 +350,13 @@ export const PLUGIN_WHISPER =
   "@qvac/sdk/whispercpp-transcription/plugin" as const;
 
 /**
+ * Brain-Computer Interface neural-signal transcription plugin
+ * (whisper.cpp). Provides: transcription of neural signals to text.
+ */
+export const PLUGIN_BCI =
+  "@qvac/sdk/bci-whispercpp-transcription/plugin" as const;
+
+/**
  * Speech-to-text transcription plugin (Parakeet ONNX).
  * Provides: audio transcription using NVIDIA Parakeet models.
  */
@@ -266,16 +370,38 @@ export const PLUGIN_PARAKEET =
 export const PLUGIN_NMT = "@qvac/sdk/nmtcpp-translation/plugin" as const;
 
 /**
- * Text-to-speech synthesis plugin (ONNX).
+ * Text-to-speech synthesis plugin (GGML).
  * Provides: speech synthesis from text.
  */
-export const PLUGIN_TTS = "@qvac/sdk/onnx-tts/plugin" as const;
+export const PLUGIN_TTS = "@qvac/sdk/tts-ggml/plugin" as const;
 
 /**
- * Optical character recognition plugin (ONNX).
+ * Optical character recognition plugin (GGML).
  * Provides: text extraction from images.
  */
-export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
+export const PLUGIN_OCR = "@qvac/sdk/ggml-ocr/plugin" as const;
+
+/**
+ * Image generation plugin (stable-diffusion.cpp).
+ * Provides: text-to-image generation and standalone ESRGAN image upscaling.
+ */
+export const PLUGIN_DIFFUSION =
+  "@qvac/sdk/sdcpp-generation/plugin" as const;
+
+/**
+ * Vision-Language-Action plugin (ggml). Supports SmolVLA and π₀.₅ (pi05),
+ * dispatched on the GGUF `general.architecture` key.
+ * Provides: robot-action inference from one or more camera frames (2 for
+ * SmolVLA, 3 for π₀.₅) and a natural-language instruction.
+ */
+export const PLUGIN_VLA = "@qvac/sdk/ggml-vla/plugin" as const;
+
+/**
+ * Image classification plugin (GGML / MobileNetV3-Small).
+ * Provides: image classification with bundled 3-class model (food / report / other).
+ */
+export const PLUGIN_CLASSIFICATION =
+  "@qvac/sdk/ggml-classification/plugin" as const;
 
 /**
  * All built-in SDK plugins.
@@ -290,10 +416,14 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_WHISPER,
+  PLUGIN_BCI,
   PLUGIN_PARAKEET,
   PLUGIN_NMT,
   PLUGIN_TTS,
   PLUGIN_OCR,
+  PLUGIN_DIFFUSION,
+  PLUGIN_VLA,
+  PLUGIN_CLASSIFICATION,
 ] as const;
 
 export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];
@@ -311,14 +441,26 @@ export const ADDON_EMBEDDING = "@qvac/embed-llamacpp" as const;
 /** Native addon package for Whisper transcription (whisper.cpp) */
 export const ADDON_WHISPER = "@qvac/transcription-whispercpp" as const;
 
+/** Native addon package for BCI neural-signal transcription (whisper.cpp) */
+export const ADDON_BCI = "@qvac/bci-whispercpp" as const;
+
 /** Native addon package for Parakeet transcription (ONNX) */
 export const ADDON_PARAKEET = "@qvac/transcription-parakeet" as const;
 
 /** Native addon package for NMT translation (nmt.cpp) */
 export const ADDON_NMT = "@qvac/translation-nmtcpp" as const;
 
-/** Native addon package for TTS (ONNX) */
-export const ADDON_TTS = "@qvac/tts-onnx" as const;
+/** Native addon package for TTS (GGML) */
+export const ADDON_TTS = "@qvac/tts-ggml" as const;
 
-/** Native addon package for OCR (ONNX) */
-export const ADDON_OCR = "@qvac/ocr-onnx" as const;
+/** Native addon package for OCR (GGML) */
+export const ADDON_OCR = "@qvac/ocr-ggml" as const;
+
+/** Native addon package for image generation (stable-diffusion.cpp) */
+export const ADDON_DIFFUSION = "@qvac/diffusion-cpp" as const;
+
+/** Native addon package for vision-language-action inference (SmolVLA / π₀.₅ on ggml) */
+export const ADDON_VLA = "@qvac/vla-ggml" as const;
+
+/** Native addon package for image classification (GGML / MobileNetV3) */
+export const ADDON_CLASSIFICATION = "@qvac/classification-ggml" as const;

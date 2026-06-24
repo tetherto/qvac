@@ -1,6 +1,8 @@
-// @ts-expect-error brittle has no type declarations
 import test from "brittle";
-import { loadModelSrcRequestSchema } from "@/schemas/load-model";
+import {
+  loadModelOptionsToRequestSchema,
+  loadModelSrcRequestSchema,
+} from "@/schemas/load-model";
 import { ModelType } from "@/schemas";
 
 test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
@@ -16,6 +18,53 @@ test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
   t.is(result.success, false);
 });
 
+test("loadModelOptionsToRequestSchema: points misplaced LLM config fields to modelConfig", (t) => {
+  try {
+    loadModelOptionsToRequestSchema.parse({
+      modelSrc: "model.gguf",
+      modelType: "llm",
+      ctx_size: 2048,
+    });
+    t.fail("expected misplaced ctx_size to fail validation");
+  } catch (error) {
+    t.ok(error instanceof Error);
+    t.ok(
+      error instanceof Error && error.message.includes("modelConfig.ctx_size"),
+    );
+  }
+});
+
+test("loadModelOptionsToRequestSchema: points misplaced non-LLM config fields to modelConfig", (t) => {
+  const cases = [
+    {
+      input: {
+        modelSrc: "whisper.bin",
+        modelType: "whisper",
+        language: "en",
+      },
+      hint: "modelConfig.language",
+    },
+    {
+      input: {
+        modelSrc: "embed.gguf",
+        modelType: "embeddings",
+        batchSize: 512,
+      },
+      hint: "modelConfig.batchSize",
+    },
+  ];
+
+  for (const { input, hint } of cases) {
+    try {
+      loadModelOptionsToRequestSchema.parse(input);
+      t.fail(`expected misplaced ${hint} to fail validation`);
+    } catch (error) {
+      t.ok(error instanceof Error);
+      t.ok(error instanceof Error && error.message.includes(hint));
+    }
+  }
+});
+
 test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", (t) => {
   const validWhisperRequest = {
     type: "loadModel",
@@ -29,15 +78,45 @@ test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", 
 
   const validOcrRequest = {
     type: "loadModel",
-    modelType: ModelType.onnxOcr,
-    modelSrc: "recognizer.onnx",
+    modelType: ModelType.ggmlOcr,
+    modelSrc: "recognizer.gguf",
     modelConfig: {
-      detectorModelSrc: "detector.onnx",
+      detectorModelSrc: "detector.gguf",
     },
   };
 
   t.is(loadModelSrcRequestSchema.safeParse(validWhisperRequest).success, true);
   t.is(loadModelSrcRequestSchema.safeParse(validOcrRequest).success, true);
+});
+
+test("loadModelSrcRequestSchema: accepts classification load with empty modelSrc (bundled weights)", (t) => {
+  // Classification ships bundled GGUF weights, so callers can omit modelSrc.
+  // The client-side transform produces modelSrc: "" in that case; the server
+  // schema must accept it without falling through to the custom-plugin arm.
+  const bundledLoad = {
+    type: "loadModel",
+    modelType: ModelType.ggmlClassification,
+    modelSrc: "",
+    modelConfig: {},
+  };
+
+  const bundledWithTopK = {
+    type: "loadModel",
+    modelType: ModelType.ggmlClassification,
+    modelSrc: "",
+    modelConfig: { topK: 3 },
+  };
+
+  const customGguf = {
+    type: "loadModel",
+    modelType: ModelType.ggmlClassification,
+    modelSrc: "/path/to/my-classifier.gguf",
+    modelConfig: {},
+  };
+
+  t.is(loadModelSrcRequestSchema.safeParse(bundledLoad).success, true);
+  t.is(loadModelSrcRequestSchema.safeParse(bundledWithTopK).success, true);
+  t.is(loadModelSrcRequestSchema.safeParse(customGguf).success, true);
 });
 
 test("loadModelRequestSchema: custom plugin allows unknown modelConfig keys", (t) => {

@@ -14,16 +14,58 @@ on:
       - tmp-*
     paths:
       - "packages/ocr-onnx/**"
-      - ".github/workflows/*ocr*.yml"
+      - ".github/workflows/*ocr-onnx*.yml"
+      - ".github/actions/cache-models/**"
   workflow_dispatch:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
   changes:
     runs-on: ubuntu-latest
@@ -31,63 +73,66 @@ jobs:
       pkg: ${{ steps.filter.outputs.pkg }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
 
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
         id: filter
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
             pkg:
               - "packages/ocr-onnx/**"
-              - ".github/workflows/*ocr*.yml"
+              - ".github/workflows/*ocr-onnx*.yml"
 
   sanity-checks:
-    needs: changes
-    if: |
-      (needs.changes.outputs.pkg == 'true' &&
-       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')) ||
-      github.event_name == 'workflow_dispatch'
+    needs:
+      - authorize
+      - changes
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
       PKG_DIR: packages/ocr-onnx
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: |
-            packages/ocr-onnx
           fetch-depth: 0
 
       - name: Fetch PR head and target branch
         id: fetch_pr
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
         continue-on-error: true
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
-          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          git fetch origin "$HEAD_SHA:refs/pr/head"
 
       - name: Check PR Status with Target Branch
         continue-on-error: true
         id: target_branch_checks
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        env:
+          TARGET_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          TARGET_SHA=${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
           if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
             echo "::error title=PR is not up to date::This PR is not up to date with target branch"
           fi
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_update
+        uses: ./.github/actions/yamlfmt
+        with:
+          workdir: ${{ env.PKG_DIR }}
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -103,11 +148,9 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
+        uses: ./.github/actions/run-lint-and-unit-tests
         with:
-          npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
           workdir: ${{ env.PKG_DIR }}
 
@@ -140,38 +183,48 @@ jobs:
           fi
 
   cpp-lint:
-    needs: changes
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    needs:
+      - authorize
+      - changes
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/ocr-onnx
 
   prebuild:
-    needs: [changes]
-    if: |
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
-      )
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+      id-token: write
+    needs:
+      - authorize
+      - changes
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
     uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      publish_target: "gpr"
 
   run-integration-tests:
-    needs: [changes, prebuild]
-    if: |
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
-      )
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    needs:
+      - authorize
+      - changes
+      - prebuild
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
     uses: ./.github/workflows/integration-test-ocr-onnx.yml
     secrets: inherit
     with:
@@ -179,13 +232,18 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-mobile-integration-tests:
-    needs: [changes, prebuild]
-    if: |
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
-      )
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+      id-token: write
+    needs:
+      - authorize
+      - changes
+      - prebuild
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
     uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
     secrets: inherit
     with:
@@ -193,11 +251,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
-    needs: [changes, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    needs: [authorize, changes, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests]
+    if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
-    secrets: inherit

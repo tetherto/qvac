@@ -1,0 +1,236 @@
+name: Mobile Integration Tests (TTS GGML)
+
+# Migrated to .github/actions/run-mobile-integration-tests in
+# QVAC-18168 follow-up: rollout to remaining 9 mobile addons.
+#
+# As of PR #2168 (Android dynamic ggml backends), TTS-GGML tests
+# download models at runtime via the registry, so the CI no longer
+# pre-converts or bundles GGUFs into the test app.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/tts-ggml"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF + streaming benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      package_spec:
+        description: "Package to test (name@version). Use @qvac/tts-ggml@... for npm, @tetherto/tts-ggml@... for GPR"
+        type: string
+        required: false
+        default: "@qvac/tts-ggml@latest"
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/tts-ggml"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF + streaming benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # NOTE: continue-on-error: true matches the previous monolithic
+  # workflow.  on-pr-tts-ggml.yml's merge-guard treats `success ||
+  # skipped` as a pass, so a hard Device Farm failure does not gate
+  # merge today.  Tighten once the Device Farm provisioning + signing
+  # + runner pool is stable.
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    timeout-minutes: 120
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        run: npm run test:mobile:validate || true
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/tts-ggml' }}
+          addon-npm-name: '@qvac/tts-ggml'
+          prebuild-artifact-prefix: 'tts-ggml-'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # Benchmark opt-in (run_rtf_benchmarks=true): patch the addon's
+      # test/mobile/integration-runtime.cjs to stub `bare-os.getEnv` so the
+      # on-device test/integration/{rtf,streaming}-benchmark.test.js shims see
+      # QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 and delegate to the canonical
+      # test/benchmark/* suites instead of soft-skipping. The shims emit
+      # [PERF_REPORT_START] blocks scraped by the Extract step below. Must run
+      # AFTER setup (which checks out the addon) and BEFORE build-mobile-app
+      # (which bakes the runtime into the bundle). No-op on normal PR runs.
+      - name: Inject benchmark env into mobile runtime
+        if: ${{ inputs.run_rtf_benchmarks }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          echo "Injecting QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 into mobile runtime"
+          cat > test/mobile/inject-env.cjs <<NODE
+          const os = require('bare-os')
+          const originalGetEnv = os.getEnv
+          os.getEnv = function (key) {
+            if (key === 'QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') return '1'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_DEVICE') return '$PLATFORM-device-farm'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_RUNNER') return 'aws-device-farm-$PLATFORM'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-q4'
+            return originalGetEnv ? originalGetEnv.call(this, key) : undefined
+          }
+          NODE
+          cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
+          mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/tts-ggml' }}
+          addon-npm-name: '@qvac/tts-ggml'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/tts-ggml' }}
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+          enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
+          mocha-timeout-ms: '2700000'
+          wdio-waitfor-timeout-ms: '600000'
+
+      - name: Schedule Device Farm test runs
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_TTS_GGML || secrets.IOS_DEVICE_POOL_ARN_ONNX_TTS }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Monitor Device Farm test runs
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform }}
+          addon-npm-name: '@qvac/tts-ggml'
+          enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      # Benchmark runs (run_rtf_benchmarks=true) print one [PERF_REPORT_START]
+      # block per suite (RTF + streaming) into bare_console.log. Scrape every
+      # block with --merge (no last-write-wins) and union them per device. The
+      # artifact name is what benchmark-rtf-tts-ggml.yml's summarize job
+      # downloads (pattern perf-report-tts-ggml-*). Skipped on normal PR runs.
+      - name: Extract and report TTS-GGML performance
+        if: always() && !cancelled() && inputs.run_rtf_benchmarks && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          filter: ''
+          merge: 'true'
+          unzip-customer-artifacts: 'true'
+          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }})'
+          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ github.run_number }}
+
+      - name: Comment results on PR
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: '@qvac/tts-ggml'
+          platform: ${{ matrix.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}

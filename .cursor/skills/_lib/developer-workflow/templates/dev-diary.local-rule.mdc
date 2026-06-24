@@ -1,0 +1,41 @@
+---
+description: Local dev diary capture for meaningful work activity
+alwaysApply: true
+---
+
+# Local Dev Diary
+
+After meaningful work, append a concise entry to the local diary only when diary capture is enabled.
+
+First check for `~/.config/qvac-pr-skills/diary.enabled`. If it is missing, do nothing and do not mention diary logging.
+
+Log after substantive work:
+
+- PR review or PR feedback
+- PR testing or validation
+- Coding, debugging, investigation, docs, release work, triage, comms, blockers
+- Any other substantive work the user asked for
+
+Do not log casual questions, orientation-only file reading, config lookup, or tool setup with no work outcome.
+
+Use the repo helper when available:
+
+```bash
+node .cursor/skills/_lib/developer-workflow/diary-cli.mjs --append '<json-entry>'
+```
+
+Entry JSON shape:
+
+```json
+{
+  "title": "Short activity title",
+  "summary": "One or two lines describing outcome.",
+  "type": "pr-review | pr-testing | coding | release | investigation | docs | triage | comms | blocker | other",
+  "ticket": "optional ticket id",
+  "pr": "optional PR number",
+  "status": "done | wip | blocked",
+  "blocker": "optional blocker detail"
+}
+```
+
+Keep entries short. Never write diary files into the repo.

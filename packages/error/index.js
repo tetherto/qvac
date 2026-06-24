@@ -28,7 +28,7 @@
 
 /**
  * @typedef {Object} PackageInfo
- * @property {string} name - Package name (e.g., '@tetherto/qvac-lib-inference-addon-mlc-base')
+ * @property {string} name - Package name (e.g., '@tetherto/inference-addon-mlc-base')
  * @property {string} version - Package version (semantic version)
  */
 

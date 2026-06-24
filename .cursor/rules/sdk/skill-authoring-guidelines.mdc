@@ -2,7 +2,7 @@
 description: Guidelines for creating SDK pod Cursor skills
 alwaysApply: false
 globs:
-  - .cursor/skills/sdk-**
+  - .cursor/skills/qv-sdk-**
 ---
 
 # Skill Authoring Guidelines
@@ -25,10 +25,12 @@ Guidelines for creating effective Cursor skills, based on the [Agent Skills spec
 
 ## Naming Convention
 
-**Use pod prefix for skill directories:**
+**Use `qv-` prefix plus pod segment for skill directories:**
 
-- SDK pod skills: `sdk-pr-create`, `sdk-changelog`, `sdk-release`
-- Other pods: `infra-deploy`, `platform-migration`
+- SDK pod skills: `qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`
+- DevOps pod: `qv-devops-pr-create`, `qv-devops-pr-review`
+- Addon pod: `qv-addon-changelog`, `qv-addon-pr-create`
+- Cross-pod PR workflow: `qv-pr-review`, `qv-pr-test`, `qv-pr-mine`
 
 **If pod is unclear, ask the user.**
 
@@ -42,7 +44,7 @@ Guidelines for creating effective Cursor skills, based on the [Agent Skills spec
 
 **Prefer gerund form or action-oriented names:**
 
-- Good: `processing-pdfs`, `analyzing-data`, `sdk-pr-create`
+- Good: `processing-pdfs`, `analyzing-data`, `qv-sdk-pr-create`
 - Avoid: `helper`, `utils`, `tools`
 
 ## Required Frontmatter
@@ -328,7 +330,7 @@ Choose one term and use it throughout:
 
 ### Vague Skill Names
 
-- Good: `sdk-pr-create`, `processing-pdfs`
+- Good: `qv-sdk-pr-create`, `processing-pdfs`
 - Bad: `helper`, `utils`, `stuff`
 
 ## Degrees of Freedom

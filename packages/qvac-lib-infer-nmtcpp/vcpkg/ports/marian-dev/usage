@@ -1,4 +1,0 @@
-marian-dev provides CMake targets:
-
-find_package(marian-dev CONFIG REQUIRED)
-target_link_libraries(main PRIVATE marian-dev::marian-dev)

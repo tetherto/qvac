@@ -1,0 +1,502 @@
+name: Mobile Test — Build App
+description: |
+  Phase 2 of the mobile integration test pipeline.
+
+  Builds the addon test app for the target platform: installs the addon's
+  npm deps, packs it, sets up the test framework, builds the JS bundle and
+  test app, and produces an Android APK or signed iOS IPA.
+
+  iOS path: imports the build keychain + provisioning profile, generates
+  the Xcode project, archives, and exports an IPA using whichever export
+  method the provisioning profile supports (development/ad-hoc/enterprise/
+  app-store, auto-detected from the profile).
+
+  Pre-condition: the `setup` phase has already populated ./test-framework
+  and addon/<workdir>/prebuilds.
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  addon-workdir:
+    description: "Relative path to the addon package within the addon checkout"
+    required: true
+  addon-npm-name:
+    description: "NPM package name (used in build summary)"
+    required: true
+  app-bundle-id:
+    description: "Mobile app bundle id"
+    required: false
+    default: "io.tether.test.qvac"
+
+  # iOS signing inputs (ignored on Android)
+  ios-build-cert-base64:
+    description: "Base64 iOS signing certificate (.p12)"
+    required: false
+    default: ""
+  ios-build-cert-password:
+    description: "Password for the iOS signing certificate"
+    required: false
+    default: ""
+  ios-keychain-password:
+    description: "Throwaway password for the temporary build keychain"
+    required: false
+    default: ""
+  ios-provisioning-profile-base64:
+    description: "Base64 iOS provisioning profile"
+    required: false
+    default: ""
+  apple-team-id:
+    description: "Apple Developer Team ID"
+    required: false
+    default: ""
+
+  # Optional per-test timeout extension applied after the test
+  # framework generates `e2e/tests/app.test.js`. The generator emits a
+  # 20-minute (1,200,000 ms) Mocha ceiling per test; addons whose
+  # individual tests legitimately exceed that (e.g. LLM VLM image
+  # tests on Android) opt in here. No-op when unset or on iOS.
+  # NOTE: pair this with `mocha-timeout-ms` on `upload-to-devicefarm`
+  # so the WDIO/Mocha session ceiling outlives any single test.
+  android-per-test-timeout-minutes:
+    description: |
+      Override per-test Mocha timeout (minutes) in the generated Android
+      app.test.js. Leave empty to keep the framework default (20 min).
+    required: false
+    default: ""
+
+outputs:
+  app-path:
+    description: "Absolute path to the built APK or IPA"
+    value: ${{ steps.resolve_app.outputs.app_path }}
+  app-type:
+    description: "Device Farm app type (ANDROID_APP | IOS_APP)"
+    value: ${{ steps.resolve_app.outputs.app_type }}
+  app-name:
+    description: "Friendly file name for the uploaded artifact"
+    value: ${{ steps.resolve_app.outputs.app_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Verify test files exist
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        echo "Verifying addon has mobile tests..."
+        if [ ! -d "test/mobile" ]; then
+          echo "ERROR: test/mobile directory not found in $(pwd)"
+          exit 1
+        fi
+        CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l)
+        if [ "$CJS_COUNT" -eq 0 ]; then
+          echo "ERROR: No .cjs test files found in test/mobile!"
+          exit 1
+        fi
+        echo "Mobile test files found:"
+        ls -la test/mobile/*.cjs
+
+    - name: Install Ninja build tool (iOS, github-hosted only)
+      if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        echo "Installing Ninja..."
+        brew install ninja
+        ninja --version
+
+    - name: Verify Ninja on PATH (iOS, self-hosted)
+      if: inputs.platform == 'iOS' && runner.environment != 'github-hosted'
+      shell: bash
+      run: |
+        if ! command -v ninja >/dev/null 2>&1; then
+          echo "ERROR: ninja not found on self-hosted runner — must be pre-installed."
+          exit 1
+        fi
+        ninja --version
+
+    - name: Install addon dependencies
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        echo "Installing addon dependencies..."
+        npm install
+
+    - name: Pack addon
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        echo "Packing addon..."
+        mkdir -p dist
+        npm pack --pack-destination dist
+        PACK_FILE=$(ls dist/*.tgz | head -1)
+        if [ ! -f "$PACK_FILE" ]; then
+          echo "ERROR: Pack file not found in dist/"
+          exit 1
+        fi
+        echo "Pack file: $PACK_FILE ($(du -h "$PACK_FILE" | cut -f1))"
+
+    - name: Setup test framework dependencies
+      shell: bash
+      working-directory: ./test-framework
+      run: |
+        echo "Setting up mobile test framework..."
+        npm install
+
+    - name: Build test app with addon
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+      run: |
+        echo "Building test app with addon..."
+        ADDON_PATH="${GITHUB_WORKSPACE}/addon/${ADDON_WORKDIR}"
+        npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
+        if [ ! -f "backend/backend.cjs" ]; then
+          echo "ERROR: backend/backend.cjs was not generated!"
+          exit 1
+        fi
+        echo "Test app built successfully"
+
+    # Patches the freshly generated e2e/tests/app.test.js to bump the
+    # per-test Mocha ceiling. Runs ONLY on Android with the input set;
+    # no-op otherwise. Must sit between "Build test app with addon"
+    # (which generates the file) and `upload-to-devicefarm` (which
+    # packs it into the Device Farm test bundle).
+    - name: Extend Android per-test mocha timeout
+      if: inputs.platform == 'Android' && inputs.android-per-test-timeout-minutes != ''
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        TIMEOUT_MIN: ${{ inputs.android-per-test-timeout-minutes }}
+      run: |
+        node <<'NODE'
+        const fs = require('fs')
+        const path = require('path')
+
+        const minutes = Number(process.env.TIMEOUT_MIN)
+        if (!Number.isFinite(minutes) || minutes <= 0) {
+          throw new Error(`android-per-test-timeout-minutes must be a positive number, got "${process.env.TIMEOUT_MIN}"`)
+        }
+        const newMs = minutes * 60 * 1000
+
+        const testFile = 'e2e/tests/app.test.js'
+        if (!fs.existsSync(testFile)) {
+          throw new Error(`Expected generated ${testFile} not found — did "Build test app with addon" run?`)
+        }
+        const before = fs.readFileSync(testFile, 'utf8')
+        const after = before
+          .replaceAll('timeout: 1200000,', `timeout: ${newMs},`)
+          .replaceAll('did not complete within 20 minutes', `did not complete within ${minutes} minutes`)
+
+        if (after === before) {
+          throw new Error('No generated Android test timeout blocks matched expected format (timeout: 1200000 / "20 minutes")')
+        }
+
+        fs.writeFileSync(testFile, after)
+        console.log(`Extended generated Android per-test timeout to ${minutes} minutes (${newMs} ms)`)
+        NODE
+
+    - name: Display build summary
+      if: always()
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        ADDON_NAME: ${{ inputs.addon-npm-name }}
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        echo "BUILD SUMMARY"
+        echo "Platform: $PLATFORM"
+        echo "Addon:    $ADDON_NAME"
+        echo "Generated Files:"
+        echo "  backend/backend.cjs:       $([ -f backend/backend.cjs ] && echo OK || echo MISSING)"
+        echo "  backend/app.bundle:        $([ -f backend/app.bundle ] && echo OK || echo MISSING)"
+        echo "  app/testConfig.js:         $([ -f app/testConfig.js ] && echo OK || echo MISSING)"
+        echo "  app/assetManifest.js:      $([ -f app/assetManifest.js ] && echo OK || echo MISSING)"
+        echo "  e2e/tests/app.test.js:     $([ -f e2e/tests/app.test.js ] && echo OK || echo MISSING)"
+
+    # ---- Android build path -------------------------------------------------
+
+    - name: Set up JDK 17 (Android)
+      if: inputs.platform == 'Android'
+      uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
+      with:
+        java-version: 17
+        distribution: temurin
+
+    - name: Setup Android SDK
+      if: inputs.platform == 'Android'
+      uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+
+    - name: Generate Android project
+      if: inputs.platform == 'Android'
+      shell: bash
+      working-directory: ./test-framework
+      run: |
+        echo "Generating Android project with Expo..."
+        npx expo prebuild --platform android --clean
+
+    - name: Build Android APK
+      if: inputs.platform == 'Android'
+      id: build_apk
+      shell: bash
+      working-directory: ./test-framework
+      run: |
+        echo "Building Android APK for Device Farm..."
+        export JAVA_HOME=$JAVA_HOME_17_X64
+
+        echo "Bundling JavaScript code..."
+        npm run bundle
+
+        cd android
+        echo "Building APK with Gradle (RELEASE with embedded JS bundle)..."
+        ./gradlew assembleRelease \
+          -PreactNativeArchitectures=arm64-v8a \
+          --no-daemon \
+          --no-build-cache \
+          --stacktrace
+        cd ..
+
+        APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | grep "release" | grep -v "unaligned" | head -1)
+        if [ ! -f "$APK_PATH" ]; then
+          echo "ERROR: APK not found"
+          find android/app/build/outputs/apk -type f 2>/dev/null || true
+          exit 1
+        fi
+        APK_ABSOLUTE_PATH="${GITHUB_WORKSPACE}/test-framework/$APK_PATH"
+        echo "APK built: $APK_PATH ($(du -h "$APK_PATH" | cut -f1))"
+        echo "apk_path=$APK_ABSOLUTE_PATH" >> "$GITHUB_OUTPUT"
+        echo "app_type=ANDROID_APP" >> "$GITHUB_OUTPUT"
+        echo "app_name=test-app-Android.apk" >> "$GITHUB_OUTPUT"
+
+        rm -rf android/app/build/intermediates
+        rm -rf android/.gradle
+        df -h
+
+    # ---- iOS build path -----------------------------------------------------
+
+    - name: Set up Xcode version (iOS, github-hosted only)
+      if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        echo "Available Xcode versions:"
+        ls /Applications | grep Xcode || echo "No Xcode apps found"
+        if [ -d "/Applications/Xcode_16.1.app" ]; then
+          echo "Switching to Xcode 16.1..."
+          sudo xcode-select -s /Applications/Xcode_16.1.app
+        elif [ -d "/Applications/Xcode_16.1.0.app" ]; then
+          sudo xcode-select -s /Applications/Xcode_16.1.0.app
+        elif [ -d "/Applications/Xcode_16.2.app" ]; then
+          echo "WARN: 16.1 not found, falling back to 16.2"
+          sudo xcode-select -s /Applications/Xcode_16.2.app
+        else
+          echo "ERROR: No suitable Xcode (need >= 16.1)"
+          exit 1
+        fi
+        xcodebuild -version
+        xcodebuild -showsdks | grep -i ios
+
+    - name: Verify Xcode + iOS SDK (iOS, self-hosted)
+      if: inputs.platform == 'iOS' && runner.environment != 'github-hosted'
+      shell: bash
+      run: |
+        if ! command -v xcodebuild >/dev/null 2>&1; then
+          echo "ERROR: xcodebuild not found on self-hosted Mac — must be pre-installed."
+          exit 1
+        fi
+        xcodebuild -version
+        if ! xcodebuild -showsdks | grep -qi ios; then
+          echo "ERROR: no iOS SDK in xcodebuild -showsdks output."
+          exit 1
+        fi
+
+    - name: Install CocoaPods (iOS, github-hosted only)
+      if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        sudo gem install cocoapods
+        pod --version
+
+    - name: Verify CocoaPods on PATH (iOS, self-hosted)
+      if: inputs.platform == 'iOS' && runner.environment != 'github-hosted'
+      shell: bash
+      run: |
+        if ! command -v pod >/dev/null 2>&1; then
+          echo "ERROR: CocoaPods (pod) not found on self-hosted Mac — must be pre-installed."
+          exit 1
+        fi
+        pod --version
+
+    - name: Create Keychain and Import Certificate (iOS)
+      if: inputs.platform == 'iOS'
+      shell: bash
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ inputs.ios-build-cert-base64 }}
+        P12_PASSWORD: ${{ inputs.ios-build-cert-password }}
+        BUILD_PROVISION_PROFILE_BASE64: ${{ inputs.ios-provisioning-profile-base64 }}
+        KEYCHAIN_PASSWORD: ${{ inputs.ios-keychain-password }}
+      run: |
+        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+        PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+        echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+        security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        security list-keychain -d user -s $KEYCHAIN_PATH
+
+        PP_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i $PP_PATH))
+        echo "PP_UUID=$PP_UUID" >> "$GITHUB_ENV"
+
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+        cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+        security find-identity -p codesigning -v
+
+    - name: Verify provisioning profile (iOS)
+      if: inputs.platform == 'iOS'
+      shell: bash
+      env:
+        APP_BUNDLE_ID: ${{ inputs.app-bundle-id }}
+      run: |
+        PP_FILE=~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+        if [ ! -f "$PP_FILE" ]; then
+          echo "ERROR: Provisioning profile not found"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+          exit 1
+        fi
+
+        security cms -D -i "$PP_FILE" > /tmp/profile.plist
+        PROFILE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+        HAS_DEVICES=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" /tmp/profile.plist 2>/dev/null && echo "yes" || echo "no")
+        PROVISIONS_ALL=$(/usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" /tmp/profile.plist 2>/dev/null || echo "false")
+        HAS_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" /tmp/profile.plist 2>/dev/null || echo "false")
+
+        if [[ "$PROVISIONS_ALL" == "true" ]]; then
+          EXPORT_METHOD="enterprise"
+        elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "true" ]]; then
+          EXPORT_METHOD="development"
+        elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "false" ]]; then
+          EXPORT_METHOD="ad-hoc"
+        else
+          EXPORT_METHOD="app-store"
+        fi
+        echo "EXPORT_METHOD=$EXPORT_METHOD" >> "$GITHUB_ENV"
+
+        BUNDLE_ID_ONLY=$(echo "$PROFILE_BUNDLE_ID" | sed 's/^[^.]*\.//')
+        if [[ "$BUNDLE_ID_ONLY" != "$APP_BUNDLE_ID" ]]; then
+          echo "ERROR: Profile bundle ID '$BUNDLE_ID_ONLY' != '$APP_BUNDLE_ID'"
+          exit 1
+        fi
+        echo "Provisioning profile OK (export method: $EXPORT_METHOD)"
+
+    - name: Generate iOS project
+      if: inputs.platform == 'iOS'
+      shell: bash
+      working-directory: ./test-framework
+      run: |
+        echo "Generating iOS project with Expo..."
+        npx expo prebuild --platform ios --clean
+
+    - name: Install iOS dependencies (CocoaPods)
+      if: inputs.platform == 'iOS'
+      shell: bash
+      working-directory: ./test-framework/ios
+      run: |
+        echo "Installing CocoaPods dependencies..."
+        pod install --repo-update
+
+    - name: Build and Archive iOS App
+      if: inputs.platform == 'iOS'
+      id: build_ios
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        APPLE_TEAM_ID: ${{ inputs.apple-team-id }}
+      run: |
+        echo "Bundling JavaScript code..."
+        npm run bundle
+
+        cd ios
+        SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
+        echo "Scheme: $SCHEME_NAME"
+
+        xcodebuild -workspace $SCHEME_NAME.xcworkspace \
+          -scheme "$SCHEME_NAME" \
+          -sdk iphoneos \
+          -configuration Release \
+          -destination "generic/platform=iOS" \
+          -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
+          CODE_SIGN_STYLE=Manual \
+          PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
+          CODE_SIGN_IDENTITY="Apple Distribution" \
+          DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+          clean archive
+
+    - name: Export IPA
+      if: inputs.platform == 'iOS'
+      id: export_ipa
+      shell: bash
+      working-directory: ./test-framework/ios
+      env:
+        APP_BUNDLE_ID: ${{ inputs.app-bundle-id }}
+        APPLE_TEAM_ID: ${{ inputs.apple-team-id }}
+      run: |
+        SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
+        echo "Using export method: $EXPORT_METHOD"
+
+        EXPORT_OPTS_PATH=$RUNNER_TEMP/ExportOptions.plist
+        cat > $EXPORT_OPTS_PATH << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>method</key>
+          <string>$EXPORT_METHOD</string>
+          <key>teamID</key>
+          <string>$APPLE_TEAM_ID</string>
+          <key>signingStyle</key>
+          <string>manual</string>
+          <key>provisioningProfiles</key>
+          <dict>
+            <key>$APP_BUNDLE_ID</key>
+            <string>$PP_UUID</string>
+          </dict>
+        </dict>
+        </plist>
+        EOF
+
+        xcodebuild -exportArchive \
+          -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
+          -exportOptionsPlist $EXPORT_OPTS_PATH \
+          -exportPath $RUNNER_TEMP/build
+
+        IPA_FILE=$(find $RUNNER_TEMP/build -name "*.ipa" | head -1)
+        if [ ! -f "$IPA_FILE" ]; then
+          echo "ERROR: IPA not found"
+          exit 1
+        fi
+        echo "IPA exported: $IPA_FILE"
+        echo "ipa_path=$IPA_FILE" >> "$GITHUB_OUTPUT"
+
+    - name: Resolve app artifact
+      id: resolve_app
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        ANDROID_APK_PATH: ${{ steps.build_apk.outputs.apk_path }}
+        IOS_IPA_PATH: ${{ steps.export_ipa.outputs.ipa_path }}
+      run: |
+        if [ "$PLATFORM" = "Android" ]; then
+          echo "app_path=$ANDROID_APK_PATH" >> "$GITHUB_OUTPUT"
+          echo "app_type=ANDROID_APP" >> "$GITHUB_OUTPUT"
+          echo "app_name=test-app-Android.apk" >> "$GITHUB_OUTPUT"
+        else
+          echo "app_path=$IOS_IPA_PATH" >> "$GITHUB_OUTPUT"
+          echo "app_type=IOS_APP" >> "$GITHUB_OUTPUT"
+          echo "app_name=test-app-iOS.ipa" >> "$GITHUB_OUTPUT"
+        fi

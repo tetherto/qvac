@@ -13,6 +13,7 @@ import {
  * @param params.kvCacheKey - The cache key to delete
  * @param params.modelId - Optional: specific model ID to delete within the cache key. If not provided, deletes entire cache key.
  * @returns Promise resolving to success status
+ * @throws {QvacErrorBase} When the cache parameters are invalid (`InvalidDeleteCacheParamsError`) or the server reports a delete failure (`DeleteCacheFailedError`).
  * @example
  * ```typescript
  * // Delete all caches

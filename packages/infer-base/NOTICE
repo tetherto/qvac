@@ -1,0 +1,19 @@
+@qvac/infer-base
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/infer-base itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  bare-events@2.4.2
+    https://github.com/holepunchto/bare-events
+  bare-os@3.9.0
+    https://github.com/holepunchto/bare-os
+

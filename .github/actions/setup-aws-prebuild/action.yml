@@ -1,0 +1,32 @@
+name: Setup AWS for prebuilds
+description: Configure AWS OIDC credentials and install the AWS CLI v2 on Windows self-hosted runners.
+
+inputs:
+  role-to-assume:
+    description: AWS role ARN to assume via OIDC
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        aws-region: eu-central-1
+
+    - if: ${{ runner.os == 'Windows' }}
+      name: Install AWS CLI on self-hosted Windows runner
+      shell: powershell
+      run: |
+        if (Get-Command aws -ErrorAction SilentlyContinue) {
+          Write-Host "AWS CLI already installed"
+          aws --version
+        } else {
+          Write-Host "Installing AWS CLI v2..."
+          Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+          Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+          $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+          echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+          aws --version
+        }

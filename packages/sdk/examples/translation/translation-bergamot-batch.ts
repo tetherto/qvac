@@ -3,7 +3,6 @@ import { loadModel, translate, unloadModel, BERGAMOT_EN_FR } from "@qvac/sdk";
 try {
   const modelId = await loadModel({
     modelSrc: BERGAMOT_EN_FR,
-    modelType: "nmt",
     modelConfig: {
       engine: "Bergamot",
       from: "en",
@@ -14,12 +13,15 @@ try {
       norepeatngramsize: 3,
       lengthpenalty: 1.2,
     },
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
-  console.log(`✅ Bergamot model loaded: ${modelId}`);
+  console.log(`▸ Bergamot model loaded: ${modelId}`);
 
   // Test with array of texts for batch processing
   const texts = [
@@ -29,20 +31,20 @@ try {
     "The weather is nice",
   ];
 
-  console.log("\n📝 Translating batch of texts:");
-  texts.forEach((text, i) => console.log(`  ${i + 1}. ${text}`));
+  console.log("▸ Translating batch of texts:");
+  texts.forEach((text, i) => console.log(`▸   ${i + 1}. ${text}`));
 
   const result = translate({
     modelId,
     text: texts, // Pass array for batch processing
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     stream: false,
   });
 
   const translatedText = await result.text;
   const translations = translatedText.split("\n");
 
-  console.log("\n✅ Translations:");
+  console.log("▸ Translations:");
   translations.forEach((translation, i) => {
     if (i < texts.length) {
       console.log(`  ${i + 1}. ${texts[i]} -> "${translation}"`);
@@ -51,6 +53,6 @@ try {
 
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

@@ -14,7 +14,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
   workflow_dispatch:
     inputs:
       ref:
@@ -26,11 +26,12 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
 
 jobs:
   run-cpp-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
     permissions:
       contents: read
@@ -43,16 +44,17 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64
           - os: macos-14
             platform: darwin
             arch: arm64
           - os: macos-15-intel
             platform: darwin
             arch: x64
-          - os: windows-11
+          - os: windows-2025
             platform: windows
             arch: x64
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -63,112 +65,62 @@ jobs:
     steps:
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
         run: |
-          echo "ref=${{ inputs.ref || github.ref }}"
-          echo "repository=${{ inputs.repository || github.repository }}"
-          echo "workdir=${{ env.WORKDIR }}"
+          echo "ref=$INPUT_REF"
+          echo "repository=$INPUT_REPO"
+          echo "workdir=$INPUT_WORKDIR"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Configure Windows runner
-        run: |
-          git config --system core.longpaths true
-          choco upgrade llvm -y
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.WORKDIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           npm install
-          npm install -g bare bare-make
+      
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install llvm-19 on Linux
-        shell: bash
-        run: |
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install Vulkan SDK on Linux
-        shell: bash
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc > /dev/null
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install -y vulkan-sdk
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Vulkan SDK on Windows
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install vcpkg on macOS
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Cleanup vcpkg
         shell: bash
         run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
-          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-          echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
-        shell: bash
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Clone and bootstrap vcpkg (Windows)
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
         shell: powershell
         run: |
@@ -180,23 +132,30 @@ jobs:
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache (package-local)
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: >-
             cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
               hashFiles(
                 format('{0}/vcpkg.json', inputs.workdir),
                 format('{0}/vcpkg-configuration.json', inputs.workdir),
-                format('{0}/vcpkg/ports/**', inputs.workdir),
-                'vcpkg.json',
-                'vcpkg-configuration.json',
-                'vcpkg/ports/**'
+                format('{0}/vcpkg/ports/**', inputs.workdir)
               )
             }}
           path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
+      - name: Cache C++ test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: embed-llamacpp
+          paths: packages/embed-llamacpp/models/unit-test
+          hash-files-glob: .github/workflows/cpp-tests-embed.yml
+
       - name: Download test models (into package dir)
+        if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -232,7 +191,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
           set -euo pipefail
 
@@ -257,7 +216,7 @@ jobs:
           fi
 
       - name: Generate Coverage Report
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -266,8 +225,8 @@ jobs:
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
 
       - name: Archive Coverage Results
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
-        uses: actions/upload-artifact@v6
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |
@@ -279,7 +238,7 @@ jobs:
 
 
       - name: Coverage Summary
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
         shell: bash
         run: |
           echo "## 🎯 C++ Test Coverage Summary" >> $GITHUB_STEP_SUMMARY

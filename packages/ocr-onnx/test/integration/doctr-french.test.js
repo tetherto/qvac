@@ -42,6 +42,6 @@ test('DocTR french test - accented characters', { timeout: TEST_TIMEOUT }, async
   )
   t.comment('Contains accented characters: ' + hasAccent)
 
-  t.comment(formatOCRPerformanceMetrics('[DocTR French]', stats, outputTexts))
+  t.comment(formatOCRPerformanceMetrics('[DocTR French]', stats, outputTexts, { skipReport: true }))
   t.pass('DocTR French test completed successfully')
 })

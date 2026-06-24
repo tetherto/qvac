@@ -9,6 +9,7 @@ on:
       - tmp-*
     paths:
       - "packages/sdk/**"
+      - "packages/bare-sdk/**"
   pull_request_target:
     types:
       - opened
@@ -23,6 +24,7 @@ on:
       - main
     paths:
       - "packages/sdk/**"
+      - "packages/bare-sdk/**"
 
   workflow_dispatch:
     inputs:
@@ -30,25 +32,62 @@ on:
         description: "Tag for publishing (optional override for GPR)"
         required: false
         default: "dev"
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
 
 env:
   WORKDIR: packages/sdk
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   release-merge-guard:
     name: Release Merge Guard
-    continue-on-error: true
     if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -62,11 +101,12 @@ jobs:
           changelog-path: packages/sdk/CHANGELOG.md
 
   build:
-    if: >
-      github.event_name != 'pull_request_target' ||
-      github.event.pull_request.head.repo.fork == false ||
-      contains(github.event.pull_request.labels.*.name, 'verify')
+    needs:
+      - authorize
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -76,7 +116,7 @@ jobs:
       READ_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -88,31 +128,41 @@ jobs:
         run: |
           git fetch origin ${{ github.event.pull_request.head.sha }}
 
+      - name: Verify @qvac/sdk and @qvac/bare-sdk version lockstep
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # pull_request_target pins the working tree to base.sha; read both
+          # manifests from the PR head SHA so a missed bare-sdk bump fails pre-merge.
+          set -euo pipefail
+          REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
+          SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
+          BARE_VER=$(git show "${REF}":packages/bare-sdk/package.json | jq -r .version)
+          if [ "$SDK_VER" != "$BARE_VER" ]; then
+            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER at ${REF}. Both packages must share the same version (lockstep release). Bump both packages together in the release branch."
+            exit 1
+          fi
+          echo "OK: @qvac/sdk and @qvac/bare-sdk both at $SDK_VER (verified at ${REF})"
+
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
           bun-version: latest
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
-          
-          # Remove stale lock file to force fresh registry resolution
-          rm -f bun.lock
-          
           echo "Writing .npmrc for dual registry install…"
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
@@ -131,14 +181,7 @@ jobs:
 
           [install.scopes]
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
-          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
           EOF
-          
-          # Debug: show config
-          echo "=== .npmrc ==="
-          cat .npmrc
-          echo "=== bunfig.toml ==="
-          cat bunfig.toml
 
       - name: Install dependencies
         run: bun install
@@ -208,12 +251,12 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
-          retention-days: 1
-      
+          retention-days: 30
+
       - name: Determine version and tag
         id: version
         working-directory: ${{ env.WORKDIR }}
@@ -242,6 +285,44 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       branch: ${{ steps.version.outputs.branch }}
 
+  build-bare-sdk:
+    name: Build @qvac/bare-sdk (from sdk dist)
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      WORKDIR_BARE: packages/bare-sdk
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Download @qvac/sdk dist artifact
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: dist
+          path: packages/sdk/dist/
+
+      - name: Build bare-sdk (bundle from sdk + run guards)
+        shell: bash
+        working-directory: ${{ env.WORKDIR_BARE }}
+        run: bun run build
+
+      - name: Upload bare-sdk dist artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: dist-bare-sdk
+          path: ${{ env.WORKDIR_BARE }}/dist/
+          retention-days: 30
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -302,13 +383,21 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: ./.github/actions/download-release-artifact
         with:
           name: dist
-          path: ${{ env.WORKDIR }}/dist/
+          path: ${{ runner.temp }}/dist-staging
+
+      - name: Move dist from staging to workspace
+        shell: bash
+        run: |
+          mkdir -p ${{ env.WORKDIR }}/dist
+          cp -r ${{ runner.temp }}/dist-staging/. ${{ env.WORKDIR }}/dist/
+          echo "Dist moved from staging area"
+          ls -la ${{ env.WORKDIR }}/dist/
 
       - name: Modify package name for branch-based test publishing
         working-directory: ${{ env.WORKDIR }}
@@ -343,51 +432,181 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || needs.publish-logic.outputs.gpr_tag || 'dev'}}
           workdir: ${{ env.WORKDIR }}
           name-suffix: "-mono"
 
+  publish-gpr-bare-sdk:
+    name: Publish @qvac/bare-sdk to GitHub Packages (GPR)
+    needs: [build-bare-sdk, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: write
+    env:
+      WORKDIR_BARE: packages/bare-sdk
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Download bare-sdk dist artifact
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: dist-bare-sdk
+          path: ${{ env.WORKDIR_BARE }}/dist/
+
+      - name: Modify bare-sdk package name for branch-based test publishing
+        working-directory: ${{ env.WORKDIR_BARE }}
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+          case "$BRANCH_NAME" in
+            dev)
+              SUFFIX="dev"
+              ;;
+            fix-*|feature-*)
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              ;;
+            *)
+              echo "Branch $BRANCH_NAME not configured for modified package name"
+              exit 0
+              ;;
+          esac
+
+          echo "Modifying bare-sdk package name for branch: $BRANCH_NAME → suffix: $SUFFIX"
+
+          ORIGINAL_NAME=$(node -p "require('./package.json').name")
+          NEW_NAME="${ORIGINAL_NAME}-${SUFFIX}"
+
+          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          MODIFIED_NAME=$(node -p "require('./package.json').name")
+          echo "Package name: $ORIGINAL_NAME → $MODIFIED_NAME"
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || needs.publish-logic.outputs.gpr_tag || 'dev'}}
+          workdir: ${{ env.WORKDIR_BARE }}
+          name-suffix: "-mono"
+
   publish-npm:
     name: Publish to NPM
-    needs: [build, publish-logic, release-merge-guard]
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    needs:
+      - build
+      - publish-logic
+      - release-merge-guard
+      - label-gate
+    if: >-
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: write
       packages: write
+      id-token: write
     steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: ./.github/actions/download-release-artifact
         with:
           name: dist
-          path: ${{ env.WORKDIR }}/dist/
+          path: ${{ runner.temp }}/dist-staging
+
+      - name: Move dist from staging to workspace
+        shell: bash
+        run: |
+          mkdir -p ${{ env.WORKDIR }}/dist
+          cp -r ${{ runner.temp }}/dist-staging/. ${{ env.WORKDIR }}/dist/
+          echo "Dist moved from staging area"
+          ls -la ${{ env.WORKDIR }}/dist/
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          repo_name: sdk
+          tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.WORKDIR }}
 
-  # Create GitHub release only for actual releases (after NPM publish)
+  publish-npm-bare-sdk:
+    name: Publish @qvac/bare-sdk to NPM
+    needs:
+      - build-bare-sdk
+      - publish-logic
+      - release-merge-guard
+      - label-gate
+    if: >-
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+    runs-on: ubuntu-latest
+    environment: npm
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    env:
+      WORKDIR_BARE: packages/bare-sdk
+    steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Download bare-sdk dist artifact
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: dist-bare-sdk
+          path: ${{ env.WORKDIR_BARE }}/dist/
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: ./.github/actions/publish-library-to-npm
+        with:
+          tag: ${{ inputs.npm_tag }}
+          workdir: ${{ env.WORKDIR_BARE }}
+
+  # Create GitHub release only for actual releases (after NPM publish).
+  # Gated on BOTH publish-npm jobs succeeding so we never tag a release
+  # where @qvac/sdk shipped but @qvac/bare-sdk failed (or vice versa)
   publish-release:
-    needs: [publish-npm]
-    if:  needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    needs: [publish-npm, publish-npm-bare-sdk]
+    if: >-
+      needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+      && needs.publish-npm-bare-sdk.result == 'success' && needs.publish-npm-bare-sdk.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "sdk"
       release_name: "QVAC SDK"

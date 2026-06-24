@@ -1,14 +1,19 @@
+import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
-import { source } from '@/lib/source';
 import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
-import { FaGithub, FaDiscord } from 'react-icons/fa6';
+import { FaGithub, FaDiscord, FaXTwitter } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
-import { FeaturebaseIcon } from '@/components/featurebase-icon';
-import { VersionedLayout } from '@/components/versioned-layout';
-import { getAllTrees } from '@/lib/trees';
+import { KeetIcon } from '@/components/keet-icon';
+import KeetRoomModalMount from '@/components/keet-modal';
+import { customTree } from '@/lib/custom-tree';
+import {
+  AskAISearchToggleLarge,
+  AskAISearchToggleSmall,
+  AskAIShell,
+  // AskAITextSelection,  // disabled while we sort out the legacy fallback
+} from '@/components/ask-ai';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
-
   const linkItems: LinkItemType[] = [
     {
       type: 'icon',
@@ -26,11 +31,10 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     },
     {
       type: 'icon',
-      url: 'https://qvacbytether.featurebase.app/?b=68d07d333a52713329b11fa6',
-      label: 'FeatureBase',
-      text: 'FeatureBase',
-      icon: <FeaturebaseIcon />,
-      external: true,
+      url: '#keet-room',
+      label: 'Keet',
+      text: 'Keet',
+      icon: <KeetIcon />,
     },
     {
       type: 'icon',
@@ -42,28 +46,48 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     },
     {
       type: 'icon',
-      url: '/#community',
-      label: 'Keet',
-      text: 'Keet',
-      icon: <img
-        src="/keet.svg"
-        alt="Keet"
-        width={24}
-        height={24}
-        className="h-4 w-4 object-contain"
-      />,
+      url: 'https://x.com/QVAC',
+      label: 'X (Twitter)',
+      text: 'X (Twitter)',
+      icon: <FaXTwitter />,
+      external: true,
     },
   ];
 
-  const versionedTrees = getAllTrees();
+  const base = baseOptions();
 
   return (
-    <VersionedLayout
-      {...baseOptions()}
-      links={linkItems}
-      versionedTrees={versionedTrees}
-    >
-      {children}
-    </VersionedLayout>
+    <>
+      <DocsLayout
+        {...base}
+        nav={{ ...base.nav, mode: 'top' }}
+        links={linkItems}
+        tree={{ name: 'docs', $id: 'latest', children: customTree }}
+        searchToggle={{
+          components: {
+            lg: <AskAISearchToggleLarge />,
+            sm: <AskAISearchToggleSmall />,
+          },
+        }}
+      >
+        {children}
+      </DocsLayout>
+      {/*
+       * Custom Mintlify-style assistant. The unified `AskAIShell`
+       * mounts ONE persistent fixed container: a bottom-anchored
+       * composer bar that morphs into the chat modal, driven by the
+       * same `AskAIProvider` state every existing trigger feeds
+       * (top-nav button, hotkey, deep link, Cmd/Ctrl+K search hijack).
+       * It is `position: fixed`, so it sits as a sibling of
+       * `<DocsLayout>` and doesn't interact with its grid template.
+       *
+       * The legacy Inkeep modal (`AskAILegacyShell` + `AskAIPill`) is
+       * preserved under `@/components/ask-ai-legacy` as an unmounted
+       * fallback should the custom shell need to be parked again.
+       */}
+      <AskAIShell />
+      <KeetRoomModalMount />
+      {/* AskAITextSelection disabled — re-enable by uncommenting the import above and rendering <AskAITextSelection /> here. */}
+    </>
   );
 }

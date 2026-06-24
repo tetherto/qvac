@@ -6,4 +6,4 @@ runs:
   steps:
     - name: Install Bare
       shell: bash
-      run: npm install -g bare-runtime bare-make
+      run: npm install -g --force bare-runtime bare-make

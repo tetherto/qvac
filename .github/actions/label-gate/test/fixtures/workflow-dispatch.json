@@ -1,0 +1,10 @@
+{
+  "ref": "refs/heads/main",
+  "inputs": {},
+  "repository": {
+    "full_name": "tetherto/qvac"
+  },
+  "sender": {
+    "login": "alice-team-member"
+  }
+}

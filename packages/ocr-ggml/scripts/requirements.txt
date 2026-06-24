@@ -1,0 +1,46 @@
+# Runtime requirements for the EasyOCR .pth -> .gguf converter under
+# scripts/pth_to_gguf.py.
+#
+# Real deps:
+#
+#   gguf     -- writes the output .gguf file (GGUFWriter + block
+#               quantizers for Q8_0 / Q4_K)
+#   numpy    -- tensor shape handling for the gguf writer
+#   torch    -- loads the upstream EasyOCR PyTorch state_dicts (.pth).
+#               This script never calls .cuda() / forward() / autograd;
+#               it uses torch purely as a deserializer (torch.load with
+#               map_location="cpu") and immediately converts each
+#               tensor to numpy. CPU-only torch is therefore sufficient
+#               and saves ~1.8 GiB on the wheel + a transitive CUDA
+#               runtime install vs. the default GPU wheel.
+#   easyocr  -- supplies the filename -> arch/vocab registry that the
+#               converter uses to auto-classify shipped checkpoints
+#               (detection_models / recognition_models in
+#               easyocr.config). Easyocr itself declares `torch` as a
+#               dep; by the time pip resolves it the CPU wheel below is
+#               already installed and satisfies the constraint.
+#
+# Unpinned by default because this is a developer-time conversion tool,
+# not a runtime dep of the addon. Pin here if a specific upstream release
+# breaks the converter and we need to lock it.
+#
+# --extra-index-url below adds the official PyTorch CPU wheel index in
+# addition to PyPI. On Linux / Windows that index serves torch wheels
+# with the `+cpu` local-version suffix (e.g. torch==2.11.0+cpu), which
+# pip prefers over the default CUDA-enabled wheel on PyPI. On macOS
+# PyTorch ships a single wheel per Python version (no +cpu vs +cuda
+# split), so the directive is a harmless no-op there.
+#
+# Exception: on darwin-x64 (Intel Macs) the latest available torch wheel
+# is torch==2.2.2 -- PyTorch stopped shipping macOS x86_64 wheels after
+# 2.2.x. That wheel is built against the NumPy 1.x C ABI and crashes at
+# `import torch` when paired with NumPy 2.x ("Failed to initialize
+# NumPy: _ARRAY_API not found"). We pin numpy<2 only on that platform;
+# every other platform stays free to resolve the latest numpy.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+gguf
+numpy<2; sys_platform == "darwin" and platform_machine == "x86_64"
+numpy; sys_platform != "darwin" or platform_machine != "x86_64"
+torch
+easyocr

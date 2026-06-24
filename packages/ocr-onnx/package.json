@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-onnx",
-  "version": "0.3.3",
+  "version": "0.7.0",
   "description": "OCR addon for qvac",
   "addon": true,
   "engines": {
@@ -40,7 +40,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git"
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/ocr-onnx"
   },
   "author": "Tether",
   "keywords": [
@@ -50,8 +51,8 @@
     "ocr"
   ],
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/issues",
-  "homepage": "https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext#readme",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
   "standard": {
     "ignore": [
       "benchmarks/**",
@@ -61,7 +62,8 @@
   "devDependencies": {
     "@qvac/registry-client": "^0.1.5",
     "@types/node": "^25.0.3",
-    "bare-fs": "^4.0.1",
+    "bare-fetch": "^3.0.1",
+    "bare-path": "^3.0.0",
     "bare-process": "^4.2.1",
     "brittle": "^3.16.5",
     "cmake-bare": "^1.5.0",
@@ -70,15 +72,11 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0",
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
-    "@qvac/onnx": "^0.13.3",
-    "@qvac/response": "^0.1.2",
-    "bare-fetch": "^2.5.1",
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/onnx": "^0.15.1",
     "bare-fs": "^4.5.1",
-    "bare-path": "^3.0.0",
-    "bare-process": "^4.2.1"
+    "bare-os": "^3.9.1"
   },
   "optionalDependencies": {
     "@qvac/diagnostics": "^0.1.0"

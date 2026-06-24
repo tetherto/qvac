@@ -5,12 +5,16 @@ import { ModelType } from "./model-types";
 const modelRegistryEntryAddonSchema = z.enum([
   "llm",
   "whisper",
+  "bci",
   "embeddings",
   "nmt",
   "vad",
   "tts",
   "ocr",
   "parakeet",
+  "diffusion",
+  "vla",
+  "classification",
   "other",
 ]);
 
@@ -22,29 +26,60 @@ const modelRegistryEntryAddonSchema = z.enum([
 export const modelRegistryEngineSchema = z.enum([
   ModelType.llamacppCompletion,
   ModelType.whispercppTranscription,
+  ModelType.bciWhispercppTranscription,
   ModelType.llamacppEmbedding,
   ModelType.nmtcppTranslation,
   ModelType.onnxTts,
-  ModelType.onnxOcr,
+  ModelType.ttsGgml,
+  ModelType.ggmlOcr,
   ModelType.parakeetTranscription,
+  ModelType.sdcppGeneration,
+  ModelType.ggmlVla,
+  ModelType.ggmlClassification,
   "onnx-vad",
 ]);
 
 export const modelRegistryEntrySchema = z.object({
-  name: z.string(),
-  registryPath: z.string(),
-  registrySource: z.string(),
-  blobCoreKey: z.string(),
-  blobBlockOffset: z.number(),
-  blobBlockLength: z.number(),
-  blobByteOffset: z.number(),
-  modelId: z.string(),
-  addon: modelRegistryEntryAddonSchema,
-  expectedSize: z.number(),
-  sha256Checksum: z.string(),
-  engine: modelRegistryEngineSchema,
-  quantization: z.string(),
-  params: z.string(),
+  name: z.string().describe("Catalog name of the model entry."),
+  registryPath: z
+    .string()
+    .describe("Registry-relative path to the model."),
+  registrySource: z
+    .string()
+    .describe("Registry source identifier, e.g. `huggingface`."),
+  blobCoreKey: z
+    .string()
+    .describe("Hyperdrive blob core key for the model file."),
+  blobBlockOffset: z
+    .number()
+    .describe("Starting block offset of the model file in the blob."),
+  blobBlockLength: z
+    .number()
+    .describe("Number of blocks occupied by the model file."),
+  blobByteOffset: z
+    .number()
+    .describe("Starting byte offset of the model file within its block."),
+  modelId: z
+    .string()
+    .describe("Unique identifier used to reference the model in SDK calls."),
+  addon: modelRegistryEntryAddonSchema.describe(
+    "Inference addon / capability category this model belongs to.",
+  ),
+  expectedSize: z
+    .number()
+    .describe("Expected total size of the model file in bytes."),
+  sha256Checksum: z
+    .string()
+    .describe("Expected SHA-256 checksum of the model file."),
+  engine: modelRegistryEngineSchema.describe(
+    "Canonical inference engine identifier.",
+  ),
+  quantization: z
+    .string()
+    .describe("Quantization identifier, e.g. `Q4_K_M`."),
+  params: z
+    .string()
+    .describe("Parameter-count label for the model, e.g. `7B`."),
 });
 
 export type ModelRegistryEntry = z.infer<typeof modelRegistryEntrySchema>;

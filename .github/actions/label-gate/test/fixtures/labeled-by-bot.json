@@ -1,0 +1,27 @@
+{
+  "action": "labeled",
+  "number": 4246,
+  "pull_request": {
+    "number": 4246,
+    "head": {
+      "repo": { "full_name": "tetherto/qvac" },
+      "ref": "renovate/some-bump",
+      "sha": "b07b07b"
+    },
+    "base": {
+      "repo": { "full_name": "tetherto/qvac" }
+    },
+    "labels": [
+      { "name": "verified" }
+    ]
+  },
+  "label": {
+    "name": "verified"
+  },
+  "sender": {
+    "login": "renovate[bot]"
+  },
+  "repository": {
+    "full_name": "tetherto/qvac"
+  }
+}

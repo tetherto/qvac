@@ -7,7 +7,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
   workflow_call:
     inputs:
       ref:
@@ -22,7 +22,10 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
+
+permissions:
+  contents: read
 
 jobs:
   test-cpp:
@@ -33,14 +36,18 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
+            runner: mac-mini-m4-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: windows-11
+            runner: qvac-ubuntu2404-x64
+          - os: windows-2025
             platform: windows
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64
+            arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
 
     env:
@@ -49,70 +56,38 @@ jobs:
       GIT_TERMINAL_PROMPT: "0"
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install llvm-19 on Linux
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
         working-directory: ${{ env.WORKDIR }}
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Cleanup vcpkg
+        shell: bash
         run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install Vulkan SDK on Linux
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install vulkan-sdk
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Configure Windows runner
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          git config --system core.longpaths true
-          choco upgrade llvm -y
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Vulkan SDK on Windows
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Clone and bootstrap vcpkg (Windows)
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'macos-14' }}
-        name: Install vcpkg on macOS
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
-          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT="$(pwd)"
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-          echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
-        working-directory: ${{ env.WORKDIR }}
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
@@ -120,49 +95,65 @@ jobs:
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-11' }}
-        working-directory: ${{ env.WORKDIR }}
-        run: mkdir -p vcpkg/cache
-
-      - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-11' }}
-        shell: powershell
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null
+      - name: Create vcpkg cache location (package-local)
+        shell: bash
+        run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
-          NPMRC
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          npm install -g bare bare-make
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      - name: Cache C++ test models
+        id: model-cache
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          paths: |
+            packages/diffusion-cpp/test/model
+            packages/diffusion-cpp/models
+            !packages/diffusion-cpp/test/model/*.png
+          hash-files-glob: packages/diffusion-cpp/scripts/download-model-sd2.sh
+
+      - if: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14') && steps.model-cache.outputs.cache-hit != 'true' }}
+        name: Download SD2 model for C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          ./scripts/download-model-sd2.sh
+          find . -name "stable-diffusion-v2-1-Q8_0.gguf"
+          MODEL_PATH=$(find . -name "stable-diffusion-v2-1-Q8_0.gguf" | head -n 1)
+          test -f "$MODEL_PATH"
+          mkdir -p ./test/model
+          cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
+          test -f ./test/model/stable-diffusion-v2-1-Q8_0.gguf
+
+      - if: ${{ matrix.os == 'windows-2025' && steps.model-cache.outputs.cache-hit != 'true' }}
+        name: Download SD2 model for C++ tests (Windows)
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          & .\scripts\download-model-sd2.ps1
+          $modelPath = Get-ChildItem -Path . -Filter "stable-diffusion-v2-1-Q8_0.gguf" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $modelPath) { throw "Model file not found" }
+          New-Item -ItemType Directory -Force -Path ".\test\model" | Out-Null
+          Copy-Item -Path $modelPath -Destination ".\test\model\stable-diffusion-v2-1-Q8_0.gguf" -Force
+          if (-not (Test-Path ".\test\model\stable-diffusion-v2-1-Q8_0.gguf")) { throw "Failed to copy model file" }
 
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
@@ -174,7 +165,12 @@ jobs:
       - name: Build C++ tests with coverage
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
-        run: npm run coverage:cpp:build
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
+          bare-make build --target addon-test
 
       - name: Build C++ tests
         if: ${{ matrix.os != 'ubuntu-24.04' }}
@@ -186,8 +182,16 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+          SD_TEST_MODEL_PATH: ${{ github.workspace }}/${{ env.WORKDIR }}/test/model/stable-diffusion-v2-1-Q8_0.gguf
         run: |
+          if [ -f "${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt" ]; then
+            export LSAN_OPTIONS="suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt"
+          fi
+          echo "SD_TEST_MODEL_PATH=$SD_TEST_MODEL_PATH"
+          ls -lh "$SD_TEST_MODEL_PATH"
+          test -f "$SD_TEST_MODEL_PATH"
+          export SD_TEST_MODEL_PATH="$SD_TEST_MODEL_PATH"
+
           EXE="build/test/unit/addon-test"
           if [ -f "build/test/unit/addon-test.exe" ]; then
             EXE="build/test/unit/addon-test.exe"
@@ -214,7 +218,7 @@ jobs:
           fi
 
       - name: Generate Coverage Report
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm run coverage:cpp:report
@@ -222,8 +226,8 @@ jobs:
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
 
       - name: Archive Coverage Results
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
-        uses: actions/upload-artifact@v6
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -234,7 +238,7 @@ jobs:
           retention-days: 30
 
       - name: Coverage Summary
-        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() && !cancelled() }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |

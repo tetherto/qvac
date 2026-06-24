@@ -46,7 +46,7 @@ type SerializedError = {
 };
 type PackageInfo = {
     /**
-     * - Package name (e.g., '@tetherto/qvac-lib-inference-addon-mlc-base')
+     * - Package name (e.g., '@tetherto/inference-addon-mlc-base')
      */
     name: string;
     /**
@@ -116,7 +116,7 @@ declare function isCodeRegistered(code: number): boolean;
  */
 /**
  * @typedef {Object} PackageInfo
- * @property {string} name - Package name (e.g., '@tetherto/qvac-lib-inference-addon-mlc-base')
+ * @property {string} name - Package name (e.g., '@tetherto/inference-addon-mlc-base')
  * @property {string} version - Package version (semantic version)
  */
 /**

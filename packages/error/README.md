@@ -1,11 +1,11 @@
-# @qvac/error-base
+# @qvac/error
 
 This library provides standardized error handling capabilities for all QVAC libraries. It ensures consistency in error reporting, serialization, and handling across the entire QVAC ecosystem.
 
 ## Installation
 
 ```bash
-npm i @qvac/error-base
+npm i @qvac/error
 ```
 
 ## Features
@@ -22,7 +22,7 @@ npm i @qvac/error-base
 ### Basic Usage
 
 ```javascript
-const { QvacErrorBase, addCodes } = require('@qvac/error-base')
+const { QvacErrorBase, addCodes } = require('@qvac/error')
 
 // Create your own error class extending the base
 class QvacErrorCustom extends QvacErrorBase {

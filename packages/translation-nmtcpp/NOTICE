@@ -1,0 +1,314 @@
+@qvac/translation-nmtcpp
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/translation-nmtcpp itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+Third-Party Model Licenses
+=========================================================================
+
+--- mit (MIT License) ---
+
+  ggml-indictrans2-en-indic-1B-f16
+    https://huggingface.co/ai4bharat/indictrans2-en-indic-1B
+  ggml-indictrans2-en-indic-dist-200M-f16
+    https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M
+  ggml-indictrans2-indic-en-1B-f16
+    https://huggingface.co/ai4bharat/indictrans2-indic-en-1B
+  ggml-indictrans2-indic-en-dist-200M-f16
+    https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M
+  ggml-indictrans2-indic-indic-1B-f16
+    https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B
+  ggml-indictrans2-indic-indic-dist-320M-f16
+    https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M
+
+--- mpl-2.0 (Mozilla Public License 2.0) ---
+
+  model.aren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
+  model.azen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/azen
+  model.been.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/been
+  model.bgen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/bgen
+  model.bnen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/bnen
+  model.bsen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/bsen
+  model.caen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/caen
+  model.csen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen
+  model.daen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/daen
+  model.deen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/deen
+  model.elen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/elen
+  model.enar.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar
+  model.enaz.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enaz
+  model.enbg.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbg
+  model.enbn.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbn
+  model.enca.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enca
+  model.encs.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs
+  model.enda.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enda
+  model.ende.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ende
+  model.enel.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enel
+  model.enes.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes
+  model.enet.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enet
+  model.enfa.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfa
+  model.enfi.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfi
+  model.enfr.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr
+  model.engu.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/engu
+  model.enhe.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhe
+  model.enhi.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhi
+  model.enhr.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhr
+  model.enhu.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhu
+  model.enid.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enid
+  model.enis.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enis
+  model.enit.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enit
+  model.enja.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
+  model.enkn.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enkn
+  model.enko.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enko
+  model.enlt.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enlt
+  model.enlv.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enlv
+  model.enml.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enml
+  model.enms.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enms
+  model.ennl.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ennl
+  model.enpl.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpl
+  model.enpt.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt
+  model.enro.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enro
+  model.enru.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru
+  model.ensk.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensk
+  model.ensl.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensl
+  model.ensq.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensq
+  model.ensv.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensv
+  model.enta.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enta
+  model.ente.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ente
+  model.entr.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/entr
+  model.enuk.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enuk
+  model.esen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/esen
+  model.eten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/eten
+  model.faen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/faen
+  model.fien.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fien
+  model.fren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
+  model.guen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/guen
+  model.heen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/heen
+  model.hien.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hien
+  model.hren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hren
+  model.huen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/huen
+  model.iden.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iden
+  model.isen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/isen
+  model.iten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten
+  model.jaen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen
+  model.knen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/knen
+  model.koen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/koen
+  model.lten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/lten
+  model.lven.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/lven
+  model.mlen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/mlen
+  model.msen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/msen
+  model.mten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/mten
+  model.nben.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/nben
+  model.nlen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/nlen
+  model.nnen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/nnen
+  model.plen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/plen
+  model.pten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten
+  model.roen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/roen
+  model.ruen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
+  model.sken.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sken
+  model.slen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/slen
+  model.sqen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sqen
+  model.sren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sren
+  model.sven.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sven
+  model.taen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/taen
+  model.teen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/teen
+  model.tren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/tren
+  model.uken.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/uken
+  model.vien.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/vien
+
+=========================================================================
+Modification Notice
+=========================================================================
+
+Models listed above may have been converted from original model
+weights into optimized inference formats (GGUF, GGML, ONNX, or
+Bergamot intgemm). These conversions involve format transformation
+and/or weight quantization. No architectural changes were made to
+the underlying models.
+
+Source URLs for original weights are recorded in each model's
+metadata entry within the registry.
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  @qvac/diagnostics@0.1.1
+  @qvac/error@0.1.1
+  @qvac/infer-base@0.4.1
+    https://github.com/tetherto/qvac
+  @qvac/logging@0.1.0
+  bare-events@2.4.2
+    https://github.com/holepunchto/bare-events
+  bare-os@3.9.1
+    https://github.com/holepunchto/bare-os
+  bare-path@3.0.0
+    https://github.com/holepunchto/bare-path
+
+
+=========================================================================
+Python Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  mtdata
+    https://github.com/thammegowda/mtdata
+  requests
+    https://github.com/psf/requests
+  sacrebleu
+    https://github.com/mjpost/sacrebleu
+  sentencepiece
+    https://github.com/google/sentencepiece
+  transformers
+    https://github.com/huggingface/transformers
+  unbabel-comet
+    https://github.com/Unbabel/COMET
+
+--- bsd-3-clause (BSD 3-Clause License) ---
+
+  click
+    https://github.com/pallets/click/
+  numpy
+    https://numpy.org
+  toolz
+    https://github.com/pytoolz/toolz
+  torch
+    https://pytorch.org
+
+--- mpl-2.0 (Mozilla Public License 2.0) ---
+
+  bergamot
+    https://github.com/browsermt/bergamot-translator/
+
+--- mpl-2.0 AND mit ---
+
+  tqdm
+    https://tqdm.github.io
+
+
+=========================================================================
+C++ Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  qvac-lib-inference-addon-cpp
+    https://github.com/tetherto/qvac
+  qvac-lint-cpp
+  sentencepiece
+    https://github.com/google/sentencepiece
+  ssplit
+    https://github.com/browsermt/ssplit-cpp
+
+--- apache-2.0-with-llvm-exception ---
+
+  libc++ (LLVM C++ Standard Library)
+    https://github.com/llvm/llvm-project
+
+--- mit (MIT License) ---
+
+  qvac-fabric
+    https://github.com/tetherto/qvac-fabric-llm.cpp
+
+--- mpl-2.0 (Mozilla Public License 2.0) ---
+
+  bergamot-translator
+    https://github.com/tetherto/qvac-ext-bergamot-translator
+

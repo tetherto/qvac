@@ -1,12 +1,12 @@
 import test from "brittle";
-import { sourceTypeSchema } from "../../schemas/download-asset";
-import { type OperationEvent } from "../../schemas/profiling";
-import { buildOperationEvent } from "../../server/rpc/profiling/operation-metrics";
-import { injectProfilingIntoString } from "../../server/rpc/profiling/context";
-import { extractProfilingMeta } from "../../profiling/envelope";
-import { clearAggregator, getAggregates, recordEvent } from "../../profiling/aggregator";
+import { sourceTypeSchema, type OperationEvent } from "@/schemas";
+import { buildOperationEvent } from "@/server/rpc/profiling";
+import type { ProfilingEvent } from "@/profiling/types";
+import { injectProfilingIntoString } from "@/server/rpc/profiling/context";
+import { extractProfilingMeta } from "@/profiling";
+import { clearAggregator, getAggregates, recordEvent } from "@/profiling/aggregator";
 
-test("sourceType: accepts expected values and rejects unknown", (t: any) => {
+test("sourceType: accepts expected values and rejects unknown", (t) => {
   const expected = ["hyperdrive", "http", "registry", "filesystem"];
   for (const value of expected) {
     t.ok(sourceTypeSchema.safeParse(value).success, `${value} is valid`);
@@ -15,13 +15,13 @@ test("sourceType: accepts expected values and rejects unknown", (t: any) => {
   t.absent(sourceTypeSchema.safeParse("unknown").success, "unknown is invalid");
 });
 
-test("operation metrics: loadModel extracts gauges and tags", (t: any) => {
+test("operation metrics: loadModel extracts gauges and tags", (t) => {
   const event = buildOperationEvent(
     "loadModel",
     "profile-1",
     100,
     500,
-    { modelType: "llm" },
+    { modelType: "llamacpp-completion" },
     {
       __profilingMeta: {
         sourceType: "registry",
@@ -37,7 +37,7 @@ test("operation metrics: loadModel extracts gauges and tags", (t: any) => {
   );
 
   t.ok(event, "event is built");
-  t.alike(event!.tags, { modelType: "llm", sourceType: "registry" });
+  t.alike(event!.tags, { modelType: "llamacpp-completion", sourceType: "registry" });
   t.is(event!.gauges?.downloadTime, 220);
   t.is(event!.gauges?.totalBytesDownloaded, 4096);
   t.is(event!.gauges?.downloadSpeedBps, 18618);
@@ -45,13 +45,13 @@ test("operation metrics: loadModel extracts gauges and tags", (t: any) => {
   t.is(event!.gauges?.totalLoadTime, 500);
 });
 
-test("operation metrics: omits unavailable gauges (no fabrication)", (t: any) => {
+test("operation metrics: omits unavailable gauges (no fabrication)", (t) => {
   const event = buildOperationEvent(
     "loadModel",
     "profile-2",
     100,
     90,
-    { modelType: "llm" },
+    { modelType: "llamacpp-completion" },
     {
       __profilingMeta: {
         sourceType: "filesystem",
@@ -76,14 +76,14 @@ test("operation metrics: omits unavailable gauges (no fabrication)", (t: any) =>
   );
 });
 
-test("transport: operation event survives injection/extraction round-trip", (t: any) => {
+test("transport: operation event survives injection/extraction round-trip", (t) => {
   const operation: OperationEvent = {
     op: "loadModel",
     kind: "handler",
     ms: 500,
     profileId: "round-trip-test",
     gauges: { totalLoadTime: 500, downloadTime: 200 },
-    tags: { modelType: "llm", sourceType: "registry", cacheHit: "true" },
+    tags: { modelType: "llamacpp-completion", sourceType: "registry", cacheHit: "true" },
   };
 
   const baseJson = '{"type":"loadModel","success":true}';
@@ -99,13 +99,13 @@ test("transport: operation event survives injection/extraction round-trip", (t: 
   t.is(extracted!.operation!.profileId, "round-trip-test");
   t.alike(extracted!.operation!.gauges, { totalLoadTime: 500, downloadTime: 200 });
   t.alike(extracted!.operation!.tags, {
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     sourceType: "registry",
     cacheHit: "true",
   });
 });
 
-test("cacheHit: cache-hit path omits download metrics", (t: any) => {
+test("cacheHit: cache-hit path omits download metrics", (t) => {
   clearAggregator();
 
   const cacheHitEvent: OperationEvent = {
@@ -119,7 +119,7 @@ test("cacheHit: cache-hit path omits download metrics", (t: any) => {
     tags: { sourceType: "registry", cacheHit: "true" },
   };
 
-  recordEvent(cacheHitEvent);
+  recordEvent({ ...cacheHitEvent, ts: Date.now() } as ProfilingEvent);
 
   const aggregates = getAggregates();
   t.ok(aggregates["loadModel.totalLoadTime"], "totalLoadTime aggregated");
@@ -140,7 +140,7 @@ test("cacheHit: cache-hit path omits download metrics", (t: any) => {
   clearAggregator();
 });
 
-test("cacheHit: cache-miss path includes download metrics", (t: any) => {
+test("cacheHit: cache-miss path includes download metrics", (t) => {
   clearAggregator();
 
   const cacheMissEvent: OperationEvent = {
@@ -157,7 +157,7 @@ test("cacheHit: cache-miss path includes download metrics", (t: any) => {
     tags: { sourceType: "registry", cacheHit: "false" },
   };
 
-  recordEvent(cacheMissEvent);
+  recordEvent({ ...cacheMissEvent, ts: Date.now() } as ProfilingEvent);
 
   const aggregates = getAggregates();
   t.ok(aggregates["loadModel.totalLoadTime"], "totalLoadTime aggregated");

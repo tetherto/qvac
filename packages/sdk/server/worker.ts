@@ -3,16 +3,20 @@
  */
 
 import { initializeWorkerCore, ensureRPCSetup } from "@/server/worker-core";
-import { registerPlugin } from "@/server/plugins";
+import { registerPlugins } from "@/server/plugins";
 import { getServerLogger } from "@/logging";
 import {
   llmPlugin,
   embeddingsPlugin,
   whisperPlugin,
+  bciPlugin,
   parakeetPlugin,
   nmtPlugin,
   ttsPlugin,
   ocrPlugin,
+  diffusionPlugin,
+  vlaPlugin,
+  classificationPlugin,
 } from "@/server/bare/plugins";
 
 const { hasRPCConfig } = initializeWorkerCore();
@@ -21,14 +25,19 @@ const logger = getServerLogger();
 
 logger.info("🐻 Hello from Bare");
 
-// Register all built-in plugins
-registerPlugin(llmPlugin);
-registerPlugin(embeddingsPlugin);
-registerPlugin(whisperPlugin);
-registerPlugin(parakeetPlugin);
-registerPlugin(nmtPlugin);
-registerPlugin(ttsPlugin);
-registerPlugin(ocrPlugin);
+registerPlugins([
+  llmPlugin,
+  embeddingsPlugin,
+  whisperPlugin,
+  bciPlugin,
+  parakeetPlugin,
+  nmtPlugin,
+  ttsPlugin,
+  ocrPlugin,
+  diffusionPlugin,
+  vlaPlugin,
+  classificationPlugin,
+]);
 
 logger.info(
   hasRPCConfig

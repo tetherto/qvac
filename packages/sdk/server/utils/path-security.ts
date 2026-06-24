@@ -19,7 +19,7 @@ export function isPathWithinBase(
   return checkPathWithinBase(
     basePath,
     targetPath,
-    path.resolve,
+    (...args: [string, ...string[]]) => path.resolve(...args),
     path.sep || "/",
   );
 }

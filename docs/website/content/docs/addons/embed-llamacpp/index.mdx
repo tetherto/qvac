@@ -1,0 +1,246 @@
+---
+title: "@qvac/embed-llamacpp"
+titleStyle: code
+description: Vector embedding generation for semantic search, clustering, and retrieval that seamlessly supports retrieval-augmented generation workflow.
+schemaType: APIReference
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for text embeddings and RAG in QVAC using [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine.
+
+## Models
+
+You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embeddings model. Model file format: `*.gguf`.
+
+## Requirement
+
+Bare $\geq$ v1.24
+
+## Installation
+
+```bash
+npm i @qvac/embed-llamacpp
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+
+```bash
+mkdir qvac-embed-quickstart
+cd qvac-embed-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+
+```bash
+npm i @qvac/embed-llamacpp bare-path
+```
+</Step>
+
+<Step>
+Download a compatible model:
+
+```bash
+curl -L --create-dirs -o models/gte-large_fp16.gguf \
+  https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf
+```
+</Step>
+
+<Step>
+Create `index.js`:
+</Step>
+
+<WrapCode>
+
+```js title="index.js" lineNumbers
+'use strict'
+
+const path = require('bare-path')
+const GGMLBert = require('@qvac/embed-llamacpp')
+
+async function main () {
+  const modelName = 'gte-large_fp16.gguf'
+  const dirPath = path.resolve('./models')
+  const modelPath = path.join(dirPath, modelName)
+
+  // 1. Configuring model settings
+  const model = new GGMLBert({
+    files: { model: [modelPath] },
+    config: {
+      device: 'gpu',
+      gpu_layers: '25'
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  // 2. Loading model
+  await model.load()
+
+  try {
+    // 3. Generating embeddings
+    const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
+    const response = await model.run(query)
+    const embeddings = await response.await()
+
+    console.log('Embeddings shape:', embeddings.length, 'x', embeddings[0].length)
+    console.log('First few values of first embedding:')
+    console.log(embeddings[0].slice(0, 5))
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
+  } finally {
+    // 4. Cleaning up resources
+    await model.unload()
+  }
+}
+
+main().catch(console.error)
+```
+</WrapCode>
+
+<Step>
+Run `index.js`:
+
+```bash
+bare index.js
+```
+</Step>
+</Steps>
+
+## Usage
+
+### 1. Import the Model Class
+
+```js
+const GGMLBert = require('@qvac/embed-llamacpp')
+```
+
+### 2. Create Local Model Paths
+
+The addon reads GGUF files directly from disk. Download the model, then pass absolute local paths to `files.model`.
+
+```js
+const path = require('bare-path')
+
+const dirPath = path.resolve('./models')
+const modelName = 'gte-large_fp16.gguf'
+
+const modelPath = path.join(dirPath, modelName)
+```
+
+### 3. Create the `args` obj
+
+```js
+const args = {
+  files: { model: [modelPath] },
+  config: {
+    device: 'gpu',
+    gpu_layers: '25'
+  },
+  logger: console,
+  opts: { stats: true }
+}
+```
+
+The `args` obj contains the following properties:
+
+* `files.model`: An array of absolute paths to the model file(s) on disk. For sharded models, provide every shard in order.
+* `config`: A dictionary of hyper-parameters used to tweak the behaviour of the model.
+* `logger`: This property is used to create a `QvacLogger` instance, which handles all logging functionality.
+* `opts.stats`: This flag determines whether to calculate inference stats.
+
+### 4. Create `config`
+
+The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
+*All parameters must be strings.*
+
+```js
+// an example of possible configuration
+const config = {
+  device: 'gpu',
+  gpu_layers: '99',
+  batch_size: '1024',
+  ctx_size: '512'
+}
+```
+
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| device            | `"gpu"` or `"cpu"`                          | `"gpu"`                      | Device to run inference on                            |
+| gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
+| batch_size        | integer                                     | 2048                         | Tokens processed per batch                            |
+| ctx_size          | 0 – model-dependent                         | model default                | Runtime context window in tokens                      |
+| pooling           | `"none"`, `"mean"`, `"cls"`, `"last"`, or `"rank"` | model default        | Pooling type for embeddings                           |
+| attention         | `"causal"` or `"non-causal"`                | model default                | Attention type for embeddings                         |
+| embd_normalize    | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
+| flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention                        |
+| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
+
+#### IGPU/GPU  selection logic:
+
+| Scenario                       | main-gpu not specified                | main-gpu: `"dedicated"`             | main-gpu: `"integrated"`           |
+|---------------------------------|---------------------------------------|-------------------------------------|-------------------------------------|
+| Devices considered              | All GPUs (dedicated + integrated)     | Only dedicated GPUs                 | Only integrated GPUs                |
+| System with iGPU only           | ✅ Uses iGPU                          | ❌ Falls back to CPU                | ✅ Uses iGPU                        |
+| System with dedicated GPU only  | ✅ Uses dedicated GPU                 | ✅ Uses dedicated GPU               | ❌ Falls back to CPU                |
+| System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
+
+
+### 5. Instantiate the model
+
+```js
+const model = new GGMLBert(args)
+```
+
+### 6. Load the model
+
+```js
+await model.load()
+```
+
+`load()` reads the file(s) listed in `files.model` directly from disk and activates the model. The caller is responsible for ensuring the files already exist at those paths.
+
+### 7. Generate embeddings for input sequence
+
+The model outputs a vector for the input sequence.
+
+```js
+const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
+const response = await model.run(query)
+const embeddings = await response.await()
+```
+
+### 8. Release Resources
+
+Unload the model when finished:
+
+```javascript
+try {
+  await model.unload()
+} catch (error) {
+  console.error('Failed to unload model:', error)
+}
+```
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/embed-llamacpp)

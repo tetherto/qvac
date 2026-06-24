@@ -1,5 +1,9 @@
 # QVAC SDK Tests
 # Runs desktop and/or mobile (Android/iOS) e2e tests for the SDK package
+#
+# Triggered via:
+#   - workflow_dispatch: manual runs with full customizability
+#   - workflow_call: called by on-pr-test-sdk.yml for label/release-branch triggers
 
 name: QVAC Tests (sdk)
 
@@ -12,102 +16,200 @@ on:
         options:
           - all
           - desktop
+          - electron
           - mobile
+          - electron + desktop
+          - desktop + mobile
+          - electron + mobile
           - android
           - ios
-        default: desktop
+        default: all
+      suite:
+        description: "Suite selection (full = all tests, smoke = smoke suite, custom = use suite-custom value)"
+        type: choice
+        options:
+          - full
+          - smoke
+          - custom
+        default: full
+      suite-custom:
+        description: "Custom suite value (only used when suite=custom). Comma-separated suite names."
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated, e.g. 'slow,flaky'). Tests tagged with these suites are skipped."
+        type: string
       filter:
         description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
         type: string
       desktop-consumer-timeout:
-        description: "Desktop consumer timeout (seconds)"
+        description: "Desktop/Electron consumer timeout (seconds)"
         type: number
         default: 60
       mobile-consumer-timeout:
         description: "Mobile consumer timeout (seconds)"
         type: number
-        default: 600
+        default: 1200
       device-farm-timeout:
         description: "Device Farm session timeout (minutes)"
         type: number
-        default: 30
+        default: 90
+      device-farm-start-timeout:
+        description: "Device Farm scheduling timeout before producer starts (minutes)"
+        type: number
+        default: 90
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
-        default: '["ai-run-windows11-gpu", "ai-run-linux-gpu", "macos-latest-xlarge"]'
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
-  # pull_request:
-  #   paths:
-  #     - "packages/sdk/**"
-  #   branches:
-  #     - main
-  #     - release-*
-  # push:
-  #   branches:
-  #     - main
-  #     - release-*
-  #     - feature-*
-  #     - tmp-*
-  #   paths:
-  #     - "packages/sdk/**"
+      cache-models:
+        description: "Cache downloaded models between runs"
+        type: boolean
+        default: true
+
+  workflow_call:
+    inputs:
+      targets:
+        description: "Which platforms to test"
+        type: string
+        default: "all"
+      suite:
+        description: "Resolved suite value: empty string = full, 'smoke', or custom comma-separated"
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated)"
+        type: string
+      filter:
+        description: "Test filter (comma-separated categories/prefixes)"
+        type: string
+      desktop-consumer-timeout:
+        type: number
+        default: 60
+      mobile-consumer-timeout:
+        type: number
+        default: 1200
+      device-farm-timeout:
+        type: number
+        default: 90
+      device-farm-start-timeout:
+        type: number
+        default: 90
+      desktop-platforms:
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+      test-version:
+        type: string
+      cache-models:
+        type: boolean
+        default: true
 
 permissions:
+  actions: read
   contents: read
   pull-requests: write
   packages: read
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      suite: ${{ steps.resolve.outputs.suite }}
+    steps:
+      - name: Resolve suite
+        id: resolve
+        shell: bash
+        run: |
+          SUITE="${{ inputs.suite }}"
+          if [ "$SUITE" = "full" ] || [ -z "$SUITE" ]; then
+            echo "suite=" >> "$GITHUB_OUTPUT"
+          elif [ "$SUITE" = "custom" ]; then
+            echo "suite=${{ inputs.suite-custom }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "suite=$SUITE" >> "$GITHUB_OUTPUT"
+          fi
+
   desktop-tests:
-    # Runs for: all, desktop, empty (future PR/push)
-    if: inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
-    uses: ./.github/workflows/test-desktop-sdk.yml
+    needs: resolve
+    if: inputs.targets == 'all' || inputs.targets == 'desktop' || inputs.targets == 'electron + desktop' || inputs.targets == 'desktop + mobile'
+    uses: ./.github/workflows/test-node-sdk.yml
     with:
+      consumer: desktop
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/tests-qvac"
-      platforms: ${{ inputs.desktop-platforms || '["ai-run-windows11-gpu", "ai-run-linux-gpu", "macos-latest-xlarge"]' }}
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
       test-version: ${{ inputs.test-version || '' }}
-    secrets:
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
-      MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
-      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
-      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
-      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  electron-tests:
+    needs: resolve
+    # Electron CI is manual-only for now. `workflow_call` callers such as
+    # on-pr-test-sdk.yml keep their existing desktop + mobile behavior.
+    if: github.event_name == 'workflow_dispatch' && (inputs.targets == 'all' || inputs.targets == 'electron' || inputs.targets == 'electron + desktop' || inputs.targets == 'electron + mobile')
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: electron
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      test-version: ${{ inputs.test-version || '' }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
 
   android-tests:
-    # Runs for: all, mobile, android, empty (future PR/push)
-    if: inputs.targets != 'desktop' && inputs.targets != 'ios'
+    needs: resolve
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'android' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/tests-qvac"
-      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
+      working-directory: "packages/sdk/e2e"
+      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
       filter: ${{ inputs.filter }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '30') }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
       test-version: ${{ inputs.test-version || '' }}
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
-      MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
-      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
-      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
-      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    secrets: inherit
 
-  # ios-tests:
-  #   # Runs for: all, mobile, ios, empty (future PR/push)
-  #   if: inputs.targets != 'desktop' && inputs.targets != 'android'
-  #   uses: ./.github/workflows/test-ios-sdk.yml
-  #   with:
-  #     ...
+  ios-tests:
+    needs: resolve
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'ios' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
+    uses: ./.github/workflows/test-ios-sdk.yml
+    with:
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
+      device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
+      ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
+      test-version: ${{ inputs.test-version || '' }}
+    secrets: inherit

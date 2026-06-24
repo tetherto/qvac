@@ -24,19 +24,39 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
-          bun-version: latest
+          # Pinned (vs `latest`) so a compromised Bun release can't be picked
+          # up automatically on the next CI run, including for fork PRs.
+          # Keep in sync with the `bun: ^1.3.11` devDep in docs/website/package.json.
+          bun-version: 1.3.11
 
       - name: Install dependencies
         run: bun install
 
-      - name: Create placeholder for generated API docs
-        run: |
-          mkdir -p "content/docs/(latest)/sdk/api"
-          printf '%s\n' '---' 'title: "@qvac/sdk"' 'titleStyle: code' 'description: API Reference' '---' '' 'Placeholder for generated API docs.' > "content/docs/(latest)/sdk/api/index.mdx"
-
       - name: Build and validate
+        # The API summary `index.mdx` (and its older-version siblings) lives
+        # at `content/docs/reference/api/`. It is committed to the repo and
+        # refreshed by the `Docs Release` workflow on SDK release pushes,
+        # so every PR checkout already has it on disk — no placeholder
+        # step is needed here. (The historical placeholder targeted the
+        # legacy `content/docs/sdk/api/` path, which the build never read.)
         run: bun run build
+
+      - name: Run docs tests
+        run: bun run vitest run --exclude '**/tsdoc-completeness*'
+
+      - name: Install SDK dependencies
+        id: sdk-install
+        continue-on-error: true
+        run: bun install
+        working-directory: packages/sdk
+
+      - name: TSDoc completeness audit (warning mode)
+        if: steps.sdk-install.outcome == 'success'
+        continue-on-error: true
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        run: bun run vitest run tests/tsdoc-completeness.test.ts

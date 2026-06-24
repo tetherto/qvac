@@ -1,0 +1,163 @@
+---
+title: Image generation
+description: Text-to-image and image-to-image generation using a customized Diffusion engine.
+schemaType: HowTo
+---
+
+## Overview
+
+Image generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate.
+
+For image-to-image, also pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) — the model transforms the input guided by the prompt instead of starting from noise. `diffusion()` returns one or more PNG images as `Uint8Array` buffers. Use `progressStream` to track generation progress step-by-step.
+
+For higher-resolution outputs, you can chain a Real-ESRGAN upscaler. Either attach it as a post-processing step at load time and trigger it per generation via `diffusion({ upscale })`, or load an ESRGAN model standalone with `modelConfig.mode: "upscale"` and call `upscale()` on any PNG/JPEG buffer — generated or not. Both paths return PNG `Uint8Array` buffers and accept a `repeats` option that compounds the scale factor across sequential passes.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`diffusion()`](/reference/api#diffusion) or `upscale()`
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Models
+
+Supported model families and their file layouts:
+
+- **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
+- **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
+- **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
+- **ESRGAN**: post-generation upscaler, `*.pth` format. Two ways to load:
+  - **Paired with a diffusion model** — set `modelConfig.upscaler.model_src` at `loadModel()` time alongside the diffusion `modelSrc`.
+  - **Standalone** — pass the ESRGAN model as the top-level `modelSrc` with `modelConfig.mode: "upscale"`.
+
+For models available as constants, see [SDK — Models](/introduction#models).
+
+<Callout type="info">
+**On upscaling:** ESRGAN can be used standalone via `modelConfig.mode: "upscale"` + `upscale()`, or optionally paired with any supported diffusion family to upscale generated images in the same call via `diffusion({ upscale })`. Available constants: `REALESRGAN_X4PLUS_ANIME_6B`, `REALESRGAN_X4PLUS`.
+</Callout>
+
+## Examples
+
+### FLUX.2-klein
+
+The following script shows text-to-image generation using FLUX.2-klein with its split-layout model (separate diffusion model, LLM text encoder, and VAE):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux2-klein.js title="diffusion-flux2-klein.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein.ts title="diffusion-flux2-klein.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Stable Diffusion
+
+The following script shows a minimal text-to-image generation example using a single all-in-one SD 2.1 model:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-simple.js title="diffusion-simple.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-simple.ts title="diffusion-simple.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+
+
+### Image-to-image
+
+Pass `init_image` to transform an existing image guided by a text prompt. Behavior depends on the model family:
+
+- **FLUX.2**: in-context conditioning. Requires `prediction: "flux2_flow"` in `modelConfig` at `loadModel()` time; `strength` is ignored on this path.
+- **SD / SDXL / SD3**: SDEdit-style. Use `strength` to control how much the source is preserved (`0` = keep source, `1` = ignore source).
+
+The following script loads FLUX.2-klein in split-layout and transforms an input image using in-context conditioning (`prediction: "flux2_flow"`):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux2-klein-img2img.js title="diffusion-flux2-klein-img2img.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein-img2img.ts title="diffusion-flux2-klein-img2img.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Upscaling
+
+#### Post-processing
+
+Pass `upscale` to `diffusion()` to upscale generated images in the same call. Requires `modelConfig.upscaler = { type: "esrgan", model_src, tile_size? }` at `loadModel()` time. Behavior depends on the value passed:
+
+- `true` (or `{}` / `{ repeats: 1 }`): single pass at the model's native scale factor (e.g. `x4` for RealESRGAN_x4plus).
+- `{ repeats: N }`: N sequential passes — each pass multiplies the output dimensions by the model's scale factor (e.g. `repeats: 2` with an `x4` model → `x16`).
+- When `batch_count > 1`, every output image is upscaled independently.
+
+The following script loads SD 2.1 with an ESRGAN upscaler and generates both a single-pass (`x4`) and a two-pass (`x16`) upscale from the same prompt:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-esrgan-upscale.js title="diffusion-esrgan-upscale.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-esrgan-upscale.ts title="diffusion-esrgan-upscale.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+#### Standalone
+
+The SDK also exposes `upscale()` — a standalone path that upscales any PNG/JPEG image without running diffusion. Load the ESRGAN model directly with `modelConfig.mode: "upscale"`:
+
+```ts
+const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
+  modelType: "diffusion",
+  modelConfig: { mode: "upscale", upscaler: { tile_size: 128 } },
+});
+const { outputs } = upscale({ modelId, image: pngBytes, repeats: 2 });
+const [upscaledPng] = await outputs;
+```
+
+`tile_size` defaults to 128. Increase it to reduce tile seams on large inputs, at the cost of more memory per pass.
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>

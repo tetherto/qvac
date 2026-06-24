@@ -11,13 +11,13 @@ import {
 } from "@qvac/sdk";
 
 try {
-  console.log("🚀 Starting log streaming demo...\n");
+  console.log("▸ Streaming SDK and model logs");
 
   // Note: To configure logging (level and console output), use config file:
   // { "loggerLevel": "debug", "loggerConsoleOutput": false } in qvac.config.json/js/ts
 
   // Subscribe to SDK server logs in background
-  console.log("📡 Starting SDK server log stream...\n");
+  console.log("▸ Subscribing to SDK server logs");
   (async () => {
     for await (const log of loggingStream({ id: SDK_LOG_ID })) {
       console.log(
@@ -29,10 +29,9 @@ try {
   });
 
   // Load models
-  console.log("📥 Loading models (watch SDK logs above)...\n");
+  console.log("▸ Loading models");
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
     modelConfig: {
       ctx_size: 2048,
       temp: 0.7,
@@ -42,10 +41,9 @@ try {
 
   const embedModelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    modelType: "embeddings",
   });
 
-  console.log("📡 Starting model-specific log streams...\n");
+  console.log("▸ Subscribing to model logs");
   (async () => {
     for await (const log of loggingStream({ id: llmModelId })) {
       const timestamp = new Date(log.timestamp).toISOString();
@@ -76,12 +74,12 @@ try {
     history: messages,
     stream: true,
   });
-  const embedding = await embed({
+  const { embedding } = await embed({
     modelId: embedModelId,
     text: messages[0]?.content ?? "Hello, world!",
   });
 
-  console.log("📝 Response:\n");
+  console.log("▸ Response");
   for await (const token of result.tokenStream) {
     process.stdout.write(token);
   }
@@ -90,15 +88,12 @@ try {
   console.log("Embeddings length", embedding.length);
 
   console.log(
-    "\n💡 Notice three log streams running:\n" +
-      "   - [SDK] = SDK server operations\n" +
-      "   - [LLM] = LLM model inference logs\n" +
-      "   - [EMBED] = Embedding model logs\n",
+    "▸ Three streams running: [SDK] server, [LLM] inference, [EMBED] embedding",
   );
 
   await unloadModel({ modelId: llmModelId, clearStorage: false });
   await unloadModel({ modelId: embedModelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

@@ -3,10 +3,13 @@ import { z } from "zod";
 export const unloadModelParamsSchema = z.object({
   modelId: z.string(),
   clearStorage: z.boolean().default(false),
+  autoClose: z.boolean().optional(),
 });
 
-export const unloadModelRequestSchema = unloadModelParamsSchema.extend({
+export const unloadModelRequestSchema = z.object({
   type: z.literal("unloadModel"),
+  modelId: z.string(),
+  clearStorage: z.boolean().default(false),
 });
 
 export const unloadModelResponseSchema = z.object({

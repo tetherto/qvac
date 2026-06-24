@@ -69,7 +69,7 @@ test('DocTR CTC - db_mobilenet + crnn_mobilenet on english.bmp', { timeout: TEST
 
   const texts = results.map(r => r.text)
   t.comment('Detected: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[CTC mobilenet]', stats, texts))
+  t.comment(formatOCRPerformanceMetrics('[CTC mobilenet]', stats, texts, { skipReport: true }))
 
   // Should detect many text regions from the infographic
   t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
@@ -98,7 +98,7 @@ test('DocTR attention - db_resnet50 + parseq on english.bmp', { timeout: TEST_TI
 
   const texts = results.map(r => r.text)
   t.comment('Detected: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[attention resnet+parseq]', stats, texts))
+  t.comment(formatOCRPerformanceMetrics('[attention resnet+parseq]', stats, texts, { skipReport: true }))
 
   t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
 
@@ -127,7 +127,7 @@ test('DocTR cross - db_mobilenet + parseq (attention) on english.bmp', { timeout
 
   const texts = results.map(r => r.text)
   t.comment('Detected: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[attention mobilenet+parseq]', stats, texts))
+  t.comment(formatOCRPerformanceMetrics('[attention mobilenet+parseq]', stats, texts, { skipReport: true }))
 
   t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
 
@@ -152,7 +152,7 @@ test('DocTR cross - db_resnet50 + crnn_mobilenet (CTC) on english.bmp', { timeou
 
   const texts = results.map(r => r.text)
   t.comment('Detected: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[CTC resnet+crnn]', stats, texts))
+  t.comment(formatOCRPerformanceMetrics('[CTC resnet+crnn]', stats, texts, { skipReport: true }))
 
   t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)
 
@@ -177,7 +177,7 @@ test('DocTR attention - db_resnet50 + parseq on basic_test.bmp', { timeout: TEST
   const texts = results.map(r => r.text)
   const lowerTexts = texts.map(w => w.toLowerCase())
   t.comment('Detected: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[attention basic_test]', stats, texts))
+  t.comment(formatOCRPerformanceMetrics('[attention basic_test]', stats, texts, { skipReport: true }))
 
   t.ok(results.length >= 1, `should detect at least 1 text region, got ${results.length}`)
   // "normal" is the only horizontal word — should be reliably detected
@@ -204,7 +204,7 @@ test('DocTR straightenPages - should not crash and produce valid output', { time
 
   const texts = results.map(r => r.text)
   t.comment('Detected with straightenPages: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[straightenPages]', stats, texts))
+  t.comment(formatOCRPerformanceMetrics('[straightenPages]', stats, texts, { skipReport: true }))
 
   // An upright image should produce the same results with or without straightenPages
   t.ok(results.length >= 30, `should detect >= 30 text regions, got ${results.length}`)

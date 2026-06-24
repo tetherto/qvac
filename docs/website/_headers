@@ -1,0 +1,11 @@
+# Agent discovery: LLM documentation index
+/*
+  Link: </llms.txt>; rel="describedby"; type="text/markdown"; title="LLM documentation index"
+
+# Agent discovery: full LLM-readable documentation
+/*
+  Link: </llms-full.txt>; rel="describedby"; type="text/markdown"; title="Full LLM-readable documentation"
+
+# Agent discovery: SDK API summary
+/*
+  Link: </reference/api/>; rel="service-doc"; type="text/html"; title="SDK API summary"

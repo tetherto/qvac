@@ -1,0 +1,65 @@
+{
+  "_comment": "Per-device-class soft performance baselines for nmtcpp integration tests. Any run that violates a threshold is logged as a WARN in the test output / GitHub Step Summary but does NOT fail CI. Populate real numbers after one week of passing data (see QVAC-17790 plan, Phase 4.2). Sentinel/empty is intentional for the first merge.",
+  "_schema": {
+    "buckets": "array of { name, platform, execution_provider, thresholds }",
+    "thresholds.tps_min": "warn if metrics.tps falls below this value",
+    "thresholds.total_time_ms_max": "warn if metrics.total_time_ms exceeds this value"
+  },
+  "buckets": [
+    {
+      "name": "android-arm64-vulkan",
+      "platform": "android",
+      "execution_provider": "vulkan",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
+      "name": "android-arm64-opencl",
+      "_comment": "Reachable only when caller opts into OpenCL via config.gpu_backend='opencl' on a build with QVAC_NMTCPP_USE_OPENCL defined; default Android backend is Vulkan since QVAC-17790.",
+      "platform": "android",
+      "execution_provider": "opencl",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
+      "name": "ios-arm64-metal",
+      "platform": "ios",
+      "execution_provider": "metal",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
+      "name": "darwin-arm64-metal",
+      "platform": "darwin",
+      "execution_provider": "metal",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
+      "name": "desktop-vulkan",
+      "platform": "linux",
+      "execution_provider": "vulkan",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
+      "name": "win32-x64-vulkan",
+      "platform": "win32",
+      "execution_provider": "vulkan",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+# QVAC bare-sdk inference e2e - PR Trigger
+#
+# Label-gated Bare-runtime inference e2e for @qvac/bare-sdk. The model-free
+# assembly gate runs on every PR via "SDK Pod Checks" (test:bare); this is the
+# heavy leg — it downloads models and needs native addon prebuilds — so it only
+# runs when:
+#   - the "test-e2e-full" label is applied (bare-sdk rides along with the SDK
+#     full suite rather than keeping its own smoke/full split), or
+#   - a PR targeting a release-* branch touches packages/sdk/ or packages/bare-sdk/, or
+#   - dispatched manually (workflow_dispatch).
+#
+# Mirrors the SDK suite's gating (on-pr-test-sdk.yml): pull_request_target for
+# registry/secret access, with label-gate (a trusted member applied the
+# "verified" label) + authorize-pr (fork/permission safety) guarding the run
+# before any PR code is checked out.
+name: QVAC Tests (bare-sdk) - PR
+
+on:
+  pull_request_target:
+    types: [labeled, opened, synchronize]
+    paths:
+      - "packages/bare-sdk/**"
+      - "packages/sdk/**"
+      - ".github/workflows/on-pr-bare-sdk-e2e.yml"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA). Defaults to current ref."
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+  pull-requests: write
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  resolve-config:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+
+      - name: Authorize PR
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          label: safe-to-test
+          github-token: ${{ github.token }}
+
+      - name: Determine whether to run
+        if: steps.auth.outputs.allowed == 'true'
+        id: check
+        shell: bash
+        run: |
+          EVENT="${{ github.event.action }}"
+          LABEL="${{ github.event.label.name }}"
+          TARGET="${{ github.base_ref }}"
+
+          if [ "$EVENT" = "labeled" ]; then
+            if [ "$LABEL" = "test-e2e-full" ]; then
+              echo "should-run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::Ignoring unrelated label: $LABEL"
+              echo "should-run=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+          elif echo "$TARGET" | grep -q '^release-'; then
+            echo "::notice::Release branch PR — running bare-sdk inference e2e"
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  run-e2e:
+    name: bare-sdk inference e2e (linux-x64)
+    needs:
+      - resolve-config
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && needs.resolve-config.outputs.should-run == 'true'
+    runs-on: qvac-ubuntu2204-x64-gpu
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    timeout-minutes: 30
+    steps:
+      # Self-hosted runners persist the workspace between runs; wipe it so a
+      # prior PR's tree can't leak into this checkout.
+      - name: Manual Workspace Cleanup
+        if: runner.environment != 'github-hosted'
+        working-directory: .
+        shell: bash
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      # PR head — the code under test. Safe only because the gates above passed.
+      # PAT_TOKEN lets the checkout reach the fork on external PRs.
+      - name: Checkout PR head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install Bare runtime
+        run: npm install -g --force bare
+
+      - name: Install bare-sdk deps
+        working-directory: packages/bare-sdk
+        run: bun install
+
+      # Builds ../sdk/dist that bare-sdk bundles from (no-op if already fresh).
+      - name: Build sibling sdk
+        working-directory: packages/bare-sdk
+        run: npm run sdk-source:workspace
+
+      # Native addon prebuilds the inference paths exercise. --no-save keeps the
+      # committed manifest addon-free (enforced by check-no-addon-deps).
+      - name: Install addon prebuilds
+        working-directory: packages/bare-sdk
+        run: npm install --no-save @qvac/llm-llamacpp @qvac/embed-llamacpp @qvac/translation-nmtcpp @qvac/transcription-whispercpp
+
+      - name: Run bare-sdk inference e2e
+        working-directory: packages/bare-sdk
+        timeout-minutes: 20
+        run: npm run test:bare:e2e

@@ -1,11 +1,5 @@
 name: General CI/CD (cli)
 
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
-
 on:
   push:
     branches:
@@ -26,21 +20,46 @@ on:
       custom_input_3:
         required: false
         type: string
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
 
 env:
   WORKDIR: packages/cli
 
+permissions:
+  contents: read
+
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   release-merge-guard:
     name: Release Merge Guard
-    continue-on-error: true
     if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -57,10 +76,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
 
@@ -73,11 +92,11 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
-          retention-days: 1
+          retention-days: 30
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -128,19 +147,23 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-main-gpr-dev:
-    needs: [build, publish-logic]
-    if: needs.publish-logic.outputs.publish_main == 'true'
+    needs:
+      - build
+      - publish-logic
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_main == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
@@ -149,19 +172,24 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/cli
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [build, publish-logic, release-merge-guard]
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    needs:
+      - build
+      - publish-logic
+      - release-merge-guard
+      - label-gate
+    if: >-
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -169,11 +197,21 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
@@ -182,40 +220,38 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          repo_name: cli
+          tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.WORKDIR }}
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "cli"
-      release_name: "QVAC cli Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/cli"
 
   publish-feature-gpr:
-    needs: [build, publish-logic]
-    if: needs.publish-logic.outputs.publish_feature == 'true'
+    needs:
+      - build
+      - publish-logic
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_feature == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
@@ -224,29 +260,32 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/cli
           name-suffix: "-mono"
 
   publish-tmp-gpr:
-    needs: [build, publish-logic]
-    if: needs.publish-logic.outputs.publish_tmp == 'true'
+    needs:
+      - build
+      - publish-logic
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
@@ -255,10 +294,9 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/cli

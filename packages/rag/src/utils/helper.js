@@ -1,19 +1,9 @@
 'use strict'
 
 const { QvacErrorRAG, ERR_CODES } = require('../errors')
-// Set up crypto polyfill for uuid-random
-try {
-  const crypto = require('bare-crypto')
-  global.crypto = crypto
-} catch (e2) {
-  if (typeof global === 'undefined' || (typeof global !== 'undefined' && !global.crypto)) {
-    throw new QvacErrorRAG(
-      ERR_CODES.DEPENDENCY_REQUIRED,
-      'No crypto implementation found. Please ensure a crypto module is available in your environment.'
-    )
-  }
-}
-const uuid = require('uuid-random')
+
+const UUID_BYTES = 16
+const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => (i + 0x100).toString(16).slice(1))
 
 /**
  * Calculate the cosine similarity between two vectors.
@@ -98,7 +88,51 @@ function normalizeDocs (docs) {
  * @returns {string} A unique identifier.
  */
 function generateId () {
-  return uuid()
+  const bytes = randomBytes(UUID_BYTES)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+
+  return BYTE_TO_HEX[bytes[0]] + BYTE_TO_HEX[bytes[1]] +
+    BYTE_TO_HEX[bytes[2]] + BYTE_TO_HEX[bytes[3]] + '-' +
+    BYTE_TO_HEX[bytes[4]] + BYTE_TO_HEX[bytes[5]] + '-' +
+    BYTE_TO_HEX[bytes[6]] + BYTE_TO_HEX[bytes[7]] + '-' +
+    BYTE_TO_HEX[bytes[8]] + BYTE_TO_HEX[bytes[9]] + '-' +
+    BYTE_TO_HEX[bytes[10]] + BYTE_TO_HEX[bytes[11]] +
+    BYTE_TO_HEX[bytes[12]] + BYTE_TO_HEX[bytes[13]] +
+    BYTE_TO_HEX[bytes[14]] + BYTE_TO_HEX[bytes[15]]
+}
+
+function randomBytes (size) {
+  try {
+    const crypto = typeof globalThis !== 'undefined' ? globalThis.crypto : null
+    if (crypto && typeof crypto.getRandomValues === 'function') {
+      return crypto.getRandomValues(new Uint8Array(size))
+    }
+  } catch {}
+
+  try {
+    const cryptoMod = require('#crypto')
+    if (cryptoMod && typeof cryptoMod.randomBytes === 'function') {
+      return toUint8Array(cryptoMod.randomBytes(size))
+    }
+    if (cryptoMod && typeof cryptoMod.getRandomValues === 'function') {
+      return cryptoMod.getRandomValues(new Uint8Array(size))
+    }
+  } catch {}
+
+  throw new QvacErrorRAG({
+    code: ERR_CODES.DEPENDENCY_REQUIRED,
+    adds: 'No secure random byte source available for UUID generation. Provide globalThis.crypto.getRandomValues or a #crypto implementation with randomBytes/getRandomValues.'
+  })
+}
+
+function toUint8Array (bytes) {
+  if (bytes instanceof Uint8Array) return bytes
+  if (typeof ArrayBuffer !== 'undefined' && bytes instanceof ArrayBuffer) return new Uint8Array(bytes)
+  if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(bytes)) {
+    return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  }
+  return Uint8Array.from(bytes)
 }
 
 /**

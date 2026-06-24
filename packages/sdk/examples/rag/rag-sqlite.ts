@@ -4,7 +4,7 @@ import sqlite3InitModule from "@sqliteai/sqlite-wasm";
 try {
   // Get query from command line or use default
   const query = process.argv[2] || "machine learning algorithms";
-  console.log(`🔍 Query: "${query}"`);
+  console.log(`▸ Query: "${query}"`);
 
   // Initialize SQLite with vector extension
   const sqlite3 = await sqlite3InitModule();
@@ -12,9 +12,11 @@ try {
 
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    modelType: "embeddings",
-    onProgress: (progress) => {
-      console.log(`Loading model... ${progress.percentage.toFixed(1)}%`);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
   });
 
@@ -62,9 +64,9 @@ try {
   )
 `);
 
-  console.log("📚 Embedding documents...");
+  console.log("▸ Embedding documents...");
   for (const sample of samples) {
-    const embedding = await embed({ modelId, text: sample.text });
+    const { embedding } = await embed({ modelId, text: sample.text });
     db.exec({
       sql: "INSERT INTO documents VALUES (?, ?, vector_as_f32(?))",
       bind: [sample.id, sample.text, JSON.stringify(embedding)],
@@ -83,8 +85,8 @@ try {
   db.exec(`SELECT vector_quantize_preload('documents', 'embedding')`);
 
   // Search for similar documents
-  console.log("🔎 Searching for similar documents...");
-  const queryEmbedding = await embed({ modelId, text: query });
+  console.log("▸ Searching for similar documents...");
+  const { embedding: queryEmbedding } = await embed({ modelId, text: query });
 
   const results: Array<{
     id: number;
@@ -108,7 +110,7 @@ try {
     },
   });
 
-  console.log("\n📋 Top 3 most similar documents:");
+  console.log("\n▸ Top 3 most similar documents:");
   results.forEach((result, index) => {
     console.log("=".repeat(50) + " Top result:");
     console.log(
@@ -122,6 +124,6 @@ try {
   await unloadModel({ modelId });
   db.close();
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

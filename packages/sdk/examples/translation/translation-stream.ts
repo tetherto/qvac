@@ -1,35 +1,29 @@
-import {
-  loadModel,
-  translate,
-  unloadModel,
-  MARIAN_OPUS_EN_IT_Q4_0,
-} from "@qvac/sdk";
+import { loadModel, translate, unloadModel, BERGAMOT_EN_ES } from "@qvac/sdk";
 
 try {
   const modelId = await loadModel({
-    modelSrc: MARIAN_OPUS_EN_IT_Q4_0,
-    modelType: "nmt",
+    modelSrc: BERGAMOT_EN_ES,
     modelConfig: {
-      engine: "Opus",
+      engine: "Bergamot",
       from: "en",
-      to: "it",
+      to: "es",
     },
   });
 
-  console.log(`✅ Model loaded: ${modelId}`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const text =
     "Hello, how are you today? I hope you are having a wonderful day!";
 
-  console.log("\n--- Streaming Translation ---");
+  console.log("▸ Streaming Translation");
   const streamResult = translate({
     modelId,
     text,
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     stream: true,
   });
 
-  process.stdout.write("Translated text EN -> IT: ");
+  process.stdout.write("Translated text EN -> ES: ");
   for await (const token of streamResult.tokenStream) {
     process.stdout.write(token);
   }
@@ -37,11 +31,11 @@ try {
 
   const stats = await streamResult.stats;
   if (stats) {
-    console.log(`Processing stats:`, stats);
+    console.log(`▸ Processing stats:`, stats);
   }
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

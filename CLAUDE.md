@@ -32,9 +32,18 @@ QVAC (Quantum Versatile AI Compute) is a monorepo for building local-first, P2P 
 
 ## Build & Test — Quick Reference
 
-### Native Addons (C++ packages, e.g. qvac-lib-infer-llamacpp-llm)
+### Native Addons (C++ packages, e.g. llm-llamacpp)
 
-**Prerequisites:** clang-19, libc++-19-dev, libc++abi-19-dev, vcpkg, bare >=1.24, bare-make
+**Prerequisites:** clang-22, libc++-22-dev, libc++abi-22-dev, vcpkg, bare >=1.24, bare-make
+
+> The CI workflows install LLVM via `.github/actions/setup-llvm`, which is the
+> single source of truth for the LLVM major used across the monorepo. To bump
+> the LLVM version everywhere, change `version` (and `windows-version` for the
+> chocolatey pin) in that one action file. Local dev environments should match
+> the CI default (`clang-22` today); if you're temporarily blocked on an older
+> system clang you can override the vcpkg toolchain locally — every package's
+> `linux-clang.cmake` now uses unversioned `clang`/`clang++`, so pointing them
+> at a different version only requires `update-alternatives` on your machine.
 
 ```bash
 cd packages/<addon-package>
@@ -51,7 +60,7 @@ Full one-liner: `npm install && bare-make generate && bare-make build && bare-ma
 npm run test               # run all integration tests (brittle framework)
 npm run test:integration   # same as above (generates all.js then runs bare test/integration/all.js)
 npm run test:cpp           # C++ unit tests (GoogleTest)
-npm run coverage:cpp       # C++ code coverage (llvm-cov-19)
+npm run coverage:cpp       # C++ code coverage (llvm-cov)
 bare test/integration/<name>.test.js  # run a single integration test
 ```
 
@@ -73,6 +82,7 @@ bun run format      # prettier check
 **Testing:**
 ```bash
 bun run test:unit
+bun run test:bare
 bun run test:security
 bun run test:security:bare
 ```
@@ -116,17 +126,17 @@ qvac/
 │   └── settings.json          # [GENERATED] from packages/ocr-onnx/.agent/settings.json
 ├── .cursor/                   # Cursor config
 │   ├── skills/setup/          # Bootstrap skill (tracked in git)
-│   ├── skills/                # Existing skills (addon-changelog, sdk-*, etc.)
+│   ├── skills/                # Custom skills (qv-addon-*, qv-sdk-*, qv-pr-*, etc.)
 │   ├── commands/              # Existing commands
 │   └── rules/                 # .mdc files with Cursor-specific rules
-│   ├── qvac-sdk/              # Main SDK entry point
-│   ├── qvac-cli/              # CLI tool
-│   ├── qvac-lib-rag/          # RAG library
-│   ├── qvac-lib-infer-*/      # Inference addons (LLM, TTS, OCR, etc.)
-│   ├── qvac-lib-dl-*/         # Data loaders (filesystem, hyperdrive)
-│   ├── qvac-lib-logging/      # Logging
-│   ├── qvac-lib-error-base/   # Error handling base
-│   ├── qvac-lib-registry-server/ # Distributed model registry
+│   ├── sdk/              # Main SDK entry point
+│   ├── cli/              # CLI tool
+│   ├── rag/          # RAG library
+│   ├── infer-*/      # Inference addons (LLM, TTS, OCR, etc.)
+│   ├── dl-*/         # Data loaders (filesystem, hyperdrive)
+│   ├── logging/      # Logging
+│   ├── error-base/   # Error handling base
+│   ├── registry-server/ # Distributed model registry
 │   └── docs/                  # Documentation
 ├── scripts/                   # Build and validation scripts
 ├── .github/workflows/         # CI/CD (85+ workflow files)
@@ -186,6 +196,7 @@ When a question relates to one of these topics, read the corresponding knowledge
 | Topic | When to read | File |
 |-------|-------------|------|
 | CI / GitHub Actions | CI failures, workflow triggers, validation, publishing | `packages/ocr-onnx/.agent/knowledge/ci-validation.md` |
+| Self-hosted CI runners | Manual Workspace Cleanup, `working-directory: .`, `runner.environment`, `qvac-*` labels | `docs/ci/SELF-HOSTED-RUNNERS.md` |
 | vcpkg / native builds | vcpkg deps, triplets, registries, CMake integration, build failures | `packages/ocr-onnx/.agent/knowledge/vcpkg-management.md` |
 | llama.cpp Android | Cross-compiling llama.cpp, ADB deployment, Vulkan GPU, Android inference | `packages/ocr-onnx/.agent/knowledge/llama-cpp-android.md` |
 | Model registry | Adding/updating models, registry format, vcpkg port config | `packages/ocr-onnx/.agent/knowledge/registry-models.md` |

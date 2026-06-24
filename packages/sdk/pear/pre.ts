@@ -5,6 +5,9 @@
  * 1. Generate `qvac/worker.pear.entry.mjs` with selected plugins
  * 2. Persist `pear.stage.entrypoints` to package.json for routing
  *
+ * Note: `qvac verify bundle` is not wired here yet — run it manually
+ * (locally and/or in CI) before `pear stage` / `pear run`.
+ *
  * @example package.json configuration
  * ```json
  * {
@@ -51,18 +54,26 @@ const BUILTIN_PLUGINS = [
   "@qvac/sdk/llamacpp-completion/plugin",
   "@qvac/sdk/llamacpp-embedding/plugin",
   "@qvac/sdk/whispercpp-transcription/plugin",
+  "@qvac/sdk/bci-whispercpp-transcription/plugin",
   "@qvac/sdk/nmtcpp-translation/plugin",
-  "@qvac/sdk/onnx-tts/plugin",
-  "@qvac/sdk/onnx-ocr/plugin",
+  "@qvac/sdk/tts-ggml/plugin",
+  "@qvac/sdk/ggml-ocr/plugin",
+  "@qvac/sdk/sdcpp-generation/plugin",
+  "@qvac/sdk/ggml-vla/plugin",
+  "@qvac/sdk/ggml-classification/plugin",
 ];
 
 const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   "llamacpp-completion": "llmPlugin",
   "llamacpp-embedding": "embeddingsPlugin",
   "whispercpp-transcription": "whisperPlugin",
+  "bci-whispercpp-transcription": "bciPlugin",
   "nmtcpp-translation": "nmtPlugin",
-  "onnx-tts": "ttsPlugin",
-  "onnx-ocr": "ocrPlugin",
+  "tts-ggml": "ttsPlugin",
+  "ggml-ocr": "ocrPlugin",
+  "sdcpp-generation": "diffusionPlugin",
+  "ggml-vla": "vlaPlugin",
+  "ggml-classification": "classificationPlugin",
 };
 
 const SDK_NAME = "@qvac/sdk";
