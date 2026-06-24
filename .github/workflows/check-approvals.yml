@@ -12,10 +12,15 @@ permissions:
   pull-requests: write
   issues: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   check-approvals:
     name: Check Approvals
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     continue-on-error: true
     if: >-
       (

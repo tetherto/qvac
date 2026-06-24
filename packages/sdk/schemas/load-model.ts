@@ -100,7 +100,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
     ),
   ],
-  [ModelType.onnxOcr, configKeys(ocrConfigSchema)],
+  [ModelType.ggmlOcr, configKeys(ocrConfigSchema)],
   [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
   [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
   [ModelType.ggmlClassification, configKeys(classificationConfigSchema)],
@@ -395,7 +395,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion("modelType", [
     .strict()
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: ModelType.onnxOcr,
+      modelType: ModelType.ggmlOcr,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: (data.modelConfig ?? {}),
@@ -559,7 +559,7 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema
 
 export const loadOcrModelRequestSchema = commonModelConfigSchema
   .extend({
-    modelType: z.literal(ModelType.onnxOcr),
+    modelType: z.literal(ModelType.ggmlOcr),
     modelConfig: ocrConfigSchema,
   })
   .strict();
@@ -761,7 +761,7 @@ export type InferredConfig<S> = S extends {
         ? z.input<typeof nmtConfigSchema>
         : S extends { engine: typeof ModelType.ttsGgml }
           ? z.input<typeof ttsConfigSchema>
-          : S extends { engine: typeof ModelType.onnxOcr }
+          : S extends { engine: typeof ModelType.ggmlOcr }
             ? Partial<z.input<typeof ocrConfigSchema>>
             : S extends { engine: typeof ModelType.parakeetTranscription }
               ? z.input<typeof parakeetConfigSchema>
