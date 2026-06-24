@@ -76,23 +76,6 @@ jobs:
           ref: ${{ env.HEAD_REF }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Fetch base commit
-        shell: bash
-        env:
-          BASE_REPO: ${{ github.repository }}
-        run: |
-          if git cat-file -e "$BASE_SHA^{commit}"; then
-            exit 0
-          fi
-
-          if [[ ! "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "::error::BASE_SHA '$BASE_SHA' is not available locally and is not a full commit SHA"
-            exit 1
-          fi
-
-          git fetch --no-tags --depth=1 "https://github.com/$BASE_REPO.git" "$BASE_SHA"
-          git cat-file -e "$BASE_SHA^{commit}"
-
       - name: Setup AWS + Windows CLI
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
         with:
