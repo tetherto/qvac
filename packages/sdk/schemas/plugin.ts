@@ -86,6 +86,7 @@ export interface DuplexPluginHandlerDefinition<
  * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
  * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
  * - `detectorModelPath` - OCR detector model
+ * - `embedderPath` - BCI whisper.cpp embedder weights
  *
  * Custom plugins can define their own artifact keys.
  */
