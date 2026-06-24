@@ -1,5 +1,8 @@
 import test from "brittle";
-import { llmConfigBaseSchema } from "@/schemas/llamacpp-config";
+import {
+  llmConfigBaseSchema,
+  REASONING_BUDGET_MAX,
+} from "@/schemas/llamacpp-config";
 import {
   loadModelOptionsToRequestSchema,
   loadModelSrcRequestSchema,
@@ -109,8 +112,17 @@ test("llmConfigBaseSchema: accepts reasoning_budget 0 (disabled)", (t) => {
   t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 0 }).success, true);
 });
 
+test("llmConfigBaseSchema: accepts positive reasoning_budget (token cap)", (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 1 }).success, true);
+  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 128 }).success, true);
+});
+
 test("llmConfigBaseSchema: rejects reasoning_budget other values", (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 1 }).success, false);
   t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: -2 }).success, false);
   t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 0.5 }).success, false);
+  t.is(
+    llmConfigBaseSchema.safeParse({ reasoning_budget: REASONING_BUDGET_MAX + 1 })
+      .success,
+    false,
+  );
 });

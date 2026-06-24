@@ -456,6 +456,23 @@ describe('extractGenerationParams (chat semantics)', () => {
     assert.equal(params, undefined)
   })
 
+  it('extracts remove_thinking_from_context true', () => {
+    const params = extractChat({ remove_thinking_from_context: true })
+    assert.ok(params)
+    assert.equal(params.remove_thinking_from_context, true)
+  })
+
+  it('extracts remove_thinking_from_context false', () => {
+    const params = extractChat({ remove_thinking_from_context: false })
+    assert.ok(params)
+    assert.equal(params.remove_thinking_from_context, false)
+  })
+
+  it('ignores non-boolean remove_thinking_from_context', () => {
+    const params = extractChat({ remove_thinking_from_context: 1 })
+    assert.equal(params, undefined)
+  })
+
   it('ignores non-number values', () => {
     const params = extractChat({ temperature: 'hot', max_tokens: '100' })
     assert.equal(params, undefined)

@@ -4,7 +4,7 @@ import {
   translate,
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
-  OCR_LATIN_RECOGNIZER_1,
+  OCR_LATIN,
   BERGAMOT_EN_FR,
 } from "@qvac/sdk";
 import { ValidationHelpers, type TestResult } from "@tetherto/qvac-test-suite";
@@ -90,8 +90,8 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     expectation: typeof modelLoadOcr.expectation,
   ): Promise<TestResult> {
     const modelId = await loadModel({
-      modelSrc: OCR_LATIN_RECOGNIZER_1,
-      modelType: "onnx-ocr",
+      modelSrc: OCR_LATIN,
+      modelType: "ggml-ocr",
       modelConfig: { langList: ["en"] },
     });
     this.resources.register("ocr", modelId);
