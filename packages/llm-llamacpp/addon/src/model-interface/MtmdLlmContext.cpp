@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include <common/log.h>
+#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
@@ -163,6 +164,44 @@ void MtmdLlmContext::initVisionContext() {
       params_.mmproj_backend.empty() ? nullptr : params_.mmproj_backend.c_str();
   mparams.print_timings = true;
   mparams.n_threads = params_.cpuparams.n_threads;
+  // Forward the per-image token budget to the vision encoder. These were
+  // previously dropped: the addon parsed image_min/max_tokens into
+  // common_params but never copied them into mtmd_context_params, so a
+  // caller-set cap had no effect and the encoder always used the model-metadata
+  // default (up to ~4M pixels -> thousands of patches). For dynamic-resolution
+  // encoders (Qwen-VL, Pixtral, LFM2, ...) this lets callers bound the
+  // O(n_patches^2) encode cost; for fixed-grid encoders it is a no-op.
+  mparams.image_min_tokens = params_.image_min_tokens;
+  mparams.image_max_tokens = params_.image_max_tokens;
+
+  // When the caller has not set an explicit cap, apply a sensible default for
+  // Qwen-VL encoders only. Qwen-VL allows up to 4096 image tokens, far more
+  // than the ~1024 it needs for grounding, so an uncapped high-resolution
+  // image pays O(n_patches^2) attention for tokens the model cannot use (and
+  // can even destabilize generation). 2048 stays well above the documented
+  // grounding floor while roughly halving the worst-case encode + image
+  // prefill. We gate on the mmproj projector type rather than applying a
+  // blanket value so that smaller-budget dynamic encoders (e.g. LightOnOCR /
+  // Pixtral at 1024, LFM2 at 256) are never *raised* above their native limit;
+  // fixed-grid encoders (SigLIP/SmolVLM) are unaffected regardless. Fully
+  // overridable via image_max_tokens config.
+  if (mparams.image_max_tokens <= 0) {
+    static constexpr int kQwenVlDefaultImageMaxTokens = 2048;
+    gguf_init_params gp = {};
+    gp.no_alloc = true;
+    if (gguf_context* gc = gguf_init_from_file(clipPath, gp)) {
+      const int64_t keyId = gguf_find_key(gc, "clip.projector_type");
+      if (keyId >= 0 && gguf_get_kv_type(gc, keyId) == GGUF_TYPE_STRING) {
+        const std::string projType = gguf_get_val_str(gc, keyId);
+        // matches qwen2vl_merger / qwen2.5vl_merger / qwen3vl_merger
+        if (projType.rfind("qwen", 0) == 0 &&
+            projType.find("vl") != std::string::npos) {
+          mparams.image_max_tokens = kQwenVlDefaultImageMaxTokens;
+        }
+      }
+      gguf_free(gc);
+    }
+  }
   ctxVision_.reset(mtmd_init_from_file(clipPath, modelCtx_.model, mparams));
   if (ctxVision_.get() == nullptr) {
     std::string errorMsg = string_format(
