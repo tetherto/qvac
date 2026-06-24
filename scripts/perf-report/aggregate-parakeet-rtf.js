@@ -5,10 +5,10 @@ const fs = require('fs')
 const path = require('path')
 
 // GGML (parakeet.cpp) GPU backend cascade: Vulkan (linux/win32/android),
-// Metal (darwin/ios), OpenCL (Adreno android). CUDA is ingestible via an
-// explicit hint / manual drop. Previously this was the ONNX EP set
-// (coreml/directml/nnapi/rocm), which never matched the GGML runtime.
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'cuda']
+// Metal (darwin/ios), OpenCL (Adreno android). CUDA is not supported on any
+// platform. Previously this was the ONNX EP set (coreml/directml/nnapi/rocm),
+// which never matched the GGML runtime.
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 function parseArgs (argv) {
   const args = {

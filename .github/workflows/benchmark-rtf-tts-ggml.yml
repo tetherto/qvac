@@ -403,7 +403,6 @@ jobs:
           echo "| vulkan | linux x64, win32 x64 | qvac-*-gpu self-hosted runners |" >> "$GITHUB_STEP_SUMMARY"
           echo "| mobile cpu | Android / iOS flagships | AWS Device Farm, opt-in via \`include_mobile=true\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| metal | not on CI (hosted macOS Metal crash) | drop JSON into packages/tts-ggml/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| cuda | not in default tts-cpp cascade | drop JSON into packages/tts-ggml/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| opencl | Adreno-only | drop JSON into packages/tts-ggml/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated benchmark report
