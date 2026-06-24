@@ -12,7 +12,6 @@ import {
   unloadModel,
   bciTranscribe,
   BCI_WINDOWED,
-  BCI_EMBEDDER,
 } from "@qvac/sdk";
 
 const args = process.argv.slice(2);
@@ -31,7 +30,6 @@ try {
   const modelId = await loadModel({
     modelSrc: BCI_WINDOWED,
     modelConfig: {
-      embedderModelSrc: BCI_EMBEDDER,
       whisperConfig: {
         language: "en",
         n_threads: 4,
