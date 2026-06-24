@@ -330,6 +330,18 @@ const SINGLE_FILE_MANIFEST = [
   },
   {
     scope: 'ci',
+    url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf',
+    dest: 'Qwen3.5-0.8B-Q8_0.gguf',
+    sha256: '76aee9e2f08ee795acd1aca7752646b7a2fe177dbec81523f76414f93ddaa5d3'
+  },
+  {
+    scope: 'ci',
+    url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf',
+    dest: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+    sha256: 'c7185073f2b8bba6f4d35a2a63c4e6579382c73575c23359a1ee313050aaee11'
+  },
+  {
+    scope: 'ci',
     url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf',
     dest: 'bitnet_b1_58-large-TQ2_0.gguf',
     sha256: '281aafb18a9f4a3124c10a1d8683e2296f0cfe8a2944da0a5667d17488a951bb'
