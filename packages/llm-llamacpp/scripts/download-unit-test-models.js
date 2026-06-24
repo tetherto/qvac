@@ -332,13 +332,13 @@ const SINGLE_FILE_MANIFEST = [
     scope: 'ci',
     url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf',
     dest: 'Qwen3.5-0.8B-Q8_0.gguf',
-    sha256: '76aee9e2f08ee795acd1aca7752646b7a2fe177dbec81523f76414f93ddaa5d3'
+    sha256: '0ad885ffd4bb022fc4f0d33a3308fa108ef8613159d3b3a67e23abca056b7a6c'
   },
   {
     scope: 'ci',
     url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf',
     dest: 'mmproj-Qwen3.5-0.8B-F16.gguf',
-    sha256: 'c7185073f2b8bba6f4d35a2a63c4e6579382c73575c23359a1ee313050aaee11'
+    sha256: '56e4c6cfe73b0c82e3e82bc518d7591997e61d81f723fc41a586f4fa69ea2453'
   },
   {
     scope: 'ci',
