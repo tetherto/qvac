@@ -26,11 +26,20 @@ std::vector<uint8_t> readBinaryFile(const fs::path& path) {
 }
 
 fs::path multimodalTestImagePath() {
-  const fs::path packageRelative = fs::path("media/fruitPlate.png");
+  const fs::path packageRelative = "media/fruitPlate.png";
   if (fs::exists(packageRelative)) {
     return packageRelative;
   }
-  return fs::path("packages/llm-llamacpp/media/fruitPlate.png");
+
+#ifdef TEST_BINARY_DIR
+  const fs::path binaryRelative = fs::path(TEST_BINARY_DIR) / ".." / ".." /
+                                  ".." / "media" / "fruitPlate.png";
+  if (fs::exists(binaryRelative)) {
+    return binaryRelative.lexically_normal();
+  }
+#endif
+
+  return "packages/llm-llamacpp/media/fruitPlate.png";
 }
 } // namespace
 
