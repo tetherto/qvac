@@ -1,10 +1,10 @@
-import type { ModelProgressUpdate, ShardUrl } from "@/schemas";
-import fs, { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
-import { Readable, type Writable } from "bare-stream";
-import fetch, { Headers } from "bare-fetch";
-import type { AbortSignal } from "bare-abort-controller";
-import { withTimeout } from "@/utils/withTimeout";
+import type { ModelProgressUpdate, ShardUrl } from '@/schemas'
+import fs, { promises as fsPromises } from 'bare-fs'
+import path from 'bare-path'
+import { Readable, type Writable } from 'bare-stream'
+import fetch, { Headers } from 'bare-fetch'
+import type { AbortSignal } from 'bare-abort-controller'
+import { withTimeout } from '@/utils/withTimeout'
 import {
   getModelsCacheDir,
   getShardedModelCacheDir,
@@ -19,118 +19,113 @@ import {
   validateShardedModelCache,
   checkAllShardsExist,
   generateShardFilenames,
-  hasValidGGUFHeader,
-} from "@/server/utils";
-import { getSDKConfig } from "@/server/bare/registry/config-registry";
+  hasValidGGUFHeader
+} from '@/server/utils'
+import { getSDKConfig } from '@/server/bare/registry/config-registry'
 import {
   createHttpDownloadKey,
   startOrJoinDownload,
-  applyJoinedDownloadStats,
-} from "@/server/rpc/handlers/load-model/download-manager";
+  applyJoinedDownloadStats
+} from '@/server/rpc/handlers/load-model/download-manager'
 import {
   DownloadCancelledError,
   HTTPError,
   NoResponseBodyError,
   PartialDownloadOfflineError,
-  ResponseBodyNotReadableError,
-} from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
-import type { DownloadHooks } from "./types";
+  ResponseBodyNotReadableError
+} from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
+import type { DownloadHooks } from './types'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
-const DEFAULT_CONCURRENCY = 3;
+const DEFAULT_CONCURRENCY = 3
 
 interface ShardDownloadState {
-  index: number;
-  shard: ShardUrl;
-  shardPath: string;
-  expectedSize: number;
-  downloadedBytes: number;
-  isComplete: boolean;
+  index: number
+  shard: ShardUrl
+  shardPath: string
+  expectedSize: number
+  downloadedBytes: number
+  isComplete: boolean
 }
 
-const DEFAULT_HTTP_CONNECTION_TIMEOUT_MS = 10_000;
+const DEFAULT_HTTP_CONNECTION_TIMEOUT_MS = 10_000
 
 function extractFilenameFromUrl(url: string): string {
   // Parse URL to get the filename from the path
-  const urlParts = url.split("/");
-  const filename = urlParts[urlParts.length - 1] || "model.gguf";
+  const urlParts = url.split('/')
+  const filename = urlParts[urlParts.length - 1] || 'model.gguf'
 
   // Remove query parameters if present
-  const cleanFilename = filename.split("?")[0] || "model.gguf";
+  const cleanFilename = filename.split('?')[0] || 'model.gguf'
 
   // Sanitize to prevent path traversal via crafted URLs
-  return sanitizePathComponent(cleanFilename);
+  return sanitizePathComponent(cleanFilename)
 }
 
 async function validateCachedFile(
   modelPath: string,
   url: string,
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ): Promise<string | null> {
   try {
-    await fsPromises.access(modelPath);
+    await fsPromises.access(modelPath)
 
-    const localStats = await fsPromises.stat(modelPath);
-    const localSize = localStats.size;
+    const localStats = await fsPromises.stat(modelPath)
+    const localSize = localStats.size
 
-    const config = getSDKConfig();
-    const connectionTimeout =
-      config.httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS;
-    let expectedSize = 0;
+    const config = getSDKConfig()
+    const connectionTimeout = config.httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS
+    let expectedSize = 0
     try {
       const response = await withTimeout(
         fetch(url, {
-          method: "HEAD",
-          ...(signal && { signal }),
+          method: 'HEAD',
+          ...(signal && { signal })
         }),
-        connectionTimeout,
-      );
-      expectedSize = parseInt(response.headers.get("content-length") || "0");
+        connectionTimeout
+      )
+      expectedSize = parseInt(response.headers.get('content-length') || '0')
     } catch (headError) {
       logger.warn(
-        `⚠️ HEAD request failed: ${headError instanceof Error ? headError.message : String(headError)}`,
-      );
-      logger.info(`📴 Falling back to GGUF header validation...`);
+        `⚠️ HEAD request failed: ${headError instanceof Error ? headError.message : String(headError)}`
+      )
+      logger.info(`📴 Falling back to GGUF header validation...`)
 
-      const hasValidHeader = await hasValidGGUFHeader(modelPath);
+      const hasValidHeader = await hasValidGGUFHeader(modelPath)
       if (hasValidHeader) {
-        logger.info(
-          `✅ Offline - GGUF header valid, using cached file: ${modelPath}`,
-        );
-        return modelPath;
+        logger.info(`✅ Offline - GGUF header valid, using cached file: ${modelPath}`)
+        return modelPath
       }
 
       if (localSize > 0) {
         logger.error(
-          `❌ Offline with partial download (${localSize} bytes). Cannot resume without network.`,
-        );
-        throw new PartialDownloadOfflineError(url, localSize);
+          `❌ Offline with partial download (${localSize} bytes). Cannot resume without network.`
+        )
+        throw new PartialDownloadOfflineError(url, localSize)
       }
 
-      logger.warn(
-        `⚠️ Offline and GGUF validation failed - file may be incomplete`,
-      );
-      return null;
+      logger.warn(`⚠️ Offline and GGUF validation failed - file may be incomplete`)
+      return null
     }
 
     if (localSize !== expectedSize) {
       logger.info(
-        `📥 Cached file size mismatch. Expected: ${expectedSize}, Found: ${localSize}. Re-downloading...`,
-      );
-      return null;
+        `📥 Cached file size mismatch. Expected: ${expectedSize}, Found: ${localSize}. Re-downloading...`
+      )
+      return null
     }
 
-    logger.info(`✅ Using cached HTTP model: ${modelPath}`);
-    return modelPath;
+    logger.info(`✅ Using cached HTTP model: ${modelPath}`)
+    return modelPath
   } catch (error) {
     // Re-throw PartialDownloadOfflineError
     if (error instanceof PartialDownloadOfflineError) {
-      throw error;
+      throw error
     }
     // File doesn't exist or other access error
-    return null;
+    return null
   }
 }
 
@@ -139,429 +134,400 @@ async function performHttpDownload(
   modelPath: string,
   downloadKey: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ): Promise<void> {
   if (signal?.aborted) {
-    throw new DownloadCancelledError();
+    throw new DownloadCancelledError()
   }
 
-  logger.info(`📥 Downloading model from HTTP: ${url}`);
+  logger.info(`📥 Downloading model from HTTP: ${url}`)
 
   // Check if file exists for resuming
-  let startOffset = 0;
-  let downloadedBytes = 0;
+  let startOffset = 0
+  let downloadedBytes = 0
 
   try {
-    const existingStats = await fsPromises.stat(modelPath);
-    startOffset = existingStats.size;
-    downloadedBytes = startOffset;
-    logger.info(`📥 Resuming download from byte ${startOffset}`);
+    const existingStats = await fsPromises.stat(modelPath)
+    startOffset = existingStats.size
+    downloadedBytes = startOffset
+    logger.info(`📥 Resuming download from byte ${startOffset}`)
   } catch {
-    logger.info(`📥 Starting fresh download`);
+    logger.info(`📥 Starting fresh download`)
   }
 
   // Prepare headers for resume if needed
   const headers = new Headers({
-    "User-Agent": "qvac-sdk",
-  });
+    'User-Agent': 'qvac-sdk'
+  })
 
   if (startOffset > 0) {
-    headers.append("Range", `bytes=${startOffset}-`);
+    headers.append('Range', `bytes=${startOffset}-`)
   }
 
-  const config = getSDKConfig();
-  const connectionTimeout =
-    config.httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS;
+  const config = getSDKConfig()
+  const connectionTimeout = config.httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS
 
-  let response;
+  let response
   try {
     response = await withTimeout(
       fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers,
-        ...(signal && { signal }),
+        ...(signal && { signal })
       }),
-      connectionTimeout,
-    );
+      connectionTimeout
+    )
   } catch (error) {
     // Check if it was parent abort
     if (signal?.aborted) {
-      throw new DownloadCancelledError();
+      throw new DownloadCancelledError()
     }
     // Connection timeout or network error
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`❌ Connection failed: ${errorMsg}. URL: ${url}`);
-    throw new HTTPError(0, `Connection failed: ${errorMsg}`, error);
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    logger.error(`❌ Connection failed: ${errorMsg}. URL: ${url}`)
+    throw new HTTPError(0, `Connection failed: ${errorMsg}`, error)
   }
 
   if (!response.ok) {
     // Check if it's a 416 (Range Not Satisfiable) - file already complete
     if (response.status === 416 && startOffset > 0) {
-      logger.info(`✅ File already completely downloaded`);
+      logger.info(`✅ File already completely downloaded`)
       // Send 100% progress for already complete file
       if (progressCallback) {
         progressCallback({
-          type: "modelProgress",
+          type: 'modelProgress',
           downloaded: startOffset,
           total: startOffset,
           percentage: 100,
-          downloadKey,
-        });
+          downloadKey
+        })
       }
-      return;
+      return
     }
 
     // Check if server doesn't support range requests
     if (response.status === 200 && startOffset > 0) {
-      logger.warn(`⚠️ Server doesn't support resume, starting fresh download`);
-      startOffset = 0;
-      downloadedBytes = 0;
+      logger.warn(`⚠️ Server doesn't support resume, starting fresh download`)
+      startOffset = 0
+      downloadedBytes = 0
 
       // Retry without Range header
       response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: new Headers({
-          "User-Agent": "qvac-sdk",
+          'User-Agent': 'qvac-sdk'
         }),
-        ...(signal && { signal }),
-      });
+        ...(signal && { signal })
+      })
 
       if (!response.ok) {
-        throw new HTTPError(response.status, response.statusText);
+        throw new HTTPError(response.status, response.statusText)
       }
     } else if (response.status !== 206) {
       // 206 is Partial Content (successful resume)
-      throw new HTTPError(response.status, response.statusText);
+      throw new HTTPError(response.status, response.statusText)
     }
   }
 
   // Get total size from headers
-  let totalBytes = 0;
-  const contentLength = response.headers.get("content-length");
+  let totalBytes = 0
+  const contentLength = response.headers.get('content-length')
 
   if (response.status === 206) {
     // For resumed downloads, parse Content-Range header
-    const contentRange = response.headers.get("content-range");
+    const contentRange = response.headers.get('content-range')
     if (contentRange) {
-      const match = contentRange.match(/bytes \d+-\d+\/(\d+)/);
+      const match = contentRange.match(/bytes \d+-\d+\/(\d+)/)
       if (match && match[1]) {
-        totalBytes = parseInt(match[1]);
+        totalBytes = parseInt(match[1])
       }
     }
   } else {
     // For fresh downloads
-    totalBytes = contentLength ? parseInt(contentLength) : 0;
+    totalBytes = contentLength ? parseInt(contentLength) : 0
   }
 
-  logger.info(
-    `📏 Total size: ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(2)} MB)`,
-  );
+  logger.info(`📏 Total size: ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(2)} MB)`)
 
   // Create write stream (append if resuming)
-  const writeStreamOptions =
-    startOffset > 0 && response.status === 206 ? { flags: "a" } : {};
-  const writeStream = fs.createWriteStream(modelPath, writeStreamOptions);
+  const writeStreamOptions = startOffset > 0 && response.status === 206 ? { flags: 'a' } : {}
+  const writeStream = fs.createWriteStream(modelPath, writeStreamOptions)
 
   // Get the response body
-  const body = response.body;
+  const body = response.body
 
   if (!body) {
-    throw new NoResponseBodyError();
+    throw new NoResponseBodyError()
   }
 
   try {
     // Check if body has pipe method (it's a Node/Bare stream)
     const isReadable =
       body instanceof Readable ||
-      (typeof (body as unknown as Readable).pipe === "function" &&
-        typeof (body as unknown as Readable).on === "function");
+      (typeof (body as unknown as Readable).pipe === 'function' &&
+        typeof (body as unknown as Readable).on === 'function')
 
     if (isReadable) {
       // Track progress by intercepting data events if possible
-      (body as Readable).on("data", (chunk) => {
-        downloadedBytes += (chunk as Buffer).length;
+      ;(body as Readable).on('data', (chunk) => {
+        downloadedBytes += (chunk as Buffer).length
         if (progressCallback) {
           progressCallback({
-            type: "modelProgress",
+            type: 'modelProgress',
             downloaded: downloadedBytes,
             total: totalBytes,
             percentage: calculatePercentage(downloadedBytes, totalBytes),
-            downloadKey,
-          });
+            downloadKey
+          })
         }
-      });
+      })
 
       // Pipe directly to file
-      (body as Readable).pipe(writeStream as unknown as Writable);
+      ;(body as Readable).pipe(writeStream as unknown as Writable)
 
       // Wait for download to complete
       await new Promise((resolve, reject) => {
         // Handle abort signal
         const abortHandler = () => {
-          const error = new DownloadCancelledError();
-          (body as Readable).destroy();
-          writeStream.destroy();
-          reject(error);
-        };
-
-        if (signal) {
-          signal.addEventListener("abort", abortHandler);
+          const error = new DownloadCancelledError()
+          ;(body as Readable).destroy()
+          writeStream.destroy()
+          reject(error)
         }
 
-        writeStream.on("finish", () => {
-          logger.info(`✅ Model downloaded successfully to ${modelPath}`);
+        if (signal) {
+          signal.addEventListener('abort', abortHandler)
+        }
+
+        writeStream.on('finish', () => {
+          logger.info(`✅ Model downloaded successfully to ${modelPath}`)
           if (signal) {
-            signal.removeEventListener("abort", abortHandler);
+            signal.removeEventListener('abort', abortHandler)
           }
-          resolve(undefined);
-        });
-        writeStream.on("error", reject);
-        (body as Readable).on("error", reject);
-      });
+          resolve(undefined)
+        })
+        writeStream.on('error', reject)
+        ;(body as Readable).on('error', reject)
+      })
     } else if (body[Symbol.asyncIterator]) {
       // Body is an async iterable (for await...of)
       for await (const chunk of body as AsyncIterable<Buffer | Uint8Array>) {
         // Check if abort signal is triggered
         if (signal && signal.aborted) {
-          writeStream.destroy();
-          throw new DownloadCancelledError();
+          writeStream.destroy()
+          throw new DownloadCancelledError()
         }
 
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        downloadedBytes += buffer.length;
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        downloadedBytes += buffer.length
 
         if (progressCallback) {
           progressCallback({
-            type: "modelProgress",
+            type: 'modelProgress',
             downloaded: downloadedBytes,
             total: totalBytes,
             percentage: calculatePercentage(downloadedBytes, totalBytes),
-            downloadKey,
-          });
+            downloadKey
+          })
         }
 
         // Write chunk to file
         await new Promise<void>((resolve, reject) => {
           writeStream.write(buffer, (err) => {
-            if (err)
-              reject(
-                new Error(err instanceof Error ? err.message : String(err)),
-              );
-            else resolve();
-          });
-        });
+            if (err) reject(new Error(err instanceof Error ? err.message : String(err)))
+            else resolve()
+          })
+        })
       }
 
       // Close the write stream
       await new Promise<void>((resolve, reject) => {
         writeStream.end(() => {
-          logger.info(`✅ Model downloaded successfully to ${modelPath}`);
-          resolve();
-        });
-        writeStream.on("error", reject);
-      });
+          logger.info(`✅ Model downloaded successfully to ${modelPath}`)
+          resolve()
+        })
+        writeStream.on('error', reject)
+      })
     } else {
       // Fallback: try to use getReader() if it's a ReadableStream
       const readableStreamBody = body as unknown as {
         getReader?: () => {
-          read: () => Promise<{ done: boolean; value: Uint8Array }>;
-          releaseLock: () => void;
-        };
-      };
-      const reader = readableStreamBody.getReader
-        ? readableStreamBody.getReader()
-        : null;
+          read: () => Promise<{ done: boolean; value: Uint8Array }>
+          releaseLock: () => void
+        }
+      }
+      const reader = readableStreamBody.getReader ? readableStreamBody.getReader() : null
       if (reader) {
         try {
           while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+            const { done, value } = await reader.read()
+            if (done) break
 
-            const buffer = Buffer.from(value);
-            downloadedBytes += buffer.length;
+            const buffer = Buffer.from(value)
+            downloadedBytes += buffer.length
 
             if (progressCallback) {
               progressCallback({
-                type: "modelProgress",
+                type: 'modelProgress',
                 downloaded: downloadedBytes,
                 total: totalBytes,
                 percentage: calculatePercentage(downloadedBytes, totalBytes),
-                downloadKey,
-              });
+                downloadKey
+              })
             }
 
             // Write chunk to file
             await new Promise<void>((resolve, reject) => {
               writeStream.write(buffer, (err) => {
-                if (err)
-                  reject(
-                    new Error(err instanceof Error ? err.message : String(err)),
-                  );
-                else resolve();
-              });
-            });
+                if (err) reject(new Error(err instanceof Error ? err.message : String(err)))
+                else resolve()
+              })
+            })
           }
         } finally {
-          reader.releaseLock();
+          reader.releaseLock()
         }
 
         // Close the write stream
         await new Promise<void>((resolve, reject) => {
           writeStream.end(() => {
-            logger.info(`✅ Model downloaded successfully to ${modelPath}`);
-            resolve();
-          });
-          writeStream.on("error", reject);
-        });
+            logger.info(`✅ Model downloaded successfully to ${modelPath}`)
+            resolve()
+          })
+          writeStream.on('error', reject)
+        })
       } else {
-        throw new ResponseBodyNotReadableError();
+        throw new ResponseBodyNotReadableError()
       }
     }
   } catch (error) {
-    writeStream.destroy();
-    logger.error(
-      "Error during download:",
-      error instanceof Error ? error.message : String(error),
-    );
-    throw error instanceof Error ? error : new Error(String(error));
+    writeStream.destroy()
+    logger.error('Error during download:', error instanceof Error ? error.message : String(error))
+    throw error instanceof Error ? error : new Error(String(error))
   }
 }
 
 export async function downloadModelFromHttp(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadHooks,
+  hooks?: DownloadHooks
 ) {
-  const filename = extractFilenameFromUrl(url);
+  const filename = extractFilenameFromUrl(url)
 
   if (isArchiveUrl(url)) {
-    return downloadShardedModelFromArchive(url, progressCallback, hooks);
+    return downloadShardedModelFromArchive(url, progressCallback, hooks)
   }
 
-  const shardInfo = detectShardedModel(filename);
+  const shardInfo = detectShardedModel(filename)
 
   if (shardInfo.isSharded && shardInfo.totalShards) {
-    return downloadShardedModelFromHttp(url, progressCallback, hooks);
+    return downloadShardedModelFromHttp(url, progressCallback, hooks)
   }
 
-  const downloadKey = createHttpDownloadKey(url);
-  hooks?.onDownloadKey?.(downloadKey);
-  const cacheDir = getModelsCacheDir();
-  const sourceHash = generateShortHash(url);
-  const modelPath = `${cacheDir}/${sourceHash}_${filename}`;
+  const downloadKey = createHttpDownloadKey(url)
+  hooks?.onDownloadKey?.(downloadKey)
+  const cacheDir = getModelsCacheDir()
+  const sourceHash = generateShortHash(url)
+  const modelPath = `${cacheDir}/${sourceHash}_${filename}`
 
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
       try {
         // Check if already cached
-        const cachedPath = await validateCachedFile(
-          modelPath,
-          url,
-          ctx.signal,
-        );
+        const cachedPath = await validateCachedFile(modelPath, url, ctx.signal)
         if (cachedPath) {
-          hooks?.markCacheHit?.();
-          ctx.setCacheHit(true);
+          hooks?.markCacheHit?.()
+          ctx.setCacheHit(true)
           try {
-            const stats = await fsPromises.stat(cachedPath);
+            const stats = await fsPromises.stat(cachedPath)
             ctx.broadcastProgress({
-              type: "modelProgress",
+              type: 'modelProgress',
               downloaded: stats.size,
               total: stats.size,
               percentage: 100,
-              downloadKey,
-            });
+              downloadKey
+            })
           } catch (error) {
-            logger.debug("Failed to get file stats for progress callback", {
+            logger.debug('Failed to get file stats for progress callback', {
               path: cachedPath,
-              error,
-            });
+              error
+            })
           }
-          return cachedPath;
+          return cachedPath
         }
 
         // Download the file
-        hooks?.markCacheMiss?.();
-        ctx.setCacheHit(false);
-        await performHttpDownload(
-          url,
-          modelPath,
-          downloadKey,
-          ctx.broadcastProgress,
-          ctx.signal,
-        );
+        hooks?.markCacheMiss?.()
+        ctx.setCacheHit(false)
+        await performHttpDownload(url, modelPath, downloadKey, ctx.broadcastProgress, ctx.signal)
 
         try {
-          const stats = await fsPromises.stat(modelPath);
+          const stats = await fsPromises.stat(modelPath)
           ctx.broadcastProgress({
-            type: "modelProgress",
+            type: 'modelProgress',
             downloaded: stats.size,
             total: stats.size,
             percentage: 100,
-            downloadKey,
-          });
+            downloadKey
+          })
         } catch (error) {
-          logger.debug("Failed to get file stats for final progress update", {
+          logger.debug('Failed to get file stats for final progress update', {
             path: modelPath,
-            error,
-          });
+            error
+          })
         }
 
-        return modelPath;
+        return modelPath
       } catch (error) {
         logger.error(
-          "❌ Error downloading model:",
-          error instanceof Error ? error.message : String(error),
-        );
+          '❌ Error downloading model:',
+          error instanceof Error ? error.message : String(error)
+        )
 
         // Check if we should delete the partial file (clearCache was requested)
         if (error instanceof DownloadCancelledError) {
           if (ctx.shouldClearCache()) {
-            logger.info("🗑️ Clearing cache - deleting partial file");
+            logger.info('🗑️ Clearing cache - deleting partial file')
             try {
-              await fsPromises.unlink(modelPath);
-              logger.info(`✅ Deleted partial file: ${modelPath}`);
+              await fsPromises.unlink(modelPath)
+              logger.info(`✅ Deleted partial file: ${modelPath}`)
             } catch (error) {
-              logger.debug("Failed to delete partial file during cleanup", {
+              logger.debug('Failed to delete partial file during cleanup', {
                 path: modelPath,
-                error,
-              });
+                error
+              })
             }
           } else {
-            logger.info("📥 Download paused - partial file preserved for resume");
+            logger.info('📥 Download paused - partial file preserved for resume')
           }
         }
 
-        const errorToThrow =
-          error instanceof Error ? error : new Error(String(error));
-        throw errorToThrow;
+        const errorToThrow = error instanceof Error ? error : new Error(String(error))
+        throw errorToThrow
       }
     },
     progressCallback,
-    hooks?.requestBinding,
-  );
+    hooks?.requestBinding
+  )
 
-  return applyJoinedDownloadStats(result, hooks);
+  return applyJoinedDownloadStats(result, hooks)
 }
 
 async function downloadShardedModelFromHttp(
   shardUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadHooks,
+  hooks?: DownloadHooks
 ) {
-  const config = getSDKConfig();
-  const concurrency = config.httpDownloadConcurrency ?? DEFAULT_CONCURRENCY;
-  const { shardUrls: shardInfos, cacheKey } =
-    parsePatternBasedShardUrl(shardUrl);
-  const downloadKey = `http-sharded:${cacheKey}`;
-  hooks?.onDownloadKey?.(downloadKey);
+  const config = getSDKConfig()
+  const concurrency = config.httpDownloadConcurrency ?? DEFAULT_CONCURRENCY
+  const { shardUrls: shardInfos, cacheKey } = parsePatternBasedShardUrl(shardUrl)
+  const downloadKey = `http-sharded:${cacheKey}`
+  hooks?.onDownloadKey?.(downloadKey)
 
-  logger.info(
-    `📥 HTTP sharded download: ${shardInfos.length} shards detected from ${shardUrl}`,
-  );
+  logger.info(`📥 HTTP sharded download: ${shardInfos.length} shards detected from ${shardUrl}`)
 
-  const shardDir = getShardedModelCacheDir(cacheKey);
+  const shardDir = getShardedModelCacheDir(cacheKey)
 
   const result = startOrJoinDownload(
     downloadKey,
@@ -569,22 +535,20 @@ async function downloadShardedModelFromHttp(
       try {
         const shardStates: ShardDownloadState[] = await Promise.all(
           shardInfos.map(async (shard, index) => {
-            const shardPath = path.join(shardDir, shard.filename);
-            let expectedSize = 0;
+            const shardPath = path.join(shardDir, shard.filename)
+            let expectedSize = 0
 
             try {
               const response = await fetch(shard.url, {
-                method: "HEAD",
-                signal: ctx.signal,
-              });
-              expectedSize = parseInt(
-                response.headers.get("content-length") || "0",
-              );
+                method: 'HEAD',
+                signal: ctx.signal
+              })
+              expectedSize = parseInt(response.headers.get('content-length') || '0')
             } catch (error) {
-              logger.warn("Failed to get shard size via HEAD request", {
+              logger.warn('Failed to get shard size via HEAD request', {
                 url: shard.url,
-                error,
-              });
+                error
+              })
             }
 
             return {
@@ -593,52 +557,41 @@ async function downloadShardedModelFromHttp(
               shardPath,
               expectedSize,
               downloadedBytes: 0,
-              isComplete: false,
-            };
-          }),
-        );
+              isComplete: false
+            }
+          })
+        )
 
-        const overallTotal = shardStates.reduce(
-          (sum, s) => sum + s.expectedSize,
-          0,
-        );
+        const overallTotal = shardStates.reduce((sum, s) => sum + s.expectedSize, 0)
 
         logger.info(
-          `📏 Total size: ${overallTotal} bytes (${(overallTotal / 1024 / 1024).toFixed(2)} MB)`,
-        );
+          `📏 Total size: ${overallTotal} bytes (${(overallTotal / 1024 / 1024).toFixed(2)} MB)`
+        )
 
         const cacheChecks = await Promise.all(
           shardStates.map(async (state) => {
-            const cached = await validateCachedFile(
-              state.shardPath,
-              state.shard.url,
-              ctx.signal,
-            );
-            return { state, isCached: cached !== null };
-          }),
-        );
+            const cached = await validateCachedFile(state.shardPath, state.shard.url, ctx.signal)
+            return { state, isCached: cached !== null }
+          })
+        )
 
-        const shardsToDownload = cacheChecks
-          .filter((c) => !c.isCached)
-          .map((c) => c.state);
+        const shardsToDownload = cacheChecks.filter((c) => !c.isCached).map((c) => c.state)
 
         for (const check of cacheChecks) {
           if (check.isCached) {
-            check.state.isComplete = true;
-            check.state.downloadedBytes = check.state.expectedSize;
+            check.state.isComplete = true
+            check.state.downloadedBytes = check.state.expectedSize
           }
         }
 
-        logger.info(
-          `📥 ${shardsToDownload.length} of ${shardInfos.length} shards need downloading`,
-        );
+        logger.info(`📥 ${shardsToDownload.length} of ${shardInfos.length} shards need downloading`)
 
         if (shardsToDownload.length === 0) {
-          hooks?.markCacheHit?.();
-          ctx.setCacheHit(true);
+          hooks?.markCacheHit?.()
+          ctx.setCacheHit(true)
         } else {
-          hooks?.markCacheMiss?.();
-          ctx.setCacheHit(false);
+          hooks?.markCacheMiss?.()
+          ctx.setCacheHit(false)
         }
 
         await downloadShardsWithConcurrency(
@@ -648,167 +601,147 @@ async function downloadShardedModelFromHttp(
           ctx.signal,
           downloadKey,
           overallTotal,
-          ctx.broadcastProgress,
-        );
+          ctx.broadcastProgress
+        )
 
-        logger.info(
-          `✅ All ${shardInfos.length} shards downloaded successfully`,
-        );
+        logger.info(`✅ All ${shardInfos.length} shards downloaded successfully`)
 
-        await extractTensorsFromShards(shardDir, shardInfos[0]!.filename);
+        await extractTensorsFromShards(shardDir, shardInfos[0]!.filename)
 
-        return path.join(shardDir, shardInfos[0]!.filename);
+        return path.join(shardDir, shardInfos[0]!.filename)
       } catch (error) {
         logger.error(
-          "❌ Error during sharded download:",
-          error instanceof Error ? error.message : String(error),
-        );
+          '❌ Error during sharded download:',
+          error instanceof Error ? error.message : String(error)
+        )
 
         if (error instanceof DownloadCancelledError) {
           if (ctx.shouldClearCache()) {
-            logger.info("🗑️ Clearing cache - deleting partial shard files");
+            logger.info('🗑️ Clearing cache - deleting partial shard files')
             try {
-              await fsPromises.rm(shardDir, { recursive: true, force: true });
-              logger.info(`✅ Deleted shard directory: ${shardDir}`);
+              await fsPromises.rm(shardDir, { recursive: true, force: true })
+              logger.info(`✅ Deleted shard directory: ${shardDir}`)
             } catch (cleanupError) {
-              logger.debug(
-                "Failed to delete shard directory during cleanup",
-                {
-                  path: shardDir,
-                  error: cleanupError,
-                },
-              );
+              logger.debug('Failed to delete shard directory during cleanup', {
+                path: shardDir,
+                error: cleanupError
+              })
             }
           }
         }
 
-        throw error;
+        throw error
       }
     },
     progressCallback,
-    hooks?.requestBinding,
-  );
+    hooks?.requestBinding
+  )
 
-  return applyJoinedDownloadStats(result, hooks);
+  return applyJoinedDownloadStats(result, hooks)
 }
 
 async function downloadShardedModelFromArchive(
   archiveUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadHooks,
+  hooks?: DownloadHooks
 ) {
-  const filename = extractFilenameFromUrl(archiveUrl);
-  const sourceHash = generateShortHash(archiveUrl);
-  const downloadKey = `http-archive:${sourceHash}`;
-  hooks?.onDownloadKey?.(downloadKey);
+  const filename = extractFilenameFromUrl(archiveUrl)
+  const sourceHash = generateShortHash(archiveUrl)
+  const downloadKey = `http-archive:${sourceHash}`
+  hooks?.onDownloadKey?.(downloadKey)
 
-  logger.info(`📦 HTTP archive download: ${filename}`);
+  logger.info(`📦 HTTP archive download: ${filename}`)
 
-  const extractDir = getShardedModelCacheDir(sourceHash);
-  const archivePath = path.join(extractDir, `${sourceHash}_${filename}`);
+  const extractDir = getShardedModelCacheDir(sourceHash)
+  const archivePath = path.join(extractDir, `${sourceHash}_${filename}`)
 
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
       try {
-        await fsPromises.mkdir(extractDir, { recursive: true });
+        await fsPromises.mkdir(extractDir, { recursive: true })
 
-        const files = await fsPromises.readdir(extractDir);
-        const shardedFile = files.find(
-          (f) => detectShardedModel(String(f)).isSharded,
-        );
+        const files = await fsPromises.readdir(extractDir)
+        const shardedFile = files.find((f) => detectShardedModel(String(f)).isSharded)
 
         if (!shardedFile) {
-          hooks?.markCacheMiss?.();
-          ctx.setCacheHit(false);
-          return downloadAndExtractArchive();
+          hooks?.markCacheMiss?.()
+          ctx.setCacheHit(false)
+          return downloadAndExtractArchive()
         }
 
-        const shardFilename = String(shardedFile);
-        const allShardsExist = await checkAllShardsExist(
-          extractDir,
-          shardFilename,
-        );
+        const shardFilename = String(shardedFile)
+        const allShardsExist = await checkAllShardsExist(extractDir, shardFilename)
 
         if (!allShardsExist) {
-          logger.warn(`⚠️ Incomplete shards found, re-downloading archive`);
-          hooks?.markCacheMiss?.();
-          ctx.setCacheHit(false);
-          return downloadAndExtractArchive();
+          logger.warn(`⚠️ Incomplete shards found, re-downloading archive`)
+          hooks?.markCacheMiss?.()
+          ctx.setCacheHit(false)
+          return downloadAndExtractArchive()
         }
 
-        const shardFilenames = generateShardFilenames(shardFilename);
-        const firstShard = path.join(extractDir, shardFilenames[0]!);
-        const isComplete = await validateShardedModelCache(
-          extractDir,
-          shardFilename,
-        );
+        const shardFilenames = generateShardFilenames(shardFilename)
+        const firstShard = path.join(extractDir, shardFilenames[0]!)
+        const isComplete = await validateShardedModelCache(extractDir, shardFilename)
 
         if (isComplete) {
-          logger.info(`✅ Archive already extracted: ${extractDir}`);
-          hooks?.markCacheHit?.();
-          ctx.setCacheHit(true);
+          logger.info(`✅ Archive already extracted: ${extractDir}`)
+          hooks?.markCacheHit?.()
+          ctx.setCacheHit(true)
           ctx.broadcastProgress({
-            type: "modelProgress",
+            type: 'modelProgress',
             downloaded: 1,
             total: 1,
             percentage: 100,
-            downloadKey,
-          });
-          return firstShard;
+            downloadKey
+          })
+          return firstShard
         }
 
-        logger.info(
-          `📝 All shards present but tensors.txt missing, extracting tensors...`,
-        );
+        logger.info(`📝 All shards present but tensors.txt missing, extracting tensors...`)
         try {
-          await extractTensorsFromShards(extractDir, shardFilename);
-          logger.info(`✅ Tensors extracted successfully`);
-          hooks?.markCacheHit?.();
-          ctx.setCacheHit(true);
+          await extractTensorsFromShards(extractDir, shardFilename)
+          logger.info(`✅ Tensors extracted successfully`)
+          hooks?.markCacheHit?.()
+          ctx.setCacheHit(true)
           ctx.broadcastProgress({
-            type: "modelProgress",
+            type: 'modelProgress',
             downloaded: 1,
             total: 1,
             percentage: 100,
-            downloadKey,
-          });
-          return firstShard;
+            downloadKey
+          })
+          return firstShard
         } catch (error) {
           logger.warn(`Failed to extract tensors, will re-download archive`, {
-            error,
-          });
-          hooks?.markCacheMiss?.();
-          ctx.setCacheHit(false);
-          return downloadAndExtractArchive();
+            error
+          })
+          hooks?.markCacheMiss?.()
+          ctx.setCacheHit(false)
+          return downloadAndExtractArchive()
         }
       } catch (error) {
-        logger.error("❌ Error downloading/extracting archive:", error);
+        logger.error('❌ Error downloading/extracting archive:', error)
 
         if (error instanceof DownloadCancelledError) {
           if (ctx.shouldClearCache()) {
-            logger.info(
-              "🗑️ Clearing cache - deleting archive extract directory",
-            );
+            logger.info('🗑️ Clearing cache - deleting archive extract directory')
             try {
               await fsPromises.rm(extractDir, {
                 recursive: true,
-                force: true,
-              });
-              logger.info(`✅ Deleted extract directory: ${extractDir}`);
+                force: true
+              })
+              logger.info(`✅ Deleted extract directory: ${extractDir}`)
             } catch (cleanupError) {
-              logger.debug(
-                "Failed to delete extract directory during cleanup",
-                {
-                  path: extractDir,
-                  error: cleanupError,
-                },
-              );
+              logger.debug('Failed to delete extract directory during cleanup', {
+                path: extractDir,
+                error: cleanupError
+              })
             }
           }
         }
 
-        throw error;
+        throw error
       }
 
       async function downloadAndExtractArchive() {
@@ -817,35 +750,35 @@ async function downloadShardedModelFromArchive(
           archivePath,
           downloadKey,
           ctx.broadcastProgress,
-          ctx.signal,
-        );
+          ctx.signal
+        )
 
-        logger.info(`✅ Archive downloaded, extracting to: ${extractDir}`);
+        logger.info(`✅ Archive downloaded, extracting to: ${extractDir}`)
 
         const firstShardPath = await extractAndValidateShardedArchive(
           archivePath,
           extractDir,
-          ctx.signal,
-        );
+          ctx.signal
+        )
 
         try {
-          await fsPromises.unlink(archivePath);
-          logger.info(`🗑️ Cleaned up archive file: ${archivePath}`);
+          await fsPromises.unlink(archivePath)
+          logger.info(`🗑️ Cleaned up archive file: ${archivePath}`)
         } catch (cleanupError) {
-          logger.debug("Failed to delete archive file during cleanup", {
+          logger.debug('Failed to delete archive file during cleanup', {
             path: archivePath,
-            error: cleanupError,
-          });
+            error: cleanupError
+          })
         }
 
-        return firstShardPath;
+        return firstShardPath
       }
     },
     progressCallback,
-    hooks?.requestBinding,
-  );
+    hooks?.requestBinding
+  )
 
-  return applyJoinedDownloadStats(result, hooks);
+  return applyJoinedDownloadStats(result, hooks)
 }
 
 async function downloadShardsWithConcurrency(
@@ -855,45 +788,37 @@ async function downloadShardsWithConcurrency(
   signal: AbortSignal,
   downloadKey: string,
   overallTotal: number,
-  progressCallback?: (progress: ModelProgressUpdate) => void,
+  progressCallback?: (progress: ModelProgressUpdate) => void
 ) {
-  const queue = [...shardsToDownload];
-  const inFlight = new Set<Promise<void>>();
+  const queue = [...shardsToDownload]
+  const inFlight = new Set<Promise<void>>()
 
   while (queue.length > 0 || inFlight.size > 0) {
     if (signal.aborted) {
-      throw new DownloadCancelledError();
+      throw new DownloadCancelledError()
     }
 
     while (queue.length > 0 && inFlight.size < concurrency) {
-      const state = queue.shift()!;
+      const state = queue.shift()!
 
       const downloadPromise = (async () => {
-        logger.info(
-          `📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`,
-        );
+        logger.info(`📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`)
 
         await performHttpDownload(
           state.shard.url,
           state.shardPath,
           downloadKey,
           (progress) => {
-            state.downloadedBytes = progress.downloaded;
+            state.downloadedBytes = progress.downloaded
 
             if (progressCallback) {
-              const overallDownloaded = allShards.reduce(
-                (sum, s) => sum + s.downloadedBytes,
-                0,
-              );
+              const overallDownloaded = allShards.reduce((sum, s) => sum + s.downloadedBytes, 0)
 
               progressCallback({
-                type: "modelProgress",
+                type: 'modelProgress',
                 downloaded: state.downloadedBytes,
                 total: state.expectedSize,
-                percentage: calculatePercentage(
-                  state.downloadedBytes,
-                  state.expectedSize,
-                ),
+                percentage: calculatePercentage(state.downloadedBytes, state.expectedSize),
                 downloadKey,
                 shardInfo: {
                   currentShard: state.index + 1,
@@ -901,41 +826,36 @@ async function downloadShardsWithConcurrency(
                   shardName: state.shard.filename,
                   overallDownloaded,
                   overallTotal,
-                  overallPercentage: calculatePercentage(
-                    overallDownloaded,
-                    overallTotal,
-                  ),
-                },
-              });
+                  overallPercentage: calculatePercentage(overallDownloaded, overallTotal)
+                }
+              })
             }
           },
-          signal,
-        );
+          signal
+        )
 
-        logger.info(
-          `✅ Shard ${state.index + 1} complete: ${state.shard.filename}`,
-        );
+        logger.info(`✅ Shard ${state.index + 1} complete: ${state.shard.filename}`)
       })().finally(() => {
-        inFlight.delete(downloadPromise);
-      });
+        inFlight.delete(downloadPromise)
+      })
 
-      inFlight.add(downloadPromise);
+      inFlight.add(downloadPromise)
     }
 
     if (inFlight.size > 0) {
-      await Promise.race(inFlight);
+      await Promise.race(inFlight)
     }
   }
 
   // Mark all downloaded shards as complete
   for (const state of shardsToDownload) {
-    state.isComplete = true;
-    state.downloadedBytes = state.expectedSize;
+    state.isComplete = true
+    state.downloadedBytes = state.expectedSize
   }
 
   if (progressCallback) {
     progressCallback({
-      type: "modelProgress",
+      type: 'modelProgress',
       downloaded: overallTotal,
       total: overallTotal,
       percentage: 100,
@@ -946,8 +866,8 @@ async function downloadShardsWithConcurrency(
         shardName: allShards[allShards.length - 1]!.shard.filename,
         overallDownloaded: overallTotal,
         overallTotal,
-        overallPercentage: 100,
-      },
-    });
+        overallPercentage: 100
+      }
+    })
   }
 }

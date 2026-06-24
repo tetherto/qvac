@@ -1,2 +1,2 @@
-export * from "./audio";
-export * from "./registry";
+export * from './audio'
+export * from './registry'

@@ -1,72 +1,72 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 function createFinetuneTest(
   testId: string,
   params: Record<string, unknown>,
   estimatedDurationMs: number,
-  suites?: string[],
+  suites?: string[]
 ): TestDefinition {
   return {
     testId,
     params,
-    expectation: { validation: "type", expectedType: "string" },
+    expectation: { validation: 'type', expectedType: 'string' },
     ...(suites && { suites }),
     metadata: {
-      category: "finetune",
-      dependency: "finetune-llm",
-      estimatedDurationMs,
-    },
-  };
+      category: 'finetune',
+      dependency: 'finetune-llm',
+      estimatedDurationMs
+    }
+  }
 }
 
 export const finetuneStartComplete = createFinetuneTest(
-  "finetune-start-complete",
+  'finetune-start-complete',
   {
-    numberOfEpochs: 1,
+    numberOfEpochs: 1
   },
   60000,
-  ["smoke"],
-);
+  ['smoke']
+)
 
 export const finetunePauseResume = createFinetuneTest(
-  "finetune-pause-resume",
+  'finetune-pause-resume',
   {
     numberOfEpochs: 1,
-    pauseAfterGlobalSteps: 2,
+    pauseAfterGlobalSteps: 2
   },
-  90000,
-);
+  90000
+)
 
 export const finetuneProgressStreaming = createFinetuneTest(
-  "finetune-progress-streaming",
+  'finetune-progress-streaming',
   {
     numberOfEpochs: 1,
-    minimumProgressEvents: 1,
+    minimumProgressEvents: 1
   },
-  60000,
-);
+  60000
+)
 
 export const finetuneErrorCases = createFinetuneTest(
-  "finetune-error-cases",
+  'finetune-error-cases',
   {
-    invalidModelId: "missing-finetune-model",
+    invalidModelId: 'missing-finetune-model'
   },
-  30000,
-);
+  30000
+)
 
 export const finetuneProgressZeroDrop = createFinetuneTest(
-  "finetune-progress-zero-drop",
+  'finetune-progress-zero-drop',
   {
-    numberOfEpochs: 2,
+    numberOfEpochs: 2
   },
-  120000,
-);
+  120000
+)
 
 export const finetuneProgressLossSchema = createFinetuneTest(
-  "finetune-progress-loss-schema",
+  'finetune-progress-loss-schema',
   { numberOfEpochs: 1 },
-  60000,
-);
+  60000
+)
 
 export const finetuneTests = [
   finetuneStartComplete,
@@ -74,5 +74,5 @@ export const finetuneTests = [
   finetuneProgressStreaming,
   finetuneErrorCases,
   finetuneProgressZeroDrop,
-  finetuneProgressLossSchema,
-];
+  finetuneProgressLossSchema
+]

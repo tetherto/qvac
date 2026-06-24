@@ -1,30 +1,25 @@
-import { parseBuiltinSpecifier } from "@/commands/bundle/plugins";
+import { parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 
-export function generateWorkerEntry(
-  pluginSpecifiers: string[],
-  sdkName: string,
-): string {
-  const imports: string[] = [];
-  const registrations: string[] = [];
-  let varIndex = 0;
+export function generateWorkerEntry(pluginSpecifiers: string[], sdkName: string): string {
+  const imports: string[] = []
+  const registrations: string[] = []
+  let varIndex = 0
 
   for (const specifier of pluginSpecifiers) {
-    const builtin = parseBuiltinSpecifier(specifier, sdkName);
+    const builtin = parseBuiltinSpecifier(specifier, sdkName)
     if (builtin) {
-      imports.push(
-        `import { ${builtin.exportName} } from "${sdkName}/${builtin.suffix}/plugin";`,
-      );
-      registrations.push(`registerPlugin(${builtin.exportName});`);
+      imports.push(`import { ${builtin.exportName} } from "${sdkName}/${builtin.suffix}/plugin";`)
+      registrations.push(`registerPlugin(${builtin.exportName});`)
     } else {
-      const varName = `customPlugin${varIndex++}`;
-      imports.push(`import ${varName} from "${specifier}";`);
-      registrations.push(`registerPlugin(${varName});`);
+      const varName = `customPlugin${varIndex++}`
+      imports.push(`import ${varName} from "${specifier}";`)
+      registrations.push(`registerPlugin(${varName});`)
     }
   }
 
-  const importsStr = imports.join("\n");
-  const registrationsStr = registrations.join("\n");
-  const pluginsList = pluginSpecifiers.map((p) => `*   - ${p}`).join("\n");
+  const importsStr = imports.join('\n')
+  const registrationsStr = registrations.join('\n')
+  const pluginsList = pluginSpecifiers.map((p) => `*   - ${p}`).join('\n')
 
   return `/**
  * QVAC SDK Worker Entry (auto-generated)
@@ -52,5 +47,5 @@ ${registrationsStr}
 if (hasRPCConfig) {
   ensureRPCSetup();
 }
-`;
+`
 }

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 // === INTERNAL: Canonical types (used in SDK code) ===
 /**
@@ -7,34 +7,34 @@ import { z } from "zod";
  * Use dot-accessor syntax: `ModelType.llamacppCompletion`
  */
 export const ModelType = {
-  llamacppCompletion: "llamacpp-completion",
-  whispercppTranscription: "whispercpp-transcription",
-  bciWhispercppTranscription: "bci-whispercpp-transcription",
-  llamacppEmbedding: "llamacpp-embedding",
-  nmtcppTranslation: "nmtcpp-translation",
-  onnxTts: "onnx-tts",
-  ttsGgml: "tts-ggml",
-  parakeetTranscription: "parakeet-transcription",
-  ggmlOcr: "ggml-ocr",
-  sdcppGeneration: "sdcpp-generation",
-  ggmlVla: "ggml-vla",
-  ggmlClassification: "ggml-classification",
-} as const;
+  llamacppCompletion: 'llamacpp-completion',
+  whispercppTranscription: 'whispercpp-transcription',
+  bciWhispercppTranscription: 'bci-whispercpp-transcription',
+  llamacppEmbedding: 'llamacpp-embedding',
+  nmtcppTranslation: 'nmtcpp-translation',
+  onnxTts: 'onnx-tts',
+  ttsGgml: 'tts-ggml',
+  parakeetTranscription: 'parakeet-transcription',
+  ggmlOcr: 'ggml-ocr',
+  sdcppGeneration: 'sdcpp-generation',
+  ggmlVla: 'ggml-vla',
+  ggmlClassification: 'ggml-classification'
+} as const
 
 // === INTERNAL: Alias keys (backward compat names) ===
 const AliasKeys = {
-  llm: "llm",
-  whisper: "whisper",
-  bci: "bci",
-  embeddings: "embeddings",
-  nmt: "nmt",
-  parakeet: "parakeet",
-  tts: "tts",
-  ocr: "ocr",
-  diffusion: "diffusion",
-  vla: "vla",
-  classification: "classification",
-} as const;
+  llm: 'llm',
+  whisper: 'whisper',
+  bci: 'bci',
+  embeddings: 'embeddings',
+  nmt: 'nmt',
+  parakeet: 'parakeet',
+  tts: 'tts',
+  ocr: 'ocr',
+  diffusion: 'diffusion',
+  vla: 'vla',
+  classification: 'classification'
+} as const
 
 // === INTERNAL: Aliases (backward compat mapping) ===
 /**
@@ -52,16 +52,16 @@ export const ModelTypeAliases = {
   [AliasKeys.ocr]: ModelType.ggmlOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
   [AliasKeys.vla]: ModelType.ggmlVla,
-  [AliasKeys.classification]: ModelType.ggmlClassification,
-} as const;
+  [AliasKeys.classification]: ModelType.ggmlClassification
+} as const
 
 // === TYPES ===
-export type CanonicalModelType = (typeof ModelType)[keyof typeof ModelType];
-export type AliasKey = keyof typeof ModelTypeAliases;
-export type ModelTypeInput = CanonicalModelType | AliasKey;
+export type CanonicalModelType = (typeof ModelType)[keyof typeof ModelType]
+export type AliasKey = keyof typeof ModelTypeAliases
+export type ModelTypeInput = CanonicalModelType | AliasKey
 
 // Set of canonical values for quick lookup
-const canonicalValuesSet = new Set<string>(Object.values(ModelType));
+const canonicalValuesSet = new Set<string>(Object.values(ModelType))
 
 // === PUBLIC: Combined (exported via index.ts as MODEL_TYPES) ===
 /**
@@ -81,30 +81,28 @@ const canonicalValuesSet = new Set<string>(Object.values(ModelType));
  */
 export const PUBLIC_MODEL_TYPES = {
   ...ModelType,
-  ...ModelTypeAliases,
-} as const;
+  ...ModelTypeAliases
+} as const
 
 // === ZOD SCHEMAS ===
 // Derive input values from objects - no string repetition
 const inputValues = [
   ...Object.values(ModelType),
-  ...(Object.keys(ModelTypeAliases) as AliasKey[]),
-] as [ModelTypeInput, ...ModelTypeInput[]];
+  ...(Object.keys(ModelTypeAliases) as AliasKey[])
+] as [ModelTypeInput, ...ModelTypeInput[]]
 
 /** Schema accepting both canonical and alias model type inputs */
-export const modelTypeInputSchema = z.enum(inputValues);
+export const modelTypeInputSchema = z.enum(inputValues)
 
 /** Schema that transforms input to canonical model type */
-export const modelTypeSchema = modelTypeInputSchema.transform(
-  (val): CanonicalModelType => {
-    // If already canonical, return as-is
-    if (canonicalValuesSet.has(val)) {
-      return val as CanonicalModelType;
-    }
-    // Otherwise, look up in aliases
-    return ModelTypeAliases[val as AliasKey];
-  },
-);
+export const modelTypeSchema = modelTypeInputSchema.transform((val): CanonicalModelType => {
+  // If already canonical, return as-is
+  if (canonicalValuesSet.has(val)) {
+    return val as CanonicalModelType
+  }
+  // Otherwise, look up in aliases
+  return ModelTypeAliases[val as AliasKey]
+})
 
 /**
  * Normalize model type input to canonical form.
@@ -113,24 +111,22 @@ export const modelTypeSchema = modelTypeInputSchema.transform(
 export function normalizeModelType(input: string): string {
   // If already canonical, return as-is
   if (canonicalValuesSet.has(input)) {
-    return input;
+    return input
   }
   // If it's an alias, normalize to canonical
   if (input in ModelTypeAliases) {
-    return ModelTypeAliases[input as AliasKey];
+    return ModelTypeAliases[input as AliasKey]
   }
   // Custom plugin type - return as-is
-  return input;
+  return input
 }
 
 /**
  * Type guard to check if a string is a canonical (built-in) model type.
  * Returns false for custom plugin types.
  */
-export function isCanonicalModelType(
-  input: string,
-): input is CanonicalModelType {
-  return canonicalValuesSet.has(input);
+export function isCanonicalModelType(input: string): input is CanonicalModelType {
+  return canonicalValuesSet.has(input)
 }
 
 /**
@@ -138,7 +134,7 @@ export function isCanonicalModelType(
  * Returns false for custom plugin types.
  */
 export function isModelTypeAlias(input: string): boolean {
-  return input in ModelTypeAliases;
+  return input in ModelTypeAliases
 }
 
 // === PER-MODEL-TYPE SCHEMAS (for discriminated unions) ===
@@ -151,10 +147,8 @@ export function isModelTypeAlias(input: string): boolean {
  */
 export const llmModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.llm, ModelType.llamacppCompletion])
-  .describe(
-    'LLM model type: "llm" (alias) or "llamacpp-completion" (canonical)',
-  );
-export type LlmModelTypeInput = z.infer<typeof llmModelTypeSchema>;
+  .describe('LLM model type: "llm" (alias) or "llamacpp-completion" (canonical)')
+export type LlmModelTypeInput = z.infer<typeof llmModelTypeSchema>
 
 /**
  * Whisper/Transcription model type schema.
@@ -163,10 +157,8 @@ export type LlmModelTypeInput = z.infer<typeof llmModelTypeSchema>;
  */
 export const whisperModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.whisper, ModelType.whispercppTranscription])
-  .describe(
-    'Whisper model type: "whisper" (alias) or "whispercpp-transcription" (canonical)',
-  );
-export type WhisperModelTypeInput = z.infer<typeof whisperModelTypeSchema>;
+  .describe('Whisper model type: "whisper" (alias) or "whispercpp-transcription" (canonical)')
+export type WhisperModelTypeInput = z.infer<typeof whisperModelTypeSchema>
 
 /**
  * BCI/Transcription model type schema.
@@ -175,10 +167,8 @@ export type WhisperModelTypeInput = z.infer<typeof whisperModelTypeSchema>;
  */
 export const bciModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.bci, ModelType.bciWhispercppTranscription])
-  .describe(
-    'BCI model type: "bci" (alias) or "bci-whispercpp-transcription" (canonical)',
-  );
-export type BciModelTypeInput = z.infer<typeof bciModelTypeSchema>;
+  .describe('BCI model type: "bci" (alias) or "bci-whispercpp-transcription" (canonical)')
+export type BciModelTypeInput = z.infer<typeof bciModelTypeSchema>
 
 /**
  * Parakeet/Transcription model type schema.
@@ -187,10 +177,8 @@ export type BciModelTypeInput = z.infer<typeof bciModelTypeSchema>;
  */
 export const parakeetModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.parakeet, ModelType.parakeetTranscription])
-  .describe(
-    'Parakeet model type: "parakeet" (alias) or "parakeet-transcription" (canonical)',
-  );
-export type ParakeetModelTypeInput = z.infer<typeof parakeetModelTypeSchema>;
+  .describe('Parakeet model type: "parakeet" (alias) or "parakeet-transcription" (canonical)')
+export type ParakeetModelTypeInput = z.infer<typeof parakeetModelTypeSchema>
 
 /**
  * Embeddings model type schema.
@@ -199,12 +187,8 @@ export type ParakeetModelTypeInput = z.infer<typeof parakeetModelTypeSchema>;
  */
 export const embeddingsModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.embeddings, ModelType.llamacppEmbedding])
-  .describe(
-    'Embeddings model type: "embeddings" (alias) or "llamacpp-embedding" (canonical)',
-  );
-export type EmbeddingsModelTypeInput = z.infer<
-  typeof embeddingsModelTypeSchema
->;
+  .describe('Embeddings model type: "embeddings" (alias) or "llamacpp-embedding" (canonical)')
+export type EmbeddingsModelTypeInput = z.infer<typeof embeddingsModelTypeSchema>
 
 /**
  * NMT/Translation model type schema.
@@ -213,10 +197,8 @@ export type EmbeddingsModelTypeInput = z.infer<
  */
 export const nmtModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.nmt, ModelType.nmtcppTranslation])
-  .describe(
-    'NMT model type: "nmt" (alias) or "nmtcpp-translation" (canonical)',
-  );
-export type NmtModelTypeInput = z.infer<typeof nmtModelTypeSchema>;
+  .describe('NMT model type: "nmt" (alias) or "nmtcpp-translation" (canonical)')
+export type NmtModelTypeInput = z.infer<typeof nmtModelTypeSchema>
 
 /**
  * TTS model type schema.
@@ -225,8 +207,8 @@ export type NmtModelTypeInput = z.infer<typeof nmtModelTypeSchema>;
  */
 export const ttsModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.tts, ModelType.ttsGgml])
-  .describe('TTS model type: "tts" (alias) or "tts-ggml" (canonical)');
-export type TtsModelTypeInput = z.infer<typeof ttsModelTypeSchema>;
+  .describe('TTS model type: "tts" (alias) or "tts-ggml" (canonical)')
+export type TtsModelTypeInput = z.infer<typeof ttsModelTypeSchema>
 
 /**
  * OCR model type schema.
@@ -235,8 +217,8 @@ export type TtsModelTypeInput = z.infer<typeof ttsModelTypeSchema>;
  */
 export const ocrModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.ocr, ModelType.ggmlOcr])
-  .describe('OCR model type: "ocr" (alias) or "ggml-ocr" (canonical)');
-export type OcrModelTypeInput = z.infer<typeof ocrModelTypeSchema>;
+  .describe('OCR model type: "ocr" (alias) or "ggml-ocr" (canonical)')
+export type OcrModelTypeInput = z.infer<typeof ocrModelTypeSchema>
 
 /**
  * Diffusion/Image Generation model type schema.
@@ -245,12 +227,8 @@ export type OcrModelTypeInput = z.infer<typeof ocrModelTypeSchema>;
  */
 export const diffusionModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.diffusion, ModelType.sdcppGeneration])
-  .describe(
-    'Diffusion model type: "diffusion" (alias) or "sdcpp-generation" (canonical)',
-  );
-export type DiffusionModelTypeInput = z.infer<
-  typeof diffusionModelTypeSchema
->;
+  .describe('Diffusion model type: "diffusion" (alias) or "sdcpp-generation" (canonical)')
+export type DiffusionModelTypeInput = z.infer<typeof diffusionModelTypeSchema>
 
 /**
  * VLA (vision-language-action) model type schema.
@@ -259,8 +237,8 @@ export type DiffusionModelTypeInput = z.infer<
  */
 export const vlaModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.vla, ModelType.ggmlVla])
-  .describe('VLA model type: "vla" (alias) or "ggml-vla" (canonical)');
-export type VlaModelTypeInput = z.infer<typeof vlaModelTypeSchema>;
+  .describe('VLA model type: "vla" (alias) or "ggml-vla" (canonical)')
+export type VlaModelTypeInput = z.infer<typeof vlaModelTypeSchema>
 
 /**
  * Image Classification model type schema.
@@ -270,8 +248,6 @@ export type VlaModelTypeInput = z.infer<typeof vlaModelTypeSchema>;
 export const classificationModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.classification, ModelType.ggmlClassification])
   .describe(
-    'Classification model type: "classification" (alias) or "ggml-classification" (canonical)',
-  );
-export type ClassificationModelTypeInput = z.infer<
-  typeof classificationModelTypeSchema
->;
+    'Classification model type: "classification" (alias) or "ggml-classification" (canonical)'
+  )
+export type ClassificationModelTypeInput = z.infer<typeof classificationModelTypeSchema>
