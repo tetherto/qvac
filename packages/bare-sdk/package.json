@@ -148,7 +148,15 @@
     "check:no-addon-deps": "node ./scripts/check-no-addon-deps.mjs",
     "check:no-addon-leaks": "node ./scripts/check-no-addon-leaks.mjs",
     "check:deps-vs-sdk": "node ./scripts/check-deps-vs-sdk.mjs",
-    "build": "rm -rf dist && bun run bundle && bun run check:no-addon-deps && bun run check:no-addon-leaks && bun run check:deps-vs-sdk"
+    "build": "rm -rf dist && bun run bundle && bun run check:no-addon-deps && bun run check:no-addon-leaks && bun run check:deps-vs-sdk",
+    "sdk-source:workspace": "node ./scripts/build-sibling-sdk.mjs",
+    "link:self": "node ./scripts/link-self.mjs",
+    "build:bare": "tsc -p test/bare/tsconfig.json",
+    "build:bare:e2e": "tsc -p test/bare/tsconfig.e2e.json",
+    "make:test:bare": "brittle-make-test test/dist/bare/all.mjs \"test/dist/bare/*.test.js\"",
+    "make:test:bare:e2e": "brittle-make-test test/dist/bare/e2e/all.mjs \"test/dist/bare/e2e/*.test.js\" \"test/dist/bare/e2e/suite-teardown.js\"",
+    "test:bare": "bun run build && bun run link:self && bun run build:bare && bun run make:test:bare && brittle-bare test/dist/bare/all.mjs",
+    "test:bare:e2e": "bun run build && bun run link:self && bun run build:bare:e2e && bun run make:test:bare:e2e && brittle-bare test/dist/bare/e2e/all.mjs"
   },
   "dependencies": {
     "@qvac/decoder-audio": "^0.5.0",
@@ -178,5 +186,10 @@
     "which-runtime": "^1.3.2",
     "zod": "^4.3.0",
     "compact-encoding": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/brittle": "^3.5.0",
+    "brittle": "^4.0.0",
+    "typescript": "^5.9.3"
   }
 }

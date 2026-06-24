@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { toolSchema } from "./tools";
 import { completionEventSchema } from "./completion-event";
+import { REASONING_BUDGET_MAX } from "./llamacpp-config";
 
 export {
   completionStatsSchema,
@@ -75,10 +76,19 @@ export const generationParamsSchema = z
       .optional()
       .describe("Penalty applied to repeated tokens."),
     reasoning_budget: z
-      .union([z.literal(-1), z.literal(0)])
+      .number()
+      .int()
+      .min(-1)
+      .max(REASONING_BUDGET_MAX)
       .optional()
       .describe(
-        "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+        "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+      ),
+    remove_thinking_from_context: z
+      .boolean()
+      .optional()
+      .describe(
+        "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.",
       ),
   })
   .strict();

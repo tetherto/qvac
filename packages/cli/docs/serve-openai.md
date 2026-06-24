@@ -114,7 +114,7 @@ Blocking response shape (single prompt):
 
 Same as `/v1/chat/completions`: `temperature`, `max_tokens`,
 `max_completion_tokens`, `top_p`, `seed`, `frequency_penalty`,
-`presence_penalty`, `reasoning_budget`.
+`presence_penalty`, `reasoning_budget`, `remove_thinking_from_context`.
 
 ### Ignored parameters (warning logged)
 

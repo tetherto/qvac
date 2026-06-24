@@ -4941,7 +4941,7 @@
     "link": "https://huggingface.co/supertone/supertonic-3"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-24/supertonic3-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Supertonic 3 TTS (GGUF, multilingual)",
     "quantization": "q4_0",
