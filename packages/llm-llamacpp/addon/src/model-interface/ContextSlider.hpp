@@ -33,9 +33,9 @@ struct ContextUsage {
 /// Outcome of a sliding-window operation on the KV cache.
 struct ContextSlideOutcome {
   enum class Kind {
-    NotNeeded, // Context had enough room; no slide performed
-    Slid,      // Successfully discarded tokens via partial slide
-    Overflow,  // Could not free enough space; caller should throw
+    NotNeeded,             // Context had enough room; no slide performed
+    Slid,                  // Successfully discarded tokens via partial slide
+    Overflow,              // Could not free enough space; caller should throw
     MemoryOperationFailed, // llama memory rejected the requested slide
   };
 
