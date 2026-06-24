@@ -23,6 +23,7 @@ const skipStress = !forceStress && !isLinuxX64
 const CTX_SIZE = 8192
 const N_DISCARDED = 256
 const PREFILL_CANCEL_DELAY_MS = 1500
+const MIN_QWEN35_IMAGE_CACHE_TOKENS = 4015
 
 const QWEN35_MODEL = {
   modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
@@ -94,6 +95,16 @@ function makeCancelPrefillTurn (imageBytes) {
   ]
 }
 
+function makeFixedImagePrefillTurn (imageBytes, label) {
+  return [
+    { role: 'user', type: 'media', content: imageBytes },
+    {
+      role: 'user',
+      content: `Image prefill ${label}: reply with one word.`
+    }
+  ]
+}
+
 function makeLongTextTurn (wordCount) {
   return [
     {
@@ -116,7 +127,7 @@ function makeShortDecodeTurn () {
   ]
 }
 
-async function setupModel (t) {
+async function setupModel (t, configOverrides = {}) {
   const modelPath = await ensureModelPath(QWEN35_MODEL)
   const projectionModelPath = await ensureModelPath(QWEN35_MMPROJ)
 
@@ -131,7 +142,8 @@ async function setupModel (t) {
       temp: '0',
       seed: '42',
       'reasoning-budget': '0',
-      verbosity: '2'
+      verbosity: '2',
+      ...configOverrides
     },
     logger: createLogger(),
     opts: { stats: true }
@@ -258,6 +270,16 @@ async function runNoCacheSeparator (t, addon, label) {
 
   t.ok(result.text.length > 0, `${label}: no-cache separator generated output`)
   t.is(toNumber(result.stats.CacheTokens), 0, `${label}: no-cache separator cleared in-memory cache`)
+}
+
+async function assertContextOverflow (t, action, label) {
+  try {
+    await action()
+    t.fail(`${label}: expected context overflow`)
+  } catch (err) {
+    const msg = err?.message || String(err)
+    t.ok(/context overflow/i.test(msg), `${label}: context overflow surfaced (${msg.slice(0, 120)})`)
+  }
 }
 
 safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
@@ -396,4 +418,49 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   )
   t.ok(afterDecodeCancel.text.length > 0, 'chat recovered after cancel during decoding')
   assertCachedStats(t, afterDecodeCancel.stats, 'after decode cancel')
+})
+
+safeTest('Qwen3.5-VL image cache overflows by cache tokens before positions', {
+  timeout: 1_200_000,
+  skip: skipStress
+}, async t => {
+  const imagePath = getMediaPath('fruitPlate.png')
+  t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
+
+  const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
+  const addon = await setupModel(t, { n_discarded: '0' })
+  const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-token-overflow-${Date.now()}.bin`)
+  cleanupIntegrationCacheFiles(cachePath)
+  t.teardown(() => {
+    try {
+      fs.unlinkSync(cachePath)
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
+    }
+  })
+
+  const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true, prefill: true }
+
+  const first = await runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'one'), cacheOpts)
+  t.is(first.text, '', 'first image prefill emits no text')
+  t.is(toNumber(first.stats.generatedTokens), 0, 'first image prefill reports zero generated tokens')
+  t.ok(
+    toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS,
+    `first image prefill cached image cells (${first.stats.CacheTokens})`
+  )
+
+  const second = await runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'two'), cacheOpts)
+  t.is(second.text, '', 'second image prefill emits no text')
+  t.is(toNumber(second.stats.generatedTokens), 0, 'second image prefill reports zero generated tokens')
+  t.ok(
+    toNumber(second.stats.CacheTokens) > CTX_SIZE - MIN_QWEN35_IMAGE_CACHE_TOKENS,
+    `two image prefills nearly fill cache by physical cells (${second.stats.CacheTokens}/${CTX_SIZE})`
+  )
+  t.ok(toNumber(second.stats.CacheTokens) <= CTX_SIZE, 'two image prefills still fit by cache tokens')
+
+  await assertContextOverflow(
+    t,
+    () => runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'three'), cacheOpts),
+    'third image prefill overflows physical cache-token capacity'
+  )
 })
