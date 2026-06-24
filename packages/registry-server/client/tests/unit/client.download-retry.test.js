@@ -31,6 +31,7 @@ function makeClient () {
   client._core = core
 
   client.hyperswarm = {
+    suspended: false,
     join () { events.push('swarm.join') },
     async flush () {}
   }
@@ -60,37 +61,61 @@ function requestTimeout () {
 const PARTIAL = Buffer.alloc(256, 1)
 const COMPLETE = Buffer.alloc(1000, 2)
 
-test('downloadModel preserves the partial across a REQUEST_TIMEOUT retry', async t => {
+// The resume speedup comes from the core's cached blocks, not the output file
+// (which `_streamBlobToFile` truncates and re-streams each attempt). The real
+// invariant is that cached blocks are not cleared until the download succeeds.
+test('downloadModel keeps cached blocks across a REQUEST_TIMEOUT retry', async t => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
   const client = makeClient()
-  let attempt = 0
-  let partialPresentOnRetry = null
+  let clearCalls = 0
+  let clearsBeforeRetrySucceeded = null
+  client._clearBlobBlocks = async () => { clearCalls++ }
 
+  let attempt = 0
   client._streamBlobToFile = async (blobs, core, pointer, filePath) => {
     attempt++
-    client._events.push('attempt-' + attempt)
-    if (attempt === 1) {
-      await fs.promises.writeFile(filePath, PARTIAL)
-      throw requestTimeout()
-    }
-    // Second attempt: observe whether the partial written above survived.
-    try {
-      const st = await fs.promises.stat(filePath)
-      partialPresentOnRetry = st.size >= PARTIAL.length
-    } catch {
-      partialPresentOnRetry = false
-    }
+    if (attempt === 1) throw requestTimeout()
+    clearsBeforeRetrySucceeded = clearCalls
     await fs.promises.writeFile(filePath, COMPLETE)
   }
 
   await client.downloadModel('models/tiny.gguf', 's3', { outputFile, maxRetries: 3 })
 
   t.is(attempt, 2, 'streamBlobToFile retried exactly once after REQUEST_TIMEOUT')
+  t.is(clearsBeforeRetrySucceeded, 0, 'cached blocks were not cleared before the retry')
+  t.is(clearCalls, 1, 'cached blocks cleared once, only after success')
+})
+
+test('downloadModel waits for the swarm to resume before retrying', async t => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient()
+  // Start backgrounded; foreground shortly after the first failure.
+  let suspended = true
+  Object.defineProperty(client.hyperswarm, 'suspended', { get () { return suspended } })
+
+  let attempt = 0
+  client._streamBlobToFile = async (blobs, core, pointer, filePath) => {
+    attempt++
+    client._events.push('attempt-' + attempt)
+    if (attempt === 1) {
+      setTimeout(() => { suspended = false; client._events.push('resumed') }, 100)
+      throw requestTimeout()
+    }
+    await fs.promises.writeFile(filePath, COMPLETE)
+  }
+
+  await client.downloadModel('models/tiny.gguf', 's3', { outputFile, maxRetries: 3 })
+
+  const ev = client._events
+  t.is(attempt, 2, 'retried after the swarm resumed')
+  t.ok(ev.includes('resumed'), 'swarm resumed during the wait')
   t.ok(
-    partialPresentOnRetry,
-    'partial on disk is preserved going into the retry (not unlinked)'
+    ev.indexOf('resumed') < ev.indexOf('attempt-2'),
+    'retry waited until the swarm resumed (did not burn the attempt while suspended)'
   )
 })
 
