@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - New `getBackendInfo()` surfaces the active GPU hardware name. The native addon now captures `ggml_backend_dev_description()` for the resolved GPU device at `load()` (e.g. "NVIDIA GeForce RTX 3090", "Apple M2 Pro") and exposes it through `TranscriptionParakeet#getBackendInfo()` → `{ backendDevice, backendId, backendName, backendDescription }`. The RTF benchmark uses it as a fallback for `labels.gpuModel` on CI GPU runners where the host probe (nvidia-smi / procfs) can't see the device but the ggml CUDA/Vulkan/Metal backend still knows its name via `cudaGetDeviceProperties` / `VkPhysicalDeviceProperties` / `MTLDevice.name` (QVAC-21167).
+- Bumped the `parakeet-cpp` `version>=` constraint from `2026-06-18` to `2026-06-18#1`, which refreshes the bundled `ggml-speech` from `2026-06-09` to `2026-06-15` (speech branch tip `7bb9f229`), keeping it consistent with the other speech-stack addons (`tts-cpp` already pins `ggml-speech 2026-06-15`). The `parakeet-cpp` C++ source is unchanged (same `master` REF `b95ad447`), so this only moves `ggml-speech`. The registry baseline is left unchanged; `version>=` resolves the new port-version forward of the pinned baseline (QVAC-21322, registry [tetherto/qvac-registry-vcpkg#210](https://github.com/tetherto/qvac-registry-vcpkg/pull/210)).
 
 ## [0.8.1] - 2026-06-22
 

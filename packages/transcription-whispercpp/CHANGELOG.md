@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Bumped the `whisper-cpp` vcpkg override from `1.8.5#3` to `1.8.5#5`, which
+  refreshes the bundled `ggml-speech` from `2026-06-04` to `2026-06-15` (speech
+  branch tip `7bb9f229`), keeping it consistent with the other speech-stack
+  addons (`tts-cpp` already pins `ggml-speech 2026-06-15`). The `whisper-cpp`
+  C++ source is unchanged between port-versions `#3` and `#5`, so this only
+  moves `ggml-speech`. The registry baseline is left unchanged; the override
+  resolves the new port-version forward of the pinned baseline (QVAC-21321,
+  registry [tetherto/qvac-registry-vcpkg#210](https://github.com/tetherto/qvac-registry-vcpkg/pull/210)).
+
 ## [0.10.1] - 2026-06-22
 
 ### Changed
