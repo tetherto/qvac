@@ -8,19 +8,19 @@
 #     mishandled by `subgroup_size == 8 ? 8 : 32`, causing OOB + the "M<48 cliff"
 #     and the Pixel 9 Pro XL non-determinism) on both coopmat and scalar warptiles.
 #   - 76955becc: native f32-input cm1 coopmat path + coopmat property-list sort.
-#   - 25655933 (ship-candidate round O+1): decline GGML_OP_CONV_TRANSPOSE_1D in
-#     supports_op when vendor_id == 0x13b5 (ARM Mali) so the scheduler routes it to
-#     CPU like Adreno/OpenCL. Fixes the Chatterbox HiFT ISTFT 5x-quiet on Mali-G715
-#     (device-confirmed round O). Mirrors the FLASH_ATTN_EXT->Qualcomm decline.
-# Everything else (build options incl. the no-op GGML_VULKAN_DISABLE_COOPMAT, the
-# spirv-headers patch, android-vulkan-version) is byte-identical to the registry
-# port so only the ggml fix is under test. THROWAWAY — never merge.
+# PROBE (2026-06-24): pinned to e303be3f = the PARENT of 25655933, i.e. the tile +
+# FA fixes WITHOUT the CONV_TRANSPOSE_1D ARM supports_op decline. ggml-vulkan
+# natively supports conv_transpose_1d, so on Mali this keeps the HiFT ISTFT
+# conv_transpose ON THE GPU (primary_runs_all=1) instead of routing it to the
+# Mali CPU. Purpose: prove by-ear whether the Mali-GPU conv_transpose output is
+# clean+intelligible (the campaign's "5x quiet" suspected to actually be CORRECT;
+# the 12 kHz tone comes from the Mali CPU path). THROWAWAY — never merge.
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 25655933332b73916a636d8e2f0ad5271ac14431
-    SHA512 6a316e089de44c407f64f33c7df32c2e1e7fee24fe8a3e63fba44b3175559c624c2410cc2d56b3bf7d9453704c1657a67f3c192cf0e0f3739bc5e6964d4e5ecc
+    REF e303be3fa355feff9a5b8a03367bf9156be629ef
+    SHA512 0b473caa278243d9672e85236c59ed692474105f126feb531777fd54eeaed7d246369e81aae3811668c287af4a9f9cb1e75da7df960d2171d1981f3ffd15bf6e
     HEAD_REF speech
 )
 
