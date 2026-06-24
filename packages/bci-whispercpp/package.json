@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bci-whispercpp",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
   "engines": {
