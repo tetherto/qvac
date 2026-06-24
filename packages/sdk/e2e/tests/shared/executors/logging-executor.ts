@@ -286,7 +286,7 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
     await outputs;
   }
 
-  // Overridden in DesktopLoggingExecutor / MobileLoggingExecutor.
+  // Overridden in NodeLoggingExecutor / MobileLoggingExecutor.
   protected triggerWhisper(_modelId: string, _params: AudioParams): Promise<void> {
     return notImplemented("triggerWhisper");
   }

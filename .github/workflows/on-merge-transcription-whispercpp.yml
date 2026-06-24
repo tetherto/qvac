@@ -337,25 +337,3 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-
-  benchmark:
-    name: Trigger Benchmark (Whispercpp)
-    runs-on: ubuntu-latest
-    environment: release
-    needs:
-      - post-build-gate
-      - label-gate
-    if: "needs.label-gate.outputs.authorised == 'true' && (!cancelled() && needs.post-build-gate.outputs.should_run_tests == 'true')"
-    steps:
-      - name: Trigger benchmark workflow
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          gh workflow run benchmark-transcription-whispercpp.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref_name }} \
-            -f dataset_type=librispeech \
-            -f language=english \
-            -f model_size=tiny \
-            -f streaming_mode=false \
-            -f workdir=packages/transcription-whispercpp

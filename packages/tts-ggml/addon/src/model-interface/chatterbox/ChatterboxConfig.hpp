@@ -65,6 +65,25 @@ struct ChatterboxConfig {
   /** Post-processing output sample rate.  Currently unused (engine always emits 24 kHz). */
   std::optional<int> outputSampleRate;
   /**
+   * Speaking-rate multiplier (a duration multiplier, mirroring Supertonic's
+   * `speed`):  outputDuration = synthesizedDuration / speed.  `speed < 1`
+   * slows speech down, `> 1` speeds it up.
+   *
+   * Unset (or 1.0) leaves the raw model output unchanged — no rate control is
+   * applied by default, for backward compatibility.  Callers opt in by passing
+   * an explicit value.
+   *
+   * Unlike Supertonic — which scales a native duration predictor inside the
+   * engine — Chatterbox's engine exposes no speaking-rate control (its S3
+   * speech tokens run at a fixed 25 Hz and duration is emergent from the
+   * autoregressive T3).  So this is applied as a post-synthesis,
+   * pitch-preserving WSOLA time-stretch on the 24 kHz PCM (see
+   * {@link WsolaTimeStretch}), functionally equivalent to ffmpeg's `atempo`.
+   *
+   * Must be > 0; bounded to [0.25, 4.0] by ChatterboxModel::validateConfig.
+   */
+  std::optional<float> speed;
+  /**
    * Tri-state GPU intent:
    *   - std::nullopt: unspecified, let the engine use its library default.
    *   - true:         if nGpuLayers unset, maps to nGpuLayers=99.
