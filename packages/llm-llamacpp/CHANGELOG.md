@@ -13,6 +13,10 @@ This release fixes per-image token budgets for multimodal (vision) contexts, whi
 - The default is gated on the mmproj projector type (read from `clip.projector_type`, falling back to `clip.vision.projector_type` for combined vision+audio mmprojs such as Qwen Omni), so smaller-budget dynamic encoders (LightOnOCR / Pixtral at 1024, LFM2 at 256) are never raised above their native limit and fixed-grid encoders (SigLIP / SmolVLM) are unaffected.
 - The default cap respects an explicit `image_min_tokens` floor: since mtmd throws when `max_pixels < min_pixels`, the default max is not injected when the caller-set min meets or exceeds it, leaving the budget to the caller / model default.
 
+## Pull Requests
+
+- [#2815](https://github.com/tetherto/qvac/pull/2815) - QVAC-21295 fix[api]: forward vision image-token limits and cap Qwen-VL by default
+
 ## [0.29.2] - 2026-06-23
 
 This release adds opt-in KV-cache compaction of completed reasoning blocks, so callers can keep multi-turn context tight on models that emit a `<think>`-style channel. Detection is now driven by the active chat template's thinking tags, falling back to the hardcoded model-family table when the template does not expose them.
