@@ -15,7 +15,7 @@ export const ModelType = {
   onnxTts: "onnx-tts",
   ttsGgml: "tts-ggml",
   parakeetTranscription: "parakeet-transcription",
-  onnxOcr: "onnx-ocr",
+  ggmlOcr: "ggml-ocr",
   sdcppGeneration: "sdcpp-generation",
   ggmlVla: "ggml-vla",
   ggmlClassification: "ggml-classification",
@@ -49,7 +49,7 @@ export const ModelTypeAliases = {
   [AliasKeys.nmt]: ModelType.nmtcppTranslation,
   [AliasKeys.parakeet]: ModelType.parakeetTranscription,
   [AliasKeys.tts]: ModelType.ttsGgml,
-  [AliasKeys.ocr]: ModelType.onnxOcr,
+  [AliasKeys.ocr]: ModelType.ggmlOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
   [AliasKeys.vla]: ModelType.ggmlVla,
   [AliasKeys.classification]: ModelType.ggmlClassification,
@@ -230,12 +230,12 @@ export type TtsModelTypeInput = z.infer<typeof ttsModelTypeSchema>;
 
 /**
  * OCR model type schema.
- * - Alias: `"ocr"` → resolves to `"onnx-ocr"`
- * - Canonical: `"onnx-ocr"`
+ * - Alias: `"ocr"` → resolves to `"ggml-ocr"`
+ * - Canonical: `"ggml-ocr"`
  */
 export const ocrModelTypeSchema = modelTypeInputSchema
-  .extract([AliasKeys.ocr, ModelType.onnxOcr])
-  .describe('OCR model type: "ocr" (alias) or "onnx-ocr" (canonical)');
+  .extract([AliasKeys.ocr, ModelType.ggmlOcr])
+  .describe('OCR model type: "ocr" (alias) or "ggml-ocr" (canonical)');
 export type OcrModelTypeInput = z.infer<typeof ocrModelTypeSchema>;
 
 /**
