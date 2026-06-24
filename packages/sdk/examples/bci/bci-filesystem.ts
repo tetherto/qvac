@@ -7,7 +7,12 @@
  *
  * Usage: bun run examples/bci/bci-filesystem.ts <neural-bin-file-path>
  */
-import { loadModel, unloadModel, bciTranscribe, BCI_WINDOWED } from "@qvac/sdk";
+import {
+  loadModel,
+  unloadModel,
+  bciTranscribe,
+  BCI_WINDOWED,
+} from "@qvac/sdk";
 
 const args = process.argv.slice(2);
 

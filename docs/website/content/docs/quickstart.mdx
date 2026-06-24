@@ -35,6 +35,13 @@ npm i @qvac/sdk
 </Step>
 
 <Step>
+The SDK prints no logs by default. To watch its client and server logs while the quickstart runs, save this config in your workspace (any path works — `QVAC_CONFIG_PATH` points at it in the run step):
+
+```json file=<rootDir>/packages/sdk/examples/config/default/default.config.json title="qvac.config.json"
+```
+</Step>
+
+<Step>
 Create the quickstart script:
 <WrapCode>
 
@@ -44,10 +51,10 @@ Create the quickstart script:
 </Step>
 
 <Step>
-Run the quickstart script with Node.js:
+Run the quickstart script with Node.js, pointing `QVAC_CONFIG_PATH` at the config you saved (omit it to run silently):
 
 ```bash
-node quickstart.js
+QVAC_CONFIG_PATH=./qvac.config.json node quickstart.js
 ```
 
 Or with the [Bare](https://bare.pears.com) runtime. Running on Bare needs a little setup — a `process` global and plugin registration — so see [Running on Bare](#running-on-bare) below.
@@ -60,6 +67,8 @@ Or with the [Bare](https://bare.pears.com) runtime. Running on Bare needs a litt
 Follow these instructions to run any example in this documentation:
 - All examples are self-contained, runnable JavaScript scripts. Use the `qvac-examples` workspace created in this quickstart to store and run them as you explore this documentation.
 - Run each example with the indicated compatible JavaScript environment. QVAC supports multiple environments (Node.js, Bare, and Expo). The examples are written in Node style and run on Node.js or Bun directly; to run them on Bare, see [Running on Bare](#running-on-bare).
+- More examples can be found in the [SDK examples directory](https://github.com/tetherto/qvac/tree/main/packages/sdk/examples).
+- Some examples need companion files — sample audio, an image, or a config — that aren't part of the embedded code. These can be found in the same examples directory.
 - Some examples also provide a TypeScript version. If you want to run TS directly, install the required dev dependencies:
   ```bash
   npm i -D tsx typescript

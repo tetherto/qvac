@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Bump the `tts-cpp` pin to `2026-06-24`** (`qvac-ext-lib-whisper.cpp` master
+  `46921668`, PR #65), consumed from `qvac-registry-vcpkg`. Brings QVAC-19557
+  **S3TokenizerV2 host-mirror elimination**: the Chatterbox voice-conditioning
+  bake no longer holds the ~458 MB S3Tokenizer encoder weights in a host
+  `std::vector` mirror *and* the backend (Metal) weight buffer simultaneously —
+  `build_encoder_ctx` now streams each encoder tensor straight from the GGUF
+  into its backend tensor (8 MiB chunks, no host mirror). This drops the
+  ~900 MB dual-residency that dominated the Chatterbox first-`synthesize()`
+  peak; on-device (iPhone 17 Pro Max) the first-test peak falls from ~3184 MB to
+  ~2772 MB (under the ~3 GB iOS jetsam budget), warm synthesis unchanged, and
+  the produced audio is bit-identical (same tensor names/shapes/dtypes). The
+  `default-registry` baseline advances to `1130cabb` so the new pin resolves.
+
 ## [0.3.4] - 2026-06-23
 
 ### Added

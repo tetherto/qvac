@@ -5,7 +5,7 @@ export { bciPlugin } from "./bci-whispercpp-transcription/plugin";
 export { parakeetPlugin } from "./parakeet-transcription/plugin";
 export { nmtPlugin } from "./nmtcpp-translation/plugin";
 export { ttsPlugin } from "./tts-ggml/plugin";
-export { ocrPlugin } from "./onnx-ocr/plugin";
+export { ocrPlugin } from "./ggml-ocr/plugin";
 export { diffusionPlugin } from "./sdcpp-generation/plugin";
 export { vlaPlugin } from "./ggml-vla/plugin";
 export { classificationPlugin } from "./ggml-classification/plugin";

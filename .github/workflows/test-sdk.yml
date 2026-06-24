@@ -16,7 +16,11 @@ on:
         options:
           - all
           - desktop
+          - electron
           - mobile
+          - electron + desktop
+          - desktop + mobile
+          - electron + mobile
           - android
           - ios
         default: all
@@ -38,7 +42,7 @@ on:
         description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
         type: string
       desktop-consumer-timeout:
-        description: "Desktop consumer timeout (seconds)"
+        description: "Desktop/Electron consumer timeout (seconds)"
         type: number
         default: 60
       mobile-consumer-timeout:
@@ -128,9 +132,29 @@ jobs:
 
   desktop-tests:
     needs: resolve
-    if: inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
-    uses: ./.github/workflows/test-desktop-sdk.yml
+    if: inputs.targets == 'all' || inputs.targets == 'desktop' || inputs.targets == 'electron + desktop' || inputs.targets == 'desktop + mobile'
+    uses: ./.github/workflows/test-node-sdk.yml
     with:
+      consumer: desktop
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      test-version: ${{ inputs.test-version || '' }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  electron-tests:
+    needs: resolve
+    # Electron CI is manual-only for now. `workflow_call` callers such as
+    # on-pr-test-sdk.yml keep their existing desktop + mobile behavior.
+    if: github.event_name == 'workflow_dispatch' && (inputs.targets == 'all' || inputs.targets == 'electron' || inputs.targets == 'electron + desktop' || inputs.targets == 'electron + mobile')
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: electron
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
@@ -150,7 +174,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets != 'desktop' && inputs.targets != 'ios'
+    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'android' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"
@@ -174,7 +198,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets != 'desktop' && inputs.targets != 'android'
+    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'ios' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
     uses: ./.github/workflows/test-ios-sdk.yml
     with:
       project-directory: "packages/sdk"
