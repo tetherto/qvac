@@ -386,6 +386,16 @@ async function runContinuousBatchingTest (options = {}) { // eslint-disable-line
   return runIntegrationModule('../integration/continuous-batching.test.js', options)
 }
 
+async function runFinetuningArchsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningArchsTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-archs.test.js', options)
+}
+
+async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningMoeTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-moe.test.js', options)
+}
+
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningPauseResumeTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
