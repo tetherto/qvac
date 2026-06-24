@@ -3,7 +3,6 @@
 build/
 prebuilds/
 node_modules/
-dist/
 
 # Added by qvac-lint-cpp
 .clang-format

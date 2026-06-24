@@ -90,9 +90,7 @@ def run_qvac_benchmark(images):
             f.write(img + '\n')
         input_file = f.name
 
-    output_fd = tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False)
-    output_file = output_fd.name
-    output_fd.close()
+    output_file = tempfile.mktemp(suffix='.jsonl')
 
     try:
         # Run QVAC batch CLI

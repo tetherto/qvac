@@ -66,7 +66,6 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/StreamingProcessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperConfig.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperHandlers.cpp
@@ -103,7 +102,6 @@ if(BUILD_TESTING)
 
   # Create whisper-core library for testing
   set(CORE_SRCS
-      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/StreamingProcessor.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperConfig.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperModel.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperHandlers.cpp

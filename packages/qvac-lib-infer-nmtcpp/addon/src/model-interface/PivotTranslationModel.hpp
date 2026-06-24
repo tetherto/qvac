@@ -15,7 +15,7 @@ namespace qvac_lib_inference_addon_marian {
 
 class PivotTranslationModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
-      public qvac_lib_inference_addon_cpp::model::IModelCancel {
+      qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   PivotTranslationModel() = default;
   PivotTranslationModel(
@@ -32,8 +32,8 @@ public:
 
   PivotTranslationModel(const PivotTranslationModel&) = delete;
   PivotTranslationModel& operator=(const PivotTranslationModel&) = delete;
-  PivotTranslationModel(PivotTranslationModel&&) noexcept = delete;
-  PivotTranslationModel& operator=(PivotTranslationModel&&) noexcept = delete;
+  PivotTranslationModel(PivotTranslationModel&&) noexcept = default;
+  PivotTranslationModel& operator=(PivotTranslationModel&&) noexcept = default;
 
   void load();
   void unload();

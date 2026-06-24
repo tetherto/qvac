@@ -54,7 +54,6 @@ void PivotTranslationModel::reload() {
 }
 
 void PivotTranslationModel::reset() {
-  stopTranslation_.store(false);
   firstModel_->reset();
   secondModel_->reset();
 }
@@ -115,28 +114,21 @@ PivotTranslationModel::runtimeStats() const {
   return merged;
 }
 
-void PivotTranslationModel::cancel() const {
-  stopTranslation_.store(true);
-  firstModel_->cancel();
-  secondModel_->cancel();
-}
+void PivotTranslationModel::cancel() const { stopTranslation_.store(true); }
 
 std::any PivotTranslationModel::translateString(const std::string& input) {
+
   if (!isLoaded()) {
     throw std::runtime_error("PivotTranslationModel models are not loaded");
   }
 
-  if (stopTranslation_.load()) {
-    return std::any{};
+  if (!stopTranslation_.load()) {
+    const std::any firstOutput = firstModel_->process(input);
+
+    if (!stopTranslation_.load()) {
+      return secondModel_->process(firstOutput);
+    }
   }
-
-  const std::any firstOutput = firstModel_->process(input);
-
-  if (stopTranslation_.load()) {
-    return std::any{};
-  }
-
-  return secondModel_->process(firstOutput);
 }
 
 std::any
@@ -144,17 +136,7 @@ PivotTranslationModel::translateBatch(const std::vector<std::string>& inputs) {
   if (!isLoaded()) {
     throw std::runtime_error("PivotTranslationModel models are not loaded");
   }
-
-  if (stopTranslation_.load()) {
-    return std::any{};
-  }
-
   auto firstBatch = firstModel_->processBatch(inputs);
-
-  if (stopTranslation_.load()) {
-    return std::any{};
-  }
-
   return secondModel_->processBatch(firstBatch);
 }
 

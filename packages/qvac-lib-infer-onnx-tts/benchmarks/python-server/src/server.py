@@ -37,14 +37,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BENCHMARKS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_BENCHMARKS_REAL = os.path.realpath(BENCHMARKS_DIR)
-
-
-def _validate_path_within_benchmarks(path: str) -> str:
-    resolved = os.path.realpath(path)
-    if not resolved.startswith(_BENCHMARKS_REAL + os.sep) and resolved != _BENCHMARKS_REAL:
-        raise HTTPException(400, "Path must be within the benchmarks directory")
-    return resolved
 
 app = FastAPI(
     title="TTS Python Native Benchmark Server",
@@ -130,7 +122,7 @@ async def synthesize_chatterbox(request: ChatterboxRequest):
             logger.info("Chatterbox runner initialized")
         except ImportError as e:
             logger.error(f"Failed to initialize Chatterbox runner: {e}")
-            raise HTTPException(500, "Required dependency chatterbox-tts is not installed")
+            raise HTTPException(500, f"chatterbox-tts not installed: {str(e)}")
     
     try:
         logger.info(f"[Chatterbox] Processing {len(request.texts)} texts")
@@ -139,10 +131,8 @@ async def synthesize_chatterbox(request: ChatterboxRequest):
         
         if not chatterbox_runner.is_model_loaded():
             ref_audio_path = request.config.referenceAudioPath
-            if ref_audio_path:
-                if not os.path.isabs(ref_audio_path):
-                    ref_audio_path = os.path.join(BENCHMARKS_DIR, ref_audio_path)
-                ref_audio_path = _validate_path_within_benchmarks(ref_audio_path)
+            if ref_audio_path and not os.path.isabs(ref_audio_path):
+                ref_audio_path = os.path.join(BENCHMARKS_DIR, ref_audio_path)
             
             logger.info(f"[Chatterbox] Loading model on device: {device}")
             chatterbox_runner.load_model(
@@ -168,10 +158,10 @@ async def synthesize_chatterbox(request: ChatterboxRequest):
         
     except ImportError as e:
         logger.error(f"[Chatterbox] Import error: {e}")
-        raise HTTPException(500, "Required dependency chatterbox-tts is not installed")
+        raise HTTPException(500, f"Chatterbox not installed: {str(e)}")
     except Exception as e:
         logger.error(f"[Chatterbox] Synthesis failed: {e}", exc_info=True)
-        raise HTTPException(500, "Chatterbox synthesis failed")
+        raise HTTPException(500, f"Chatterbox synthesis failed: {str(e)}")
 
 
 @app.post("/synthesize-supertonic")
@@ -192,7 +182,7 @@ async def synthesize_supertonic(request: SupertonicRequest):
             logger.error(f"Failed to initialize Supertonic runner: {e}")
             raise HTTPException(
                 500,
-                "Supertonic dependencies not installed. "
+                f"Supertonic dependencies not installed: {str(e)}. "
                 "Install with: pip install -r requirements-supertonic.txt",
             )
 
@@ -202,10 +192,8 @@ async def synthesize_supertonic(request: SupertonicRequest):
         model_dir = request.config.modelDir
         if not model_dir:
             model_dir = os.path.join(BENCHMARKS_DIR, "shared-data", "models", "supertonic")
-        else:
-            if not os.path.isabs(model_dir):
-                model_dir = os.path.join(BENCHMARKS_DIR, model_dir)
-            model_dir = _validate_path_within_benchmarks(model_dir)
+        elif not os.path.isabs(model_dir):
+            model_dir = os.path.join(BENCHMARKS_DIR, model_dir)
 
         if not supertonic_runner.is_model_loaded():
             logger.info(f"[Supertonic] Loading model from: {model_dir}")
@@ -237,7 +225,7 @@ async def synthesize_supertonic(request: SupertonicRequest):
 
     except ImportError as e:
         logger.error(f"[Supertonic] Import error: {e}")
-        raise HTTPException(500, "Required Supertonic dependencies are not installed")
+        raise HTTPException(500, f"Supertonic not installed: {str(e)}")
     except Exception as e:
         logger.error(f"[Supertonic] Synthesis failed: {e}", exc_info=True)
-        raise HTTPException(500, "Supertonic synthesis failed")
+        raise HTTPException(500, f"Supertonic synthesis failed: {str(e)}")

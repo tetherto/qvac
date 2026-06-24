@@ -1,7 +1,7 @@
 ---
 title: "modelRegistryList( )"
 titleStyle: code
-description: "Returns all available models from the QVAC distributed model registry."
+description: "No description available"
 ---
 
 ```typescript
@@ -14,23 +14,4 @@ function modelRegistryList(): Promise
 
 ```typescript
 Promise
-```
-
-Resolves with an array of `ModelRegistryEntry` objects representing every model in the registry.
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `ModelRegistryQueryFailedError` | The registry query fails on the server |
-
-## Example
-
-```typescript
-import { modelRegistryList } from "@qvac/sdk";
-
-const models = await modelRegistryList();
-for (const model of models) {
-  console.log(model.registryPath, model.addon);
-}
 ```

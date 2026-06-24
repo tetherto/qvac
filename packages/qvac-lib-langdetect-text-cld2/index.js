@@ -1,35 +1,55 @@
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 const cld = require('cld')
-const tags = require('language-tags')
+const isoLanguageCodes = require('iso-language-codes')
 
 /**
  * @typedef {Object} Language
- * @property {string} code - ISO 639-1/2/3 code.
+ * @property {string} code - ISO 639-1 code.
  * @property {string} language - The language name.
  */
 
 /**
  * @typedef {Object} LanguageProbability
- * @property {string} code - ISO 639-1/2/3 code.
+ * @property {string} code - ISO 639-1 code.
  * @property {string} language - The language name.
  * @property {number} probability - The probability of the language being detected.
  */
 
 /**
- * Convert CLD2 language code to ISO 639 code
- * Returns ISO 639-1 if available, otherwise ISO 639-2/3
+ * Convert CLD2 language code to ISO 639-1
+ * CLD2 returns codes in various formats (ISO 639-1, ISO 639-2, etc.)
  * @param {string} cldCode The CLD2 language code
- * @returns {string} ISO 639-1/2/3 code or 'und' if not found
+ * @returns {string} ISO 639-1 code or 'und' if not found
  */
-function cldToISO (cldCode) {
+function cldToISO2 (cldCode) {
   if (!cldCode) return 'und'
 
   const code = cldCode.toLowerCase()
 
+  // CLD2 often returns ISO 639-1 codes directly
+  // Try to find by alpha2 first
+  if (isoLanguageCodes.by639_1[code]) {
+    return code
+  }
+
+  // Try to find by alpha3 (ISO 639-2T)
+  if (isoLanguageCodes.by639_2T[code]) {
+    const lang = isoLanguageCodes.by639_2T[code]
+    if (lang.iso639_1) return lang.iso639_1
+  }
+
+  // Try to find by alpha3 (ISO 639-2B)
+  if (isoLanguageCodes.by639_2B[code]) {
+    const lang = isoLanguageCodes.by639_2B[code]
+    if (lang.iso639_1) return lang.iso639_1
+  }
+
+  // Handle special CLD2 cases
   const specialCases = {
     'zh-hant': 'zh', // Traditional Chinese
     'zh-hans': 'zh', // Simplified Chinese
+    tl: 'tl', // Tagalog (CLD2 uses tl, ISO uses tl/fil)
     iw: 'he', // Hebrew (CLD2 sometimes uses old code)
     in: 'id', // Indonesian (CLD2 sometimes uses old code)
     jw: 'jv', // Javanese
@@ -41,45 +61,24 @@ function cldToISO (cldCode) {
 
   if (specialCases[code]) return specialCases[code]
 
-  // Try to parse as a language tag
-  const tag = tags(code)
-
-  if (tag && tag.valid()) {
-    const lang = tag.language()
-    if (lang) {
-      const subtag = lang.format()
-      if (subtag) {
-        return subtag
-      }
-    }
-  }
-
-  // Return the code as is if it's 2 or 3 letters, otherwise 'und'
-  return (code.length === 2 || code.length === 3) ? code : 'und'
+  // If no mapping found, return the original code if it's 2 chars, otherwise 'und'
+  return code.length === 2 ? code : 'und'
 }
 
 /**
- * Get language name from ISO code using language-tags
- * @param {string} isoCode ISO 639-1, 639-2, or 639-3 code
+ * Get language name from ISO2 code using iso-language-codes
+ * @param {string} iso2 ISO 639-1 code
  * @returns {string} Language name
  */
-function getLanguageName (isoCode) {
-  if (!isoCode || isoCode === 'und') return 'Undetermined'
+function getLanguageName (iso2) {
+  if (!iso2 || iso2 === 'und') return 'Undetermined'
 
-  const code = isoCode.toLowerCase()
-  const tag = tags(code)
-
-  if (tag && tag.valid()) {
-    const lang = tag.language()
-    if (lang && lang.descriptions) {
-      const descriptions = lang.descriptions()
-      if (descriptions && descriptions.length > 0) {
-        return descriptions[0]
-      }
-    }
+  try {
+    const lang = isoLanguageCodes.by639_1[iso2.toLowerCase()]
+    return lang ? lang.name : 'Unknown'
+  } catch (error) {
+    return 'Unknown'
   }
-
-  return 'Unknown'
 }
 
 /**
@@ -95,30 +94,30 @@ async function detectOne (text) {
     }
   }
 
-  let result
   try {
-    result = await cld.detect(text)
+    // CLD2 detect is asynchronous
+    const result = await cld.detect(text)
+
+    if (!result || !result.languages || result.languages.length === 0) {
+      return {
+        code: 'und',
+        language: 'Undetermined'
+      }
+    }
+
+    const topLanguage = result.languages[0]
+    const iso2Code = cldToISO2(topLanguage.code)
+
+    return {
+      code: iso2Code,
+      language: getLanguageName(iso2Code)
+    }
   } catch (error) {
     // CLD2 throws an error if it can't detect the language
     return {
       code: 'und',
       language: 'Undetermined'
     }
-  }
-
-  if (!result || !result.languages || result.languages.length === 0) {
-    return {
-      code: 'und',
-      language: 'Undetermined'
-    }
-  }
-
-  const topLanguage = result.languages[0]
-  const isoCode = cldToISO(topLanguage.code)
-
-  return {
-    code: isoCode,
-    language: getLanguageName(isoCode)
   }
 }
 
@@ -141,9 +140,28 @@ async function detectMultiple (text, topK = 3) {
     topK = 3
   }
 
-  let result
   try {
-    result = await cld.detect(text)
+    const result = await cld.detect(text)
+
+    if (!result || !result.languages || result.languages.length === 0) {
+      return [{
+        code: 'und',
+        language: 'Undetermined',
+        probability: 1
+      }]
+    }
+
+    // CLD2 returns languages with percent field
+    const languages = result.languages.slice(0, topK).map(lang => {
+      const iso2Code = cldToISO2(lang.code)
+      return {
+        code: iso2Code,
+        language: getLanguageName(iso2Code),
+        probability: lang.percent / 100 // Convert percent to probability (0-1)
+      }
+    })
+
+    return languages
   } catch (error) {
     return [{
       code: 'und',
@@ -151,26 +169,6 @@ async function detectMultiple (text, topK = 3) {
       probability: 1
     }]
   }
-
-  if (!result || !result.languages || result.languages.length === 0) {
-    return [{
-      code: 'und',
-      language: 'Undetermined',
-      probability: 1
-    }]
-  }
-
-  // CLD2 returns languages with percent field
-  const languages = result.languages.slice(0, topK).map(lang => {
-    const isoCode = cldToISO(lang.code)
-    return {
-      code: isoCode,
-      language: getLanguageName(isoCode),
-      probability: lang.percent / 100 // Convert percent to probability (0-1)
-    }
-  })
-
-  return languages
 }
 
 /**
@@ -185,19 +183,26 @@ function getLangName (code) {
 
   const normalizedCode = code.trim().toLowerCase()
 
-  const tag = tags(normalizedCode)
-
-  if (tag && tag.valid()) {
-    const lang = tag.language()
-    if (lang && lang.descriptions) {
-      const descriptions = lang.descriptions()
-      if (descriptions && descriptions.length > 0) {
-        return descriptions[0]
-      }
+  try {
+    // Try ISO2 first
+    if (isoLanguageCodes.by639_1[normalizedCode]) {
+      return isoLanguageCodes.by639_1[normalizedCode].name
     }
-  }
 
-  return null
+    // Try ISO3 (639-2T)
+    if (isoLanguageCodes.by639_2T[normalizedCode]) {
+      return isoLanguageCodes.by639_2T[normalizedCode].name
+    }
+
+    // Try ISO3 (639-2B)
+    if (isoLanguageCodes.by639_2B[normalizedCode]) {
+      return isoLanguageCodes.by639_2B[normalizedCode].name
+    }
+
+    return null
+  } catch (error) {
+    return null
+  }
 }
 
 /**
@@ -211,21 +216,31 @@ function getISO2FromName (languageName) {
   }
 
   const normalizedName = languageName.trim()
-  const searchResults = tags.search(normalizedName)
 
-  if (searchResults && searchResults.length > 0) {
-    for (const result of searchResults) {
-      // Check if it's a language type and has a 2-letter code
-      if (result && result.data && result.data.type === 'language') {
-        const subtag = result.format()
-        if (subtag && subtag.length === 2) {
-          return subtag
-        }
-      }
+  try {
+    // iso-language-codes.codes array contains all languages
+    const allLanguages = isoLanguageCodes.codes
+
+    // First try exact match (case-insensitive)
+    const exactMatch = allLanguages.find(lang =>
+      lang.name && lang.name.toLowerCase() === normalizedName.toLowerCase()
+    )
+    if (exactMatch && exactMatch.iso639_1) {
+      return exactMatch.iso639_1
     }
-  }
 
-  return null
+    // Try to find by native name as well
+    const nativeMatch = allLanguages.find(lang =>
+      lang.nativeName && lang.nativeName.toLowerCase() === normalizedName.toLowerCase()
+    )
+    if (nativeMatch && nativeMatch.iso639_1) {
+      return nativeMatch.iso639_1
+    }
+
+    return null
+  } catch (error) {
+    return null
+  }
 }
 
 export {
