@@ -336,6 +336,33 @@ across all legs), then quality / speed / OCR tables; (2) **Details**
 (models & origins with Source, HW/SW provenance, full matrices); (3) **Test Results**
 (per-target pass counts), (4) **Image samples** (task → image → W×H).
 
+### Measurement stability (warmup + thermal guard)
+
+Cold-start (weight load, JIT, Vulkan shader-compile, cache fill) and **CPU heating /
+throttling** can skew latency — **especially on mobile**, which previously ran a single
+cold shot. Three layers keep the reported numbers steady-state:
+
+1. **Warmup pass.** Before the measured passes, the harness runs one warmup pass over the
+   first item (`WARMUP_REPEATS`, default **1** for single-process runs — mobile and
+   desktop-direct), stamped **`block: 0`**. The report **drops `block 0`** from every
+   statistic, so the JIT/shader/cache prime is never counted. Warmup rows are still emitted
+   (auditable). Override with `QVAC_VLM_WARMUP_REPEATS` (`0` disables).
+2. **Stability guard.** After warmup, `methodology.cjs` `stabilityGuard()` waits for a
+   **steady thermal state** before the measured pass — a calibrated CPU micro-probe polled
+   until its timing stabilises within tolerance over a window, or `maxWaitMs` (best effort).
+   Modes: `probe` (default — no privileges, works on phones), `temp` (Mac mini powermetrics —
+   hook, not yet wired), `off`. On mobile it's bounded tight (~6 s) to stay under the Device
+   Farm per-test ceiling. It emits a **`[VLMBLOCK]`** marker recording what it did
+   (`{kind, value_ms, waited_ms}`).
+3. **First-encode drop + repeats.** The vision-encode metric additionally drops the first
+   segment per cell (the shader-compile spike); measured passes are repeated (`repeats`,
+   mean reported).
+
+Tuning lives in `config.cjs` `methodology` (`warmupBlocks`, `stability`, …). The full
+interleaved round scheduler (median over measured blocks, blocks interleaved across sources
+for fair thermal drift) is a desktop follow-up; the per-process warmup + guard above is what
+runs on every target today, including phones.
+
 ---
 
 ## Extending
