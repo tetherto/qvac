@@ -358,7 +358,6 @@ function runModel (spec) {
             task: item.task,
             id: item.id,
             metric: item.metric,
-            gold: item.gold,
             pred: String(r.text).slice(0, 600),
             img: item.image,
             img_w: r.dims.w,
@@ -370,7 +369,7 @@ function runModel (spec) {
             prompt_tokens: st.promptTokens != null ? st.promptTokens : null
           }, 0))
         } catch (e) {
-          emitRow(stamp(null, { rss_mb: peakRssMb(), cell: axis, source: SOURCE, model: spec.label, device, rep: w, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) }, 0))
+          emitRow(stamp(null, { rss_mb: peakRssMb(), cell: axis, source: SOURCE, model: spec.label, device, rep: w, task: item.task, id: item.id, metric: item.metric, error: String((e && e.message) || e) }, 0))
         }
       }
       // After warming, wait for the machine to settle before the measured pass so
@@ -403,7 +402,6 @@ function runModel (spec) {
               task: item.task,
               id: item.id,
               metric: item.metric,
-              gold: item.gold,
               pred: String(r.text).slice(0, 600),
               img: item.image,
               img_w: r.dims.w,
@@ -416,7 +414,7 @@ function runModel (spec) {
             }))
             ok++
           } catch (e) {
-            emitRow(stamp(rep, { rss_mb: peakRssMb(), cell: axis, source: SOURCE, model: spec.label, device, rep, task: item.task, id: item.id, metric: item.metric, gold: item.gold, error: String((e && e.message) || e) }))
+            emitRow(stamp(rep, { rss_mb: peakRssMb(), cell: axis, source: SOURCE, model: spec.label, device, rep, task: item.task, id: item.id, metric: item.metric, error: String((e && e.message) || e) }))
           }
         }
       }

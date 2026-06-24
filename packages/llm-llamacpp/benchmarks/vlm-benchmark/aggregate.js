@@ -13,6 +13,17 @@ const fs = require('fs')
 let CONFIG = {}
 try { CONFIG = require('./config.cjs') } catch (_) {}
 
+// Gold references live in the fixture, not in the [VLMROW] markers: an OCR page's gold
+// is ~700 chars and, inlined, pushed the marker past Android logcat's per-line limit —
+// the clean copy got truncated mid-JSON (losing [/VLMROW]) so the row vanished from the
+// report. The harness now omits `gold`; we resolve it by item id here. Markers that
+// still carry inline gold (older logs, desktop CLI path) win for back-compat.
+let GOLD_BY_ID = {}
+try {
+  const FIXTURE = require('./fixture.data.cjs')
+  for (const it of (FIXTURE.items || [])) GOLD_BY_ID[it.id] = it.gold
+} catch (_) {}
+
 const ARTICLES = new Set(['a', 'an', 'the'])
 const PUNCT = /[;/[\]"{}()=+\\_\-><@`,?!.]/g
 
@@ -222,7 +233,7 @@ function parseLog (inputs) {
         const sig = host + ' ' + rm[1]
         if (seenRows.has(sig)) continue
         seenRows.add(sig)
-        try { const r = JSON.parse(rm[1]); r.__host = host; rows.push(r) } catch (_) {}
+        try { const r = JSON.parse(rm[1]); r.__host = host; if (r.gold == null && GOLD_BY_ID[r.id] != null) r.gold = GOLD_BY_ID[r.id]; rows.push(r) } catch (_) {}
       }
     }
   }
