@@ -32,7 +32,7 @@ function parseFlagSpec (spec) {
   const valueRequired = valuePart ? valuePart.startsWith('<') : false
   const valueOptional = valuePart ? valuePart.startsWith('[') : false
 
-  return { longName, shortName, valueRequired, valueOptional, hasValue: Boolean(valuePart) }
+  return { longName, shortName, valuePart, valueRequired, valueOptional, hasValue: Boolean(valuePart) }
 }
 
 function buildHelp (cmd) {
@@ -42,7 +42,8 @@ function buildHelp (cmd) {
     if (part.type === 'summary') lines.push(part.text)
   }
   lines.push('')
-  lines.push('Usage: ' + cmd.name + ' [command] [options]')
+  const cmdPart = cmd.subcommands.length > 0 ? ' [command]' : ''
+  lines.push('Usage: ' + cmd.name + cmdPart + ' [options]')
   lines.push('')
 
   if (cmd.subcommands.length > 0) {
@@ -58,8 +59,10 @@ function buildHelp (cmd) {
     lines.push('Options:')
     for (const f of cmd.flagDefs) {
       const parsed = parseFlagSpec(f.spec)
-      const aliases = parsed.shortName ? ', -' + parsed.shortName : ''
-      lines.push('  ' + f.spec + aliases + '  ' + f.description)
+      const long = '--' + parsed.longName
+      const short = parsed.shortName ? ', -' + parsed.shortName : ''
+      const val = parsed.valuePart ? ' ' + parsed.valuePart : ''
+      lines.push('  ' + long + short + val + '  ' + f.description)
     }
     lines.push('')
   }
