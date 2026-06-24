@@ -303,7 +303,11 @@ function build (rows, vision, meta, provText, title, opts = {}) {
       sl: visSlices(key),
       ttft: mean(okRows.map(r => r.ttft_ms).filter(v => v != null)),
       tps: mean(okRows.map(r => r.decode_tps).filter(v => v != null)),
-      wall: mean(okRows.map(r => r.ms).filter(v => v != null))
+      wall: mean(okRows.map(r => r.ms).filter(v => v != null)),
+      // Peak RSS is a per-process high-water mark; each measured block is its own
+      // process, so report the MAX across blocks (not the mean). Populated on every
+      // platform the runtime exposes getrusage (desktop + Android); null otherwise.
+      rss: (() => { const v = okRows.map(r => r.rss_mb).filter(x => x != null); return v.length ? Math.max(...v) : null })()
     }
   }
   // Avg OCR metrics (CER/WER ↓, BLEU ↑) for a host|cell|device group, over its OCR rows.
@@ -567,6 +571,21 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   L.push('> **mmproj enc** is parsed from llama.cpp\'s native stderr. On mobile (Device Farm) that ' +
     'stream is not captured (Android logcat / iOS console), so it shows `—` there; TTFT on mobile ' +
     'already includes the vision-encode + prompt-eval time and is the cross-platform proxy.\n')
+  // Peak RSS — its own table so a memory regression is easy to spot per platform ×
+  // device × source. One row per host|cell|device; the value is the max across
+  // measured blocks (per-process high-water). Populated where the runtime exposes it.
+  L.push('### Peak memory (RSS)\n')
+  L.push('| Config | host | device | peak RSS (MB) |')
+  L.push('|---|---|---|---|')
+  for (const k of keys) {
+    const [host, cell, dev] = k.split('|')
+    const g = groupStats(k)
+    L.push(`| \`${cell}\` | ${host || '—'} | ${dev.toUpperCase()} | ${g.rss == null ? '—' : g.rss} |`)
+  }
+  L.push('')
+  L.push('> Peak RSS is the process high-water mark (max across measured blocks), from the ' +
+    'runtime\'s getrusage — populated on desktop (Linux / macOS / Windows) and Android. A row ' +
+    'shows `—` only where the platform doesn\'t expose it.\n')
   // ── 3 · Test results (Device-Farm-style Metric | Count, per platform) ──────
   L.push('# 3 · Test Results (per platform)\n')
   L.push('| Platform | Metric | Count |')

@@ -394,6 +394,14 @@ The benchmark is meant to grow. The three common changes:
   app, not arbitrary CLIs, so phones are excluded from this mode. On Windows the build
   uses the pre-installed clang + Ninja (the runner has no Visual Studio, and the
   GH-Actions user can't run choco), set up by the workflow's Windows-only step.
+  Each CLI source can be pinned to a release **tag**, a **branch**, or a **full
+  40-char commit SHA** — a SHA shallow-fetches the exact commit (`clone -b` only
+  takes ref names), so a regression can be bisected to an arbitrary commit, not just
+  tagged releases.
+- **Peak RSS** is the process high-water mark (max across measured blocks), from the
+  runtime's `getrusage` (`bare-os` `resourceUsage().maxRSS`, KB on every platform), with
+  a Linux `/proc` fallback. Populated on desktop (Linux / macOS / Windows) and Android;
+  the report's **Peak memory (RSS)** table shows `—` only where a platform doesn't expose it.
 - **mmproj vision-encode time is unavailable on mobile.** It comes from llama.cpp's native
   stderr, which neither Android logcat nor the iOS console capture carries — the report
   shows `—` there and uses **TTFT** (which includes vision-encode) as the mobile proxy.

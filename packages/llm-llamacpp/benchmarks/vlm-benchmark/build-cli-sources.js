@@ -108,11 +108,16 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
   log(`repo: ${sourceConfig.repo}`)
   log(`ref:  ${sourceConfig.ref}`)
 
-  const remoteSha = resolveRemoteSha(sourceConfig.repo, sourceConfig.ref)
+  // A tag/branch resolves via ls-remote; a full commit SHA does not (ls-remote
+  // lists refs, not arbitrary commits) — accept it directly so a run can pin
+  // fabric/upstream to ANY commit, not just release tags (A5).
+  let remoteSha = resolveRemoteSha(sourceConfig.repo, sourceConfig.ref)
+  const bySha = !remoteSha && /^[0-9a-f]{40}$/i.test(sourceConfig.ref)
+  if (bySha) remoteSha = sourceConfig.ref.toLowerCase()
   if (!remoteSha) {
-    throw new Error(`Could not resolve ref '${sourceConfig.ref}' from ${sourceConfig.repo}`)
+    throw new Error(`Could not resolve ref '${sourceConfig.ref}' from ${sourceConfig.repo} (use a tag, branch, or full 40-char commit SHA)`)
   }
-  log(`resolved SHA: ${remoteSha.slice(0, 12)}`)
+  log(`resolved SHA: ${remoteSha.slice(0, 12)}${bySha ? ' (commit)' : ''}`)
 
   const mergedFlags = { ...sourceConfig.cmakeFlags, ...backendCmakeFlags(backend) }
 
@@ -133,9 +138,19 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
   log(`cloning into ${tmpDir}`)
 
   try {
-    execFileSync('git', ['clone', '--depth', '1', '-b', sourceConfig.ref, sourceConfig.repo, tmpDir], {
-      stdio: 'inherit', timeout: 120000
-    })
+    if (bySha) {
+      // Arbitrary commit: `clone -b` only takes ref names, so shallow-fetch the
+      // single object (GitHub allows fetching a reachable SHA) and check it out.
+      fs.mkdirSync(tmpDir, { recursive: true })
+      execFileSync('git', ['-C', tmpDir, 'init', '-q'], { stdio: 'inherit', timeout: 30000 })
+      execFileSync('git', ['-C', tmpDir, 'remote', 'add', 'origin', sourceConfig.repo], { stdio: 'inherit', timeout: 30000 })
+      execFileSync('git', ['-C', tmpDir, 'fetch', '--depth', '1', 'origin', remoteSha], { stdio: 'inherit', timeout: 120000 })
+      execFileSync('git', ['-C', tmpDir, 'checkout', '-q', 'FETCH_HEAD'], { stdio: 'inherit', timeout: 30000 })
+    } else {
+      execFileSync('git', ['clone', '--depth', '1', '-b', sourceConfig.ref, sourceConfig.repo, tmpDir], {
+        stdio: 'inherit', timeout: 120000
+      })
+    }
 
     const localSha = execFileSync('git', ['-C', tmpDir, 'rev-parse', 'HEAD'], {
       encoding: 'utf8', timeout: 5000

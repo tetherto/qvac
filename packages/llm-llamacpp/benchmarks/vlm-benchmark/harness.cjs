@@ -278,9 +278,18 @@ function stamp (rep, obj, block) {
   return Object.assign(out, obj)
 }
 
-// Peak process memory (MB). Linux exposes the high-water mark in
-// /proc/self/status; elsewhere null until the A4 sampler lands.
+// Peak process memory (MB), cross-platform. bare-os exposes libuv's getrusage as
+// resourceUsage().maxRSS, reported in KB on every platform here (Linux, macOS,
+// Windows — verified on the Mac mini: a ~2 GB process reads 2,097,152, i.e. KB
+// not bytes). Fall back to the Linux /proc high-water for any runtime without
+// resourceUsage; null where neither is available.
 function peakRssMb () {
+  try {
+    if (typeof os.resourceUsage === 'function') {
+      const max = os.resourceUsage().maxRSS
+      if (typeof max === 'number' && max > 0) return Math.round(max / 1024)
+    }
+  } catch (_) {}
   try {
     const txt = String(fs.readFileSync('/proc/self/status'))
     const m = txt.match(/VmHWM:\s*(\d+)\s*kB/)
