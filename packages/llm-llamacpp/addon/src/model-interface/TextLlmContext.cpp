@@ -432,7 +432,7 @@ bool TextLlmContext::evalMessageWithTools(
   llama_pos tokenIndex = 0;
   while (tokenIndex < nTokens) {
     if (stopGeneration_.load()) {
-      // Temporary recurrent-memory fix: removeLastNTokens() may no-op for
+      // [TODO] Temporary recurrent-memory fix: removeLastNTokens() may no-op for
       // hybrid/SSM models. A proper cancellation rollback needs llama.cpp
       // sequence checkpoint save + restore so partially evaluated tokens can
       // be restored without corrupting recurrent state.
