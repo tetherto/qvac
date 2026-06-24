@@ -1,12 +1,12 @@
-// The SDK is silent by default. Pointing QVAC_CONFIG_PATH at a config with
-// `loggerConsoleOutput: true` prints the SDK's client and server logs to the
-// console. Drop this line (or set the flag to false) to run quietly.
-const configDir = import.meta.dirname ?? process.cwd();
-process.env["QVAC_CONFIG_PATH"] =
-  `${configDir}/config/default/default.config.json`;
-
-const { loadModel, LLAMA_3_2_1B_INST_Q4_0, completion, unloadModel } =
-  await import("@qvac/sdk");
+// The SDK prints no logs by default. To see its client and server logs, run with
+// QVAC_CONFIG_PATH pointing at a config that sets "loggerConsoleOutput": true
+// (see the Quickstart docs).
+import {
+  loadModel,
+  LLAMA_3_2_1B_INST_Q4_0,
+  completion,
+  unloadModel,
+} from "@qvac/sdk";
 
 try {
   // Load a model into memory

@@ -1,10 +1,15 @@
-name: QVAC Desktop Tests
-# Reusable workflow for running desktop tests across platforms
+name: QVAC Node Consumer Tests
+# Reusable workflow for running Node-compatible SDK consumers across platforms
 # Originally from qvac-test-suite
 
 on:
   workflow_call:
     inputs:
+      consumer:
+        description: "Node-compatible consumer to run (desktop or electron)"
+        required: false
+        type: string
+        default: desktop
       working-directory:
         description: "Working directory for tests (consumer/test runner)"
         required: false
@@ -77,7 +82,7 @@ permissions:
 
 jobs:
   report-start:
-    name: "[desktop] report-start"
+    name: "[${{ inputs.consumer }}] report-start"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -91,7 +96,7 @@ jobs:
           sparse-checkout: .github/actions/sdk-e2e-report-start
           sparse-checkout-cone-mode: false
 
-      - name: Derive desktop platform keys
+      - name: Derive node platform keys
         id: keys
         shell: node {0}
         env:
@@ -113,14 +118,14 @@ jobs:
         id: report
         uses: ./.github/actions/sdk-e2e-report-start
         with:
-          family: desktop
+          family: ${{ inputs.consumer }}
           platforms: ${{ steps.keys.outputs.platforms }}
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
 
-  test-desktop:
-    name: "[desktop] test (${{ matrix.os }})"
+  test-node:
+    name: "[${{ inputs.consumer }}] test (${{ matrix.os }})"
     strategy:
       matrix:
         os: ${{ fromJSON(inputs.platforms) }}
@@ -284,7 +289,7 @@ jobs:
       - name: Bootstrap (download models)
         if: steps.models-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.working-directory }}
-        run: npx qvac-test run:bootstrap:desktop --config=.
+        run: npx qvac-test run:bootstrap:${{ inputs.consumer }} --config=.
 
       # Save right after bootstrap. On parallel runners, first to finish reserves the key;
       # others get a non-fatal "unable to reserve" warning which is expected.
@@ -296,17 +301,23 @@ jobs:
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
+      - name: Build Electron package
+        if: inputs.consumer == 'electron'
+        working-directory: ${{ inputs.working-directory }}
+        run: npx qvac-test build:consumer:electron --config=. --skip-install
+
       - name: Generate runId
         id: runid
         shell: node {0}
         env:
-          EXPECTED_JOB_NAME: "[desktop] test (${{ matrix.os }})"
+          CONSUMER: ${{ inputs.consumer }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           const fs = require('fs');
           const platform = "${{ matrix.os }}";
+          const expectedJobName = `[${process.env.CONSUMER}] test (${platform})`;
           let platformShort = 'unknown';
           if (/mac/i.test(platform)) platformShort = 'macos';
           else if (/win/i.test(platform)) platformShort = 'windows';
@@ -339,13 +350,13 @@ jobs:
           }
 
           const matches = jobs.filter(
-            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
-              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
+            (job) => job.name === expectedJobName ||
+              job.name.endsWith(` / ${expectedJobName}`),
           );
           const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
           const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
           if (!job) {
-            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
+            throw new Error(`Could not resolve current job id for ${expectedJobName}`);
           }
 
           const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
@@ -386,12 +397,18 @@ jobs:
             const suiteArgs = suite ? ['--suite=' + suite] : [];
             const excludeSuite = '${{ inputs.exclude-suite }}';
             const excludeSuiteArgs = excludeSuite ? ['--exclude-suite=' + excludeSuite] : [];
+            const consumerType = '${{ inputs.consumer }}';
 
-            const consumer = spawn('npx', [
-              'qvac-test', 'run:consumer:desktop',
+            const consumerArgs = [
+              'qvac-test', `run:consumer:${consumerType}`,
               '--runId=${{ steps.runid.outputs.runId }}',
               '--config=.'
-            ], { detached: false, shell: true, stdio: 'inherit' });
+            ];
+            if (consumerType === 'electron') {
+              consumerArgs.push('--skip-build');
+            }
+
+            const consumer = spawn('npx', consumerArgs, { detached: false, shell: true, stdio: 'inherit' });
 
             let consumerClosed = false;
             let consumerExitCode = 0;
@@ -517,7 +534,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: consumer-log-desktop-${{ steps.runid.outputs.platform }}
+          name: consumer-log-${{ inputs.consumer }}-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/consumer.log
           retention-days: 7
 
@@ -525,7 +542,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: results-desktop-${{ steps.runid.outputs.platform }}
+          name: results-${{ inputs.consumer }}-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/
           retention-days: 30
 
@@ -534,9 +551,9 @@ jobs:
         uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
         continue-on-error: true
         with:
-          workflow: test-desktop-sdk.yml
+          workflow: test-node-sdk.yml
           branch: ${{ github.event.pull_request.base.ref }}
-          name: baseline-desktop-${{ steps.runid.outputs.platform }}
+          name: baseline-${{ inputs.consumer }}-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/baseline
           github_token: ${{ github.token }}
           if_no_artifact_found: warn
@@ -602,7 +619,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: report-section-desktop-${{ steps.runid.outputs.platform }}
+          name: report-section-${{ inputs.consumer }}-${{ steps.runid.outputs.platform }}
           path: |
             ${{ inputs.working-directory }}/section-*.md
             ${{ inputs.working-directory }}/comparison-*.json
@@ -613,7 +630,7 @@ jobs:
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: baseline-desktop-${{ steps.runid.outputs.platform }}
+          name: baseline-${{ inputs.consumer }}-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
@@ -635,8 +652,8 @@ jobs:
           }
 
   report-finalize:
-    name: "[desktop] report-finalize"
-    needs: [report-start, test-desktop]
+    name: "[${{ inputs.consumer }}] report-finalize"
+    needs: [report-start, test-node]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -651,7 +668,7 @@ jobs:
 
       - uses: ./.github/actions/sdk-e2e-report-finalize
         with:
-          family: desktop
+          family: ${{ inputs.consumer }}
           platforms: ${{ needs.report-start.outputs.platform-keys }}
           comment-ids: ${{ needs.report-start.outputs.comment-ids }}
           suite: ${{ inputs.suite }}

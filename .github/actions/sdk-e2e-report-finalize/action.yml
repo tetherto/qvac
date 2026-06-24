@@ -9,12 +9,12 @@ description: >
 
 inputs:
   family:
-    description: "SDK e2e family: desktop | android | ios"
+    description: "SDK e2e family: desktop | electron | android | ios"
     required: true
   platforms:
     description: >
       JSON array of platform keys that participated in this run, e.g.
-      ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
+      ["linux","windows","macos"] for desktop/electron or ["android"] / ["ios"].
     required: true
   comment-ids:
     description: >
@@ -49,8 +49,8 @@ runs:
         FAMILY: ${{ inputs.family }}
       run: |
         case "$FAMILY" in
-          desktop)
-            echo "results-pattern=results-desktop-*" >> "$GITHUB_OUTPUT"
+          desktop|electron)
+            echo "results-pattern=results-${FAMILY}-*" >> "$GITHUB_OUTPUT"
             ;;
           android)
             echo "results-pattern=results-android" >> "$GITHUB_OUTPUT"
@@ -99,9 +99,10 @@ runs:
             `/actions/runs/${context.runId}`;
 
           const resultsRoot = '.sdk-e2e-report/current-results';
+          const isNodeFamily = family === 'desktop' || family === 'electron';
 
           const artifactDir = (platform) =>
-            family === 'desktop' ? `results-desktop-${platform}` : `results-${family}`;
+            isNodeFamily ? `results-${family}-${platform}` : `results-${family}`;
           const marker = (platform) =>
             `<!-- sdk-e2e-report:pr=${pr ?? 'none'}:family=${family}:platform=${platform} -->`;
 
@@ -124,7 +125,7 @@ runs:
           function artifactSpecs(platform) {
             const specs = [{ name: artifactDir(platform), label: 'reports' }];
 
-            if (family !== 'desktop') {
+            if (!isNodeFamily) {
               const logPrefix = `device-farm-logs-${family}-`;
               for (const artifact of artifacts) {
                 if (artifact.name.startsWith(logPrefix)) {
@@ -154,8 +155,9 @@ runs:
           // actions/download-artifact@v8 extracts a single matched artifact directly
           // into `path` instead of `path/<artifact-name>/` (the per-artifact subdir is
           // only created when the pattern matches >=2 artifacts). For families with one
-          // platform (android, ios) we therefore probe both layouts. Desktop always has
-          // multiple platforms so the per-artifact subdir is created and is preferred.
+          // platform (android, ios) we therefore probe both layouts. Node consumers
+          // (desktop/electron) usually have multiple platforms, so the per-artifact
+          // subdir is created and is preferred.
           function findResultsJson(platform) {
             const candidates = [
               path.join(resultsRoot, artifactDir(platform)),
