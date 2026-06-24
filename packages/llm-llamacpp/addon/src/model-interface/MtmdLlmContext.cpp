@@ -164,6 +164,7 @@ void MtmdLlmContext::initVisionContext() {
       params_.mmproj_backend.empty() ? nullptr : params_.mmproj_backend.c_str();
   mparams.print_timings = true;
   mparams.n_threads = params_.cpuparams.n_threads;
+  mparams.image_tile_mode = params_.image_tile_mode;
   // Forward the per-image token budget to the vision encoder. These were
   // previously dropped: the addon parsed image_min/max_tokens into
   // common_params but never copied them into mtmd_context_params, so a
