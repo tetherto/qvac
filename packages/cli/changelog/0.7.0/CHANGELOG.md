@@ -11,4 +11,3 @@ Release Date: 2026-06-15
 ## ⚙️ Infrastructure
 
 - Test CLI against in-repo and published SDK in SDK Pod Checks. (see PR [#2541](https://github.com/tetherto/qvac/pull/2541))
-

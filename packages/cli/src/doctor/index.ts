@@ -3,9 +3,7 @@ import { formatJsonReport, formatReport } from './format.js'
 import type { DoctorReport, RunDoctorOptions } from './types.js'
 
 // lunte-disable-next-line require-await
-export async function runDoctor (
-  options: RunDoctorOptions = {}
-): Promise<DoctorReport> {
+export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorReport> {
   const projectRoot = options.projectRoot ?? process.cwd()
   const sections = collectCheckSections({ projectRoot })
 

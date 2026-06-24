@@ -27,7 +27,7 @@ if (typeof sdkDep !== 'string') {
 } else if (!rangeAllowsCommandsSubpath(sdkDep)) {
   errors.push(
     `dependencies["@qvac/sdk"] is "${sdkDep}" — must allow ` +
-    '@qvac/sdk@0.12.0 or later (the first release with the ./commands subpath)'
+      '@qvac/sdk@0.12.0 or later (the first release with the ./commands subpath)'
   )
 }
 
@@ -62,7 +62,7 @@ process.exit(1)
 // Minimal range check — avoids pulling in `semver` as a runtime dep just for
 // publish-time validation. Accepts caret/tilde/range/comparator forms that
 // can include 0.12.0 or higher, and rejects anything pinned to 0.11.x.
-function rangeAllowsCommandsSubpath (range) {
+function rangeAllowsCommandsSubpath(range) {
   const trimmed = range.trim()
 
   // Wildcards / "any version" — trust the publisher.

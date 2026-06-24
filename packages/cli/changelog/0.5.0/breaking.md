@@ -14,9 +14,7 @@ A `mask` / `mask[]` part on `/v1/images/edits` is now rejected with `400 mask_no
 // 0.4.x: response_format=url, no --public-base-url configured
 {
   "created": 1718000000,
-  "data": [
-    { "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..." }
-  ]
+  "data": [{ "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..." }]
 }
 ```
 
@@ -61,21 +59,21 @@ The replacement is the `requestId` exposed synchronously on the decorated promis
 **BEFORE:**
 
 ```typescript
-import { downloadAsset, cancel } from "@qvac/sdk";
+import { downloadAsset, cancel } from '@qvac/sdk'
 
-const op = downloadAsset({ assetSrc, onProgress });
+const op = downloadAsset({ assetSrc, onProgress })
 // ...some time later, user clicks Cancel:
-await cancel({ operation: "downloadAsset", downloadKey: assetSrc.key, clearCache: true });
+await cancel({ operation: 'downloadAsset', downloadKey: assetSrc.key, clearCache: true })
 ```
 
 **AFTER:**
 
 ```typescript
-import { downloadAsset, cancel } from "@qvac/sdk";
+import { downloadAsset, cancel } from '@qvac/sdk'
 
-const op = downloadAsset({ assetSrc, onProgress });
+const op = downloadAsset({ assetSrc, onProgress })
 // `op.requestId` is available synchronously on the decorated promise:
-await cancel({ requestId: op.requestId, clearCache: true });
+await cancel({ requestId: op.requestId, clearCache: true })
 ```
 
 ### `cancel({ operation: "rag", workspace? })` removed
@@ -85,30 +83,30 @@ The three cancellable RAG operations (`ragIngest`, `ragSaveEmbeddings`, `ragRein
 **BEFORE:**
 
 ```typescript
-import { ragIngest, cancel } from "@qvac/sdk";
+import { ragIngest, cancel } from '@qvac/sdk'
 
-ragIngest({ workspace: "my-workspace", documents });
+ragIngest({ workspace: 'my-workspace', documents })
 // later:
-await cancel({ operation: "rag", workspace: "my-workspace" });
+await cancel({ operation: 'rag', workspace: 'my-workspace' })
 ```
 
 **AFTER:** by `requestId` (primary path)
 
 ```typescript
-import { ragIngest, cancel } from "@qvac/sdk";
+import { ragIngest, cancel } from '@qvac/sdk'
 
-const op = ragIngest({ workspace: "my-workspace", documents });
+const op = ragIngest({ workspace: 'my-workspace', documents })
 // `op.requestId` is available synchronously on the decorated promise:
-await cancel({ requestId: op.requestId });
+await cancel({ requestId: op.requestId })
 ```
 
 **AFTER:** broad cancel (escape hatch, no requestId to hand)
 
 ```typescript
-import { cancel } from "@qvac/sdk";
+import { cancel } from '@qvac/sdk'
 
 // Cancel every in-flight RAG operation running on the embedding model:
-await cancel({ modelId: ragEmbeddingModelId, kind: "rag" });
+await cancel({ modelId: ragEmbeddingModelId, kind: 'rag' })
 ```
 
 ### Preserved (NOT breaking) — every other call shape still works
@@ -116,13 +114,13 @@ await cancel({ modelId: ragEmbeddingModelId, kind: "rag" });
 `normalizeCancelParams` translates the two most common legacy sugars to the new wire envelope at the client boundary:
 
 ```typescript
-import { cancel } from "@qvac/sdk";
+import { cancel } from '@qvac/sdk'
 
-await cancel({ operation: "inference", modelId: "model-123" });   // -> {operation:"broad",modelId,kind:"completion"}
-await cancel({ operation: "embeddings", modelId: "model-123" });  // -> {operation:"broad",modelId,kind:"embeddings"}
-await cancel({ modelId: "model-123" });                            // new sugar (broad)
-await cancel({ modelId: "model-123", kind: "completion" });        // new sugar (broad)
-await cancel({ requestId: "rid-1" });                              // primary path
+await cancel({ operation: 'inference', modelId: 'model-123' }) // -> {operation:"broad",modelId,kind:"completion"}
+await cancel({ operation: 'embeddings', modelId: 'model-123' }) // -> {operation:"broad",modelId,kind:"embeddings"}
+await cancel({ modelId: 'model-123' }) // new sugar (broad)
+await cancel({ modelId: 'model-123', kind: 'completion' }) // new sugar (broad)
+await cancel({ requestId: 'rid-1' }) // primary path
 ```
 
 ---
