@@ -64,7 +64,7 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/diffusion-cpp#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-fs": "^4.5.1",
