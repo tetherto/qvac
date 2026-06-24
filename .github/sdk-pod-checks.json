@@ -43,5 +43,9 @@
   {
     "package": "opencode-plugin",
     "path": "plugins/opencode"
+  },
+  {
+    "package": "openclaw-plugin",
+    "path": "plugins/openclaw"
   }
 ]
