@@ -186,11 +186,3 @@ if(BUILD_TESTING)
   # Pass ENABLE_COVERAGE option to test subdirectory
   add_subdirectory(test/unit)
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${inference-addon-llama}
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
