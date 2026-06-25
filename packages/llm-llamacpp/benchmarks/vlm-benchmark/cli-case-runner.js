@@ -199,7 +199,12 @@ function runOnceCli (spec) {
     throw new Error(`CLI spawn failed: ${result.error.message}`)
   }
   if (result.status !== 0) {
-    const tail = (result.stderr || '').trim().split('\n').slice(-10).join('\n')
+    // Surface the ACTUAL llama/mtmd failure, not just the trailing `/usr/bin/time -v`
+    // resource summary (~23 lines) that the wrapper appends. Pull any error-looking lines
+    // plus a generous tail so the real cause (load/flag/assert error) is visible.
+    const lines = (result.stderr || '').trim().split('\n')
+    const errish = lines.filter(l => /error|fail|assert|unknown|unrecognized|invalid|unsupported|terminate|what\(\)|GGML_|exception|cannot|no such/i.test(l))
+    const tail = [...new Set([...errish, ...lines.slice(-25)])].join('\n')
     throw new Error(`CLI exited with status ${result.status}:\n${tail}`)
   }
 
