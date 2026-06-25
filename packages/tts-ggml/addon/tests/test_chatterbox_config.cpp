@@ -212,7 +212,9 @@ TEST(ChatterboxEngineOptions, NCtxDefaultsTo4096) {
 // q8_0->q8_0 CONT, so it is opt-in rather than the default.
 TEST(ChatterboxEngineOptions, KvCacheTypeDefaultsToF16) {
   ChatterboxConfig cfg;
-  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type, "f16");
+  EXPECT_EQ(
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type,
+      "f16");
 }
 
 TEST(ChatterboxEngineOptions, ExplicitKvCacheTypeForwarded) {
