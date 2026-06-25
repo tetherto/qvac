@@ -1,10 +1,8 @@
 import { downloadAsset, suspend, resume, modelRegistryList } from "@qvac/sdk";
-import * as http from "node:http";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-import type { AddressInfo } from "node:net";
 import { BaseExecutor, type TestResult } from "@tetherto/qvac-test-suite";
 import {
   downloadResilienceRegistrySuspend,
@@ -12,6 +10,11 @@ import {
   downloadResilienceHttpSuspend,
   downloadResilienceHttpSharded,
 } from "../../../download-resilience-tests.js";
+import {
+  FlakyFileServer,
+  ShardSeverProxy,
+  SHARDED_MODEL_PATH,
+} from "../../flaky-http-servers.js";
 
 const resilienceTests = [
   downloadResilienceRegistrySuspend,
@@ -20,19 +23,12 @@ const resilienceTests = [
   downloadResilienceHttpSharded,
 ] as const;
 
-const PAYLOAD_BYTES = 6 * 1024 * 1024;
 const SUSPEND_BACKGROUND_MS = 750;
 const REGISTRY_RESUME_TIMEOUT_MS = 60_000;
 const HTTP_RESUME_TIMEOUT_MS = 30_000;
-
-// Sharded resilience: front the real sharded model with a proxy that severs one
-// shard's transfer once. Downloads a real (~hundreds of MB) model, so it is
-// gated behind QVAC_E2E_HTTP_SHARDED_RESILIENCE and excluded from the default suite.
-const HF_ORIGIN = "https://huggingface.co";
-const SHARDED_MODEL_PATH =
-  "/opaninakuffo/gte-large-fp16-sharded/resolve/main/gte-large_fp16-00003-of-00005.gguf";
-const SHARD_TO_SEVER = "-00002-of-";
-const SHARD_SEVER_AT_BYTES = 16 * 1024 * 1024;
+// Sharded test downloads a real (~hundreds of MB) model through the severing
+// proxy, so it is gated behind QVAC_E2E_HTTP_SHARDED_RESILIENCE and excluded
+// from the default suite.
 const SHARDED_RESUME_TIMEOUT_MS = 300_000;
 
 // The registry stream must stall past its per-block timeout while suspended so
@@ -57,222 +53,6 @@ function singleFileCachePath(registryPath: string): string {
     .digest("hex")
     .substring(0, 16);
   return path.join(os.homedir(), ".qvac", "models", `${hash}_${filename}`);
-}
-
-function buildPayload(size: number): Buffer {
-  const buf = Buffer.allocUnsafe(size);
-  for (let i = 0; i < size; i++) buf[i] = i & 0xff;
-  return buf;
-}
-
-function parseRangeStart(header: string | undefined): number {
-  if (!header) return 0;
-  const m = /bytes=(\d+)-/.exec(header);
-  return m && m[1] ? parseInt(m[1], 10) : 0;
-}
-
-/**
- * Local HTTP file server that models a flaky network. It serves a fixed payload
- * with Range support and severs the connection once mid-stream; the next request
- * (a Range resume) is served to completion. In "manual" mode the sever is
- * triggered externally (to coincide with suspend()); in "auto" mode it severs
- * after a byte threshold on the first response.
- */
-class FlakyFileServer {
-  readonly payload: Buffer;
-  private readonly mode: "auto" | "manual";
-  private readonly severAtBytes: number;
-  private server?: http.Server;
-  private port = 0;
-  private severedOnce = false;
-  private activeResponse: http.ServerResponse | null = null;
-
-  constructor(opts: { mode: "auto" | "manual"; severAtBytes?: number }) {
-    this.payload = buildPayload(PAYLOAD_BYTES);
-    this.mode = opts.mode;
-    this.severAtBytes = opts.severAtBytes ?? Math.floor(PAYLOAD_BYTES / 3);
-  }
-
-  async start(): Promise<void> {
-    this.server = http.createServer((req, res) => this.handle(req, res));
-    await new Promise<void>((resolve) => {
-      this.server!.listen(0, "127.0.0.1", () => resolve());
-    });
-    this.port = (this.server!.address() as AddressInfo).port;
-  }
-
-  get url(): string {
-    return `http://127.0.0.1:${this.port}/resilience-model.bin`;
-  }
-
-  /** Drops the connection currently being served (manual mode). */
-  sever(): void {
-    if (this.activeResponse) {
-      this.severedOnce = true;
-      this.activeResponse.destroy();
-      this.activeResponse = null;
-    }
-  }
-
-  private handle(req: http.IncomingMessage, res: http.ServerResponse): void {
-    const total = this.payload.length;
-
-    if (req.method === "HEAD") {
-      res.writeHead(200, {
-        "content-length": String(total),
-        "accept-ranges": "bytes",
-      });
-      res.end();
-      return;
-    }
-
-    const start = parseRangeStart(req.headers["range"] as string | undefined);
-    const slice = this.payload.subarray(start);
-
-    if (start > 0) {
-      res.writeHead(206, {
-        "content-length": String(slice.length),
-        "content-range": `bytes ${start}-${total - 1}/${total}`,
-        "accept-ranges": "bytes",
-      });
-    } else {
-      res.writeHead(200, {
-        "content-length": String(total),
-        "accept-ranges": "bytes",
-      });
-    }
-
-    // A resumed request (Range) or any request after the one sever — serve fully.
-    if (start > 0 || this.severedOnce) {
-      res.end(slice);
-      return;
-    }
-
-    // Trickle bytes so the client receives a real partial before the drop.
-    // "auto" severs once it has delivered severAtBytes (a mid-stream network
-    // drop); "manual" keeps flowing until sever() is called (on suspend).
-    this.activeResponse = res;
-    let offset = 0;
-    const chunk = Math.max(64 * 1024, Math.floor(this.severAtBytes / 8));
-    const pump = () => {
-      if (res !== this.activeResponse || res.destroyed) return;
-      if (this.mode === "auto" && !this.severedOnce && offset >= this.severAtBytes) {
-        this.severedOnce = true;
-        res.destroy();
-        this.activeResponse = null;
-        return;
-      }
-      if (offset >= total) {
-        res.end();
-        this.activeResponse = null;
-        return;
-      }
-      res.write(this.payload.subarray(offset, offset + chunk));
-      offset += chunk;
-      setTimeout(pump, 40);
-    };
-    pump();
-  }
-
-  async close(): Promise<void> {
-    if (this.activeResponse) {
-      this.activeResponse.destroy();
-      this.activeResponse = null;
-    }
-    if (this.server) {
-      await new Promise<void>((resolve) => this.server!.close(() => resolve()));
-    }
-  }
-}
-
-/**
- * Reverse proxy in front of the real sharded model on HuggingFace. It relays
- * each shard request (forwarding Range), and severs one designated shard's
- * transfer exactly once mid-stream to simulate a network drop. The resumed
- * (Range) request is served to completion, so a working retry/resume recovers.
- */
-class ShardSeverProxy {
-  private server?: http.Server;
-  private port = 0;
-  private severedOnce = false;
-
-  async start(): Promise<void> {
-    this.server = http.createServer((req, res) => {
-      void this.handle(req, res);
-    });
-    await new Promise<void>((resolve) => {
-      this.server!.listen(0, "127.0.0.1", () => resolve());
-    });
-    this.port = (this.server!.address() as AddressInfo).port;
-  }
-
-  get baseUrl(): string {
-    return `http://127.0.0.1:${this.port}`;
-  }
-
-  private async handle(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-  ): Promise<void> {
-    const range = req.headers["range"];
-    const reqHeaders: Record<string, string> = { "user-agent": "qvac-e2e-proxy" };
-    if (typeof range === "string") reqHeaders["range"] = range;
-
-    let upstream: Awaited<ReturnType<typeof fetch>>;
-    try {
-      upstream = await fetch(`${HF_ORIGIN}${req.url}`, {
-        method: req.method === "HEAD" ? "HEAD" : "GET",
-        headers: reqHeaders,
-      });
-    } catch (err) {
-      res.writeHead(502);
-      res.end(err instanceof Error ? err.message : String(err));
-      return;
-    }
-
-    const outHeaders: Record<string, string> = {
-      "accept-ranges": upstream.headers.get("accept-ranges") ?? "bytes",
-      "content-type":
-        upstream.headers.get("content-type") ?? "application/octet-stream",
-    };
-    const cl = upstream.headers.get("content-length");
-    if (cl) outHeaders["content-length"] = cl;
-    const cr = upstream.headers.get("content-range");
-    if (cr) outHeaders["content-range"] = cr;
-    res.writeHead(upstream.status, outHeaders);
-
-    if (req.method === "HEAD" || !upstream.body) {
-      res.end();
-      return;
-    }
-
-    // Sever the designated shard's first (Range-less) transfer exactly once;
-    // the retry arrives with a Range header and is served to completion.
-    const severThis =
-      !range && !this.severedOnce && (req.url ?? "").includes(SHARD_TO_SEVER);
-
-    let sent = 0;
-    try {
-      for await (const chunk of upstream.body as unknown as AsyncIterable<Uint8Array>) {
-        if (severThis && sent >= SHARD_SEVER_AT_BYTES) {
-          this.severedOnce = true;
-          res.destroy();
-          return;
-        }
-        res.write(Buffer.from(chunk));
-        sent += chunk.length;
-      }
-      res.end();
-    } catch {
-      res.destroy();
-    }
-  }
-
-  async close(): Promise<void> {
-    if (this.server) {
-      await new Promise<void>((resolve) => this.server!.close(() => resolve()));
-    }
-  }
 }
 
 function withTimeout<T>(label: string, p: Promise<T>, ms: number): Promise<T> {
