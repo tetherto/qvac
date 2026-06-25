@@ -390,7 +390,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       // be restored without corrupting recurrent state.
       const llama_pos removedTokens = removeLastNTokens(totalDelta);
       if (removedTokens == 0 && totalDelta > 0) {
-        auto* mem = llama_get_memory(modelCtx_.lctx);
+        auto* mem = llama_get_memory(lctx_);
         if (mem == nullptr) {
           throw qvac_errors::StatusError(
               ADDON_ID,
@@ -399,7 +399,7 @@ bool MtmdLlmContext::evalMessageWithTools(
               "[MtmdLlm] llama memory is null while syncing canceled prefill "
               "position");
         }
-        const llama_pos posMax = llama_memory_seq_pos_max(mem, seqId_);
+        const llama_pos posMax = llama_memory_seq_pos_max(mem, 0);
         current_.pos = posMax < 0 ? 0 : posMax + 1;
         refreshCurrentCacheTokensFromMemory();
       }
