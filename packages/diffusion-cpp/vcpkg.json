@@ -59,6 +59,11 @@
       "description": "Enable Vulkan GPU backend",
       "dependencies": [
         {
+          "name": "spirv-headers",
+          "platform": "!osx & !ios",
+          "version>=": "1.4.341.0"
+        },
+        {
           "name": "stable-diffusion-cpp",
           "features": [
             "vulkan"
