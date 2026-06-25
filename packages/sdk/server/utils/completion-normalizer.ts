@@ -32,6 +32,8 @@ type DialectSpec = {
   contentFrames?: readonly FrameSpec[];
   // Standalone glue tokens stripped without state transition.
   dropTokens?: readonly string[];
+  // Markers too short to register without stealing longer split markers.
+  contentDropTokens?: readonly string[];
 };
 
 type Dialect = NonNullable<NormalizerConfig["toolDialect"]>;
@@ -62,14 +64,18 @@ const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
     ],
     contentFrames: [
       { open: "<|channel|>final<|message|>", close: "<|return|>" },
+      { open: "<|channel|>assistant<|message|>", close: "<|end|>" },
     ],
-    // Role headers between channel frames + stray `<|return|>` closes.
+    // Role headers and stray Harmony control tokens between frames.
     dropTokens: [
+      "<|message|>",
+      "<|end|>",
       "<|start|>assistant",
       "<|start|>system",
       "<|start|>user",
       "<|return|>",
     ],
+    contentDropTokens: ["<|channel|>"],
   },
   qwen35: {
     // Same <tool_call>…</tool_call> framing as hermes; inner content is XML.
@@ -142,6 +148,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   ];
   const contentFrames: readonly FrameSpec[] = dialectSpec.contentFrames ?? [];
   const dropTokens: readonly string[] = dialectSpec.dropTokens ?? [];
+  const contentDropTokens: readonly string[] = dialectSpec.contentDropTokens ?? [];
 
   const markerToEntry = new Map<string, { kind: FrameKind; spec: FrameSpec }>();
   const dropTokenSet = new Set<string>();
@@ -167,9 +174,13 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   function emitContent(events: CompletionEvent[], text: string) {
-    if (!text) return;
-    contentParts.push(text);
-    events.push({ type: "contentDelta", seq: nextSeq(), text });
+    let normalized = text;
+    for (const token of contentDropTokens) {
+      normalized = normalized.split(token).join("");
+    }
+    if (!normalized) return;
+    contentParts.push(normalized);
+    events.push({ type: "contentDelta", seq: nextSeq(), text: normalized });
   }
 
   // Capture-gated: thinking frames may register even when `captureThinking`

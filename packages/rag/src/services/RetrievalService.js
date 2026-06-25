@@ -12,7 +12,7 @@ class RetrievalService {
    * @param {EmbeddingService} config.embeddingService - Service for generating embeddings
    * @param {Logger} [config.logger] - Optional logger instance
    */
-  constructor ({ dbAdapter, chunkingService, embeddingService, logger }) {
+  constructor({ dbAdapter, chunkingService, embeddingService, logger }) {
     if (!dbAdapter) throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_REQUIRED })
     if (!chunkingService) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_CHUNKER })
     if (!embeddingService) throw new QvacErrorRAG({ code: ERR_CODES.EMBEDDING_FUNCTION_REQUIRED })
@@ -28,7 +28,8 @@ class RetrievalService {
    * @param {string} text - The text to generate embeddings for.
    * @returns {Promise<Array<number>>} The embeddings.
    */
-  async generateEmbeddings (text) {
+  // lunte-disable-next-line require-await
+  async generateEmbeddings(text) {
     return this.embeddingService.generateEmbeddings(text)
   }
 
@@ -38,7 +39,7 @@ class RetrievalService {
    * @param {GenerateEmbeddingsOpts} [opts] - Options for the embedding generation.
    * @returns {Promise<{[key: string]: Array<number>}>} A map of document IDs to their embeddings.
    */
-  async generateEmbeddingsForDocs (docs, opts = {}) {
+  async generateEmbeddingsForDocs(docs, opts = {}) {
     const { signal, chunk = true, chunkOpts } = opts
 
     if (signal?.aborted) {
@@ -67,17 +68,21 @@ class RetrievalService {
    * @param {Object} [params] - The parameters for the search.
    * @returns {Promise<Array<SearchResult>>} An array of search results.
    */
-  async search (query, params = {}) {
+  async search(query, params = {}) {
     const { signal } = params
 
     if (signal?.aborted) {
       throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
     }
 
-    this.logger.debug(`Search started: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`)
+    this.logger.debug(
+      `Search started: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
+    )
     const startTime = Date.now()
 
-    if (typeof query !== 'string' || query.trim() === '') throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT })
+    if (typeof query !== 'string' || query.trim() === '') {
+      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT })
+    }
     const queryVector = await this.embeddingService.generateEmbeddings(query)
 
     if (signal?.aborted) {

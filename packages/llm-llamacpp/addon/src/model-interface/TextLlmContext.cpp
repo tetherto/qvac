@@ -432,6 +432,10 @@ bool TextLlmContext::evalMessageWithTools(
   llama_pos tokenIndex = 0;
   while (tokenIndex < nTokens) {
     if (stopGeneration_.load()) {
+      // [TODO] Temporary recurrent-memory fix: removeLastNTokens() may no-op for
+      // hybrid/SSM models. A proper cancellation rollback needs llama.cpp
+      // sequence checkpoint save + restore so partially evaluated tokens can
+      // be restored without corrupting recurrent state.
       removeLastNTokens(tokenIndex);
       stopGeneration_.store(false);
       pendingBatchFirstMsg_ = false;
@@ -519,16 +523,6 @@ std::vector<llama_token> TextLlmContext::preparePrefill(
           string_format(
               "[TextLlm] Batch prefill step: discarded %d tokens after the "
               "first message\n",
-              outcome.discarded));
-      break;
-    case ContextSlideOutcome::Kind::FullWipe:
-      nPast_ = outcome.newNPast;
-      ++nSlides_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[TextLlm] Batch prefill step: wiped %d tokens after the first "
-              "message\n",
               outcome.discarded));
       break;
     case ContextSlideOutcome::Kind::Overflow: {
@@ -656,7 +650,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
   common_batch_add(
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(modelCtx_.vocab) : eot,
-      nPast_++,
+      nPast_,
       {seqId_},
       true);
   if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -664,6 +658,7 @@ void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
   }
+  ++nPast_;
 }
 
 bool TextLlmContext::generateResponse(
@@ -718,7 +713,7 @@ bool TextLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, step.token, nPast_++, {seqId_}, true);
+    common_batch_add(*batch, step.token, nPast_, {seqId_}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -726,6 +721,7 @@ bool TextLlmContext::generateResponse(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    ++nPast_;
   }
 
   onGenerationFinished(outputCallback);
@@ -1055,6 +1051,9 @@ void TextLlmContext::onGenerationCompletePolicy(
   const auto decision =
       tools_.onGenerationComplete(assistantOutput, nPast_, firstMsgTokens_);
   if (decision.trim) {
+    // Safe here: dynamic tools are only supported by Qwen3, which does not
+    // use recurrent memory, so tail removal does not hit the recurrent
+    // rollback limitation.
     removeLastNTokens(decision.tokensToRemoveFromTail);
     if (decision.clampFirstMsgTokensToNPast && firstMsgTokens_ > nPast_) {
       firstMsgTokens_ = nPast_;
@@ -1080,30 +1079,70 @@ bool TextLlmContext::loadCache(
         "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
   }
 
-  if (tokenCount <= 1) {
-    return false;
-  }
-  if (sessionTokens[0] > llama_n_ctx(modelCtx_.lctx)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(ContextLengthExeeded),
-        "TextLlmContext::loadCache: cache '" + cacheKey +
-            "' exceeds current context size");
-  }
+  auto clearLoadedSequence = [this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[TextLlm] failed to clear sequence after invalid cache load\n");
+    }
+    nPast_ = 0;
+    firstMsgTokens_ = 0;
+    tools_.reset();
+  };
 
-  nPast_ = sessionTokens[0];
-  firstMsgTokens_ = sessionTokens[1];
-  // Clamp discard to the per-slot window (ctxCeiling), not the physical
-  // context: in batch mode the slot ceiling is ctx / n_parallel.
-  const llama_pos window = ctxCeiling();
-  if (configuredNDiscarded > window - firstMsgTokens_) {
-    nDiscarded_ = window - firstMsgTokens_ - 1;
-  } else {
-    nDiscarded_ = configuredNDiscarded;
-  }
+  try {
+    if (tokenCount <= 1) {
+      clearLoadedSequence();
+      return false;
+    }
+    const llama_pos metadataNPast = sessionTokens[0];
+    const llama_pos metadataFirstMsgTokens = sessionTokens[1];
+    if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(ContextLengthExeeded),
+          "TextLlmContext::loadCache: cache '" + cacheKey +
+              "' exceeds current context size");
+    }
 
-  if (auto* mem = llama_get_memory(modelCtx_.lctx); mem != nullptr) {
-    llama_memory_seq_rm(mem, seqId_, nPast_, -1);
+    auto* mem = llama_get_memory(modelCtx_.lctx);
+    if (mem == nullptr) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          "TextLlmContext::loadCache: llama memory is null after loading "
+          "cache '" +
+              cacheKey + "'");
+    }
+
+    const llama_pos restoredNPast = llama_memory_seq_pos_max(mem, seqId_) + 1;
+    if (restoredNPast != metadataNPast) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          string_format(
+              "TextLlmContext::loadCache: cache '%s' restored nPast=%d, but "
+              "metadata expected nPast=%d",
+              cacheKey.c_str(),
+              restoredNPast,
+              metadataNPast));
+    }
+
+    nPast_ = metadataNPast;
+    firstMsgTokens_ = metadataFirstMsgTokens;
+    // Clamp discard to the per-slot window (ctxCeiling), not the physical
+    // context: in batch mode the slot ceiling is ctx / n_parallel.
+    const llama_pos window = ctxCeiling();
+    if (configuredNDiscarded > window - firstMsgTokens_) {
+      nDiscarded_ = window - firstMsgTokens_ - 1;
+    } else {
+      nDiscarded_ = configuredNDiscarded;
+    }
+  } catch (...) {
+    clearLoadedSequence();
+    throw;
   }
   return true;
 }
@@ -1253,6 +1292,15 @@ llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
     return 0;
   }
 
+  if (hasRecurrentMemory_) {
+    // TODO: Re-enable tail-token removal for recurrent / hybrid SSM models
+    // once QVAC supports llama.cpp sequence checkpoint save + restore. Until
+    // then, partial `llama_memory_seq_rm` can fail because recurrent state
+    // does not keep full per-token history (for example Qwen3.5 with
+    // n_rs_seq=0).
+    return 0;
+  }
+
   clearSequenceMemory(modelCtx_.lctx, nPast_ - tokensToRemove, -1);
 
   // Decrement the token count by the number of tokens removed
@@ -1294,12 +1342,14 @@ bool TextLlmContext::handleReasoningEOS(
 
   // Decode closing tag
   common_batch_clear(batch);
-  common_batch_add(batch, tokenId, nPast++, {seqId_}, true);
+  common_batch_add(batch, tokenId, nPast, {seqId_}, true);
   if (llama_decode(modelCtx_.lctx, batch) != 0) {
     QLOG_IF(
         Priority::ERROR,
         "[TextLlm] Failed to decode closing tag during replacement\n");
+    return true;
   }
+  ++nPast;
 
   // Close marker just committed — record span end before injecting
   // the trailing newlines (they are excluded from the span).
@@ -1314,14 +1364,16 @@ bool TextLlmContext::handleReasoningEOS(
     for (int i = 0; i < 2; i++) {
       common_batch_clear(batch);
       common_batch_add(
-          batch, reasoningState_.cached_newline_token, nPast++, {seqId_}, true);
+          batch, reasoningState_.cached_newline_token, nPast, {seqId_}, true);
 
       if (llama_decode(modelCtx_.lctx, batch) != 0) {
         QLOG_IF(
             Priority::ERROR,
             "[TextLlm] Failed to decode newline token during forced "
             "injection\n");
+        break;
       }
+      ++nPast;
 
       std::string newlineStr = common_token_to_piece(
           modelCtx_.lctx,

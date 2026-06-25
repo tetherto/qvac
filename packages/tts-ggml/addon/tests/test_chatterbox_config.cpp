@@ -199,19 +199,22 @@ TEST(ChatterboxValidate, ConfigSpeedDefaultUnset) {
 // The T3 KV cache is allocated up-front at n_ctx (Turbo GGUF ships
 // n_ctx=8196 ~= 1.6 GB of f32 KV), so the addon must cap it by default
 // rather than inherit tts-cpp's uncapped library default (QVAC-19557 iOS
-// OOM).  4096 + the q8_0 dtype default below ~= 210 MB.
+// OOM).  4096 + the f16 dtype default below ~= 390 MB.
 TEST(ChatterboxEngineOptions, NCtxDefaultsTo4096) {
   ChatterboxConfig cfg;
   const auto opts = qvac::ttsggml::chatterbox::engineOptionsForTests(cfg);
   EXPECT_EQ(opts.n_ctx, 4096);
 }
 
-// q8_0 KV by default: ~27% of f32's resident KV memory; Turbo greedy
-// decoding validated byte-identical across f32/f16/q8_0 upstream
-// (qvac-ext-lib-whisper.cpp#43).
-TEST(ChatterboxEngineOptions, KvCacheTypeDefaultsToQ8) {
+// f16 KV by default: ~50% of f32's resident KV memory and the safe
+// cross-backend default.  q8_0 (~27%, the prior 0.3.2 default) aborts the
+// multilingual model on Metal because the ggml-speech Metal backend has no
+// q8_0->q8_0 CONT, so it is opt-in rather than the default.
+TEST(ChatterboxEngineOptions, KvCacheTypeDefaultsToF16) {
   ChatterboxConfig cfg;
-  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type, "q8_0");
+  EXPECT_EQ(
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type,
+      "f16");
 }
 
 TEST(ChatterboxEngineOptions, ExplicitKvCacheTypeForwarded) {
