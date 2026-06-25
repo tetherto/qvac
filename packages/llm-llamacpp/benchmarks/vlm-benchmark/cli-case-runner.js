@@ -143,8 +143,11 @@ function buildCliArgs (spec) {
     args.push('--chat-template', patched)
   }
 
-  // Opt-in: print the fully-rendered prompt (after chat-template) for parity audits.
-  if (spec.verbosePrompt) args.push('--verbose-prompt')
+  // NOTE: `--verbose-prompt` (a prompt dump for parity audits) was removed — llama.cpp
+  // dropped the flag around build 8828 ("error: invalid argument: --verbose-prompt"),
+  // which made the CLIs fail outright at the auto-resolved build. Nothing in the pipeline
+  // parses its output (metrics come from the timing lines, not the prompt dump), so it is
+  // simply gone rather than gated on a build check.
 
   args.push('-p', spec.prompt)
 
