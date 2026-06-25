@@ -17,9 +17,28 @@ openclaw config set plugins.allow '["qvac"]' --strict-json
 `@qvac/sdk` must be available next to the `qvac` command so serve can resolve
 model constants from the catalog.
 
-## Test Locally From Source
+## Manual Local Testing
 
-From a checkout of `tetherto/qvac`, build and pack the plugin:
+These steps test the plugin from a local checkout before it is published.
+They modify your local OpenClaw config under `~/.openclaw`.
+
+### 1. Install the local tools
+
+Install OpenClaw and make sure the `qvac` command is available:
+
+```bash
+npm install -g openclaw @qvac/cli @qvac/sdk
+openclaw --version
+qvac --version
+```
+
+If another process is already using port `11434`, stop it before running the
+smoke test. The OpenClaw `localService` should own the `qvac serve` process for
+this test.
+
+### 2. Build and pack the plugin
+
+From the repository root:
 
 ```bash
 cd plugins/openclaw
@@ -30,7 +49,9 @@ bun run build
 npm pack
 ```
 
-Install the local tarball into OpenClaw:
+This creates `qvac-openclaw-plugin-0.1.0.tgz` in `plugins/openclaw`.
+
+### 3. Install the packed plugin into OpenClaw
 
 ```bash
 openclaw plugins install ./qvac-openclaw-plugin-0.1.0.tgz --force
@@ -38,7 +59,13 @@ openclaw plugins enable qvac
 openclaw config set plugins.allow '["qvac"]' --strict-json
 ```
 
-Create a local QVAC serve config next to the packed plugin:
+`--force` replaces any previously installed local copy of the plugin.
+`plugins.allow` removes OpenClaw's warning about auto-loading non-bundled
+plugins and explicitly trusts the local `qvac` plugin.
+
+### 4. Create the QVAC serve config
+
+Create `qvac.config.json` next to the packed plugin:
 
 ```bash
 cat > qvac.config.json <<'JSON'
@@ -61,7 +88,14 @@ cat > qvac.config.json <<'JSON'
 JSON
 ```
 
-Point OpenClaw at that local service config:
+The 9B model is recommended for the OpenClaw agent smoke test. Smaller models
+can answer direct prompts, but they are less reliable with the full agent
+harness.
+
+### 5. Configure OpenClaw to use the local QVAC provider
+
+Run this from `plugins/openclaw` so `$(pwd)/qvac.config.json` points at the file
+created above:
 
 ```bash
 openclaw config set models.providers.qvac "$(cat <<EOF
@@ -109,7 +143,25 @@ openclaw config set agents.defaults.experimental.localModelLean true --strict-js
 openclaw config validate
 ```
 
-Run the agent smoke test:
+The `localService` block tells OpenClaw how to start `qvac serve openai` on
+demand. `compat.requiresStringContent` keeps OpenClaw's request shape compatible
+with QVAC's OpenAI adapter, and `localModelLean` reduces agent prompt pressure
+for local models.
+
+### 6. Confirm OpenClaw can see the QVAC model
+
+```bash
+openclaw models list --all --provider qvac
+openclaw models status
+```
+
+Expected result:
+
+- `qvac/qwen3.5-9b` appears in the model list.
+- `openclaw models status` shows `Default: qvac/qwen3.5-9b`.
+- The QVAC provider should not show a missing-auth error.
+
+### 7. Run the agent smoke test
 
 ```bash
 openclaw agent --local \
@@ -120,9 +172,13 @@ openclaw agent --local \
   --json
 ```
 
-The expected response contains `finalAssistantVisibleText: "pong"` and an
-execution trace with `provider: "qvac"`, `model: "qwen3.5-9b"`, and
-`fallbackUsed: false`.
+Expected result:
+
+- OpenClaw logs `starting qvac local service`.
+- OpenClaw logs `qvac local service ready`.
+- The JSON response contains `finalAssistantVisibleText: "pong"`.
+- The execution trace uses `provider: "qvac"` and `model: "qwen3.5-9b"`.
+- `fallbackUsed` is `false`.
 
 ## Configure
 
