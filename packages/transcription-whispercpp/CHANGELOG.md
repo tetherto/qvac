@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.2] - 2026-06-24
 
 ### Changed
 
@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moves `ggml-speech`. The registry baseline is left unchanged; the override
   resolves the new port-version forward of the pinned baseline (QVAC-21321,
   registry [tetherto/qvac-registry-vcpkg#210](https://github.com/tetherto/qvac-registry-vcpkg/pull/210)).
+
+## Pull Requests
+
+- [#2845](https://github.com/tetherto/qvac/pull/2845) - QVAC-21321 transcription-whispercpp: consume ggml-speech 2026-06-15 (whisper-cpp 1.8.5#5)
 
 ## [0.10.1] - 2026-06-22
 

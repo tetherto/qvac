@@ -7,7 +7,8 @@ class BaseDBAdapter extends ReadyResource {
   /**
    * @param {Object} config - Configuration object.
    */
-  constructor (config = {}) {
+  // lunte-disable-next-line no-unused-vars
+  constructor(config = {}) {
     super()
     if (new.target === BaseDBAdapter) {
       throw new QvacErrorRAG({ code: ERR_CODES.ABSTRACT_CLASS })
@@ -21,7 +22,8 @@ class BaseDBAdapter extends ReadyResource {
    * @param {DbOpts} [opts] - The options for the processing.
    * @returns {Promise<Array<SaveEmbeddingsResult>>} - Array of processing results.
    */
-  async saveEmbeddings (docs, opts) {
+  // lunte-disable-next-line require-await
+  async saveEmbeddings(docs, opts) {
     throw new QvacErrorRAG({ code: ERR_CODES.NOT_IMPLEMENTED })
   }
 
@@ -30,7 +32,8 @@ class BaseDBAdapter extends ReadyResource {
    * @param {Array<string>} ids - The ids of the documents to be deleted.
    * @returns {Promise<boolean>} - True if the embeddings were deleted
    */
-  async deleteEmbeddings (ids) {
+  // lunte-disable-next-line require-await
+  async deleteEmbeddings(ids) {
     throw new QvacErrorRAG({ code: ERR_CODES.NOT_IMPLEMENTED })
   }
 
@@ -41,7 +44,8 @@ class BaseDBAdapter extends ReadyResource {
    * @param {Object} [params] - The parameters for the search..
    * @returns {Promise<Array<SearchResult>>} - An array of search results.
    */
-  async search (query, queryVector, params) {
+  // lunte-disable-next-line require-await
+  async search(query, queryVector, params) {
     throw new QvacErrorRAG({ code: ERR_CODES.NOT_IMPLEMENTED })
   }
 
@@ -51,7 +55,8 @@ class BaseDBAdapter extends ReadyResource {
    * @param {ReindexOpts} [opts] - Options for reindexing.
    * @returns {Promise<ReindexResult>} - Result of the reindex operation.
    */
-  async reindex (opts) {
+  // lunte-disable-next-line require-await
+  async reindex(opts) {
     return { reindexed: false, details: {} }
   }
 }

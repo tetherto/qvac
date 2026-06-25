@@ -1,219 +1,112 @@
-import QvacResponse = require("@qvac/response");
-import ReadyResource = require("ready-resource");
-import type { LoggerInterface } from "@qvac/logging";
-import { ERR_CODES, QvacErrorRAG } from "./src/errors";
+import QvacResponse = require('@qvac/response')
+import ReadyResource = require('ready-resource')
+import type { LoggerInterface } from '@qvac/logging'
+import { ERR_CODES, QvacErrorRAG } from './src/errors'
 
-type Logger = LoggerInterface;
+type Logger = LoggerInterface
 
 export interface Doc {
-  id: string;
-  content: string;
+  id: string
+  content: string
 }
 
 export interface EmbeddedDoc extends Doc {
-  embedding: number[];
-  embeddingModelId: string;
-  metadata?: Record<string, any> | undefined;
+  embedding: number[]
+  embeddingModelId: string
+  metadata?: Record<string, any> | undefined
 }
 
 export interface PartialDoc {
-  content: string;
-  id?: string;
+  content: string
+  id?: string
 }
 
 export interface SaveEmbeddingsResult {
-  status: "fulfilled" | "rejected";
-  id?: string | undefined;
-  error?: string | undefined;
+  status: 'fulfilled' | 'rejected'
+  id?: string | undefined
+  error?: string | undefined
 }
 
 export interface IngestResult {
-  processed: SaveEmbeddingsResult[];
-  droppedIndices: number[];
+  processed: SaveEmbeddingsResult[]
+  droppedIndices: number[]
 }
 
 export interface SearchResult {
-  id: string;
-  content: string;
-  score: number;
+  id: string
+  content: string
+  score: number
 }
 
 export interface BaseDBAdapterConfig {
-  embeddingModelId: string;
-  dimension: number;
-  createdAt: Date;
+  embeddingModelId: string
+  dimension: number
+  createdAt: Date
 }
 
 export interface HyperDBAdapterConfig extends BaseDBAdapterConfig {
-  key: string;
-  NUM_CENTROIDS: number;
-  BUCKET_SIZE: number;
-  BATCH_SIZE: number;
+  key: string
+  NUM_CENTROIDS: number
+  BUCKET_SIZE: number
+  BATCH_SIZE: number
 }
 
 export interface SearchParams {
-  topK?: number; // Number of top results to retrieve from the database.
-  n?: number; // Number of centroids to use for IVF index search.
-  signal?: AbortSignal;
+  topK?: number // Number of top results to retrieve from the database.
+  n?: number // Number of centroids to use for IVF index search.
+  signal?: AbortSignal
 }
 
 export interface BaseChunkOpts {
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 export interface DbOpts {
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 export interface LLMChunkOpts extends BaseChunkOpts {
-  chunkSize?: number | undefined; // Maximum size of each chunk in tokens. (default: 256)
-  chunkOverlap?: number | undefined; // Number of tokens to overlap between chunks. (default: 50)
-  chunkStrategy?: "character" | "paragraph" | undefined; // Chunking strategy to use. Determines how chunks are grouped (default: 'paragraph')
-  splitStrategy?: "character" | "token" | "word" | "sentence" | "line" | undefined; // Predefined split strategy for tokenization. If both splitter and splitStrategy are provided, splitter takes precedence. (default: 'token')
-  splitter?: ((text: string) => string[]) | undefined; // Custom function to split text into tokens. If provided, takes precedence over splitStrategy.
+  chunkSize?: number | undefined // Maximum size of each chunk in tokens. (default: 256)
+  chunkOverlap?: number | undefined // Number of tokens to overlap between chunks. (default: 50)
+  chunkStrategy?: 'character' | 'paragraph' | undefined // Chunking strategy to use. Determines how chunks are grouped (default: 'paragraph')
+  splitStrategy?: 'character' | 'token' | 'word' | 'sentence' | 'line' | undefined // Predefined split strategy for tokenization. If both splitter and splitStrategy are provided, splitter takes precedence. (default: 'token')
+  splitter?: ((text: string) => string[]) | undefined // Custom function to split text into tokens. If provided, takes precedence over splitStrategy.
 }
 
 export interface EmbeddingOpts {
-  onProgress?: (current: number, total: number) => void;
-  signal?: AbortSignal;
+  onProgress?: (current: number, total: number) => void
+  signal?: AbortSignal
 }
 
 export interface GenerateEmbeddingsOpts {
-  chunk?: boolean;
-  chunkOpts?: BaseChunkOpts;
-  signal?: AbortSignal;
+  chunk?: boolean
+  chunkOpts?: BaseChunkOpts
+  signal?: AbortSignal
 }
 
-export type SaveStage = "deduplicating" | "preparing" | "writing";
+export type SaveStage = 'deduplicating' | 'preparing' | 'writing'
 
 export interface SaveEmbeddingsOpts {
-  dbOpts?: DbOpts | undefined;
-  onProgress?: ((stage: SaveStage, current: number, total: number) => void) | undefined;
-  progressInterval?: number | undefined;
-  signal?: AbortSignal | undefined;
+  dbOpts?: DbOpts | undefined
+  onProgress?: ((stage: SaveStage, current: number, total: number) => void) | undefined
+  progressInterval?: number | undefined
+  signal?: AbortSignal | undefined
 }
 
 export type IngestStage =
-  | "chunking"
-  | "embedding"
-  | "saving:deduplicating"
-  | "saving:preparing"
-  | "saving:writing";
+  | 'chunking'
+  | 'embedding'
+  | 'saving:deduplicating'
+  | 'saving:preparing'
+  | 'saving:writing'
 
 export interface IngestOpts {
-  chunk?: boolean | undefined;
-  chunkOpts?: BaseChunkOpts | undefined;
-  dbOpts?: DbOpts | undefined;
-  onProgress?: ((stage: IngestStage, current: number, total: number) => void) | undefined;
-  progressInterval?: number | undefined;
-  signal?: AbortSignal | undefined;
-}
-
-export interface InferOpts extends SearchParams {
-  llmAdapter?: BaseLlmAdapter;
-  systemPrompt?: string;
-}
-
-export type ReindexStage =
-  | "collecting"
-  | "clustering"
-  | "reassigning"
-  | "updating";
-
-export interface ReindexOpts {
-  onProgress?: ((stage: ReindexStage, current: number, total: number) => void) | undefined;
-  signal?: AbortSignal | undefined;
-}
-
-export interface ReindexResult {
-  reindexed: boolean;
-  details?: Record<string, any> | undefined;
-}
-
-export interface QvacLlmAddon {
-  /**
-   * Run LLM inference with messages and options
-   * @param messages - Array of message objects with role and content
-   * @param opts - Additional options for inference
-   * @returns The generated response.
-   */
-  run(
-    messages: Array<{ role: string; content: string }>,
-    opts?: object
-  ): Promise<QvacResponse>;
-}
-
-export type EmbeddingFunction = (
-  text: string | string[]
-) => Promise<number[] | number[][]>;
-
-/**
- * Abstract class for the database adapter.
- */
-declare abstract class BaseDBAdapter extends ReadyResource {
-  isInitialized: boolean; // Indicates whether the adapter has been initialized.
-
-  /**
-   * Save embeddings for a set of documents inside the vector database.
-   * @param embeddedDocs - Documents with embeddings to be processed.
-   * @param opts - Options for the processing.
-   * @returns Array of processing results.
-   */
-  abstract saveEmbeddings(
-    embeddedDocs: EmbeddedDoc[],
-    opts?: SaveEmbeddingsOpts
-  ): Promise<SaveEmbeddingsResult[]>;
-
-  /**
-   * Delete embeddings for a set of documents inside the vector database.
-   * @param ids - The ids of the documents to be deleted.
-   * @returns True if the embeddings were deleted
-   */
-  abstract deleteEmbeddings(ids: string[]): Promise<boolean>;
-
-  /**
-   * Search for documents based on a query string.
-   * @param query - The search query.
-   * @param params - The parameters for the search.
-   * @returns An array of search results.
-   */
-  abstract search(
-    query: string,
-    queryVector: number[],
-    params?: SearchParams
-  ): Promise<SearchResult[]>;
-
-  /**
-   * Reindex the database to optimize search performance.
-   * Default implementation returns not reindexed. Adapters can override.
-   * @param opts - Options for reindexing.
-   * @returns Reindexing result.
-   */
-  reindex(opts?: ReindexOpts): Promise<ReindexResult>;
-
-  /**
-   * Get stored adapter configuration.
-   * @returns The stored config or null if not configured
-   */
-  getConfig(): Promise<BaseDBAdapterConfig | null>;
-}
-
-/**
- * Abstract class for the chunk adapter.
- */
-declare abstract class BaseChunkAdapter {
-  opts: BaseChunkOpts;
-
-  /**
-   * Splits text into multiple chunks.
-   * @param input - The text to chunk.
-   * @param opts - The options for the chunking.
-   * @returns An array of chunk results.
-   */
-  abstract chunkText(
-    input: string | string[],
-    opts?: BaseChunkOpts
-  ): Promise<Doc[]>;
+  chunk?: boolean | undefined
+  chunkOpts?: BaseChunkOpts | undefined
+  dbOpts?: DbOpts | undefined
+  onProgress?: ((stage: IngestStage, current: number, total: number) => void) | undefined
+  progressInterval?: number | undefined
+  signal?: AbortSignal | undefined
 }
 
 /**
@@ -227,11 +120,102 @@ declare abstract class BaseLlmAdapter {
    * @param opts - Additional options for the inference
    * @returns The generated response (format depends on LLM adapter implementation)
    */
-  abstract run(
+  abstract run(query: string, searchResults: SearchResult[], opts?: InferOpts): Promise<any>
+}
+
+export interface InferOpts extends SearchParams {
+  llmAdapter?: BaseLlmAdapter
+  systemPrompt?: string
+}
+
+export type ReindexStage = 'collecting' | 'clustering' | 'reassigning' | 'updating'
+
+export interface ReindexOpts {
+  onProgress?: ((stage: ReindexStage, current: number, total: number) => void) | undefined
+  signal?: AbortSignal | undefined
+}
+
+export interface ReindexResult {
+  reindexed: boolean
+  details?: Record<string, any> | undefined
+}
+
+export interface QvacLlmAddon {
+  /**
+   * Run LLM inference with messages and options
+   * @param messages - Array of message objects with role and content
+   * @param opts - Additional options for inference
+   * @returns The generated response.
+   */
+  run(messages: Array<{ role: string; content: string }>, opts?: object): Promise<QvacResponse>
+}
+
+export type EmbeddingFunction = (text: string | string[]) => Promise<number[] | number[][]>
+
+/**
+ * Abstract class for the database adapter.
+ */
+declare abstract class BaseDBAdapter extends ReadyResource {
+  isInitialized: boolean // Indicates whether the adapter has been initialized.
+
+  /**
+   * Save embeddings for a set of documents inside the vector database.
+   * @param embeddedDocs - Documents with embeddings to be processed.
+   * @param opts - Options for the processing.
+   * @returns Array of processing results.
+   */
+  abstract saveEmbeddings(
+    embeddedDocs: EmbeddedDoc[],
+    opts?: SaveEmbeddingsOpts
+  ): Promise<SaveEmbeddingsResult[]>
+
+  /**
+   * Delete embeddings for a set of documents inside the vector database.
+   * @param ids - The ids of the documents to be deleted.
+   * @returns True if the embeddings were deleted
+   */
+  abstract deleteEmbeddings(ids: string[]): Promise<boolean>
+
+  /**
+   * Search for documents based on a query string.
+   * @param query - The search query.
+   * @param params - The parameters for the search.
+   * @returns An array of search results.
+   */
+  abstract search(
     query: string,
-    searchResults: SearchResult[],
-    opts?: InferOpts
-  ): Promise<any>;
+    queryVector: number[],
+    params?: SearchParams
+  ): Promise<SearchResult[]>
+
+  /**
+   * Reindex the database to optimize search performance.
+   * Default implementation returns not reindexed. Adapters can override.
+   * @param opts - Options for reindexing.
+   * @returns Reindexing result.
+   */
+  reindex(opts?: ReindexOpts): Promise<ReindexResult>
+
+  /**
+   * Get stored adapter configuration.
+   * @returns The stored config or null if not configured
+   */
+  getConfig(): Promise<BaseDBAdapterConfig | null>
+}
+
+/**
+ * Abstract class for the chunk adapter.
+ */
+declare abstract class BaseChunkAdapter {
+  opts: BaseChunkOpts
+
+  /**
+   * Splits text into multiple chunks.
+   * @param input - The text to chunk.
+   * @param opts - The options for the chunking.
+   * @returns An array of chunk results.
+   */
+  abstract chunkText(input: string | string[], opts?: BaseChunkOpts): Promise<Doc[]>
 }
 
 /**
@@ -245,34 +229,20 @@ declare class HttpLlmAdapter extends BaseLlmAdapter {
    */
   constructor(
     httpConfig: {
-      apiUrl: string;
-      method?: string;
-      headers?: Record<string, string>;
+      apiUrl: string
+      method?: string
+      headers?: Record<string, string>
     },
-    requestBodyFormatter: (
-      query: string,
-      searchResults: SearchResult[],
-      opts?: object
-    ) => object,
+    requestBodyFormatter: (query: string, searchResults: SearchResult[], opts?: object) => object,
     responseBodyFormatter: (response: unknown) => unknown
-  );
+  )
 
-  run(
-    query: string,
-    searchResults: SearchResult[],
-    opts?: InferOpts
-  ): Promise<any>;
-  updateHttpConfig(newHttpConfig: object): void;
+  run(query: string, searchResults: SearchResult[], opts?: InferOpts): Promise<any>
+  updateHttpConfig(newHttpConfig: object): void
   updateRequestBodyFormatter(
-    newFormatter: (
-      query: string,
-      searchResults: SearchResult[],
-      opts?: object
-    ) => object
-  ): void;
-  updateResponseBodyFormatter(
-    newFormatter: (response: unknown) => unknown
-  ): void;
+    newFormatter: (query: string, searchResults: SearchResult[], opts?: object) => object
+  ): void
+  updateResponseBodyFormatter(newFormatter: (response: unknown) => unknown): void
 }
 
 /**
@@ -282,13 +252,9 @@ declare class QvacLlmAdapter extends BaseLlmAdapter {
   /**
    * @param llm - The QVAC LLM instance
    */
-  constructor(llm: QvacLlmAddon);
-  run(
-    query: string,
-    searchResults: SearchResult[],
-    opts?: object
-  ): Promise<QvacResponse>;
-  updateLLM(newLLM: QvacLlmAddon): void;
+  constructor(llm: QvacLlmAddon)
+  run(query: string, searchResults: SearchResult[], opts?: object): Promise<QvacResponse>
+  updateLLM(newLLM: QvacLlmAddon): void
 }
 
 /**
@@ -306,32 +272,32 @@ declare class RAG extends ReadyResource {
    * @param config.logger - Optional logger instance
    */
   constructor(config: {
-    embeddingFunction: EmbeddingFunction;
-    dbAdapter: BaseDBAdapter;
-    llm?: BaseLlmAdapter;
-    chunker?: BaseChunkAdapter;
-    chunkOpts?: BaseChunkOpts;
-    logger?: Logger;
-  });
+    embeddingFunction: EmbeddingFunction
+    dbAdapter: BaseDBAdapter
+    llm?: BaseLlmAdapter
+    chunker?: BaseChunkAdapter
+    chunkOpts?: BaseChunkOpts
+    logger?: Logger
+  })
 
   /**
    * Ready the RAG instance.
    * @returns A promise that resolves when the RAG instance is ready.
    */
-  ready(): Promise<void>;
+  ready(): Promise<void>
 
   /**
    * Close the RAG instance.
    * @returns A promise that resolves when the RAG instance is closed.
    */
-  close(): Promise<void>;
+  close(): Promise<void>
 
   /**
    * Generate embeddings for a single text.
    * @param text - The text to generate embeddings for.
    * @returns The embeddings.
    */
-  generateEmbeddings(text: string): Promise<number[]>;
+  generateEmbeddings(text: string): Promise<number[]>
 
   /**
    * Generate embeddings for a set of documents.
@@ -342,7 +308,7 @@ declare class RAG extends ReadyResource {
   generateEmbeddingsForDocs(
     docs: string | string[],
     opts?: GenerateEmbeddingsOpts
-  ): Promise<{ [key: string]: number[] }>;
+  ): Promise<{ [key: string]: number[] }>
 
   /**
    * Save embedded documents directly to the vector database.
@@ -354,7 +320,7 @@ declare class RAG extends ReadyResource {
   saveEmbeddings(
     embeddedDocs: EmbeddedDoc[],
     opts?: SaveEmbeddingsOpts
-  ): Promise<SaveEmbeddingsResult[]>;
+  ): Promise<SaveEmbeddingsResult[]>
 
   /**
    * Ingest documents: chunk, embed, and save to the vector database.
@@ -368,14 +334,14 @@ declare class RAG extends ReadyResource {
     docs: string | string[],
     embeddingModelId: string,
     opts?: IngestOpts
-  ): Promise<IngestResult>;
+  ): Promise<IngestResult>
 
   /**
    * Delete embeddings for a set of documents inside the vector database.
    * @param ids - The ids of the documents to be deleted.
    * @returns True if the embeddings were deleted
    */
-  deleteEmbeddings(ids: string[]): Promise<boolean>;
+  deleteEmbeddings(ids: string[]): Promise<boolean>
 
   /**
    * Chunks a large text into multiple chunks using the configured chunking options.
@@ -383,7 +349,7 @@ declare class RAG extends ReadyResource {
    * @param chunkOpts - Optional chunking options to override the default.
    * @returns Array of chunk results.
    */
-  chunk(input: string | string[], chunkOpts?: BaseChunkOpts): Promise<Doc[]>;
+  chunk(input: string | string[], chunkOpts?: BaseChunkOpts): Promise<Doc[]>
 
   /**
    * Searches for context based on the prompt and generates a response.
@@ -391,7 +357,7 @@ declare class RAG extends ReadyResource {
    * @param opts - Options for inference.
    * @returns The generated response (format depends on LLM adapter) or null if no context found.
    */
-  infer(query: string, opts?: InferOpts): Promise<any>;
+  infer(query: string, opts?: InferOpts): Promise<any>
 
   /**
    * Searches for documents based on a query string.
@@ -399,26 +365,26 @@ declare class RAG extends ReadyResource {
    * @param params - The parameters for the search.
    * @returns An array of search results.
    */
-  search(query: string, params?: SearchParams): Promise<SearchResult[]>;
+  search(query: string, params?: SearchParams): Promise<SearchResult[]>
 
   /**
    * Reindex the database to optimize search performance.
    * @param opts - Options for reindexing.
    * @returns Reindexing result.
    */
-  reindex(opts?: ReindexOpts): Promise<ReindexResult>;
+  reindex(opts?: ReindexOpts): Promise<ReindexResult>
 
   /**
    * Get stored database adapter configuration.
    * @returns The stored config or null if not configured
    */
-  getDBConfig(): Promise<BaseDBAdapterConfig | null>;
+  getDBConfig(): Promise<BaseDBAdapterConfig | null>
 
   /**
    * Sets the default LLM adapter for the RAG.
    * @param llmAdapter - The LLM adapter.
    */
-  setLlm(llmAdapter: BaseLlmAdapter): void;
+  setLlm(llmAdapter: BaseLlmAdapter): void
 }
 
 /**
@@ -441,25 +407,25 @@ declare class HyperDBAdapter extends BaseDBAdapter {
    * @param config.configTable - The name of the config table
    */
   constructor(config?: {
-    store?: any;
-    db?: any;
-    dbName?: string;
-    NUM_CENTROIDS?: number;
-    BUCKET_SIZE?: number;
-    BATCH_SIZE?: number;
-    PROGRESS_INTERVAL?: number;
-    CACHE_SIZE?: number;
-    documentsTable?: string;
-    vectorsTable?: string;
-    centroidsTable?: string;
-    invertedIndexTable?: string;
-    configTable?: string;
-  });
+    store?: any
+    db?: any
+    dbName?: string
+    NUM_CENTROIDS?: number
+    BUCKET_SIZE?: number
+    BATCH_SIZE?: number
+    PROGRESS_INTERVAL?: number
+    CACHE_SIZE?: number
+    documentsTable?: string
+    vectorsTable?: string
+    centroidsTable?: string
+    invertedIndexTable?: string
+    configTable?: string
+  })
 
   /**
    * Get the hypercore instance.
    */
-  get core(): any;
+  get core(): any
 
   /**
    * Replicate the hypercore with another hypercore.
@@ -467,10 +433,10 @@ declare class HyperDBAdapter extends BaseDBAdapter {
    * @returns An object containing the two streams and a destroy function
    */
   replicateWith(otherHypercore: any): Promise<{
-    stream1: any;
-    stream2: any;
-    destroy: () => void;
-  }>;
+    stream1: any
+    stream2: any
+    destroy: () => void
+  }>
 
   /**
    * Save embeddings for a set of documents inside the vector database.
@@ -481,14 +447,14 @@ declare class HyperDBAdapter extends BaseDBAdapter {
   saveEmbeddings(
     embeddedDocs: EmbeddedDoc[],
     opts?: SaveEmbeddingsOpts
-  ): Promise<SaveEmbeddingsResult[]>;
+  ): Promise<SaveEmbeddingsResult[]>
 
   /**
    * Delete embeddings for a set of documents inside the vector database.
    * @param ids - The ids of the documents to be deleted.
    * @returns True if the embeddings were deleted
    */
-  deleteEmbeddings(ids: string[]): Promise<boolean>;
+  deleteEmbeddings(ids: string[]): Promise<boolean>
 
   /**
    * Searches for documents based on a query string.
@@ -497,24 +463,20 @@ declare class HyperDBAdapter extends BaseDBAdapter {
    * @param params - The parameters for the search.
    * @returns An array of search results.
    */
-  search(
-    query: string,
-    queryVector: number[],
-    params?: SearchParams
-  ): Promise<SearchResult[]>;
+  search(query: string, queryVector: number[], params?: SearchParams): Promise<SearchResult[]>
 
   /**
    * Reindex the database to optimize search performance.
    * @param opts - Options for reindexing.
    * @returns Reindexing result.
    */
-  reindex(opts?: ReindexOpts): Promise<ReindexResult>;
+  reindex(opts?: ReindexOpts): Promise<ReindexResult>
 
   /**
    * Get stored adapter configuration.
    * @returns The stored config or null if not configured
    */
-  getConfig(): Promise<HyperDBAdapterConfig | null>;
+  getConfig(): Promise<HyperDBAdapterConfig | null>
 }
 
 /**
@@ -524,7 +486,7 @@ declare class LLMChunkAdapter extends BaseChunkAdapter {
   /**
    * @param chunkOpts - Chunking options
    */
-  constructor(chunkOpts?: LLMChunkOpts);
+  constructor(chunkOpts?: LLMChunkOpts)
 
   /**
    * Splits text into multiple chunks using LLM-aware strategies.
@@ -532,7 +494,7 @@ declare class LLMChunkAdapter extends BaseChunkAdapter {
    * @param opts - The options for the chunking.
    * @returns An array of chunk results.
    */
-  chunkText(input: string | string[], opts?: LLMChunkOpts): Promise<Doc[]>;
+  chunkText(input: string | string[], opts?: LLMChunkOpts): Promise<Doc[]>
 }
 
 export {
@@ -545,5 +507,5 @@ export {
   HttpLlmAdapter,
   QvacLlmAdapter,
   QvacErrorRAG,
-  ERR_CODES,
-};
+  ERR_CODES
+}
