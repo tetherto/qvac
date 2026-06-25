@@ -486,6 +486,11 @@ async function runQwen35ImageHighResAuroraPerfTest (options = {}) { // eslint-di
   return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-perf.test.js', options)
 }
 
+async function runQwen35MultimodalCacheStressTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35MultimodalCacheStressTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-multimodal-cache-stress.test.js', options)
+}
+
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35Test')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5.test.js', options)

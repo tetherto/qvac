@@ -375,6 +375,8 @@ public:
     (void)hasKvCacheContext;
   }
 
+  [[nodiscard]] llama_seq_id getSeqId() const { return seqId_; }
+
 protected:
   void clearSequenceMemory(
       llama_context* lctx, llama_pos startPos = -1,

@@ -48,5 +48,5 @@ These files are picked up automatically by:
 Use this directory for results such as:
 
 - Linux ROCm devices
-- Windows CUDA-specific runs
+- Adreno OpenCL Android devices not in the Device Farm pool
 - Any other supported backend or device combination that the CI matrix cannot host
