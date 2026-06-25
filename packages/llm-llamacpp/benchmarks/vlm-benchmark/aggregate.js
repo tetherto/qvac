@@ -384,9 +384,10 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     // One-liner verdict: candidate vs baseline averaged across every platform·device leg
     // in this run. Speed = per-leg mean of the two latency metrics that exist on BOTH
     // cells — vis-encode (mmproj) + TTFT — falling back to whichever one is present (mobile
-    // legs usually have TTFT only). Quality = VQA overall % when VQA tasks ran, otherwise
-    // OCR BLEU (higher = better). Each leg gets equal weight (mean of per-leg relative %).
-    // Two-models mode only.
+    // legs usually have TTFT only). Quality = the mean of every quality DIMENSION present on
+    // the leg — VQA overall % and OCR BLEU % (both higher = better) — so a run with cognitive
+    // AND OCR tasks reflects both, not just VQA. Each leg gets equal weight (mean of per-leg
+    // relative %). Two-models mode only.
     const speedPcts = []
     const qualPcts = []
     for (const host of hosts) {
@@ -401,13 +402,18 @@ function build (rows, vision, meta, provText, title, opts = {}) {
           const bs = mean(bParts); const cs = mean(cParts)
           if (bs > 0) speedPcts.push((bs - cs) / bs * 100)
         }
+        // Blend every quality dimension present on this leg (VQA overall %, OCR BLEU %) —
+        // each higher = better — so OCR is NOT dropped when cognitive tasks also ran.
+        const qParts = []
         if (b.overall != null && c.overall != null && b.overall > 0) {
-          qualPcts.push((c.overall - b.overall) / b.overall * 100)
-        } else {
-          const bo = ocrGroup(`${host}|${base}|${dv}`)
-          const co = ocrGroup(`${host}|${candidate}|${dv}`)
-          if (bo && co && bo.bleu != null && co.bleu != null && bo.bleu > 0) qualPcts.push((co.bleu - bo.bleu) / bo.bleu * 100)
+          qParts.push((c.overall - b.overall) / b.overall * 100)
         }
+        const bo = ocrGroup(`${host}|${base}|${dv}`)
+        const co = ocrGroup(`${host}|${candidate}|${dv}`)
+        if (bo && co && bo.bleu != null && co.bleu != null && bo.bleu > 0) {
+          qParts.push((co.bleu - bo.bleu) / bo.bleu * 100)
+        }
+        if (qParts.length) qualPcts.push(mean(qParts))
       }
     }
     const sp = mean(speedPcts)
