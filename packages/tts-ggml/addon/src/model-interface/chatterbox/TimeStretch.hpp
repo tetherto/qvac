@@ -87,7 +87,7 @@ private:
     }
     for (int i = 0; i < n; ++i) {
       w[static_cast<std::size_t>(i)] =
-          0.5f * (1.0f - std::cos(2.0f * kPi * i / (n - 1)));
+          0.5f * (1.0f - std::cos(2.0f * K_PI * i / (n - 1)));
     }
     return w;
   }
@@ -264,7 +264,7 @@ private:
     }
   }
 
-  static constexpr float kPi = 3.14159265358979323846f;
+  static constexpr float K_PI = 3.14159265358979323846f;
 
   const int N_;
   const int Hs_;

@@ -15,8 +15,8 @@ import {
   BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  TTS_S3GEN_EN_CHATTERBOX,
+  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
+  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
@@ -259,13 +259,13 @@ resources.define("afriquegemma", {
 
 
 resources.define("tts-chatterbox", {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
+  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "chatterbox",
     language: "en",
     useGPU: true,
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,

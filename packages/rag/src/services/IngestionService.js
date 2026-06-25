@@ -13,7 +13,7 @@ class IngestionService {
    * @param {EmbeddingService} config.embeddingService - Service for generating embeddings
    * @param {Logger} [config.logger] - Optional logger instance
    */
-  constructor ({ dbAdapter, chunkingService, embeddingService, logger }) {
+  constructor({ dbAdapter, chunkingService, embeddingService, logger }) {
     if (!dbAdapter) throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_REQUIRED })
     if (!chunkingService) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_CHUNKER })
     if (!embeddingService) throw new QvacErrorRAG({ code: ERR_CODES.EMBEDDING_FUNCTION_REQUIRED })
@@ -30,7 +30,8 @@ class IngestionService {
    * @param {ChunkOpts} [opts] - Optional chunking options to override the default.
    * @returns {Promise<Array<Doc>>} - Array of chunked documents with IDs and content.
    */
-  async chunk (input, opts = {}) {
+  // lunte-disable-next-line require-await
+  async chunk(input, opts = {}) {
     return this.chunkingService.chunkText(input, opts)
   }
 
@@ -40,7 +41,7 @@ class IngestionService {
    * @throws {QvacErrorRAG} If validation fails
    * @private
    */
-  _validateEmbeddedDocs (embeddedDocs) {
+  _validateEmbeddedDocs(embeddedDocs) {
     try {
       embeddedDocsArraySchema.parse(embeddedDocs)
     } catch (error) {
@@ -63,7 +64,8 @@ class IngestionService {
    * @param {SaveEmbeddingsOpts} [opts] - Options for saving.
    * @returns {Promise<Array<SaveEmbeddingsResult>>} - Array of processing results.
    */
-  async saveEmbeddings (embeddedDocs, opts = {}) {
+  // lunte-disable-next-line require-await
+  async saveEmbeddings(embeddedDocs, opts = {}) {
     const { onProgress, signal, dbOpts } = opts
 
     this._validateEmbeddedDocs(embeddedDocs)
@@ -87,7 +89,7 @@ class IngestionService {
    * @param {IngestOpts} [opts] - Options for the ingestion pipeline.
    * @returns {Promise<{processed: Array<SaveEmbeddingsResult>, droppedIndices: Array<number>}>} - Processing results and dropped indices.
    */
-  async ingest (docs, embeddingModelId, opts = {}) {
+  async ingest(docs, embeddingModelId, opts = {}) {
     const { onProgress, signal, dbOpts, chunkOpts, progressInterval } = opts
     if (opts.chunk === undefined) opts.chunk = true
 
@@ -135,18 +137,15 @@ class IngestionService {
     }
 
     this.logger.debug('Phase: Embedding')
-    const embeddingMap = await this.embeddingService.generateEmbeddingsForDocs(
-      preparedDocs,
-      {
-        onProgress: (current, total) => {
-          onProgress?.('embedding', current, total)
-        },
-        signal
-      }
-    )
+    const embeddingMap = await this.embeddingService.generateEmbeddingsForDocs(preparedDocs, {
+      onProgress: (current, total) => {
+        onProgress?.('embedding', current, total)
+      },
+      signal
+    })
 
     // Attach embeddings to documents
-    const embeddedDocs = preparedDocs.map(doc => ({
+    const embeddedDocs = preparedDocs.map((doc) => ({
       ...doc,
       embeddingModelId,
       embedding: embeddingMap[doc.id]
@@ -167,7 +166,9 @@ class IngestionService {
       signal
     })
 
-    this.logger.info(`Ingestion complete: ${processed.length} saved, ${droppedIndices.length} dropped`)
+    this.logger.info(
+      `Ingestion complete: ${processed.length} saved, ${droppedIndices.length} dropped`
+    )
 
     return {
       processed,
@@ -180,7 +181,8 @@ class IngestionService {
    * @param {Array<string>} ids - The ids of the documents to be deleted.
    * @returns {Promise<boolean>} True if the embeddings were deleted
    */
-  async deleteEmbeddings (ids) {
+  // lunte-disable-next-line require-await
+  async deleteEmbeddings(ids) {
     return this.dbAdapter.deleteEmbeddings(ids)
   }
 }

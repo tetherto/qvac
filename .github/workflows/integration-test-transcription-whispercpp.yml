@@ -85,7 +85,7 @@ jobs:
             arch: x64
             runner: qvac-ubuntu2404-x64-gpu
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"cuda"}]
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"vulkan"}]
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64

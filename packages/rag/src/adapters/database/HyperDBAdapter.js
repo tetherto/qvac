@@ -34,7 +34,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {string} [config.configTable='@rag/config'] - The name of the config table.
    * @param {Logger} [config.logger] - Optional logger instance
    */
-  constructor (config = {}) {
+  constructor(config = {}) {
     super(config)
     this.store = config.store || null
     this.db = config.db || null
@@ -62,7 +62,9 @@ class HyperDBAdapter extends BaseDBAdapter {
    * Get the hypercore instance.
    * @returns {Hypercore} The hypercore instance.
    */
-  get core () { return this.hypercore }
+  get core() {
+    return this.hypercore
+  }
 
   /**
    * Saves embeddings for a set of documents by processing them in batches.
@@ -71,13 +73,13 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {SaveEmbeddingsOpts} [opts] - Options for saving.
    * @returns {Promise<Array<SaveEmbeddingsResult>>} - Array of processing results.
    */
-  async saveEmbeddings (embeddedDocs, opts = {}) {
+  async saveEmbeddings(embeddedDocs, opts = {}) {
     const { onProgress, signal, progressInterval } = opts
     const results = []
 
     // Validate embeddingModelId is present and consistent across all docs
     if (embeddedDocs.length > 0) {
-      const modelIds = new Set(embeddedDocs.map(doc => doc.embeddingModelId).filter(Boolean))
+      const modelIds = new Set(embeddedDocs.map((doc) => doc.embeddingModelId).filter(Boolean))
 
       if (modelIds.size === 0) {
         throw new QvacErrorRAG({
@@ -119,11 +121,13 @@ class HyperDBAdapter extends BaseDBAdapter {
       this.logger.warn(`${duplicates.length} duplicate(s) found`)
     }
 
-    results.push(...duplicates.map(doc => ({
-      id: doc.id,
-      status: 'rejected',
-      error: doc.error
-    })))
+    results.push(
+      ...duplicates.map((doc) => ({
+        id: doc.id,
+        status: 'rejected',
+        error: doc.error
+      }))
+    )
 
     const processedDocs = unique
     const uniqueTotal = processedDocs.length
@@ -160,12 +164,14 @@ class HyperDBAdapter extends BaseDBAdapter {
   }
 
   /**
- * Delete embeddings for a set of documents inside the vector database.
- * @param {Array<string>} ids - The IDs of the documents to be deleted.
- * @returns {Promise<boolean>} - True if the embeddings were deleted
- */
-  async deleteEmbeddings (ids) {
-    if (!Array.isArray(ids) || ids.length === 0) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_PARAMS })
+   * Delete embeddings for a set of documents inside the vector database.
+   * @param {Array<string>} ids - The IDs of the documents to be deleted.
+   * @returns {Promise<boolean>} - True if the embeddings were deleted
+   */
+  async deleteEmbeddings(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_PARAMS })
+    }
 
     this.logger.debug(`Deleting ${ids.length} document(s) from HyperDB`)
 
@@ -182,15 +188,17 @@ class HyperDBAdapter extends BaseDBAdapter {
       for (let i = 0; i < this.NUM_CENTROIDS; i++) {
         const centroidId = `centroid-${i}`
         const bucket = await this._getBucket(tx, centroidId)
-        const updatedBucket = bucket.filter(docId => !ids.includes(docId))
+        const updatedBucket = bucket.filter((docId) => !ids.includes(docId))
         if (updatedBucket.length !== bucket.length) {
-          ops.push(tx.insert(this.invertedIndexTable, {
-            centroidId,
-            documentIds: updatedBucket,
-            capacity: this.BUCKET_SIZE,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }))
+          ops.push(
+            tx.insert(this.invertedIndexTable, {
+              centroidId,
+              documentIds: updatedBucket,
+              capacity: this.BUCKET_SIZE,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            })
+          )
         }
       }
       await Promise.all(ops)
@@ -201,7 +209,11 @@ class HyperDBAdapter extends BaseDBAdapter {
       return true
     } catch (error) {
       this.logger.error('Delete embeddings failed:', error)
-      throw new QvacErrorRAG({ code: ERR_CODES.DB_OPERATION_FAILED, adds: error.message, cause: error })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: error.message,
+        cause: error
+      })
     } finally {
       await tx.close()
     }
@@ -218,7 +230,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {AbortSignal} [params.signal] - Signal for cancellation.
    * @returns {Promise<Array<SearchResult>>} The top matching results.
    */
-  async search (query, queryVector, params = {}) {
+  async search(query, queryVector, params = {}) {
     const { topK = 5, n = 3, signal } = params
     if (!this.isInitialized) throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED })
 
@@ -242,8 +254,8 @@ class HyperDBAdapter extends BaseDBAdapter {
       throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
     }
 
-    buckets.forEach(bucket => {
-      bucket.forEach(id => candidateIds.add(id))
+    buckets.forEach((bucket) => {
+      bucket.forEach((id) => candidateIds.add(id))
     })
 
     if (!candidateIds.size) {
@@ -275,7 +287,7 @@ class HyperDBAdapter extends BaseDBAdapter {
 
       const vectorScore = cosineSimilarity(queryVector, vector)
       const textScore = calculateTextScore(query, content)
-      const finalScore = (vectorScore * 0.7) + (textScore * 0.3) // todo: would weight be configurable?
+      const finalScore = vectorScore * 0.7 + textScore * 0.3 // todo: would weight be configurable?
 
       results.push({ id, content, score: finalScore })
     }
@@ -289,7 +301,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {ReindexOpts} [opts] - Options for reindexing.
    * @returns {Promise<ReindexResult>}
    */
-  async reindex (opts = {}) {
+  async reindex(opts = {}) {
     const { onProgress, signal } = opts
 
     if (!this.isInitialized) {
@@ -309,8 +321,17 @@ class HyperDBAdapter extends BaseDBAdapter {
     const allVectors = await this._getAllEntries(snapshot, this.vectorsTable)
 
     if (allVectors.length < this.NUM_CENTROIDS) {
-      this.logger.warn(`Insufficient documents for reindex: ${allVectors.length} < ${this.NUM_CENTROIDS}`)
-      return { reindexed: false, details: { reason: 'insufficient documents', documentCount: allVectors.length, centroidCount: this.centroids.length } }
+      this.logger.warn(
+        `Insufficient documents for reindex: ${allVectors.length} < ${this.NUM_CENTROIDS}`
+      )
+      return {
+        reindexed: false,
+        details: {
+          reason: 'insufficient documents',
+          documentCount: allVectors.length,
+          centroidCount: this.centroids.length
+        }
+      }
     }
 
     this.logger.debug(`Collected ${allVectors.length} vectors`)
@@ -322,8 +343,8 @@ class HyperDBAdapter extends BaseDBAdapter {
 
     // Stage 2: Run k-means clustering
     onProgress?.('clustering', 0, 1)
-    const vectors = allVectors.map(v => v.vector)
-    const docIds = allVectors.map(v => v.docId)
+    const vectors = allVectors.map((v) => v.vector)
+    const docIds = allVectors.map((v) => v.docId)
     const newCentroids = this._kMeans(vectors, this.NUM_CENTROIDS, 10)
     onProgress?.('clustering', 1, 1)
 
@@ -402,12 +423,21 @@ class HyperDBAdapter extends BaseDBAdapter {
       // Update in-memory centroids
       this.centroids = newCentroids
 
-      this.logger.info(`Reindex complete: ${vectors.length} document(s), ${newCentroids.length} centroid(s)`)
+      this.logger.info(
+        `Reindex complete: ${vectors.length} document(s), ${newCentroids.length} centroid(s)`
+      )
 
-      return { reindexed: true, details: { documentCount: vectors.length, centroidCount: newCentroids.length } }
+      return {
+        reindexed: true,
+        details: { documentCount: vectors.length, centroidCount: newCentroids.length }
+      }
     } catch (error) {
       this.logger.error('Reindex failed:', error)
-      throw new QvacErrorRAG({ code: ERR_CODES.DB_OPERATION_FAILED, adds: error.message, cause: error })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: error.message,
+        cause: error
+      })
     } finally {
       await tx.close()
     }
@@ -416,7 +446,7 @@ class HyperDBAdapter extends BaseDBAdapter {
   /**
    * @private
    */
-  _kMeans (vectors, k, maxIterations = 10) {
+  _kMeans(vectors, k, maxIterations = 10) {
     if (vectors.length === 0) return []
     if (vectors.length <= k) return vectors.slice()
 
@@ -506,7 +536,8 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {Hypercore} otherHypercore - The other hypercore to replicate with.
    * @returns {Promise<Object>} An object containing the two streams and a destroy function.
    */
-  async replicateWith (otherHypercore) {
+  // lunte-disable-next-line require-await
+  async replicateWith(otherHypercore) {
     if (!this.isInitialized || !this.hypercore) {
       throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED })
     }
@@ -527,7 +558,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * Initializes the underlying database connection and ensures that it is ready for use.
    * @private
    */
-  async _open () {
+  async _open() {
     this.logger.info('Opening HyperDB connection...')
 
     // If a HyperDB instance was provided in constructor, use it
@@ -560,7 +591,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * Close the adapter and release resources.
    * @private
    */
-  async _close () {
+  async _close() {
     if (this.db) {
       this.logger.info('Closing HyperDB connection...')
       this.documentCache.clear()
@@ -578,7 +609,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {number} [n=3] - The number of centroids to return.
    * @returns {Array<{index: number, similarity: number}>} Top N centroids.
    */
-  _findTopNCentroids (vector, n = 3) {
+  _findTopNCentroids(vector, n = 3) {
     const topCentroids = []
 
     for (let i = 0; i < this.centroids.length; i++) {
@@ -607,7 +638,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {DbOpts} [opts] - Additional options.
    * @private
    */
-  async _initialize (docs, opts = {}) {
+  async _initialize(docs, opts = {}) {
     this.logger.info('Initializing HyperDB...')
 
     const tx = await this.db.exclusiveTransaction()
@@ -616,13 +647,13 @@ class HyperDBAdapter extends BaseDBAdapter {
         this.logger.debug(`Creating ${this.NUM_CENTROIDS} centroids from initial documents`)
         const shuffled = docs.slice()
         for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
         }
         const docsForCreatingCentroids = shuffled.slice(0, this.NUM_CENTROIDS)
         const embeddingsForCentroids = docsForCreatingCentroids
-          .filter(doc => doc.embedding && Array.isArray(doc.embedding))
-          .map(doc => doc.embedding)
+          .filter((doc) => doc.embedding && Array.isArray(doc.embedding))
+          .map((doc) => doc.embedding)
 
         this.centroids = embeddingsForCentroids
 
@@ -648,19 +679,25 @@ class HyperDBAdapter extends BaseDBAdapter {
           }
         }
       }
-      this.centroids = this.centroids.filter(v => Array.isArray(v) && v.length > 0)
+      this.centroids = this.centroids.filter((v) => Array.isArray(v) && v.length > 0)
       this.isInitialized = this.centroids.length > 0
-      if (!this.isInitialized) throw new QvacErrorRAG({ code: ERR_CODES.CENTROIDS_INITIALIZATION_FAILURE })
+      if (!this.isInitialized) {
+        throw new QvacErrorRAG({ code: ERR_CODES.CENTROIDS_INITIALIZATION_FAILURE })
+      }
       this.logger.info(`HyperDB initialized with ${this.centroids.length} centroid(s)`)
     } catch (error) {
       this.logger.error('HyperDB initialization failed:', error)
-      throw new QvacErrorRAG({ code: ERR_CODES.DB_OPERATION_FAILED, adds: error.message, cause: error })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: error.message,
+        cause: error
+      })
     } finally {
       await tx.close()
     }
   }
 
-  async _checkIsInitialized () {
+  async _checkIsInitialized() {
     if (this.isInitialized) return
 
     this.centroids = [] // reset centroids
@@ -674,10 +711,14 @@ class HyperDBAdapter extends BaseDBAdapter {
           this.centroids[i] = Array.isArray(entry.vector) ? entry.vector : []
         }
       }
-      this.centroids = this.centroids.filter(v => Array.isArray(v) && v.length > 0)
+      this.centroids = this.centroids.filter((v) => Array.isArray(v) && v.length > 0)
       this.isInitialized = this.centroids.length > 0
     } catch (error) {
-      throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED, adds: error.message, cause: error })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED,
+        adds: error.message,
+        cause: error
+      })
     } finally {
       await tx.close()
     }
@@ -689,12 +730,14 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {string} embeddingModelId - The embedding model ID
    * @private
    */
-  async _ensureConfig (embeddingModelId, dimension) {
+  async _ensureConfig(embeddingModelId, dimension) {
     const storedConfig = await this.getConfig()
 
     if (!storedConfig) {
       await this._persistConfig(embeddingModelId, dimension)
-      this.logger?.info(`Initialized config: embeddingModelId=${embeddingModelId}, dimension=${dimension}`)
+      this.logger?.info(
+        `Initialized config: embeddingModelId=${embeddingModelId}, dimension=${dimension}`
+      )
     } else if (storedConfig.embeddingModelId !== embeddingModelId) {
       throw new QvacErrorRAG({
         code: ERR_CODES.EMBEDDING_MODEL_MISMATCH,
@@ -714,7 +757,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {number} dimension - The embedding dimension from the documents
    * @private
    */
-  async _persistConfig (embeddingModelId, dimension) {
+  async _persistConfig(embeddingModelId, dimension) {
     const now = new Date()
     const tx = await this.db.exclusiveTransaction()
     try {
@@ -729,7 +772,11 @@ class HyperDBAdapter extends BaseDBAdapter {
       })
       await tx.flush()
     } catch (error) {
-      throw new QvacErrorRAG({ code: ERR_CODES.DB_OPERATION_FAILED, adds: `Failed to persist config: ${error.message}`, cause: error })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: `Failed to persist config: ${error.message}`,
+        cause: error
+      })
     } finally {
       await tx.close()
     }
@@ -739,7 +786,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * Get stored adapter configuration.
    * @returns {Promise<HyperDBAdapterConfig|null>} The stored config or null if not configured
    */
-  async getConfig () {
+  async getConfig() {
     if (!this.db) {
       throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED })
     }
@@ -760,7 +807,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @returns {Promise<Array<SaveEmbeddingsResult>>} - Array of processing results.
    * @private
    */
-  async _processBatch (docs, opts = {}) {
+  async _processBatch(docs, opts = {}) {
     if (!this.isInitialized) throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED })
 
     const { signal, onPrepareProgress, progressInterval = this.PROGRESS_INTERVAL } = opts
@@ -804,28 +851,30 @@ class HyperDBAdapter extends BaseDBAdapter {
       try {
         const operations = []
 
-        preparedDocs.forEach(doc => {
+        preparedDocs.forEach((doc) => {
           operations.push({
             type: 'document',
             index: doc.index,
-            operation: () => tx.insert(this.documentsTable, {
-              id: doc.id,
-              content: doc.content,
-              contentHash: doc.contentHash,
-              metadata: doc.metadata,
-              createdAt: now,
-              updatedAt: now
-            })
+            operation: () =>
+              tx.insert(this.documentsTable, {
+                id: doc.id,
+                content: doc.content,
+                contentHash: doc.contentHash,
+                metadata: doc.metadata,
+                createdAt: now,
+                updatedAt: now
+              })
           })
 
           operations.push({
             type: 'vector',
             index: doc.index,
-            operation: () => tx.insert(this.vectorsTable, {
-              docId: doc.id,
-              vector: doc.vector,
-              createdAt: now
-            })
+            operation: () =>
+              tx.insert(this.vectorsTable, {
+                docId: doc.id,
+                vector: doc.vector,
+                createdAt: now
+              })
           })
 
           this._updateCaches({ id: doc.id, content: doc.content }, doc.vector)
@@ -844,9 +893,10 @@ class HyperDBAdapter extends BaseDBAdapter {
 
         // Execute all operations within the transaction
         const operationPromises = operations.map((op) => {
-          return op.operation()
+          return op
+            .operation()
             .then(() => ({ type: op.type, index: op.index, status: 'fulfilled' }))
-            .catch(error => ({
+            .catch((error) => ({
               type: op.type,
               index: op.index,
               status: 'rejected',
@@ -878,7 +928,7 @@ class HyperDBAdapter extends BaseDBAdapter {
         await tx.flush()
         results.push(...Array.from(docResults.values()))
       } catch (error) {
-        preparedDocs.forEach(doc => {
+        preparedDocs.forEach((doc) => {
           results.push({
             id: doc.id,
             status: 'rejected',
@@ -898,7 +948,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {Array<number>} vector - The vector to update the caches with.
    * @private
    */
-  _updateCaches (doc, vector) {
+  _updateCaches(doc, vector) {
     this.documentCache.set(doc.id, doc.content)
     this.vectorCache.set(doc.id, vector)
   }
@@ -910,10 +960,11 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @param {Date} now - Current timestamp.
    * @private
    */
-  async _updateBuckets (tx, bucketUpdates, now) {
+  async _updateBuckets(tx, bucketUpdates, now) {
     const bucketPromises = Array.from(bucketUpdates.entries()).map(([centroidId, update]) => {
-      return tx.get(this.invertedIndexTable, { centroidId })
-        .then(existingBucket => {
+      return tx
+        .get(this.invertedIndexTable, { centroidId })
+        .then((existingBucket) => {
           const newDocIds = Array.from(update.docIds)
 
           if (!existingBucket) {
@@ -929,7 +980,7 @@ class HyperDBAdapter extends BaseDBAdapter {
           const updatedBucket = [...existingBucket.documentIds]
           let hasChanges = false
 
-          newDocIds.forEach(docId => {
+          newDocIds.forEach((docId) => {
             if (!updatedBucket.includes(docId)) {
               updatedBucket.push(docId)
               hasChanges = true
@@ -949,8 +1000,12 @@ class HyperDBAdapter extends BaseDBAdapter {
             })
           }
         })
-        .catch(error => {
-          throw new QvacErrorRAG({ code: ERR_CODES.DB_OPERATION_FAILED, adds: `Failed to update bucket ${centroidId}: ${error.message}`, cause: error })
+        .catch((error) => {
+          throw new QvacErrorRAG({
+            code: ERR_CODES.DB_OPERATION_FAILED,
+            adds: `Failed to update bucket ${centroidId}: ${error.message}`,
+            cause: error
+          })
         })
     })
     await Promise.all(bucketPromises)
@@ -963,7 +1018,7 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @returns {Promise<Array<string>>} The document IDs in the bucket.
    * @private
    */
-  async _getBucket (snapshot, centroidId) {
+  async _getBucket(snapshot, centroidId) {
     let bucket = []
     const bucketEntry = await snapshot.get(this.invertedIndexTable, { centroidId })
     if (bucketEntry && Array.isArray(bucketEntry.documentIds)) {
@@ -978,7 +1033,8 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @returns {Promise<Array>} The entries.
    * @private
    */
-  async _getAllEntries (snapshot, table) {
+  // lunte-disable-next-line require-await
+  async _getAllEntries(snapshot, table) {
     return snapshot.find(table).toArray()
   }
 
@@ -989,21 +1045,20 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @returns {Promise<Map<string, Array<number>>>} Map of docId to vector.
    * @private
    */
-  async _getVectors (snapshot, docIds) {
+  async _getVectors(snapshot, docIds) {
     const vectorMap = new Map()
     const vectorPromises = docIds.map((docId) => {
       let vector = this.vectorCache.get(docId)
       if (vector) {
         return Promise.resolve({ docId, vector })
       }
-      return snapshot.get(this.vectorsTable, { docId })
-        .then(vectorEntry => {
-          if (vectorEntry && Array.isArray(vectorEntry.vector)) {
-            vector = vectorEntry.vector
-            this.vectorCache.set(docId, vector)
-          }
-          return { docId, vector }
-        })
+      return snapshot.get(this.vectorsTable, { docId }).then((vectorEntry) => {
+        if (vectorEntry && Array.isArray(vectorEntry.vector)) {
+          vector = vectorEntry.vector
+          this.vectorCache.set(docId, vector)
+        }
+        return { docId, vector }
+      })
     })
     const results = await Promise.all(vectorPromises)
     results.forEach(({ docId, vector }) => {
@@ -1022,21 +1077,20 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @returns {Promise<Map<string, string>>} Map of id to content.
    * @private
    */
-  async _getDocumentContents (snapshot, ids) {
+  async _getDocumentContents(snapshot, ids) {
     const contentMap = new Map()
     const contentPromises = ids.map((id) => {
       let content = this.documentCache.get(id)
       if (content) {
         return Promise.resolve({ id, content })
       }
-      return snapshot.get(this.documentsTable, { id })
-        .then(docEntry => {
-          if (docEntry) {
-            content = docEntry.content
-            this.documentCache.set(id, content)
-          }
-          return { id, content }
-        })
+      return snapshot.get(this.documentsTable, { id }).then((docEntry) => {
+        if (docEntry) {
+          content = docEntry.content
+          this.documentCache.set(id, content)
+        }
+        return { id, content }
+      })
     })
 
     const results = await Promise.all(contentPromises)
@@ -1049,30 +1103,40 @@ class HyperDBAdapter extends BaseDBAdapter {
   }
 
   /**
-  * Progressive centroid expansion for smart fallback when no candidates are found.
-  * Gradually expands the search scope by including more centroids until sufficient candidates are found.
-  * @param {HyperDB} snapshot - The database snapshot to use.
-  * @param {Array<number>} queryVector - The query vector.
-  * @param {number} initialN - The initial number of centroids to try.
-  * @param {number} [minCandidates=10] - Minimum number of candidates to find before stopping.
-  * @param {number} [maxExpansions=5] - Maximum number of expansion steps.
-  * @returns {Promise<Set<string>>} Set of candidate document IDs.
-  * @private
-  */
-  async _progressiveCentroidExpansion (snapshot, queryVector, initialN, minCandidates = 10, maxExpansions = 5) {
+   * Progressive centroid expansion for smart fallback when no candidates are found.
+   * Gradually expands the search scope by including more centroids until sufficient candidates are found.
+   * @param {HyperDB} snapshot - The database snapshot to use.
+   * @param {Array<number>} queryVector - The query vector.
+   * @param {number} initialN - The initial number of centroids to try.
+   * @param {number} [minCandidates=10] - Minimum number of candidates to find before stopping.
+   * @param {number} [maxExpansions=5] - Maximum number of expansion steps.
+   * @returns {Promise<Set<string>>} Set of candidate document IDs.
+   * @private
+   */
+  async _progressiveCentroidExpansion(
+    snapshot,
+    queryVector,
+    initialN,
+    minCandidates = 10,
+    maxExpansions = 5
+  ) {
     const candidateIds = new Set()
     let centroidCount = initialN
     let expansionStep = 0
 
-    while (candidateIds.size < minCandidates && expansionStep < maxExpansions && centroidCount <= this.NUM_CENTROIDS) {
+    while (
+      candidateIds.size < minCandidates &&
+      expansionStep < maxExpansions &&
+      centroidCount <= this.NUM_CENTROIDS
+    ) {
       const topCentroids = this._findTopNCentroids(queryVector, centroidCount)
       const bucketPromises = topCentroids.map(({ index }) => {
         const centroidId = `centroid-${index}`
         return this._getBucket(snapshot, centroidId)
       })
       const buckets = await Promise.all(bucketPromises)
-      buckets.forEach(bucket => {
-        bucket.forEach(docId => {
+      buckets.forEach((bucket) => {
+        bucket.forEach((docId) => {
           candidateIds.add(docId)
         })
       })
@@ -1087,7 +1151,7 @@ class HyperDBAdapter extends BaseDBAdapter {
       const allDocs = await this._getAllEntries(snapshot, this.documentsTable)
       const sampleSize = Math.min(50, allDocs.length)
       const sample = reservoirSample(allDocs, sampleSize)
-      sample.forEach(doc => {
+      sample.forEach((doc) => {
         candidateIds.add(doc.id)
       })
     }
@@ -1101,13 +1165,13 @@ class HyperDBAdapter extends BaseDBAdapter {
    * @returns {Promise<{unique: Array<EmbeddedDoc>, duplicates: Array<{id: string, error: string}>}>} Separated unique and duplicate documents.
    * @private
    */
-  async _filterDuplicates (docs) {
+  async _filterDuplicates(docs) {
     const dbSnapshot = this.db.snapshot()
     const unique = []
     const duplicates = []
     const seenInBatch = new Map()
 
-    const docsWithHashes = docs.map(doc => ({
+    const docsWithHashes = docs.map((doc) => ({
       doc,
       hash: qvacCrypto.createHash('sha256').update(doc.content).digest('hex')
     }))
@@ -1127,8 +1191,12 @@ class HyperDBAdapter extends BaseDBAdapter {
     }
 
     const dbLookupPromises = batchUnique.map(({ doc, hash }) =>
-      dbSnapshot.findOne('@rag/doc-by-content-hash', { gte: { contentHash: hash }, lte: { contentHash: hash } })
-        .then(existingDoc => ({ doc, hash, existingDoc }))
+      dbSnapshot
+        .findOne('@rag/doc-by-content-hash', {
+          gte: { contentHash: hash },
+          lte: { contentHash: hash }
+        })
+        .then((existingDoc) => ({ doc, hash, existingDoc }))
     )
 
     const dbResults = await Promise.all(dbLookupPromises)

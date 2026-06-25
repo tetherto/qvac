@@ -4,7 +4,7 @@ const test = require('brittle')
 const fetchShim = require('../../src/shims/fetch')
 const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
 
-test('fetch shim: throws QvacErrorRAG when no fetch implementation is available', async t => {
+test('fetch shim: throws QvacErrorRAG when no fetch implementation is available', async (t) => {
   const original = globalThis.fetch
   // Force the shim's resolver to find no implementation.
   delete globalThis.fetch
@@ -21,10 +21,11 @@ test('fetch shim: throws QvacErrorRAG when no fetch implementation is available'
   }
 })
 
-test('fetch shim: delegates calls to globalThis.fetch when available', async t => {
+test('fetch shim: delegates calls to globalThis.fetch when available', async (t) => {
   const original = globalThis.fetch
   let receivedArgs
-  globalThis.fetch = async function stub (...args) {
+  // lunte-disable-next-line require-await
+  globalThis.fetch = async function (...args) {
     receivedArgs = args
     return { ok: true, url: args[0] }
   }
@@ -44,7 +45,7 @@ test('fetch shim: delegates calls to globalThis.fetch when available', async t =
   }
 })
 
-test('fetch shim: exposes a default export that aliases the same function', t => {
+test('fetch shim: exposes a default export that aliases the same function', (t) => {
   t.is(typeof fetchShim, 'function', 'Module export should be a function')
   t.is(fetchShim.default, fetchShim, 'default property should reference the same function')
 })
