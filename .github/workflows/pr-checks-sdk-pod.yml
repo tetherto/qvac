@@ -303,6 +303,7 @@ jobs:
               run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
 
               run "lint $src" npm run --if-present lint
+              run "format $src" npm run --if-present format
               run "build:types $src" npm run --if-present build:types
               run "build $src" npm run --if-present build
               run "test:unit $src" npm run --if-present test:unit
