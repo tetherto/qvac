@@ -101,10 +101,10 @@ async function pollUntilStable(browser, bundleId) {
       } catch (_) { /* path doesn't exist yet */ }
     }
 
-    if (!found && round % 6 === 5) {
-      console.log(`[perf-extract] poll ${round}: no file found yet`);
+    if (!found && round === 5) {
+      console.log(`[perf-extract] poll ${round}: no file found after ${round + 1} rounds`);
     }
-    if (stableRounds >= 6) break;
+    if (stableRounds >= 2) break;
     await new Promise(resolve => setTimeout(resolve, 5000));
   }
 
