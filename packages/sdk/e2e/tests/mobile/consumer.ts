@@ -407,6 +407,10 @@ export const executor = createExecutor({
       "lifecycle-rapid-toggle",
       "lifecycle-suspend-during-inference",
     ], "suspend() hangs the runner on mobile"),
+    // Same root cause: these download-resilience tests call suspend(), plus the
+    // HTTP variants need a local server (no node:http on RN). A mobile-native
+    // executor is tracked separately.
+    new SkipExecutor(/^download-resilience-/, "suspend() hangs the runner on mobile; HTTP variants need an on-device server"),
     ...(Platform.OS === "android" ? [
       skipTests([
         "parakeet-stream-eou",
