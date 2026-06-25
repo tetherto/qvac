@@ -22,7 +22,7 @@
  *   }
  *
  * If QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON is empty, a small default matrix
- * (chatterbox + chatterbox-mtl + supertonic, CPU-only) is run.
+ * (chatterbox + chatterbox-mtl + supertonic + supertonic-mtl, CPU-only) is run.
  */
 
 const path = require('path')
@@ -67,7 +67,8 @@ function parseMatrixConfig () {
     return [
       { engine: 'chatterbox', useGPU: false, backendHint: 'cpu' },
       { engine: 'chatterbox-mtl', useGPU: false, backendHint: 'cpu' },
-      { engine: 'supertonic', useGPU: false, backendHint: 'cpu' }
+      { engine: 'supertonic', useGPU: false, backendHint: 'cpu' },
+      { engine: 'supertonic-mtl', useGPU: false, backendHint: 'cpu' }
     ]
   }
 

@@ -87,11 +87,6 @@ function formatMaybeInteger (value) {
   return String(Math.round(Number(value)))
 }
 
-function formatPercent (value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return 'n/a'
-  return (Number(value) * 100).toFixed(1) + '%'
-}
-
 // tts-cpp's GPU backend cascade: Vulkan on linux/win32/android, Metal on
 // darwin/ios. CUDA + OpenCL only appear when an explicit hint carries them
 // (manual drops / dedicated runners), so they pass through the hint branch.
@@ -251,7 +246,6 @@ function normalizeDesktopRecord (report, sourceFile) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
-  const quality = summary.quality || null
   const platformName = report.platformName || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
   const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || '')
@@ -282,10 +276,6 @@ function normalizeDesktopRecord (report, sourceFile) {
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : (report.model && report.model.sizeBytes ? Number(report.model.sizeBytes) / 1024 / 1024 : null),
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
-    qualityWer: quality ? toNumberOrNull(quality.wer) : null,
-    qualityCer: quality ? toNumberOrNull(quality.cer) : null,
-    qualityModel: quality ? String(quality.model || '') : '',
-    qualityTranscript: quality ? String(quality.transcript || '') : '',
     noisy: deriveNoisy(rtf, summary),
     runId: (report.correlation && report.correlation.githubRunId) || '',
     sha: (report.correlation && report.correlation.githubSha) || '',
@@ -324,10 +314,6 @@ function normalizeMobileRecord (record, sourceFile) {
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : null,
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
-    qualityWer: null,
-    qualityCer: null,
-    qualityModel: '',
-    qualityTranscript: '',
     noisy: deriveNoisy(rtf, summary),
     runId: (record.correlation && record.correlation.githubRunId) || '',
     sha: (record.correlation && record.correlation.githubSha) || '',
@@ -361,10 +347,6 @@ function normalizeManualRecord (record, sourceFile) {
     modelSizeMb: toNumberOrNull(record.modelSizeMb),
     wallMs: toNumberOrNull(record.wallMs),
     tokensPerSecond: toNumberOrNull(record.tokensPerSecond),
-    qualityWer: toNumberOrNull(record.qualityWer),
-    qualityCer: toNumberOrNull(record.qualityCer),
-    qualityModel: record.qualityModel || '',
-    qualityTranscript: record.qualityTranscript || '',
     noisy: typeof record.noisy === 'boolean' ? record.noisy : null,
     runId: '',
     sha: '',
@@ -552,10 +534,9 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('RTF = generation_time / audio_duration. Lower is faster. RTF < 1 is faster than real-time.')
   lines.push('')
   lines.push('`Cold RTF` is the first warmup run after load (captures cold-path latency). `Noisy` flags rows where stddev / mean > 15%.')
-  lines.push('Desktop benchmark rows also include Whisper tiny round-trip quality when available (`input text -> TTS audio -> Whisper transcript`).')
   lines.push('')
-  lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Model (MB) | Tokens/s | WER | CER | Quality Model | Noisy | Run |')
-  lines.push('|--------|--------|----------|--------|---------|-----|---------|-----------|-------|----------|-----|-----|----------|----------------|-----------|---------------|------------|----------|-----|-----|---------------|-------|-----|')
+  lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Model (MB) | Tokens/s | Noisy | Run |')
+  lines.push('|--------|--------|----------|--------|---------|-----|---------|-----------|-------|----------|-----|-----|----------|----------------|-----------|---------------|------------|----------|-------|-----|')
 
   for (const r of records) {
     lines.push('| ' + [
@@ -577,9 +558,6 @@ function renderMarkdown (records, streamingRecords) {
       formatMaybeInteger(r.peakRssMb),
       formatModelSize(r.modelSizeMb),
       formatNumber(r.tokensPerSecond, 1),
-      formatPercent(r.qualityWer),
-      formatPercent(r.qualityCer),
-      r.qualityModel || '-',
       r.noisy === true ? '⚠' : '-',
       r.runId ? `#${r.runId}` : ''
     ].join(' | ') + ' |')

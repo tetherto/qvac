@@ -232,21 +232,30 @@ jobs:
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       # Benchmark leg (run_rtf_benchmarks=true, set by
-      # benchmark-performance-tts-ggml.yml). The GGML TTS perf matrix stays on
-      # qvac GPU runners because those are the stable Vulkan/registry baseline
-      # machines for this addon; each runner measures CPU and Vulkan entries.
+      # benchmark-performance-tts-ggml.yml). CPU entries run across the desktop
+      # integration matrix, matching the Parakeet benchmark posture. GPU
+      # entries are included only on runners that advertise GPU support.
       - name: Run RTF benchmark matrix
-        if: ${{ inputs.run_rtf_benchmarks && contains(matrix.runner || '', '-gpu') }}
+        if: ${{ inputs.run_rtf_benchmarks }}
         shell: bash
         working-directory: ${{ github.workspace }}/packages/tts-ggml
-        run: node scripts/run-rtf-benchmark-matrix.js
+        run: |
+          set -euo pipefail
+          if [ -n "$QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE" ]; then
+            export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON="$QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE"
+          elif [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
+            export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"}]'
+          else
+            export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan"},{"engine":"chatterbox-mtl","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic-mtl","useGPU":true,"backendHint":"vulkan"}]'
+          fi
+          node scripts/run-rtf-benchmark-matrix.js
         env:
           QVAC_TTS_GGML_BENCHMARK_VARIANT: q4
           QVAC_TTS_GGML_BENCHMARK_QUALITY: "true"
           QVAC_TTS_GGML_QUALITY_WHISPER_MODEL: ggml-tiny.bin
+          QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE: ${{ inputs.benchmark_matrix_json }}
           QVAC_TTS_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
-          QVAC_TTS_GGML_BENCHMARK_RUNNER: self-hosted-${{ matrix.runner || matrix.os }}
-          QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || '[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan"},{"engine":"chatterbox-mtl","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan"}]' }}
+          QVAC_TTS_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -263,7 +272,7 @@ jobs:
       # engine/backend does not sink the whole leg. A run with zero artifacts
       # means every entry failed and should still fail loudly.
       - name: Verify RTF benchmark output exists
-        if: ${{ always() && inputs.run_rtf_benchmarks && contains(matrix.runner || '', '-gpu') }}
+        if: ${{ always() && inputs.run_rtf_benchmarks }}
         shell: bash
         working-directory: ${{ github.workspace }}/packages/tts-ggml
         run: |
@@ -281,20 +290,20 @@ jobs:
           echo "rtf-benchmark-*.json: $rtf_count"
           echo "streaming-benchmark-*.json: $stream_count"
           {
-            echo "### Benchmark output — ${{ matrix.runner }} (${{ matrix.platform }}-${{ matrix.arch }})"
+            echo "### Benchmark output — ${{ matrix.runner || matrix.os }} (${{ matrix.platform }}-${{ matrix.arch }})"
             echo "- rtf-benchmark JSON files: \`$rtf_count\`"
             echo "- streaming-benchmark JSON files: \`$stream_count\`"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$rtf_count" -eq 0 ]; then
-            echo "::error title=No RTF benchmark output::scripts/run-rtf-benchmark-matrix.js produced zero rtf-benchmark-*.json files on ${{ matrix.runner }}. Every benchmark entry failed — check the matrix runner log above for model-fetch failures, prebuild path issues, or per-entry crashes."
+            echo "::error title=No RTF benchmark output::scripts/run-rtf-benchmark-matrix.js produced zero rtf-benchmark-*.json files on ${{ matrix.runner || matrix.os }}. Every benchmark entry failed — check the matrix runner log above for model-fetch failures, prebuild path issues, or per-entry crashes."
             exit 1
           fi
 
       - name: Upload RTF benchmark results
-        if: ${{ always() && inputs.run_rtf_benchmarks && contains(matrix.runner || '', '-gpu') }}
+        if: ${{ always() && inputs.run_rtf_benchmarks }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: rtf-results-tts-ggml-${{ matrix.runner }}-${{ matrix.arch }}-gpu
+          name: rtf-results-tts-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
           path: |
             packages/tts-ggml/benchmarks/results/rtf-benchmark-*.json
             packages/tts-ggml/benchmarks/results/streaming-benchmark-*.json

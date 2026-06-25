@@ -41,8 +41,6 @@
  *   QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS  number of warmup iterations (default: 1)
  *   QVAC_TTS_GGML_BENCHMARK_RUNS         number of measured iterations (default: 5 desktop, 3 mobile)
  *   QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND  assertion cap for mean RTF (optional)
- *   QVAC_TTS_GGML_BENCHMARK_QUALITY      1 | true to run desktop-only Whisper round-trip quality
- *   QVAC_TTS_GGML_QUALITY_WHISPER_MODEL  Whisper model file name (default: ggml-tiny.bin)
  */
 
 const test = require('brittle')
@@ -56,10 +54,8 @@ const {
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
-  ensureSupertonicMtlModel,
-  ensureWhisperModel
+  ensureSupertonicMtlModel
 } = require('../utils/downloadModel')
-const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 
 const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl']
 // GGUF quant is baked into the file (registry serves q4_0 weights + f16 s3gen),
@@ -203,8 +199,6 @@ function getSettings () {
     numWarmup: getEnvInteger('QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS', 1),
     numRuns: getEnvInteger('QVAC_TTS_GGML_BENCHMARK_RUNS', isMobile ? 3 : 5),
     numThreads,
-    runQuality: !isMobile && getEnvBoolean('QVAC_TTS_GGML_BENCHMARK_QUALITY', false),
-    qualityWhisperModel: getEnv('QVAC_TTS_GGML_QUALITY_WHISPER_MODEL') || 'ggml-tiny.bin',
     requestedUpperBound: getEnv('QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND') || '',
     correlation: {
       githubRunId: getEnv('GITHUB_RUN_ID') || '',
@@ -414,58 +408,6 @@ async function runSynthesis (engine, model, text) {
   return runner(model, { text }, {})
 }
 
-async function runQualityCheck (settings, sample) {
-  if (!settings.runQuality || !sample || !sample.wavBuffer) return null
-
-  const baseDir = getBaseDir()
-  const whisperDir = path.join(baseDir, 'models', 'whisper')
-  const whisperPath = path.join(whisperDir, settings.qualityWhisperModel)
-  const language = isMultilingualEngine(settings.engine) ? 'es' : 'en'
-
-  console.log('\n' + '='.repeat(70))
-  console.log('GGML TTS QUALITY CHECK')
-  console.log('='.repeat(70))
-  console.log(`  Whisper model: ${settings.qualityWhisperModel}`)
-  console.log(`  Language:      ${language}`)
-  console.log(`  Text:          "${sample.text}"`)
-  console.log('='.repeat(70) + '\n')
-
-  const ensured = await ensureWhisperModel(whisperPath)
-  if (!ensured || !ensured.success) {
-    throw new Error(`Whisper model unavailable for quality check: ${whisperPath}`)
-  }
-
-  const whisper = await loadWhisper({
-    modelName: settings.qualityWhisperModel,
-    diskPath: whisperDir,
-    language
-  })
-
-  try {
-    const result = await runWhisper(whisper, sample.text, sample.wavBuffer)
-    const wer = typeof result.wer === 'number' ? result.wer : null
-    const cer = typeof result.cer === 'number' ? result.cer : null
-    const transcript = result.text || ''
-
-    console.log('QUALITY RESULTS')
-    console.log(`  Transcript: "${transcript}"`)
-    console.log(`  WER:        ${wer !== null ? (wer * 100).toFixed(1) + '%' : 'n/a'}`)
-    console.log(`  CER:        ${cer !== null ? (cer * 100).toFixed(1) + '%' : 'n/a'}`)
-    console.log('')
-
-    return {
-      model: settings.qualityWhisperModel,
-      language,
-      text: sample.text,
-      transcript,
-      wer,
-      cer
-    }
-  } finally {
-    try { await whisper.unload() } catch (_) {}
-  }
-}
-
 function getUpperBound (settings) {
   if (!settings.requestedUpperBound) return null
   const parsed = Number.parseFloat(settings.requestedUpperBound)
@@ -518,7 +460,6 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
 
   const runs = []
   const warmupRuns = []
-  let qualitySample = null
   let coldRtf = null
   let coldWallMs = null
   let peakRssBytes = rssAfterLoad
@@ -589,12 +530,6 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         rssBytes: currentRss
       }
       runs.push(run)
-      if (!qualitySample && result.data && result.data.wavBuffer) {
-        qualitySample = {
-          text,
-          wavBuffer: Buffer.from(result.data.wavBuffer)
-        }
-      }
 
       console.log(`  Run ${i + 1}/${settings.numRuns}: ` +
         `RTF=${rtf.toFixed(4)}  ` +
@@ -616,7 +551,6 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
     const stddevOverMean = rtfStats.mean > 0 ? rtfStats.stddev / rtfStats.mean : 0
     const noisy = stddevOverMean > 0.15
     const activeBackend = observedBackendId !== null ? backendIdToName(observedBackendId) : ''
-    const quality = await runQualityCheck(settings, qualitySample)
 
     console.log('\n' + '='.repeat(70))
     console.log('RTF BENCHMARK RESULTS')
@@ -687,11 +621,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         useGPU: settings.useGPU,
         variant: settings.variant,
         modelLoadMs: loadMs,
-        numThreads: settings.numThreads !== undefined ? settings.numThreads : null,
-        quality: {
-          enabled: settings.runQuality,
-          whisperModel: settings.qualityWhisperModel
-        }
+        numThreads: settings.numThreads !== undefined ? settings.numThreads : null
       },
       requested: {
         engine: settings.engine,
@@ -717,8 +647,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         backendId: observedBackendId,
         activeBackend,
         stddevOverMean,
-        noisy,
-        quality
+        noisy
       },
       runs,
       warmupRuns

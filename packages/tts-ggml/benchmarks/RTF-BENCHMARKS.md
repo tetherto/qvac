@@ -66,7 +66,8 @@ npm --prefix packages/tts-ggml run test:benchmark:rtf
 QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[
   {"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},
   {"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},
-  {"engine":"supertonic","useGPU":false,"backendHint":"cpu"}
+  {"engine":"supertonic","useGPU":false,"backendHint":"cpu"},
+  {"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"}
 ]' npm --prefix packages/tts-ggml run test:benchmark:rtf:matrix
 
 # Streaming latency (TTFA + inter-chunk gap)
@@ -117,7 +118,7 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON` | (3-engine CPU default) | JSON array of `(engine, useGPU, backendHint, ...)` entries. |
+| `QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON` | (4-engine CPU default) | JSON array of `(engine, useGPU, backendHint, ...)` entries. |
 | `QVAC_TTS_GGML_BENCHMARK_ENTRY_TIMEOUT_MS` | `600000` | Per-entry watchdog — a hung engine is SIGTERM'd so the matrix continues. |
 
 ### Mobile (Device Farm)
@@ -139,30 +140,34 @@ every report links back to the CI run that produced it.
 workflow_dispatch
   └── benchmark-performance-tts-ggml.yml  (orchestrator)
          ├── prebuilds-tts-ggml.yml          (build native addon)
-         ├── desktop-benchmarks               (qvac-*-gpu runners: CPU + Vulkan)
-         ├── mobile-benchmarks                (run_mobile=true → Device Farm CPU)
+         ├── desktop-benchmarks              (desktop matrix: CPU everywhere, Vulkan on GPU runners)
+         ├── mobile-benchmarks               (run_mobile=true → Device Farm CPU)
          └── summarize job
                ├── downloads rtf-results-tts-ggml-* (desktop) + perf-report-tts-ggml-* (mobile)
                ├── runs aggregate-tts-ggml-rtf.js --manual-dir benchmarks/manual-results
                └── writes combined markdown + JSON to $GITHUB_STEP_SUMMARY + artifact
 ```
 
-The primary orchestrator runs on `workflow_dispatch`. Desktop and mobile are on
-by default via the `run_desktop` / `run_mobile` dispatch inputs, matching the
-Parakeet benchmark workflow shape. On-PR workflows do NOT run the benchmarks.
+The orchestrator runs on `workflow_dispatch`. Desktop and mobile are both on by
+default and can be disabled with the `run_desktop=false` / `run_mobile=false`
+dispatch inputs. On-PR workflows do NOT run the benchmarks.
 
 ## CI runner coverage
 
-The desktop matrix runs on the same `qvac-*` self-hosted runners as the
-integration suite, because that is where the registry models, the Vulkan ICDs,
-and the prebuilds plumbing already live.
+The desktop matrix reuses the integration-test runner matrix. CPU benchmark
+entries run across the desktop matrix; Vulkan entries run only on GPU-capable
+`qvac-*-gpu` runners where the Vulkan ICD and baseline hardware are stable.
 
 | Platform / Arch | Backend | CI source |
 |---|---|---|
-| linux / x64 | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu` (self-hosted) |
-| win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` (self-hosted) |
-| Android | cpu | **run_mobile** — AWS Device Farm (this matrix runs CPU; GPU is opt-in via `useGPU`) |
-| iOS | cpu | **run_mobile** — AWS Device Farm |
+| linux / x64 | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu` |
+| linux / arm64 | cpu | `ubuntu-24.04-arm` |
+| darwin / arm64 | cpu | `macos-14-xlarge` |
+| darwin / x64 | cpu | `macos-15-large` |
+| win32 / x64 | cpu | `qvac-win25-x64` |
+| win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` |
+| Android | cpu | `run_mobile=true` — AWS Device Farm (this matrix runs CPU; GPU is opt-in via `useGPU`) |
+| iOS | cpu | `run_mobile=true` — AWS Device Farm |
 | darwin / arm64 | metal | **Manual** — hosted macOS Metal crashes ggml's encoder; drop JSON under `manual-results/` |
 | linux / x64 | cuda | **Manual** — not in the default tts-cpp backend cascade; drop JSON under `manual-results/` |
 | android | opencl | **Manual** — Adreno-only; drop JSON under `manual-results/` |
@@ -192,9 +197,10 @@ total wall time.
 
 ## Adding a new platform
 
-1. Add the matrix row to `.github/workflows/integration-test-tts-ggml.yml`'s
-   benchmark-only leg, or pass `benchmark_matrix_json` when dispatching
-   `.github/workflows/benchmark-performance-tts-ggml.yml`.
+1. Add the matrix row to the `desktop-benchmarks` path in
+   `.github/workflows/integration-test-tts-ggml.yml`, or dispatch
+   `.github/workflows/benchmark-performance-tts-ggml.yml` with
+   `benchmark_matrix_json` containing the `(engine, useGPU, backendHint)` combos.
 2. Add the platform's GPU backend, if any, to
    `scripts/perf-report/aggregate-tts-ggml-rtf.js`'s `SUPPORTED_GPU_BACKENDS`.
 3. For unavailable backends (CUDA, OpenCL, hosted-macOS Metal), drop fixtures
@@ -205,7 +211,8 @@ total wall time.
 The RTF benchmark supports `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND`. We
 deliberately **don't** set a bound in CI yet — without accumulated baselines,
 any bound would either trip on noise or fail to catch real regressions.
-Recommended follow-up once the weekly cron has a few runs banked:
+Recommended follow-up once the scheduled or manually dispatched benchmark has a
+few runs banked:
 
 1. Read the P95 of the last 4 weekly runs per `(platform, engine, gpu)` from the
    summarize JSON artifact.

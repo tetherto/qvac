@@ -116,8 +116,7 @@ async function runWhisper (model, text, wavBuffer) {
   }
   console.log(`>>> [WHISPER] Full text: ${fullText}`)
   const wer = wordErrorRate(text, fullText)
-  const cer = characterErrorRate(text, fullText)
-  return { wer, cer, text: fullText }
+  return { wer }
 }
 
 async function _processResponse (response) {
@@ -135,42 +134,25 @@ async function _processResponse (response) {
 }
 
 function wordErrorRate (expected, actual) {
-  const r = normalizeWords(expected)
-  const h = normalizeWords(actual)
-  if (r.length === 0) return h.length === 0 ? 0 : 1
-  return editDistance(r, h) / r.length
-}
-
-function characterErrorRate (expected, actual) {
-  const r = normalizeText(expected).replace(/\s+/g, '').split('')
-  const h = normalizeText(actual).replace(/\s+/g, '').split('')
-  if (r.length === 0) return h.length === 0 ? 0 : 1
-  return editDistance(r, h) / r.length
-}
-
-function normalizeText (text) {
-  return String(text || '')
-    .trim()
-    .toLowerCase()
+  // Normalize text for comparison
+  const normalize = (text) => {
+    return text
+      .trim()
+      .toLowerCase()
     // Remove punctuation (periods, commas, exclamation, question marks, etc.)
-    .replace(/[.,!?;:"""''„«»()[\]{}]/g, '')
+      .replace(/[.,!?;:"""''„«»()[\]{}]/g, '')
     // Normalize apostrophes (handle French contractions like l'aube -> l aube)
-    .replace(/[''ʼ]/g, ' ')
+      .replace(/[''ʼ]/g, ' ')
     // Normalize hyphens (au-dessus -> au dessus)
-    .replace(/[-–—]/g, ' ')
+      .replace(/[-–—]/g, ' ')
     // Collapse multiple spaces into one
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(/\s+/)
+  }
 
-function normalizeWords (text) {
-  const normalized = normalizeText(text)
-  return normalized ? normalized.split(/\s+/) : []
-}
-
-function editDistance (reference, hypothesis) {
-  const r = reference
-  const h = hypothesis
+  const r = normalize(expected)
+  const h = normalize(actual)
   const d = Array(r.length + 1)
     .fill(null)
     .map(() => Array(h.length + 1).fill(0))
@@ -189,7 +171,8 @@ function editDistance (reference, hypothesis) {
     }
   }
 
-  return d[r.length][h.length]
+  const wer = Math.round((d[r.length][h.length] / r.length) * 10) / 10
+  return wer
 }
 
 module.exports = { loadWhisper, runWhisper }

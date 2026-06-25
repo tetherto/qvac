@@ -185,7 +185,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Backend | Coverage | How |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---------|----------|-----|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| cpu | linux x64, win32 x64 | qvac-*-gpu self-hosted runners |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cpu | linux x64/arm64, macOS arm64/x64, win32 x64 | desktop integration matrix |" >> "$GITHUB_STEP_SUMMARY"
           echo "| vulkan | linux x64, win32 x64 | qvac-*-gpu self-hosted runners |" >> "$GITHUB_STEP_SUMMARY"
           echo "| mobile cpu | Android / iOS flagships | AWS Device Farm |" >> "$GITHUB_STEP_SUMMARY"
           echo "| metal | not on CI (hosted macOS Metal crash) | drop JSON into packages/tts-ggml/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"
