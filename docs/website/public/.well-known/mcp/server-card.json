@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.tether.qvac/docs",
+  "title": "QVAC Docs",
+  "description": "Official QVAC developer resources for AI assistants and agents.",
+  "version": "1.12.3",
+  "websiteUrl": "https://docs.qvac.tether.io",
+  "serverInfo": {
+    "name": "inkeep-mcp-tetherio-server",
+    "version": "1.12.3"
+  },
+  "endpoint": "https://mcp.inkeep.com/tetherio/mcp",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.inkeep.com/tetherio/mcp"
+    }
+  ],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "tools": [
+    {
+      "name": "search-qvac-docs",
+      "description": "Use this tool to do a semantic search for reference content related to QVAC. The results provided will be extracts from documentation sites and other public sources like GitHub. The content may not fully answer your question -- be circumspect when reviewing and interpreting these extracts before using them in your response."
+    },
+    {
+      "name": "ask-question-about-qvac",
+      "description": "Use this tool to ask a question about QVAC to an AI Support Agent that is knowledgeable about QVAC. Use this tool to ask specific troubleshooting, feature capability, or conceptual questions. Be specific and provide the minimum context needed to address your question in full"
+    }
+  ]
+}
