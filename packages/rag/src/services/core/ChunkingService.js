@@ -12,7 +12,7 @@ class ChunkingService {
    * @param {ChunkOpts} [config.chunkOpts] - Optional chunking options
    * @param {Logger} [config.logger] - Optional logger instance
    */
-  constructor ({ chunker, chunkOpts = {}, logger }) {
+  constructor({ chunker, chunkOpts = {}, logger }) {
     if (chunker && !(chunker instanceof BaseChunkAdapter)) {
       throw new QvacErrorRAG({ code: ERR_CODES.INVALID_CHUNKER })
     }
@@ -28,7 +28,7 @@ class ChunkingService {
    * @param {Object} [opts] - Chunking options to override defaults.
    * @returns {Promise<Array<Doc>>} Array of chunked documents with IDs and content.
    */
-  async chunkText (input, opts = {}) {
+  async chunkText(input, opts = {}) {
     const inputCount = typeof input === 'string' ? 1 : input.length
     this.logger.debug(`Chunking ${inputCount} text(s)`)
     const startTime = Date.now()
@@ -47,7 +47,7 @@ class ChunkingService {
    * @param {BaseChunkAdapter} chunker - The chunker instance.
    * @param {ChunkOpts} [chunkOpts] - The options for the chunking.
    */
-  setChunker (chunker, chunkOpts = {}) {
+  setChunker(chunker, chunkOpts = {}) {
     if (!(chunker instanceof BaseChunkAdapter)) {
       throw new QvacErrorRAG({ code: ERR_CODES.INVALID_CHUNKER })
     }

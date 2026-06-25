@@ -1,4 +1,6 @@
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -7,14 +9,40 @@
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 
-#include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"
-#include "model-interface/MtmdLlmContext.hpp"
 #include "test_common.hpp"
 
 using test_common::getStatValue;
 
 namespace fs = std::filesystem;
+
+namespace {
+constexpr uint32_t kQwen35MultimodalPrefillCells = 2899;
+constexpr llama_pos kQwen35MultimodalPrefillPosMax = 90;
+
+std::vector<uint8_t> readBinaryFile(const fs::path& path) {
+  std::ifstream stream(path, std::ios::binary);
+  return {
+      std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+}
+
+fs::path multimodalTestImagePath() {
+  const fs::path packageRelative = "media/fruitPlate.png";
+  if (fs::exists(packageRelative)) {
+    return packageRelative;
+  }
+
+#ifdef TEST_BINARY_DIR
+  const fs::path binaryRelative = fs::path(TEST_BINARY_DIR) / ".." / ".." /
+                                  ".." / "media" / "fruitPlate.png";
+  if (fs::exists(binaryRelative)) {
+    return binaryRelative.lexically_normal();
+  }
+#endif
+
+  return "packages/llm-llamacpp/media/fruitPlate.png";
+}
+} // namespace
 
 class MtmdLlmContextTest : public ::testing::Test {
 protected:
@@ -48,6 +76,10 @@ protected:
     return fs::exists(test_model_path) && fs::exists(test_projection_path);
   }
 
+  bool hasValidQwen35Model() {
+    return fs::exists(qwen35_model_path) && fs::exists(qwen35_projection_path);
+  }
+
   std::unique_ptr<LlamaModel> createModel() {
     if (!hasValidModel()) {
       return nullptr;
@@ -63,6 +95,28 @@ protected:
     }
     return model;
   }
+
+  std::unique_ptr<LlamaModel> createQwen35Model() {
+    if (!hasValidQwen35Model()) {
+      return nullptr;
+    }
+    std::string modelPath = qwen35_model_path;
+    std::string projectionPath = qwen35_projection_path;
+    auto configCopy = config_files;
+    configCopy["ctx_size"] = "4096";
+    auto model = std::make_unique<LlamaModel>(
+        std::move(modelPath), std::move(projectionPath), std::move(configCopy));
+    model->waitForLoadInitialization();
+    if (!model->isLoaded()) {
+      return nullptr;
+    }
+    return model;
+  }
+
+  std::string qwen35_model_path =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  std::string qwen35_projection_path =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
 };
 
 TEST_F(MtmdLlmContextTest, Constructor) {
@@ -108,18 +162,18 @@ TEST_F(MtmdLlmContextTest, ProcessWithCallback) {
     FAIL() << "Model failed to load";
   }
 
-  std::vector<std::string> generated_tokens;
+  std::vector<std::string> generatedTokens;
 
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "Hello"}])";
-  prompt.outputCallback = [&generated_tokens](const std::string& token) {
-    generated_tokens.push_back(token);
+  prompt.outputCallback = [&generatedTokens](const std::string& token) {
+    generatedTokens.push_back(token);
   };
 
   EXPECT_NO_THROW({
     std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
-    EXPECT_GT(generated_tokens.size(), 0);
+    EXPECT_GT(generatedTokens.size(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
@@ -155,10 +209,10 @@ TEST_F(MtmdLlmContextTest, LoadMediaBinary) {
     FAIL() << "Model failed to load";
   }
 
-  std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
+  std::vector<uint8_t> imageData = {0xFF, 0xD8, 0xFF, 0xE0};
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  prompt.media.push_back(std::move(image_data));
+  prompt.media.push_back(std::move(imageData));
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
@@ -219,10 +273,10 @@ TEST_F(MtmdLlmContextTest, ResetMedia) {
     FAIL() << "Model failed to load";
   }
 
-  std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
+  std::vector<uint8_t> imageData = {0xFF, 0xD8, 0xFF, 0xE0};
   LlamaModel::Prompt mediaPrompt;
   mediaPrompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  mediaPrompt.media.push_back(std::move(image_data));
+  mediaPrompt.media.push_back(std::move(imageData));
   EXPECT_THROW(
       { model->processPrompt(mediaPrompt); }, qvac_errors::StatusError);
 
@@ -255,6 +309,139 @@ TEST_F(MtmdLlmContextTest, MultimodalMessages) {
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
+}
+
+TEST_F(MtmdLlmContextTest, CacheTokensMatchesLlamaMemoryTokenCount) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Describe this image briefly."}])";
+  prompt.media.push_back(readBinaryFile(imagePath));
+
+  std::string output = model->processPrompt(prompt);
+  EXPECT_GE(output.length(), 0);
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+
+  const auto expectedCacheTokens =
+      static_cast<double>(llama_memory_seq_token_count(mem, 0));
+  const auto stats = model->runtimeStats();
+
+  EXPECT_EQ(getStatValue(stats, "CacheTokens"), expectedCacheTokens);
+}
+
+TEST_F(MtmdLlmContextTest, Qwen35MultimodalReportsMemoryTokenCountAndPosMax) {
+  if (!hasValidQwen35Model()) {
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  auto model = createQwen35Model();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Describe this image in one sentence."}])";
+  prompt.prefill = true;
+  prompt.media.push_back(readBinaryFile(imagePath));
+
+  std::string output = model->processPrompt(prompt);
+  EXPECT_TRUE(output.empty());
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+
+  const uint32_t sequenceCells = llama_memory_seq_token_count(mem, 0);
+  const uint32_t totalCells = llama_memory_seq_token_count(mem, -1);
+  const llama_pos posMax = llama_memory_seq_pos_max(mem, 0);
+  SCOPED_TRACE(
+      "sequenceCells=" + std::to_string(sequenceCells) +
+      ", totalCells=" + std::to_string(totalCells) +
+      ", posMax=" + std::to_string(posMax));
+
+  EXPECT_EQ(sequenceCells, kQwen35MultimodalPrefillCells);
+  EXPECT_EQ(totalCells, kQwen35MultimodalPrefillCells);
+  EXPECT_EQ(posMax, kQwen35MultimodalPrefillPosMax);
+
+  const auto stats = model->runtimeStats();
+  EXPECT_EQ(
+      getStatValue(stats, "CacheTokens"), static_cast<double>(sequenceCells));
+}
+
+TEST_F(
+    MtmdLlmContextTest,
+    Qwen35MultimodalGenerationWithCacheKeyKeepsMemoryAfterGeneration) {
+  if (!hasValidQwen35Model()) {
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  auto model = createQwen35Model();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-generation-cache.bin";
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Describe this image in one sentence."}])";
+  prompt.cacheKey = cachePath.string();
+  prompt.saveCacheToDisk = true;
+  prompt.media.push_back(readBinaryFile(imagePath));
+
+  std::string output = model->processPrompt(prompt);
+  EXPECT_GE(output.length(), 0);
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+
+  const uint32_t sequenceCells = llama_memory_seq_token_count(mem, 0);
+  const uint32_t totalCells = llama_memory_seq_token_count(mem, -1);
+  const llama_pos posMax = llama_memory_seq_pos_max(mem, 0);
+  SCOPED_TRACE(
+      "sequenceCells=" + std::to_string(sequenceCells) +
+      ", totalCells=" + std::to_string(totalCells) +
+      ", posMax=" + std::to_string(posMax));
+
+  EXPECT_GT(sequenceCells, kQwen35MultimodalPrefillCells);
+  EXPECT_EQ(totalCells, sequenceCells);
+  EXPECT_GT(posMax, kQwen35MultimodalPrefillPosMax);
+
+  const auto stats = model->runtimeStats();
+  EXPECT_EQ(
+      getStatValue(stats, "CacheTokens"), static_cast<double>(sequenceCells));
+
+  fs::remove(cachePath);
 }
 
 TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
@@ -298,10 +485,10 @@ TEST_F(MtmdLlmContextTest, InvalidMedia) {
     FAIL() << "Model failed to load";
   }
 
-  std::vector<uint8_t> invalid_data = {0x00, 0x01, 0x02};
+  std::vector<uint8_t> invalidData = {0x00, 0x01, 0x02};
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  prompt.media.push_back(std::move(invalid_data));
+  prompt.media.push_back(std::move(invalidData));
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 

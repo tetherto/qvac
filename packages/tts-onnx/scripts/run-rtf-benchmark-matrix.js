@@ -11,7 +11,7 @@
  *     "engine": "chatterbox-en" | "chatterbox-multi" | "supertonic",
  *     "variant": "fp32" | "fp16" | "q4" | "q4f16",           (optional, default q4)
  *     "useGPU": true | false,
- *     "backendHint": "cpu" | "coreml" | "cuda" | "directml", (optional)
+ *     "backendHint": "cpu" | "coreml" | "directml",          (optional)
  *     "deviceLabel": "...",                                  (optional)
  *     "runnerLabel": "...",                                  (optional)
  *     "label": "...",                                        (optional)

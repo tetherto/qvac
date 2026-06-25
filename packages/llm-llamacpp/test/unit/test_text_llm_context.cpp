@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -17,6 +18,31 @@
 using test_common::getStatValue;
 
 namespace fs = std::filesystem;
+
+namespace {
+
+fs::path uniqueTextCachePath(const char* prefix) {
+  const auto id =
+      std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  return fs::temp_directory_path() /
+         (std::string(prefix) + "-" + std::to_string(id) + ".bin");
+}
+
+void removeCacheFile(const fs::path& path) {
+  if (fs::exists(path)) {
+    fs::remove(path);
+  }
+}
+
+llama_pos seqPosMax(LlamaModel& model, llama_seq_id seqId = 0) {
+  auto* mem = llama_get_memory(model.getContext());
+  if (mem == nullptr) {
+    return -1;
+  }
+  return llama_memory_seq_pos_max(mem, seqId);
+}
+
+} // namespace
 
 class TextLlmContextTest : public ::testing::Test {
 protected:
@@ -95,6 +121,100 @@ TEST_F(TextLlmContextTest, LoadCacheKeepsConfiguredNDiscardedWithoutCache) {
   EXPECT_EQ(driver.getNDiscarded(), kConfiguredNDiscarded)
       << "no-cache batch slot dropped the configured nDiscarded budget; "
          "context shifting is disabled (nDiscarded stuck at 0)";
+}
+
+TEST_F(TextLlmContextTest, LoadCacheClearsLegacyOneFieldMetadata) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt seedPrompt;
+  seedPrompt.prefill = true;
+  seedPrompt.input = R"([{"role": "user", "content": "Seed cache rows."}])";
+  ASSERT_NO_THROW({ model->processPrompt(seedPrompt); });
+
+  const llama_pos nPast = seqPosMax(*model) + 1;
+  ASSERT_GT(nPast, 0);
+
+  const fs::path cachePath = uniqueTextCachePath("legacy-seq-cache");
+  const std::string cachePathString = cachePath.string();
+  llama_token metadata[1] = {static_cast<llama_token>(nPast)};
+  ASSERT_GT(
+      llama_state_seq_save_file(
+          model->getContext(), cachePathString.c_str(), 0, metadata, 1),
+      0u);
+
+  model->reset();
+  ASSERT_EQ(seqPosMax(*model), -1);
+
+  LlmModelContext shared{
+      .model = model->getModel(),
+      .lctx = model->getContext(),
+      .vocab = llama_model_get_vocab(model->getModel()),
+  };
+  ToolsCompactController tools(std::nullopt);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+
+  EXPECT_FALSE(driver.loadCache(cachePathString, 64));
+  EXPECT_EQ(driver.getNPast(), 0);
+  EXPECT_EQ(seqPosMax(*model), -1)
+      << "legacy metadata load returned false but left KV rows resident";
+
+  removeCacheFile(cachePath);
+}
+
+TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt seedPrompt;
+  seedPrompt.prefill = true;
+  seedPrompt.input = R"([{"role": "user", "content": "Seed bad cache rows."}])";
+  ASSERT_NO_THROW({ model->processPrompt(seedPrompt); });
+
+  const llama_pos nPast = seqPosMax(*model) + 1;
+  ASSERT_GT(nPast, 0);
+
+  const fs::path cachePath = uniqueTextCachePath("bad-npast-seq-cache");
+  const std::string cachePathString = cachePath.string();
+  llama_token metadata[2] = {
+      static_cast<llama_token>(nPast + 1), static_cast<llama_token>(1)};
+  ASSERT_GT(
+      llama_state_seq_save_file(
+          model->getContext(), cachePathString.c_str(), 0, metadata, 2),
+      0u);
+
+  model->reset();
+  ASSERT_EQ(seqPosMax(*model), -1);
+
+  LlmModelContext shared{
+      .model = model->getModel(),
+      .lctx = model->getContext(),
+      .vocab = llama_model_get_vocab(model->getModel()),
+  };
+  ToolsCompactController tools(std::nullopt);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+
+  EXPECT_THROW(
+      { driver.loadCache(cachePathString, 64); }, qvac_errors::StatusError);
+  EXPECT_EQ(driver.getNPast(), 0);
+  EXPECT_EQ(seqPosMax(*model), -1)
+      << "failed sequence cache validation left loaded KV rows resident";
+
+  removeCacheFile(cachePath);
 }
 
 TEST_F(TextLlmContextTest, ProcessWithStringInput) {
