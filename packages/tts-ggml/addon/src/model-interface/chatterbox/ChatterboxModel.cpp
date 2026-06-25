@@ -39,16 +39,21 @@ namespace general_error = qvac_errors::general_error;
 // restore the uncapped behaviour.
 constexpr int DEFAULT_N_CTX = 4096;
 
-// Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  q8_0 stores
-// the cache at ~27% of f32.  Upstream validation on real GGUFs
+// Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  f16 stores
+// the cache at ~50% of f32 and is the safe cross-backend default: the
+// multilingual model's Metal step graph issues a CONT on the KV cache,
+// and the ggml-speech Metal backend only supports a q8_0-source CONT to
+// f32/f16 (not q8_0->q8_0), so a q8_0 KV cache hard-aborts that path with
+// GGML_ABORT("unsupported op 'CONT'").  q8_0 had been the default since
+// 0.3.2 (QVAC-19557, iOS peak-memory) — it stores the cache at ~27% of
+// f32 and decodes 20-30% faster on Metal — but it only works where the
+// backend implements the q8_0 CONT (CPU, CUDA), so it is now opt-in via
+// kvCacheType:"q8_0".  Upstream validation on real GGUFs
 // (qvac-ext-lib-whisper.cpp#43): Turbo greedy token sequences are
-// byte-identical across f32/f16/q8_0 on CPU and Metal; the multilingual
-// variant's CFG mixing can flip a near-tie argmax (same class of
-// variation as a seed change — whisper transcribes the q8_0 output to
-// the exact input text); Metal decode is 20-30% faster from the
-// bandwidth saving.  Pass kvCacheType:"f32" for bit-exact parity with
-// the pre-quantisation behaviour.
-constexpr const char* DEFAULT_KV_CACHE_TYPE = "q8_0";
+// byte-identical across f32/f16/q8_0 on CPU and Metal.  Pass
+// kvCacheType:"f32" for bit-exact parity with the pre-quantisation
+// behaviour.
+constexpr const char* DEFAULT_KV_CACHE_TYPE = "f16";
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;

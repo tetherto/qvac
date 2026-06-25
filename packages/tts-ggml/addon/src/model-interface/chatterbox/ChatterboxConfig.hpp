@@ -52,14 +52,15 @@ struct ChatterboxConfig {
    * T3 KV-cache storage type, forwarded to
    * `tts_cpp::chatterbox::EngineOptions::kv_cache_type`:
    * "f32" | "f16" | "q8_0".  The cache is allocated up-front at nCtx,
-   * so the dtype directly scales resident memory — q8_0 stores it at
-   * ~27% of f32 (one fp16 scale per 32 values).  Upstream validation
-   * (qvac-ext-lib-whisper.cpp#43): greedy token sequences are
+   * so the dtype directly scales resident memory — f16 stores it at
+   * ~50% of f32, q8_0 at ~27% (one fp16 scale per 32 values).  Upstream
+   * validation (qvac-ext-lib-whisper.cpp#43): greedy token sequences are
    * byte-identical across all three dtypes on the Turbo model
-   * (CPU + Metal), and Metal decode gets 20-30% FASTER from the
+   * (CPU + Metal), and q8_0 decodes 20-30% FASTER on Metal from the
    * bandwidth saving.  Empty/unset -> {@link ChatterboxModel}'s
-   * kDefaultKvCacheType ("q8_0"); anything outside the three values
-   * is rejected by validateConfig.
+   * DEFAULT_KV_CACHE_TYPE ("f16", the safe cross-backend default; q8_0
+   * aborts the multilingual Metal CONT path so it is opt-in); anything
+   * outside the three values is rejected by validateConfig.
    */
   std::string kvCacheType;
   /** Post-processing output sample rate.  Currently unused (engine always emits 24 kHz). */
