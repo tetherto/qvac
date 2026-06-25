@@ -10,18 +10,30 @@ import {
   downloadResilienceRegistrySuspend,
   downloadResilienceHttpNetdrop,
   downloadResilienceHttpSuspend,
+  downloadResilienceHttpSharded,
 } from "../../../download-resilience-tests.js";
 
 const resilienceTests = [
   downloadResilienceRegistrySuspend,
   downloadResilienceHttpNetdrop,
   downloadResilienceHttpSuspend,
+  downloadResilienceHttpSharded,
 ] as const;
 
 const PAYLOAD_BYTES = 6 * 1024 * 1024;
 const SUSPEND_BACKGROUND_MS = 750;
 const REGISTRY_RESUME_TIMEOUT_MS = 60_000;
 const HTTP_RESUME_TIMEOUT_MS = 30_000;
+
+// Sharded resilience: front the real sharded model with a proxy that severs one
+// shard's transfer once. Downloads a real (~hundreds of MB) model, so it is
+// gated behind QVAC_E2E_HTTP_SHARDED_RESILIENCE and excluded from the default suite.
+const HF_ORIGIN = "https://huggingface.co";
+const SHARDED_MODEL_PATH =
+  "/opaninakuffo/gte-large-fp16-sharded/resolve/main/gte-large_fp16-00003-of-00005.gguf";
+const SHARD_TO_SEVER = "-00002-of-";
+const SHARD_SEVER_AT_BYTES = 16 * 1024 * 1024;
+const SHARDED_RESUME_TIMEOUT_MS = 300_000;
 
 // The registry stream must stall past its per-block timeout while suspended so
 // that resume() forces a reconnect-then-retry. Run this test with the short
@@ -173,6 +185,96 @@ class FlakyFileServer {
   }
 }
 
+/**
+ * Reverse proxy in front of the real sharded model on HuggingFace. It relays
+ * each shard request (forwarding Range), and severs one designated shard's
+ * transfer exactly once mid-stream to simulate a network drop. The resumed
+ * (Range) request is served to completion, so a working retry/resume recovers.
+ */
+class ShardSeverProxy {
+  private server?: http.Server;
+  private port = 0;
+  private severedOnce = false;
+
+  async start(): Promise<void> {
+    this.server = http.createServer((req, res) => {
+      void this.handle(req, res);
+    });
+    await new Promise<void>((resolve) => {
+      this.server!.listen(0, "127.0.0.1", () => resolve());
+    });
+    this.port = (this.server!.address() as AddressInfo).port;
+  }
+
+  get baseUrl(): string {
+    return `http://127.0.0.1:${this.port}`;
+  }
+
+  private async handle(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): Promise<void> {
+    const range = req.headers["range"];
+    const reqHeaders: Record<string, string> = { "user-agent": "qvac-e2e-proxy" };
+    if (typeof range === "string") reqHeaders["range"] = range;
+
+    let upstream: Awaited<ReturnType<typeof fetch>>;
+    try {
+      upstream = await fetch(`${HF_ORIGIN}${req.url}`, {
+        method: req.method === "HEAD" ? "HEAD" : "GET",
+        headers: reqHeaders,
+      });
+    } catch (err) {
+      res.writeHead(502);
+      res.end(err instanceof Error ? err.message : String(err));
+      return;
+    }
+
+    const outHeaders: Record<string, string> = {
+      "accept-ranges": upstream.headers.get("accept-ranges") ?? "bytes",
+      "content-type":
+        upstream.headers.get("content-type") ?? "application/octet-stream",
+    };
+    const cl = upstream.headers.get("content-length");
+    if (cl) outHeaders["content-length"] = cl;
+    const cr = upstream.headers.get("content-range");
+    if (cr) outHeaders["content-range"] = cr;
+    res.writeHead(upstream.status, outHeaders);
+
+    if (req.method === "HEAD" || !upstream.body) {
+      res.end();
+      return;
+    }
+
+    // Sever the designated shard's first (Range-less) transfer exactly once;
+    // the retry arrives with a Range header and is served to completion.
+    const severThis =
+      !range && !this.severedOnce && (req.url ?? "").includes(SHARD_TO_SEVER);
+
+    let sent = 0;
+    try {
+      for await (const chunk of upstream.body as unknown as AsyncIterable<Uint8Array>) {
+        if (severThis && sent >= SHARD_SEVER_AT_BYTES) {
+          this.severedOnce = true;
+          res.destroy();
+          return;
+        }
+        res.write(Buffer.from(chunk));
+        sent += chunk.length;
+      }
+      res.end();
+    } catch {
+      res.destroy();
+    }
+  }
+
+  async close(): Promise<void> {
+    if (this.server) {
+      await new Promise<void>((resolve) => this.server!.close(() => resolve()));
+    }
+  }
+}
+
 function withTimeout<T>(label: string, p: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -192,6 +294,7 @@ export class DownloadResilienceExecutor extends BaseExecutor<typeof resilienceTe
     [downloadResilienceRegistrySuspend.testId]: this.registrySuspend.bind(this),
     [downloadResilienceHttpNetdrop.testId]: this.httpNetdrop.bind(this),
     [downloadResilienceHttpSuspend.testId]: this.httpSuspend.bind(this),
+    [downloadResilienceHttpSharded.testId]: this.httpSharded.bind(this),
   };
 
   /** registry:// download must survive suspend/resume and finish from the partial. */
@@ -364,6 +467,52 @@ export class DownloadResilienceExecutor extends BaseExecutor<typeof resilienceTe
       };
     } finally {
       await server.close();
+    }
+  }
+
+  /** Sharded https:// download must recover when one shard's transfer drops mid-stream. */
+  async httpSharded(): Promise<TestResult> {
+    // Gated: downloads a real (~hundreds of MB) sharded model through a proxy.
+    //   QVAC_E2E_HTTP_SHARDED_RESILIENCE=1 npx qvac-test run:local:desktop \
+    //     --filter download-resilience-http-sharded
+    if (!process.env["QVAC_E2E_HTTP_SHARDED_RESILIENCE"]) {
+      return {
+        passed: true,
+        skipped: true,
+        output:
+          "skipped: set QVAC_E2E_HTTP_SHARDED_RESILIENCE=1 to run (downloads a real sharded model through the severing proxy)",
+      };
+    }
+
+    const proxy = new ShardSeverProxy();
+    await proxy.start();
+    // Random proxy port → unique shard cacheKey → cold download by construction.
+    const assetSrc = `${proxy.baseUrl}${SHARDED_MODEL_PATH}`;
+    let maxPct = 0;
+    try {
+      const assetId = await withTimeout(
+        "http sharded download",
+        downloadAsset({
+          assetSrc,
+          onProgress: (p: { percentage: number }) => {
+            maxPct = Math.max(maxPct, p.percentage);
+          },
+        }),
+        SHARDED_RESUME_TIMEOUT_MS,
+      );
+      return {
+        passed: true,
+        output: `sharded http download recovered from a mid-stream shard drop: ${assetId} (maxPct=${maxPct.toFixed(1)})`,
+      };
+    } catch (err) {
+      return {
+        passed: false,
+        output: `sharded http download did not recover from a mid-stream shard drop (maxPct=${maxPct.toFixed(1)}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      };
+    } finally {
+      await proxy.close();
     }
   }
 }

@@ -39,8 +39,24 @@ export const downloadResilienceHttpSuspend: TestDefinition = {
   },
 };
 
+// Sharded HTTP download must recover when one shard's transfer drops mid-stream.
+// Faithful e2e: a local proxy fronts the real sharded model and severs one shard
+// once. Downloads a real (~hundreds of MB) model, so it is gated behind
+// QVAC_E2E_HTTP_SHARDED_RESILIENCE and excluded from the default suite.
+export const downloadResilienceHttpSharded: TestDefinition = {
+  testId: "download-resilience-http-sharded",
+  params: {},
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "download",
+    dependency: "none",
+    estimatedDurationMs: 300000,
+  },
+};
+
 export const downloadResilienceTests = [
   downloadResilienceRegistrySuspend,
   downloadResilienceHttpNetdrop,
   downloadResilienceHttpSuspend,
+  downloadResilienceHttpSharded,
 ];
