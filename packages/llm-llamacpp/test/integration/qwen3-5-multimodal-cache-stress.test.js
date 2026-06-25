@@ -21,9 +21,10 @@ const skipStress = !forceStress && !isLinuxX64
   : false
 
 const CTX_SIZE = 8192
-const N_DISCARDED = 256
+const N_DISCARDED = 1024
+const PREFILL_PRESSURE_OVERSHOOT = 64
 const PREFILL_CANCEL_DELAY_MS = 1500
-const MIN_QWEN35_IMAGE_CACHE_TOKENS = 4015
+const MIN_QWEN35_IMAGE_CACHE_TOKENS = 2880
 
 const QWEN35_MODEL = {
   modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
@@ -74,14 +75,20 @@ function makeImageTurn (imageBytes) {
     { role: 'user', type: 'media', content: imageBytes },
     {
       role: 'user',
-      content: 'Describe the image briefly, then list the numbers from 1 to 500 separated by commas. Do not stop early.'
+      content: 'Describe the image briefly, then write a very long story inspired by it with many scenes, characters, and details. Keep writing continuously until the token budget is exhausted.'
     }
   ]
 }
 
 function makePrefillPressureTurn (cacheTokens) {
   const freeSlots = Math.max(0, CTX_SIZE - toNumber(cacheTokens))
-  const wordCount = Math.max(96, Math.min(4600, freeSlots + Math.floor(N_DISCARDED / 4)))
+  const wordCount = Math.max(96, Math.min(4600, freeSlots + PREFILL_PRESSURE_OVERSHOOT))
+  return makeLongTextTurn(wordCount)
+}
+
+function makeDecodePressureTurn (cacheTokens) {
+  const freeSlots = Math.max(0, CTX_SIZE - toNumber(cacheTokens))
+  const wordCount = Math.max(96, Math.min(4600, freeSlots + N_DISCARDED - 256))
   return makeLongTextTurn(wordCount)
 }
 
@@ -322,12 +329,12 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
     makeImageTurn(imageBytes),
     {
       ...cacheOpts,
-      generationParams: { predict: 384 }
+      generationParams: { predict: N_DISCARDED + 256 }
     }
   )
   t.ok(first.text.length > 0, 'first multimodal turn generated output')
   t.ok(toNumber(first.stats.generatedTokens) > N_DISCARDED, `first turn generated enough disposable tokens (${first.stats.generatedTokens})`)
-  t.ok(toNumber(first.stats.CacheTokens) > 4000, `first turn cached Qwen3.5 image cells (${first.stats.CacheTokens})`)
+  t.ok(toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS, `first turn cached Qwen3.5 image cells (${first.stats.CacheTokens})`)
   assertCachedStats(t, first.stats, 'first multimodal turn')
   t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
   await runNoCacheSeparator(t, addon, 'after first multimodal turn')
@@ -371,7 +378,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
 
   const decodePressure = await runAndCollect(
     addon,
-    makePrefillPressureTurn(afterPrefillCancel.stats.CacheTokens),
+    makeDecodePressureTurn(afterPrefillCancel.stats.CacheTokens),
     {
       ...cacheOpts,
       prefill: true
@@ -428,7 +435,9 @@ safeTest('Qwen3.5-VL image cache overflows by cache tokens before positions', {
   t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
 
   const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
-  const addon = await setupModel(t, { n_discarded: '0' })
+  const CTX_SIZE_OVERRIDE = '6000'
+
+  const addon = await setupModel(t, { n_discarded: '0', ctx_size: CTX_SIZE_OVERRIDE })
   const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-token-overflow-${Date.now()}.bin`)
   cleanupIntegrationCacheFiles(cachePath)
   t.teardown(() => {
@@ -453,10 +462,10 @@ safeTest('Qwen3.5-VL image cache overflows by cache tokens before positions', {
   t.is(second.text, '', 'second image prefill emits no text')
   t.is(toNumber(second.stats.generatedTokens), 0, 'second image prefill reports zero generated tokens')
   t.ok(
-    toNumber(second.stats.CacheTokens) > CTX_SIZE - MIN_QWEN35_IMAGE_CACHE_TOKENS,
-    `two image prefills nearly fill cache by physical cells (${second.stats.CacheTokens}/${CTX_SIZE})`
+    toNumber(second.stats.CacheTokens) > CTX_SIZE_OVERRIDE - MIN_QWEN35_IMAGE_CACHE_TOKENS,
+    `two image prefills nearly fill cache by physical cells (${second.stats.CacheTokens}/${CTX_SIZE_OVERRIDE})`
   )
-  t.ok(toNumber(second.stats.CacheTokens) <= CTX_SIZE, 'two image prefills still fit by cache tokens')
+  t.ok(toNumber(second.stats.CacheTokens) <= CTX_SIZE_OVERRIDE, 'two image prefills still fit by cache tokens')
 
   await assertContextOverflow(
     t,
