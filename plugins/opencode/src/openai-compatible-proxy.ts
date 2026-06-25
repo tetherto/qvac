@@ -1,4 +1,9 @@
-import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type ServerResponse
+} from 'node:http'
 
 import type { HostLogger } from './host-logger.js'
 import {
@@ -31,12 +36,12 @@ export interface StartedOpenAICompatibleProxy {
 
 type SerializedRunner = (work: () => Promise<void>) => Promise<void>
 
-export function originOf (baseURL: string): Upstream {
+export function originOf(baseURL: string): Upstream {
   const u = new URL(baseURL)
   return { hostname: u.hostname, port: u.port }
 }
 
-function buildForwardHeaders (req: IncomingMessage, bodyLength: number): Record<string, string> {
+function buildForwardHeaders(req: IncomingMessage, bodyLength: number): Record<string, string> {
   const headers: Record<string, string> = {}
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue
@@ -49,11 +54,11 @@ function buildForwardHeaders (req: IncomingMessage, bodyLength: number): Record<
   return headers
 }
 
-function isInferenceRequest (req: IncomingMessage): boolean {
+function isInferenceRequest(req: IncomingMessage): boolean {
   return req.method === 'POST' && (req.url ?? '').includes('/chat/completions')
 }
 
-function createSerializedRunner (): SerializedRunner {
+function createSerializedRunner(): SerializedRunner {
   let tail: Promise<void> = Promise.resolve()
   return async (work: () => Promise<void>): Promise<void> => {
     const previous = tail
@@ -70,16 +75,18 @@ function createSerializedRunner (): SerializedRunner {
   }
 }
 
-function emitSplitResult (result: SplitResult, res: ServerResponse): void {
+function emitSplitResult(result: SplitResult, res: ServerResponse): void {
   if (result.reasoning !== '') {
-    res.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: result.reasoning }, finish_reason: null }] })}\n\n`)
+    res.write(
+      `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: result.reasoning }, finish_reason: null }] })}\n\n`
+    )
   }
   if (result.content !== '') {
     res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: result.content } }] })}\n\n`)
   }
 }
 
-function emitSSELine (line: string, split: ThinkSplitter, res: ServerResponse): void {
+function emitSSELine(line: string, split: ThinkSplitter, res: ServerResponse): void {
   if (line.startsWith('data:')) {
     const payload = line.slice(5).trim()
     if (payload === '[DONE]') {
@@ -100,7 +107,7 @@ function emitSSELine (line: string, split: ThinkSplitter, res: ServerResponse): 
   }
 }
 
-function pipeResponse (
+function pipeResponse(
   upstreamRes: IncomingMessage,
   res: ServerResponse,
   reqStart: number,
@@ -116,7 +123,9 @@ function pipeResponse (
   res.writeHead(upstreamRes.statusCode ?? 502, outHeaders)
 
   if (!options.openAICompatTransforms || !isSSE) {
-    upstreamRes.on('end', () => options.logger.trace(`done total=${((Date.now() - reqStart) / 1000).toFixed(1)}s`))
+    upstreamRes.on('end', () =>
+      options.logger.trace(`done total=${((Date.now() - reqStart) / 1000).toFixed(1)}s`)
+    )
     upstreamRes.pipe(res)
     return
   }
@@ -141,7 +150,7 @@ function pipeResponse (
   })
 }
 
-function writeProxyError (res: ServerResponse, statusCode: number, message: string): void {
+function writeProxyError(res: ServerResponse, statusCode: number, message: string): void {
   if (res.headersSent) {
     res.destroy()
     return
@@ -150,7 +159,7 @@ function writeProxyError (res: ServerResponse, statusCode: number, message: stri
   res.end(JSON.stringify({ error: { message } }))
 }
 
-async function forwardToUpstream (
+async function forwardToUpstream(
   req: IncomingMessage,
   res: ServerResponse,
   body: Buffer,
@@ -175,7 +184,9 @@ async function forwardToUpstream (
         headers: buildForwardHeaders(req, body.length)
       },
       (proxyRes) => {
-        options.logger.trace(`<- ${proxyRes.statusCode ?? '?'} headers=${((Date.now() - reqStart) / 1000).toFixed(1)}s`)
+        options.logger.trace(
+          `<- ${proxyRes.statusCode ?? '?'} headers=${((Date.now() - reqStart) / 1000).toFixed(1)}s`
+        )
         proxyRes.on('end', finish)
         proxyRes.on('close', finish)
         proxyRes.on('error', finish)
@@ -201,7 +212,7 @@ async function forwardToUpstream (
   })
 }
 
-async function handleRequest (
+async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   rawBody: Buffer,
@@ -211,12 +222,18 @@ async function handleRequest (
 ): Promise<void> {
   let body = rawBody
   const contentType = req.headers['content-type'] ?? ''
-  if (options.openAICompatTransforms && contentType.includes('application/json') && body.length > 0) {
+  if (
+    options.openAICompatTransforms &&
+    contentType.includes('application/json') &&
+    body.length > 0
+  ) {
     try {
       const parsed = flattenMessages(JSON.parse(body.toString('utf8')) as ChatCompletionBody)
       body = Buffer.from(JSON.stringify(parsed))
       const msgs = Array.isArray(parsed.messages) ? parsed.messages.length : 0
-      options.logger.trace(`-> ${req.method ?? '?'} ${req.url ?? '?'} msgs=${msgs} bytes=${body.length}`)
+      options.logger.trace(
+        `-> ${req.method ?? '?'} ${req.url ?? '?'} msgs=${msgs} bytes=${body.length}`
+      )
     } catch {
       // forward unchanged
     }
@@ -237,7 +254,9 @@ async function handleRequest (
   await forwardToUpstream(req, res, body, reqStart, upstream, options)
 }
 
-export function startOpenAICompatibleProxy (options: ProxyOptions): Promise<StartedOpenAICompatibleProxy> {
+export function startOpenAICompatibleProxy(
+  options: ProxyOptions
+): Promise<StartedOpenAICompatibleProxy> {
   const runInference = createSerializedRunner()
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     res.on('error', () => {})
@@ -246,10 +265,12 @@ export function startOpenAICompatibleProxy (options: ProxyOptions): Promise<Star
     const chunks: Buffer[] = []
     req.on('data', (c: Buffer) => chunks.push(c))
     req.on('end', () => {
-      void handleRequest(req, res, Buffer.concat(chunks), reqStart, options, runInference).catch((err: unknown) => {
-        options.logger.trace(`proxy request error: ${String(err)}`)
-        writeProxyError(res, 500, 'qvac serve proxy internal error')
-      })
+      void handleRequest(req, res, Buffer.concat(chunks), reqStart, options, runInference).catch(
+        (err: unknown) => {
+          options.logger.trace(`proxy request error: ${String(err)}`)
+          writeProxyError(res, 500, 'qvac serve proxy internal error')
+        }
+      )
     })
   })
   server.on('error', (err) => options.logger.trace(`proxy server error: ${String(err)}`))
@@ -259,12 +280,13 @@ export function startOpenAICompatibleProxy (options: ProxyOptions): Promise<Star
       const port = typeof addr === 'object' && addr !== null ? addr.port : 0
       resolve({
         port,
-        close: () => new Promise<void>((res, rej) => {
-          server.close((err) => {
-            if (err === undefined) res()
-            else rej(err)
+        close: () =>
+          new Promise<void>((res, rej) => {
+            server.close((err) => {
+              if (err === undefined) res()
+              else rej(err)
+            })
           })
-        })
       })
     })
   })
