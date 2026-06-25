@@ -755,6 +755,51 @@ test("harmony dialect with empty tools + captureThinking=true: analysis routed t
   t.is(texts(events, "contentDelta").join(""), "Hello, world!");
 });
 
+test("harmony assistant channel frame: inner emitted as content with markers stripped", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: NONE_CAPS,
+      tools: [],
+      toolDialect: "harmony",
+    }),
+  );
+  const events = [
+    ...pushAll(n, [
+      `<|channel|>assistant<|message|>ready`,
+      `<|end|>`,
+    ]),
+    ...n.finish(),
+  ];
+
+  const joined = texts(events, "contentDelta").join("");
+  t.is(joined, "ready");
+  t.absent(joined.includes("<|channel|>"), "no channel marker leak");
+  t.absent(joined.includes("<|message|>"), "no message marker leak");
+  t.absent(joined.includes("<|end|>"), "no end marker leak");
+});
+
+test("harmony stray channel markers are stripped from plain output", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: NONE_CAPS,
+      tools: [],
+      toolDialect: "harmony",
+    }),
+  );
+  const events = [
+    ...pushAll(n, [
+      `<|channel|>Conclusion: ready`,
+      `<|end|>`,
+    ]),
+    ...n.finish(),
+  ];
+
+  const joined = texts(events, "contentDelta").join("");
+  t.is(joined, "Conclusion: ready");
+  t.absent(joined.includes("<|channel|>"), "no channel marker leak");
+  t.absent(joined.includes("<|end|>"), "no end marker leak");
+});
+
 // Regression guard: the existing `<think>` reasoning and `<tool_call>`
 // streaming paths must not be perturbed by the harmony spec being defined.
 test("harmony spec defined but hermes dialect still strips <think> as before", (t) => {
