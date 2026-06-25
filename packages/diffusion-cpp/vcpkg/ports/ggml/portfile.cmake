@@ -4,14 +4,18 @@
 # Fork of ggml-org/ggml with all overlay patches pre-applied, plus the
 # downstream LTX support currently under review.
 #
-# Pulls from tetherto/qvac-ext-ggml#23 (branch 2026-06-06-ltx). REF is pinned to
-# the PR head commit for reproducibility while the dependency PR is under review.
-# f5c6977c adds the coopmat1 flash-attn f32-accumulation fix (RADV PV/output in
-# f32 under GGML_PREC_F32) needed for correct LTX-2.3 output on Strix Halo.
+# Pulls from tetherto/qvac-ext-ggml branch 2026-06-06 (REF pinned to its tip
+# 805e8e1b for reproducibility). 805e8e1b is the merge of PR #23
+# (2026-06-06-ltx) into the canonical 2026-06-06 line, so it carries the full
+# merged compute set on top of leejet/ggml v0.12.0: the Metal fused Flux RoPE
+# kernel + implicit-GEMM conv2d + flash-attention fix, Wan IM2COL_3D/PAD, the
+# coopmat1 flash-attn f32-accumulation fixes (RADV PV/output in f32 under
+# GGML_PREC_F32, needed for correct LTX-2.3 output on Strix Halo), and the
+# ggml_graph_leaf/leafs/n_leafs public API export.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL "https://github.com/tetherto/qvac-ext-ggml.git"
-    REF f5c6977cc3b37b04643ee7d4fb33dd3fd3427912
+    REF 805e8e1b0329c9a6a11968bb31a81b03362a9f35
 )
 
 # --- GPU feature flags ---

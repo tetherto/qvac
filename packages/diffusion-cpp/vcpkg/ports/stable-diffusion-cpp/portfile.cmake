@@ -3,12 +3,13 @@
 # Builds the stable-diffusion.cpp inference library and links against the
 # system-installed ggml provided by the separate ggml overlay port.
 #
-# Pulls from tetherto/qvac-ext-stable-diffusion.cpp#13. REF is pinned to the
-# PR head commit for reproducibility while the dependency PR is under review.
+# Pulls from tetherto/qvac-ext-stable-diffusion.cpp#13 (branch 2026-06-04-ltx).
+# REF is pinned to the PR head commit for reproducibility while the dependency
+# PR is under review.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL "https://github.com/tetherto/qvac-ext-stable-diffusion.cpp.git"
-    REF 6a13b9cacc09f29eae7a1fe03603260909f01cf0
+    REF 26d85c702253b2c23d8e991a0817a8fa2017d515
 )
 
 set(SD_FLASH_ATTN OFF)

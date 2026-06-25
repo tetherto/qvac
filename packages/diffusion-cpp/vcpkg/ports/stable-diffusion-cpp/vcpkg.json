@@ -1,7 +1,7 @@
 {
   "name": "stable-diffusion-cpp",
   "version-date": "2026-06-04",
-  "port-version": 3,
+  "port-version": 4,
   "description": "Diffusion model inference in pure C/C++ (SD1.x, SD2.x, SDXL, SD3, FLUX, Wan, ...)",
   "homepage": "https://github.com/tetherto/qvac-ext-stable-diffusion.cpp",
   "license": "MIT",
