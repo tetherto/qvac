@@ -11,7 +11,7 @@
  *     "engine": "chatterbox" | "chatterbox-mtl" | "supertonic" | "supertonic-mtl",
  *     "variant": "q4" | "q8" | "f16" | "mixed",              (optional, default q4)
  *     "useGPU": true | false,
- *     "backendHint": "cpu" | "metal" | "vulkan" | "cuda" | "opencl", (optional)
+ *     "backendHint": "cpu" | "metal" | "vulkan" | "opencl",  (optional)
  *     "deviceLabel": "...",                                  (optional)
  *     "runnerLabel": "...",                                  (optional)
  *     "label": "...",                                        (optional)

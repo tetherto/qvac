@@ -153,24 +153,6 @@ jobs:
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: ai-run-linux-gpu
-            platform: linux
-            arch: x64
-            runner_label: ai-run-linux-gpu
-            device_label: ai-run-linux-gpu
-            backend: cpu
-            use_gpu: false
-            run_python: false
-            round_trip_test: true
-          - os: ai-run-linux-gpu
-            platform: linux
-            arch: x64
-            runner_label: ai-run-linux-gpu
-            device_label: ai-run-linux-gpu
-            backend: cuda
-            use_gpu: true
-            run_python: false
-            round_trip_test: true
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64

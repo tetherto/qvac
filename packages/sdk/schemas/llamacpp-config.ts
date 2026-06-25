@@ -75,6 +75,14 @@ export const llmConfigBaseSchema = z.object({
    */
   reasoning_budget: z.number().int().min(-1).max(REASONING_BUDGET_MAX).optional(),
   projectionModelSrc: modelSrcInputSchema.optional(),
+  /**
+   * Qwen3.5-VL multi-tile image encoding mode (multimodal models only):
+   *   - `"sequential"` (default): encode image tiles one tile at a time.
+   *   - `"batched"`: encode all tiles in a single batched pass.
+   *   - `"disabled"`: no multi-tile encoding (single tile).
+   * Ignored by text-only models. Default is `"sequential"`.
+   */
+  image_tile_mode: z.enum(["disabled", "batched", "sequential"]).optional(),
 });
 
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>;
@@ -85,6 +93,7 @@ export const LLM_CONFIG_DEFAULTS = {
   gpu_layers: 99,
   device: "gpu",
   system_prompt: "You are a helpful assistant.",
+  image_tile_mode: "sequential",
 } as const satisfies Partial<LlmConfigInput>;
 
 // Full schema - applies defaults via transform (no duplication)

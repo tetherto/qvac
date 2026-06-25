@@ -44,7 +44,6 @@ ContextSlideOutcome trySlidePrefillImpl(
   const llama_pos protectedPrefixPos = protectedPrefix.pos;
   const llama_pos appendPos = append.pos;
   const llama_pos currentCacheTokens = current.cacheTokens;
-  const llama_pos protectedCacheTokens = protectedPrefix.cacheTokens;
   const llama_pos appendCacheTokens = append.cacheTokens;
 
   // Check if sliding is needed
@@ -72,53 +71,6 @@ ContextSlideOutcome trySlidePrefillImpl(
     return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
   }
 
-  // Fallback: wipe everything after the first message.
-  // Some hybrid recurrent memories cannot roll their tail state backwards. In
-  // that case, preserve the tail token and move it next to the protected prefix
-  // so decoding can continue with a best-effort contaminated state.
-  if (nDiscarded > 0) {
-    const llama_pos tail = currentPos - 1;
-    const llama_pos exactWipe = currentPos - protectedPrefixPos;
-    const llama_pos tailPreservingWipe = tail - protectedPrefixPos;
-    const bool exactWipeFits = exactWipe <= nDiscarded &&
-                               protectedPrefixPos + appendPos < nCtx &&
-                               protectedCacheTokens + appendCacheTokens < nCtx;
-    const bool tailPreservingWipeFits =
-        tail > protectedPrefixPos && tailPreservingWipe <= nDiscarded &&
-        protectedPrefixPos + 1 + appendPos < nCtx &&
-        protectedCacheTokens + 1 + appendCacheTokens < nCtx;
-
-    if (!exactWipeFits && !tailPreservingWipeFits) {
-      return {ContextSlideOutcome::Kind::Overflow, currentPos, 0};
-    }
-
-    auto mem = ops.memory(lctx);
-
-    if (exactWipeFits &&
-        ops.seqRm(mem, seqId, protectedPrefixPos, currentPos)) {
-      if (tools.enabled()) {
-        tools.reset();
-      }
-      return {
-          ContextSlideOutcome::Kind::FullWipe, protectedPrefixPos, exactWipe};
-    }
-
-    if (tailPreservingWipeFits &&
-        ops.seqRm(mem, seqId, protectedPrefixPos, tail)) {
-      ops.seqAdd(mem, seqId, tail, currentPos, protectedPrefixPos - tail);
-      if (tools.enabled()) {
-        tools.reset();
-      }
-      return {
-          ContextSlideOutcome::Kind::FullWipe,
-          protectedPrefixPos + 1,
-          tailPreservingWipe};
-    }
-
-    return {ContextSlideOutcome::Kind::MemoryOperationFailed, currentPos, 0};
-  }
-
-  // Cannot free enough space
   return {ContextSlideOutcome::Kind::Overflow, currentPos, 0};
 }
 } // namespace

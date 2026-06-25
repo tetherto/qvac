@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-06-25
+
+### Fixed
+
+- **Chatterbox Metal GPU crash on the multilingual model — default KV-cache
+  dtype changed from `q8_0` to `f16`.** With the `q8_0` KV cache (the default
+  since 0.3.2, QVAC-19557), running the **multilingual** Chatterbox model on a
+  **Metal GPU** hard-aborted mid-synthesis with
+  `GGML_ABORT("unsupported op 'CONT'")`. The multilingual step graph
+  (`eval_step_mtl`, B=2 cond+uncond batched path) issues a `CONT` on the KV
+  cache, and the ggml-speech Metal backend only implements a `q8_0`-source
+  `CONT` to `f32`/`f16` — not `q8_0`→`q8_0` — so the op fails
+  `ggml_metal_device_supports_op` and aborts. The EN **Turbo** model and the
+  **CPU** backend were unaffected (different graph / backend supports the op),
+  which is why ≤0.2.5 worked on GPU and 0.3.2+ regressed. `f16` (~50% of f32,
+  vs `q8_0`'s ~27%) is now the safe cross-backend default; `q8_0` remains
+  available opt-in via `kvCacheType: 'q8_0'` for memory-constrained CPU/CUDA
+  hosts that implement the op. A proper backend-aware fix (extend
+  `chatterbox_resolve_kv_type` to probe `CONT` support, not just flash-attn)
+  belongs in `qvac-ext-lib-whisper.cpp` and would let Metal keep `q8_0` storage.
+
 ## [0.3.5] - 2026-06-24
 
 ### Changed
