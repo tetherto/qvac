@@ -26,6 +26,10 @@ const { analyzeSamples } = require('../utils/toneAnalysis')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
+// The GPU subtest below validates the Mali/Adreno (Android) bug fixes. Skip it off
+// mobile or when NO_GPU is set: the macOS E2E job hardcodes NO_GPU=true and its
+// "Apple Paravirtual" GPU can't encode the S3-tokenizer MUL_MAT on Metal (aborts).
+const forceNoGpu = os.getEnv('NO_GPU') === 'true'
 
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -92,7 +96,7 @@ test('Chatterbox audio CLEAN on CPU — Bug-1 SVE Nyquist-tone gate', { timeout:
   t.ok(a.rms > RMS_MIN && a.rms < RMS_MAX, `cpu: rms in [${RMS_MIN}, ${RMS_MAX}] (got ${a.rms.toFixed(4)})`)
 })
 
-test('Chatterbox audio CLEAN on GPU — Bug-1 + Bug-2 gates', { timeout: 1800000 }, async (t) => {
+test('Chatterbox audio CLEAN on GPU — Bug-1 + Bug-2 gates', { timeout: 1800000, skip: !isMobile || forceNoGpu }, async (t) => {
   const a = await synthAndAnalyze(t, true, 'gpu')
   if (!a) return
   t.ok(a.nyquistEnergyFraction < NYQ_MAX, `gpu: no ~12 kHz Nyquist tone (nyqFrac ${a.nyquistEnergyFraction.toExponential(3)} < ${NYQ_MAX})`)
