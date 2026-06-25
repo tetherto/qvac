@@ -70,9 +70,9 @@ declare interface TTSGgmlOptions {
   seed?: number
   /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: pass 99 to offload on GPU-capable hosts (including Android, per tts-cpp's per-vendor allowlist). */
   nGpuLayers?: number
-  /** Chatterbox-only: cap on the T3 context length (prompt + generated speech tokens, 25 tokens ~= 1 s of audio).  The KV cache is allocated up-front at this length, so the cap directly bounds memory: the Turbo GGUF's native n_ctx=8196 costs ~1.6 GB of f32 KV, while the defaults (nCtx=4096 + kvCacheType "q8_0") cost ~210 MB for ~160 s of audio per synthesis call.  Pass 0 to use the GGUF's full context; negative values are rejected. */
+  /** Chatterbox-only: cap on the T3 context length (prompt + generated speech tokens, 25 tokens ~= 1 s of audio).  The KV cache is allocated up-front at this length, so the cap directly bounds memory: the Turbo GGUF's native n_ctx=8196 costs ~1.6 GB of f32 KV, while the defaults (nCtx=4096 + kvCacheType "f16") cost ~390 MB for ~160 s of audio per synthesis call.  Pass 0 to use the GGUF's full context; negative values are rejected. */
   nCtx?: number
-  /** Chatterbox-only: T3 KV-cache storage dtype: 'f32' | 'f16' | 'q8_0' (default 'q8_0', ~27% of f32's memory; upstream-validated byte-identical greedy decoding on Turbo, and 20-30% faster decode on Metal).  Pass 'f32' for bit-exact parity with the pre-quantisation behaviour. */
+  /** Chatterbox-only: T3 KV-cache storage dtype: 'f32' | 'f16' | 'q8_0' (default 'f16', ~50% of f32's memory; the safe cross-backend default).  'q8_0' is ~27% of f32 and decodes 20-30% faster on Metal, but only works on backends that implement the q8_0 CONT op (CPU, CUDA) — it hard-aborts the multilingual model on Metal, so it is opt-in.  Pass 'f32' for bit-exact parity with the pre-quantisation behaviour. */
   kvCacheType?: 'f32' | 'f16' | 'q8_0'
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number

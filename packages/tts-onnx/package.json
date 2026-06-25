@@ -76,7 +76,7 @@
     "directory": "packages/tts-onnx"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-onnx#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/registry-client": "^0.4.0",

@@ -38,7 +38,7 @@
     "directory": "packages/onnx"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/onnx#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",

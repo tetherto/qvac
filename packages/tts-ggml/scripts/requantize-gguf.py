@@ -256,7 +256,13 @@ def build_supertonic_keep_f32(src: gguf.GGUFReader) -> set[str]:
     return keep
 
 
-def should_quantize(name: str, shape: tuple[int, ...], qtype: gguf.GGMLQuantizationType) -> bool:
+def should_quantize(
+    name: str,
+    shape: tuple[int, ...],
+    qtype: gguf.GGMLQuantizationType,
+    *,
+    support_pwconv_squeeze: bool = False,
+) -> bool:
     # Keep tiny tensors at full precision.
     n_elements = 1
     for d in shape:
@@ -313,9 +319,24 @@ def should_quantize(name: str, shape: tuple[int, ...], qtype: gguf.GGMLQuantizat
         # where the bulk of a Supertonic GGUF lives (ConvNeXt pwconv1/pwconv2
         # in the vocoder + vector_estimator), so unlocking it is what takes a
         # Q8_0 GGUF from ~96% of F32 down to ~32%.
-        squeezed = tuple(d for d in shape if d != 1)
-        if len(squeezed) == 2 and squeezed[-1] % block == 0:
-            return True
+        #
+        # Gated behind `support_pwconv_squeeze` because the squeeze is a
+        # *caller* capability, not a pure policy decision: only this script's
+        # rewrite loop both performs the 3-D -> 2-D squeeze AND emits the
+        # `supertonic.pwconv_squeezed` re-expansion roster the C++ loader
+        # honours.  The in-tree converters (convert-s3gen / convert-t3-*-to-
+        # gguf.py) call should_quantize directly and then write the array
+        # as-is, so for them a pointwise conv must stay at source dtype (F16) —
+        # otherwise they hand `gguf.quants.quantize` a (OC, IC, 1) tensor whose
+        # last axis (K=1) is not a multiple of the block size and crash with
+        # `QuantError: Can't quantize tensor with shape (..., 1)`.  The S3Gen
+        # CFM decoder ships exactly such (OC, IC, 1) pointwise convs, so the
+        # default-off gate restores those converters' documented "fall back to
+        # F16" behaviour.
+        if support_pwconv_squeeze:
+            squeezed = tuple(d for d in shape if d != 1)
+            if len(squeezed) == 2 and squeezed[-1] % block == 0:
+                return True
         return False
 
     return False
@@ -414,7 +435,8 @@ def main() -> int:
         if (in_filter and t.name not in keep_f32_storage
                       and t.tensor_type in _QUANTIZABLE_SRC_DTYPES
                       and t.tensor_type != qtype
-                      and should_quantize(t.name, shape, qtype)):
+                      and should_quantize(t.name, shape, qtype,
+                                          support_pwconv_squeeze=True)):
             # Reshape to natural (shape).  GGUF raw data is contiguous in
             # the original order, but reversed() above gives element-shape
             # which is what `quantize()` expects.

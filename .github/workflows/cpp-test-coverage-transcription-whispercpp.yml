@@ -83,6 +83,12 @@ jobs:
         run: |
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
+          # qvac-lint-cpp / qvac-lib-inference-addon-cpp use vcpkg_from_git, which
+          # fetches into a shared downloads/git-tmp. An interrupted prior run can
+          # leave a stale .git/shallow.lock there, breaking later `git fetch` with
+          # "Unable to create '.../git-tmp/.git/shallow.lock': File exists" on this
+          # persistent runner. Drop the scratch dir so each run fetches clean.
+          rm -rf $VCPKG_ROOT/downloads/git-tmp
 
       - name: Generate and build unit tests
         working-directory: ${{ env.WORKDIR }}

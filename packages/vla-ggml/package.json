@@ -1,6 +1,6 @@
 {
   "name": "@qvac/vla-ggml",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "VLA vision-language-action inference addon for QVAC (ggml backend)",
   "addon": true,
   "engines": {
@@ -49,7 +49,7 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/vla-ggml#readme",
+  "homepage": "https://qvac.tether.io",
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
