@@ -7,7 +7,7 @@
     "@qvac/sdk/parakeet-transcription/plugin",
     "@qvac/sdk/nmtcpp-translation/plugin",
     "@qvac/sdk/tts-ggml/plugin",
-    "@qvac/sdk/onnx-ocr/plugin",
+    "@qvac/sdk/ggml-ocr/plugin",
     "@qvac/sdk/ggml-classification/plugin"
   ],
   "loggerLevel": "debug",
