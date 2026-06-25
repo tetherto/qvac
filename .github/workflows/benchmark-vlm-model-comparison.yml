@@ -97,6 +97,8 @@ jobs:
       fabric_ref: ${{ steps.sources.outputs.fabric_ref }}
       upstream_ref: ${{ steps.sources.outputs.upstream_ref }}
       models_b64: ${{ steps.sources.outputs.models_b64 }}
+      version_mode: ${{ steps.sources.outputs.version_mode }}
+      versions_b64: ${{ steps.sources.outputs.versions_b64 }}
       merge_base: ${{ steps.commits.outputs.merge_base }}
       head_sha: ${{ steps.commits.outputs.head_sha }}
       head_title: ${{ steps.commits.outputs.head_title }}
@@ -125,6 +127,7 @@ jobs:
           ref: ${{ steps.ctx.outputs.ref }}
           sparse-checkout: |
             packages/llm-llamacpp/benchmarks/vlm-benchmark
+            packages/llm-llamacpp/vcpkg.json
           sparse-checkout-cone-mode: false
       - id: tmo
         shell: bash
@@ -269,30 +272,29 @@ jobs:
         env:
           MATRIX_SOURCES: ${{ inputs.matrix_sources }}
           MATRIX_MODELS: ${{ inputs.matrix_models }}
+          MATRIX_MODE: ${{ inputs.matrix_mode }}
         run: |
-          engine=addon; fabric_ref=v8189.0.2; upstream_ref=b8189
-          IFS=',' read -ra toks <<< "${MATRIX_SOURCES:-addon}"
-          for raw in "${toks[@]}"; do
-            t=$(echo "$raw" | xargs)
-            case "$t" in
-              # addon / candidate / baseline are addon builds — scheduled by the desktop
-              # source loop and the mobile matrix; nothing to resolve here. This step only
-              # extracts the native-CLI refs (fabric/upstream).
-              ""|addon|addon@candidate|addon@baseline|fabric|upstream) ;;
-              fabric@*) fabric_ref="${t#fabric@}" ;;
-              upstream@*) upstream_ref="${t#upstream@}" ;;
-              *) echo "::warning::Unknown matrix_sources token '$t' (known: addon[@candidate|@baseline], fabric@<ref>, upstream@<ref>)" ;;
-            esac
-          done
+          engine=addon
           models_b64=""
           if [ -n "$MATRIX_MODELS" ]; then models_b64=$(printf '%s' "$MATRIX_MODELS" | base64 -w0); fi
           {
             echo "engine=$engine"
-            echo "fabric_ref=$fabric_ref"
-            echo "upstream_ref=$upstream_ref"
             echo "models_b64=$models_b64"
           } >> "$GITHUB_OUTPUT"
-          echo "sources: engine=$engine fabric=$fabric_ref upstream=$upstream_ref models_b64_len=${#models_b64}"
+          # several-sources: auto-select ONE llama.cpp build supported by every requested
+          # source (the most recent common build), or honor explicit @refs (manual mode).
+          # resolve-versions.cjs emits fabric_ref/upstream_ref (the CLI build refs),
+          # version_mode (auto|manual), and versions_b64 (drives the report's "Engine
+          # versions" table). two-models has one engine (addon) — no CLI refs to resolve.
+          if [ "$MATRIX_MODE" = "several-sources" ]; then
+            node packages/llm-llamacpp/benchmarks/vlm-benchmark/resolve-versions.cjs "${MATRIX_SOURCES:-addon}" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "fabric_ref=v8189.0.2"
+              echo "upstream_ref=b8189"
+            } >> "$GITHUB_OUTPUT"
+          fi
+          echo "sources: mode=$MATRIX_MODE sources=${MATRIX_SOURCES:-addon} models_b64_len=${#models_b64}"
       # Resolve commit metadata so the consolidated report can show what
       # the candidate ref + merge-base actually point at (hash, title,
       # date). Needs a real clone — sparse checkout doesn't give us git
@@ -508,20 +510,6 @@ jobs:
           unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_SHARED_CREDENTIALS_FILE AWS_CONFIG_FILE
           aws s3 sync s3://tether-ai-dev/vlm-benchmark/ benchmarks/vlm-benchmark/fixture/
           echo "fixture images:"; ls benchmarks/vlm-benchmark/fixture/
-
-      # Advisory: log each source's llama.cpp build before the run so a cross-version
-      # comparison is visible up front. Same build is the default expectation; a mismatch
-      # is allowed (sometimes exactly what's being benchmarked) and NEVER fails the run —
-      # the consolidated report carries a warning banner instead. addon's engine = the
-      # qvac-fabric vcpkg pin; fabric/upstream = their refs (a SHA-pinned ref can't be
-      # derived → warns).
-      - name: Check llama.cpp engine version parity (several-sources, advisory)
-        if: inputs.matrix_mode == 'several-sources'
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        env:
-          QVAC_VLM_SOURCES: ${{ inputs.matrix_sources }}
-        run: node benchmarks/vlm-benchmark/version-guard.cjs
 
       - name: Run VLM matrix
         working-directory: ${{ env.WORKDIR }}
@@ -824,7 +812,7 @@ jobs:
             --out consolidated/vlm-matrix-consolidated.md \
             --title "VLM Matrix — ${{ inputs.matrix_mode }} / ${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
             --mode "${{ inputs.matrix_mode }}" --engine "${{ needs.context.outputs.engine }}" \
-            --sources "${{ inputs.matrix_sources }}" \
+            --versions-b64 "${{ needs.context.outputs.versions_b64 }}" \
             --run-number "${{ github.run_number }}"
 
       - name: Post step summary

@@ -24,13 +24,6 @@ try {
   for (const it of (FIXTURE.items || [])) GOLD_BY_ID[it.id] = it.gold
 } catch (_) {}
 
-// Engine-version parity check (several-sources). Best-effort: derives each source's
-// llama.cpp build from its id (addon = qvac-fabric vcpkg pin; CLI = ref) so the report
-// can warn when an engine comparison spans different builds. Loaded defensively so
-// aggregate still works if the module/vcpkg.json isn't present.
-let VERSION_GUARD = null
-try { VERSION_GUARD = require('./version-guard.cjs') } catch (_) {}
-
 const ARTICLES = new Set(['a', 'an', 'the'])
 const PUNCT = /[;/[\]"{}()=+\\_\-><@`,?!.]/g
 
@@ -173,7 +166,7 @@ const TASK_LABELS = {
 const taskLabel = t => TASK_LABELS[t] || t
 
 function parseArgs (argv) {
-  const out = { files: [], inputs: [], title: 'VLM Matrix', outFile: null, prov: [], mode: '', engine: '', base: CONFIG.base || 'model_1', candidate: CONFIG.candidate || 'model_2', sources: process.env.QVAC_VLM_SOURCES || '' }
+  const out = { files: [], inputs: [], title: 'VLM Matrix', outFile: null, prov: [], mode: '', engine: '', base: CONFIG.base || 'model_1', candidate: CONFIG.candidate || 'model_2', versionsB64: process.env.QVAC_VLM_VERSIONS_B64 || '' }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--title') out.title = argv[++i]
     else if (argv[i] === '--out') out.outFile = argv[++i]
@@ -181,7 +174,7 @@ function parseArgs (argv) {
     else if (argv[i] === '--engine') out.engine = argv[++i]
     else if (argv[i] === '--base') out.base = argv[++i]
     else if (argv[i] === '--candidate') out.candidate = argv[++i]
-    else if (argv[i] === '--sources') out.sources = argv[++i]
+    else if (argv[i] === '--versions-b64') out.versionsB64 = argv[++i]
     else if (argv[i] === '--provenance') out.prov.push(argv[++i])
     // --in <host-label> <file>: tag every marker in <file> with a platform
     // label (e.g. linux / s25). [VLMROW].device only carries cpu/gpu, so the
@@ -348,25 +341,6 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   if (severalSources) {
     // Comparison axis is the engine; one column per source.
     const sources = [...new Set(rows.map(r => r.cell))].sort()
-    // Engine-version parity: a cross-version comparison is allowed (sometimes the point),
-    // but the deltas then reflect the llama.cpp build gap, not only the engine — so flag it
-    // loudly here. Builds come from the source ids; SHA-pinned refs can't be derived.
-    if (VERSION_GUARD) {
-      try {
-        // Prefer the matrix_sources tokens (carry each engine's ref/build); the report's
-        // own source columns are engine labels (fabric-cli) that don't parse to a build.
-        const vg = VERSION_GUARD.evaluate(opts.sources || sources.join(','))
-        if (vg.mismatch) {
-          const desc = vg.entries.map(e => `${e.id} = ${e.engine.replace(' (addon)', '')} ${e.build == null ? '?' : e.build}`).join(', ')
-          L.push(`> ⚠️ **Cross-version comparison — sources do NOT share one llama.cpp build** (${desc}). ` +
-            'The deltas below reflect the version gap as well as the engine; pin every source to the same ' +
-            'build for an apples-to-apples engine comparison. (Intentional cross-version runs are fine — heads-up only.)\n')
-        } else if (vg.warn) {
-          L.push('> ⚠️ **Engine version unverified** — a source is pinned to a commit SHA, so its llama.cpp ' +
-            'build could not be derived; confirm it matches the others for an apples-to-apples comparison.\n')
-        }
-      } catch (_) {}
-    }
     L.push(`Inference engines on the same model: **${sources.join(', ')}**.\n`)
     L.push('### Quality — overall % per source\n')
     L.push('| Platform · device | ' + sources.join(' | ') + ' |')
@@ -509,6 +483,23 @@ function build (rows, vision, meta, provText, title, opts = {}) {
 
   // ── 2 · Details ───────────────────────────────────────────────────────────
   L.push('# 2 · Details\n')
+  // Engine versions — the llama.cpp build each source actually ran, and the most recent
+  // build that source has available (same or newer). AUTO mode pins every source to the
+  // most recent build they ALL support (apples-to-apples by default); MANUAL mode honors
+  // the refs set per source (builds may differ). opts.versions comes from resolve-versions.cjs.
+  if (opts.versions && Array.isArray(opts.versions.sources) && opts.versions.sources.length) {
+    const auto = opts.versions.mode === 'auto'
+    L.push('### Engine versions — llama.cpp build per source\n')
+    L.push(auto
+      ? '_Versions **chosen automatically** — the most recent llama.cpp build supported by every requested source._\n'
+      : '_Versions **set manually** — refs were pinned per source, so builds may differ._\n')
+    L.push('| Source | build used | most recent available |')
+    L.push('|---|---|---|')
+    for (const s of opts.versions.sources) {
+      L.push(`| \`${s.engine}\` | ${s.chosenTag == null ? '—' : s.chosenTag} | ${s.latestTag == null ? '—' : s.latestTag} |`)
+    }
+    L.push('')
+  }
   // Sources legend — what each compared source resolves to (e.g. addon@candidate =
   // git:<sha>, addon@baseline = npm:0.24.0), so a reader knows exactly which builds the
   // columns above represent. Keyed by the report's comparison cell; shown only when the
@@ -658,7 +649,9 @@ if (require.main === module) {
   const allInputs = args.inputs.concat(args.files.map(f => ({ label: '', file: f })))
   const { rows, vision, meta } = parseLog(allInputs)
   const provText = args.prov.map(p => { try { return fs.readFileSync(p, 'utf-8') } catch (_) { return '' } }).join('\n')
-  const md = build(rows, vision, meta, provText, args.title, { mode: args.mode, engine: args.engine, base: args.base, candidate: args.candidate, sources: args.sources })
+  let versions = null
+  try { if (args.versionsB64) versions = JSON.parse(Buffer.from(args.versionsB64, 'base64').toString('utf8')) } catch (_) {}
+  const md = build(rows, vision, meta, provText, args.title, { mode: args.mode, engine: args.engine, base: args.base, candidate: args.candidate, versions })
   process.stdout.write(md + '\n')
   if (args.outFile) fs.writeFileSync(args.outFile, md + '\n')
 }
