@@ -115,7 +115,7 @@ jobs:
             ${{ env.PKG_DIR }}/models/chatterbox-t3-mtl.gguf
             ${{ env.PKG_DIR }}/models/chatterbox-s3gen-mtl.gguf
             ${{ env.PKG_DIR }}/models/supertonic.gguf
-          key: tts-ggml-cpp-mtl-supertonic-en-q4-v1-${{ hashFiles(format('{0}/scripts/convert-models.sh', env.PKG_DIR), format('{0}/scripts/setup-venv.sh', env.PKG_DIR), format('{0}/scripts/requirements.txt', env.PKG_DIR), format('{0}/scripts/convert-t3-mtl-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-s3gen-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-supertonic2-to-gguf.py', env.PKG_DIR)) }}
+          key: tts-ggml-cpp-mtl-supertonic-en-q4-v1-${{ hashFiles(format('{0}/scripts/convert-models.sh', env.PKG_DIR), format('{0}/scripts/setup-venv.sh', env.PKG_DIR), format('{0}/scripts/requirements.txt', env.PKG_DIR), format('{0}/scripts/convert-t3-mtl-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-s3gen-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-supertonic2-to-gguf.py', env.PKG_DIR), format('{0}/scripts/requantize-gguf.py', env.PKG_DIR)) }}
           restore-keys: |
             tts-ggml-cpp-mtl-supertonic-en-q4-v1-
 

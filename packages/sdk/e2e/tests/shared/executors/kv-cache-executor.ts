@@ -22,6 +22,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       if (test.testId === "kv-cache-session-switch") return [test.testId, this.sessionSwitch.bind(this)];
       if (test.testId === "kv-cache-different-system-prompts") return [test.testId, this.differentSystemPrompts.bind(this)];
       if (test.testId === "kv-cache-stats-verification") return [test.testId, this.statsVerification.bind(this)];
+      if (test.testId === "kv-cache-remove-thinking-compaction") return [test.testId, this.removeThinkingCompaction.bind(this)];
       if (test.testId === "kv-cache-tools-sequential-save") return [test.testId, this.toolsSequentialSave.bind(this)];
       if (test.testId === "kv-cache-tools-dynamic-reuse") return [test.testId, this.toolsDynamicReuse.bind(this)];
       if (test.testId === "kv-cache-cancel-then-new-prompt") return [test.testId, this.cancelThenNewPrompt.bind(this)];
@@ -234,6 +235,66 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Stats verification failed: ${errorMsg}` };
+    }
+  }
+
+  // Proves `remove_thinking_from_context` is forwarded all the way to the
+  // addon and actually compacts the reasoning block: runs the same two-turn
+  // conversation twice against a reasoning model (Qwen3 — the "tools"
+  // resource is the cross-platform Qwen3 build), once with the flag on and
+  // once off, over independent cache keys. With compaction on, turn 1's
+  // `<think>` block is dropped from the persisted cache, so turn 2 reloads a
+  // smaller prefix and reports fewer `cacheTokens`. A passthrough regression
+  // (flag dropped before the addon) collapses the two runs to equal token
+  // counts and fails the assertion.
+  async removeThinkingCompaction(
+    params: { cacheKeyOn: string; cacheKeyOff: string; messages: string[] },
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded("tools");
+
+    const runSession = async (cacheKey: string, removeThinking: boolean) => {
+      try { await deleteCache({ kvCacheKey: cacheKey }); } catch { /* fresh start */ }
+
+      const history: ChatMessage[] = [];
+      let lastCacheTokens = 0;
+
+      for (const message of params.messages) {
+        history.push({ role: "user", content: message });
+
+        const result = completion({
+          modelId,
+          history: [...history],
+          stream: false,
+          kvCache: cacheKey,
+          generationParams: { remove_thinking_from_context: removeThinking },
+        });
+
+        const text = await result.text;
+        const stats = await result.stats;
+        lastCacheTokens = ((stats as Record<string, unknown>)?.cacheTokens as number) ?? 0;
+
+        history.push({ role: "assistant", content: text });
+      }
+
+      return lastCacheTokens;
+    };
+
+    try {
+      const onTokens = await runSession(params.cacheKeyOn, true);
+      const offTokens = await runSession(params.cacheKeyOff, false);
+
+      const summary = `cacheTokens: remove_thinking on=${onTokens}, off=${offTokens}`;
+      if (!(onTokens < offTokens)) {
+        return {
+          passed: false,
+          output: `Expected reasoning-block compaction to shrink the cached prefix going into turn 2. ${summary}`,
+        };
+      }
+      return ValidationHelpers.validate(summary, expectation);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `remove_thinking compaction test failed: ${errorMsg}` };
     }
   }
 

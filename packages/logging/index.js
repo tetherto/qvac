@@ -1,8 +1,6 @@
 'use strict'
 
-const {
-  LOG_LEVELS, LEVEL_PRIORITIES, DEFAULT_LEVEL, ENV_LOG_LEVEL
-} = require('./constants')
+const { LOG_LEVELS, LEVEL_PRIORITIES, DEFAULT_LEVEL, ENV_LOG_LEVEL } = require('./constants')
 
 const env = require('./env')
 
@@ -11,10 +9,10 @@ const env = require('./env')
  * @param {Object} logger - Logger object to validate.
  * @throws {Error} If any required logging method is missing.
  */
-function assertLoggerInterface (logger) {
+function assertLoggerInterface(logger) {
   Object.values(LOG_LEVELS)
-    .filter(level => level !== LOG_LEVELS.OFF)
-    .forEach(method => {
+    .filter((level) => level !== LOG_LEVELS.OFF)
+    .forEach((method) => {
       if (typeof logger[method] !== 'function') {
         throw new Error(`Logger must implement method: ${method}`)
       }
@@ -33,28 +31,24 @@ function assertLoggerInterface (logger) {
  * @returns {string|null}
  *   The detected log level (one of LOG_LEVELS) if found, otherwise `null`.
  */
-function getLevelFromLogger (logger) {
+function getLevelFromLogger(logger) {
   if (typeof logger.getLevel === 'function') {
     const lvl = logger.getLevel()
-    if (typeof lvl === 'string' &&
-            Object.values(LOG_LEVELS).includes(lvl.toLowerCase())
-    ) {
+    if (typeof lvl === 'string' && Object.values(LOG_LEVELS).includes(lvl.toLowerCase())) {
       return lvl
     }
   }
 
   if (typeof logger.level === 'function') {
     const lvl = logger.level()
-    if (typeof lvl === 'string' &&
-            Object.values(LOG_LEVELS).includes(lvl.toLowerCase())
-    ) {
+    if (typeof lvl === 'string' && Object.values(LOG_LEVELS).includes(lvl.toLowerCase())) {
       return lvl
     }
   }
 
   if (
     typeof logger.level === 'string' &&
-        Object.values(LOG_LEVELS).includes(logger.level.toLowerCase())
+    Object.values(LOG_LEVELS).includes(logger.level.toLowerCase())
   ) {
     return logger.level
   }
@@ -66,7 +60,7 @@ function getLevelFromLogger (logger) {
  * Check the environment variable for a log level setting.
  * @returns {null|string} Valid log level or null if not set or invalid.
  */
-function getLogLevelFromEnv () {
+function getLogLevelFromEnv() {
   const envLevel = env[ENV_LOG_LEVEL] || env[`EXPO_PUBLIC_${ENV_LOG_LEVEL}`]
   if (envLevel && Object.values(LOG_LEVELS).includes(envLevel.toLowerCase())) {
     return envLevel.toLowerCase()
@@ -80,23 +74,23 @@ function getLogLevelFromEnv () {
  */
 class QvacLogger {
   /**
-     * Expose the available log level constants.
-     * @type {Object.<string,string>}
-     * @static
-     * @memberof QvacLogger
-     */
+   * Expose the available log level constants.
+   * @type {Object.<string,string>}
+   * @static
+   * @memberof QvacLogger
+   */
   static LOG_LEVELS = LOG_LEVELS
 
   /**
-     * Create a new QvacLogger.
-     *
-     * If no `logger` is provided, defaults to `console` and starts at OFF.
-     * Otherwise, it will inherit the wrapped logger’s own level (via .getLevel()
-     * or .level), falling back to DEFAULT_LEVEL if none is found.
-     *
-     * @param {Object} [logger] - Underlying logger with the required methods.
-     */
-  constructor (logger) {
+   * Create a new QvacLogger.
+   *
+   * If no `logger` is provided, defaults to `console` and starts at OFF.
+   * Otherwise, it will inherit the wrapped logger’s own level (via .getLevel()
+   * or .level), falling back to DEFAULT_LEVEL if none is found.
+   *
+   * @param {Object} [logger] - Underlying logger with the required methods.
+   */
+  constructor(logger) {
     this._logger = logger
 
     if (!this._logger) {
@@ -111,12 +105,12 @@ class QvacLogger {
   }
 
   /**
-     * Update the current log level.
-     *
-     * @param {string} newLevel - One of the LOG_LEVELS constants.
-     * @throws {Error} If `newLevel` is not a valid level.
-     */
-  setLevel (newLevel) {
+   * Update the current log level.
+   *
+   * @param {string} newLevel - One of the LOG_LEVELS constants.
+   * @throws {Error} If `newLevel` is not a valid level.
+   */
+  setLevel(newLevel) {
     if (!Object.values(LOG_LEVELS).includes(newLevel)) {
       throw new Error(`Invalid log level: ${newLevel}`)
     }
@@ -124,42 +118,46 @@ class QvacLogger {
   }
 
   /**
-     * Get the current log level.
-     *
-     * @returns {string} The active log level.
-     */
-  getLevel () {
+   * Get the current log level.
+   *
+   * @returns {string} The active log level.
+   */
+  getLevel() {
     return this._level
   }
 
   /**
-     * Internal helper to route messages to the underlying logger
-     * if the message’s level is at-or-above the current threshold.
-     *
-     * @private
-     * @param {string} level - Level of this message.
-     * @param {...*} messages - Data or strings to log.
-     */
-  _log (level, ...messages) {
-    if (!this._logger || this._level === LOG_LEVELS.OFF || LEVEL_PRIORITIES[level] > LEVEL_PRIORITIES[this._level]) {
+   * Internal helper to route messages to the underlying logger
+   * if the message’s level is at-or-above the current threshold.
+   *
+   * @private
+   * @param {string} level - Level of this message.
+   * @param {...*} messages - Data or strings to log.
+   */
+  _log(level, ...messages) {
+    if (
+      !this._logger ||
+      this._level === LOG_LEVELS.OFF ||
+      LEVEL_PRIORITIES[level] > LEVEL_PRIORITIES[this._level]
+    ) {
       return
     }
     this._logger[level](...messages)
   }
 
-  error (...msgs) {
+  error(...msgs) {
     this._log(LOG_LEVELS.ERROR, ...msgs)
   }
 
-  warn (...msgs) {
+  warn(...msgs) {
     this._log(LOG_LEVELS.WARN, ...msgs)
   }
 
-  info (...msgs) {
+  info(...msgs) {
     this._log(LOG_LEVELS.INFO, ...msgs)
   }
 
-  debug (...msgs) {
+  debug(...msgs) {
     this._log(LOG_LEVELS.DEBUG, ...msgs)
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "GGML image classification addon for QVAC (MobileNetV3-Small CPU inference)",
   "addon": true,
   "scripts": {
@@ -54,7 +54,7 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-url": "^2.1.6",

@@ -78,10 +78,10 @@ test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", 
 
   const validOcrRequest = {
     type: "loadModel",
-    modelType: ModelType.onnxOcr,
-    modelSrc: "recognizer.onnx",
+    modelType: ModelType.ggmlOcr,
+    modelSrc: "recognizer.gguf",
     modelConfig: {
-      detectorModelSrc: "detector.onnx",
+      detectorModelSrc: "detector.gguf",
     },
   };
 

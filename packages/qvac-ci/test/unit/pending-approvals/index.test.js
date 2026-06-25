@@ -24,7 +24,7 @@ test('pending-approvals — declares required secrets', t => {
   t.ok(envVars.includes('GITHUB_PRIVATE_KEY'))
 })
 
-test('pending-approvals — toCommand() returns a paparam command object', t => {
+test('pending-approvals — toCommand() returns a CLI command object', t => {
   const cmd = pa.toCommand()
   t.ok(cmd !== null && typeof cmd === 'object', 'toCommand returns an object')
 })

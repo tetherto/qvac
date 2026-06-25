@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include <common/log.h>
+#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
@@ -163,6 +164,69 @@ void MtmdLlmContext::initVisionContext() {
       params_.mmproj_backend.empty() ? nullptr : params_.mmproj_backend.c_str();
   mparams.print_timings = true;
   mparams.n_threads = params_.cpuparams.n_threads;
+  mparams.image_tile_mode = params_.image_tile_mode;
+  // Forward the per-image token budget to the vision encoder. These were
+  // previously dropped: the addon parsed image_min/max_tokens into
+  // common_params but never copied them into mtmd_context_params, so a
+  // caller-set cap had no effect and the encoder always used the model-metadata
+  // default (up to ~4M pixels -> thousands of patches). For dynamic-resolution
+  // encoders (Qwen-VL, Pixtral, LFM2, ...) this lets callers bound the
+  // O(n_patches^2) encode cost; for fixed-grid encoders it is a no-op.
+  mparams.image_min_tokens = params_.image_min_tokens;
+  mparams.image_max_tokens = params_.image_max_tokens;
+
+  // When the caller has not set an explicit cap, apply a sensible default for
+  // Qwen-VL encoders only. Qwen-VL allows up to 4096 image tokens, far more
+  // than the ~1024 it needs for grounding, so an uncapped high-resolution
+  // image pays O(n_patches^2) attention for tokens the model cannot use (and
+  // can even destabilize generation). 2048 stays well above the documented
+  // grounding floor while roughly halving the worst-case encode + image
+  // prefill. We gate on the mmproj projector type rather than applying a
+  // blanket value so that smaller-budget dynamic encoders (e.g. LightOnOCR /
+  // Pixtral at 1024, LFM2 at 256) are never *raised* above their native limit;
+  // fixed-grid encoders (SigLIP/SmolVLM) are unaffected regardless. Fully
+  // overridable via image_max_tokens config.
+  if (mparams.image_max_tokens <= 0) {
+    static constexpr int kQwenVlDefaultImageMaxTokens = 2048;
+    // Respect an explicit image_min_tokens floor. mtmd converts both knobs into
+    // min/max pixel budgets and throws when max_pixels < min_pixels, so if the
+    // caller asked for at least as many tokens as our default cap, injecting
+    // the default max would make a min-only config fail to load. Leave the
+    // budget to the caller / model default in that case.
+    if (mparams.image_min_tokens < kQwenVlDefaultImageMaxTokens) {
+      gguf_init_params gp = {};
+      gp.no_alloc = true;
+      if (gguf_context* gc = gguf_init_from_file(clipPath, gp)) {
+        // Mirror mtmd's projector-type resolution: it reads clip.projector_type
+        // first and, for mixed vision+audio mmprojs, falls back to
+        // clip.vision.projector_type. Reading only the generic key would miss
+        // Qwen Omni vision encoders (e.g. Qwen3-Omni stores its vision merger
+        // under the vision key), silently leaving them on the uncapped path.
+        auto readProjType = [&](const char* key) -> std::string {
+          const int64_t id = gguf_find_key(gc, key);
+          if (id >= 0 && gguf_get_kv_type(gc, id) == GGUF_TYPE_STRING) {
+            return gguf_get_val_str(gc, id);
+          }
+          return {};
+        };
+        std::string projType = readProjType("clip.projector_type");
+        if (projType.empty()) {
+          projType = readProjType("clip.vision.projector_type");
+        }
+        // Qwen vision mergers: qwen2vl_merger / qwen2.5vl_merger /
+        // qwen3vl_merger. Plus qwen2.5o, the Qwen2.5-Omni combined projector,
+        // which mtmd resolves to the Qwen2.5-VL vision merger for the vision
+        // modality.
+        const bool isQwenVlMerger = projType.rfind("qwen", 0) == 0 &&
+                                    projType.find("vl") != std::string::npos;
+        const bool isQwenOmni = projType == "qwen2.5o";
+        if (isQwenVlMerger || isQwenOmni) {
+          mparams.image_max_tokens = kQwenVlDefaultImageMaxTokens;
+        }
+        gguf_free(gc);
+      }
+    }
+  }
   ctxVision_.reset(mtmd_init_from_file(clipPath, modelCtx_.model, mparams));
   if (ctxVision_.get() == nullptr) {
     std::string errorMsg = string_format(
@@ -390,25 +454,12 @@ bool MtmdLlmContext::evalMessageWithTools(
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
       current_.pos = outcome.newNPast;
-      current_.cacheTokens -= outcome.discarded;
+      refreshCurrentCacheTokensFromMemory();
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
               "[MtmdLlm] Prefill step: discarded %d tokens after the first "
-              "message\n",
-              outcome.discarded));
-      break;
-    case ContextSlideOutcome::Kind::FullWipe:
-      current_.pos = outcome.newNPast;
-      current_.cacheTokens = current_.pos == protectedPrefix_.pos
-                                 ? protectedPrefix_.cacheTokens
-                                 : protectedPrefix_.cacheTokens + 1;
-      ++nSlides_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[MtmdLlm] Prefill step: wiped %d tokens after the first "
               "message\n",
               outcome.discarded));
       break;
@@ -452,7 +503,43 @@ bool MtmdLlmContext::evalMessageWithTools(
     if (stopGeneration_.load()) {
       llama_pos totalDelta = nPastLocal - current_.pos;
       current_.pos = nPastLocal;
-      removeLastNTokens(totalDelta);
+      // [TODO] Temporary recurrent-memory fix: removeLastNTokens() may no-op for
+      // hybrid/SSM models. A proper cancellation rollback needs llama.cpp
+      // sequence checkpoint save + restore so partially evaluated tokens can
+      // be restored without corrupting recurrent state.
+      const llama_pos removedTokens = removeLastNTokens(totalDelta);
+      if (removedTokens == 0 && totalDelta > 0) {
+        // [TODO] Replace this metadata resync in the next PR with real
+        // checkpoint save/restore rollback. This branch means rollback did not
+        // remove the partially evaluated prompt, which is expected for
+        // Qwen3VL hybrid/recurrent memory until checkpoint restore exists.
+        //
+        // The subtle case is cancellation between mtmd chunks: the image chunk
+        // has already returned from mtmd_helper_eval_chunk_single(), so
+        // nPastLocal has been advanced to the next chunk's cursor by the
+        // Qwen3VL M-RoPE span (max(nx, ny)). But the following text chunk has
+        // not run yet. llama memory currently contains only the committed image
+        // KV cells, whose normal sequence position is the image chunk's pos.t;
+        // the image x/y coordinates are stored as extended metadata and are not
+        // reported by llama_memory_seq_pos_max().
+        //
+        // If we save nPastLocal as cache metadata here, disk reload can fail
+        // because the saved nPast is ahead of the positions actually restored
+        // from llama memory. Persist the memory-derived position until proper
+        // rollback can restore the exact pre-cancel state.
+        auto* mem = llama_get_memory(modelCtx_.lctx);
+        if (mem == nullptr) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InternalError),
+              "[MtmdLlm] llama memory is null while syncing canceled prefill "
+              "position");
+        }
+        const llama_pos posMax = llama_memory_seq_pos_max(mem, seqId_);
+        current_.pos = posMax < 0 ? 0 : posMax + 1;
+        refreshCurrentCacheTokensFromMemory();
+      }
       stopGeneration_.store(false);
       return false;
     }
@@ -473,7 +560,7 @@ bool MtmdLlmContext::evalMessageWithTools(
     }
   }
   current_.pos = nPastLocal;
-  current_.cacheTokens += nTokens;
+  refreshCurrentCacheTokensFromMemory();
 
   if (isFirstMsg) {
     protectedPrefix_ = current_;
@@ -497,6 +584,19 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
   }
 }
 
+void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
+  auto* mem = llama_get_memory(modelCtx_.lctx);
+  if (mem == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(ContextSlideFailed),
+        "[MtmdLlm] llama memory is null while refreshing cache token count");
+  }
+
+  current_.cacheTokens =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId_));
+}
+
 void MtmdLlmContext::applyContextDiscard() {
   constexpr llama_pos effectiveCtx = -1;
   auto outcome = trySlideGeneration(
@@ -511,7 +611,7 @@ void MtmdLlmContext::applyContextDiscard() {
       current_.cacheTokens);
   if (outcome.kind == ContextSlideOutcome::Kind::Slid) {
     current_.pos = outcome.newNPast;
-    current_.cacheTokens -= outcome.discarded;
+    refreshCurrentCacheTokensFromMemory();
     ++nSlides_;
     // Recorded span positions are no longer valid after the shift;
     // drop them rather than try to fix them up.
@@ -539,7 +639,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
   common_batch_add(
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(modelCtx_.vocab) : eot,
-      current_.pos++,
+      current_.pos,
       {seqId_},
       true);
   if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -547,6 +647,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(FailedToDecode), errorMsg);
   }
+  ++current_.pos;
   ++current_.cacheTokens;
 }
 
@@ -627,8 +728,8 @@ bool MtmdLlmContext::generateResponse(
     }
 
     // Reasoning channel detection. `current_.pos` here reflects the
-    // cache state BEFORE this token is committed (it's incremented in
-    // common_batch_add below), so the open-marker math mirrors
+    // cache state BEFORE this token is committed (it's incremented after
+    // successful decode below), so the open-marker math mirrors
     // TextLlmContext: the first marker piece is at
     // `current_.pos - (openTokenCount - 1)`.
     if (reasoningEnabled_) {
@@ -688,13 +789,14 @@ bool MtmdLlmContext::generateResponse(
       }
 
       common_batch_clear(*batch);
-      common_batch_add(*batch, tokenId, current_.pos++, {seqId_}, true);
+      common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
       if (llama_decode(modelCtx_.lctx, *batch) != 0) {
         const char* errorMsg =
             "[MtmdLlm] failed to decode substituted reasoning close tag\n";
         throw qvac_errors::StatusError(
             ADDON_ID, toString(FailedToDecode), errorMsg);
       }
+      ++current_.pos;
       ++current_.cacheTokens;
       capturePendingThinkClose();
       flushPendingUtf8ToCallback(outputCallback);
@@ -711,7 +813,7 @@ bool MtmdLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, tokenId, current_.pos++, {seqId_}, true);
+    common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
 
     // eval the token
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -719,6 +821,7 @@ bool MtmdLlmContext::generateResponse(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    ++current_.pos;
     ++current_.cacheTokens;
     // Close-marker token (if any was sampled this iteration) is now
     // committed; capture the span end.
@@ -906,10 +1009,7 @@ void MtmdLlmContext::compactThinkSpan() {
       compactKvRange(modelCtx_.lctx, seqId_, start, end, current_.pos);
   if (outcome.kind == CompactRangeOutcome::Kind::Compacted) {
     current_.pos = outcome.newNPast;
-    // Multimodal cacheTokens tracks image tokens separately from text
-    // positions; the compacted range is text-only so cacheTokens drops
-    // by the same number of discarded tokens.
-    current_.cacheTokens -= outcome.discarded;
+    refreshCurrentCacheTokensFromMemory();
     if (start < protectedPrefix_.pos) {
       const llama_pos removedProtectedTokens =
           std::min(outcome.discarded, protectedPrefix_.pos - start);
@@ -1061,11 +1161,19 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
     return 0;
   }
 
+  if (hasRecurrentMemory_) {
+    // TODO: Re-enable tail-token removal for recurrent / hybrid SSM models
+    // once QVAC supports llama.cpp sequence checkpoint save + restore. Until
+    // then, partial `llama_memory_seq_rm` can fail because recurrent state
+    // does not keep full per-token history (for example Qwen3.5 with
+    // n_rs_seq=0).
+    return 0;
+  }
+
   clearSequenceMemory(modelCtx_.lctx, current_.pos - tokensToRemove, -1);
 
-  // Decrement the token count by the number of tokens removed
   current_.pos -= tokensToRemove;
-  current_.cacheTokens -= std::min(tokensToRemove, current_.cacheTokens);
+  refreshCurrentCacheTokensFromMemory();
 
   // Note: The sampler doesn't have an "undo" function, so we leave it as is.
   // The sampler maintains its own history, but the removed tokens won't affect
