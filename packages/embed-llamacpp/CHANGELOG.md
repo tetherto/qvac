@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.23.0] - 2026-06-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.0.0` → `9341.1.0` (Qwen3.5-VL multi-tile batching; no API change for this package).
+
+## Pull Requests
+
+- [#2837](https://github.com/tetherto/qvac/pull/2837) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (embed-llamacpp)
+
 ## [0.22.1] - 2026-06-22
 
 ### Changed
