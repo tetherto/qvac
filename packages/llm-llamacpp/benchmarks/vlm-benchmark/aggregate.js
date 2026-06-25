@@ -433,22 +433,26 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     L.push(`> ${icon} **Summary** — candidate **${candidate}** is ${verdict(sp, 'faster', 'slower')} than baseline **${base}** _(vis-encode + TTFT)_, ` +
       `with ${verdict(qp, 'better', 'worse')} quality, averaged across ${legs} platform·device leg${legs === 1 ? '' : 's'}.\n`)
     L.push(`Two models — **${base}** (base) vs **${candidate}** (candidate), per platform · device.\n`)
+    // Relative % difference (cand vs base), shown alongside the absolute Δ in every Highlights
+    // comparison table for easier magnitude reading. Relative to the baseline value.
+    const relPct = (bv, cv) => (bv != null && cv != null && bv !== 0) ? (cv - bv) / bv * 100 : null
+    const fmtRel = v => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%'
     L.push(`### Quality — overall %: ${base} vs ${candidate}\n`)
-    L.push(`| Platform · device | ${base} % | ${candidate} % | Δ (pp, cand−base) |`)
-    L.push('|---|---|---|---|')
+    L.push(`| Platform · device | ${base} % | ${candidate} % | Δ (pp, cand−base) | Δ % (cand−base) |`)
+    L.push('|---|---|---|---|---|')
     for (const host of hosts) {
       for (const dv of devs) {
         const b = groupStats(`${host}|${base}|${dv}`)
         const c = groupStats(`${host}|${candidate}|${dv}`)
         if (!b && !c) continue
         const dpp = (b && b.overall != null && c && c.overall != null) ? (c.overall - b.overall) * 100 : null
-        L.push(`| ${host || '—'} · ${dv.toUpperCase()} | ${fmtPct(b && b.overall)} | ${fmtPct(c && c.overall)} | ${dpp == null ? '—' : (dpp >= 0 ? '+' : '') + dpp.toFixed(1)} |`)
+        L.push(`| ${host || '—'} · ${dv.toUpperCase()} | ${fmtPct(b && b.overall)} | ${fmtPct(c && c.overall)} | ${dpp == null ? '—' : (dpp >= 0 ? '+' : '') + dpp.toFixed(1)} | ${fmtRel(relPct(b && b.overall, c && c.overall))} |`)
       }
     }
     L.push('')
     L.push(`### Speed: ${base} vs ${candidate} (lower = faster; metric is mmproj-encode on desktop, TTFT on mobile)\n`)
-    L.push(`| Platform · device | metric | ${base} | ${candidate} | Δ ms (cand−base, −=faster) |`)
-    L.push('|---|---|---|---|---|')
+    L.push(`| Platform · device | metric | ${base} | ${candidate} | Δ ms (cand−base, −=faster) | Δ % (−=faster) |`)
+    L.push('|---|---|---|---|---|---|')
     for (const host of hosts) {
       for (const dv of devs) {
         const b = groupStats(`${host}|${base}|${dv}`)
@@ -462,15 +466,15 @@ function build (rows, vision, meta, provText, title, opts = {}) {
         // Absolute ms delta — robust near zero, unlike a "% faster" that explodes when
         // the baseline is a few ms (e.g. GPU mmproj-encode).
         const dms = (bv != null && cv != null) ? cv - bv : null
-        L.push(`| ${host || '—'} · ${dv.toUpperCase()} | ${metric} | ${fmtNum(bv, d)} | ${fmtNum(cv, d)} | ${dms == null ? '—' : (dms >= 0 ? '+' : '') + dms.toFixed(d)} |`)
+        L.push(`| ${host || '—'} · ${dv.toUpperCase()} | ${metric} | ${fmtNum(bv, d)} | ${fmtNum(cv, d)} | ${dms == null ? '—' : (dms >= 0 ? '+' : '') + dms.toFixed(d)} | ${fmtRel(relPct(bv, cv))} |`)
       }
     }
     L.push('')
     // OCR comparison (only when OCR tasks ran): avg of each metric per model + Δ.
     if (ocrTasks.length) {
       L.push(`### OCR — avg CER/WER/BLEU: ${base} vs ${candidate} (CER/WER lower better · BLEU higher better)\n`)
-      L.push(`| Platform · device | metric | ${base} | ${candidate} | Δ (cand−base) |`)
-      L.push('|---|---|---|---|---|')
+      L.push(`| Platform · device | metric | ${base} | ${candidate} | Δ (cand−base) | Δ % (cand−base) |`)
+      L.push('|---|---|---|---|---|---|')
       for (const host of hosts) {
         for (const dv of devs) {
           const b = ocrGroup(`${host}|${base}|${dv}`)
@@ -479,7 +483,7 @@ function build (rows, vision, meta, provText, title, opts = {}) {
           for (const { k, label } of OCR_ROWS) {
             const bv = b && b[k]; const cv = c && c[k]
             const delta = (bv != null && cv != null) ? (cv - bv) : null
-            L.push(`| ${host || '—'} · ${dv.toUpperCase()} | ${label} | ${fmtNum(bv, 3)} | ${fmtNum(cv, 3)} | ${delta == null ? '—' : (delta >= 0 ? '+' : '') + delta.toFixed(3)} |`)
+            L.push(`| ${host || '—'} · ${dv.toUpperCase()} | ${label} | ${fmtNum(bv, 3)} | ${fmtNum(cv, 3)} | ${delta == null ? '—' : (delta >= 0 ? '+' : '') + delta.toFixed(3)} | ${fmtRel(relPct(bv, cv))} |`)
           }
         }
       }
