@@ -274,8 +274,18 @@ jobs:
           DIFF_FROM="$BASE_SHA"
           if [ "$EVENT_ACTION" = "synchronize" ] && [ -n "$BEFORE_SHA" ]; then
             DIFF_FROM="$BEFORE_SHA"
-            # Fetch the before SHA too (may not be in shallow clone)
-            git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null || true
+            # Fetch BEFORE_SHA — same fork fallback as HEAD_SHA.
+            # For fork PRs the previous head may only exist in the fork repo.
+            if ! git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null; then
+              if [ -n "$HEAD_REPO" ] && [ -n "$HEAD_REF" ]; then
+                git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_REF" --depth=50 2>/dev/null || true
+              fi
+              # If BEFORE_SHA is still unreachable, fall back to base..head diff
+              if ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+                echo "::warning::BEFORE_SHA ($BEFORE_SHA) unreachable — falling back to base..head diff"
+                DIFF_FROM="$BASE_SHA"
+              fi
+            fi
           fi
 
           CHANGED=false
