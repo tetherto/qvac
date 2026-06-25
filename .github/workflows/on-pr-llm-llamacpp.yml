@@ -62,7 +62,9 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
       run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
       run_desktop: ${{ steps.route.outputs.run_desktop }}
       run_mobile: ${{ steps.route.outputs.run_mobile }}
     steps:
@@ -77,26 +79,31 @@ jobs:
              [ "$EVENT_NAME" = "push" ] || \
              [ "$EVENT_NAME" = "schedule" ]; then
             echo "Trusted event ($EVENT_NAME) — enabling all CI stages"
-            echo "run_prebuilds=true" >> "$GITHUB_OUTPUT"
-            echo "run_desktop=true" >> "$GITHUB_OUTPUT"
-            echo "run_mobile=true" >> "$GITHUB_OUTPUT"
+            for out in run_verified_checks run_prebuilds run_cpp_tests run_desktop run_mobile; do
+              echo "$out=true" >> "$GITHUB_OUTPUT"
+            done
             exit 0
           fi
+          VERIFIED=false
           PREBUILDS=false
+          CPP_TESTS=false
           DESKTOP=false
           MOBILE=false
           if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
             for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
               case "$label" in
                 prebuilds)                PREBUILDS=true ;;
-                run-desktop-addon-tests)  PREBUILDS=true; DESKTOP=true ;;
-                run-mobile-addon-tests)   PREBUILDS=true; MOBILE=true ;;
-                verified)                 PREBUILDS=true; DESKTOP=true; MOBILE=true ;;
+                run-cpp-addon-tests)      CPP_TESTS=true; PREBUILDS=true ;;
+                run-desktop-addon-tests)  DESKTOP=true; PREBUILDS=true ;;
+                run-mobile-addon-tests)   MOBILE=true; PREBUILDS=true ;;
+                verified)                 VERIFIED=true; PREBUILDS=true; CPP_TESTS=true; DESKTOP=true; MOBILE=true ;;
               esac
             done
           fi
-          echo "CI Router: prebuilds=$PREBUILDS desktop=$DESKTOP mobile=$MOBILE"
+          echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
+          echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
           echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
+          echo "run_cpp_tests=$CPP_TESTS" >> "$GITHUB_OUTPUT"
           echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
           echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"
 
@@ -132,7 +139,7 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - verify-fabric-lockstep
@@ -153,7 +160,7 @@ jobs:
           workdir: packages/llm-llamacpp
 
   cpp-tests:
-    if: needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - sanity-checks
@@ -166,7 +173,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   cpp-lint:
-    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
       - authorize
@@ -355,7 +362,6 @@ jobs:
   prebuild:
     needs:
       - authorize
-      - sanity-checks
       - ci-router
       - detect-native-changes
       - prebuild-cache-restore
