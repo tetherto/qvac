@@ -103,6 +103,8 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 | `QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS` | `1` | Warmup iterations before measurement (1st becomes `summary.coldRtf`). |
 | `QVAC_TTS_GGML_BENCHMARK_RUNS` | `5` desktop / `3` mobile | Measured iterations. |
 | `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND` | — | If set, test **fails** when mean RTF exceeds it. Use as a catastrophic-regression guard. No bound = numbers-only. |
+| `QVAC_TTS_GGML_BENCHMARK_QUALITY` | — | Desktop-only opt-in for round-trip quality (`input text -> TTS audio -> Whisper transcript`). |
+| `QVAC_TTS_GGML_QUALITY_WHISPER_MODEL` | `ggml-tiny.bin` | Whisper model used for quality metrics when quality is enabled. |
 
 ### Streaming benchmark only
 
@@ -134,22 +136,20 @@ every report links back to the CI run that produced it.
 ## How the CI pipeline fits together
 
 ```
-workflow_dispatch / cron schedule
-  └── benchmark-rtf-tts-ggml.yml  (orchestrator)
+workflow_dispatch
+  └── benchmark-performance-tts-ggml.yml  (orchestrator)
          ├── prebuilds-tts-ggml.yml          (build native addon)
-         ├── benchmarks-self-hosted matrix    (qvac-*-gpu runners: CPU + Vulkan)
-         ├── mobile-benchmarks                (include_mobile=true → Device Farm CPU)
+         ├── desktop-benchmarks               (qvac-*-gpu runners: CPU + Vulkan)
+         ├── mobile-benchmarks                (run_mobile=true → Device Farm CPU)
          └── summarize job
                ├── downloads rtf-results-tts-ggml-* (desktop) + perf-report-tts-ggml-* (mobile)
                ├── runs aggregate-tts-ggml-rtf.js --manual-dir benchmarks/manual-results
                └── writes combined markdown + JSON to $GITHUB_STEP_SUMMARY + artifact
 ```
 
-The orchestrator runs on `workflow_dispatch` and on `cron: '30 6 * * 1'`
-(Monday 06:30 UTC — offset from the ONNX benchmark's 06:00 so the two weekly
-runs don't contend at the same minute). Desktop is on by default; the mobile leg is opt-in via the
-`include_mobile=true` dispatch input so the weekly cron never burns AWS Device
-Farm capacity. On-PR workflows do NOT run the benchmarks.
+The primary orchestrator runs on `workflow_dispatch`. Desktop and mobile are on
+by default via the `run_desktop` / `run_mobile` dispatch inputs, matching the
+Parakeet benchmark workflow shape. On-PR workflows do NOT run the benchmarks.
 
 ## CI runner coverage
 
@@ -161,8 +161,8 @@ and the prebuilds plumbing already live.
 |---|---|---|
 | linux / x64 | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu` (self-hosted) |
 | win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` (self-hosted) |
-| Android | cpu | **include_mobile** — AWS Device Farm (this matrix runs CPU; GPU is opt-in via `useGPU`) |
-| iOS | cpu | **include_mobile** — AWS Device Farm |
+| Android | cpu | **run_mobile** — AWS Device Farm (this matrix runs CPU; GPU is opt-in via `useGPU`) |
+| iOS | cpu | **run_mobile** — AWS Device Farm |
 | darwin / arm64 | metal | **Manual** — hosted macOS Metal crashes ggml's encoder; drop JSON under `manual-results/` |
 | linux / x64 | cuda | **Manual** — not in the default tts-cpp backend cascade; drop JSON under `manual-results/` |
 | android | opencl | **Manual** — Adreno-only; drop JSON under `manual-results/` |
@@ -180,6 +180,9 @@ The aggregated table carries:
 - **Peak RSS (MB)**: high-water RSS observed across warmup + measured runs.
 - **Model (MB)**: sum of the engine's GGUF files on disk.
 - **Tokens/s**: populated from the addon's `runtimeStats`. `n/a` when absent.
+- **WER / CER**: desktop-only Whisper tiny round-trip quality metrics. Lower is
+  better. Mobile rows report `n/a` because Device Farm quality is intentionally
+  skipped.
 - **Noisy**: `⚠` when stddev / mean > 15% — compare P50 instead.
 - **Run**: links back to the GitHub Actions run.
 
@@ -189,9 +192,9 @@ total wall time.
 
 ## Adding a new platform
 
-1. Add the matrix row to the `benchmarks-self-hosted` job in
-   `.github/workflows/benchmark-rtf-tts-ggml.yml`, including a
-   `benchmark_matrix_json` with the `(engine, useGPU, backendHint)` combos.
+1. Add the matrix row to `.github/workflows/integration-test-tts-ggml.yml`'s
+   benchmark-only leg, or pass `benchmark_matrix_json` when dispatching
+   `.github/workflows/benchmark-performance-tts-ggml.yml`.
 2. Add the platform's GPU backend, if any, to
    `scripts/perf-report/aggregate-tts-ggml-rtf.js`'s `SUPPORTED_GPU_BACKENDS`.
 3. For unavailable backends (CUDA, OpenCL, hosted-macOS Metal), drop fixtures
