@@ -1041,7 +1041,7 @@ async function downloadShardedModelFromArchive(
       }
 
       async function downloadAndExtractArchive() {
-        await performHttpDownload(
+        await performHttpDownloadWithResume(
           archiveUrl,
           archivePath,
           downloadKey,
@@ -1102,7 +1102,7 @@ async function downloadShardsWithConcurrency(
           `📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`,
         );
 
-        await performHttpDownload(
+        await performHttpDownloadWithResume(
           state.shard.url,
           state.shardPath,
           downloadKey,
