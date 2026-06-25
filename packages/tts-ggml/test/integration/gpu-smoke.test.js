@@ -30,7 +30,7 @@ const test = require('brittle')
 
 const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
-const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
+const { ensureChatterboxModels, ensureChatterboxMtlModels, ensureSupertonicModel } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
@@ -182,6 +182,61 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     t.ok(result.data.sampleCount > 0, 'Chatterbox/GPU produced audio')
     assertGpuBackend(t, 'Chatterbox', result.data.stats, /* allowPolicyCpu */ true)
     recordSmoke(t, 'chatterbox gpu-smoke', result, wallMs)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+// Multilingual (MTL) GPU smoke. The Chatterbox GPU smoke above loads the EN
+// Turbo model, whose step graph never CONTs the KV cache. The MULTILINGUAL
+// model does (eval_step_mtl's B=2 cond+uncond path), which made a q8_0 KV
+// cache hard-abort on Metal with GGML_ABORT("unsupported op 'CONT'") (the
+// ggml-speech Metal backend has no q8_0->q8_0 CONT). The addon now defaults
+// the KV cache to f16, which Metal's CONT supports. This entry is the
+// regression guard for that fix: it runs the MTL model with useGPU=true and
+// the default (f16) KV dtype, and would have aborted before the fix. Uses a
+// tier-1 non-English language so the multilingual path (tokenizer + run_t3
+// MTL dispatch) is actually exercised.
+test('Chatterbox MTL GPU smoke - multilingual model on GPU with the default (f16) KV cache', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureChatterboxMtlModels({ targetDir: modelsDir })
+  if (!download.success) {
+    t.fail('Chatterbox MTL GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
+    return
+  }
+
+  // Mobile-aware resolution: see multiple-runs.test.js for rationale.
+  const refWavPath = resolveRefWavPath({})
+  if (!fs.existsSync(refWavPath)) {
+    t.pass('Skipped: reference audio missing')
+    return
+  }
+
+  const model = await loadChatterboxTTS({
+    modelDir: download.targetDir,
+    t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
+    s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
+    refWavPath,
+    language: 'es',
+    useGPU: true
+    // kvCacheType intentionally left unset so the run uses the addon default
+    // (f16) — the whole point of this regression guard.
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runChatterboxTTS(
+      model,
+      { text: 'Comprobación de la GPU multilingüe.' },
+      { minSamples: 5000 }
+    )
+    const wallMs = Date.now() - t0
+    console.log(result.output)
+    t.ok(result.passed, 'Chatterbox MTL/GPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Chatterbox MTL/GPU produced audio')
+    assertGpuBackend(t, 'Chatterbox MTL', result.data.stats, /* allowPolicyCpu */ true)
+    recordSmoke(t, 'chatterbox-mtl gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }
