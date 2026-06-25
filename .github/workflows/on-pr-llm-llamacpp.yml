@@ -57,6 +57,7 @@ jobs:
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     permissions:
       contents: read
       pull-requests: read
@@ -211,14 +212,15 @@ jobs:
       - authorize
       - ci-router
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
       native_changed: ${{ steps.detect.outputs.native_changed }}
       native_hash: ${{ steps.detect.outputs.native_hash }}
     steps:
-      - name: Checkout
+      - name: Checkout base branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          fetch-depth: 0
       - name: Detect native file changes
         id: detect
         env:
@@ -235,9 +237,28 @@ jobs:
             echo "native_hash=dispatch-$(date +%s)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          # Fetch the PR head commit so git diff and git ls-tree work
+          # even for fork PRs (pull_request_target only fetches base refs).
+          # This does NOT check out PR code — just makes the commit
+          # reachable for read-only git operations.
+          if [ -n "$HEAD_SHA" ]; then
+            git fetch origin "$HEAD_SHA" --depth=1 2>/dev/null || {
+              echo "::warning::Could not fetch HEAD_SHA ($HEAD_SHA) — treating as changed"
+              echo "native_changed=true" >> "$GITHUB_OUTPUT"
+              echo "native_hash=unfetchable-$(date +%s)" >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+          fi
+
           CHANGED=false
           if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ]; then
-            DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 2>/dev/null || true)
+            DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 2>&1) || {
+              echo "::warning::git diff failed — treating as changed"
+              echo "native_changed=true" >> "$GITHUB_OUTPUT"
+              echo "native_hash=diff-failed-$(date +%s)" >> "$GITHUB_OUTPUT"
+              exit 0
+            }
             if [ -n "$DIFF_FILES" ]; then
               while IFS= read -r file; do
                 case "$file" in
@@ -252,12 +273,17 @@ jobs:
             echo "No base/head SHA — treating as changed"
             CHANGED=true
           fi
-          NATIVE_HASH=$(find "$WORKDIR" \
-            \( -name "*.cpp" -o -name "*.hpp" -o -name "*.c" -o -name "*.h" \
-               -o -name "CMakeLists.txt" -o -name "vcpkg.json" \
-               -o -name "vcpkg-configuration.json" \) \
-            -type f 2>/dev/null | sort | xargs cat 2>/dev/null | sha256sum | cut -d' ' -f1)
+
+          # Compute hash from the PR HEAD tree (not the checked-out base).
+          # git ls-tree reads the tree object without checking out files —
+          # secure (no PR code execution) and correct (reflects PR state).
+          NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- \
+            "$WORKDIR/addon" "$WORKDIR/vcpkg.json" "$WORKDIR/vcpkg-configuration.json" \
+            "$WORKDIR/vcpkg" 2>/dev/null \
+            | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$' \
+            | sha256sum | cut -d' ' -f1)
           [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
+
           echo "Native changed: $CHANGED | Hash: ${NATIVE_HASH:0:16}"
           echo "native_changed=$CHANGED" >> "$GITHUB_OUTPUT"
           echo "native_hash=${NATIVE_HASH:0:16}" >> "$GITHUB_OUTPUT"
@@ -268,6 +294,9 @@ jobs:
       - detect-native-changes
       - sanity-checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       cache_hit: ${{ steps.cache.outputs.cache-hit }}
     steps:
@@ -308,14 +337,19 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   prebuild-cache-save:
-    if: |
-      always() &&
-      needs.prebuild.result == 'success' &&
-      needs.detect-native-changes.outputs.native_changed == 'true'
+    # Save whenever prebuild succeeds — regardless of native_changed.
+    # This ensures the first build on ANY PR populates the cache,
+    # so subsequent JS-only pushes can restore it.
+    # Cache key is scoped by PR number + native hash, so PRs cannot
+    # poison each other's cache and native changes invalidate it.
+    if: always() && needs.prebuild.result == 'success'
     needs:
       - prebuild
       - detect-native-changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - name: Download prebuilds artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -604,4 +638,4 @@ jobs:
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success'}}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true' }}
