@@ -48,8 +48,8 @@ public:
 
   /// Override the media-segment eval used by serviceNextMediaSegmentLocked();
   /// inject a stub that throws to exercise the media-eval failure path.
-  static void setEvalMediaFunc(
-      Scheduler& scheduler, Scheduler::EvalMediaFunc fn) {
+  static void
+  setEvalMediaFunc(Scheduler& scheduler, Scheduler::EvalMediaFunc fn) {
     scheduler.evalMediaFunc_ = std::move(fn);
   }
 };

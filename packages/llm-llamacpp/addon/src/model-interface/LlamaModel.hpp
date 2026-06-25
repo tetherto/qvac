@@ -199,7 +199,8 @@ public:
 private:
   friend class LlamaFinetuner;
   // Unit tests reach internals (scheduler, single-prompt context) through this
-  // peer instead of public `*ForTesting()` accessors. See test_internal_peers.hpp.
+  // peer instead of public `*ForTesting()` accessors. See
+  // test_internal_peers.hpp.
   friend class LlamaModelTestPeer;
 
   // Impl without mutexes

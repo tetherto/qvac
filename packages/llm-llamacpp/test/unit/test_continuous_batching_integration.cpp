@@ -1192,8 +1192,8 @@ TEST_F(
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
-  ContinuousBatchSchedulerTestPeer::setDecodeFunc(*scheduler,
-      [](llama_context*, llama_batch&) -> int { return 1; });
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [](llama_context*, llama_batch&) -> int { return 1; });
 
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("What is the capital of France? Answer in one word."),
@@ -1233,7 +1233,8 @@ TEST_F(
   ASSERT_NE(scheduler, nullptr)
       << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
-  // Second admitted prompt; admission is in submission order so it owns seqId 1.
+  // Second admitted prompt; admission is in submission order so it owns
+  // seqId 1.
   constexpr uint32_t kCancelSeqId = 1;
 
   std::atomic<int> seqBTokens = 0;
@@ -1262,16 +1263,17 @@ TEST_F(
   // Arm the cancel only once seqId 1 is actively generating (>= 2 streamed
   // tokens), so the step that observes the deferred cancel would otherwise
   // sample and stream another token for it.
-  promptB.outputCallback =
-      [&seqBTokens, &readyToCancel, &cancelIssued, &streamedAfterCancel](
-          const std::string&) {
-        if (cancelIssued.load()) {
-          streamedAfterCancel.store(true);
-        }
-        if (seqBTokens.fetch_add(1) + 1 >= 2) {
-          readyToCancel.store(true);
-        }
-      };
+  promptB.outputCallback = [&seqBTokens,
+                            &readyToCancel,
+                            &cancelIssued,
+                            &streamedAfterCancel](const std::string&) {
+    if (cancelIssued.load()) {
+      streamedAfterCancel.store(true);
+    }
+    if (seqBTokens.fetch_add(1) + 1 >= 2) {
+      readyToCancel.store(true);
+    }
+  };
 
   std::vector<LlamaModel::Prompt> prompts{
       std::move(promptA), std::move(promptB)};
@@ -1319,8 +1321,8 @@ TEST_F(
   auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
   std::atomic<size_t> perSlotWindow = 0;
-  ContinuousBatchSchedulerTestPeer::setDecodeFunc(*scheduler,
-      [&perSlotWindow](llama_context* ctx, llama_batch& batch) {
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [&perSlotWindow](llama_context* ctx, llama_batch& batch) {
         perSlotWindow.store(static_cast<size_t>(llama_n_ctx(ctx)) / kParallel);
         return llama_decode(ctx, batch);
       });
@@ -1378,8 +1380,8 @@ public:
       qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler&
           scheduler)
       : model_(model) {
-    ContinuousBatchSchedulerTestPeer::setDecodeFunc(scheduler,
-        [this](llama_context* ctx, llama_batch& batch) {
+    ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+        scheduler, [this](llama_context* ctx, llama_batch& batch) {
           const int rc = llama_decode(ctx, batch);
           if (decodeCalls_.fetch_add(1) == 0) {
             decodeInFlight_.store(true);
@@ -1560,8 +1562,8 @@ TEST_F(
   std::atomic<bool> textFinished = false;
   std::atomic<bool> mediaEvalInvoked = false;
   std::atomic<bool> textRunningAtThrow = false;
-  ContinuousBatchSchedulerTestPeer::setEvalMediaFunc(*scheduler,
-      [&](SequenceDriver&, size_t, llama_pos) -> llama_pos {
+  ContinuousBatchSchedulerTestPeer::setEvalMediaFunc(
+      *scheduler, [&](SequenceDriver&, size_t, llama_pos) -> llama_pos {
         mediaEvalInvoked.store(true);
         textRunningAtThrow.store(!textFinished.load());
         throw std::runtime_error("injected media-eval failure");

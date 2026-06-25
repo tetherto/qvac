@@ -162,7 +162,8 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
   ASSERT_TRUE(req.isPrefillComplete());
 
   RuntimeStatsSnapshot stats;
-  stats.accumulateSlot(/*nPast=*/42, /*nSlides=*/0, /*thinkingDiscards=*/0, req);
+  stats.accumulateSlot(
+      /*nPast=*/42, /*nSlides=*/0, /*thinkingDiscards=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 42);
 }

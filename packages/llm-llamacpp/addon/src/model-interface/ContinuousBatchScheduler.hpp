@@ -374,7 +374,8 @@ private:
   RuntimeStatsSnapshot stats_;
 
   /// Decode function used in stepLocked(). Defaults to llama_decode; a test
-  /// stub can be injected via ContinuousBatchSchedulerTestPeer::setDecodeFunc().
+  /// stub can be injected via
+  /// ContinuousBatchSchedulerTestPeer::setDecodeFunc().
   DecodeFunc decodeFunc_;
 
   /// Media-segment eval used in serviceNextMediaSegmentLocked(). Defaults to

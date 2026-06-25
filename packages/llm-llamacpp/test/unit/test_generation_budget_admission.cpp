@@ -69,9 +69,11 @@ TEST(GenerationBudgetAdmission, NonPositiveNPredictNeverExceeds) {
 /// even though the scheduler admits exactly-full prefill with strict `>`.
 TEST(ContextWindowAdmission, PrefillOnlyMayExactlyFillWindow) {
   constexpr llama_pos ceiling = 100;
-  EXPECT_FALSE(exceedsContextWindow(ceiling, ceiling, /*isPrefillOnlyRequest=*/true))
+  EXPECT_FALSE(
+      exceedsContextWindow(ceiling, ceiling, /*isPrefillOnlyRequest=*/true))
       << "exactly-full prefill-only must be admitted (it never generates)";
-  EXPECT_TRUE(exceedsContextWindow(ceiling + 1, ceiling, /*isPrefillOnlyRequest=*/true))
+  EXPECT_TRUE(
+      exceedsContextWindow(ceiling + 1, ceiling, /*isPrefillOnlyRequest=*/true))
       << "strictly over the window is still rejected";
 }
 
@@ -79,8 +81,10 @@ TEST(ContextWindowAdmission, PrefillOnlyMayExactlyFillWindow) {
 /// token, so a window that is exactly full is already too many.
 TEST(ContextWindowAdmission, GenerationNeedsAFreeSlot) {
   constexpr llama_pos ceiling = 100;
-  EXPECT_TRUE(exceedsContextWindow(ceiling, ceiling, /*isPrefillOnlyRequest=*/false))
+  EXPECT_TRUE(
+      exceedsContextWindow(ceiling, ceiling, /*isPrefillOnlyRequest=*/false))
       << "exactly-full leaves no room to generate the next token";
-  EXPECT_FALSE(exceedsContextWindow(ceiling - 1, ceiling, /*isPrefillOnlyRequest=*/false))
+  EXPECT_FALSE(exceedsContextWindow(
+      ceiling - 1, ceiling, /*isPrefillOnlyRequest=*/false))
       << "one free slot is enough to start generating";
 }
