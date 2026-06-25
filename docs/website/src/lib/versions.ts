@@ -40,7 +40,7 @@ export interface VersionedSection {
 
 export const API_SECTION: VersionedSection = {
   basePath: '/reference/api',
-  latest: 'v0.13.4',
+  latest: 'v0.13.5',
   latestSeries: 'v0.13.x',
   versions: [
     { label: 'v0.13.x (latest)', value: 'v0.13.x', isLatest: true },
@@ -54,7 +54,7 @@ export const API_SECTION: VersionedSection = {
 
 export const RELEASE_NOTES_SECTION: VersionedSection = {
   basePath: '/reference/release-notes',
-  latest: 'v0.13.4',
+  latest: 'v0.13.5',
   latestSeries: 'v0.13.x',
   versions: [
     { label: 'v0.13.x (latest)', value: 'v0.13.x', isLatest: true },

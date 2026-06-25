@@ -1,4 +1,39 @@
 # Changelog
+## [0.30.0] - 2026-06-24
+
+Adds Qwen3.5-VL multi-tile batching via the `--image-tile-mode` config key, backed by `qvac-fabric` 9341.1.0.
+
+### New APIs
+
+- `image-tile-mode` / `image_tile_mode` config key: `0`/`batched`, `1`/`sequential` (default), `2`/`disabled`. Controls how multi-tile Qwen3.5-VL images are encoded.
+- OOM fallback: if batched encoding fails, encoder retries in sequential mode.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.0.0` → `9341.1.0`.
+
+## Pull Requests
+
+- [#2836](https://github.com/tetherto/qvac/pull/2836) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (llm-llamacpp)
+
+## [0.29.3] - 2026-06-24
+
+This release fixes per-image token budgets for multimodal (vision) contexts, which were previously parsed but never forwarded to the vision encoder, and adds a sensible default cap for Qwen-VL encoders to bound encode cost on high-resolution images.
+
+### Fixed
+
+- `image_min_tokens` / `image_max_tokens` are now forwarded into the vision encoder. They were parsed into `common_params` but never copied into `mtmd_context_params`, so a caller-set cap had no effect and the encoder always used the model-metadata default (up to ~4M pixels → thousands of patches). For dynamic-resolution encoders (Qwen-VL, Pixtral, LFM2, …) callers can now bound the `O(n_patches^2)` encode cost; for fixed-grid encoders it is a no-op.
+
+### Changed
+
+- When no explicit cap is set, Qwen-VL encoders now default to `image_max_tokens = 2048`. Qwen-VL allows up to 4096 image tokens — far more than the ~1024 it needs for grounding — so an uncapped high-resolution image pays `O(n_patches^2)` attention for tokens the model cannot use (and can destabilize generation). The default stays well above the grounding floor while roughly halving worst-case encode + image prefill, and is fully overridable via `image_max_tokens`.
+- The default is gated on the mmproj projector type (read from `clip.projector_type`, falling back to `clip.vision.projector_type` for combined vision+audio mmprojs such as Qwen Omni), so smaller-budget dynamic encoders (LightOnOCR / Pixtral at 1024, LFM2 at 256) are never raised above their native limit and fixed-grid encoders (SigLIP / SmolVLM) are unaffected.
+- The default cap respects an explicit `image_min_tokens` floor: since mtmd throws when `max_pixels < min_pixels`, the default max is not injected when the caller-set min meets or exceeds it, leaving the budget to the caller / model default.
+
+## Pull Requests
+
+- [#2815](https://github.com/tetherto/qvac/pull/2815) - QVAC-21295 fix[api]: forward vision image-token limits and cap Qwen-VL by default
+
 ## [0.29.2] - 2026-06-23
 
 This release adds opt-in KV-cache compaction of completed reasoning blocks, so callers can keep multi-turn context tight on models that emit a `<think>`-style channel. Detection is now driven by the active chat template's thinking tags, falling back to the hardcoded model-family table when the template does not expose them.
