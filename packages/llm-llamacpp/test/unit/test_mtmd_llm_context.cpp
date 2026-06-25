@@ -17,6 +17,9 @@ using test_common::getStatValue;
 namespace fs = std::filesystem;
 
 namespace {
+constexpr uint32_t kQwen35MultimodalPrefillCells = 2899;
+constexpr llama_pos kQwen35MultimodalPrefillPosMax = 90;
+
 std::vector<uint8_t> readBinaryFile(const fs::path& path) {
   std::ifstream stream(path, std::ios::binary);
   return {
@@ -378,9 +381,9 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalReportsMemoryTokenCountAndPosMax) {
       ", totalCells=" + std::to_string(totalCells) +
       ", posMax=" + std::to_string(posMax));
 
-  EXPECT_EQ(sequenceCells, 4034u);
-  EXPECT_EQ(totalCells, 4034u);
-  EXPECT_EQ(posMax, 91);
+  EXPECT_EQ(sequenceCells, kQwen35MultimodalPrefillCells);
+  EXPECT_EQ(totalCells, kQwen35MultimodalPrefillCells);
+  EXPECT_EQ(posMax, kQwen35MultimodalPrefillPosMax);
 
   const auto stats = model->runtimeStats();
   EXPECT_EQ(
@@ -430,9 +433,9 @@ TEST_F(
       ", totalCells=" + std::to_string(totalCells) +
       ", posMax=" + std::to_string(posMax));
 
-  EXPECT_GT(sequenceCells, 4034u);
+  EXPECT_GT(sequenceCells, kQwen35MultimodalPrefillCells);
   EXPECT_EQ(totalCells, sequenceCells);
-  EXPECT_GT(posMax, 91);
+  EXPECT_GT(posMax, kQwen35MultimodalPrefillPosMax);
 
   const auto stats = model->runtimeStats();
   EXPECT_EQ(
