@@ -31,12 +31,15 @@ namespace general_error = qvac_errors::general_error;
 // n_ctx, and the Turbo GGUF ships n_ctx=8196 — the F32 KV cache allocated
 // up-front at that length is n_embd(1024) x n_layer(24) x n_ctx x 4 B x 2
 // (K+V) ~= 1.6 GB, which is what pushed the iOS QVAC SDK test process to a
-// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  With the q8_0
+// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  With the f16
 // default KV dtype below, 4096 tokens (~160 s of generated audio per
-// synthesize() call; T3 speech tokens run at 25 Hz) cost ~210 MB of KV —
-// less memory than f32@2048 AND double the context.  Hosts that need
-// longer single-call synthesis can raise the cap, or pass nCtx=0 to
-// restore the uncapped behaviour.
+// synthesize() call; T3 speech tokens run at 25 Hz) cost ~390 MB of KV —
+// still well under f32@4096 (~780 MB) AND double the context.  (The prior
+// q8_0 default was ~210 MB but aborts the multilingual Metal CONT path —
+// see DEFAULT_KV_CACHE_TYPE below — so it is now opt-in; passing
+// kvCacheType:"q8_0" restores the smaller footprint on backends that
+// implement the op.)  Hosts that need longer single-call synthesis can
+// raise the cap, or pass nCtx=0 to restore the uncapped behaviour.
 constexpr int DEFAULT_N_CTX = 4096;
 
 // Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  f16 stores
