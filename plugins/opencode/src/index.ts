@@ -160,6 +160,7 @@ export const QvacManagedServe: Plugin = async (input, options) => {
   registerTeardown(child)
 
   const hooks: Hooks = {
+    // lunte-disable-next-line require-await
     config: async (cfg: Config): Promise<void> => {
       injectProvider(cfg, listening, resolved)
     }

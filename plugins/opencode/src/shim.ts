@@ -31,7 +31,7 @@ interface TextPart {
 // accepts, concatenating the text parts. Strings and nullish values pass
 // through unchanged; non-text parts (e.g. image_url) contribute nothing.
 export function flattenContent(content: unknown): unknown {
-  if (typeof content === 'string' || content == null) return content
+  if (typeof content === 'string' || content === null || content === undefined) return content
   if (!Array.isArray(content)) return content
   return content
     .map((part: unknown): string => {
@@ -47,7 +47,9 @@ export function flattenContent(content: unknown): unknown {
 export function flattenMessages(body: ChatCompletionBody): ChatCompletionBody {
   if (Array.isArray(body.messages)) {
     for (const msg of body.messages) {
-      if (msg != null && 'content' in msg) msg.content = flattenContent(msg.content)
+      if (msg !== null && msg !== undefined && 'content' in msg) {
+        msg.content = flattenContent(msg.content)
+      }
     }
   }
   return body

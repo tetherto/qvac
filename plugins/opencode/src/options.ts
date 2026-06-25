@@ -55,15 +55,17 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
 export type RawOptions = Partial<Record<keyof ResolvedOptions, unknown>>
 
 function coerceString(option: string, value: unknown): string {
-  if (typeof value !== 'string')
+  if (typeof value !== 'string') {
     throw new InvalidOptionError(option, `expected a string, got ${typeof value}`)
+  }
   return value
 }
 
 function coerceNumber(option: string, value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(n))
+  if (!Number.isFinite(n)) {
     throw new InvalidOptionError(option, `expected a number, got ${JSON.stringify(value)}`)
+  }
   return n
 }
 
@@ -129,11 +131,13 @@ export function optionsFromEnv(env: NodeJS.ProcessEnv): RawOptions {
   if (env['QVAC_SHIM'] !== undefined) raw.shim = env['QVAC_SHIM']
   if (env['QVAC_RUNTIME'] !== undefined) raw.runtime = env['QVAC_RUNTIME']
   if (env['QVAC_READY_TIMEOUT_MS'] !== undefined) raw.readyTimeoutMs = env['QVAC_READY_TIMEOUT_MS']
-  if (env['QVAC_LISTEN_TIMEOUT_MS'] !== undefined)
+  if (env['QVAC_LISTEN_TIMEOUT_MS'] !== undefined) {
     raw.listenTimeoutMs = env['QVAC_LISTEN_TIMEOUT_MS']
+  }
   if (env['QVAC_DEBUG'] !== undefined) raw.debug = env['QVAC_DEBUG']
-  if (env['QVAC_SET_DEFAULT_MODEL'] !== undefined)
+  if (env['QVAC_SET_DEFAULT_MODEL'] !== undefined) {
     raw.setDefaultModel = env['QVAC_SET_DEFAULT_MODEL']
+  }
   return raw
 }
 
@@ -149,7 +153,7 @@ export function optionsFromProjectFile(projectDir: string): RawOptions {
   }
   try {
     const parsed: unknown = JSON.parse(text)
-    if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new InvalidOptionError('qvac.json', 'expected a JSON object')
     }
     return parsed as RawOptions
