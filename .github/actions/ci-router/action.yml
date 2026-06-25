@@ -1,0 +1,68 @@
+name: CI Router (Label Detection)
+description: |
+  Reads the current PR labels and outputs routing flags for CI stages.
+  Each addon's on-pr workflow calls this once, then gates jobs on the outputs.
+
+  Label → stage mapping:
+    "prebuilds"                → run_prebuilds=true
+    "run-desktop-addon-tests"  → run_prebuilds=true, run_desktop=true
+    "run-mobile-addon-tests"   → run_prebuilds=true, run_mobile=true
+
+  Trusted events (workflow_dispatch, workflow_call, push) enable all stages
+  unconditionally for backward compatibility with manual triggers.
+
+  Mobile tests additionally require "verified" via the label-gate action —
+  this action only handles CI routing, not security.
+
+outputs:
+  run_prebuilds:
+    description: "'true' if prebuilds, lint, and sanity checks should run"
+    value: ${{ steps.route.outputs.run_prebuilds }}
+  run_desktop:
+    description: "'true' if desktop CPP tests and integration tests should run"
+    value: ${{ steps.route.outputs.run_desktop }}
+  run_mobile:
+    description: "'true' if mobile integration tests should run (caller must also check label-gate for 'verified')"
+    value: ${{ steps.route.outputs.run_mobile }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect CI labels and route stages
+      id: route
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      run: |
+        # Trusted events: run everything unconditionally.
+        if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+           [ "$EVENT_NAME" = "workflow_call" ] || \
+           [ "$EVENT_NAME" = "push" ] || \
+           [ "$EVENT_NAME" = "schedule" ]; then
+          echo "Trusted event ($EVENT_NAME) — enabling all CI stages"
+          echo "run_prebuilds=true" >> "$GITHUB_OUTPUT"
+          echo "run_desktop=true" >> "$GITHUB_OUTPUT"
+          echo "run_mobile=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # PR events: check which labels are currently applied.
+        PREBUILDS=false
+        DESKTOP=false
+        MOBILE=false
+
+        if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
+          for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
+            case "$label" in
+              prebuilds)                PREBUILDS=true ;;
+              run-desktop-addon-tests)  PREBUILDS=true; DESKTOP=true ;;
+              run-mobile-addon-tests)   PREBUILDS=true; MOBILE=true ;;
+            esac
+          done
+        fi
+
+        echo "CI Router: prebuilds=$PREBUILDS desktop=$DESKTOP mobile=$MOBILE"
+        echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
+        echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
+        echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"

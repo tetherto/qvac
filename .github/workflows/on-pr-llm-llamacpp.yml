@@ -54,6 +54,27 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout (ci-router action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -86,11 +107,11 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - verify-fabric-lockstep
-      - label-gate
+      - ci-router
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -107,11 +128,11 @@ jobs:
           workdir: packages/llm-llamacpp
 
   cpp-tests:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - sanity-checks
-      - label-gate
+      - ci-router
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
@@ -120,11 +141,11 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   cpp-lint:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
       - authorize
-      - label-gate
+      - ci-router
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -160,12 +181,60 @@ jobs:
           registry-type: gpr
           workdir: packages/llm-llamacpp
 
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - ci-router
+    runs-on: ubuntu-latest
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - name: Detect native changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/llm-llamacpp
+
+  prebuild-cache-restore:
+    if: needs.detect-native-changes.outputs.native_changed == 'false'
+    needs:
+      - detect-native-changes
+      - sanity-checks
+    runs-on: ubuntu-latest
+    outputs:
+      cache_hit: ${{ steps.cache.outputs.cache-hit }}
+    steps:
+      - name: Restore prebuilds from cache
+        id: cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # 4.2.3
+        with:
+          path: cached-prebuilds
+          key: prebuilds-llm-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
+      - name: Upload cached prebuilds as artifact
+        if: steps.cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: prebuilds
+          path: cached-prebuilds
+
   prebuild:
     needs:
       - authorize
       - sanity-checks
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+      - ci-router
+      - detect-native-changes
+      - prebuild-cache-restore
+    if: |
+      always() &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-cache-restore.outputs.cache_hit != 'true')
     permissions:
       contents: write
       packages: write
@@ -177,12 +246,34 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
+  prebuild-cache-save:
+    if: |
+      always() &&
+      needs.prebuild.result == 'success' &&
+      needs.detect-native-changes.outputs.native_changed == 'true'
+    needs:
+      - prebuild
+      - detect-native-changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download prebuilds artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: cached-prebuilds
+      - name: Save prebuilds to cache
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # 4.2.3
+        with:
+          path: cached-prebuilds
+          key: prebuilds-llm-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
+
   run-integration-tests:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true')
     needs:
       - authorize
       - prebuild
-      - label-gate
+      - prebuild-cache-restore
+      - ci-router
     permissions:
       contents: read
       packages: read
@@ -199,11 +290,13 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true')
     needs:
       - authorize
       - prebuild
+      - prebuild-cache-restore
       - label-gate
+      - ci-router
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     secrets: inherit
     with:
@@ -445,7 +538,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
+    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, prebuild-cache-restore, prebuild-cache-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks, ci-router, label-gate]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
