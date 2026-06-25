@@ -226,8 +226,10 @@ jobs:
         env:
           WORKDIR: packages/llm-llamacpp
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
@@ -264,9 +266,21 @@ jobs:
             exit 0
           fi
 
+          # For synchronize (push) events, diff the PREVIOUS head
+          # (github.event.before) against the CURRENT head — so a JS-only
+          # push after earlier C++ commits correctly reports native_changed=false.
+          # For opened/reopened/labeled, diff base..head (full PR diff).
+          # native_hash always uses the full HEAD tree for cache key correctness.
+          DIFF_FROM="$BASE_SHA"
+          if [ "$EVENT_ACTION" = "synchronize" ] && [ -n "$BEFORE_SHA" ]; then
+            DIFF_FROM="$BEFORE_SHA"
+            # Fetch the before SHA too (may not be in shallow clone)
+            git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null || true
+          fi
+
           CHANGED=false
-          if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ]; then
-            DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 2>&1) || {
+          if [ -n "$DIFF_FROM" ] && [ -n "$HEAD_SHA" ]; then
+            DIFF_FILES=$(git diff --name-only "$DIFF_FROM" "$HEAD_SHA" -- 2>&1) || {
               echo "::warning::git diff failed — treating as changed"
               echo "native_changed=true" >> "$GITHUB_OUTPUT"
               echo "native_hash=diff-failed-$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -337,6 +351,7 @@ jobs:
       - prebuild-cache-restore
     if: |
       always() &&
+      needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-cache-restore.outputs.cache_hit != 'true')
