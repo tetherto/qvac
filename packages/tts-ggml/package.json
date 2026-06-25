@@ -60,6 +60,7 @@
     "test/utils/runSupertonicTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
+    "test/utils/toneAnalysis.js",
     "test/utils/pcmConcatenator.js",
     "test/utils/runWhisper.js",
     "test/data/sentences-medium.js",

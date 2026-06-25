@@ -1,0 +1,82 @@
+{
+  "name": "tts-cpp",
+  "version-date": "2026-06-18",
+  "port-version": 1,
+  "description": "Text-to-speech inference in pure C++/ggml. Ships Resemble Chatterbox (Turbo + Multilingual variants) and Supertonic engines under a unified Engine API. Sourced from tetherto/qvac-ext-lib-whisper.cpp's tts-cpp/ subfolder. This pin (master HEAD b95ad447) brings QVAC-20616 end-of-speech robustness (PR #53): alignment-based EOS plus a heuristic stop controller so the Chatterbox multilingual model stops at end-of-utterance instead of rambling random tokens past the text; and QVAC-20557 Supertonic Android GPU (PR #54): Adreno OpenCL + Xclipse/Mali Vulkan, which also reroutes the direct CPU-backend calls (ggml_backend_is_cpu / ggml_get_type_traits_cpu) to ggml-base + a registry shim so the addon dlopen's cleanly on Android. Consumes the ggml-speech port.",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ggml-speech",
+      "version>=": "2026-06-15"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "cuda"
+          ]
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration (macOS / iOS)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "metal"
+          ]
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration (Android / Adreno)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "opencl"
+          ]
+        }
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "vulkan"
+          ]
+        }
+      ]
+    }
+  }
+}

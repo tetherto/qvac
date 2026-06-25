@@ -10,12 +10,20 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runChatterboxAudioCorrectnessTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/chatterbox-audio-correctness.test.js', options)
+}
+
 async function runChatterboxJaMecabTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/chatterbox-ja-mecab.test.js', options)
 }
 
 async function runChatterboxMtlTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/chatterbox-mtl.test.js', options)
+}
+
+async function runChatterboxSpeedTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/chatterbox-speed.test.js', options)
 }
 
 async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -48,8 +56,10 @@ async function runSupertonic3QuantTest (options = {}) { // eslint-disable-line n
 
 module.exports = {
   runAddonTest,
+  runChatterboxAudioCorrectnessTest,
   runChatterboxJaMecabTest,
   runChatterboxMtlTest,
+  runChatterboxSpeedTest,
   runGpuSmokeTest,
   runMultipleRunsTest,
   runRtfBenchmarkTest,

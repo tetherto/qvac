@@ -1,0 +1,57 @@
+{
+  "name": "ggml-speech",
+  "version-date": "2026-06-15",
+  "description": "Speech-stack flavour of ggml from tetherto/qvac-ext-ggml@speech, including the ggml-org v0.10.2 sync (PR #13), the iOS Metal NULL-safety hardening from PR #10, GustavoA1604's Android per-arch CPU dlopen fallback (PR #11), the Mac M2 PAD test fix, and Adreno-aware Android OpenCL/Vulkan backend selection (PR #18, QVAC-18993): on Android the loader detects the GPU via Vulkan and only keeps OpenCL for Adreno > 700, CPU-only for Adreno 1..700, Vulkan/CPU for non-Adreno. Adds Adreno OpenCL elementwise kernels (sin/cos/abs/elu/leaky_relu) for Chatterbox S3Gen and robust Adreno-generation detection (PR #17, #19). Library filenames are prefixed libqvac-speech-ggml-* so they coexist with libqvac-ggml-* (fabric/llm) and libqvac-diffusion-ggml-* on the same Android device. Mutually exclusive with the regular ggml port in the same triplet -- pick one per build. 2026-06-15: ggml-metal drains lingering residency sets at device free instead of asserting (PR #24, QVAC-19305, fixes SIGABRT at process exit on macOS 15+ Metal teardown) plus ggml-opencl bci-whispercpp correctness on Adreno + Samsung Xclipse (PR #22).",
+  "homepage": "https://github.com/tetherto/qvac-ext-ggml/tree/speech",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU backend"
+    },
+    "metal": {
+      "description": "Enable Metal GPU backend (macOS/iOS)"
+    },
+    "metal-fuse-mv-bias": {
+      "description": "Compile in the Q-variant mul_mv + ADD(bias) [+ ADD(residual)] fusion in ggml-metal. Off by default: empirically produces zero tokens on parakeet's EOU q8_0 joint network. Opt in only after Metal A/B-validating your model against the fused path."
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU backend",
+      "dependencies": [
+        "opencl"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU backend",
+      "dependencies": [
+        {
+          "name": "spirv-headers",
+          "version>=": "1.4.341.0"
+        }
+      ]
+    }
+  }
+}
