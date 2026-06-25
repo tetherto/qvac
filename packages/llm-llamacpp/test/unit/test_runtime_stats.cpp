@@ -88,7 +88,8 @@ TEST(RuntimeStatsRates, ResetClearsRates) {
 // reads (`generatedTokens.size()` and `prefillTokenCount` — both zero
 // here because we're isolating the `thinkingDiscards` aggregation).
 Request makeStubRequest() {
-  return Request(/*rid=*/0, /*toks=*/{}, /*maxTokens=*/0);
+  return Request(
+      /*rid=*/0, /*toks=*/std::vector<llama_token>{}, /*maxTokens=*/0);
 }
 
 // `thinkingDiscards` is the per-slot count of compacted reasoning blocks
