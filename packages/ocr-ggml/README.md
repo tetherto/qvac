@@ -143,7 +143,7 @@ console.log(ocr.getBackendInfo())
 // no Vulkan device → { requested: 'vulkan', backendDevice: 'CPU', backendName: 'CPU', deviceIndex: -1, backendDescription: '…', fallbackReason: 'Vulkan backend requested but no Vulkan-capable GPU device was found; falling back to CPU' }
 // Metal available  → { requested: 'metal',  backendDevice: 'GPU', backendName: 'MTL0', deviceIndex: 1, backendDescription: 'Apple M3 Ultra', fallbackReason: '' }  // device name; 'MTL1'… on a multi-GPU host
 // no Metal device  → { requested: 'metal',  backendDevice: 'CPU', backendName: 'CPU', deviceIndex: -1, backendDescription: '…', fallbackReason: 'Metal backend requested but no Metal-capable GPU device was found; falling back to CPU' }
-// OpenCL missing OCR ops → { requested: 'opencl', backendDevice: 'CPU', backendName: 'CPU', deviceIndex: -1, backendDescription: '…', fallbackReason: "OpenCL backend 'GPUOpenCL' (QUALCOMM Adreno(TM) 830) does not implement the OCR vision ops (e.g. POOL_2D); falling back to CPU" }
+// OpenCL available (Adreno) → { requested: 'opencl', backendDevice: 'GPU', backendName: 'GPUOpenCL', deviceIndex: 1, backendDescription: 'QUALCOMM Adreno(TM) 830', fallbackReason: '' }
 // no OpenCL device → { requested: 'opencl', backendDevice: 'CPU', backendName: 'CPU', deviceIndex: -1, backendDescription: '…', fallbackReason: 'OpenCL backend requested but no OpenCL-capable GPU device was found; falling back to CPU' }
 ```
 
@@ -164,22 +164,25 @@ Behaviour and expectations:
   qvac-fabric `gpu-backends` feature (the default on Apple). These GPU backends
   are only produced on platforms/feature sets where the upstream ggml port
   builds them; on other hosts the request quietly falls back to CPU.
-- **OpenCL is the Adreno path — but gated on op support.** Qualcomm **Adreno**
-  GPUs are *skipped* on the auto Vulkan path (their Vulkan compute is
-  numerically broken) and are not rejected for `'opencl'` (OpenCL is Adreno's
-  sound GPU family). However, the OCR graphs are CNNs built from `POOL_2D`,
-  conv, upscale and transpose-conv ops, and **ggml's current OpenCL backend does
-  not implement them** (it is matmul-focused, for LLM-style workloads). To avoid
-  a hard `GGML_ABORT` on an unsupported op, selection runs a `POOL_2D`
-  op-support probe on the chosen GPU device; a backend that cannot run it
-  (today: OpenCL) transparently falls back to CPU with a `fallbackReason`. So
-  requesting `'opencl'` is **safe (never crashes)** but currently resolves to
-  **CPU** for OCR until ggml's OpenCL backend gains the required vision ops.
-  Vulkan/Metal pass the probe and run on GPU as before.
-- **DocTR recognizer.** Only the MobileNetV3 feature-extractor graph runs on
-  the selected ggml device; the recognizer's downstream LSTM + linear
-  classifier always run on CPU (plain C++, no ggml graph), regardless of
-  `backendDevice`.
+- **OpenCL is the Adreno GPU path.** Qualcomm **Adreno** GPUs are *skipped* on
+  the auto Vulkan path (their Vulkan compute is numerically broken) but are the
+  intended target for `'opencl'` (OpenCL is Adreno's sound GPU family). As of
+  `qvac-fabric` `8828.1.2` the OpenCL backend implements the vision ops the OCR
+  graphs need (`POOL_2D`, `CONV_2D_DW`, `HARDSWISH`, `HARDSIGMOID`, …), so
+  **both the EasyOCR and DocTR pipelines now run end-to-end on Adreno via
+  OpenCL** — the EasyOCR CRAFT/CRNN and DocTR graphs take a backend-aware
+  `ggml_conv_2d_direct` path on OpenCL (see the **Direct conv path** section
+  below). Selection still runs a `POOL_2D` op-support probe on the chosen GPU
+  device as a safety net: any backend that cannot run a required op transparently
+  falls back to CPU with a `fallbackReason` instead of aborting at inference
+  (`GGML_ABORT`). On a build that ships the `libggml-opencl` backend lib,
+  requesting `'opencl'` on an Adreno device resolves to the **GPU**.
+- **DocTR recognizer.** The MobileNetV3 feature-extractor graph **and** the
+  bidirectional LSTM + linear classifier run on the selected ggml device as a
+  batched ggml graph (set `OCR_DOCTR_LSTM_CPU=1` to force the scalar CPU LSTM
+  path). On Mali, where the CPU would otherwise sit idle next to the Vulkan
+  recognizer, a CPU work-stealing assist runs a second feature extractor on
+  disjoint crop chunks concurrently and the LSTM is split across CPU + GPU.
 - **Threads.** `nThreads` only affects the CPU backend; it is ignored when a
   Vulkan, Metal or OpenCL device is selected.
 - **Performance guidance (Metal).** The win depends on the detector. The
@@ -190,6 +193,14 @@ Behaviour and expectations:
   output is identical either way. Recommended default: **EasyOCR → `'metal'`,
   DocTR → `'cpu'`** on Apple. Since `backendDevice` is per-instance, you can mix
   both. (Numbers are workload/hardware dependent — measure for your case.)
+- **Performance guidance (Mali, DocTR).** On Arm **Mali / Immortalis** GPUs the
+  DBNet detector's many `conv2d` dispatches are pathologically slow under Vulkan,
+  so a plain `backendDevice: 'vulkan'` request on a Mali GPU auto-routes
+  **detection to the CPU** while keeping **recognition on Vulkan** (detected from
+  the GPU description at load time; no API change). On a Pixel 9 Pro (Mali-G715)
+  the `clinical_chemistry` page drops from ~11.9 s to ~2.7 s warm GPU end-to-end
+  with identical output. Other GPUs (Adreno OpenCL, Apple Metal, NVIDIA/Intel
+  Vulkan) keep full-GPU detection.
 
 ### Selecting a specific GPU (`gpuDevice`)
 
@@ -294,7 +305,7 @@ model-load time (mirrors the F16 kernel decision):
 | Resolved backend | 1×1 conv default |
 |---|---|
 | GPU / accelerator (NVIDIA Vulkan, Apple Metal, Mali Vulkan) | **`mul_mat`** (~−19% total / −43% detection on NVIDIA, ~−10% on Metal, ~neutral on Mali — output verified identical) |
-| **Adreno** on **Vulkan** | **`conv_2d`** — Adreno's Vulkan compute is numerically fragile (and is already auto-skipped to CPU). Keyed on the backend API, so a future Adreno-OpenCL backend is not affected. |
+| **Adreno** on **Vulkan** | **`conv_2d`** — Adreno's Vulkan compute is numerically fragile (and is already auto-skipped to CPU). Keyed on the backend API, so the Adreno-**OpenCL** path is not affected and follows the GPU `mul_mat` default. |
 | Any CPU (x86, Apple-Silicon, non-Apple ARM) | **`conv_2d`** (`mul_mat` is neutral-to-slower there) |
 
 Two env vars override the default (read once at model load; only the exact value
@@ -516,7 +527,7 @@ case only when the corresponding GGUFs are present on disk:
 | `OCR_GGML_DOCTR_DETECTOR` | Doctr | Doctr case |
 | `OCR_GGML_DOCTR_RECOGNIZER` | Doctr | Doctr case |
 | `OCR_GGML_IMAGE` | — | overrides the default sample image |
-| `OCR_GGML_BACKEND` | — | manual ggml backend override for the whole suite: `cpu` or `vulkan` (otherwise auto-detected, see below) |
+| `OCR_GGML_BACKEND` | — | manual ggml backend override for the whole suite: `cpu`, `vulkan`, `metal` or `opencl` (otherwise auto-detected, see below) |
 
 CI sets these automatically; locally you can:
 
@@ -575,6 +586,26 @@ desktop and iOS (iOS has no Vulkan).
 > is the backstop that catches a numerically-broken Vulkan device that slips
 > through.
 
+### Android OpenCL (mobile suite)
+
+OpenCL is Adreno's sound GPU path (the inverse of the Vulkan Adreno guard above),
+and the `android-arm64` prebuild ships the OpenCL backend lib
+(`libqvac-ggml-opencl.so`). Two tests exercise it:
+
+- [`test/integration/android-opencl.test.js`](./test/integration/android-opencl.test.js)
+  (`runAndroidOpenclTest`, `android` → `regularB` shard) requests
+  `backendDevice: 'opencl'` on real Device Farm devices and asserts the addon
+  either runs on an OpenCL device **or** reports an explicit CPU fallback —
+  with a correctness (accuracy) gate either way. Android-only; clean skip on
+  desktop and iOS.
+- [`test/integration/opencl-backend.test.js`](./test/integration/opencl-backend.test.js)
+  (`runOpenclBackendTest`) covers the desktop opt-in path and skips cleanly on
+  any host that did not ship a `libggml-opencl` backend lib.
+
+Because the OCR vision ops are now implemented on OpenCL, an Adreno device that
+ships the OpenCL backend lib resolves `'opencl'` to the **GPU** and runs both
+pipelines on-device (rather than falling back to CPU).
+
 ### CPU-vs-Vulkan benchmark
 
 The `Benchmark Performance (OCR-GGML)` workflow reuses the integration suites,
@@ -587,10 +618,12 @@ renders a **"CPU → Vulkan Speedup"** section (markdown + HTML) showing
 The section only appears when a test ran on both backends, so non-GPU runs are
 unaffected.
 
-On mobile, Android also attempts Vulkan (see below); Mali devices (e.g. Pixel)
-fill the GPU column, while Adreno devices auto-fall-back to CPU. To compare
-**output quality** (not just speed) across backends, the Python quality
-benchmark takes a `--backend` flag:
+On mobile, Android attempts a GPU pass per device family: **Mali** devices
+(e.g. Pixel) run on **Vulkan**, while **Adreno** devices — auto-skipped on
+Vulkan — run the GPU pass on **OpenCL** instead, so both families fill the GPU
+column (the harness probes the device once and picks Vulkan or OpenCL
+accordingly). To compare **output quality** (not just speed) across backends,
+the Python quality benchmark takes a `--backend` flag:
 
 ```bash
 python benchmarks/quality_eval/benchmark_100.py \

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.22.1",
+  "version": "0.23.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -60,7 +60,7 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "brittle": "^3.4.0",

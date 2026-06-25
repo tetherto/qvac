@@ -7,12 +7,12 @@ description: >
 
 inputs:
   family:
-    description: "SDK e2e family: desktop | android | ios"
+    description: "SDK e2e family: desktop | electron | android | ios"
     required: true
   platforms:
     description: >
       JSON array of platform keys targeted by this run, e.g.
-      ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
+      ["linux","windows","macos"] for desktop/electron or ["android"] / ["ios"].
     required: true
   suite:
     description: "Suite filter passed to the run (empty = full)"

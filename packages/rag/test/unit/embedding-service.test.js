@@ -5,12 +5,13 @@ const EmbeddingService = require('../../src/services/core/EmbeddingService')
 const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
 
 class MockEmbeddingFunction {
-  constructor () {
+  constructor() {
     this.calls = []
     this.shouldFail = false
   }
 
-  async call (text) {
+  // lunte-disable-next-line require-await
+  async call(text) {
     this.calls.push(text)
     if (this.shouldFail) {
       throw new Error('Mock embedding function failure')
@@ -23,14 +24,14 @@ class MockEmbeddingFunction {
     return [0.1, 0.2, 0.3]
   }
 
-  reset () {
+  reset() {
     this.calls = []
     this.shouldFail = false
   }
 }
 
 // Create a callable function that delegates to the mock
-function createMockEmbeddingFunction () {
+function createMockEmbeddingFunction() {
   const mock = new MockEmbeddingFunction()
   const func = async (text) => {
     return await mock.call(text)
@@ -39,28 +40,36 @@ function createMockEmbeddingFunction () {
   return func
 }
 
-test('EmbeddingService: should create with valid embedding function', t => {
+test('EmbeddingService: should create with valid embedding function', (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
-  t.is(service.embeddingFunction, mockEmbeddingFunction, 'Should store the embedding function instance')
+  t.is(
+    service.embeddingFunction,
+    mockEmbeddingFunction,
+    'Should store the embedding function instance'
+  )
 })
 
-test('EmbeddingService: should throw error when embedding function not provided', t => {
+test('EmbeddingService: should throw error when embedding function not provided', (t) => {
   const invalidEmbeddingFunctions = [null, undefined, {}]
 
-  invalidEmbeddingFunctions.forEach(embeddingFunction => {
+  invalidEmbeddingFunctions.forEach((embeddingFunction) => {
     try {
       // eslint-disable-next-line no-new
       new EmbeddingService({ embeddingFunction })
       t.fail(`Should throw error for invalid embedding function: ${embeddingFunction}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.EMBEDDING_FUNCTION_REQUIRED, 'Error code should be EMBEDDING_FUNCTION_REQUIRED')
+      t.is(
+        err.code,
+        ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
+        'Error code should be EMBEDDING_FUNCTION_REQUIRED'
+      )
     }
   })
 })
 
-test('EmbeddingService: should generate embeddings for valid text', async t => {
+test('EmbeddingService: should generate embeddings for valid text', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -72,7 +81,7 @@ test('EmbeddingService: should generate embeddings for valid text', async t => {
   t.ok(result.length > 0, 'Should return non-empty embeddings')
 })
 
-test('EmbeddingService: should handle empty or invalid text input', async t => {
+test('EmbeddingService: should handle empty or invalid text input', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -85,12 +94,15 @@ test('EmbeddingService: should handle empty or invalid text input', async t => {
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
       t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
-      t.ok(err.message.includes('Invalid input') || err.message.includes('invalid'), 'Error message should mention invalid input')
+      t.ok(
+        err.message.includes('Invalid input') || err.message.includes('invalid'),
+        'Error message should mention invalid input'
+      )
     }
   }
 })
 
-test('EmbeddingService: should handle embedding function failure', async t => {
+test('EmbeddingService: should handle embedding function failure', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   mockEmbeddingFunction.mock.shouldFail = true
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
@@ -101,11 +113,14 @@ test('EmbeddingService: should handle embedding function failure', async t => {
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
     t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Error code should be GENERATION_FAILED')
-    t.ok(err.message.includes('Failed to generate embeddings'), 'Error message should be descriptive')
+    t.ok(
+      err.message.includes('Failed to generate embeddings'),
+      'Error message should be descriptive'
+    )
   }
 })
 
-test('EmbeddingService: should generate embeddings for multiple documents', async t => {
+test('EmbeddingService: should generate embeddings for multiple documents', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -134,7 +149,7 @@ test('EmbeddingService: should generate embeddings for multiple documents', asyn
   t.ok(Array.isArray(result.doc3), 'Doc3 embeddings should be an array')
 })
 
-test('EmbeddingService: should handle invalid documents array', async t => {
+test('EmbeddingService: should handle invalid documents array', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -151,7 +166,7 @@ test('EmbeddingService: should handle invalid documents array', async t => {
   }
 })
 
-test('EmbeddingService: should handle documents with missing id or content', async t => {
+test('EmbeddingService: should handle documents with missing id or content', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -175,7 +190,7 @@ test('EmbeddingService: should handle documents with missing id or content', asy
   }
 })
 
-test('EmbeddingService: should handle embedding function failure in batch processing', async t => {
+test('EmbeddingService: should handle embedding function failure in batch processing', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   mockEmbeddingFunction.mock.shouldFail = true
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
@@ -191,11 +206,14 @@ test('EmbeddingService: should handle embedding function failure in batch proces
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
     t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Error code should be GENERATION_FAILED')
-    t.ok(err.message.includes('Failed to generate batch embeddings'), 'Error message should mention batch embeddings')
+    t.ok(
+      err.message.includes('Failed to generate batch embeddings'),
+      'Error message should mention batch embeddings'
+    )
   }
 })
 
-test('EmbeddingService: should preserve document order in results', async t => {
+test('EmbeddingService: should preserve document order in results', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -220,13 +238,11 @@ test('EmbeddingService: should preserve document order in results', async t => {
   t.is(mockEmbeddingFunction.mock.calls[0][2], 'Document 3', 'Batch should contain third document')
 })
 
-test('EmbeddingService: should support cancellation via AbortSignal', async t => {
+test('EmbeddingService: should support cancellation via AbortSignal', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
-  const docs = [
-    { id: 'doc1', content: 'Document' }
-  ]
+  const docs = [{ id: 'doc1', content: 'Document' }]
 
   const abortController = { signal: { aborted: true } }
 
@@ -239,7 +255,7 @@ test('EmbeddingService: should support cancellation via AbortSignal', async t =>
   }
 })
 
-test('EmbeddingService: should call onProgress callback at start and end', async t => {
+test('EmbeddingService: should call onProgress callback at start and end', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -261,7 +277,7 @@ test('EmbeddingService: should call onProgress callback at start and end', async
   t.alike(progressCalls[1], { current: 2, total: 2 }, 'Second call should be completion')
 })
 
-test('EmbeddingService: should support generateEmbeddings with array input', async t => {
+test('EmbeddingService: should support generateEmbeddings with array input', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
@@ -275,7 +291,9 @@ test('EmbeddingService: should support generateEmbeddings with array input', asy
   t.alike(mockEmbeddingFunction.mock.calls[0], texts, 'Should pass array to embedding function')
 })
 
-test('EmbeddingService: Zod validation should reject invalid embedding outputs', async t => {
+// lunte-disable-next-line require-await
+test('EmbeddingService: Zod validation should reject invalid embedding outputs', async (t) => {
+  // lunte-disable-next-line require-await
   const invalidOutputFunction = async (text) => {
     if (Array.isArray(text)) {
       return ['not', 'numbers'] // Invalid: strings instead of number arrays

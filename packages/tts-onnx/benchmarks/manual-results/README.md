@@ -3,8 +3,7 @@
 Drop additional ONNX TTS benchmark JSON files in this directory when you need
 to include supported GPU backends or devices that are **not available on CI**
 (ROCm, discrete-GPU DirectML, specific Android OEMs not on Device Farm,
-Windows CUDA-specific runs, etc.), or when you just want to capture a number
-from a local engineer box.
+etc.), or when you just want to capture a number from a local engineer box.
 
 This directory is read by **two** independent aggregators, each of which uses a
 slightly different record shape. Both aggregators silently ignore records they
@@ -71,7 +70,7 @@ These files are picked up automatically by:
 Use this directory for results such as:
 
 - Linux ROCm devices
-- Windows CUDA-specific runs
+- Discrete-GPU DirectML Windows runs
 - Any other supported backend or desktop device combination that the CI matrix cannot host
 
 ## Schema 2 — ONNX TTS RTF benchmark (rtf-benchmark.test.js)
@@ -107,7 +106,7 @@ The canonical shape includes:
 | `engine`                      | string   | yes      | `chatterbox-en` / `chatterbox-multi` / `supertonic`. |
 | `model.variant`               | string   | yes      | `fp32` / `fp16` / `q4` / `q4f16`. |
 | `model.sizeBytes`             | number   | no       | Sum of model files on disk. Shown as `Model (MB)`. |
-| `labels.backend`              | string   | yes      | `cpu` / `coreml` / `cuda` / `directml` / `nnapi` / `rocm`. |
+| `labels.backend`              | string   | yes      | `cpu` / `coreml` / `directml` / `nnapi` / `rocm`. |
 | `labels.device`               | string   | yes      | Human-readable device identifier (goes into the `Device` column). |
 | `labels.label`                | string   | no       | Free-form tag — used for variant / thread sweeps. |
 | `requested.useGPU`            | boolean  | yes      | `true` → `GPU` row; `false` → `CPU` row. |

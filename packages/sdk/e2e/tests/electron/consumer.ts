@@ -1,4 +1,5 @@
 import * as os from "node:os";
+import mqtt from "mqtt";
 import {
   ConsumerBase,
   createExecutor,
@@ -6,7 +7,8 @@ import {
   loadConfig,
   loadTests,
   buildMqttConnectionConfig,
-  createMqttClient,
+  buildMqttOptions,
+  logMqttConnectionSecurity,
   startNodeMemoryPoller,
   type TestDefinition,
 } from "@tetherto/qvac-test-suite";
@@ -439,7 +441,12 @@ export async function startElectronConsumer() {
   }
 
   const consumerId = `consumer-${platform}-${os.hostname()}-${Date.now()}`;
-  const client = createMqttClient(mqttConfig, configDir, { clientId: consumerId });
+  const mqttOptions = buildMqttOptions(mqttConfig, configDir);
+  mqttOptions.clientId = consumerId;
+  mqttOptions.clean = false;
+  mqttOptions.manualConnect = true;
+  logMqttConnectionSecurity(mqttConfig.brokerUrl, mqttOptions);
+  const client = mqtt.connect(mqttConfig.brokerUrl, mqttOptions);
 
   if (executor.initProfiling) {
     executor.initProfiling();
@@ -467,6 +474,7 @@ export async function startElectronConsumer() {
   );
 
   consumer.setupMqttHandlers();
+  client.connect();
 
   const shutdown = () => {
     memoryPoller?.stop();

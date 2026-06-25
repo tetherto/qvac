@@ -86,6 +86,7 @@ export interface DuplexPluginHandlerDefinition<
  * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
  * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
  * - `detectorModelPath` - OCR detector model
+ * - `embedderPath` - BCI whisper.cpp embedder weights
  *
  * Custom plugins can define their own artifact keys.
  */
@@ -375,10 +376,10 @@ export const PLUGIN_NMT = "@qvac/sdk/nmtcpp-translation/plugin" as const;
 export const PLUGIN_TTS = "@qvac/sdk/tts-ggml/plugin" as const;
 
 /**
- * Optical character recognition plugin (ONNX).
+ * Optical character recognition plugin (GGML).
  * Provides: text extraction from images.
  */
-export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
+export const PLUGIN_OCR = "@qvac/sdk/ggml-ocr/plugin" as const;
 
 /**
  * Image generation plugin (stable-diffusion.cpp).
@@ -452,8 +453,8 @@ export const ADDON_NMT = "@qvac/translation-nmtcpp" as const;
 /** Native addon package for TTS (GGML) */
 export const ADDON_TTS = "@qvac/tts-ggml" as const;
 
-/** Native addon package for OCR (ONNX) */
-export const ADDON_OCR = "@qvac/ocr-onnx" as const;
+/** Native addon package for OCR (GGML) */
+export const ADDON_OCR = "@qvac/ocr-ggml" as const;
 
 /** Native addon package for image generation (stable-diffusion.cpp) */
 export const ADDON_DIFFUSION = "@qvac/diffusion-cpp" as const;

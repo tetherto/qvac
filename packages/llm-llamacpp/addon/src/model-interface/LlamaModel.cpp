@@ -1011,7 +1011,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"ppTPS", promptProcessingTPS},
-      {"CacheTokens", static_cast<int64_t>(state_->llmContext_->getNPast())},
+      {"CacheTokens",
+       static_cast<int64_t>(state_->llmContext_->getCacheTokens())},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
       {"contextSlides",
@@ -1130,6 +1131,32 @@ void LlamaModel::commonParamsParse(
   for (const std::string& key : {"reasoning-budget", "reasoning_budget"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
       params.reasoning_budget = parseReasoningBudget(it->second);
+      configFilemap.erase(it);
+    }
+  }
+
+  // parse image-tile-mode (not in LLAMA_EXAMPLE_COMMON, must be handled
+  // manually before configVector is built)
+  for (const std::string& key : {"image-tile-mode", "image_tile_mode"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      std::string val = it->second;
+      std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+      if (val == "0" || val == "batched") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
+      } else if (val == "1" || val == "sequential") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_SEQUENTIAL;
+      } else if (val == "2" || val == "disabled") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_DISABLED;
+      } else {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "image-tile-mode must be 0/batched, 1/sequential, or "
+                "2/disabled, got: %s",
+                it->second.c_str()));
+      }
       configFilemap.erase(it);
     }
   }

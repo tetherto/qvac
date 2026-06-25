@@ -1,6 +1,6 @@
 ---
 title: SDK Release Notes — v0.13.x (latest)
-description: Lists all releases from v0.13.0 to v0.13.4.
+description: Lists all releases from v0.13.0 to v0.13.5.
 ---
 
 ## v0.13.0
@@ -100,7 +100,7 @@ for await (const ev of sdk.transcribe({ modelId, audioChunk, metadata: true })) 
 }
 ```
 
-#### Neural-Signal and Robot-Action APIs Are Available
+#### Neural-Signal Transcription API Is Available
 
 The SDK now includes BCI transcription backed by whisper.cpp. It supports both batch transcription from a `.bin` path or `Uint8Array`, and streaming duplex sessions over neural-signal chunks.
 
@@ -119,7 +119,9 @@ for await (const token of session) {
 }
 ```
 
-This release also integrates the pi05 VLA model path for robot-action inference. The VLA API can inspect model hparams, preprocess camera frames, and run action generation with the required image, token, mask, and noise inputs.
+#### Robot-Action (VLA) API Is Available
+
+This release integrates the pi05 VLA model path for robot-action inference. The VLA API can inspect model hparams, preprocess camera frames, and run action generation with the required image, token, mask, and noise inputs.
 
 ```typescript
 import { loadModel, vla, vlaHparams, vlaPreprocessImage, PI05_BASE_Q_AGGRESSIVE } from "@qvac/sdk";
@@ -272,3 +274,30 @@ string key inside an otherwise JSON object. Previously the parser rejected that
 frame as invalid JSON, so no structured tool call was produced and callers saw
 the raw markup as assistant text. The parser now recognizes and repairs this
 specific shape, so the tool call is recovered and dispatched correctly.
+
+## v0.13.5
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.5
+
+A patch release that fixes Expo RPC worker cleanup on Android and other
+non-iOS platforms when the SDK closes its RPC connection.
+
+#### Bug Fixes
+
+##### Clean up the Expo RPC worker on non-iOS close
+
+On Expo, closing the SDK RPC connection now sends the worker a shutdown
+roundtrip before dropping client-side references. On iOS the worklet can still
+be terminated safely; on Android and other non-iOS platforms the worklet cannot
+be terminated without risking a native crash, so the SDK releases addon logger
+handles and clears worklet state instead.
+
+After shutdown, the SDK also resets its worklet reference so the next RPC
+session starts with a fresh worker and a fully populated plugin registry. This
+prevents follow-up model loads from failing with "Plugin not found" when tests
+or app flows unload the last model and auto-close the RPC client between runs.
+
+The same update is mirrored into the Bare build (`@qvac/bare-sdk`), which ships
+in lockstep with `@qvac/sdk`.
