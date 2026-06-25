@@ -228,6 +228,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
              [ "$EVENT_NAME" = "workflow_call" ] || \
@@ -238,17 +240,28 @@ jobs:
             exit 0
           fi
 
-          # Fetch the PR head commit so git diff and git ls-tree work
-          # even for fork PRs (pull_request_target only fetches base refs).
-          # This does NOT check out PR code — just makes the commit
-          # reachable for read-only git operations.
+          # Fetch the PR head commit for read-only git operations (diff + ls-tree).
+          # Same-repo PRs: fetch by SHA from origin.
+          # Fork PRs: SHA may not be fetchable from origin — fetch from
+          # the fork repo by ref instead. Does NOT check out PR code.
+          FETCHED=false
           if [ -n "$HEAD_SHA" ]; then
-            git fetch origin "$HEAD_SHA" --depth=1 2>/dev/null || {
-              echo "::warning::Could not fetch HEAD_SHA ($HEAD_SHA) — treating as changed"
-              echo "native_changed=true" >> "$GITHUB_OUTPUT"
-              echo "native_hash=unfetchable-$(date +%s)" >> "$GITHUB_OUTPUT"
-              exit 0
-            }
+            if git fetch origin "$HEAD_SHA" --depth=1 2>/dev/null; then
+              FETCHED=true
+            elif [ -n "$HEAD_REPO" ] && [ -n "$HEAD_REF" ]; then
+              echo "SHA not fetchable from origin (likely fork PR) — trying $HEAD_REPO/$HEAD_REF"
+              if git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_REF" --depth=1 2>/dev/null; then
+                HEAD_SHA=$(git rev-parse FETCH_HEAD)
+                FETCHED=true
+              fi
+            fi
+          fi
+
+          if [ "$FETCHED" != "true" ]; then
+            echo "::warning::Could not fetch PR head — treating as changed (cache disabled for this push)"
+            echo "native_changed=true" >> "$GITHUB_OUTPUT"
+            echo "native_hash=unfetchable-$(date +%s)" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           CHANGED=false
@@ -274,11 +287,13 @@ jobs:
             CHANGED=true
           fi
 
-          # Compute hash from the PR HEAD tree (not the checked-out base).
-          # git ls-tree reads the tree object without checking out files —
-          # secure (no PR code execution) and correct (reflects PR state).
+          # Hash from PR HEAD tree — includes ALL native build inputs:
+          # addon source (*.cpp, *.h), CMakeLists.txt at package root
+          # and in subdirs, vcpkg config. git ls-tree reads the tree
+          # object without checkout — secure and correct.
           NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- \
-            "$WORKDIR/addon" "$WORKDIR/vcpkg.json" "$WORKDIR/vcpkg-configuration.json" \
+            "$WORKDIR/addon" "$WORKDIR/CMakeLists.txt" \
+            "$WORKDIR/vcpkg.json" "$WORKDIR/vcpkg-configuration.json" \
             "$WORKDIR/vcpkg" 2>/dev/null \
             | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$' \
             | sha256sum | cut -d' ' -f1)
