@@ -3,13 +3,17 @@
 const path = require('bare-path')
 const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
-const { cleanupIntegrationCacheFiles, ensureModel, safeTest } = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModel, safeTest: integrationTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const useCpu = isDarwinX64 || isLinuxArm64
+
+function safeTest (name, opts, fn) {
+  integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
+}
 
 const DEFAULT_MODEL = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',

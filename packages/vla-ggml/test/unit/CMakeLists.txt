@@ -19,6 +19,7 @@ add_executable(
   test_pi05_m3_12_ode_loop.cpp
   test_pi05_m3_13_end_to_end.cpp
   test_pi05_integration.cpp
+  backend_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla_adapter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/pi05.cpp
@@ -42,6 +43,15 @@ target_include_directories(
 )
 
 target_compile_features(addon-test PRIVATE cxx_std_20)
+
+# Under GGML_BACKEND_DL the CPU/GPU backends are separate libqvac-ggml-*.so
+# modules co-installed with the ggml core lib. Production loads them from the
+# addon's prebuilds dir; the unit-test env (backend_env.cpp) loads them from
+# here. There's no reliable runtime handle to that directory ($ORIGIN RUNPATH
+# leaves dladdr with a relative path), so pass the absolute ggml lib dir in.
+target_compile_definitions(
+  addon-test
+  PRIVATE GGML_BACKEND_DIR="$<TARGET_FILE_DIR:ggml::ggml>")
 
 target_link_libraries(
   addon-test

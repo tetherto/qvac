@@ -1,0 +1,66 @@
+---
+description: QVAC coding-agent integration stack — ai-sdk-provider, OpenCode plugin, CLI serve, models.dev, docs, layer ownership, releases
+globs:
+  - packages/ai-sdk-provider/**
+  - plugins/opencode/**
+  - packages/cli/src/serve/**
+  - packages/cli/docs/serve-openai.md
+  - docs/website/content/docs/cli/http-server/**
+  - docs/architecture/AGENT-INTEGRATIONS.md
+alwaysApply: false
+---
+
+When working on QVAC coding-agent integrations, read `docs/architecture/AGENT-INTEGRATIONS.md` first. It is the detailed repo reference for `@qvac/ai-sdk-provider`, `@qvac/opencode-plugin`, `qvac serve openai`, QVAC docs, and models.dev provider metadata.
+
+## Package Stack
+
+```text
+OpenCode / coding agent
+  -> @qvac/opencode-plugin                 # OpenCode-specific turnkey UX
+    -> @qvac/ai-sdk-provider managed mode  # spawn/reuse local qvac serve
+      -> @qvac/cli qvac serve openai       # OpenAI-compatible HTTP adapter
+        -> @qvac/sdk                       # model loading, inference, registry
+```
+
+Manual/custom-provider integrations skip the plugin and point directly at `qvac serve openai`.
+
+## Layer Ownership
+
+- `packages/sdk`: core inference semantics, model loading, registry downloads, tool-call parsers/dialects, cancellation primitives, structured errors, generated model constants.
+- `packages/cli/src/serve`: OpenAI-compatible HTTP API, route validation, request/response translation, same-model queueing, client-disconnect cancellation, CORS/auth/OpenAPI, generic OpenAI-client compatibility.
+- `packages/ai-sdk-provider`: Vercel AI SDK provider wrapper, `createQvac`, external/managed modes, managed serve lifecycle/reuse, friendly model catalog (`qvacCatalog`), typed model metadata exports.
+- `plugins/opencode`: OpenCode plugin hooks, provider injection, project default model selection, host process, OpenCode startup/TUI behavior, temporary OpenCode/OpenAI-compatible shims.
+- `models.dev`: external provider/model metadata only. Do not encode QVAC runtime behavior there.
+- QVAC docs/READMEs: plugin-first OpenCode setup, manual server setup as advanced/custom-provider path, model selection, release-relevant behavior.
+
+Keep changes in the lowest correct layer. If a plugin shim becomes generally true for all OpenAI-compatible clients, move it down to CLI serve and remove it from the plugin.
+
+## Model Naming
+
+There are three model naming layers:
+
+- Friendly id: `qwen3.5-9b` (`@qvac/ai-sdk-provider` `qvacCatalog`, mirrored in models.dev).
+- SDK constant: `GPT_OSS_20B_INST_Q4_K_M` / `GEMMA4_31B_MULTIMODAL_Q4_K_M` (generated SDK model constants).
+- Serve alias: HTTP `model` value used by clients; managed mode can use the friendly id or raw constant as the alias.
+
+`@qvac/opencode-plugin` accepts both friendly ids and raw QVAC chat-model constants. Do not document the plugin as if only Qwen3.5 friendly ids are usable.
+
+## OpenCode Documentation Rules
+
+- Lead with `@qvac/opencode-plugin`.
+- Manual `qvac serve openai` and custom provider JSON are advanced paths.
+- Avoid "no provider block / no second terminal / no QVAC_MODEL prefix" framing. State positive behavior: the plugin starts managed QVAC serve, registers `qvac`, and selects the project model.
+- Mention stronger raw constants such as `GPT_OSS_20B_INST_Q4_K_M` when recommending agent-capable local models.
+- Keep npm README expectations clear: npmjs.com only updates after publishing a new package version.
+
+## Release Guidance
+
+Release dependency order for multi-layer changes:
+
+1. `@qvac/sdk`
+2. `@qvac/cli`
+3. `@qvac/ai-sdk-provider`
+4. `@qvac/opencode-plugin`
+5. docs / models.dev as appropriate
+
+If a fix is transitive through caret ranges, verify with a fresh install before deciding whether upper packages need re-release.

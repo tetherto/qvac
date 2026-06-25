@@ -91,6 +91,13 @@ function promptToAddonMessages (prompt, runOptions) {
 function normalizeGenerationParams (generationParams) {
   if (generationParams === undefined) return undefined
 
+  if (generationParams.remove_thinking_from_context !== undefined &&
+      typeof generationParams.remove_thinking_from_context !== 'boolean') {
+    throw new TypeError(
+      'generationParams.remove_thinking_from_context must be a boolean when provided'
+    )
+  }
+
   const hasGrammar = typeof generationParams.grammar === 'string' &&
     generationParams.grammar.length > 0
   const hasJsonSchema = generationParams.json_schema !== undefined &&

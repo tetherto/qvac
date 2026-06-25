@@ -7,9 +7,9 @@
 // devices. This file flips the switch with `useGPU: true` so that on
 //   - macOS / iOS:    Metal is engaged
 //   - Linux / Windows: Vulkan is engaged
-//   - Android:         Vulkan is preferred, OpenCL is the fallback
-//                      (Adreno only; non-Adreno phones may silently
-//                      fall back to CPU at ggml_cl2_init)
+//   - Android:         OpenCL on Adreno 700+, Vulkan on Mali / Xclipse;
+//                      the engine routes any vendor/tier it can't drive
+//                      to CPU and flags it via stats.gpuUnsupported
 //
 // The strict gate uses `response.stats.backendDevice` (0 = CPU, 1 = GPU)
 // and `response.stats.backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan,
@@ -35,9 +35,10 @@
 //   2. The "GPU is expected here" decision is platform-driven (see
 //      `expectsGpu()` below). All four supported platforms (darwin,
 //      ios, linux, win32, android) wire a GPU backend by default in
-//      transcription-parakeet/vcpkg.json, so any CPU result on those
-//      platforms is treated as a regression (modulo
-//      QVAC_PARAKEET_GPU_SMOKE_RELAX).
+//      transcription-parakeet/vcpkg.json, so a CPU result on those
+//      platforms is treated as a regression -- unless the engine flags
+//      stats.gpuUnsupported (a vendor/tier it declines by policy), or
+//      QVAC_PARAKEET_GPU_SMOKE_RELAX is set.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -126,6 +127,16 @@ function assertGpuBackend (t, modelType, stats) {
   const name = backendIdToName(id)
   console.log(`[${modelType}/GPU] backendDevice=${dev} backendId=${id} (${name})`)
 
+  // A GPU the engine declines by policy -- an unsupported Adreno tier, or a
+  // vendor that fails parakeet-cpp's correctness gate -- legitimately runs on
+  // CPU and flags it via stats.gpuUnsupported. Treat that as the correct
+  // result, not a GPU regression. (Under parakeet-cpp 2026-06-18 the device-farm
+  // vendors Adreno/Mali run on the GPU; this only fires for declined devices.)
+  if (platform === 'android' && dev === 0 && stats.gpuUnsupported) {
+    t.pass(`${modelType}/android: GPU present but declined by policy (gpuUnsupported); correctly using CPU`)
+    return
+  }
+
   if (!expectsGpu()) {
     // Platforms with no GPU backend wired into the addon today must
     // resolve to CPU. This catches accidental GPU-on-Linux config drift.
@@ -193,7 +204,6 @@ async function runGpuModelTest (t, modelType, modelPath, audio, expectations) {
 }
 
 test('CTC GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
   const loggerBinding = setupJsLogger(binding)
   try {
     const modelPath = await loadGgufOrSkip(t, 'ctc')
@@ -207,7 +217,6 @@ test('CTC GPU smoke — useGPU=true must engage the GPU backend on GPU-capable p
 })
 
 test('TDT GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
   const loggerBinding = setupJsLogger(binding)
   try {
     const modelPath = await loadGgufOrSkip(t, 'tdt')
@@ -225,7 +234,6 @@ test('TDT GPU smoke — useGPU=true must engage the GPU backend on GPU-capable p
 // the zero-token regression triggered by ggml-metal's Q-variant
 // mul_mv + bias/residual fusion on the EOU q8_0 joint network.
 test('EOU GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
   const loggerBinding = setupJsLogger(binding)
   try {
     const modelPath = await loadGgufOrSkip(t, 'eou')
@@ -239,7 +247,6 @@ test('EOU GPU smoke — useGPU=true must engage the GPU backend on GPU-capable p
 })
 
 test('Sortformer GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
   const loggerBinding = setupJsLogger(binding)
   try {
     const modelPath = await loadGgufOrSkip(t, 'sortformer')

@@ -927,7 +927,7 @@ test("ocr: recognizer english — full field mapping", (t) => {
     },
   });
 
-  t.is(model.engine, "onnx-ocr", "legacy @qvac/ocr-onnx resolved to onnx-ocr");
+  t.is(model.engine, "ggml-ocr", "legacy @qvac/ocr-onnx resolved to ggml-ocr");
   t.is(model.addon, "ocr");
   t.is(model.modelId, "recognizer_english.onnx");
   t.is(

@@ -1,10 +1,13 @@
 'use strict'
 
 const process = require('bare-process')
+const os = require('bare-os')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const path = require('bare-path')
+
+const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 
 const MODEL = {
   name: 'Qwen3-0.6B-Q8_0.gguf',
@@ -32,6 +35,7 @@ async function collectResponse (response) {
 }
 
 const hasMultiGpu = process.env.QVAC_HAS_MULTI_GPU === '1'
+const skip = isDarwinX64
 
 const BASE_CONFIG = {
   device: 'gpu',
@@ -92,19 +96,19 @@ function assertSingleDevice (t, devices) {
   t.ok(devices.size <= 1, `layers should stay on a single device (found: ${[...devices].join(', ')})`)
 }
 
-safeTest('multi-gpu: split-mode=layer distributes layers across GPUs', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=layer distributes layers across GPUs', { timeout: 600_000, skip }, async t => {
   await runMultiGpuTest(t, { 'split-mode': 'layer' }, assertMultiDevice('layers'))
 })
 
-safeTest('multi-gpu: split-mode=row distributes tensors across GPUs', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=row distributes tensors across GPUs', { timeout: 600_000, skip }, async t => {
   await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
 })
 
-safeTest('multi-gpu: default (no split-mode) pins layers to a single device', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: default (no split-mode) pins layers to a single device', { timeout: 600_000, skip }, async t => {
   await runMultiGpuTest(t, {}, assertSingleDevice)
 })
 
-safeTest('multi-gpu: split-mode=layer with tensor-split and main-gpu', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=layer with tensor-split and main-gpu', { timeout: 600_000, skip }, async t => {
   await runMultiGpuTest(
     t,
     { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': '0' },

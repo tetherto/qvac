@@ -26,7 +26,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(inference-addon-sd C CXX)
 
@@ -143,10 +143,11 @@ if(BUILD_TESTING)
   add_subdirectory(test/unit)
 endif()
 
-if(WIN32)
-  target_link_libraries(
-    ${inference-addon-sd}
-    PRIVATE
-      msvcrt.lib
-  )
+# Symbol-export hygiene: hide this addon's statically linked ggml /
+# stable-diffusion symbols so they cannot interpose on another ggml addon
+# loaded into the same process (see packages/ggml-coload-smoke and
+# scripts/verify-prebuild-symbols.mjs). Matches every other ggml addon, which
+# all rely on --exclude-libs,ALL alone; diffusion-cpp previously shipped nothing.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${inference-addon-sd}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()

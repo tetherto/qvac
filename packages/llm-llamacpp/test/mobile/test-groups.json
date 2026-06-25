@@ -7,6 +7,7 @@
     "imageFruitPlate": ["runImageFruitPlateTest"],
     "gemma": ["runGemma4Test"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
+    "continuousBatching": ["runContinuousBatchingTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -27,6 +28,7 @@
     ]
   },
   "android": {
+    "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
       "runConfigParametersTest",

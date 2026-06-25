@@ -124,18 +124,22 @@ void BCIModel::loadEmbedderIfNeeded() {
     return;
   }
 
-  // Look for embedder weights next to the model file
-  auto modelPathIt = cfg_.whisperContextCfg.find("model");
-  if (modelPathIt == cfg_.whisperContextCfg.end()) {
-    return;
-  }
-  const auto modelPath = std::get<std::string>(modelPathIt->second);
+  // Prefer an explicit embedder path supplied from JS
+  // (`configurationParams.embedderPath`). When absent, fall back to
+  // resolving `bci-embedder.bin` next to the GGML model file.
+  std::string embedderPath = cfg_.embedderPath;
+  if (embedderPath.empty()) {
+    auto modelPathIt = cfg_.whisperContextCfg.find("model");
+    if (modelPathIt == cfg_.whisperContextCfg.end()) {
+      return;
+    }
+    const auto modelPath = std::get<std::string>(modelPathIt->second);
 
-  auto lastSep = modelPath.find_last_of("/\\");
-  auto dir = (lastSep != std::string::npos)
-                 ? modelPath.substr(0, lastSep)
-                 : ".";
-  auto embedderPath = dir + "/bci-embedder.bin";
+    auto lastSep = modelPath.find_last_of("/\\");
+    auto dir =
+        (lastSep != std::string::npos) ? modelPath.substr(0, lastSep) : ".";
+    embedderPath = dir + "/bci-embedder.bin";
+  }
 
   if (neuralProcessor_.loadEmbedderWeights(embedderPath)) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,

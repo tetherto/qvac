@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(GGML_BACKEND_DL)
 #include <filesystem>
 #endif
 
@@ -129,32 +129,36 @@ void ClassificationModel::load() {
         "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
   }
 
-#if defined(__ANDROID__)
-  // qvac-fabric on Android ships per-microarch CPU variants as MODULE
-  // .so files loaded at runtime via dlopen. ggml_backend_cpu_init() is
-  // not statically linkable here (symbol lives inside the variant .so),
-  // so we open the variants from <backendsDir>/<BACKENDS_SUBDIR>/ and
-  // pick a CPU device through the generic registry API.
+#if defined(__ANDROID__) || defined(GGML_BACKEND_DL)
+  // Under GGML_BACKEND_DL (Android, and desktop Linux when gpu-backends is
+  // enabled) qvac-fabric ships per-microarch CPU variants and GPU backends as
+  // MODULE .so files loaded at runtime via dlopen. ggml_backend_cpu_init() is
+  // not statically linkable here (the symbol lives inside a variant .so), so we
+  // open the modules from <backendsDir>/<BACKENDS_SUBDIR>/ and pick a CPU
+  // device through the generic registry API.
   //
-  // backendsDir comes from JS (`path.join(__dirname, 'prebuilds')`,
-  // mirroring the llamacpp-llm addon) and BACKENDS_SUBDIR is the
-  // compile-time `<bare_target>/<module_name>` relative path.
+  // backendsDir comes from JS (`path.join(__dirname, 'prebuilds')`, mirroring
+  // the llamacpp-llm addon) and BACKENDS_SUBDIR is the compile-time
+  // `<bare_target>/<module_name>` relative path.
+#if defined(__ANDROID__)
   if (backendsDir_.empty()) {
     throw StatusError(
         InvalidArgument,
         "Configuration 'config.backendsDir' is required on Android");
   }
-  std::filesystem::path variantsDir =
-      std::filesystem::path(backendsDir_) / BACKENDS_SUBDIR;
-  ggml_backend_load_all_from_path(variantsDir.string().c_str());
+#endif
+  if (!backendsDir_.empty()) {
+    std::filesystem::path variantsDir =
+        std::filesystem::path(backendsDir_) / BACKENDS_SUBDIR;
+    ggml_backend_load_all_from_path(variantsDir.string().c_str());
+  }
 
   ggml_backend_dev_t cpuDev =
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   if (cpuDev == nullptr) {
     throw StatusError(
         InternalError,
-        "No CPU backend device registered after loading variants from " +
-            variantsDir.string());
+        "No CPU backend device registered (GGML_BACKEND_DL build)");
   }
   backend_ = ggml_backend_dev_init(cpuDev, /*params=*/nullptr);
 #else

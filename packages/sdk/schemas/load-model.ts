@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Logger } from "@/logging";
 import {
   llmConfigBaseSchema,
   embedConfigBaseSchema,
@@ -12,8 +13,13 @@ import {
 import type { parakeetConfigSchema } from "./transcription-config";
 import { bciConfigSchema } from "./bci-config";
 import { delegateSchema } from "./delegate";
-import { nmtConfigSchema } from "./translation-config";
-import { ttsConfigSchema } from "./text-to-speech";
+import { nmtConfigBaseSchema, nmtConfigSchema } from "./translation-config";
+import {
+  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+  ttsChatterboxLoadConfigSchema,
+  ttsConfigSchema,
+  ttsSupertonicLoadConfigSchema,
+} from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
@@ -35,6 +41,7 @@ import {
   classificationModelTypeSchema,
   ModelType,
   ModelTypeAliases,
+  normalizeModelType,
   type CanonicalModelType,
   type ModelTypeInput,
 } from "./model-types";
@@ -51,7 +58,6 @@ const builtInModelTypes = new Set([
 export function isBuiltInModelType(modelType: unknown): boolean {
   return typeof modelType === "string" && builtInModelTypes.has(modelType);
 }
-import type { Logger } from "@/logging";
 import { reloadConfigRequestSchema } from "./reload-config";
 
 const loadModelCommonFields = {
@@ -67,6 +73,78 @@ const loadModelRequestCommonFields = {
   withProgress: z.boolean().optional(),
   requestId: z.string().min(1).optional(),
 };
+
+const topLevelLoadModelOptionKeys = new Set([
+  ...Object.keys(loadModelRequestCommonFields),
+  "modelType",
+  "modelConfig",
+]);
+
+type ShapeSchema = { shape: Record<string, unknown> };
+
+const modelConfigKeysByModelType = new Map<string, Set<string>>([
+  [ModelType.llamacppCompletion, configKeys(llmConfigBaseSchema)],
+  [ModelType.whispercppTranscription, configKeys(whisperConfigSchema)],
+  [ModelType.bciWhispercppTranscription, configKeys(bciConfigSchema)],
+  [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
+  [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
+  [
+    ModelType.nmtcppTranslation,
+    configKeys(...nmtConfigBaseSchema.options),
+  ],
+  [
+    ModelType.ttsGgml,
+    configKeys(
+      ttsChatterboxLoadConfigSchema,
+      ttsSupertonicLoadConfigSchema,
+      LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+    ),
+  ],
+  [ModelType.ggmlOcr, configKeys(ocrConfigSchema)],
+  [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
+  [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
+  [ModelType.ggmlClassification, configKeys(classificationConfigSchema)],
+]);
+
+const misplacedLoadModelConfigGuard = z.unknown().superRefine((value, ctx) => {
+  const keys = getMisplacedModelConfigKeys(value);
+  if (keys.length === 0) return;
+
+  ctx.addIssue({
+    code: "custom",
+    message:
+      `Model config field "${keys[0]}" must be passed inside modelConfig. ` +
+      `Did you mean ${keys.map((key) => `modelConfig.${key}`).join(", ")}?`,
+  });
+});
+
+function configKeys(
+  ...sources: (ShapeSchema | readonly string[])[]
+): Set<string> {
+  const keys = sources.flatMap((source) =>
+    isStringArray(source) ? source : Object.keys(source.shape),
+  );
+  return new Set(keys.filter((key) => !topLevelLoadModelOptionKeys.has(key)));
+}
+
+function isStringArray(
+  source: ShapeSchema | readonly string[],
+): source is readonly string[] {
+  return Array.isArray(source);
+}
+
+function getMisplacedModelConfigKeys(value: unknown): string[] {
+  if (!isRecord(value) || typeof value["modelType"] !== "string") return [];
+  const configKeys = modelConfigKeysByModelType.get(
+    normalizeModelType(value["modelType"]),
+  );
+  if (!configKeys) return [];
+  return Object.keys(value).filter((key) => configKeys.has(key));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
@@ -317,7 +395,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion("modelType", [
     .strict()
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: ModelType.onnxOcr,
+      modelType: ModelType.ggmlOcr,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: (data.modelConfig ?? {}),
@@ -409,7 +487,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
 ]);
 
 export const loadModelOptionsToRequestSchema =
-  loadModelOptionsToRequestBaseSchema;
+  misplacedLoadModelConfigGuard.pipe(loadModelOptionsToRequestBaseSchema);
 
 const commonModelConfigSchema = z.object({
   type: z.literal("loadModel"),
@@ -481,7 +559,7 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema
 
 export const loadOcrModelRequestSchema = commonModelConfigSchema
   .extend({
-    modelType: z.literal(ModelType.onnxOcr),
+    modelType: z.literal(ModelType.ggmlOcr),
     modelConfig: ocrConfigSchema,
   })
   .strict();
@@ -683,7 +761,7 @@ export type InferredConfig<S> = S extends {
         ? z.input<typeof nmtConfigSchema>
         : S extends { engine: typeof ModelType.ttsGgml }
           ? z.input<typeof ttsConfigSchema>
-          : S extends { engine: typeof ModelType.onnxOcr }
+          : S extends { engine: typeof ModelType.ggmlOcr }
             ? Partial<z.input<typeof ocrConfigSchema>>
             : S extends { engine: typeof ModelType.parakeetTranscription }
               ? z.input<typeof parakeetConfigSchema>

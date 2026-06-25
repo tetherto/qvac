@@ -87,7 +87,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED]: {
     name: "MODEL_TYPE_REQUIRED",
     message:
-      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
+      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
   },
   [SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH]: {
     name: "MODEL_SRC_TYPE_MISMATCH",
@@ -201,7 +201,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
     name: "WORKER_PLUGINS_NOT_REGISTERED",
     message: () =>
-      "No plugins registered in the worker. Call `plugins([...])` (or `registerPlugin(...)`) before the first SDK call. Import default plugin manifests from `@qvac/sdk/server/bare/plugins` if you want the full built-in set.",
+      "No plugins registered in the worker. On Bare, register the plugins you need with `plugins([...])` (or `registerPlugin(...)`) before the first SDK call — import each from its subpath, e.g. `@qvac/sdk/llamacpp-completion/plugin`. For direct Bare usage we recommend the dedicated `@qvac/bare-sdk` package. See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare",
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: "BUNDLE_VERIFICATION_FAILED",

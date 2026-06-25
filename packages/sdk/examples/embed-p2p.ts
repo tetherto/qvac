@@ -11,8 +11,11 @@ function cosineSimilarity(vecA: number[], vecB: number[]) {
 try {
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
-    onProgress: (progress) => {
-      console.log(progress);
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
     },
     modelConfig: {
       gpuLayers: 99,
@@ -20,7 +23,7 @@ try {
     },
   });
 
-  console.log("\n📝 Example 1: Single Text Embedding");
+  console.log("\n▸ Example 1: Single Text Embedding");
   console.log("=".repeat(50));
 
   const { embedding: singleEmbedding } = await embed({
@@ -32,7 +35,7 @@ try {
   console.log("Embedding dimensions:", singleEmbedding.length);
   console.log("First 10 values:", singleEmbedding.slice(0, 10));
 
-  console.log("\n📝 Example 2: Batch Text Embeddings");
+  console.log("\n▸ Example 2: Batch Text Embeddings");
   console.log("=".repeat(50));
 
   const texts = [
@@ -54,7 +57,7 @@ try {
 
   console.log("Each embedding dimensions:", emb1.length);
 
-  console.log("\n🔍 Similarity Analysis");
+  console.log("\n▸ Similarity Analysis");
   console.log("=".repeat(50));
 
   const similarity1 = cosineSimilarity(emb1, emb2);
@@ -68,10 +71,10 @@ try {
     "Similarity between texts 1 and 3 (different topics):",
     similarity2.toFixed(4),
   );
-  console.log("\n💡 Higher values indicate more similar meanings");
+  console.log("\n▸ Higher values indicate more similar meanings");
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }

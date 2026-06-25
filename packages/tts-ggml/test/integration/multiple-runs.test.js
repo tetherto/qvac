@@ -33,8 +33,7 @@ const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
 // Lifecycle / sequential-run test, not a GPU policy test: rely on the
-// package default (`useGPU: false`) and the Android C++-side override
-// in ChatterboxModel::loadLocked rather than opting into GPU here.
+// package default (`useGPU: false`) rather than opting into GPU here.
 // Tests that *are* about GPU live in gpu-smoke.test.js.
 
 function getBaseDir () {

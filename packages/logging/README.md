@@ -28,12 +28,12 @@ const log = new QvacLogger(myLogger)
 ```
 
 - **With a provided logger**:
-    1. If `logger.getLevel()` exists, its return value (case-insensitive) is used.
-    2. Else if `logger.level()` exists, its return (case-insensitive) is used.
-    3. Else if `logger.level` is a string, it’s used (case-insensitive).
-    4. If none yield a valid level, falls back to `DEFAULT_LEVEL` (`"info"`).
+  1. If `logger.getLevel()` exists, its return value (case-insensitive) is used.
+  2. Else if `logger.level()` exists, its return (case-insensitive) is used.
+  3. Else if `logger.level` is a string, it’s used (case-insensitive).
+  4. If none yield a valid level, falls back to `DEFAULT_LEVEL` (`"info"`).
 - **Without a logger**:
-    - The wrapper starts in `OFF` mode and silences all messages.
+  - The wrapper starts in `OFF` mode and silences all messages.
 
 ### Log Levels
 
@@ -67,6 +67,7 @@ Note that changing the log level on the wrapper does not change the level of the
 If you need to change the log level you need to call method on both the wrapper and the underlying logger.
 
 For example:
+
 ```js
 import * as logLevel from 'loglevel'
 import QvacLogger from '@qvac/logging'
@@ -74,16 +75,15 @@ import QvacLogger from '@qvac/logging'
 logLevel.setLevel('warn')
 const log = new QvacLogger(logLevel)
 
-console.log(log.getLevel())    // 'warn'
-log.info('Info here')          // skipped
-log.error('Critical!')         // forwarded to logLevel.error
+console.log(log.getLevel()) // 'warn'
+log.info('Info here') // skipped
+log.error('Critical!') // forwarded to logLevel.error
 
-logLevel.setLevel('debug')     // change logLevel level
-log.setLevel('debug')          // change wrapper level
-console.log(log.getLevel())    // 'debug'
-log.debug('Debugging now!')   // forwarded to logLevel.debug
+logLevel.setLevel('debug') // change logLevel level
+log.setLevel('debug') // change wrapper level
+console.log(log.getLevel()) // 'debug'
+log.debug('Debugging now!') // forwarded to logLevel.debug
 ```
-
 
 ## Quickstart Example
 
@@ -94,9 +94,9 @@ import QvacLogger from '@qvac/logging'
 logLevel.setLevel('warn')
 const log = new QvacLogger(logLevel)
 
-console.log(log.getLevel())    // 'warn'
-log.info('Info here')          // skipped
-log.error('Critical!')         // forwarded to logLevel.error
+console.log(log.getLevel()) // 'warn'
+log.info('Info here') // skipped
+log.error('Critical!') // forwarded to logLevel.error
 ```
 
 ## SDK Integration Example
@@ -109,7 +109,7 @@ import * as logLevel from 'loglevel'
 logLevel.setLevel('debug')
 const log = new QvacLogger(logLevel)
 
-const qvac = new Qvac({logger: log})
+const qvac = new Qvac({ logger: log })
 await qvac.start()
 ```
 
@@ -120,4 +120,3 @@ Run unit tests with:
 ```bash
 npm test
 ```
-
