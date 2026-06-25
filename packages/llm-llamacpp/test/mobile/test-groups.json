@@ -1,6 +1,7 @@
 {
   "ios": {
-    "finetuning": ["runFinetuningPauseResumeTest", "runFinetuningArchsTest"],
+    "finetuning": ["runFinetuningPauseResumeTest"],
+    "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],
@@ -32,10 +33,12 @@
     "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
-      "runFinetuningArchsTest",
       "runConfigParametersTest",
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
+    ],
+    "funcShardF": [
+      "runFinetuningArchsTest"
     ],
     "funcShardB": [
       "runToolsCompactTest",
