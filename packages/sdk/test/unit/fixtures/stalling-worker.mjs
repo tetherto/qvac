@@ -3,10 +3,11 @@
 
 import RPC from 'bare-rpc'
 import { connect } from 'bare-net'
-import process from 'bare-process'
+import Signal from 'bare-signals'
 
-const { QVAC_IPC_SOCKET_PATH: socketPath } = JSON.parse(process.argv[2])
+const { QVAC_IPC_SOCKET_PATH: socketPath } = JSON.parse(Bare.argv[2])
 
 new RPC(connect(socketPath), () => {})
 
-process.on('SIGTERM', () => process.exit(0))
+const signals = new Signal.Emitter()
+signals.once('SIGTERM', () => Bare.exit(0))

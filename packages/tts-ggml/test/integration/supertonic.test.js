@@ -11,6 +11,7 @@ const test = require('brittle')
 
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureSupertonicModel } = require('../utils/downloadModel')
+const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -32,16 +33,26 @@ test('Supertonic TTS (ggml): basic synthesis returns ~44.1 kHz audio + stats', {
   })
   try {
     const wavPath = isMobile ? undefined : path.join(baseDir, 'test', 'output', 'supertonic-en.wav')
+    const text = 'The supertonic engine produces high quality speech in real time.'
+    const t0 = Date.now()
     const result = await runSupertonicTTS(
       model,
-      { text: 'The supertonic engine produces high quality speech in real time.', saveWav: !isMobile, wavOutputPath: wavPath },
+      { text, saveWav: !isMobile, wavOutputPath: wavPath },
       { minSamples: 10000, maxSamples: 5000000, minDurationMs: 250, maxDurationMs: 300000 }
     )
+    const wallMs = Date.now() - t0
     console.log(result.output)
 
     t.ok(result.passed, 'supertonic synth passes expectations')
     t.ok(result.data.sampleCount > 0, 'supertonic produced audio')
     t.is(result.data.reportedSampleRate, 44100, 'supertonic reports 44.1 kHz native sample rate')
+
+    const st = result.data?.stats || {}
+    t.comment(recordTtsStats(
+      'supertonic en',
+      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
+      { wallMs, sampleCount: result.data?.sampleCount, model: 'supertonic', output: text }
+    ))
     if (result.data.stats) {
       t.ok(typeof result.data.stats.realTimeFactor === 'number', 'supertonic stats include RTF')
       t.ok(typeof result.data.stats.audioDurationMs === 'number', 'supertonic stats include audio duration')

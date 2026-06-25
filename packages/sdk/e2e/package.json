@@ -3,25 +3,31 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "dist/tests/electron/main.js",
   "description": "SDK tests using QVAC test framework",
   "scripts": {
     "prepare:sdk": "cd .. && (bun i && bun run build); cd e2e",
     "build": "npm run clean && tsc",
     "install:build": "npm install --install-links && npm run build",
     "install:build:full": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run install:build",
+    "package:electron": "electron-forge package",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "clean:sdk-snapshot": "rm -rf node_modules/@qvac/sdk build/consumers/ios/node_modules/@qvac/sdk build/consumers/android/node_modules/@qvac/sdk",
-    "consumer:desktop:run": "qvac-test run:consumer:desktop"
+    "consumer:desktop:run": "qvac-test run:consumer:desktop",
+    "consumer:electron:run": "qvac-test run:consumer:electron"
   },
   "dependencies": {
     "@qvac/sdk": "file:..",
-    "@tetherto/qvac-test-suite": "^0.6.4",
+    "@tetherto/qvac-test-suite": "^0.7.0",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",
     "react-native-bare-kit": "^0.14.0"
   },
   "devDependencies": {
+    "@electron-forge/cli": "^7.11.2",
+    "@electron-forge/plugin-base": "^7.11.2",
+    "electron": "^42.4.1",
     "typescript": "^5.9.3"
   }
 }

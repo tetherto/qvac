@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-06-24
+
+### Changed
+
+- Bumped the `whisper-cpp` vcpkg override from `1.8.5#3` to `1.8.5#5`, which
+  refreshes the bundled `ggml-speech` from `2026-06-04` to `2026-06-15` (speech
+  branch tip `7bb9f229`), keeping it consistent with the other speech-stack
+  addons (`tts-cpp` already pins `ggml-speech 2026-06-15`). The `whisper-cpp`
+  C++ source is unchanged between port-versions `#3` and `#5`, so this only
+  moves `ggml-speech`. The registry baseline is left unchanged; the override
+  resolves the new port-version forward of the pinned baseline (QVAC-21321,
+  registry [tetherto/qvac-registry-vcpkg#210](https://github.com/tetherto/qvac-registry-vcpkg/pull/210)).
+
+## Pull Requests
+
+- [#2845](https://github.com/tetherto/qvac/pull/2845) - QVAC-21321 transcription-whispercpp: consume ggml-speech 2026-06-15 (whisper-cpp 1.8.5#5)
+
+## [0.10.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.10.0]
+
+### Changed
+
+- Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2638](https://github.com/tetherto/qvac/pull/2638)).
+- `vcpkg.json` now selects `whisper-cpp[metal]` on **iOS** as well as
+  macOS (QVAC-20687). The separate featureless `ios` dependency entry is
+  merged into the `osx` entry as a single `"platform": "osx | ios"` block
+  requesting `["metal"]`, so Apple GPU backend selection is declarative
+  and at parity with `transcription-parakeet`. Supersedes the 0.9.0 note
+  that iOS shipped without the `[metal]` feature pending the iOS
+  Metal/MTLCompiler XPC crash investigation.
+
+### Added
+- iOS Metal assertion in the mobile perf integration test
+  (`test/integration/mobile-perf-runner.js`): with `use_gpu=true` on iOS
+  the runner now asserts `backendId === 1` (Metal), mirroring the
+  existing Android GPU-backend assertion. The on-PR iOS device-farm run
+  thus guards that whisper engages Metal (and that the historical
+  MTLCompiler XPC init crash has not regressed) instead of silently
+  falling back to CPU.
+
 ## [0.9.0]
 
 ### Added

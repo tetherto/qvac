@@ -244,6 +244,7 @@ declare interface Addon {
   /** Cancels the matching JS-owned job when one is active or buffered. */
   cancel(jobId?: number): Promise<void>
   loadWeights(weightsData: { filename: string; chunk: Uint8Array; completed: boolean }): Promise<void>
+  getBackendInfo(): TranscriptionParakeet.BackendInfo | null
   status(): Promise<string>
   pause(): Promise<void>
   stop(): Promise<void>
@@ -317,6 +318,12 @@ declare class TranscriptionParakeet {
   getState(): InferenceClientState
   cancel(): Promise<void>
   status(): Promise<string | undefined>
+
+  /**
+   * Backend the native engine resolved at load() (device class, ggml backend
+   * family, and human-readable GPU name). `null` before load / after unload.
+   */
+  getBackendInfo(): TranscriptionParakeet.BackendInfo | null
   pause(): Promise<void>
   unpause(): Promise<void>
   destroy(): Promise<void>
@@ -375,6 +382,32 @@ declare namespace TranscriptionParakeet {
     backendDevice: number
     /** {@link BackendId} integer code. */
     backendId: number
+    /**
+     * 1 when a GPU was present but the engine routed to CPU because the GPU
+     * mis-computes the models (e.g. Mali Vulkan) or the vendor/tier is declined
+     * by policy; 0 otherwise. A CPU `backendDevice` with `gpuUnsupported === 1`
+     * is expected, not a regression.
+     */
+    gpuUnsupported: number
+  }
+
+  /**
+   * Backend the native engine resolved at load(), as returned by
+   * {@link TranscriptionParakeet.getBackendInfo}. `backendDescription` is the
+   * human-readable GPU name (e.g. "NVIDIA GeForce RTX 3090", "Apple M2 Pro")
+   * recovered from the ggml device registry -- the nvidia-smi-independent
+   * source the perf reporter falls back to on CI runners. Empty when the
+   * active backend is CPU or ggml provides no description.
+   */
+  export interface BackendInfo {
+    /** Resolved device class: `'CPU'` or `'GPU'`. */
+    backendDevice: string
+    /** {@link BackendId} integer code (0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 99=other). */
+    backendId: number
+    /** ggml backend/device name of the resolved device (e.g. `'CUDA0'`, `'Vulkan0'`, `'CPU'`). */
+    backendName: string
+    /** Human-readable device description (e.g. `'NVIDIA GeForce RTX 3090'`); empty when CPU or unavailable. */
+    backendDescription: string
   }
 
   /**
@@ -395,6 +428,7 @@ declare namespace TranscriptionParakeet {
     AppendInput,
     Addon,
     BackendId,
+    BackendInfo,
     InferenceClientState,
     StreamingRunConfig
   }

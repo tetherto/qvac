@@ -10,9 +10,10 @@ preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
 (Metal on macOS/iOS, Vulkan / OpenCL on Linux/Windows)
 is **opt-in** via `config: { useGPU: true }`; the default is CPU.  On
-Android the GPU paths are temporarily pinned off in the C++ layer
-until upstream Vulkan-on-Mali and OpenCL-on-Adreno crashes stabilize,
-so `useGPU` is effectively ignored there (see
+Android `useGPU` flows through to `tts-cpp`, which picks the GPU
+backend per its own per-vendor allowlist (Supertonic on Adreno/OpenCL,
+Xclipse/Vulkan, Mali/Vulkan; Chatterbox on Adreno/Xclipse, declined to
+CPU on Mali) (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)).
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
@@ -28,9 +29,9 @@ so `useGPU` is effectively ignored there (see
   utterance.
 - **Voice cloning** from a reference wav (or a pre-baked profile dir).
 - **CPU by default**, GPU (Metal / Vulkan / OpenCL) opt-in via
-  `config.useGPU: true` on GPU-capable hosts.  Android currently pins
-  the engine to CPU regardless — see
-  [Backends & GPU acceleration](#backends--gpu-acceleration).
+  `config.useGPU: true` on GPU-capable hosts — including Android, where
+  `tts-cpp` selects the GPU backend per its per-vendor allowlist (see
+  [Backends & GPU acceleration](#backends--gpu-acceleration)).
 - **Dynamic backend loading on Android** — per-arch CPU + Vulkan +
   OpenCL `.so` files ship under `prebuilds/<bare-target>/qvac__tts-ggml/`
   and are picked up at runtime via the new `backendsDir` option (see
@@ -216,6 +217,11 @@ host's policy:
 | Android — Mali / others | Vulkan                                       |
 | Everything else / CPU-only build | CPU                                 |
 
+> **Chatterbox on ARM Mali** is the one exception to the table: `tts-cpp`
+> declines Mali for the Chatterbox / S3Gen graph (`allow_arm_mali=false`) and
+> runs it on CPU there (reported via `stats.gpuUnsupported`).  Supertonic runs
+> on Mali via Vulkan.
+
 ### Android: dynamic backend loading
 
 Android prebuilds enable `GGML_BACKEND_DL=ON` and ship per-arch
@@ -243,6 +249,8 @@ backend persist its compiled program cache across launches.
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
 | `nGpuLayers`              | number     | 0          | Layers offloaded to GPU (mirrors `useGPU`; pass `99` to offload all) |
+| `nCtx`                    | number     | 4096       | Cap on the T3 context (prompt + generated speech tokens; 25 tokens ≈ 1 s of audio).  The KV cache is allocated up-front at this length, so it directly bounds memory: the Turbo GGUF's native `n_ctx=8196` would cost ~1.6 GB of f32 KV vs ~210 MB at the defaults (4096 + `q8_0`).  Pass `0` to use the GGUF's full context |
+| `kvCacheType`             | string     | `q8_0`     | T3 KV-cache dtype: `f32` \| `f16` \| `q8_0`.  `q8_0` stores the cache at ~27% of f32 and decodes 20-30% faster on Metal; Turbo greedy decoding is byte-identical across all three (upstream-validated).  Pass `f32` for bit-exact pre-quantisation behaviour |
 | `threads`                 | number     | hw.concurrency capped at 4 | |
 | `streamChunkTokens`       | number     | 0          | **>0 enables native chunk streaming** |
 | `streamFirstChunkTokens`  | number     | = streamChunkTokens | Smaller first chunk for low first-audio-out |
@@ -250,7 +258,7 @@ backend persist its compiled program cache across launches.
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for both engines on GPU-capable hosts; forced to CPU on Android (Adreno) at the C++ engine boundary |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for both engines on GPU-capable hosts, including Android, where `tts-cpp` selects the GPU backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali) |
 | `config.outputSampleRate` | number     | 24000      | Resample native 24 kHz output |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 3=Vulkan, 4=OpenCL, 99=other) etc. |
 | `opts.exclusiveRun`       | boolean    | `false`    | Serialize overlapping streaming runs |
@@ -396,14 +404,12 @@ your reference wav's mel was baked (`Using C++ VoiceEncoder` /
 falls back to CPU, a chunk of the first-call overhead is visible in
 RTF.
 
-**Slow-but-otherwise-fine RTF on Android** — expected: GPU is forced
-off on Android until the upstream Vulkan/Mali + OpenCL/Adreno crashes
-stabilize (see [Backends & GPU acceleration](#backends--gpu-acceleration)).
-`useGPU: true` is honoured with a `WARNING` log line and silently
-re-routed to CPU.  If you've verified your device is stable against
-those backends and want to opt out of the override, you'll need to
-patch out the `#ifdef __ANDROID__` block in
-`addon/src/model-interface/chatterbox/ChatterboxModel.cpp`.
+**Slow-but-otherwise-fine RTF on Android** — set `config: { useGPU:
+true }` (the default is CPU; see
+[Backends & GPU acceleration](#backends--gpu-acceleration)) and confirm
+your device's GPU is on `tts-cpp`'s per-vendor allowlist.  Chatterbox is
+declined to CPU on ARM Mali, so on a Mali device that engine stays on
+CPU regardless; Supertonic runs on the GPU there.
 
 ## License
 

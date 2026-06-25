@@ -5,7 +5,6 @@
 
 import Hyperswarm from "hyperswarm";
 import RPC from "bare-rpc";
-import process from "bare-process";
 
 const seed = Buffer.alloc(32, "qvac-test-seed");
 

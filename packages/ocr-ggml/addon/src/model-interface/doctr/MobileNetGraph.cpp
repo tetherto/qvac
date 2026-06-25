@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <sstream>
@@ -18,6 +19,7 @@
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 
+#include "model-interface/OcrBackendSelection.hpp"
 #include "model-interface/easyocr/pipeline/qlog.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
@@ -162,6 +164,57 @@ struct ggml_tensor* applyFoldedBn(
   return ggml_add(ctx, scaled, shift);
 }
 
+// DocTR regular convs can run via the DIRECT (fused, dedicated-kernel)
+// convolution or the default im2col + mul_mat lowering. On the Adreno OpenCL
+// backend the direct ggml-opencl conv2d kernel is markedly faster than the
+// im2col f16xf16 GEMV (detection ~1.35s -> ~0.5-0.85s) at identical accuracy;
+// on Metal the im2col path is faster, so the default is backend-aware (see
+// resolveDirectConv). Depthwise stays on ggml_conv_2d_dw_direct.
+struct ggml_tensor* doctrConv2d(
+    struct ggml_context* ctx, struct ggml_tensor* w, struct ggml_tensor* x,
+    int s0, int s1, int p0, int p1, int d0, int d1, bool useDirect) {
+  if (useDirect) {
+    return ggml_conv_2d_direct(ctx, w, x, s0, s1, p0, p1, d0, d1);
+  }
+  return ggml_conv_2d(ctx, w, x, s0, s1, p0, p1, d0, d1);
+}
+
+// Resolve whether the DocTR graph uses the direct regular-conv path. Default
+// from the backend: ON for OpenCL (Adreno, where the direct kernel is fast and
+// validated), OFF otherwise (im2col — unchanged on CPU/Vulkan/Metal). Env
+// OCR_DOCTR_FUSED_CONV overrides ("1" on, "0" off) for A/B testing.
+bool resolveDirectConv(const char* envName, bool backendDefault) {
+  const char* e = std::getenv(envName);
+  if (e != nullptr && (e[0] == '0' || e[0] == '1') && e[1] == '\0') {
+    return e[0] == '1';
+  }
+  return backendDefault;
+}
+
+// True when the graph's compute backend is ggml's OpenCL backend (Adreno).
+bool graphBackendIsOpenCl(const std::vector<ggml_backend_t>& backends) {
+  if (backends.empty() || backends[0] == nullptr) {
+    return false;
+  }
+  const char* name = ggml_backend_name(backends[0]);
+  return name != nullptr &&
+         qvac_lib_infer_ocr_ggml::ocr_backend_selection::isOpenCLBackendName(
+             name);
+}
+
+// True when the graph's compute backend is ggml's Vulkan backend (Mali). The
+// fused GGML_OP_CONV_2D kernel avoids the per-conv im2col dispatch that is
+// pathologically slow on Mali, so DocTR uses the direct path on Vulkan too.
+bool graphBackendIsVulkan(const std::vector<ggml_backend_t>& backends) {
+  if (backends.empty() || backends[0] == nullptr) {
+    return false;
+  }
+  const char* name = ggml_backend_name(backends[0]);
+  return name != nullptr &&
+         qvac_lib_infer_ocr_ggml::ocr_backend_selection::isVulkanBackendName(
+             name);
+}
+
 struct GraphBuilder {
   struct ggml_context* ctx;
   // GraphBuilder is a stateless one-shot helper that never outlives its
@@ -169,6 +222,13 @@ struct GraphBuilder {
   // graph build.
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
+
+  // Resolved once per graph build (see buildGraph): use the direct
+  // (fused GGML_OP_CONV_2D) regular-conv kernel instead of im2col + mul_mat.
+  // On for OpenCL (Adreno) and Vulkan (Mali) by default. The fused path avoids
+  // materialising the im2col buffer; on Metal the tuned GEMM keeps im2col
+  // faster, so it stays off there.
+  bool useDirectConv = false;
 
   [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
     auto it = w.find(name);
@@ -192,11 +252,13 @@ struct GraphBuilder {
       bool useHardswish) const {
     struct ggml_tensor* kernelT = t(convPrefix + ".weight");
     const int pad = samePadding(kernel);
-    // NOTE: ggml_conv_2d_direct (fused GGML_OP_CONV_2D) measured ~2x SLOWER
-    // than im2col + mul_mat on Metal — the matmul path rides the tuned GEMM
-    // kernel.
-    struct ggml_tensor* conv =
-        ggml_conv_2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
+    // Backend-aware: direct (fused) conv on OpenCL (Adreno) and Vulkan (Mali),
+    // im2col + mul_mat elsewhere. ggml_conv_2d_direct is ~2x SLOWER than
+    // im2col on Metal (the matmul rides the tuned GEMM), but much faster than
+    // the im2col f16xf16 GEMV on Adreno and avoids Mali's per-conv im2col
+    // dispatch — so the choice follows useDirectConv.
+    struct ggml_tensor* conv = doctrConv2d(
+        ctx, kernelT, x, stride, stride, pad, pad, 1, 1, useDirectConv);
     // BN scale folded into the conv weights at load time; `.shift` carries the
     // combined (conv bias + BN shift) offset. One add instead of add+mul+add.
     conv = ggml_add(ctx, conv, t(bnPrefix + ".shift"));
@@ -303,7 +365,8 @@ struct GraphBuilder {
     struct ggml_tensor* w1 = ggml_reshape_4d(ctx, wt, 1, 1, ic, p);
 
     // 1x1 conv: [W, H, IC] -> [W, H, P].
-    struct ggml_tensor* conv = ggml_conv_2d(ctx, w1, input, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* conv =
+        doctrConv2d(ctx, w1, input, 1, 1, 0, 0, 1, 1, useDirectConv);
 
     const int64_t cw = conv->ne[0];
     const int64_t ch = conv->ne[1];
@@ -387,13 +450,22 @@ struct GraphBuilder {
     struct ggml_tensor* pooled = ggml_pool_2d(
         ctx, x, GGML_OP_POOL_AVG, poolW, poolH, poolW, poolH, 0, 0);
 
-    struct ggml_tensor* fc1 = ggml_conv_2d(
-        ctx, t(sePrefix + ".fc1.weight"), pooled, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* fc1 = doctrConv2d(
+        ctx,
+        t(sePrefix + ".fc1.weight"),
+        pooled,
+        1,
+        1,
+        0,
+        0,
+        1,
+        1,
+        useDirectConv);
     fc1 = ggml_add(ctx, fc1, t(sePrefix + ".fc1.bias_br"));
     fc1 = ggml_relu(ctx, fc1);
 
-    struct ggml_tensor* fc2 =
-        ggml_conv_2d(ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* fc2 = doctrConv2d(
+        ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1, useDirectConv);
     fc2 = ggml_add(ctx, fc2, t(sePrefix + ".fc2.bias_br"));
 
     // torchvision's SE uses hardsigmoid on the scale branch.
@@ -846,7 +918,7 @@ WeightsBundle loadWeights(
         name.ends_with(".bias_br") || name == "classifier.0.weight" ||
         name == "classifier.0.bias" || name == "classifier.3.weight" ||
         name == "classifier.3.bias") {
-      continue; // handled in the second pass
+      continue; // folded BN params / classifier handled separately
     }
     struct ggml_tensor* src = ggml_get_tensor(ggmlCtx, name.c_str());
     if (src == nullptr) {
@@ -1123,6 +1195,12 @@ ComputeGraph buildGraph(
   ggml_set_name(cg.input, "input");
 
   GraphBuilder gb{.ctx = ctx, .w = weights.tensors};
+  // Direct regular convs by default on OpenCL (Adreno) and Vulkan (Mali) — both
+  // avoid the im2col path that is slow on those GPUs; env OCR_DOCTR_FUSED_CONV
+  // (0/1) overrides the backend default for A/B.
+  gb.useDirectConv = resolveDirectConv(
+      "OCR_DOCTR_FUSED_CONV",
+      graphBackendIsOpenCl(backends) || graphBackendIsVulkan(backends));
 
   // Stem.
   struct ggml_tensor* x = gb.convBnAct(

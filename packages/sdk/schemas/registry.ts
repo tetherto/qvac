@@ -31,7 +31,7 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.nmtcppTranslation,
   ModelType.onnxTts,
   ModelType.ttsGgml,
-  ModelType.onnxOcr,
+  ModelType.ggmlOcr,
   ModelType.parakeetTranscription,
   ModelType.sdcppGeneration,
   ModelType.ggmlVla,

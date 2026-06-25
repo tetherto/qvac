@@ -1,6 +1,7 @@
 'use strict'
 
 const fs = require('bare-fs')
+const path = require('bare-path')
 const test = require('brittle')
 const os = require('bare-os')
 const BCIWhispercpp = require('../../index')
@@ -22,6 +23,12 @@ const { manifest, getSamplePath } = getTestPaths()
 const MODEL_PATH = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
   getModelPath('ggml-bci-windowed.bin')
 
+// Pass the embedder path explicitly to exercise the `files.embedder`
+// override. By convention it sits next to the GGML model file (honouring
+// any WHISPER_MODEL_PATH override); omitting it would fall back to the same
+// location natively.
+const EMBEDDER_PATH = path.join(path.dirname(MODEL_PATH), 'bci-embedder.bin')
+
 const hasModel = fs.existsSync(MODEL_PATH)
 
 // Skipping when the model is missing is fine for local dev, but in CI we
@@ -33,7 +40,7 @@ const requireModel = os.hasEnv('BCI_REQUIRE_MODEL') && os.getEnv('BCI_REQUIRE_MO
 if (requireModel && !hasModel) {
   throw new Error(
     'BCI_REQUIRE_MODEL=1 but model file was not found at ' + MODEL_PATH +
-    '. Run `bash scripts/download-models.sh` or set WHISPER_MODEL_PATH.'
+    '. Run `npm run download-models` (or `node scripts/download-models.js`) or set WHISPER_MODEL_PATH.'
   )
 }
 
@@ -43,7 +50,7 @@ function bciConfigFor (sample) {
 
 test('[BCI] load and destroy via package interface', { skip: !hasModel, timeout: 120000 }, async (t) => {
   const bci = new BCIWhispercpp({
-    files: { model: MODEL_PATH }
+    files: { model: MODEL_PATH, embedder: EMBEDDER_PATH }
   }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
@@ -64,7 +71,7 @@ test('[BCI] batch transcription from neural signal file', { skip: !hasModel, tim
   t.ok(fs.existsSync(samplePath), 'Fixture ' + sample.file + ' must exist')
 
   const bci = new BCIWhispercpp({
-    files: { model: MODEL_PATH }
+    files: { model: MODEL_PATH, embedder: EMBEDDER_PATH }
   }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false },
@@ -110,7 +117,7 @@ test('[BCI] WER measurement across all test samples', { skip: !hasModel, timeout
 
   for (const [day, samples] of byDay) {
     const bci = new BCIWhispercpp({
-      files: { model: MODEL_PATH }
+      files: { model: MODEL_PATH, embedder: EMBEDDER_PATH }
     }, {
       whisperConfig: { language: 'en', temperature: 0.0 },
       miscConfig: { caption_enabled: false },
@@ -157,7 +164,7 @@ test('[BCI] streaming transcription on short signal yields single-window output'
   t.ok(fs.existsSync(samplePath), 'Fixture ' + sample.file + ' must exist')
 
   const bci = new BCIWhispercpp({
-    files: { model: MODEL_PATH }
+    files: { model: MODEL_PATH, embedder: EMBEDDER_PATH }
   }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false },
@@ -208,7 +215,7 @@ test('[BCI] streaming transcription triggers multiple sliding windows on long si
   const tiled = buildSignal(channels, [body, body])
 
   const bci = new BCIWhispercpp({
-    files: { model: MODEL_PATH }
+    files: { model: MODEL_PATH, embedder: EMBEDDER_PATH }
   }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false },
@@ -252,7 +259,7 @@ test('[BCI] streaming emits incrementally before the input ends', { skip: !hasMo
   const tiled = buildSignal(channels, [body, body])
 
   const bci = new BCIWhispercpp({
-    files: { model: MODEL_PATH }
+    files: { model: MODEL_PATH, embedder: EMBEDDER_PATH }
   }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false },

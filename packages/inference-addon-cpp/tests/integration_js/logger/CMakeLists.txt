@@ -43,10 +43,4 @@ if(WIN32)
   )
 
   target_compile_options(${test_logger} PRIVATE "/utf-8")
-
-  target_link_libraries(
-    ${test_logger}
-    PRIVATE
-    msvcrt.lib
-  )
 endif()

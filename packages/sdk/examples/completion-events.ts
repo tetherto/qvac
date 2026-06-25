@@ -27,9 +27,14 @@ try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
     modelConfig: { ctx_size: 4096 },
-    onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
-  console.log(`✅ Model loaded: ${modelId}\n`);
+  console.log(`▸ Model loaded: ${modelId}`);
 
   const result = completion({
     modelId,
@@ -46,25 +51,25 @@ try {
 
   const final = await result.final;
 
-  console.log("\n\n--- Final Result ---");
-  console.log(`Content: ${final.contentText}\n`);
+  console.log("\n▸ Final result");
+  console.log(`▸ Content: ${final.contentText}`);
   if (final.thinkingText) {
-    console.log(`Thinking: ${final.thinkingText}\n`);
+    console.log(`▸ Thinking: ${final.thinkingText}`);
   }
   if (final.stats) {
-    console.log(`Stats: ${final.stats.tokensPerSecond?.toFixed(1)} tok/s`);
+    console.log(`▸ ${final.stats.tokensPerSecond?.toFixed(1)} tok/s`);
   }
   if (final.toolCalls.length > 0) {
-    console.log(`Tool calls: ${final.toolCalls.map((c) => c.name).join(", ")}`);
+    console.log(`▸ Tool calls: ${final.toolCalls.map((c) => c.name).join(", ")}`);
   }
   if (final.stopReason) {
-    console.log(`Stop reason: ${final.stopReason}`);
+    console.log(`▸ Stop reason: ${final.stopReason}`);
   }
-  console.log(`Raw output length: ${final.raw.fullText.length} chars`);
+  console.log(`▸ Raw output length: ${final.raw.fullText.length} chars`);
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
 
@@ -78,20 +83,20 @@ function handleEvent(event: CompletionEvent) {
       break;
     case "toolCall":
       console.log(
-        `\n→ Tool: ${event.call.name}(${JSON.stringify(event.call.arguments)})`,
+        `\n▸ Tool: ${event.call.name}(${JSON.stringify(event.call.arguments)})`,
       );
       break;
     case "toolError":
-      console.warn(
-        `\n⚠ Tool error [${event.error.code}]: ${event.error.message}`,
+      console.log(
+        `\n✖ Tool error [${event.error.code}]: ${event.error.message}`,
       );
       break;
     case "completionStats":
-      console.log(`\n📊 ${event.stats.tokensPerSecond?.toFixed(1)} tok/s`);
+      console.log(`\n▸ ${event.stats.tokensPerSecond?.toFixed(1)} tok/s`);
       break;
     case "completionDone":
       if (event.stopReason === "error" && "error" in event) {
-        console.error(`\n❌ ${event.error.message}`);
+        console.log(`\n✖ ${event.error.message}`);
       }
       break;
     case "rawDelta":

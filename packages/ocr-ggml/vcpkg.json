@@ -14,9 +14,13 @@
       ]
     },
     {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
       "name": "qvac-fabric",
       "default-features": false,
-      "version>=": "8828.1.1",
+      "version>=": "9341.1.0",
       "features": [
         "gpu-backends"
       ]
