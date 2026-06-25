@@ -13,7 +13,8 @@
 #
 # Optional env:
 #   PERF_EXTRACT_B64     — base64-encoded perf-extract.js (empty = skip)
-#   ENABLES_PERF         — "true" to wire perf bridging + post_test extraction
+#   SHARD_ENABLES_PERF   — "true" to wire perf bridging for this shard (set per-group by action.yml)
+#   ENABLES_PERF         — (legacy) global fallback if SHARD_ENABLES_PERF is unset
 #   QVAC_PERF_RUNS       — override for QVAC_PERF_RUNS
 #   QVAC_PERF_WARMUP_RUNS — override for QVAC_PERF_WARMUP_RUNS
 #   QVAC_PERF_ONLY       — restrict to perf tests only
@@ -79,14 +80,15 @@ phases:
 EOF
 
 # --- Optional: perf-extract.js deployment ---
-if [ -n "${PERF_EXTRACT_B64:-}" ]; then
+_shard_perf="${SHARD_ENABLES_PERF:-${ENABLES_PERF:-false}}"
+if [ -n "${PERF_EXTRACT_B64:-}" ] && [ "$_shard_perf" = "true" ]; then
   cat <<EOF
       - echo "${PERF_EXTRACT_B64}" | base64 -d > tests/perf-extract.js
 EOF
 fi
 
 # --- Optional: perf bridging config ---
-if [ "${ENABLES_PERF:-false}" = "true" ]; then
+if [ "$_shard_perf" = "true" ]; then
   cat <<EOF
       - echo "Perf bridging: runs=${QVAC_PERF_RUNS:-} warmup=${QVAC_PERF_WARMUP_RUNS:-} only=${QVAC_PERF_ONLY:-}"
       - echo "QVAC_PERF_RUNS=${QVAC_PERF_RUNS:-}" > /tmp/qvacPerfConfig.txt
@@ -157,7 +159,7 @@ cat <<EOF
 EOF
 
 # --- Optional: perf report extraction ---
-if [ "${ENABLES_PERF:-false}" = "true" ]; then
+if [ "$_shard_perf" = "true" ]; then
   cat <<'EOF'
       - echo "Looking for perf-report-extract.json..."
       - |

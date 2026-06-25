@@ -1,4 +1,18 @@
 # Changelog
+## [0.30.1] - 2026-06-25
+
+This patch release hardens Qwen3.5-VL cache accounting for multi-turn multimodal chats. It keeps runtime cache-token statistics aligned with llama memory while covering cancellation, cache reload, context sliding, and image-heavy cache pressure paths.
+
+### Fixed
+
+- Qwen3.5-VL multimodal cache tracking now uses physical llama memory token counts for image-heavy prompts, so chat apps can rely on `CacheTokens` even when image KV cells exceed the logical position span.
+- Cancelled multimodal prefills now preserve reloadable cache metadata for hybrid/recurrent memory by syncing the saved position with llama memory when token rollback is not available.
+- Added focused C++ and JS coverage for Qwen3.5-VL memory token counts, cache-key generation, cached multi-turn multimodal recovery, context sliding, and physical image cache overflow.
+
+## Pull Requests
+
+- [#2808](https://github.com/tetherto/qvac/pull/2808) - fix: harden Qwen3.5 multimodal KV cache handling
+
 ## [0.30.0] - 2026-06-24
 
 Adds Qwen3.5-VL multi-tile batching via the `--image-tile-mode` config key, backed by `qvac-fabric` 9341.1.0.
