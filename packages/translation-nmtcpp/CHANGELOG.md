@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0] - 2026-06-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.0.0` → `9341.1.0` (Qwen3.5-VL multi-tile batching; no API change for this package).
+
+## Pull Requests
+
+- [#2839](https://github.com/tetherto/qvac/pull/2839) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (translation-nmtcpp)
+
 ## [6.2.1] - 2026-06-22
 
 ### Changed
