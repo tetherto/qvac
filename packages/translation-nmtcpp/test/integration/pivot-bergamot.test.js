@@ -49,7 +49,9 @@ const {
   isMobile,
   platform,
   discoverGpuDevices,
-  MAX_GPU_DEVICE_PROBES
+  MAX_GPU_DEVICE_PROBES,
+  TEST_TIMEOUT,
+  CANCEL_LONG_TEXT_ES
 } = require('./utils')
 
 const PIVOT_BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/pivot-bergamot.quality.json')
@@ -733,7 +735,7 @@ test('Pivot translation - batch with single item', { timeout: PIVOT_TIMEOUT }, a
 })
 
 // ---------------------------------------------------------------------------
-// — Cancel mid-inference, then prove the model is still usable
+// Cancel mid-inference, then prove the model is still usable
 //
 // WHY: The existing pivot cancel test only checks no-crash but never drains
 // the cancelled response or proves a follow-up translation works. Pivot
@@ -752,24 +754,20 @@ test('Pivot translation - cancel mid-inference leaves model reusable', { timeout
     model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
     await model.load()
 
-    const longText = 'Esta es una oración muy larga que debería tomar un poco de tiempo para traducir. ' +
-      'Queremos asegurarnos de que la cancelación funcione correctamente durante la traducción pivote. ' +
-      'El texto sigue y sigue para dar tiempo al proceso de ser cancelado antes de terminar.'
-
-    const response = await model.run(longText)
+    const response = await model.run(CANCEL_LONG_TEXT_ES)
     await response.cancel()
     t.pass('cancel() during pivot translation did not crash')
 
     try { await response.await() } catch (_) { /* cancelled job may settle as error */ }
 
-    // Bergamot pivot translates synchronously in C++ (intgemm). The cancel
-    // may land after the native job already completed, in which case the
-    // output callback races with startWith() and output can be empty. The
-    // safety property here is: run() after cancel does not crash/throw.
-    const r2 = await model.run('Gracias')
-    let out2 = ''
-    await r2.onUpdate(data => { out2 += data }).await()
-    t.pass(`second run() after cancel completed (output: "${out2 || '<empty — cancel landed post-completion>'}")`)
+    try {
+      const r2 = await model.run('Gracias')
+      let out2 = ''
+      await r2.onUpdate(data => { out2 += data }).await()
+      t.ok(out2.length > 0, `model still translates after cancel: "${out2}"`)
+    } catch (e) {
+      t.fail('run() after cancel threw: ' + (e instanceof Error ? e.message : e))
+    }
   } finally {
     if (model) {
       try { await model.unload() } catch (_) {}
@@ -778,7 +776,7 @@ test('Pivot translation - cancel mid-inference leaves model reusable', { timeout
 })
 
 // ---------------------------------------------------------------------------
-// — Cancel then immediate destroy (race condition)
+// Cancel then immediate destroy (race condition)
 //
 // WHY: Pivot manages two native models — the cancel-destroy race has double
 // the surface area for use-after-free bugs.
@@ -795,24 +793,21 @@ test('Pivot translation - cancel then immediate destroy does not crash', { timeo
     model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
     await model.load()
 
-    const longText = 'Esta es una oración larga para que el modelo esté traduciendo cuando lo destruyamos ' +
-      'inmediatamente después de cancelar, ejercitando la carrera de desmontaje.'
-
-    const response = await model.run(longText)
+    const response = await model.run(CANCEL_LONG_TEXT_ES)
     response.cancel()
     await model.destroy()
 
     t.pass('cancel() then destroy() did not crash')
     t.ok(model.getState().destroyed === true, 'model state marked destroyed')
   } finally {
-    if (model) {
+    if (model && !model.getState().destroyed) {
       try { await model.destroy() } catch (_) {}
     }
   }
 })
 
 // ---------------------------------------------------------------------------
-// — run() after destroy() must throw
+// run() after destroy() must throw
 //
 // WHY: destroy() is permanent teardown. Apps must get a clear error.
 // ---------------------------------------------------------------------------
@@ -835,19 +830,42 @@ test('Pivot translation - run after destroy throws', { timeout: PIVOT_TIMEOUT },
       await model.run('Hola')
       t.fail('Expected run() after destroy to throw')
     } catch (e) {
-      t.ok(e, 'run() after destroy threw an error')
+      t.ok(e instanceof Error, 'run() after destroy threw an Error instance')
       t.comment('Error message: ' + e.message)
-      t.pass('Destroyed model correctly rejects run()')
     }
   } finally {
-    if (model) {
+    if (model && !model.getState().destroyed) {
       try { await model.destroy() } catch (_) {}
     }
   }
 })
 
 // ---------------------------------------------------------------------------
-// — Multi-cycle load/unload stress (two-model chain leak catcher)
+// run() before load() must throw
+//
+// WHY: Pivot's two-model architecture exercises a distinct null-handle path
+// in run() before load(). Must surface a clear error, not segfault.
+// ---------------------------------------------------------------------------
+
+test('Pivot translation - run before load throws', { timeout: PIVOT_TIMEOUT }, async function (t) {
+  const esEnDir = await ensureModelPair('es', 'en')
+  const enItDir = await ensureModelPair('en', 'it')
+  const esEn = findModelFiles(esEnDir)
+  const enIt = findModelFiles(enItDir)
+
+  const model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+
+  try {
+    await model.run('Hola')
+    t.fail('Expected run() before load to throw')
+  } catch (e) {
+    t.ok(e instanceof Error, 'run() before load threw an Error instance')
+    t.comment('Error message: ' + e.message)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Multi-cycle load/unload stress (two-model chain leak catcher)
 //
 // WHY: Pivot manages TWO models per instance (primary + pivot), doubling the
 // leak surface vs standalone backends. Bergamot and IndicTrans both have
@@ -855,7 +873,7 @@ test('Pivot translation - run after destroy throws', { timeout: PIVOT_TIMEOUT },
 // runtime manageable given the two-model overhead.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - multi-cycle load/unload stress', { timeout: PIVOT_TIMEOUT * 2 }, async function (t) {
+test('Pivot translation - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
