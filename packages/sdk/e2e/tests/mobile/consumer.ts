@@ -397,20 +397,9 @@ export const executor = createExecutor({
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
     new SkipExecutor(/^bci-/, "BCI addon tests are desktop-only until mobile support is enabled"),
-    // suspend() hangs the test runner on mobile (the lifecycle coordinator
-    // pauses MQTT/network ops and never resumes within the test timeout).
-    // Only resume-idempotent is safe -- it does not call suspend().
-    skipTests([
-      "lifecycle-suspend-resume-basic",
-      "lifecycle-suspend-idempotent",
-      "lifecycle-suspend-resume-inference",
-      "lifecycle-rapid-toggle",
-      "lifecycle-suspend-during-inference",
-    ], "suspend() hangs the runner on mobile"),
-    // Same root cause: these download-resilience tests call suspend(), plus the
-    // HTTP variants need a local server (no node:http on RN). A mobile-native
-    // executor is tracked separately.
-    new SkipExecutor(/^download-resilience-/, "suspend() hangs the runner on mobile; HTTP variants need an on-device server"),
+    // The HTTP variants need a local server the node executor spins up with
+    // node:http, which RN lacks. A mobile-native executor is tracked separately.
+    new SkipExecutor(/^download-resilience-/, "HTTP variants need an on-device server (no node:http on RN)"),
     ...(Platform.OS === "android" ? [
       skipTests([
         "parakeet-stream-eou",
