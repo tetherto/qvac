@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { qvacCatalog, resolveModelConstant } from '@qvac/ai-sdk-provider/models'
+import type { ModelProviderConfig } from 'openclaw/plugin-sdk/provider-model-shared'
 
 export interface ResolvedOptions {
   readonly model: string
@@ -61,6 +62,39 @@ export interface OpenClawProvider {
   readonly models: OpenClawModel[]
 }
 
+export interface OpenClawConfigLike {
+  readonly agents?: {
+    readonly defaults?: {
+      readonly experimental?: Record<string, unknown>
+      readonly models?: Record<string, {}>
+    }
+  }
+  readonly models?: {
+    readonly mode?: OpenClawModelsMode
+    readonly providers?: Record<string, ModelProviderConfig>
+  }
+}
+
+type OpenClawModelsMode = 'merge' | 'replace'
+
+export interface QvacProviderAuthResult {
+  readonly profiles: []
+  readonly configPatch: {
+    readonly agents: {
+      readonly defaults: {
+        readonly experimental: Record<string, unknown>
+        readonly models: Record<string, {}>
+      }
+    }
+    readonly models: {
+      readonly mode: OpenClawModelsMode
+      readonly providers: Record<string, ModelProviderConfig>
+    }
+  }
+  readonly defaultModel: string
+  readonly notes: string[]
+}
+
 export interface OpenClawCatalogRow {
   readonly kind: 'text'
   readonly provider: 'qvac'
@@ -86,10 +120,46 @@ export interface QvacProviderRegistration {
     readonly id: string
     readonly label: string
     readonly docsPath: string
-    readonly auth: never[]
+    readonly auth: Array<{
+      readonly id: 'local'
+      readonly label: 'Local QVAC'
+      readonly hint: string
+      readonly kind: 'custom'
+      run(context: { readonly config: OpenClawConfigLike }): Promise<QvacProviderAuthResult>
+      runNonInteractive(context: { readonly config: OpenClawConfigLike }): Promise<OpenClawConfigLike>
+    }>
+    resolveSyntheticAuth(context: {
+      readonly provider: string
+      readonly providerConfig?: unknown
+    }): {
+      readonly apiKey: 'custom-local'
+      readonly source: string
+      readonly mode: 'api-key'
+    }
+    shouldDeferSyntheticProfileAuth(context: { readonly resolvedApiKey?: string }): boolean | undefined
     readonly catalog: {
       readonly order: 'simple'
       run(): Promise<{ provider: OpenClawProvider }>
+    }
+    readonly staticCatalog: {
+      readonly order: 'simple'
+      run(): Promise<{ provider: OpenClawProvider }>
+    }
+    readonly wizard: {
+      readonly setup: {
+        readonly choiceId: 'qvac'
+        readonly choiceLabel: 'QVAC'
+        readonly choiceHint: string
+        readonly groupId: 'qvac'
+        readonly groupLabel: 'QVAC'
+        readonly groupHint: string
+        readonly methodId: 'local'
+      }
+      readonly modelPicker: {
+        readonly label: 'QVAC'
+        readonly hint: string
+        readonly methodId: 'local'
+      }
     }
   }): void
   registerModelCatalogProvider?(provider: {
@@ -104,7 +174,7 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
   host: '127.0.0.1',
   port: 11434,
   baseUrl: 'http://127.0.0.1:11434/v1',
-  apiKey: 'qvac-local',
+  apiKey: 'custom-local',
   qvacCommand: 'qvac',
   serviceRuntime: process.execPath,
   serviceEntrypoint: join(dirname(fileURLToPath(import.meta.url)), 'local-service.js'),
@@ -137,6 +207,10 @@ export const openClawCatalogRows: readonly OpenClawCatalogRow[] = qvacCatalog.ma
   label: entry.name,
   source: 'static'
 }))
+
+function resolveOpenClawModelsMode (mode: string | undefined): OpenClawModelsMode {
+  return mode === 'replace' ? 'replace' : 'merge'
+}
 
 function coerceString (option: string, value: unknown): string {
   if (typeof value !== 'string') throw new TypeError(`${option} must be a string`)
@@ -245,22 +319,112 @@ export function createOpenClawProvider (options: ResolvedOptions): OpenClawProvi
   }
 }
 
+export function createQvacSetupResult (
+  config: OpenClawConfigLike,
+  rawOptions: RawOptions = {}
+): QvacProviderAuthResult {
+  const options = resolveOptions(rawOptions)
+  const defaultModel = `qvac/${options.model}`
+  return {
+    profiles: [],
+    configPatch: {
+      agents: {
+        defaults: {
+          experimental: {
+            ...config.agents?.defaults?.experimental,
+            localModelLean: true
+          },
+          models: {
+            ...config.agents?.defaults?.models,
+            [defaultModel]: {}
+          }
+        }
+      },
+      models: {
+        mode: resolveOpenClawModelsMode(config.models?.mode),
+        providers: {
+          ...config.models?.providers,
+          qvac: createOpenClawProvider(options)
+        }
+      }
+    },
+    defaultModel,
+    notes: ['Configured QVAC as a local OpenAI-compatible provider.']
+  }
+}
+
+export function applyQvacSetupConfig (config: OpenClawConfigLike, rawOptions: RawOptions = {}): OpenClawConfigLike {
+  const setup = createQvacSetupResult(config, rawOptions).configPatch
+  return {
+    ...config,
+    agents: {
+      ...config.agents,
+      defaults: {
+        ...config.agents?.defaults,
+        experimental: setup.agents.defaults.experimental,
+        models: setup.agents.defaults.models
+      }
+    },
+    models: {
+      ...config.models,
+      mode: setup.models.mode,
+      providers: setup.models.providers
+    }
+  }
+}
+
 export function registerQvacProvider (api: QvacProviderRegistration, rawOptions: RawOptions = {}): void {
   const pluginConfig = api.pluginConfig ?? {}
+  const mergedOptions = () => ({ ...pluginConfig, ...rawOptions })
   api.registerModelCatalogProvider?.({
     provider: 'qvac',
     kinds: ['text'],
     staticCatalog: () => openClawCatalogRows
   })
 
+  const providerConfig = () => createOpenClawProvider(resolveOptions(mergedOptions()))
+
   api.registerProvider({
     id: 'qvac',
     label: 'QVAC',
     docsPath: '/providers/qvac',
-    auth: [],
+    auth: [{
+      id: 'local',
+      label: 'Local QVAC',
+      hint: 'Start qvac serve through OpenClaw localService',
+      kind: 'custom',
+      run: async ({ config }) => createQvacSetupResult(config, mergedOptions()),
+      runNonInteractive: async ({ config }) => applyQvacSetupConfig(config, mergedOptions())
+    }],
+    resolveSyntheticAuth: () => ({
+      apiKey: 'custom-local',
+      source: 'qvac plugin (synthetic local key)',
+      mode: 'api-key'
+    }),
+    shouldDeferSyntheticProfileAuth: ({ resolvedApiKey }) => resolvedApiKey === 'custom-local' || resolvedApiKey === 'qvac-local',
     catalog: {
       order: 'simple',
-      run: async () => ({ provider: createOpenClawProvider(resolveOptions({ ...pluginConfig, ...rawOptions })) })
+      run: async () => ({ provider: providerConfig() })
+    },
+    staticCatalog: {
+      order: 'simple',
+      run: async () => ({ provider: providerConfig() })
+    },
+    wizard: {
+      setup: {
+        choiceId: 'qvac',
+        choiceLabel: 'QVAC',
+        choiceHint: 'Local qvac serve runtime',
+        groupId: 'qvac',
+        groupLabel: 'QVAC',
+        groupHint: 'Local-first QVAC models',
+        methodId: 'local'
+      },
+      modelPicker: {
+        label: 'QVAC',
+        hint: 'Use the QVAC model catalog',
+        methodId: 'local'
+      }
     }
   })
 }

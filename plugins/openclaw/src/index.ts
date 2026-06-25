@@ -9,7 +9,7 @@ const configProperties = {
   host: { type: 'string', description: 'Loopback host for qvac serve.' },
   port: { type: 'number', description: 'Port for qvac serve.' },
   baseUrl: { type: 'string', description: 'OpenAI-compatible base URL exposed by qvac serve.' },
-  apiKey: { type: 'string', description: 'Non-empty API key sent by OpenClaw clients.' },
+  apiKey: { type: 'string', description: 'Optional API key marker for local OpenAI-compatible requests.' },
   qvacCommand: { type: 'string', description: 'Command or absolute path used by localService launcher to start qvac.' },
   cwd: { type: 'string', description: 'Working directory for the local qvac serve process.' },
   ctxSize: { type: 'number', description: 'Context window written into generated QVAC serve config.' },

@@ -11,7 +11,7 @@
     "providers": {
       "qvac": {
         "baseUrl": "http://127.0.0.1:11434/v1",
-        "apiKey": "qvac-local",
+        "apiKey": "custom-local",
         "api": "openai-completions",
         "models": [
           {
@@ -91,7 +91,7 @@
       },
       "apiKey": {
         "type": "string",
-        "description": "Non-empty API key sent by OpenClaw clients."
+        "description": "Optional API key marker for local OpenAI-compatible requests."
       },
       "qvacCommand": {
         "type": "string",
