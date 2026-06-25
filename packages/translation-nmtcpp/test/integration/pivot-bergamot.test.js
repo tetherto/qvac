@@ -760,10 +760,6 @@ test('Pivot translation - cancel mid-inference leaves model reusable', { timeout
 
     try { await response.await() } catch (_) { /* cancelled job may settle as error */ }
 
-    // Bergamot pivot translates synchronously via intgemm. Cancel may land
-    // after the native job already completed, so the second run's output can
-    // be empty (the addon routes output to whichever response is active).
-    // The safety property is: run() after cancel does not throw/crash.
     try {
       const r2 = await model.run('Gracias')
       let out2 = ''
