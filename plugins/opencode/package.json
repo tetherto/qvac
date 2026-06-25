@@ -47,6 +47,8 @@
     "build:watch": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.test.json",
     "lint": "tsc -p tsconfig.test.json",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
     "test": "tsx --test test/*.test.ts",
     "test:unit": "tsx --test test/*.test.ts",
     "test:e2e": "npm run test:integration",
@@ -62,6 +64,8 @@
   "devDependencies": {
     "@opencode-ai/plugin": "^1.16.0",
     "@types/node": "^24.2.1",
+    "prettier": "^3.8.4",
+    "prettier-config-holepunch": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
