@@ -90,6 +90,7 @@ jobs:
                 prebuilds)                PREBUILDS=true ;;
                 run-desktop-addon-tests)  PREBUILDS=true; DESKTOP=true ;;
                 run-mobile-addon-tests)   PREBUILDS=true; MOBILE=true ;;
+                verified)                 PREBUILDS=true; DESKTOP=true; MOBILE=true ;;
               esac
             done
           fi
