@@ -4,7 +4,7 @@ const test = require('brittle')
 const { normalizeDocs, generateId, createLRUCache } = require('../../src/utils/helper')
 const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
 
-test('normalizeDocs: should handle empty array input', t => {
+test('normalizeDocs: should handle empty array input', (t) => {
   const result = normalizeDocs([])
   t.ok(Array.isArray(result.normalizedDocs), 'normalizedDocs should be an array')
   t.is(result.normalizedDocs.length, 0, 'normalizedDocs should be empty')
@@ -12,10 +12,10 @@ test('normalizeDocs: should handle empty array input', t => {
   t.is(result.droppedIndices.length, 0, 'droppedIndices should be empty')
 })
 
-test('normalizeDocs: should throw error for non-array input', t => {
+test('normalizeDocs: should throw error for non-array input', (t) => {
   const invalidInputs = [null, undefined, 'string', 123, {}, true]
 
-  invalidInputs.forEach(input => {
+  invalidInputs.forEach((input) => {
     try {
       normalizeDocs(input)
       t.fail(`Should throw error for input: ${input}`)
@@ -26,7 +26,7 @@ test('normalizeDocs: should throw error for non-array input', t => {
   })
 })
 
-test('normalizeDocs: should convert string inputs to document objects', t => {
+test('normalizeDocs: should convert string inputs to document objects', (t) => {
   const docs = ['Document 1', 'Document 2', 'Document 3']
   const result = normalizeDocs(docs)
 
@@ -40,7 +40,7 @@ test('normalizeDocs: should convert string inputs to document objects', t => {
   })
 })
 
-test('normalizeDocs: should preserve existing document objects with content', t => {
+test('normalizeDocs: should preserve existing document objects with content', (t) => {
   const docs = [
     { content: 'Doc 1', id: 'doc1' },
     { content: 'Doc 2', id: 'doc2', metadata: { type: 'test' } },
@@ -61,7 +61,7 @@ test('normalizeDocs: should preserve existing document objects with content', t 
   t.is(result.normalizedDocs[2].content, 'Doc 3', 'Third doc should preserve content')
 })
 
-test('normalizeDocs: should drop invalid documents and track indices', t => {
+test('normalizeDocs: should drop invalid documents and track indices', (t) => {
   const docs = [
     'Valid string doc',
     null,
@@ -84,10 +84,14 @@ test('normalizeDocs: should drop invalid documents and track indices', t => {
   // Check valid documents
   t.is(result.normalizedDocs[0].content, 'Valid string doc', 'First valid doc should be correct')
   t.is(result.normalizedDocs[1].content, 'Valid object doc', 'Second valid doc should be correct')
-  t.is(result.normalizedDocs[2].content, 'Another valid string', 'Third valid doc should be correct')
+  t.is(
+    result.normalizedDocs[2].content,
+    'Another valid string',
+    'Third valid doc should be correct'
+  )
 })
 
-test('normalizeDocs: should throw error for duplicate IDs', t => {
+test('normalizeDocs: should throw error for duplicate IDs', (t) => {
   const docs = [
     { content: 'Doc 1', id: 'duplicate-id' },
     { content: 'Doc 2', id: 'unique-id' },
@@ -104,7 +108,7 @@ test('normalizeDocs: should throw error for duplicate IDs', t => {
   }
 })
 
-test('normalizeDocs: should handle edge case documents', t => {
+test('normalizeDocs: should handle edge case documents', (t) => {
   const docs = [
     { content: '' }, // Empty content is invalid, will be dropped
     { content: '   ' }, // Whitespace-only content is invalid, will be dropped
@@ -115,8 +119,16 @@ test('normalizeDocs: should handle edge case documents', t => {
 
   const result = normalizeDocs(docs)
 
-  t.is(result.normalizedDocs.length, 3, 'Should have 3 normalized documents (empty and whitespace-only content dropped)')
-  t.alike(result.droppedIndices, [0, 1], 'Should have dropped the empty and whitespace-only content documents')
+  t.is(
+    result.normalizedDocs.length,
+    3,
+    'Should have 3 normalized documents (empty and whitespace-only content dropped)'
+  )
+  t.alike(
+    result.droppedIndices,
+    [0, 1],
+    'Should have dropped the empty and whitespace-only content documents'
+  )
 
   // All should have generated IDs since empty/null/undefined IDs are replaced
   result.normalizedDocs.forEach((doc, index) => {
@@ -125,7 +137,7 @@ test('normalizeDocs: should handle edge case documents', t => {
   })
 })
 
-test('normalizeDocs: should preserve additional properties', t => {
+test('normalizeDocs: should preserve additional properties', (t) => {
   const docs = [
     {
       content: 'Test content',
@@ -148,7 +160,7 @@ test('normalizeDocs: should preserve additional properties', t => {
   t.is(doc.score, 0.95, 'Score should be preserved')
 })
 
-test('generateId: should generate valid UUID v4 strings', t => {
+test('generateId: should generate valid UUID v4 strings', (t) => {
   const id1 = generateId()
   const id2 = generateId()
 
@@ -162,7 +174,7 @@ test('generateId: should generate valid UUID v4 strings', t => {
   t.not(id1, id2, 'Generated IDs should be unique')
 })
 
-test('generateId: should generate multiple unique IDs', t => {
+test('generateId: should generate multiple unique IDs', (t) => {
   const ids = new Set()
   const count = 100
 
@@ -173,7 +185,7 @@ test('generateId: should generate multiple unique IDs', t => {
   t.is(ids.size, count, 'All generated IDs should be unique')
 })
 
-test('generateId: should fall back to #crypto when global crypto is unusable', t => {
+test('generateId: should fall back to #crypto when global crypto is unusable', (t) => {
   const original = globalThis.crypto
   const cryptoShim = require('../../src/shims/crypto')
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -190,7 +202,7 @@ test('generateId: should fall back to #crypto when global crypto is unusable', t
   }
 })
 
-test('normalizeDocs: comprehensive mixed scenario', t => {
+test('normalizeDocs: comprehensive mixed scenario', (t) => {
   const docs = [
     'String document 1',
     { content: 'Object document 1', id: 'obj1' },
@@ -229,7 +241,7 @@ test('normalizeDocs: comprehensive mixed scenario', t => {
 
 // LRU Cache Tests
 
-test('createLRUCache: should store and retrieve values', t => {
+test('createLRUCache: should store and retrieve values', (t) => {
   const cache = createLRUCache(3)
 
   cache.set('a', 1)
@@ -242,7 +254,7 @@ test('createLRUCache: should store and retrieve values', t => {
   t.is(cache.size, 3, 'Cache size should be 3')
 })
 
-test('createLRUCache: should return undefined for missing keys', t => {
+test('createLRUCache: should return undefined for missing keys', (t) => {
   const cache = createLRUCache(3)
 
   cache.set('a', 1)
@@ -252,7 +264,7 @@ test('createLRUCache: should return undefined for missing keys', t => {
   t.is(cache.has('missing'), false, 'has() should return false for missing key')
 })
 
-test('createLRUCache: should evict LRU item when capacity exceeded', t => {
+test('createLRUCache: should evict LRU item when capacity exceeded', (t) => {
   const cache = createLRUCache(3)
 
   cache.set('a', 1)
@@ -267,7 +279,7 @@ test('createLRUCache: should evict LRU item when capacity exceeded', t => {
   t.is(cache.size, 3, 'Cache size should remain at max')
 })
 
-test('createLRUCache: get() should move item to most recently used', t => {
+test('createLRUCache: get() should move item to most recently used', (t) => {
   const cache = createLRUCache(3)
 
   cache.set('a', 1)
@@ -286,7 +298,7 @@ test('createLRUCache: get() should move item to most recently used', t => {
   t.is(cache.get('d'), 4, 'New item d should exist')
 })
 
-test('createLRUCache: set() should update existing key and move to MRU', t => {
+test('createLRUCache: set() should update existing key and move to MRU', (t) => {
   const cache = createLRUCache(3)
 
   cache.set('a', 1)
@@ -304,7 +316,7 @@ test('createLRUCache: set() should update existing key and move to MRU', t => {
   t.is(cache.size, 3, 'Cache size should remain at max')
 })
 
-test('createLRUCache: delete() should remove item', t => {
+test('createLRUCache: delete() should remove item', (t) => {
   const cache = createLRUCache(3)
 
   cache.set('a', 1)
@@ -316,7 +328,7 @@ test('createLRUCache: delete() should remove item', t => {
   t.is(cache.delete('missing'), false, 'delete() should return false for missing key')
 })
 
-test('createLRUCache: clear() should remove all items', t => {
+test('createLRUCache: clear() should remove all items', (t) => {
   const cache = createLRUCache(3)
 
   cache.set('a', 1)
@@ -331,7 +343,7 @@ test('createLRUCache: clear() should remove all items', t => {
   t.is(cache.get('c'), undefined, 'All items should be removed')
 })
 
-test('createLRUCache: should handle capacity of 1', t => {
+test('createLRUCache: should handle capacity of 1', (t) => {
   const cache = createLRUCache(1)
 
   cache.set('a', 1)
@@ -343,7 +355,7 @@ test('createLRUCache: should handle capacity of 1', t => {
   t.is(cache.size, 1, 'Cache size should be 1')
 })
 
-test('createLRUCache: should handle complex values', t => {
+test('createLRUCache: should handle complex values', (t) => {
   const cache = createLRUCache(3)
 
   const obj = { id: 1, data: [1, 2, 3] }
