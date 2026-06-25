@@ -65,15 +65,38 @@ jobs:
       run_desktop: ${{ steps.route.outputs.run_desktop }}
       run_mobile: ${{ steps.route.outputs.run_mobile }}
     steps:
-      - name: Checkout (ci-router action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/ci-router
-          sparse-checkout-cone-mode: false
       - name: Route CI stages
         id: route
-        uses: ./.github/actions/ci-router
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+             [ "$EVENT_NAME" = "workflow_call" ] || \
+             [ "$EVENT_NAME" = "push" ] || \
+             [ "$EVENT_NAME" = "schedule" ]; then
+            echo "Trusted event ($EVENT_NAME) — enabling all CI stages"
+            echo "run_prebuilds=true" >> "$GITHUB_OUTPUT"
+            echo "run_desktop=true" >> "$GITHUB_OUTPUT"
+            echo "run_mobile=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PREBUILDS=false
+          DESKTOP=false
+          MOBILE=false
+          if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
+            for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
+              case "$label" in
+                prebuilds)                PREBUILDS=true ;;
+                run-desktop-addon-tests)  PREBUILDS=true; DESKTOP=true ;;
+                run-mobile-addon-tests)   PREBUILDS=true; MOBILE=true ;;
+              esac
+            done
+          fi
+          echo "CI Router: prebuilds=$PREBUILDS desktop=$DESKTOP mobile=$MOBILE"
+          echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
+          echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
+          echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"
 
   authorize:
     runs-on: ubuntu-latest
@@ -195,11 +218,48 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
-      - name: Detect native changes
+      - name: Detect native file changes
         id: detect
-        uses: ./.github/actions/detect-native-changes
-        with:
-          workdir: packages/llm-llamacpp
+        env:
+          WORKDIR: packages/llm-llamacpp
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+             [ "$EVENT_NAME" = "workflow_call" ] || \
+             [ "$EVENT_NAME" = "push" ]; then
+            echo "Trusted event ($EVENT_NAME) — treating native files as changed"
+            echo "native_changed=true" >> "$GITHUB_OUTPUT"
+            echo "native_hash=dispatch-$(date +%s)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=false
+          if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ]; then
+            DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 2>/dev/null || true)
+            if [ -n "$DIFF_FILES" ]; then
+              while IFS= read -r file; do
+                case "$file" in
+                  ${WORKDIR}/*.cpp|${WORKDIR}/*.hpp|${WORKDIR}/*.c|${WORKDIR}/*.h) CHANGED=true; break ;;
+                  ${WORKDIR}/*CMakeLists.txt) CHANGED=true; break ;;
+                  ${WORKDIR}/vcpkg.json|${WORKDIR}/vcpkg-configuration.json) CHANGED=true; break ;;
+                  ${WORKDIR}/vcpkg/*) CHANGED=true; break ;;
+                esac
+              done <<< "$DIFF_FILES"
+            fi
+          else
+            echo "No base/head SHA — treating as changed"
+            CHANGED=true
+          fi
+          NATIVE_HASH=$(find "$WORKDIR" \
+            \( -name "*.cpp" -o -name "*.hpp" -o -name "*.c" -o -name "*.h" \
+               -o -name "CMakeLists.txt" -o -name "vcpkg.json" \
+               -o -name "vcpkg-configuration.json" \) \
+            -type f 2>/dev/null | sort | xargs cat 2>/dev/null | sha256sum | cut -d' ' -f1)
+          [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
+          echo "Native changed: $CHANGED | Hash: ${NATIVE_HASH:0:16}"
+          echo "native_changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "native_hash=${NATIVE_HASH:0:16}" >> "$GITHUB_OUTPUT"
 
   prebuild-cache-restore:
     if: needs.detect-native-changes.outputs.native_changed == 'false'
