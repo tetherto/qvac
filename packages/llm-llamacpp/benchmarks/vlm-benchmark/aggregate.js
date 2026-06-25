@@ -173,7 +173,7 @@ const TASK_LABELS = {
 const taskLabel = t => TASK_LABELS[t] || t
 
 function parseArgs (argv) {
-  const out = { files: [], inputs: [], title: 'VLM Matrix', outFile: null, prov: [], mode: '', engine: '', base: CONFIG.base || 'model_1', candidate: CONFIG.candidate || 'model_2' }
+  const out = { files: [], inputs: [], title: 'VLM Matrix', outFile: null, prov: [], mode: '', engine: '', base: CONFIG.base || 'model_1', candidate: CONFIG.candidate || 'model_2', sources: process.env.QVAC_VLM_SOURCES || '' }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--title') out.title = argv[++i]
     else if (argv[i] === '--out') out.outFile = argv[++i]
@@ -181,6 +181,7 @@ function parseArgs (argv) {
     else if (argv[i] === '--engine') out.engine = argv[++i]
     else if (argv[i] === '--base') out.base = argv[++i]
     else if (argv[i] === '--candidate') out.candidate = argv[++i]
+    else if (argv[i] === '--sources') out.sources = argv[++i]
     else if (argv[i] === '--provenance') out.prov.push(argv[++i])
     // --in <host-label> <file>: tag every marker in <file> with a platform
     // label (e.g. linux / s25). [VLMROW].device only carries cpu/gpu, so the
@@ -352,7 +353,9 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     // loudly here. Builds come from the source ids; SHA-pinned refs can't be derived.
     if (VERSION_GUARD) {
       try {
-        const vg = VERSION_GUARD.evaluate(sources.join(','))
+        // Prefer the matrix_sources tokens (carry each engine's ref/build); the report's
+        // own source columns are engine labels (fabric-cli) that don't parse to a build.
+        const vg = VERSION_GUARD.evaluate(opts.sources || sources.join(','))
         if (vg.mismatch) {
           const desc = vg.entries.map(e => `${e.id} = ${e.engine.replace(' (addon)', '')} ${e.build == null ? '?' : e.build}`).join(', ')
           L.push(`> ⚠️ **Cross-version comparison — sources do NOT share one llama.cpp build** (${desc}). ` +
@@ -655,7 +658,7 @@ if (require.main === module) {
   const allInputs = args.inputs.concat(args.files.map(f => ({ label: '', file: f })))
   const { rows, vision, meta } = parseLog(allInputs)
   const provText = args.prov.map(p => { try { return fs.readFileSync(p, 'utf-8') } catch (_) { return '' } }).join('\n')
-  const md = build(rows, vision, meta, provText, args.title, { mode: args.mode, engine: args.engine, base: args.base, candidate: args.candidate })
+  const md = build(rows, vision, meta, provText, args.title, { mode: args.mode, engine: args.engine, base: args.base, candidate: args.candidate, sources: args.sources })
   process.stdout.write(md + '\n')
   if (args.outFile) fs.writeFileSync(args.outFile, md + '\n')
 }

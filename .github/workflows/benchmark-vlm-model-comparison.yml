@@ -824,6 +824,7 @@ jobs:
             --out consolidated/vlm-matrix-consolidated.md \
             --title "VLM Matrix — ${{ inputs.matrix_mode }} / ${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
             --mode "${{ inputs.matrix_mode }}" --engine "${{ needs.context.outputs.engine }}" \
+            --sources "${{ inputs.matrix_sources }}" \
             --run-number "${{ github.run_number }}"
 
       - name: Post step summary

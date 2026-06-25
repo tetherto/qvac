@@ -39,7 +39,7 @@ function walk (dir) {
 }
 
 function parseArgs (argv) {
-  const a = { dir: 'matrix-logs', out: null, title: 'VLM Matrix', mode: '', engine: '', runNumber: '' }
+  const a = { dir: 'matrix-logs', out: null, title: 'VLM Matrix', mode: '', engine: '', runNumber: '', sources: process.env.QVAC_VLM_SOURCES || '' }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--dir') a.dir = argv[++i]
     else if (argv[i] === '--out') a.out = argv[++i]
@@ -47,6 +47,10 @@ function parseArgs (argv) {
     else if (argv[i] === '--mode') a.mode = argv[++i]
     else if (argv[i] === '--engine') a.engine = argv[++i]
     else if (argv[i] === '--run-number') a.runNumber = argv[++i]
+    // matrix_sources tokens (e.g. "addon,fabric@v8189.0.2") so the report's version-parity
+    // banner can derive each engine's llama.cpp build — the report's source columns are
+    // engine labels (fabric-cli), which don't carry the ref. Defaults to QVAC_VLM_SOURCES.
+    else if (argv[i] === '--sources') a.sources = argv[++i]
   }
   return a
 }
@@ -133,7 +137,7 @@ function main () {
       }
     }
     md = build(rows, vision, meta, prov.join('\n\n'), args.title,
-      { mode: args.mode, engine: args.engine, base, candidate })
+      { mode: args.mode, engine: args.engine, base, candidate, sources: args.sources })
   }
   process.stdout.write(md + '\n')
   if (args.out) {
