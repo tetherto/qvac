@@ -1,3 +1,6 @@
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { qvacCatalog, resolveModelConstant } from '@qvac/ai-sdk-provider/models'
 
 export interface ResolvedOptions {
@@ -7,7 +10,8 @@ export interface ResolvedOptions {
   readonly baseUrl: string
   readonly apiKey: string
   readonly qvacCommand: string
-  readonly configPath: string
+  readonly serviceRuntime: string
+  readonly serviceEntrypoint: string
   readonly cwd: string | undefined
   readonly ctxSize: number
   readonly reasoningBudget: number
@@ -102,7 +106,8 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
   baseUrl: 'http://127.0.0.1:11434/v1',
   apiKey: 'qvac-local',
   qvacCommand: 'qvac',
-  configPath: 'qvac.config.json',
+  serviceRuntime: process.execPath,
+  serviceEntrypoint: join(dirname(fileURLToPath(import.meta.url)), 'local-service.js'),
   cwd: undefined,
   ctxSize: 32768,
   reasoningBudget: -1,
@@ -162,7 +167,14 @@ export function resolveOptions (raw: RawOptions = {}): ResolvedOptions {
     baseUrl,
     apiKey: raw.apiKey === undefined ? DEFAULT_OPTIONS.apiKey : coerceString('apiKey', raw.apiKey),
     qvacCommand: raw.qvacCommand === undefined ? DEFAULT_OPTIONS.qvacCommand : coerceString('qvacCommand', raw.qvacCommand),
-    configPath: raw.configPath === undefined ? DEFAULT_OPTIONS.configPath : coerceString('configPath', raw.configPath),
+    serviceRuntime:
+      raw.serviceRuntime === undefined
+        ? DEFAULT_OPTIONS.serviceRuntime
+        : coerceString('serviceRuntime', raw.serviceRuntime),
+    serviceEntrypoint:
+      raw.serviceEntrypoint === undefined
+        ? DEFAULT_OPTIONS.serviceEntrypoint
+        : coerceString('serviceEntrypoint', raw.serviceEntrypoint),
     cwd: raw.cwd === undefined ? DEFAULT_OPTIONS.cwd : coerceString('cwd', raw.cwd),
     ctxSize: raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
     reasoningBudget:
@@ -206,18 +218,23 @@ export function createOpenClawProvider (options: ResolvedOptions): OpenClawProvi
     api: 'openai-completions',
     timeoutSeconds: options.timeoutSeconds,
     localService: {
-      command: options.qvacCommand,
+      command: options.serviceRuntime,
       args: [
-        'serve',
-        'openai',
-        '--config',
-        options.configPath,
+        options.serviceEntrypoint,
+        '--qvac-command',
+        options.qvacCommand,
+        '--model',
+        options.model,
         '--host',
         options.host,
         '--port',
         String(options.port),
-        '--model',
-        options.model
+        '--ctx-size',
+        String(options.ctxSize),
+        '--reasoning-budget',
+        String(options.reasoningBudget),
+        '--tools',
+        String(options.tools)
       ],
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
       healthUrl: `${options.baseUrl}/models`,

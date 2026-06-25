@@ -11,6 +11,9 @@ interface PackageJson {
 }
 
 interface PluginManifest {
+  readonly configSchema?: {
+    readonly properties?: Record<string, unknown>
+  }
   readonly modelCatalog?: {
     readonly providers?: {
       readonly qvac?: {
@@ -70,4 +73,5 @@ test('openclaw.plugin.json declares static QVAC model catalog rows', () => {
       { requiresStringContent: true }
     ]
   )
+  assert.equal(Object.hasOwn(manifest.configSchema?.properties ?? {}, 'configPath'), false)
 })

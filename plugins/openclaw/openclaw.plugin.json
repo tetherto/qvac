@@ -95,11 +95,7 @@
       },
       "qvacCommand": {
         "type": "string",
-        "description": "Command or absolute path used by localService to start qvac."
-      },
-      "configPath": {
-        "type": "string",
-        "description": "Path to qvac.config.json used by qvac serve."
+        "description": "Command or absolute path used by localService launcher to start qvac."
       },
       "cwd": {
         "type": "string",

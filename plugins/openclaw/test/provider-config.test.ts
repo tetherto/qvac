@@ -41,7 +41,8 @@ test('resolveOptions returns OpenClaw-safe defaults', () => {
   assert.equal(options.ctxSize, 32768)
   assert.equal(options.tools, true)
   assert.equal(options.qvacCommand, 'qvac')
-  assert.equal(options.configPath, 'qvac.config.json')
+  assert.equal(options.serviceRuntime, process.execPath)
+  assert.match(options.serviceEntrypoint, /local-service\.js$/)
 })
 
 test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () => {
@@ -61,7 +62,8 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
   const provider = createOpenClawProvider(resolveOptions({
     port: 11500,
     qvacCommand: '/usr/local/bin/qvac',
-    configPath: '/tmp/qvac.config.json',
+    serviceRuntime: '/usr/local/bin/node',
+    serviceEntrypoint: '/tmp/qvac-openclaw-local-service.js',
     cwd: '/tmp/project',
     readyTimeoutMs: 123000,
     idleStopMs: 45000
@@ -72,18 +74,23 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
   assert.equal(provider.api, 'openai-completions')
   assert.equal(provider.timeoutSeconds, 300)
   assert.deepEqual(provider.localService, {
-    command: '/usr/local/bin/qvac',
+    command: '/usr/local/bin/node',
     args: [
-      'serve',
-      'openai',
-      '--config',
-      '/tmp/qvac.config.json',
+      '/tmp/qvac-openclaw-local-service.js',
+      '--qvac-command',
+      '/usr/local/bin/qvac',
+      '--model',
+      'qwen3.5-9b',
       '--host',
       '127.0.0.1',
       '--port',
       '11500',
-      '--model',
-      'qwen3.5-9b'
+      '--ctx-size',
+      '32768',
+      '--reasoning-budget',
+      '-1',
+      '--tools',
+      'true'
     ],
     cwd: '/tmp/project',
     healthUrl: 'http://127.0.0.1:11500/v1/models',
@@ -146,7 +153,8 @@ test('registerQvacProvider reads OpenClaw pluginConfig when present', async () =
   const catalog = await registered[0]?.catalog.run()
   assert.ok(catalog)
   assert.equal((catalog.provider as ReturnType<typeof createOpenClawProvider>).baseUrl, 'http://127.0.0.1:11500/v1')
-  assert.deepEqual((catalog.provider as ReturnType<typeof createOpenClawProvider>).localService.args.slice(-1), ['qwen3.5-4b'])
+  const args = (catalog.provider as ReturnType<typeof createOpenClawProvider>).localService.args
+  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', 'qwen3.5-4b'])
 })
 
 test('registerQvacProvider registers static model catalog rows for OpenClaw model listing', () => {
