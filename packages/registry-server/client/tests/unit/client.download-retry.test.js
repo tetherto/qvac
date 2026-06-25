@@ -204,6 +204,35 @@ test('downloadModel gives up after maxRetries on persistent REQUEST_TIMEOUT', as
   t.is(attempt, 2, 'attempted exactly maxRetries times')
 })
 
+test('downloadModel aborts the reconnect wait when the signal is cancelled', async t => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient()
+  // Swarm never resumes, so without a cancel the reconnect wait would block up
+  // to RESUME_WAIT_MAX_MS before the next attempt.
+  Object.defineProperty(client.hyperswarm, 'suspended', { get () { return true } })
+
+  const signal = { aborted: false }
+  let attempt = 0
+  client._streamBlobToFile = async (blobs, core, pointer, filePath) => {
+    attempt++
+    if (attempt === 1) {
+      // Cancel while _reconnectCore is waiting for the (never-resuming) swarm.
+      setTimeout(() => { signal.aborted = true }, 50)
+      throw requestTimeout()
+    }
+    await fs.promises.writeFile(filePath, COMPLETE)
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3', { outputFile, maxRetries: 3, signal }),
+    /Download cancelled/,
+    'cancel during the reconnect wait rejects promptly instead of blocking on the swarm'
+  )
+  t.is(attempt, 1, 'no second attempt started after the cancel')
+})
+
 // Locks the generic retry contract the download path relies on.
 test('withRetry retries only listed codes and stays bounded', async t => {
   let calls = 0
