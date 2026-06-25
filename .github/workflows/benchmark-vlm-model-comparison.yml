@@ -286,8 +286,14 @@ jobs:
           # resolve-versions.cjs emits fabric_ref/upstream_ref (the CLI build refs),
           # version_mode (auto|manual), and versions_b64 (drives the report's "Engine
           # versions" table). two-models has one engine (addon) — no CLI refs to resolve.
-          if [ "$MATRIX_MODE" = "several-sources" ]; then
-            node packages/llm-llamacpp/benchmarks/vlm-benchmark/resolve-versions.cjs "${MATRIX_SOURCES:-addon}" >> "$GITHUB_OUTPUT"
+          #
+          # The benchmark tooling is checked out at ctx.ref, which for a candidate run is
+          # the `ref` INPUT — a ref that may PREDATE resolve-versions.cjs. Guard on the file
+          # existing so an older candidate ref falls back to the static CLI defaults instead
+          # of hard-failing the whole run (auto-resolution simply doesn't apply there).
+          RESOLVER=packages/llm-llamacpp/benchmarks/vlm-benchmark/resolve-versions.cjs
+          if [ "$MATRIX_MODE" = "several-sources" ] && [ -f "$RESOLVER" ]; then
+            node "$RESOLVER" "${MATRIX_SOURCES:-addon}" >> "$GITHUB_OUTPUT"
           else
             {
               echo "fabric_ref=v8189.0.2"
