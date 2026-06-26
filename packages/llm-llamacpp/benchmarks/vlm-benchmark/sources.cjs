@@ -1,20 +1,16 @@
 'use strict'
-// QVAC-19371 (A1 contract): SOURCES — the builds-under-comparison axis.
-// A "source" is one thing being measured: our addon at some version, or one of
-// the native CLIs (fabric = the company llama.cpp fork, upstream = original
-// llama.cpp). Selected per run via the `matrix_sources` workflow input
+// SOURCES — the builds-under-comparison axis.
+// A "source" is one thing being measured: the addon at some version, or one of the
+// native CLIs (fabric = the company llama.cpp fork, upstream = original llama.cpp).
+// Selected per run via the `matrix_sources` workflow input
 // (tokens: addon | addon@candidate | addon@baseline | fabric@<ref> | upstream@<ref>).
-//
-// OWNERSHIP: runner workstream (Dev A). The report side never imports this —
-// it sees sources only as the `source_id`/`source_ref` marker fields.
-//
-// A1 ships the contract + the resolver for what runs TODAY (the published
-// addon). The remaining types are wired by their subtasks:
-//   addon@candidate  — prebuild built from the PR ref            TODO(A2)
-//   addon@baseline   — pinned npm version (per-model/baseline)   TODO(A2)
-//   fabric/upstream  — already runnable via the several-sources
-//                      CLI path; arbitrary-commit refs + SHA-keyed
-//                      build cache                                TODO(A5)
+// The report side never imports this — it sees sources only as the
+// `source_id`/`source_ref` marker fields. Source types:
+//   addon            — the published npm prebuild
+//   addon@candidate  — prebuild built from the dispatched ref
+//   addon@baseline   — pinned npm version (per-model / defaultBaseline)
+//   fabric/upstream  — native CLIs over the several-sources path; ref = tag, branch,
+//                      or full commit SHA (SHA-keyed build cache)
 
 // Parse one matrix_sources token into { id, type, ref }.
 function parseSourceToken (token) {
@@ -44,7 +40,7 @@ function parseSources (raw) {
 
 // Resolve an addon source to the prebuilds dir the harness should load — the whole
 // native build (the require.addon() binding AND the compute backends), so a run uses
-// candidate or baseline end to end. CI stages these (A2):
+// candidate or baseline end to end. CI stages these:
 //   addon@candidate → builds/candidate/prebuilds (built from the PR ref)
 //   addon@baseline  → builds/baseline/prebuilds  (pinned published npm version)
 //   addon           → the workspace prebuilds, loaded in place (no swap)

@@ -110,7 +110,7 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
 
   // A tag/branch resolves via ls-remote; a full commit SHA does not (ls-remote
   // lists refs, not arbitrary commits) — accept it directly so a run can pin
-  // fabric/upstream to ANY commit, not just release tags (A5).
+  // fabric/upstream to ANY commit, not just release tags.
   let remoteSha = resolveRemoteSha(sourceConfig.repo, sourceConfig.ref)
   const bySha = !remoteSha && /^[0-9a-f]{40}$/i.test(sourceConfig.ref)
   if (bySha) remoteSha = sourceConfig.ref.toLowerCase()

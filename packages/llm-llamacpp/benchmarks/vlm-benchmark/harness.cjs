@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178: VLM benchmark harness. Loops the fixture (fixture.data.cjs) for one
+// VLM benchmark harness. Loops the fixture (fixture.data.cjs) for one
 // cell and emits one [VLMROW]{json}[/VLMROW] marker per sample. The SAME code runs
 // from this dir on Linux (the workflow points brittle straight here) and from a
 // staged copy in test/integration on the mobile Device Farm path; host-side
@@ -54,9 +54,13 @@ function nonNegEnv (k) { const raw = env(k); if (raw === '') return null; const 
 // Active preset = the run SIZE (tasks × samples × repeats), independent of mode.
 // QVAC_VLM_PRESET overrides config.defaultPreset on every target — the workflow sets
 // it directly on desktop and forwards it to phones via the pushed device config
-// (os.setEnv before this module loads). Unknown name => all-defaults.
-const PRESET = config.presets[env('QVAC_VLM_PRESET') || config.defaultPreset] ||
-  { tasks: null, samplesPerTask: null, devices: null }
+// (os.setEnv before this module loads). An unknown name fails loudly rather than
+// silently running an empty default (a typo would otherwise run "everything").
+const PRESET_NAME = env('QVAC_VLM_PRESET') || config.defaultPreset
+const PRESET = config.presets[PRESET_NAME]
+if (!PRESET) {
+  throw new Error(`unknown preset '${PRESET_NAME}' (known: ${Object.keys(config.presets).join(', ')})`)
+}
 
 // Comparison mode + this run's engine. In 'several-sources' the comparison axis is
 // the engine (this addon leg is one of addon/fabric-cli/upstream-cli), so markers are
@@ -71,7 +75,7 @@ const SCENARIO_ID = (env('QVAC_VLM_SCENARIOS') || config.defaultScenario || 'def
   .split(',')[0].trim()
 const SCENARIO = (config.scenarios || {})[SCENARIO_ID]
 if (!SCENARIO) throw new Error(`unknown scenario '${SCENARIO_ID}' (known: ${Object.keys(config.scenarios || {}).join(', ')})`)
-if (SCENARIO.fixturePending) throw new Error(`scenario '${SCENARIO_ID}' has no fixture yet (lands with the scenarios workstream, B1)`)
+if (SCENARIO.fixturePending) throw new Error(`scenario '${SCENARIO_ID}' has no fixture yet`)
 
 // Source identity stamped into every marker (CONTRACT.md §1): which build
 // produced the numbers. The workflow leg sets these; sensible fallbacks here.
@@ -94,7 +98,7 @@ const REPEATS = intEnv('QVAC_VLM_REPEATS') || PRESET.repeats || (isMobile ? 1 : 
 // mobile_timeout_min. Absent/empty = 30, identical to the original hardcoded ceiling.
 const TEST_TIMEOUT_MIN = intEnv('QVAC_VLM_TEST_TIMEOUT_MIN') || 30
 
-// A3 stability: set by the (future) desktop round scheduler when it drives one block
+// Stability: set by the (future) desktop round scheduler when it drives one block
 // per process — the block number to stamp (0 = warmup, 1.. = measured), the model
 // index to pin, and the prebuild backends dir. All absent on single-process / mobile
 // runs (our model), where the harness does its OWN warmup (WARMUP_REPEATS below).
@@ -385,11 +389,9 @@ function runModel (spec) {
       // throttling state doesn't bias it. Bounded tight on mobile to stay under the
       // Device Farm per-test ceiling; emits a [VLMBLOCK] marker recording the wait.
       //
-      // Desktop runs the guard OFF: thermal settle matters for the phone (and the
-      // self-hosted Mac mini, handled by run-desktop.cjs's own scheduler), but on the
-      // fresh CI desktop VMs there is no throttling to wait out — and the probe never
-      // stabilises on a contended runner, so the guard burned ~56 min there and blew
-      // the per-test ceiling. Warmup + median-over-repeats already cover desktop noise.
+      // Desktop runs the guard OFF: thermal settle matters for the phone, but the fresh
+      // CI desktop VMs have no throttling to wait out, and the probe doesn't reliably
+      // stabilise on a contended runner. Warmup + median-over-repeats cover desktop noise.
       if (WARMUP_REPEATS > 0) {
         const guardOpts = isMobile ? { mode: 'probe', maxWaitMs: 6000, intervalMs: 800, window: 3 } : { mode: 'off' }
         const stability = await stabilityGuard(guardOpts)

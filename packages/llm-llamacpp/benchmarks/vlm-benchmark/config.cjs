@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178: single source of truth for the VLM benchmark (models + presets).
+// Single source of truth for the VLM benchmark (models + presets).
 //
 // ─ What the benchmark compares ─
 //   two-models      MODEL_1 vs MODEL_2 — two complete VLMs, one inference engine.
@@ -100,8 +100,7 @@ const SOURCES_MODEL = {
 }
 
 // Scenario definitions (the workload axis — which fixture tasks run, how they
-// are scored) live in their own file so the scenarios/reporting workstream
-// owns them without touching this one. The task lists live there too.
+// are scored) live in their own file (scenarios.cjs). The task lists live there too.
 const SCENARIOS = require('./scenarios.cjs')
 
 module.exports = {
@@ -137,16 +136,17 @@ module.exports = {
 
   // ════════════════════════ SOURCES — builds under comparison ════════════════════════
   // Tokens for the matrix_sources launch param (parsed by sources.cjs).
-  // addon@candidate/addon@baseline are wired by A2; fabric/upstream run via the
-  // several-sources CLI path (desktop only — built per-OS on Linux/macOS/Windows).
+  // addon@candidate is built from the dispatched ref; addon@baseline is the pinned
+  // published npm version; fabric/upstream run via the several-sources CLI path
+  // (desktop only — built per-OS on Linux/macOS/Windows).
   sources: {
     'addon@candidate': { type: 'addon', ref: 'branch' },
     'addon@baseline': { type: 'addon', ref: 'npm' },
     fabric: { type: 'fabric-cli', ref: 'v8189.0.2' },
     upstream: { type: 'upstream-cli', ref: 'b8189' }
   },
-  // The published addon version the gate compares candidates against when a
-  // model has no per-catalog-entry `baseline` pin. Bump deliberately.
+  // The published addon version used as `addon@baseline` when a model has no
+  // per-catalog-entry `baseline` pin. Bump deliberately.
   defaultBaseline: { npm: '0.24.0' },
 
   // ════════════════════════ SCENARIOS — the task set ════════════════════════
@@ -154,7 +154,7 @@ module.exports = {
   scenarios: SCENARIOS,
   defaultScenario: 'default',
 
-  // ════════════════════════ METHODOLOGY — how rounds run (A3) ════════════════════════
+  // ════════════════════════ METHODOLOGY — how rounds run ════════════════════════
   // warmup + measured blocks per source, median reported, blocks interleaved
   // across sources, stability guard between blocks ('auto': temperature sensor
   // on macmini, timing-probe elsewhere). Consumed by methodology.cjs.

@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178: aggregate [VLMROW] markers from one or more run logs into quality +
+// Aggregate [VLMROW] markers from one or more run logs into quality +
 // speed matrices (markdown). Quality metrics mirror the local lmms-eval harness:
 // VQA accuracy, ANLS, ChartQA relaxed accuracy, multiple-choice accuracy.
 //

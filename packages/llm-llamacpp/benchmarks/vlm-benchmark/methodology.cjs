@@ -45,7 +45,7 @@ function median (xs) {
 
 // ── stability guard ────────────────────────────────────────────────────────
 // Between blocks we wait for the machine to return to a steady thermal state, so
-// a hot run doesn't masquerade as a slow build (the Mac phantom-improvement bug).
+// a hot run doesn't masquerade as a slow build.
 // Strategies:
 //   • 'temp'  — read a real sensor (Mac mini via powermetrics). Not wired yet
 //               (needs sudo); falls back to 'probe' so the guard is always live.
@@ -89,10 +89,10 @@ async function stabilityGuard (opts) {
   const recent = []
   let last = null
   // Hard cap driven by the event loop, NOT an in-loop `Date.now() - start` check:
-  // under `bare` on a contended CI runner that delta failed to trip, so the guard ran
-  // ~56 min and blew the per-test ceiling. A setTimeout fires regardless of how
-  // Date.now() behaves inside the loop; the loop yields via sleep() each iteration, so
-  // the flag is observed within one interval (overshoot <= one probe + interval).
+  // under `bare` on a contended runner that delta can fail to trip, which would leave
+  // the guard running unbounded. A setTimeout fires regardless of how Date.now() behaves
+  // inside the loop; the loop yields via sleep() each iteration, so the flag is observed
+  // within one interval (overshoot <= one probe + interval).
   let capped = false
   const timer = setTimeout(() => { capped = true }, o.maxWaitMs)
   try {

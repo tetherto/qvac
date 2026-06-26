@@ -1,7 +1,7 @@
 /* eslint-disable */
 'use strict'
-// QVAC-19178 / QVAC-19371: VLM benchmark fixture. Bootstrapped by build-fixture.cjs, then
-// HAND-CURATED (QVAC-19371): VQA golds reduced to distinct correct answers + synonyms;
+// VLM benchmark fixture. Bootstrapped by build-fixture.cjs, then
+// HAND-CURATED: VQA golds reduced to distinct correct answers + synonyms;
 // OCR tasks added — ocr-small (curated proverb phrase images) + ocr-page (getomni-ai/
 // ocr-benchmark, MIT, full-document markdown transcription), scored by CER/WER/BLEU.
 // Images are S3-only (see fixture/README.md). A build-fixture regen overwrites this file.

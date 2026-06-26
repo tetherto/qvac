@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178 / QVAC-19371: offline metric-tuning harness. Re-scores REAL model
+// Offline metric-tuning harness. Re-scores REAL model
 // predictions with the current scorers so the quality metrics (VQA % and the OCR
 // CER/WER/BLEU) can be tuned WITHOUT re-running inference. Run: node score-check.cjs
 //

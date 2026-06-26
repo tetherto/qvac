@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19371: llama.cpp engine-version parity guard for several-sources runs.
+// llama.cpp engine-version parity guard for several-sources runs.
 //
 // An ENGINE comparison (addon vs fabric-cli vs upstream-cli) is only fair when every
 // source embeds the SAME llama.cpp build — otherwise a delta reflects the version gap,
@@ -13,7 +13,7 @@
 //         llama.cpp build number (e.g. 8828.1.0 → 8828).
 //   • fabric-cli / upstream-cli
 //       → the ref: a `vNNNN.*` / `bNNNN` tag carries the build number (v8189.0.2 → 8189,
-//         b8189 → 8189). A 40-char commit SHA (A5) does NOT — it can't be auto-verified,
+//         b8189 → 8189). A 40-char commit SHA does NOT — it can't be auto-verified,
 //         so it is reported as a WARNING (not a hard failure).
 //
 // Behaviour: ADVISORY — never blocks. A cross-version comparison is allowed (sometimes it's

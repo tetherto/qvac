@@ -1,8 +1,7 @@
 'use strict'
-// QVAC-19371: the task set the benchmark runs.
+// The task set the benchmark runs.
 //
-// Originally modelled as several "scenarios"; per the QVAC-19371 direction this is now
-// a SINGLE descriptive set — the five lmms-eval VQA tasks plus the OCR tasks — scored
+// A SINGLE descriptive set — the five lmms-eval VQA tasks plus the OCR tasks — scored
 // per task. There is NO quality-regression gate: the benchmark compares DIFFERENT
 // models (and one model across inference sources), so a candidate-vs-baseline accuracy
 // gate doesn't apply; quality is reported, not gated.
@@ -17,7 +16,7 @@
 // simply select zero items (the VQA suite runs unaffected).
 //
 // The `scenario` axis is kept (one entry) to avoid churn in the shared harness/workflow;
-// it can be fully retired later in coordination with the runner workstream.
+// it can be fully retired later.
 
 module.exports = {
   default: {

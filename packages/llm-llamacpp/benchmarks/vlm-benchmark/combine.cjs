@@ -1,14 +1,14 @@
 'use strict'
-// QVAC-19371 (A1): combine driver — everything the workflow's matrix-combine job
-// does after downloading artifacts, moved into this folder so report changes
-// never touch the workflow YAML. Discovers per-leg logs, tags each with its
-// platform host, synthesizes mobile provenance, renders the consolidated report
-// via aggregate.js, and (B4) enforces the accuracy gate via the exit code.
+// Combine driver — everything the workflow's matrix-combine job does after downloading
+// artifacts, kept in this folder so report changes never touch the workflow YAML.
+// Discovers per-leg logs, tags each with its platform host, synthesizes mobile
+// provenance, and renders the consolidated report via aggregate.js. The benchmark is
+// descriptive (no accuracy gate): the run is green as long as it produced a report.
 //
 //   node combine.cjs --dir matrix-logs --out consolidated/report.md \
 //     --title "…" --mode two-models --engine addon --run-number 7
 //
-// OWNERSHIP: report workstream (Dev B). Host-tagging rules:
+// Host-tagging rules:
 //   • desktop logs vlm-matrix-<host>-<backend>.log → host from the filename
 //   • Android logcat_full / iOS bare_console      → host = device-model slug
 //     (Galaxy_S25→s25, Pixel_9→pixel9, iPhone_17_Pro→iphone17pro); files with
@@ -121,8 +121,7 @@ function main () {
     // Two-models Highlights compare a base cell vs a candidate cell by LABEL.
     // With launch-time models (matrix_models) the labels can be anything, so
     // derive them from the rows: the committed config pair when both actually
-    // ran, else the first two distinct cells in marker order. (The B3 view
-    // rework replaces this pairwise selection with per-block tables.)
+    // ran, else the first two distinct cells in marker order.
     let base, candidate
     if (args.mode !== 'several-sources') {
       const cells = [...new Set(rows.map(r => r.cell).filter(Boolean))]
@@ -148,8 +147,7 @@ function main () {
   }
   // No quality gate: this benchmark reports how good the models are per task (and one
   // model across sources); it does not compare a candidate vs a baseline of the SAME
-  // model, so there's nothing to gate on. The run is green as long as it produced a
-  // report. (Speed candidate/baseline comparison, if any, is the runner workstream's.)
+  // model, so there's nothing to gate on. The run is green as long as it produced a report.
 }
 
 if (require.main === module) main()

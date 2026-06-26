@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178: run the VLM matrix fixture through a native llama-mtmd-cli binary
+// Run the VLM matrix fixture through a native llama-mtmd-cli binary
 // (fabric-cli / upstream-cli) for several-sources mode. Emits the SAME markers as the
 // addon harness (harness.cjs) so the existing aggregate.js scores quality
 // (vqa/anls/relaxed/mc) and reads vision-encode the same way:
@@ -93,7 +93,6 @@ function main () {
       temperature: 0,
       seed: 42,
       thinkingEnabled: false, // match the addon harness (reasoning-budget=0)
-      verbosePrompt: true, // print the rendered prompt for prompt-parity audits
       perRunTimeoutMs: 5 * 60 * 1000
     }
     for (let rep = 0; rep < REPEATS; rep++) {

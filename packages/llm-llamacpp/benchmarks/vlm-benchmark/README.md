@@ -241,6 +241,8 @@ Tuning lives in `config.cjs` `methodology`.
   blob gets a `source` descriptor). Two variants of one model = same `llm`, different `mmproj`.
 - **Add a platform** — one case in the workflow `context` job: desktop in `dmatrix`, a phone
   in `mmatrix` (must exist in the Device-Farm fleet). No harness change.
+- **Tune the scorers** — `node score-check.cjs <report-or-log>` re-scores REAL predictions
+  with the current scorers (no inference), so you can iterate on quality metrics offline.
 
 ---
 

@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178: stage the VLM benchmark into the locations the mobile test framework
+// Stage the VLM benchmark into the locations the mobile test framework
 // scans and bundles. The source of truth is THIS directory; the copies written here
 // are git-ignored. Run before the mobile build (the reusable mobile workflow's
 // `pre_build_script` input points at this file). Desktop needs NO staging — its CI

@@ -1,20 +1,9 @@
 'use strict'
-// QVAC-19371 (A1 scaffold): desktop run driver — the future home of the
-// process-level orchestration the in-process harness cannot do:
-//   • swap addon prebuild dirs between candidate/baseline blocks   TODO(A2)
-//   • schedule interleaved warmup/measured blocks + stability guard TODO(A3)
-//   • sample peak RSS around the bare process (macOS/Windows)       TODO(A4)
-//
-// NOT WIRED YET: the workflow's "Run VLM matrix" step still runs the harness
-// directly (npx brittle … && bare …). A2/A3 replace that step body with
-//   node benchmarks/vlm-benchmark/run-desktop.cjs
-// keeping all future run-logic changes inside this folder (no YAML churn).
-//
-// OWNERSHIP: runner workstream (Dev A).
-//
-// --selfcheck validates this folder's contract wiring without running any
-// model: config loads, scenarios resolve, the models grammar parses, and the
-// sample markers file matches the v2 schema. CI and devs run it cheaply.
+// Desktop run helper. Its only live entry point is `--selfcheck`, which validates this
+// folder's contract wiring without running a model: config loads, scenarios resolve, the
+// models grammar parses, and the sample markers file matches the v2 schema. CI and devs
+// run it cheaply. (A process-level block-scheduling driver was scoped here but not pursued
+// — the harness runs candidate/baseline, warmup/stability, and RSS per process directly.)
 
 const fs = require('fs')
 const path = require('path')
@@ -63,7 +52,7 @@ function selfcheck () {
 if (require.main === module) {
   if (process.argv.includes('--selfcheck')) selfcheck()
   else {
-    console.error('run-desktop.cjs: block-scheduling driver not implemented yet (A2/A3); only --selfcheck is available')
+    console.error('run-desktop.cjs: only --selfcheck is implemented')
     process.exit(2)
   }
 }

@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19371: auto-select one llama.cpp build supported by EVERY requested source, so a
+// Auto-select one llama.cpp build supported by EVERY requested source, so a
 // several-sources engine comparison is apples-to-apples by default. The chosen build is
 // the MOST RECENT one present in the intersection of all sources' available builds.
 //
