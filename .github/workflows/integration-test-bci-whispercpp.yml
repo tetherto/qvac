@@ -39,6 +39,13 @@ jobs:
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # The desktop integration runners here are CPU-only (and hosted macOS
+      # crashes ggml's Paravirtual Metal encoder), so skip the GPU smoke in
+      # gpu-smoke.test.js on desktop. Real GPU coverage for bci runs on mobile
+      # Device Farm (Metal on iOS, Vulkan/OpenCL on Android), where
+      # test/mobile/integration-runtime.cjs sets NO_GPU=false. Drop this (or
+      # add a qvac-*-gpu runner with NO_GPU unset) to add desktop GPU coverage.
+      NO_GPU: 'true'
 
     permissions:
       contents: read
