@@ -116,6 +116,7 @@ test('managed serve host exposes proxy endpoints and shuts down cleanly', {
   try {
     const listeningPromise = waitForJsonLine<ListeningLine>(child, 'QVAC_LISTENING ', 10_000)
     const readyPromise = waitForJsonLine<ReadyLine>(child, 'QVAC_READY ', timeoutMs)
+    void readyPromise.catch(() => undefined)
 
     const listening = await listeningPromise
     assert.match(listening.baseURL, /^http:\/\/127\.0\.0\.1:\d+\/v1$/)
