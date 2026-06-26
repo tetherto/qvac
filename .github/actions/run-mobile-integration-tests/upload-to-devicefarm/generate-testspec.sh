@@ -13,7 +13,8 @@
 #
 # Optional env:
 #   PERF_EXTRACT_B64     — base64-encoded perf-extract.js (empty = skip)
-#   ENABLES_PERF         — "true" to wire perf bridging + post_test extraction
+#   SHARD_ENABLES_PERF   — "true" to wire perf bridging for this shard (set per-group by action.yml)
+#   ENABLES_PERF         — (legacy) global fallback if SHARD_ENABLES_PERF is unset
 #   QVAC_PERF_RUNS       — override for QVAC_PERF_RUNS
 #   QVAC_PERF_WARMUP_RUNS — override for QVAC_PERF_WARMUP_RUNS
 #   QVAC_PERF_ONLY       — restrict to perf tests only
@@ -74,11 +75,13 @@ emit_extra_commands() {
   printf '      - npm install --legacy-peer-deps 2>&1\n'
   printf '      - echo "Decoding wdio config..."\n'
   printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
-  if [ -n "${PERF_EXTRACT_B64:-}" ]; then
+  # Deploy perf-extract.js only when this shard has perf enabled.
+  _shard_perf="${SHARD_ENABLES_PERF:-${ENABLES_PERF:-false}}"
+  if [ -n "${PERF_EXTRACT_B64:-}" ] && [ "$_shard_perf" = "true" ]; then
     printf '      - echo "%s" | base64 -d > tests/perf-extract.js\n' "$PERF_EXTRACT_B64"
   fi
 
-  if [ "${ENABLES_PERF:-false}" = "true" ]; then
+  if [ "$_shard_perf" = "true" ]; then
     printf '      - echo "Perf bridging: runs=%s warmup=%s only=%s"\n' \
       "${QVAC_PERF_RUNS:-}" "${QVAC_PERF_WARMUP_RUNS:-}" "${QVAC_PERF_ONLY:-}"
     printf '      - echo "QVAC_PERF_RUNS=%s" > /tmp/qvacPerfConfig.txt\n' "${QVAC_PERF_RUNS:-}"
@@ -143,7 +146,7 @@ emit_extra_commands() {
   printf '          echo "[TEST_RESULTS_END]"\n'
   printf '        fi\n'
 
-  if [ "${ENABLES_PERF:-false}" = "true" ]; then
+  if [ "${SHARD_ENABLES_PERF:-${ENABLES_PERF:-false}}" = "true" ]; then
     printf '      - echo "Looking for perf-report-extract.json..."\n'
     printf '      - |\n'
     printf '        for p in "$DEVICEFARM_LOG_DIR/perf-report-extract.json" "$DEVICEFARM_TEST_PACKAGE_PATH/perf-report-extract.json" "$DEVICEFARM_TEST_PACKAGE_PATH/tests/perf-report-extract.json"; do\n'

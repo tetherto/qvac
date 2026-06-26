@@ -925,6 +925,49 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), 0.0);
 }
 
+TEST_F(CacheManagementTest, CorruptCacheTokenMetadataThrowsAndCleansMemory) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt seedPrompt;
+  seedPrompt.prefill = true;
+  seedPrompt.input =
+      R"([{"role": "user", "content": "Seed full cache metadata."}])";
+  ASSERT_NO_THROW({ model->processPrompt(seedPrompt); });
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_pos nPast = llama_memory_seq_pos_max(mem, 0) + 1;
+  ASSERT_GT(nPast, 0);
+
+  llama_token badMetadata[4] = {
+      static_cast<llama_token>(nPast),
+      static_cast<llama_token>(1),
+      static_cast<llama_token>(nPast + 7),
+      static_cast<llama_token>(1)};
+  ASSERT_TRUE(llama_state_save_file(
+      model->getContext(), temp_session_path.c_str(), badMetadata, 4));
+
+  model->reset();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0), -1);
+
+  LlamaModel::Prompt loadPrompt;
+  loadPrompt.input =
+      R"([{"role": "user", "content": "This load should fail."}])";
+  loadPrompt.cacheKey = temp_session_path;
+
+  EXPECT_THROW({ model->processPrompt(loadPrompt); }, qvac_errors::StatusError);
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0), -1)
+      << "failed full-cache metadata validation left KV rows resident";
+  EXPECT_EQ(getStatValue(model->runtimeStats(), "CacheTokens"), 0.0);
+}
+
 TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
