@@ -104,8 +104,6 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 | `QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS` | `1` | Warmup iterations before measurement (1st becomes `summary.coldRtf`). |
 | `QVAC_TTS_GGML_BENCHMARK_RUNS` | `5` desktop / `3` mobile | Measured iterations. |
 | `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND` | — | If set, test **fails** when mean RTF exceeds it. Use as a catastrophic-regression guard. No bound = numbers-only. |
-| `QVAC_TTS_GGML_BENCHMARK_QUALITY` | — | Desktop-only opt-in for round-trip quality (`input text -> TTS audio -> Whisper transcript`). |
-| `QVAC_TTS_GGML_QUALITY_WHISPER_MODEL` | `ggml-tiny.bin` | Whisper model used for quality metrics when quality is enabled. |
 
 ### Streaming benchmark only
 
@@ -185,9 +183,6 @@ The aggregated table carries:
 - **Peak RSS (MB)**: high-water RSS observed across warmup + measured runs.
 - **Model (MB)**: sum of the engine's GGUF files on disk.
 - **Tokens/s**: populated from the addon's `runtimeStats`. `n/a` when absent.
-- **WER / CER**: desktop-only Whisper tiny round-trip quality metrics. Lower is
-  better. Mobile rows report `n/a` because Device Farm quality is intentionally
-  skipped.
 - **Noisy**: `⚠` when stddev / mean > 15% — compare P50 instead.
 - **Run**: links back to the GitHub Actions run.
 

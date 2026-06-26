@@ -251,8 +251,6 @@ jobs:
           node scripts/run-rtf-benchmark-matrix.js
         env:
           QVAC_TTS_GGML_BENCHMARK_VARIANT: q4
-          QVAC_TTS_GGML_BENCHMARK_QUALITY: "true"
-          QVAC_TTS_GGML_QUALITY_WHISPER_MODEL: ggml-tiny.bin
           QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE: ${{ inputs.benchmark_matrix_json }}
           QVAC_TTS_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
           QVAC_TTS_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
