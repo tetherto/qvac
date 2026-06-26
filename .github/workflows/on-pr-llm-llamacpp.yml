@@ -360,15 +360,18 @@ jobs:
             CHANGED=true
           fi
 
-          # Hash from PR HEAD tree — includes ALL native build inputs:
-          # addon source (*.cpp, *.h), CMakeLists.txt at package root
-          # and in subdirs, vcpkg config. git ls-tree reads the tree
-          # object without checkout — secure and correct.
-          NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- \
-            "$WORKDIR/addon" "$WORKDIR/CMakeLists.txt" \
-            "$WORKDIR/vcpkg.json" "$WORKDIR/vcpkg-configuration.json" \
-            "$WORKDIR/vcpkg" 2>/dev/null \
-            | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$' \
+          # Hash from the PR HEAD tree. The file set MUST stay in lockstep with
+          # the detection predicate above (source *.cpp/*.hpp/*.c/*.h, any
+          # CMakeLists.txt, vcpkg manifests, and ANY file under vcpkg/ —
+          # overlays / portfiles / patches / triplets). If the hash were
+          # narrower than detection, a native change could trigger a rebuild
+          # without moving the cache key; `cache/save` would then no-op on the
+          # existing key and a later JS-only push would restore the stale
+          # pre-change binary. We therefore ls-tree the whole package and apply
+          # the same predicate as detection. git ls-tree reads the tree object
+          # without checkout — secure and correct.
+          NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" 2>/dev/null \
+            | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/' \
             | sha256sum | cut -d' ' -f1)
           [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
 
