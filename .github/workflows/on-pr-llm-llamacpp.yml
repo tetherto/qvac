@@ -1,17 +1,17 @@
 name: On PR Trigger (LLM)
 
 on:
-  pull_request_target:
+  # TEST-ONLY (throwaway branch): pull_request_target -> pull_request so the
+  # head workflow runs and ci-router/label-gate read PR labels. Base
+  # lgci-sandbox does not match main's trigger filter. NOT FOR MERGE.
+  pull_request:
     types:
       - opened
       - synchronize
       - reopened
       - labeled
     branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
+      - lgci-sandbox
     paths:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
