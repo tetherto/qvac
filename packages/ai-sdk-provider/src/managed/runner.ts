@@ -31,26 +31,26 @@ export interface RunnerParams {
   readonly serveBinPath?: string
 }
 
-function errorPath (fleetKey: string): string {
+function errorPath(fleetKey: string): string {
   return join(managedServesDir(), `${fleetKey}.error`)
 }
 
 // Pure idle decision, factored out for unit testing. `emptySince` is the
 // timestamp the consumer set first became empty (null while someone is using
 // the serve). Returns the updated `emptySince` and whether to reap now.
-export function decideReap (params: {
+export function decideReap(params: {
   liveConsumerCount: number
   emptySince: number | null
   now: number
   idleTimeoutMs: number
-}): { emptySince: number | null, reap: boolean } {
+}): { emptySince: number | null; reap: boolean } {
   const { liveConsumerCount, now, idleTimeoutMs } = params
   if (liveConsumerCount > 0) return { emptySince: null, reap: false }
   const emptySince = params.emptySince ?? now
   return { emptySince, reap: now - emptySince >= idleTimeoutMs }
 }
 
-function cleanup (fleetKey: string, configPath: string): void {
+function cleanup(fleetKey: string, configPath: string): void {
   removeRecord(fleetKey)
   if (configPath.length > 0) {
     try {
@@ -61,7 +61,7 @@ function cleanup (fleetKey: string, configPath: string): void {
   }
 }
 
-export async function runRunner (params: RunnerParams): Promise<void> {
+export async function runRunner(params: RunnerParams): Promise<void> {
   const { fleetKey, configPath, port, host, idleTimeoutMs, startTimeoutMs } = params
 
   ensureDirSync()
@@ -102,7 +102,7 @@ export async function runRunner (params: RunnerParams): Promise<void> {
   })
 
   let shuttingDown = false
-  async function shutdown (code: number): Promise<void> {
+  async function shutdown(code: number): Promise<void> {
     if (shuttingDown) return
     shuttingDown = true
     await stopServe(spawned.child).catch(() => {})
@@ -119,8 +119,12 @@ export async function runRunner (params: RunnerParams): Promise<void> {
     process.exit(0)
   })
 
-  process.on('SIGTERM', () => { void shutdown(143) })
-  process.on('SIGINT', () => { void shutdown(130) })
+  process.on('SIGTERM', () => {
+    void shutdown(143)
+  })
+  process.on('SIGINT', () => {
+    void shutdown(130)
+  })
 
   // Idle-reaping loop, driven entirely by consumer-process liveness so it works
   // for any client regardless of how it sends requests (it never inspects the
@@ -136,7 +140,12 @@ export async function runRunner (params: RunnerParams): Promise<void> {
       } catch {
         return // transient FS error — re-check next tick
       }
-      const decision = decideReap({ liveConsumerCount: count, emptySince, now: Date.now(), idleTimeoutMs })
+      const decision = decideReap({
+        liveConsumerCount: count,
+        emptySince,
+        now: Date.now(),
+        idleTimeoutMs
+      })
       emptySince = decision.emptySince
       if (decision.reap) {
         clearInterval(timer)
@@ -148,15 +157,14 @@ export async function runRunner (params: RunnerParams): Promise<void> {
   timer.unref()
 }
 
-function parseArgs (argv: string[]): RunnerParams {
+function parseArgs(argv: string[]): RunnerParams {
   return JSON.parse(argv[2] ?? '{}') as RunnerParams
 }
 
 // Run only when invoked as a script (the spawned subprocess), not when imported
 // by the client or a test.
 const invokedDirectly =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
 
 if (invokedDirectly) {
   void runRunner(parseArgs(process.argv))
@@ -165,7 +173,7 @@ if (invokedDirectly) {
 // Resolve the runner module's own path + the command needed to execute it,
 // transparently handling both compiled (`dist/.../runner.js` under Node) and
 // dev (`src/.../runner.ts` under tsx) layouts so the client can spawn us.
-export function runnerSpawnSpec (): { command: string, args: string[] } {
+export function runnerSpawnSpec(): { command: string; args: string[] } {
   const here = fileURLToPath(import.meta.url)
   if (!here.endsWith('.ts')) {
     // Production: a compiled `.js` runs directly under Node.

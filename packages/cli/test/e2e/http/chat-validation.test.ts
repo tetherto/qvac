@@ -7,28 +7,37 @@ describe('serve: chat completions validation', () => {
 
   it('invalid JSON returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', headers: JSON_HEADERS, payload: '{not valid json}'
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: JSON_HEADERS,
+      payload: '{not valid json}'
     })
     assertStatusAndError(res, 400, 'invalid_json')
   })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', payload: { messages: [{ role: 'user', content: 'hi' }] }
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: { messages: [{ role: 'user', content: 'hi' }] }
     })
     assertStatusAndError(res, 400, 'missing_model')
   })
 
   it('missing messages returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', payload: { model: 'test' }
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: { model: 'test' }
     })
     assertStatusAndError(res, 400, 'missing_messages')
   })
 
   it('unknown model returns 404', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/chat/completions', payload: { model: 'nonexistent', messages: [{ role: 'user', content: 'hi' }] }
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: { model: 'nonexistent', messages: [{ role: 'user', content: 'hi' }] }
     })
     assertStatusAndError(res, 404, 'model_not_found')
   })

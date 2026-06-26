@@ -39,7 +39,11 @@
     "build": "rm -rf dist && tsc",
     "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "check": "npm run lint && npm run format",
     "test": "npx tsx --test test/*.test.ts",
     "test:unit": "npx tsx --test test/*.test.ts",
     "test:e2e": "npm run test:e2e:js",
@@ -68,6 +72,9 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.3",
+    "lunte": "^1.8.2",
+    "prettier": "^3.8.4",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.3"
   }
 }

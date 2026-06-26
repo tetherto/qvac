@@ -21,11 +21,11 @@ import { formatSize } from './utils.ts'
 const OUTPUT_FILE = fileURLToPath(new URL('../../src/models/constants.ts', import.meta.url))
 const HISTORY_DIR = fileURLToPath(new URL('../history', import.meta.url))
 
-function toOpenAIEndpointModels (models: ProcessedModel[]): ProcessedModel[] {
+function toOpenAIEndpointModels(models: ProcessedModel[]): ProcessedModel[] {
   return models.filter((model) => getEndpointCategoryFromAddon(model.addon) !== null)
 }
 
-async function checkOnly (nonBlocking = false, showDuplicates = false): Promise<void> {
+async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<void> {
   const timeoutMs = 30000
   let timedOut = false
 
@@ -118,7 +118,7 @@ async function checkOnly (nonBlocking = false, showDuplicates = false): Promise<
   }
 }
 
-async function updateModels (showDuplicates = false, noDedup = false): Promise<void> {
+async function updateModels(showDuplicates = false, noDedup = false): Promise<void> {
   console.log('🔄 Fetching models from QVAC Registry...\n')
 
   const currentModels = loadCurrentModels(OUTPUT_FILE)
@@ -157,7 +157,7 @@ async function updateModels (showDuplicates = false, noDedup = false): Promise<v
   }
 }
 
-async function main (): Promise<void> {
+async function main(): Promise<void> {
   const CHECK_ONLY = process.argv.includes('--check')
   const NON_BLOCKING = process.argv.includes('--non-blocking')
   const SHOW_DUPLICATES = process.argv.includes('--show-duplicates')

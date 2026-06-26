@@ -53,14 +53,14 @@ The plugin accepts both friendly catalog ids and raw QVAC model constants. Use
 the strongest model your machine can keep warm; coding agents are far more
 sensitive to model quality than short chatbots are.
 
-| Model value | Use when | Notes |
-| --- | --- | --- |
-| `qwen3.5-9b` | You want the best friendly-id default and your machine can keep it warm. | Default. Loads `QWEN3_5_9B_MULTIMODAL_Q4_K_M`. |
-| `GPT_OSS_20B_INST_Q4_K_M` | You want a larger local text/code model for more demanding agent work. | Raw QVAC constant; appears in OpenCode as `qvac/GPT_OSS_20B_INST_Q4_K_M`. |
-| `GEMMA4_31B_MULTIMODAL_Q4_K_M` | You want the larger Gemma4 local model and have enough memory. | Raw QVAC constant; appears in OpenCode as `qvac/GEMMA4_31B_MULTIMODAL_Q4_K_M`. |
-| `qwen3.5-4b` | You need a smaller/faster model for lighter code questions or modest hardware. | Less reliable for tool-heavy workflows than 9B and larger models. |
-| `qwen3.5-2b` | You are smoke-testing the plugin/server path or using a low-memory machine. | Fast, but weak for real coding-agent work. |
-| `qwen3.5-0.8b` | You need the fastest health check or demo. | Not recommended for reliable tool use or code reasoning. |
+| Model value                    | Use when                                                                       | Notes                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `qwen3.5-9b`                   | You want the best friendly-id default and your machine can keep it warm.       | Default. Loads `QWEN3_5_9B_MULTIMODAL_Q4_K_M`.                                 |
+| `GPT_OSS_20B_INST_Q4_K_M`      | You want a larger local text/code model for more demanding agent work.         | Raw QVAC constant; appears in OpenCode as `qvac/GPT_OSS_20B_INST_Q4_K_M`.      |
+| `GEMMA4_31B_MULTIMODAL_Q4_K_M` | You want the larger Gemma4 local model and have enough memory.                 | Raw QVAC constant; appears in OpenCode as `qvac/GEMMA4_31B_MULTIMODAL_Q4_K_M`. |
+| `qwen3.5-4b`                   | You need a smaller/faster model for lighter code questions or modest hardware. | Less reliable for tool-heavy workflows than 9B and larger models.              |
+| `qwen3.5-2b`                   | You are smoke-testing the plugin/server path or using a low-memory machine.    | Fast, but weak for real coding-agent work.                                     |
+| `qwen3.5-0.8b`                 | You need the fastest health check or demo.                                     | Not recommended for reliable tool use or code reasoning.                       |
 
 Friendly ids are easier to read and match the model picker. Raw constants give
 you access to other SDK chat models that are not yet in the friendly catalog.
@@ -71,17 +71,17 @@ Set from any of these sources (lowest to highest precedence): built-in defaults,
 a `qvac.json` in the project dir, the `opencode.json` plugin-tuple options, and
 `QVAC_*` environment variables.
 
-| Option (`qvac.json` / plugin tuple) | Env                       | Default      | Meaning |
-| ----------------------------------- | ------------------------- | ------------ | ------- |
-| `model`                             | `QVAC_MODEL`              | `qwen3.5-9b` | friendly id or a raw QVAC constant |
-| `ctxSize`                           | `QVAC_CTX_SIZE`           | `32768`      | serve context window (an agent's prompt + tool schemas need ≥ 32768) |
-| `reasoningBudget`                   | `QVAC_REASONING_BUDGET`   | `-1`         | `-1` = reasoning on, `0` = off |
-| `tools`                             | `QVAC_TOOLS`              | `true`       | enable the tool-calling chat template |
-| `shim`                              | `QVAC_SHIM`               | `true`       | apply the OpenAI-compat transforms (see below) |
-| `runtime`                           | `QVAC_RUNTIME`            | auto         | path to the node/bun runtime that hosts the serve |
-| `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`   | `1800000`    | budget for the serve to become healthy, incl. a cold model download |
-| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL`  | `true`       | force `qvac/<model>` as the project default + small model |
-| `debug`                             | `QVAC_DEBUG`              | `false`      | mirror host milestones + per-request traces to stderr |
+| Option (`qvac.json` / plugin tuple) | Env                      | Default      | Meaning                                                              |
+| ----------------------------------- | ------------------------ | ------------ | -------------------------------------------------------------------- |
+| `model`                             | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant                                   |
+| `ctxSize`                           | `QVAC_CTX_SIZE`          | `32768`      | serve context window (an agent's prompt + tool schemas need ≥ 32768) |
+| `reasoningBudget`                   | `QVAC_REASONING_BUDGET`  | `-1`         | `-1` = reasoning on, `0` = off                                       |
+| `tools`                             | `QVAC_TOOLS`             | `true`       | enable the tool-calling chat template                                |
+| `shim`                              | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms (see below)                       |
+| `runtime`                           | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve                    |
+| `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold model download  |
+| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default + small model            |
+| `debug`                             | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr                |
 
 Via the plugin tuple in `opencode.json`:
 

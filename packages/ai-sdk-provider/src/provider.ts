@@ -12,7 +12,7 @@ import type {
 // External mode: a thin, synchronous wrapper around `createOpenAICompatible`
 // pointed at a `qvac serve openai` endpoint the caller runs themselves. This is
 // the v1 behaviour, kept byte-for-byte identical.
-export function createExternalQvac (options: QvacExternalOptions = {}): QvacProvider {
+export function createExternalQvac(options: QvacExternalOptions = {}): QvacProvider {
   const headers = { ...DEFAULT_HEADERS, ...options.headers }
   const init: Parameters<typeof createOpenAICompatible>[0] = {
     name: 'qvac',
@@ -24,9 +24,9 @@ export function createExternalQvac (options: QvacExternalOptions = {}): QvacProv
   return createOpenAICompatible(init) as QvacProvider
 }
 
-export function createQvac (options?: QvacExternalOptions): QvacProvider
-export function createQvac (options: QvacManagedOptions): Promise<ManagedQvacProvider>
-export function createQvac (options: QvacOptions = {}): QvacProvider | Promise<ManagedQvacProvider> {
+export function createQvac(options?: QvacExternalOptions): QvacProvider
+export function createQvac(options: QvacManagedOptions): Promise<ManagedQvacProvider>
+export function createQvac(options: QvacOptions = {}): QvacProvider | Promise<ManagedQvacProvider> {
   if (options.mode === 'managed') {
     // Lazy import keeps the supervisor (and its `node:child_process` /
     // `node:net` / `@qvac/cli` resolution) out of the module graph for the

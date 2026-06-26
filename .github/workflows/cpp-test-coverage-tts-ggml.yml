@@ -97,6 +97,20 @@ jobs:
         run: |
           npm run coverage:cpp:build
 
+      # Hard gate: the deterministic C++ unit tests must pass.  The full "Run
+      # C++ Unit Tests" step below is `continue-on-error: true` because its
+      # env-gated GGUF round-trip tier is heavy and can flake — but that flag
+      # was swallowing EVERY C++ unit-test failure, not just one, so a real
+      # regression could merge (and ship) green.  Run the whole deterministic
+      # tier here (everything except the *RealGguf* round-trip tests) WITHOUT
+      # continue-on-error, so any C++ unit-test regression — current or future
+      # — fails this job.  The on-pr merge-guard requires cpp-tests-coverage to
+      # succeed, so this is what actually blocks the PR.
+      - name: Deterministic C++ unit tests (must pass)
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          cd build && ./tts_ggml_tests --gtest_filter='-*RealGguf*'
+
       # Mirrors parakeet's cpp-test-coverage flow.  The C++ suite has two
       # tiers of tests:
       #   - Pure validation / static-helper tests (no GGUF needed).

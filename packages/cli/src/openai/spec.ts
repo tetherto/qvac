@@ -14,7 +14,7 @@ export interface EmitOpenApiSpecOptions {
  * return it as a string. The `quiet: true` flag on `buildServer` keeps the
  * logger silent so this never contaminates stdout / stderr for callers.
  */
-export async function renderOpenApiSpec (format: SpecFormat = 'json'): Promise<string> {
+export async function renderOpenApiSpec(format: SpecFormat = 'json'): Promise<string> {
   const app = await buildServer({
     projectRoot: tmpdir(),
     port: 0,
@@ -34,7 +34,7 @@ export async function renderOpenApiSpec (format: SpecFormat = 'json'): Promise<s
   }
 }
 
-export async function emitOpenApiSpec (opts: EmitOpenApiSpecOptions = {}): Promise<void> {
+export async function emitOpenApiSpec(opts: EmitOpenApiSpecOptions = {}): Promise<void> {
   const text = await renderOpenApiSpec(opts.format ?? 'json')
   if (opts.output) {
     writeFileSync(opts.output, text)
