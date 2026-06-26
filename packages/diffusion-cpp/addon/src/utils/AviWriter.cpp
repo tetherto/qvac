@@ -251,8 +251,12 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU32LE(out, 56);
   appendU32LE(out, 1000000u / static_cast<uint32_t>(fps)); // us per frame
   appendU32LE(out, 0);                                     // max bytes/sec
-  appendU32LE(out, 0);     // padding granularity
-  appendU32LE(out, 0x110); // flags: HASINDEX | ISINTERLEAVED
+  appendU32LE(out, 0); // padding granularity
+  // HASINDEX (0x10) always. ISINTERLEAVED (0x100) only for video-only files:
+  // the audio path appends a single trailing 01wb chunk rather than
+  // interleaving audio per-frame, so advertising ISINTERLEAVED would
+  // misdescribe the layout when an audio stream is present.
+  appendU32LE(out, hasAudio ? 0x10u : 0x110u);        // flags
   appendU32LE(out, static_cast<uint32_t>(numFrames)); // total frames
   appendU32LE(out, 0);                                // initial frames
   appendU32LE(out, hasAudio ? 2u : 1u);               // number of streams

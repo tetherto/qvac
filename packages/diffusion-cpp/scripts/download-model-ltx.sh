@@ -19,12 +19,12 @@ set -euo pipefail
 #   Q4_K_S (~16.7 GB)
 #   Q4_K_M (~17.8 GB)
 #   Q5_K_S (~18.5 GB)
-#   Q5_K_M (~19.4 GB)
+#   Q5_K_M (~19.4 GB) - DEFAULT (size/quality balance)
 #   Q6_K   (~21.0 GB)
-#   Q8_0   (~25.5 GB) - Best quality, DEFAULT
+#   Q8_0   (~25.5 GB) - Best quality
 #
 # Usage:
-#   ./download-model-ltx.sh              # Downloads distilled-1.1 Q8_0 (default)
+#   ./download-model-ltx.sh              # Downloads distilled-1.1 Q5_K_M (default)
 #   ./download-model-ltx.sh --dev        # Use dev model instead
 #   ./download-model-ltx.sh --distilled  # Use basic distilled model
 #   ./download-model-ltx.sh --q4ks       # Downloads Q4_K_S
@@ -70,9 +70,9 @@ if [ "$DOWNLOAD_ALL" = true ]; then
   QUANTIZATIONS=("Q2_K" "Q3_K_S" "Q3_K_M" "Q4_K_S" "Q4_K_M" "Q5_K_S" "Q5_K_M" "Q6_K" "Q8_0")
 fi
 
-# If no quantizations specified, default to Q8_0
+# If no quantizations specified, default to Q5_K_M (size/quality balance)
 if [ ${#QUANTIZATIONS[@]} -eq 0 ]; then
-  QUANTIZATIONS=("Q8_0")
+  QUANTIZATIONS=("Q5_K_M")
 fi
 
 echo "LTX-2.3 GGUF Model Download"

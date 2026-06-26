@@ -623,13 +623,16 @@ class VideoStableDiffusion {
   getState () { return this.state }
 
   /**
-   * True when the configured model is LTX-2 (LTXAV), inferred from the
-   * LTX-only companion files. Drives model-aware validation (8*k+1 frames,
-   * x32 dims) on the JS side; the native layer applies the same rules.
+   * True when the configured model is LTX-2 (LTXAV). Keyed on the
+   * embeddings-connectors input, which no other model family uses; this matches
+   * the native detection (SdModel: isLtxModel_ = !embeddingsConnectorsPath.empty()).
+   * audioVae is intentionally not used here: it is optional for LTX (silent runs
+   * omit it), so keying on it would disagree with the native layer. Drives
+   * model-aware validation (8*k+1 frames, x32 dims) on the JS side.
    * @returns {boolean}
    */
   _isLtx () {
-    return !!(this._files.embeddingsConnectors || this._files.audioVae)
+    return !!this._files.embeddingsConnectors
   }
 }
 
