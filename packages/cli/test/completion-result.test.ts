@@ -2,17 +2,20 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
 import { InferenceCancelledError } from '@qvac/sdk'
-import { drainCompletion, completionTokensFromStats } from '../src/serve/adapters/openai/completion-result.js'
+import {
+  drainCompletion,
+  completionTokensFromStats
+} from '../src/serve/adapters/openai/completion-result.js'
 import { HttpError } from '../src/serve/lib/http-error.js'
 
-function fakeRun (opts: {
+function fakeRun(opts: {
   tokens?: string[]
   toolCalls?: ToolCall[]
   stats?: CompletionStats
   stopReason?: string
   final?: Promise<unknown>
 }): CompletionRun {
-  async function * events (): AsyncGenerator<unknown> {
+  async function* events(): AsyncGenerator<unknown> {
     let seq = 0
     for (const t of opts.tokens ?? []) yield { type: 'contentDelta', seq: seq++, text: t }
     for (const call of opts.toolCalls ?? []) yield { type: 'toolCall', seq: seq++, call }
@@ -26,8 +29,8 @@ function fakeRun (opts: {
     text: Promise.resolve(''),
     toolCalls: Promise.resolve([]) as unknown as CompletionRun['toolCalls'],
     stats: Promise.resolve(opts.stats),
-    tokenStream: (async function * empty (): AsyncGenerator<string> {})(),
-    toolCallStream: (async function * empty (): AsyncGenerator<never> {})()
+    tokenStream: (async function* (): AsyncGenerator<string> {})(),
+    toolCallStream: (async function* (): AsyncGenerator<never> {})()
   }
 }
 
@@ -64,10 +67,12 @@ describe('drainCompletion', () => {
   })
 
   it('finish_reason=tool_calls takes precedence over length', async () => {
-    const r = await drainCompletion(fakeRun({
-      toolCalls: [{ id: 'c1', name: 'fn', arguments: {} }],
-      stopReason: 'length'
-    }))
+    const r = await drainCompletion(
+      fakeRun({
+        toolCalls: [{ id: 'c1', name: 'fn', arguments: {} }],
+        stopReason: 'length'
+      })
+    )
     assert.equal(r.finishReason, 'tool_calls')
     assert.equal(r.toolCalls.length, 1)
   })
@@ -92,11 +97,14 @@ describe('drainCompletion', () => {
   it('throws InferenceCancelledError on cancelledDone', async () => {
     const cancelErr = new InferenceCancelledError('test-request-id')
     await assert.rejects(
-      () => drainCompletion(fakeRun({
-        tokens: ['partial'],
-        stopReason: 'cancelled',
-        final: Promise.reject(cancelErr)
-      })),
+      () =>
+        drainCompletion(
+          fakeRun({
+            tokens: ['partial'],
+            stopReason: 'cancelled',
+            final: Promise.reject(cancelErr)
+          })
+        ),
       (err) => err instanceof InferenceCancelledError
     )
   })

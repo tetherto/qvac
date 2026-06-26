@@ -98,7 +98,7 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   '@qvac/classification-ggml': 'ggml-classification'
 }
 
-export function resolveCanonicalEngine (engine: string): ModelRegistryEngine | null {
+export function resolveCanonicalEngine(engine: string): ModelRegistryEngine | null {
   if ((CANONICAL_ENGINES as readonly string[]).includes(engine)) {
     if (engine === 'onnx-tts') return 'tts-ggml'
     return engine as ModelRegistryEngine
@@ -106,7 +106,7 @@ export function resolveCanonicalEngine (engine: string): ModelRegistryEngine | n
   return LEGACY_ENGINE_TO_CANONICAL[engine] ?? null
 }
 
-export function getAddonFromEngine (engine: ModelRegistryEngine): ModelRegistryEntryAddon {
+export function getAddonFromEngine(engine: ModelRegistryEngine): ModelRegistryEntryAddon {
   return ENGINE_TO_ADDON[engine]
 }
 
@@ -148,7 +148,9 @@ export type EndpointCategory =
   | 'ocr'
   | 'image'
 
-export function getEndpointCategoryFromAddon (addon: ModelRegistryEntryAddon): EndpointCategory | null {
+export function getEndpointCategoryFromAddon(
+  addon: ModelRegistryEntryAddon
+): EndpointCategory | null {
   if (addon in ADDON_TO_ENDPOINT_CATEGORY) {
     return ADDON_TO_ENDPOINT_CATEGORY[addon as keyof typeof ADDON_TO_ENDPOINT_CATEGORY]
   }

@@ -82,7 +82,9 @@ test('resolveOptions rejects a malformed qvac.json', () => {
 })
 
 test('hostEnv carries the resolved model-loading subset as strings', () => {
-  const env = hostEnv(mergeOptions({ model: 'qwen3.5-9b', ctxSize: 32768, tools: true, shim: false }))
+  const env = hostEnv(
+    mergeOptions({ model: 'qwen3.5-9b', ctxSize: 32768, tools: true, shim: false })
+  )
   assert.equal(env['QVAC_MODEL'], 'qwen3.5-9b')
   assert.equal(env['QVAC_CTX_SIZE'], '32768')
   assert.equal(env['QVAC_TOOLS'], 'true')

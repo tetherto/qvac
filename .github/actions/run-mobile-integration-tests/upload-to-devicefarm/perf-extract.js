@@ -76,7 +76,10 @@ async function pollUntilStable(browser, bundleId) {
   let stableRounds = 0;
   let bestJson = null;
 
-  for (let round = 0; round < 48; round++) {
+  // Cap at 6 rounds (~30s). The old limit of 48 (~4 min of shell calls,
+  // ~13 min wall-clock with API overhead) ran uselessly on non-perf shards.
+  // 6 rounds is enough for the app to finish writing if perf data exists.
+  for (let round = 0; round < 6; round++) {
     let found = false;
     for (const path of paths) {
       try {
@@ -98,10 +101,10 @@ async function pollUntilStable(browser, bundleId) {
       } catch (_) { /* path doesn't exist yet */ }
     }
 
-    if (!found && round % 6 === 5) {
-      console.log(`[perf-extract] poll ${round}: no file found yet`);
+    if (!found && round === 5) {
+      console.log(`[perf-extract] poll ${round}: no file found after ${round + 1} rounds`);
     }
-    if (stableRounds >= 6) break;
+    if (stableRounds >= 2) break;
     await new Promise(resolve => setTimeout(resolve, 5000));
   }
 

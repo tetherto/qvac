@@ -16,7 +16,7 @@ const PARAM_NAME_BY_PATH_PREFIX: Array<{ test: RegExp; name: string }> = [
   { test: /\/v1\/videos\/:id$/, name: 'video_id' }
 ]
 
-function normalizeParams (path: string): string {
+function normalizeParams(path: string): string {
   for (const rule of PARAM_NAME_BY_PATH_PREFIX) {
     if (rule.test.test(path)) {
       return path.replace(/:[A-Za-z_][A-Za-z0-9_]*/g, `{${rule.name}}`)
@@ -27,7 +27,7 @@ function normalizeParams (path: string): string {
 
 const ROUTE_CALL_RE = /\bapp\s*\.\s*(get|post|put|delete|patch)\s*\(\s*['"](\/v1\/[^'"]+)['"]/gi
 
-function extractFromText (text: string, keys: Set<string>): void {
+function extractFromText(text: string, keys: Set<string>): void {
   for (const match of text.matchAll(ROUTE_CALL_RE)) {
     const method = match[1]!.toUpperCase()
     const rawPath = match[2]!
@@ -35,7 +35,7 @@ function extractFromText (text: string, keys: Set<string>): void {
   }
 }
 
-function walk (dir: string, out: string[]): void {
+function walk(dir: string, out: string[]): void {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
     const stat = statSync(full)
@@ -47,7 +47,7 @@ function walk (dir: string, out: string[]): void {
   }
 }
 
-export function parseRouter (routerSourceOrDir: string): string[] {
+export function parseRouter(routerSourceOrDir: string): string[] {
   const keys = new Set<string>()
   const abs = resolve(routerSourceOrDir)
   const stat = statSync(abs)

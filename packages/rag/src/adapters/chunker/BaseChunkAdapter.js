@@ -8,7 +8,7 @@ const { QvacErrorRAG, ERR_CODES } = require('../../errors')
  * @param {ChunkOpts} opts - The options for the chunker.
  */
 class BaseChunkAdapter {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     if (new.target === BaseChunkAdapter) {
       throw new QvacErrorRAG({ code: ERR_CODES.ABSTRACT_CLASS })
     }
@@ -22,7 +22,8 @@ class BaseChunkAdapter {
    * @returns {Promise<Array<Doc>>} - Array of Docs.
    * @throws {Error} - If chunking fails.
    */
-  async chunkText (input, opts = {}) {
+  // lunte-disable-next-line require-await
+  async chunkText(input, opts = {}) {
     throw new QvacErrorRAG({ code: ERR_CODES.NOT_IMPLEMENTED })
   }
 
@@ -31,30 +32,48 @@ class BaseChunkAdapter {
    * @param {string|Array<string>} input - The input to validate.
    * @throws {Error} - If input is invalid.
    */
-  validateInput (input) {
+  validateInput(input) {
     if (!input) {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Input cannot be empty, null or undefined' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'Input cannot be empty, null or undefined'
+      })
     }
 
     if (typeof input === 'string') {
       if (input.trim().length === 0) {
-        throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Input string cannot be empty' })
+        throw new QvacErrorRAG({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: 'Input string cannot be empty'
+        })
       }
     } else if (Array.isArray(input)) {
       if (input.length === 0) {
-        throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Input array cannot be empty' })
+        throw new QvacErrorRAG({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: 'Input array cannot be empty'
+        })
       }
 
       for (let i = 0; i < input.length; i++) {
         if (typeof input[i] !== 'string') {
-          throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: `Input array element at index ${i} must be a string` })
+          throw new QvacErrorRAG({
+            code: ERR_CODES.INVALID_INPUT,
+            adds: `Input array element at index ${i} must be a string`
+          })
         }
         if (input[i].trim().length === 0) {
-          throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: `Input array element at index ${i} cannot be empty` })
+          throw new QvacErrorRAG({
+            code: ERR_CODES.INVALID_INPUT,
+            adds: `Input array element at index ${i} cannot be empty`
+          })
         }
       }
     } else {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Input must be a string or array of strings' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'Input must be a string or array of strings'
+      })
     }
   }
 
@@ -62,7 +81,7 @@ class BaseChunkAdapter {
    * Updates the default options for this chunker instance.
    * @param {ChunkOpts} opts - New options to merge with existing defaults.
    */
-  updateOptions (opts = {}) {
+  updateOptions(opts = {}) {
     if (!this.opts) {
       this.opts = {}
     }
@@ -73,7 +92,7 @@ class BaseChunkAdapter {
    * Gets the current options for this chunker instance.
    * @returns {ChunkOpts} - Current chunker options.
    */
-  getOptions () {
+  getOptions() {
     return { ...this.opts }
   }
 }

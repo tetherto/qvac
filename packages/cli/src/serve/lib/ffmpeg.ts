@@ -12,7 +12,7 @@ export interface FfmpegRunOptions {
 export class FfmpegFailedError extends Error {
   readonly stderr: string
   readonly exitCode: number | null
-  constructor (message: string, stderr: string, exitCode: number | null) {
+  constructor(message: string, stderr: string, exitCode: number | null) {
     super(message)
     this.name = 'FfmpegFailedError'
     this.stderr = stderr
@@ -21,7 +21,7 @@ export class FfmpegFailedError extends Error {
 }
 
 export class FfmpegTimeoutError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'FfmpegTimeoutError'
   }
@@ -35,7 +35,7 @@ const DEFAULT_MAX_STDERR_BYTES = 8 * 1024
  * stdout as a Buffer. stderr is captured up to a byte cap and surfaced in any
  * thrown error. Times out after `timeoutMs` (default 5 min).
  */
-export async function runFfmpeg (
+export async function runFfmpeg(
   args: string[],
   input: Buffer,
   opts: FfmpegRunOptions = {}
@@ -51,7 +51,7 @@ export async function runFfmpeg (
     let stderrLen = 0
     let settled = false
 
-    function settle (fn: () => void): void {
+    function settle(fn: () => void): void {
       if (settled) return
       settled = true
       clearTimeout(timer)
@@ -59,7 +59,11 @@ export async function runFfmpeg (
     }
 
     const timer = setTimeout(() => {
-      try { child.kill('SIGKILL') } catch { /* noop */ }
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        /* noop */
+      }
       settle(() => reject(new FfmpegTimeoutError(`ffmpeg timed out after ${timeoutMs}ms`)))
     }, timeoutMs)
 
@@ -72,11 +76,15 @@ export async function runFfmpeg (
     })
 
     child.on('error', (err) => {
-      settle(() => reject(new FfmpegFailedError(
-        `ffmpeg failed to start: ${err.message}`,
-        Buffer.concat(stderrChunks).toString('utf8'),
-        null
-      )))
+      settle(() =>
+        reject(
+          new FfmpegFailedError(
+            `ffmpeg failed to start: ${err.message}`,
+            Buffer.concat(stderrChunks).toString('utf8'),
+            null
+          )
+        )
+      )
     })
 
     child.on('close', (code) => {
@@ -85,15 +93,21 @@ export async function runFfmpeg (
         settle(() => resolve(Buffer.concat(stdoutChunks)))
         return
       }
-      settle(() => reject(new FfmpegFailedError(
-        `ffmpeg exited with code ${code}${stderr ? `: ${stderr.trim()}` : ''}`,
-        stderr,
-        code ?? null
-      )))
+      settle(() =>
+        reject(
+          new FfmpegFailedError(
+            `ffmpeg exited with code ${code}${stderr ? `: ${stderr.trim()}` : ''}`,
+            stderr,
+            code ?? null
+          )
+        )
+      )
     })
 
     // ffmpeg may close stdin early; the close handler reports the real cause.
-    child.stdin.on('error', () => { /* noop */ })
+    child.stdin.on('error', () => {
+      /* noop */
+    })
     child.stdin.end(input)
   })
 }
@@ -102,10 +116,10 @@ export async function runFfmpeg (
  * Runs `ffmpeg -version` once to verify ffmpeg is on PATH. Intended to be
  * cached at server start and not re-probed.
  */
-export async function probeFfmpegAvailable (ffmpegPath: string = 'ffmpeg'): Promise<boolean> {
+export async function probeFfmpegAvailable(ffmpegPath: string = 'ffmpeg'): Promise<boolean> {
   return await new Promise<boolean>((resolve) => {
     let resolved = false
-    function done (ok: boolean): void {
+    function done(ok: boolean): void {
       if (resolved) return
       resolved = true
       resolve(ok)

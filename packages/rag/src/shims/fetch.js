@@ -2,7 +2,7 @@
 
 const { QvacErrorRAG, ERR_CODES } = require('../errors')
 
-function ensureFetch () {
+function ensureFetch() {
   if (typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function') {
     return globalThis.fetch.bind(globalThis)
   }
@@ -12,7 +12,7 @@ function ensureFetch () {
   })
 }
 
-function fetchProxy (...args) {
+function fetchProxy(...args) {
   return ensureFetch()(...args)
 }
 
