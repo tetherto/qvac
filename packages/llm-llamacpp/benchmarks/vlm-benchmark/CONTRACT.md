@@ -1,19 +1,19 @@
-# VLM Benchmark — Contract v2 (A1)
+# VLM Benchmark — Contract v2
 
-The frozen interface between the two parallel workstreams:
+The frozen interface between the two halves of the benchmark:
 
-- **Runner side (Dev A)** — *produces* markers: `harness.cjs`, `models.cjs`, `sources.cjs`,
+- **Runner side** — *produces* markers: `harness.cjs`, `models.cjs`, `sources.cjs`,
   `methodology.cjs`, `run-desktop.cjs`, `build-cli-sources.js`/`cli-*`, `config.cjs`,
   the workflow's `context`/`matrix-desktop`/`matrix-mobile`/`prebuild` jobs.
-- **Report side (Dev B)** — *consumes* markers: `aggregate.js`, `scorers` (B2), `combine.cjs`,
+- **Report side** — *consumes* markers: `aggregate.js`, the scorers, `combine.cjs`,
   `scenarios.cjs`, `fixture*`/`build-fixture.cjs`, `score-check.cjs`, the workflow's
   `inputs:` block and `matrix-combine` job.
 
 **Change rule:** the runner may *add* marker fields, never rename/remove; the report must
 *ignore* unknown fields and unknown `[VLM*]` marker kinds. Any change to THIS file after the
-freeze requires a sync between both devs. `markers-v2.sample.txt` is the executable
-half of this contract — Dev B builds report views against it; `node run-desktop.cjs
---selfcheck` validates it (and the config wiring) without running any model.
+freeze requires keeping both sides in sync. `markers-v2.sample.txt` is the executable half
+of this contract — report views build against it; `node run-desktop.cjs --selfcheck`
+validates it (and the config wiring) without running any model.
 
 ## 1 · Marker schema v2 (additive over v1)
 
@@ -28,7 +28,7 @@ half of this contract — Dev B builds report views against it; `node run-deskto
 | `source_id` | which build produced the row: `addon`, `addon@candidate`, `addon@baseline`, `fabric@<ref>`, `upstream@<ref>` |
 | `source_ref` | resolved version: `npm:<ver>` \| `git:<sha>` \| tag |
 | `block` | measurement round: `0` = warmup (excluded from stats), `1..N` = measured; report takes the **median** across blocks |
-| `rss_mb` | peak process memory so far (MB); `null` where unavailable (phones until A4 lands beyond Linux) |
+| `rss_mb` | peak process memory so far (MB); populated on desktop and mobile (Android + iOS), `null` only where the platform doesn't expose it |
 
 `[VLMSEG]`/`[VLMMETA]` gain `v`, `scenario`, `source_id`, `source_ref` (SEG also `block`).
 New optional `[VLMBLOCK]{json}` — one per measurement round: `{scenario, source_id,
@@ -59,7 +59,7 @@ Registry-type sources: `json:` form only, desktop-only (no registry client in th
 Presigned S3 URLs work for a one-off dispatch but expire — don't commit them to the catalog.
 
 **`matrix_sources`** — comma-separated builds-under-comparison: `addon` (published, default) ·
-`addon@candidate` / `addon@baseline` *(reserved — wired by A2)* · `fabric@<ref>` ·
+`addon@candidate` / `addon@baseline` *(build comparison)* · `fabric@<ref>` ·
 `upstream@<ref>` (CLI sources are desktop-only — Linux/macOS/Windows — several-sources mode).
 
 **Scenario** — task-set name from `scenarios.cjs` (`config.defaultScenario`, single `default`

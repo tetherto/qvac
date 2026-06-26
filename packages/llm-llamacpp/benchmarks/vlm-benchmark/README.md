@@ -30,7 +30,7 @@ gh workflow run benchmark-vlm-model-comparison.yml \
   -f matrix_preset=full \                     # smoke | cognitive | ocr1page | ocr5pages | full
   -f matrix_models=qwen3.5-f16,qwen3.5-q8 \   # catalog names | [label=]<llm-url>|<mmproj-url>[@ctx=N] | json:[…]
   -f matrix_sources=addon \                   # addon | addon@candidate | addon@baseline | fabric[@ref] | upstream[@ref]
-  -f ref=<branch|tag|commit-sha> \            # addon built as addon@candidate (A2); default = the --ref branch
+  -f ref=<branch|tag|commit-sha> \            # addon built as addon@candidate; default = the --ref branch
   -f matrix_desktop=linux-cpu,linux-gpu \     # any subset of {linux,macos,macmini,windows}-{cpu,gpu}
   -f matrix_mobile=s26,iphone17pro \          # any subset of {s26,s25,pixel9,iphone16,iphone17,iphone17pro}[-{cpu,gpu}]
   -f matrix_samples=5 \                       # override samples/task (empty = preset default)
@@ -60,7 +60,7 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 | Feature | Desktop | Mobile | Argument / values | Notes & restrictions |
 |---|---|---|---|---|
 | **two-models** | ✅ | ✅ | `-f matrix_mode=two-models` | `MODEL_1` vs `MODEL_2` (config). Can be two variants of one model (default: same LLM, mmproj F16 vs Q8) or two different models. |
-| **several-sources — build (A2)** | ✅ | ✅ | `-f matrix_mode=several-sources -f matrix_sources=addon@candidate,addon@baseline` | Candidate vs published, **same model**. Mobile runs each build as its own Device-Farm session. ⚠️ the candidate mobile leg can be flaky (see §6). |
+| **several-sources — build** | ✅ | ✅ | `-f matrix_mode=several-sources -f matrix_sources=addon@candidate,addon@baseline` | Candidate vs published, **same model**. Mobile runs each build as its own Device-Farm session. ⚠️ the candidate mobile leg can be flaky (see §6). |
 | **several-sources — engine** | ✅ | ❌ | `… -f matrix_sources=addon,fabric,upstream` | addon vs native llama.cpp CLIs. **Desktop only** — CLIs are native binaries; mobile runs an addon app. |
 | `addon` source | ✅ | ✅ | `-f matrix_sources=addon` | The published npm prebuild. |
 | `addon@candidate` | ✅ | ✅ | `…@candidate` + `-f ref=<branch\|tag\|sha>` | Built from `ref` (triggers `prebuild-candidate`). Desktop swaps the prebuild; mobile bundles it. |
@@ -156,9 +156,9 @@ gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> \
   -f matrix_models="qwen3.5-q8,challenger=https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/NewVLM-Q4_K_M.gguf|https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/mmproj-F16.gguf" \
   -f matrix_desktop=linux-cpu,linux-gpu,macos-gpu -f matrix_mobile=s25-cpu,iphone17pro
 
-# candidate-vs-baseline (A2): validate an UNMERGED change vs the published build
+# candidate-vs-baseline: validate an UNMERGED change vs the published build
 gh workflow run benchmark-vlm-model-comparison.yml \
-  --ref qvac-19371-vlm-benchmark-improve \            # branch hosting the A2 workflow
+  --ref qvac-19371-vlm-benchmark-improve \            # branch hosting the benchmark workflow
   -f run_matrix=true -f matrix_mode=several-sources \
   -f matrix_sources=addon@candidate,addon@baseline \
   -f ref=<branch|tag|commit-sha> \                    # built as addon@candidate
@@ -192,8 +192,8 @@ latency — especially on mobile. Three layers keep numbers steady-state:
    **dropped from every statistic** (override `QVAC_VLM_WARMUP_REPEATS`, `0` disables).
 2. **Thermal guard** — `methodology.cjs` `stabilityGuard()` waits for a steady thermal
    state (calibrated CPU micro-probe), bounded by a hard `maxWaitMs`. **Mobile-only by
-   default** (~6 s cap); desktop runs it `off` (fresh CI VMs don't throttle, and an
-   unbounded probe once burned ~56 min). Emits a `[VLMBLOCK]` marker.
+   default** (~6 s cap); desktop runs it `off` (fresh CI VMs don't throttle, and the probe
+   doesn't reliably stabilise on a contended runner). Emits a `[VLMBLOCK]` marker.
 3. **First-encode drop + repeats** — the vision-encode metric drops the first segment per
    cell (shader-compile spike); measured passes repeat (`repeats`, mean reported).
 
@@ -214,10 +214,10 @@ Tuning lives in `config.cjs` `methodology`.
   iOS console carry llama.cpp's native stderr; the report shows `—` and uses **TTFT**.
 - **CLI-source Peak RSS shows `—`** — the CLIs are separate subprocesses; the in-process
   `getrusage` sampler measures the addon (and mobile addon), not a spawned CLI.
-- **A2 candidate leg on mobile can be flaky.** Desktop A2 + mobile `addon@baseline` are
-  solid; the mobile `addon@candidate` leg has timed out at the Device-Farm monitor under
-  the candidate's longer pipeline + two concurrent sessions. Re-run, or pin a higher
-  `mobile_timeout_min`.
+- **Candidate-vs-baseline on mobile can be flaky.** The desktop comparison and the mobile
+  `addon@baseline` leg are solid; the mobile `addon@candidate` leg has timed out at the
+  Device-Farm monitor under the candidate's longer pipeline (a fresh prebuild build) plus
+  two concurrent device sessions. Re-run, or pin a higher `mobile_timeout_min`.
 - **`ocr5pages` / `full` are heavy on mobile** — the high-MP OCR docs can overrun the
   Device-Farm session; raise `mobile_timeout_min` or prefer `smoke`/`cognitive`/`ocr1page`.
 - **addon vs CLI prompt parity** — the addon API sends the image as its own `user` turn
