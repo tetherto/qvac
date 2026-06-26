@@ -2,10 +2,9 @@ import {
   downloadAsset,
   loadModel,
   unloadModel,
-  getModelInfo,
   suspend,
   resume,
-  modelRegistryList,
+  WHISPER_TINY,
 } from "@qvac/sdk";
 import { BaseExecutor, type TestResult } from "@tetherto/qvac-test-suite/mobile";
 import {
@@ -32,15 +31,6 @@ const REGISTRY_RESUME_TIMEOUT_MS = 120_000;
 // forces a retry → reconnect (the fix path), not just a natural resume.
 const REGISTRY_SUSPEND_MS = 20_000;
 const SUSPEND_BACKGROUND_MS = 750;
-
-// Same in-flight band as the desktop test: large enough to stay mid-download
-// when we suspend, small enough to keep the test fast.
-const REGISTRY_MIN_BYTES = 8 * 1024 * 1024;
-const REGISTRY_MAX_BYTES = 200 * 1024 * 1024;
-
-// Engines that load with only a modelType, so the registry test can seed-load
-// then unload({clearStorage}) to force a cold download without companion config.
-const SAFE_ENGINES = new Set(["llamacpp-embedding", "llamacpp-completion"]);
 
 let nonceCounter = 0;
 function uniquePath(route: "netdrop" | "suspend"): string {
@@ -87,42 +77,19 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
 
   /** registry:// download must survive suspend/resume and finish from the partial. */
   async registrySuspend(): Promise<TestResult> {
-    const models = await modelRegistryList();
-    if (!models.length) {
-      return { passed: false, output: "registry list returned no models" };
-    }
-    const chosen = models
-      .filter(
-        (m) =>
-          !!m.engine &&
-          SAFE_ENGINES.has(m.engine) &&
-          m.expectedSize >= REGISTRY_MIN_BYTES &&
-          m.expectedSize <= REGISTRY_MAX_BYTES,
-      )
-      .sort((a, b) => a.expectedSize - b.expectedSize)[0];
-    if (!chosen) {
-      return {
-        passed: false,
-        output: `no loadable registry model in [${REGISTRY_MIN_BYTES}, ${REGISTRY_MAX_BYTES}] bytes to exercise mid-download`,
-      };
-    }
-    const assetSrc = `registry://${chosen.registrySource}/${chosen.registryPath}`;
+    // A known standalone (non-sharded) registry model — small enough to stay
+    // fast, large enough to produce in-flight progress. A sharded model would
+    // break the clearStorage eviction below.
+    const assetSrc = WHISPER_TINY.src;
 
-    // Force a cold cache so the transfer is genuinely in-flight at suspend().
-    // No fs access on-device, but unloadModel({clearStorage}) deletes the cached
-    // file; seed-load only when already cached to avoid a needless extra download.
+    // Force a cold cache so the transfer is genuinely in-flight at suspend():
+    // load it (downloads if needed) then unload with clearStorage to delete the
+    // file. There's no asset-level cache-evict API and no fs access on-device.
     try {
-      const info = await getModelInfo({ name: chosen.name });
-      if (info?.isCached) {
-        // engine is one of SAFE_ENGINES (both llamacpp); cast picks that overload.
-        const seedId = await loadModel({
-          modelSrc: assetSrc,
-          modelType: chosen.engine as "llamacpp-embedding",
-        });
-        await unloadModel({ modelId: seedId, clearStorage: true });
-      }
+      const seedId = await loadModel({ modelSrc: WHISPER_TINY });
+      await unloadModel({ modelId: seedId, clearStorage: true });
     } catch {
-      /* best effort — fall through and attempt the download regardless */
+      /* best effort — proceed; the no-progress check below catches a warm cache */
     }
 
     let firstMidProgress = false;
@@ -149,19 +116,19 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
 
     try {
       const assetId = await withTimeout(
-        `registry download (${chosen.name})`,
+        "registry download (WHISPER_TINY)",
         op,
         REGISTRY_RESUME_TIMEOUT_MS,
       );
       if (!firstMidProgress) {
         return {
           passed: false,
-          output: `could not exercise mid-download — "${chosen.name}" produced no in-flight progress after a forced cold cache`,
+          output: "could not exercise mid-download — WHISPER_TINY produced no in-flight progress after a forced cold cache",
         };
       }
       return {
         passed: true,
-        output: `registry download "${chosen.name}" survived suspend/resume: ${assetId} (maxPct=${maxPct.toFixed(1)})`,
+        output: `registry download WHISPER_TINY survived suspend/resume: ${assetId} (maxPct=${maxPct.toFixed(1)})`,
       };
     } catch (err) {
       return {
