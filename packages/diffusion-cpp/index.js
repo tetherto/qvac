@@ -146,6 +146,10 @@ class ImgStableDiffusion {
       vaePath: this._files.vae || '',
       clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
+      // LTX-2 (LTXAV) extras: never set for image models, but the native
+      // createInstance reads both keys unconditionally, so pass empty strings.
+      audioVaePath: '',
+      embeddingsConnectorsPath: '',
       config: this._config
     }
 
