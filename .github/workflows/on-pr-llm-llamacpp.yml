@@ -84,21 +84,54 @@ jobs:
             done
             exit 0
           fi
+          # First pass: detect which labels are present (order-independent).
+          HAS_VERIFIED=false
+          HAS_PREBUILDS=false
+          HAS_CPP=false
+          HAS_DESKTOP=false
+          HAS_MOBILE=false
+          if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
+            for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
+              case "$label" in
+                verified)                 HAS_VERIFIED=true ;;
+                prebuilds)                HAS_PREBUILDS=true ;;
+                run-cpp-addon-tests)      HAS_CPP=true ;;
+                run-desktop-addon-tests)  HAS_DESKTOP=true ;;
+                run-mobile-addon-tests)   HAS_MOBILE=true ;;
+              esac
+            done
+          fi
+
           VERIFIED=false
           PREBUILDS=false
           CPP_TESTS=false
           DESKTOP=false
           MOBILE=false
-          if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
-            for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
-              case "$label" in
-                prebuilds)                PREBUILDS=true ;;
-                run-cpp-addon-tests)      CPP_TESTS=true; PREBUILDS=true ;;
-                run-desktop-addon-tests)  DESKTOP=true; PREBUILDS=true ;;
-                run-mobile-addon-tests)   MOBILE=true; PREBUILDS=true ;;
-                verified)                 VERIFIED=true; PREBUILDS=true; CPP_TESTS=true; DESKTOP=true; MOBILE=true ;;
-              esac
-            done
+
+          # `verified` is the trust gate. Per review, prebuilds / cpp-tests /
+          # desktop / mobile ALL require `verified` as well — a granular label
+          # on its own (without the trust gate) must never trigger expensive or
+          # secret-exposing jobs. So every stage below is computed inside this
+          # block; without `verified` nothing but the (empty) baseline runs.
+          if [ "$HAS_VERIFIED" = "true" ]; then
+            VERIFIED=true
+            if [ "$HAS_PREBUILDS" = "true" ] || [ "$HAS_CPP" = "true" ] || \
+               [ "$HAS_DESKTOP" = "true" ] || [ "$HAS_MOBILE" = "true" ]; then
+              # Selective mode: run only the explicitly requested stages.
+              # cpp-tests builds the addon itself (different flag) so it does
+              # NOT depend on prebuilds. desktop + mobile DO need prebuilds.
+              [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
+              [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
+              [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
+              [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
+            else
+              # Backward compat: `verified` alone still runs the full pipeline
+              # (kept temporarily so the rollout does not block other teams).
+              PREBUILDS=true
+              CPP_TESTS=true
+              DESKTOP=true
+              MOBILE=true
+            fi
           fi
           echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
           echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
