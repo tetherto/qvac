@@ -49,6 +49,8 @@
     "lint": "tsc -p tsconfig.test.json",
     "test": "tsx --test test/*.test.ts",
     "test:unit": "tsx --test test/*.test.ts",
+    "test:e2e": "npm run test:integration",
+    "test:integration": "npm run build && tsx --test test/managed-serve-host.integration.test.ts",
     "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
   },
   "dependencies": {
