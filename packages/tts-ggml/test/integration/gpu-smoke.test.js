@@ -84,9 +84,9 @@ function assertGpuBackend (t, engineTag, stats, allowPolicyCpu = false) {
     return
   }
 
-  // Engines tts-cpp declines on a given vendor (e.g. Chatterbox on Mali,
-  // allow_arm_mali=false) legitimately fall back to CPU and flag it via
-  // stats.gpuUnsupported. That is the correct result there, not a GPU regression.
+  // allowPolicyCpu hatch: an engine tts-cpp declines on a vendor would fall back
+  // to CPU and flag stats.gpuUnsupported. Chatterbox now runs on Mali GPU, so all
+  // callers assert strictly; the hatch stays for any future declined engine.
   if (allowPolicyCpu && dev === 0 && stats.gpuUnsupported) {
     t.pass(`${engineTag}/${platform}: GPU present but declined by policy (gpuUnsupported=1); correctly using CPU`)
     return
@@ -180,7 +180,7 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox/GPU produced audio')
-    assertGpuBackend(t, 'Chatterbox', result.data.stats, /* allowPolicyCpu */ true)
+    assertGpuBackend(t, 'Chatterbox', result.data.stats, /* allowPolicyCpu */ false)
     recordSmoke(t, 'chatterbox gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
@@ -235,7 +235,7 @@ test('Chatterbox MTL GPU smoke - multilingual model on GPU with the default (f16
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox MTL/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox MTL/GPU produced audio')
-    assertGpuBackend(t, 'Chatterbox MTL', result.data.stats, /* allowPolicyCpu */ true)
+    assertGpuBackend(t, 'Chatterbox MTL', result.data.stats, /* allowPolicyCpu */ false)
     recordSmoke(t, 'chatterbox-mtl gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
