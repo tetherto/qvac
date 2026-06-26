@@ -70,11 +70,11 @@ qvac doctor [options]
 
 **Options:**
 
-| Flag | Description |
-|------|-------------|
-| `--json` | Output the report as JSON. |
-| `-q, --quiet` | Suppress stdout — only set the exit code. |
-| `-v, --verbose` | Detailed output. |
+| Flag            | Description                               |
+| --------------- | ----------------------------------------- |
+| `--json`        | Output the report as JSON.                |
+| `-q, --quiet`   | Suppress stdout — only set the exit code. |
+| `-v, --verbose` | Detailed output.                          |
 
 **What it checks:**
 
@@ -126,13 +126,13 @@ qvac bundle sdk [options]
 
 **Options:**
 
-| Flag | Description |
-|------|-------------|
+| Flag                  | Description                                             |
+| --------------------- | ------------------------------------------------------- |
 | `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `--host <target>` | Target host (repeatable, default: all platforms) |
-| `--defer <module>` | Defer a module (repeatable, for mobile targets) |
-| `--quiet, -q` | Minimal output |
-| `--verbose, -v` | Detailed output |
+| `--host <target>`     | Target host (repeatable, default: all platforms)        |
+| `--defer <module>`    | Defer a module (repeatable, for mobile targets)         |
+| `--quiet, -q`         | Minimal output                                          |
+| `--verbose, -v`       | Detailed output                                         |
 
 **Examples:**
 
@@ -152,11 +152,11 @@ qvac bundle sdk --verbose
 
 **Output:**
 
-| File | Description |
-|------|-------------|
-| `qvac/worker.entry.mjs` | Standalone/Electron worker with RPC + lifecycle |
-| `qvac/worker.bundle.js` | Final bundle for mobile runtimes (Expo/BareKit) |
-| `qvac/addons.manifest.json` | Native addon allowlist for tree-shaking |
+| File                        | Description                                     |
+| --------------------------- | ----------------------------------------------- |
+| `qvac/worker.entry.mjs`     | Standalone/Electron worker with RPC + lifecycle |
+| `qvac/worker.bundle.js`     | Final bundle for mobile runtimes (Expo/BareKit) |
+| `qvac/addons.manifest.json` | Native addon allowlist for tree-shaking         |
 
 > **Note:** Your project must have `@qvac/sdk` installed.
 
@@ -173,12 +173,12 @@ Both `--base` and `--head` are required.
 
 **Options:**
 
-| Flag | Description |
-|------|-------------|
-| `--base <ref>` | Base git ref or SHA. |
-| `--head <ref>` | Head git ref or SHA. |
+| Flag                | Description                                                     |
+| ------------------- | --------------------------------------------------------------- |
+| `--base <ref>`      | Base git ref or SHA.                                            |
+| `--head <ref>`      | Head git ref or SHA.                                            |
 | `--lockfile <path>` | Path to npm `package-lock.json` (default: `package-lock.json`). |
-| `--quiet, -q` | Suppress output when there are no native changes. |
+| `--quiet, -q`       | Suppress output when there are no native changes.               |
 
 **Examples:**
 
@@ -195,11 +195,11 @@ qvac verify deps --base upstream/main --head HEAD --lockfile packages/sdk/packag
 
 **Exit codes:**
 
-| Exit | Meaning |
-|------|---------|
-| `0` | No native addon changes, or no npm lockfile exists at either ref. |
-| `1` | Native addon additions or removals were detected, or a removed package's native status could not be determined. Reviewers should confirm the change is intentional. |
-| `2` | Tool error (missing required args, unsupported lockfile, git ref could not be resolved, lockfile read or parse failure, etc.). The check did not complete and no judgment about native dependency changes can be made. |
+| Exit | Meaning                                                                                                                                                                                                                |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | No native addon changes, or no npm lockfile exists at either ref.                                                                                                                                                      |
+| `1`  | Native addon additions or removals were detected, or a removed package's native status could not be determined. Reviewers should confirm the change is intentional.                                                    |
+| `2`  | Tool error (missing required args, unsupported lockfile, git ref could not be resolved, lockfile read or parse failure, etc.). The check did not complete and no judgment about native dependency changes can be made. |
 
 CI guardrails should treat `1` and `2` differently: `1` means "real native change to confirm", `2` means "infrastructure/usage problem to fix".
 
@@ -228,15 +228,15 @@ as `node_modules` trees.
 
 **Options:**
 
-| Flag | Description |
-|------|-------------|
-| `--addons-source <path>` | Required. Path to a `worker.bundle.js` or a `node_modules` directory. |
-| `--host <target>` | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`. |
+| Flag                              | Description                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--addons-source <path>`          | Required. Path to a `worker.bundle.js` or a `node_modules` directory.                                                                                                                                                                                                                                                                      |
+| `--host <target>`                 | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`.                                                                                                                                                                      |
 | `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks. **Recommended for mobile / Expo CI**, where the BareKit-embedded runtime version is not currently exposed by `react-native-bare-kit` package metadata and auto-detection is unreliable. Also useful for Electron packaging where runtime inference is ambiguous. |
-| `--config, -c <path>` | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present. |
-| `--project-root <path>` | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd). |
-| `--json` | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling. |
-| `--quiet, -q` | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set. |
+| `--config, -c <path>`             | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present.                                                                                                                                                                                 |
+| `--project-root <path>`           | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd).                                                                                                                                                                                                                            |
+| `--json`                          | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                                                                                                                                                                                      |
+| `--quiet, -q`                     | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                                                                                                                                                                                      |
 
 **Examples:**
 
@@ -276,24 +276,24 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 
 **Exit codes:**
 
-| Exit | Meaning |
-|------|---------|
-| `0` | No error-level issues. All required prebuilds are present, and every ABI check that *ran* passed. Warnings may indicate skipped checks or surfaced metadata problems: `unknown-runtime-version`, `malformed-engines-bare`, `invalid-package-json`, `empty-bundle-resolutions`, or `config-load-failed`. |
-| `1` | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `invalid-runtime-version` (malformed `--bare-runtime-version` or config `bareRuntimeVersion`), or `invalid-source`. Prebuild checks always run regardless of runtime parse failures, so a typo in `--bare-runtime-version` cannot hide a real `missing-prebuild`. |
+| Exit | Meaning                                                                                                                                                                                                                                                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | No error-level issues. All required prebuilds are present, and every ABI check that _ran_ passed. Warnings may indicate skipped checks or surfaced metadata problems: `unknown-runtime-version`, `malformed-engines-bare`, `invalid-package-json`, `empty-bundle-resolutions`, or `config-load-failed`.                               |
+| `1`  | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `invalid-runtime-version` (malformed `--bare-runtime-version` or config `bareRuntimeVersion`), or `invalid-source`. Prebuild checks always run regardless of runtime parse failures, so a typo in `--bare-runtime-version` cannot hide a real `missing-prebuild`. |
 
 **Issue codes:**
 
-| Code | Level | Meaning |
-|------|-------|---------|
-| `missing-prebuild` | error | The addon's `<packageRoot>/prebuilds/<host>/*.bare` directory is missing or empty. |
-| `abi-mismatch` | error | The addon's declared `engines.bare` range does not include the resolved runtime version. |
-| `unknown-runtime-version` | warning | At least one addon declares `engines.bare`, but no Bare runtime version could be auto-detected. Pass `--bare-runtime-version` to enable strict ABI verification. |
-| `invalid-runtime-version` | error | The value passed via `--bare-runtime-version` or via the config `bareRuntimeVersion` field is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification. ABI resolution is skipped, but prebuild checks still run. |
-| `malformed-engines-bare` | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer. |
-| `invalid-package-json` | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified. |
-| `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption. |
-| `config-load-failed` | warning | An auto-detected `qvac.config.*` exists but failed to load (syntax error, throwing import, etc.). The project-pinned `bareRuntimeVersion` is being ignored. Fix the config or pass `--config` explicitly to escalate to an error. |
-| `invalid-source` | error | `--addons-source` does not point to a readable bundle or directory, `--host` was empty, or an explicit `--config` path could not be loaded. |
+| Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `missing-prebuild`         | error   | The addon's `<packageRoot>/prebuilds/<host>/*.bare` directory is missing or empty.                                                                                                                                                                                                                                                      |
+| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the resolved runtime version.                                                                                                                                                                                                                                                |
+| `unknown-runtime-version`  | warning | At least one addon declares `engines.bare`, but no Bare runtime version could be auto-detected. Pass `--bare-runtime-version` to enable strict ABI verification.                                                                                                                                                                        |
+| `invalid-runtime-version`  | error   | The value passed via `--bare-runtime-version` or via the config `bareRuntimeVersion` field is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification. ABI resolution is skipped, but prebuild checks still run. |
+| `malformed-engines-bare`   | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer.                                                                                                                                        |
+| `invalid-package-json`     | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified.                                                                                                                              |
+| `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption.                                                                                                                                      |
+| `config-load-failed`       | warning | An auto-detected `qvac.config.*` exists but failed to load (syntax error, throwing import, etc.). The project-pinned `bareRuntimeVersion` is being ignored. Fix the config or pass `--config` explicitly to escalate to an error.                                                                                                       |
+| `invalid-source`           | error   | `--addons-source` does not point to a readable bundle or directory, `--host` was empty, or an explicit `--config` path could not be loaded.                                                                                                                                                                                             |
 
 **Bare runtime detection:**
 
@@ -336,9 +336,9 @@ If no config file is found, the CLI bundles all built-in plugins.
 
 This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads this **bundler-only** key (ignored by the SDK at runtime):
 
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `plugins` | `string[]` | No | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins) |
+| Key       | Type       | Required | Description                                                                      |
+| --------- | ---------- | -------- | -------------------------------------------------------------------------------- |
+| `plugins` | `string[]` | No       | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins) |
 
 > **Custom plugin contract:** custom `*/plugin` modules must **default-export** the plugin object.
 
@@ -360,9 +360,7 @@ This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads 
 ```json
 // qvac.config.json - LLM only
 {
-  "plugins": [
-    "@qvac/sdk/llamacpp-completion/plugin"
-  ]
+  "plugins": ["@qvac/sdk/llamacpp-completion/plugin"]
 }
 ```
 

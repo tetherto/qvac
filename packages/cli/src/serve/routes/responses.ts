@@ -10,19 +10,25 @@ import {
   responsesBody,
   responsesIdParams,
   responsesListInputItemsQuery,
-  RESPONSES_UNSUPPORTED_PARAMS
-} from '../schemas/responses.js'
-import { InvalidResponseFormatError, type GenerationParams, type ResponseFormat } from '../schemas/common.js'
-import {
+  RESPONSES_UNSUPPORTED_PARAMS,
   historyPrefixFromStoredResponse,
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
   toSdkResponsesArgs,
   UnsupportedToolTypeError
 } from '../schemas/responses.js'
+import {
+  InvalidResponseFormatError,
+  type GenerationParams,
+  type ResponseFormat
+} from '../schemas/common.js'
 import { responseId as allocResponseId } from '../adapters/openai/responses-shape.js'
 import { RESPONSES_VOLATILE_STUB } from '../adapters/openai/responses-store.js'
-import { writeBlockingResponse, writeStreamingResponse, type ResponsesHandlerParams } from '../adapters/openai/response-writers.js'
+import {
+  writeBlockingResponse,
+  writeStreamingResponse,
+  type ResponsesHandlerParams
+} from '../adapters/openai/response-writers.js'
 
 const VOLATILE_HEADER = 'X-QVAC-Stub'
 
@@ -71,9 +77,12 @@ addressable via GET / DELETE / input_items.
 (\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
 and terminates **without** a \`[DONE]\` sentinel (per the spec).
 `.trim(),
-  getById: 'Fetch a previously-created response. **In-memory only** — 404 once expired or after a restart. Reply carries `X-QVAC-Stub: responses-volatile`.',
-  deleteById: 'Remove a stored response from memory. Subsequent chains via `previous_response_id` that referenced this one will return `404 previous_response_not_found`.',
-  listInputItems: 'Paginate over a stored response\'s normalized input items (the request that produced it). `limit` and `after` work as on the OpenAI cursor-paginated endpoints.'
+  getById:
+    'Fetch a previously-created response. **In-memory only** — 404 once expired or after a restart. Reply carries `X-QVAC-Stub: responses-volatile`.',
+  deleteById:
+    'Remove a stored response from memory. Subsequent chains via `previous_response_id` that referenced this one will return `404 previous_response_not_found`.',
+  listInputItems:
+    "Paginate over a stored response's normalized input items (the request that produced it). `limit` and `after` work as on the OpenAI cursor-paginated endpoints."
 }
 
 // Tag every fastify-managed reply for these routes with the volatile-store
@@ -82,176 +91,237 @@ and terminates **without** a \`[DONE]\` sentinel (per the spec).
 // by accident. Hijacked replies (POST streaming via initSSE, POST blocking
 // via writeBlockingResponse) bypass fastify and inject the header themselves
 // when writing raw response headers.
-async function markVolatile (_req: FastifyRequest, reply: FastifyReply): Promise<void> {
+// lunte-disable-next-line require-await
+async function markVolatile(_req: FastifyRequest, reply: FastifyReply): Promise<void> {
   reply.header(VOLATILE_HEADER, RESPONSES_VOLATILE_STUB)
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
-  app.post('/v1/responses', {
-    schema: {
-      body: responsesBody,
-      tags: ['Responses'],
-      summary: 'Create a model response',
-      description: descriptions.create
+  app.post(
+    '/v1/responses',
+    {
+      schema: {
+        body: responsesBody,
+        tags: ['Responses'],
+        summary: 'Create a model response',
+        description: descriptions.create
+      },
+      config: { unsupportedParams: [...RESPONSES_UNSUPPORTED_PARAMS], sseSentinel: false },
+      onRequest: markVolatile,
+      preHandler: [requireModel('chat'), logUnsupported]
     },
-    config: { unsupportedParams: [...RESPONSES_UNSUPPORTED_PARAMS], sseSentinel: false },
-    onRequest: markVolatile,
-    preHandler: [requireModel('chat'), logUnsupported]
-  }, async (req, reply) => {
-    const ctx = app.qvac
+    async (req, reply) => {
+      const ctx = app.qvac
 
-    let sdk
-    try {
-      sdk = toSdkResponsesArgs(req.body)
-    } catch (err) {
-      if (err instanceof InvalidResponsesConversationError) throw new HttpError(400, 'conversation_not_supported', err.message)
-      if (err instanceof InvalidResponsesBackgroundError) throw new HttpError(400, 'background_not_supported', err.message)
-      if (err instanceof UnsupportedToolTypeError) throw new HttpError(400, 'invalid_tool_type', err.message)
-      if (err instanceof InvalidResponseFormatError) throw new HttpError(400, 'invalid_response_format', err.message)
-      throw err
-    }
-
-    if (sdk.responseFormat && sdk.responseFormat.type !== 'text' && sdk.tools && sdk.tools.length > 0) {
-      throw new HttpError(
-        400,
-        'invalid_response_format',
-        'Structured output (json_object/json_schema) cannot be combined with "tools".'
-      )
-    }
-
-    let history = sdk.history
-    if (sdk.previousResponseId) {
-      const prev = ctx.responsesStore.get(sdk.previousResponseId)
-      if (!prev) {
-        throw new HttpError(404, 'previous_response_not_found', `No response found for previous_response_id "${sdk.previousResponseId}".`)
+      let sdk
+      try {
+        sdk = toSdkResponsesArgs(req.body)
+      } catch (err) {
+        if (err instanceof InvalidResponsesConversationError) {
+          throw new HttpError(400, 'conversation_not_supported', err.message)
+        }
+        if (err instanceof InvalidResponsesBackgroundError) {
+          throw new HttpError(400, 'background_not_supported', err.message)
+        }
+        if (err instanceof UnsupportedToolTypeError) {
+          throw new HttpError(400, 'invalid_tool_type', err.message)
+        }
+        if (err instanceof InvalidResponseFormatError) {
+          throw new HttpError(400, 'invalid_response_format', err.message)
+        }
+        throw err
       }
-      const prefix = historyPrefixFromStoredResponse(prev, (id) => ctx.responsesStore.get(id))
-      history = [...prefix, ...history]
-    }
 
-    const params: HandlerParams = {
-      sdkModelId: req.qvacModel!.sdkModelId,
-      modelAlias: req.qvacModel!.alias,
-      history,
-      tools: sdk.tools,
-      generationParams: sdk.generationParams,
-      responseFormat: sdk.responseFormat,
-      rid: allocResponseId(),
-      createdAtSec: Math.floor(Date.now() / 1000),
-      storeEnabled: sdk.storeEnabled,
-      inputItems: sdk.inputItems,
-      metadata: sdk.metadata,
-      temperature: sdk.temperature,
-      topP: sdk.topP,
-      maxOutputTokens: sdk.maxOutputTokens,
-      parallelToolCalls: sdk.parallelToolCalls,
-      previousResponseId: sdk.previousResponseId ?? null
-    }
-    const streaming = sdk.stream
+      if (
+        sdk.responseFormat &&
+        sdk.responseFormat.type !== 'text' &&
+        sdk.tools &&
+        sdk.tools.length > 0
+      ) {
+        throw new HttpError(
+          400,
+          'invalid_response_format',
+          'Structured output (json_object/json_schema) cannot be combined with "tools".'
+        )
+      }
 
-    ctx.logger.info(
-      `  responses model=${params.modelAlias} stream=${streaming}` +
-      `${params.tools ? ` tools=${params.tools.length}` : ''}` +
-      `${params.generationParams ? ` genParams=${JSON.stringify(params.generationParams)}` : ''}` +
-      `${params.responseFormat ? ` responseFormat=${params.responseFormat.type}` : ''}` +
-      `${params.previousResponseId ? ` prev=${params.previousResponseId}` : ''}`
-    )
+      let history = sdk.history
+      if (sdk.previousResponseId) {
+        const prev = ctx.responsesStore.get(sdk.previousResponseId)
+        if (!prev) {
+          throw new HttpError(
+            404,
+            'previous_response_not_found',
+            `No response found for previous_response_id "${sdk.previousResponseId}".`
+          )
+        }
+        const prefix = historyPrefixFromStoredResponse(prev, (id) => ctx.responsesStore.get(id))
+        history = [...prefix, ...history]
+      }
 
-    const writerParams: ResponsesHandlerParams = {
-      ctx: { logger: ctx.logger, responsesStore: ctx.responsesStore },
-      sdkModelId: params.sdkModelId,
-      history: params.history,
-      ...(params.tools !== undefined ? { tools: params.tools } : {}),
-      ...(params.generationParams !== undefined ? { generationParams: params.generationParams } : {}),
-      ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {}),
-      modelAlias: params.modelAlias,
-      rid: params.rid,
-      createdAtSec: params.createdAtSec,
-      storeEnabled: params.storeEnabled,
-      inputItems: params.inputItems,
-      metadata: params.metadata,
-      temperature: params.temperature,
-      topP: params.topP,
-      maxOutputTokens: params.maxOutputTokens,
-      parallelToolCalls: params.parallelToolCalls,
-      previousResponseId: params.previousResponseId
-    }
+      const params: HandlerParams = {
+        sdkModelId: req.qvacModel!.sdkModelId,
+        modelAlias: req.qvacModel!.alias,
+        history,
+        tools: sdk.tools,
+        generationParams: sdk.generationParams,
+        responseFormat: sdk.responseFormat,
+        rid: allocResponseId(),
+        createdAtSec: Math.floor(Date.now() / 1000),
+        storeEnabled: sdk.storeEnabled,
+        inputItems: sdk.inputItems,
+        metadata: sdk.metadata,
+        temperature: sdk.temperature,
+        topP: sdk.topP,
+        maxOutputTokens: sdk.maxOutputTokens,
+        parallelToolCalls: sdk.parallelToolCalls,
+        previousResponseId: sdk.previousResponseId ?? null
+      }
+      const streaming = sdk.stream
 
-    if (streaming) {
-      const result = completion({
-        modelId: params.sdkModelId,
+      ctx.logger.info(
+        `  responses model=${params.modelAlias} stream=${streaming}` +
+          `${params.tools ? ` tools=${params.tools.length}` : ''}` +
+          `${params.generationParams ? ` genParams=${JSON.stringify(params.generationParams)}` : ''}` +
+          `${params.responseFormat ? ` responseFormat=${params.responseFormat.type}` : ''}` +
+          `${params.previousResponseId ? ` prev=${params.previousResponseId}` : ''}`
+      )
+
+      const writerParams: ResponsesHandlerParams = {
+        ctx: { logger: ctx.logger, responsesStore: ctx.responsesStore },
+        sdkModelId: params.sdkModelId,
         history: params.history,
-        stream: true,
         ...(params.tools !== undefined ? { tools: params.tools } : {}),
-        ...(params.generationParams !== undefined ? { generationParams: params.generationParams } : {}),
-        ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
-      })
-      req.bindCancel(result.requestId)
-      initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
-      await writeStreamingResponse(reply.raw, writerParams, result)
-    } else {
-      const result = completion({
-        modelId: params.sdkModelId,
-        history: params.history,
-        stream: false,
-        ...(params.tools !== undefined ? { tools: params.tools } : {}),
-        ...(params.generationParams !== undefined ? { generationParams: params.generationParams } : {}),
-        ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
-      })
-      req.bindCancel(result.requestId)
-      reply.hijack()
-      await writeBlockingResponse(reply.raw, writerParams, result)
+        ...(params.generationParams !== undefined
+          ? { generationParams: params.generationParams }
+          : {}),
+        ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {}),
+        modelAlias: params.modelAlias,
+        rid: params.rid,
+        createdAtSec: params.createdAtSec,
+        storeEnabled: params.storeEnabled,
+        inputItems: params.inputItems,
+        metadata: params.metadata,
+        temperature: params.temperature,
+        topP: params.topP,
+        maxOutputTokens: params.maxOutputTokens,
+        parallelToolCalls: params.parallelToolCalls,
+        previousResponseId: params.previousResponseId
+      }
+
+      if (streaming) {
+        const result = completion({
+          modelId: params.sdkModelId,
+          history: params.history,
+          stream: true,
+          ...(params.tools !== undefined ? { tools: params.tools } : {}),
+          ...(params.generationParams !== undefined
+            ? { generationParams: params.generationParams }
+            : {}),
+          ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
+        })
+        req.bindCancel(result.requestId)
+        initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
+        await writeStreamingResponse(reply.raw, writerParams, result)
+      } else {
+        const result = completion({
+          modelId: params.sdkModelId,
+          history: params.history,
+          stream: false,
+          ...(params.tools !== undefined ? { tools: params.tools } : {}),
+          ...(params.generationParams !== undefined
+            ? { generationParams: params.generationParams }
+            : {}),
+          ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
+        })
+        req.bindCancel(result.requestId)
+        reply.hijack()
+        await writeBlockingResponse(reply.raw, writerParams, result)
+      }
     }
-  })
+  )
 
-  app.get('/v1/responses/:id', {
-    schema: {
-      params: responsesIdParams,
-      tags: ['Responses'],
-      summary: 'Retrieve a stored response',
-      description: descriptions.getById
+  app.get(
+    '/v1/responses/:id',
+    {
+      schema: {
+        params: responsesIdParams,
+        tags: ['Responses'],
+        summary: 'Retrieve a stored response',
+        description: descriptions.getById
+      },
+      onRequest: markVolatile
     },
-    onRequest: markVolatile
-  }, async (req, reply) => {
-    const rec = app.qvac.responsesStore.get(req.params.id)
-    if (!rec) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
-    reply.send(rec.responseObject)
-  })
-
-  app.delete('/v1/responses/:id', {
-    schema: {
-      params: responsesIdParams,
-      tags: ['Responses'],
-      summary: 'Delete a stored response',
-      description: descriptions.deleteById
-    },
-    onRequest: markVolatile
-  }, async (req) => {
-    const ok = app.qvac.responsesStore.delete(req.params.id)
-    if (!ok) throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
-    return { id: req.params.id, object: 'response.deleted' as const, deleted: true }
-  })
-
-  app.get('/v1/responses/:id/input_items', {
-    schema: {
-      params: responsesIdParams,
-      querystring: responsesListInputItemsQuery,
-      tags: ['Responses'],
-      summary: 'List input items for a stored response',
-      description: descriptions.listInputItems
-    },
-    onRequest: markVolatile
-  }, async (req, reply) => {
-    const opts: { limit?: number; after?: string } = {}
-    if (req.query.limit !== undefined) opts.limit = req.query.limit
-    if (req.query.after !== undefined) opts.after = req.query.after
-    const page = (opts.limit !== undefined || opts.after !== undefined)
-      ? app.qvac.responsesStore.listInputItems(req.params.id, opts)
-      : app.qvac.responsesStore.listInputItems(req.params.id)
-    if (!page) {
-      throw new HttpError(404, 'response_not_found', `Response "${req.params.id}" not found or expired.`)
+    // lunte-disable-next-line require-await
+    async (req, reply) => {
+      const rec = app.qvac.responsesStore.get(req.params.id)
+      if (!rec) {
+        throw new HttpError(
+          404,
+          'response_not_found',
+          `Response "${req.params.id}" not found or expired.`
+        )
+      }
+      reply.send(rec.responseObject)
     }
-    reply.send(page)
-  })
+  )
+
+  app.delete(
+    '/v1/responses/:id',
+    {
+      schema: {
+        params: responsesIdParams,
+        tags: ['Responses'],
+        summary: 'Delete a stored response',
+        description: descriptions.deleteById
+      },
+      onRequest: markVolatile
+    },
+    // lunte-disable-next-line require-await
+    async (req) => {
+      const ok = app.qvac.responsesStore.delete(req.params.id)
+      if (!ok) {
+        throw new HttpError(
+          404,
+          'response_not_found',
+          `Response "${req.params.id}" not found or expired.`
+        )
+      }
+      return { id: req.params.id, object: 'response.deleted' as const, deleted: true }
+    }
+  )
+
+  app.get(
+    '/v1/responses/:id/input_items',
+    {
+      schema: {
+        params: responsesIdParams,
+        querystring: responsesListInputItemsQuery,
+        tags: ['Responses'],
+        summary: 'List input items for a stored response',
+        description: descriptions.listInputItems
+      },
+      onRequest: markVolatile
+    },
+    // lunte-disable-next-line require-await
+    async (req, reply) => {
+      const opts: { limit?: number; after?: string } = {}
+      if (req.query.limit !== undefined) opts.limit = req.query.limit
+      if (req.query.after !== undefined) opts.after = req.query.after
+      const page =
+        opts.limit !== undefined || opts.after !== undefined
+          ? app.qvac.responsesStore.listInputItems(req.params.id, opts)
+          : app.qvac.responsesStore.listInputItems(req.params.id)
+      if (!page) {
+        throw new HttpError(
+          404,
+          'response_not_found',
+          `Response "${req.params.id}" not found or expired.`
+        )
+      }
+      reply.send(page)
+    }
+  )
 }
 export default plugin

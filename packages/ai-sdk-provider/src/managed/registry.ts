@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path'
 //   <fleetKey>.json            the ServeRecord
 //   <fleetKey>.consumers/<pid> one empty marker file per live consumer process
 //   <fleetKey>.lock            transient spawn lock (see client)
-export function managedServesDir (): string {
+export function managedServesDir(): string {
   return join(homedir(), '.qvac', 'managed-serves')
 }
 
@@ -33,22 +33,22 @@ export interface ServeRecord {
   readonly idleTimeoutMs: number
 }
 
-function recordPath (fleetKey: string): string {
+function recordPath(fleetKey: string): string {
   return join(managedServesDir(), `${fleetKey}.json`)
 }
 
-export function consumersDir (fleetKey: string): string {
+export function consumersDir(fleetKey: string): string {
   return join(managedServesDir(), `${fleetKey}.consumers`)
 }
 
-export function lockPath (fleetKey: string): string {
+export function lockPath(fleetKey: string): string {
   return join(managedServesDir(), `${fleetKey}.lock`)
 }
 
 // `kill(pid, 0)` is the portable liveness probe: it sends no signal but throws
 // ESRCH when the process is gone. EPERM means it exists but we can't signal it
 // (still "alive" for our purposes).
-export function isProcessAlive (pid: number): boolean {
+export function isProcessAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false
   try {
     process.kill(pid, 0)
@@ -60,7 +60,7 @@ export function isProcessAlive (pid: number): boolean {
 
 // ── Records ─────────────────────────────────────────────────────────────────
 
-export async function writeRecord (record: ServeRecord): Promise<void> {
+export async function writeRecord(record: ServeRecord): Promise<void> {
   await mkdir(managedServesDir(), { recursive: true })
   const final = recordPath(record.fleetKey)
   const tmp = `${final}.${process.pid}.${Date.now()}.tmp`
@@ -70,7 +70,7 @@ export async function writeRecord (record: ServeRecord): Promise<void> {
   await rename(tmp, final)
 }
 
-function parseRecord (raw: string): ServeRecord | undefined {
+function parseRecord(raw: string): ServeRecord | undefined {
   try {
     const r = JSON.parse(raw) as ServeRecord
     if (typeof r.servePid === 'number' && typeof r.baseURL === 'string') return r
@@ -80,7 +80,7 @@ function parseRecord (raw: string): ServeRecord | undefined {
   return undefined
 }
 
-export async function readRecord (fleetKey: string): Promise<ServeRecord | undefined> {
+export async function readRecord(fleetKey: string): Promise<ServeRecord | undefined> {
   try {
     return parseRecord(await readFile(recordPath(fleetKey), 'utf8'))
   } catch (err) {
@@ -89,7 +89,7 @@ export async function readRecord (fleetKey: string): Promise<ServeRecord | undef
   }
 }
 
-export async function readAllRecords (): Promise<ServeRecord[]> {
+export async function readAllRecords(): Promise<ServeRecord[]> {
   let files: string[]
   try {
     files = await readdir(managedServesDir())
@@ -116,10 +116,7 @@ export async function readAllRecords (): Promise<ServeRecord[]> {
 // crash+respawn so the new runner inherits every still-alive consumer instead of
 // reaping the serve out from under idle sessions. Sync so it also works in the
 // runner's exit-path cleanup, where async fs can't flush.
-export function removeRecord (
-  fleetKey: string,
-  opts?: { preserveConsumers?: boolean }
-): void {
+export function removeRecord(fleetKey: string, opts?: { preserveConsumers?: boolean }): void {
   try {
     unlinkSync(recordPath(fleetKey))
   } catch {
@@ -141,7 +138,7 @@ export function removeRecord (
 // still derive liveness, but be unique per instance so two providers in one
 // process sharing a fleet key don't collide on one marker (closing one would
 // otherwise deregister the whole process while the other is still live).
-export async function addConsumer (fleetKey: string, consumerId: string | number): Promise<void> {
+export async function addConsumer(fleetKey: string, consumerId: string | number): Promise<void> {
   const dir = consumersDir(fleetKey)
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, String(consumerId)), '', 'utf8')
@@ -149,7 +146,7 @@ export async function addConsumer (fleetKey: string, consumerId: string | number
 
 // Sync (and best-effort) so it works in `process.on('exit')` handlers too, where
 // async can't run; removing a marker is a single `unlinkSync` anyway.
-export function removeConsumer (fleetKey: string, consumerId: string | number): void {
+export function removeConsumer(fleetKey: string, consumerId: string | number): void {
   try {
     unlinkSync(join(consumersDir(fleetKey), String(consumerId)))
   } catch {
@@ -160,7 +157,7 @@ export function removeConsumer (fleetKey: string, consumerId: string | number): 
 // Returns the live consumer pids, pruning marker files for dead processes as a
 // side effect so the set never wedges on a crashed consumer. Markers are named
 // `<pid>` or `<pid>.<rand>`; `parseInt` yields the leading pid either way.
-export async function liveConsumers (fleetKey: string): Promise<number[]> {
+export async function liveConsumers(fleetKey: string): Promise<number[]> {
   const dir = consumersDir(fleetKey)
   let files: string[]
   try {
@@ -184,7 +181,7 @@ export async function liveConsumers (fleetKey: string): Promise<number[]> {
 
 // ── Health & discovery ────────────────────────────────────────────────────────
 
-export async function healthCheck (
+export async function healthCheck(
   baseURL: string,
   fetchImpl: typeof fetch,
   timeoutMs = 2_000
@@ -204,7 +201,7 @@ export async function healthCheck (
 // A serve is reusable iff its record exists, both the serve and its runner are
 // alive, and it answers a health check. (Requiring the runner be alive avoids
 // attaching to an orphan that the next sweep would kill.)
-export async function findReusableServe (
+export async function findReusableServe(
   fleetKey: string,
   fetchImpl: typeof fetch
 ): Promise<ServeRecord | undefined> {
@@ -219,7 +216,7 @@ export async function findReusableServe (
 // runner is alive (the runner owns idle reaping). Dead serve → drop record.
 // Live serve with a dead runner → kill the orphan and drop the record. Returns
 // the fleet keys swept.
-export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<string[]> {
+export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<string[]> {
   const records = await readAllRecords()
   const swept: string[] = []
   for (const rec of records) {
@@ -256,13 +253,13 @@ export async function sweepServes (fetchImpl: typeof fetch = fetch): Promise<str
   return swept
 }
 
-export function ensureDirSync (): void {
+export function ensureDirSync(): void {
   mkdirSync(managedServesDir(), { recursive: true })
 }
 
 // Atomic-ish sync record write for the runner (avoids a partial record race on
 // startup without pulling in async in signal handlers).
-export function writeRecordSync (record: ServeRecord): void {
+export function writeRecordSync(record: ServeRecord): void {
   ensureDirSync()
   const final = recordPath(record.fleetKey)
   const tmp = `${final}.${process.pid}.${Date.now()}.tmp`

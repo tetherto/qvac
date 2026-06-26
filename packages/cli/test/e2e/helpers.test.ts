@@ -7,23 +7,31 @@ import { collectSSE, multipart, assertError, type InjectResponse } from './helpe
 // Harness self-tests. The SSE case confirms app.inject captures hijacked
 // reply.raw writes, so streaming routes can be tested in-process.
 describe('e2e harness helpers', () => {
-  it('collectSSE parses hijacked reply.raw SSE captured by app.inject', { timeout: 5000 }, async () => {
-    const app = Fastify({ logger: false })
-    app.get('/sse', async (_req, reply) => {
-      initSSE(reply)
-      sendSSE(reply.raw, { a: 1 })
-      sendSSE(reply.raw, { b: 2 })
-      endSSE(reply.raw)
-    })
-    await app.ready()
+  it(
+    'collectSSE parses hijacked reply.raw SSE captured by app.inject',
+    { timeout: 5000 },
+    async () => {
+      const app = Fastify({ logger: false })
+      // lunte-disable-next-line require-await
+      app.get('/sse', async (_req, reply) => {
+        initSSE(reply)
+        sendSSE(reply.raw, { a: 1 })
+        sendSSE(reply.raw, { b: 2 })
+        endSSE(reply.raw)
+      })
+      await app.ready()
 
-    const res = await app.inject({ method: 'GET', url: '/sse' })
-    assert.equal(res.statusCode, 200)
-    assert.match(String(res.headers['content-type']), /text\/event-stream/)
-    assert.deepEqual(collectSSE(res.payload).map((e) => e.data), [{ a: 1 }, { b: 2 }, '[DONE]'])
+      const res = await app.inject({ method: 'GET', url: '/sse' })
+      assert.equal(res.statusCode, 200)
+      assert.match(String(res.headers['content-type']), /text\/event-stream/)
+      assert.deepEqual(
+        collectSSE(res.payload).map((e) => e.data),
+        [{ a: 1 }, { b: 2 }, '[DONE]']
+      )
 
-    await app.close()
-  })
+      await app.close()
+    }
+  )
 
   it('multipart builds a parseable form-data body', () => {
     const { payload, headers } = multipart([
@@ -36,7 +44,10 @@ describe('e2e harness helpers', () => {
   })
 
   it('assertError matches an OpenAI-style error envelope', () => {
-    const fake = { json: () => ({ error: { code: 'missing_model', message: 'no model' } }), payload: '' }
+    const fake = {
+      json: () => ({ error: { code: 'missing_model', message: 'no model' } }),
+      payload: ''
+    }
     assertError(fake as unknown as InjectResponse, 'missing_model')
   })
 })
