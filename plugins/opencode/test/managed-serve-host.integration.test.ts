@@ -79,12 +79,16 @@ async function requestJson (url: string, init?: RequestInit): Promise<{ status: 
 async function stopHost (child: ChildProcessWithoutNullStreams): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
   child.kill('SIGTERM')
+  let timeout: NodeJS.Timeout | undefined
   const [code] = await Promise.race([
     once(child, 'exit'),
     new Promise<never>((_resolve, reject) => {
-      setTimeout(() => reject(new Error('host did not exit after SIGTERM')), 10_000)
+      timeout = setTimeout(() => reject(new Error('host did not exit after SIGTERM')), 10_000)
+      timeout.unref()
     })
-  ]) as [number | null, NodeJS.Signals | null]
+  ]).finally(() => {
+    if (timeout !== undefined) clearTimeout(timeout)
+  }) as [number | null, NodeJS.Signals | null]
   assert.equal(code, 0)
 }
 
