@@ -195,3 +195,4 @@ if(BUILD_TESTING)
   # Pass ENABLE_COVERAGE option to test subdirectory
   add_subdirectory(test/unit)
 endif()
+# ci cache-invalidation test marker 1782476380 (harmless comment)
