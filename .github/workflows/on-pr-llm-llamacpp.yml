@@ -405,6 +405,7 @@ jobs:
     needs:
       - authorize
       - ci-router
+      - sanity-checks
       - detect-native-changes
       - prebuild-cache-restore
     if: |
