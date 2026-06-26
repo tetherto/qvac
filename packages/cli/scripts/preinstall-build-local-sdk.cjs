@@ -18,7 +18,7 @@ const SDK_DIR = path.resolve(__dirname, '..', '..', 'sdk')
 const SDK_PKG = path.join(SDK_DIR, 'package.json')
 const BUILT_MARKER = path.join(SDK_DIR, 'dist', 'commands', 'index.js')
 
-function isMonorepoSibling () {
+function isMonorepoSibling() {
   try {
     const pkg = JSON.parse(fs.readFileSync(SDK_PKG, 'utf8'))
     return pkg.name === '@qvac/sdk'
@@ -27,7 +27,7 @@ function isMonorepoSibling () {
   }
 }
 
-function alreadyBuilt () {
+function alreadyBuilt() {
   // If the marker file is newer than every tracked source file under
   // packages/sdk, skip the rebuild. Walk everything except node_modules /
   // dist to keep the check cheap.
@@ -67,7 +67,7 @@ function alreadyBuilt () {
   return true
 }
 
-function run (cmd, args, opts = {}) {
+function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { cwd: SDK_DIR, stdio: 'inherit', ...opts })
   if (result.error) {
     console.error(`[@qvac/cli preinstall] failed to spawn '${cmd}': ${result.error.message}`)
@@ -103,8 +103,17 @@ run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=warn'])
 // pinned 2.4.2 itself. Force-install a recent typed bare-events at top
 // level (no package.json mutation — purely a node_modules tweak) so tsc
 // sees the same shape bun does.
-run('npm', ['install', 'bare-events@^2.8.0', '--no-save', '--no-audit', '--no-fund', '--loglevel=warn'])
+run('npm', [
+  'install',
+  'bare-events@^2.8.0',
+  '--no-save',
+  '--no-audit',
+  '--no-fund',
+  '--loglevel=warn'
+])
 
-try { fs.rmSync(path.join(SDK_DIR, 'dist'), { recursive: true, force: true }) } catch {}
+try {
+  fs.rmSync(path.join(SDK_DIR, 'dist'), { recursive: true, force: true })
+} catch {}
 run(path.join(SDK_DIR, 'node_modules', '.bin', 'tsc'), ['--project', 'tsconfig.json'])
 run('node', ['scripts/resolve-aliases.mjs'])
