@@ -328,6 +328,15 @@ jobs:
             fi
           fi
 
+          # Ensure the diff base (DIFF_FROM) is present locally. The checkout is
+          # shallow and only HEAD_SHA / BEFORE_SHA were fetched above; the PR base
+          # SHA is otherwise absent, so `git diff` would fail and force the safe
+          # rebuild-everything fallback — silently defeating the cache. BASE_SHA
+          # always lives in origin (the base repo), so a plain fetch suffices.
+          if [ -n "$DIFF_FROM" ] && ! git cat-file -e "$DIFF_FROM" 2>/dev/null; then
+            git fetch origin "$DIFF_FROM" --depth=1 2>/dev/null || true
+          fi
+
           CHANGED=false
           if [ -n "$DIFF_FROM" ] && [ -n "$HEAD_SHA" ]; then
             DIFF_FILES=$(git diff --name-only "$DIFF_FROM" "$HEAD_SHA" -- 2>&1) || {
