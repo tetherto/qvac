@@ -267,7 +267,16 @@ private:
     StepUnlockGuard(
         ContinuousBatchScheduler& scheduler,
         std::unique_lock<std::mutex>* lock);
-    ~StepUnlockGuard();
+    /// `noexcept(false)`: the deferred-teardown work it runs is `noexcept`, but
+    /// re-acquiring `mutex_` is not. The only exception it can throw is the
+    /// `std::system_error` `std::mutex::lock()` is permitted to raise on an
+    /// unrecoverable lock failure -- i.e. the OS failing to honour its
+    /// `pthread_mutex_lock` contract for an initialised normal mutex. That is
+    /// not a recoverable condition (the worker's sole mutex is gone, so no slot
+    /// state can be touched safely), so it is left to propagate rather than be
+    /// swallowed; the implicit `noexcept` is dropped only so the throw is not
+    /// converted into a less informative `std::terminate` at this boundary.
+    ~StepUnlockGuard() noexcept(false);
     StepUnlockGuard(const StepUnlockGuard&) = delete;
     StepUnlockGuard& operator=(const StepUnlockGuard&) = delete;
     StepUnlockGuard(StepUnlockGuard&&) = delete;
@@ -323,21 +332,32 @@ private:
   void drainFinishedLocked();
   [[nodiscard]] bool hasWorkLocked() const;
   [[nodiscard]] unsigned numActiveLocked() const;
-  void completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group);
+  void completeGroupRequestLocked(
+      const std::shared_ptr<BatchGroup>& group) noexcept;
   void failGroupLocked(
       const std::shared_ptr<BatchGroup>& group, std::exception_ptr error);
   void cancelPendingLocked();
-  void clearLocked();
-  void cancelSlotLocked(uint32_t seqId);
+  void clearLocked() noexcept;
+  /// Tear down a single slot (cancel path). `noexcept`: callers run it from
+  /// the StepUnlockGuard destructor and the worker loop, so the teardown itself
+  /// must never throw. Every throwing step (driver finalize + cache save, and
+  /// the onDone callback inside notifyDone) is contained; the cleanup tail
+  /// (notifyDone/batcher cancel/freeSlot) always runs.
+  void cancelSlotLocked(uint32_t seqId) noexcept;
   /// Apply teardown requests recorded by cancel()/clear() while the
   /// worker was mid-step. Must run before admitting pending requests so
-  /// a deferred cancel can never hit a freed-and-reused slot.
-  void applyDeferredTeardownLocked();
-  void notifyDone(uint32_t seqId);
-  void freeSlot(uint32_t seqId);
+  /// a deferred cancel can never hit a freed-and-reused slot. `noexcept` so the
+  /// StepUnlockGuard destructor's teardown step cannot throw -- the only thing
+  /// that destructor can throw is the mutex re-acquire (see its declaration).
+  void applyDeferredTeardownLocked() noexcept;
+  /// `noexcept`: invoked on the teardown path. Contains the caller-provided
+  /// onDone callback internally so a throwing callback can neither escape nor
+  /// skip the group-completion below.
+  void notifyDone(uint32_t seqId) noexcept;
+  void freeSlot(uint32_t seqId) noexcept;
   /// Remove every KV-cache cell owned by `seqId` from the shared context.
   /// Single home for the cleanup repeated across all slot-teardown paths.
-  void clearSeqKv(uint32_t seqId);
+  void clearSeqKv(uint32_t seqId) noexcept;
   void finalizeFinishedSequences();
   std::function<void(const std::string&)>
   getOutputCallback(SlotState& slot, uint32_t seqId);

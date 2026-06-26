@@ -352,11 +352,11 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
   }
 }
 
-bool MultiRequestBatcher::isValid(uint32_t seqId) const {
+bool MultiRequestBatcher::isValid(uint32_t seqId) const noexcept {
   return seqId < slots_.size() && slots_[seqId].has_value();
 }
 
-const Request* MultiRequestBatcher::requestAt(uint32_t seqId) const {
+const Request* MultiRequestBatcher::requestAt(uint32_t seqId) const noexcept {
   if (!isValid(seqId)) {
     return nullptr;
   }

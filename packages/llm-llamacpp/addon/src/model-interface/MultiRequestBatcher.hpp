@@ -206,9 +206,9 @@ public:
   /// previously occupied slot, in seqId order.
   void clear(const KvClearFn& kvClear = {});
 
-  [[nodiscard]] bool isValid(uint32_t seqId) const;
+  [[nodiscard]] bool isValid(uint32_t seqId) const noexcept;
 
-  [[nodiscard]] const Request* requestAt(uint32_t seqId) const;
+  [[nodiscard]] const Request* requestAt(uint32_t seqId) const noexcept;
 
 private:
   unsigned maxChunkSize_, maxTokensPerSequence_;

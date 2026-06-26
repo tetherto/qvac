@@ -29,6 +29,33 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace {
 
+// Emit a best-effort teardown-failure log that can never throw. Composing the
+// message and invoking the logger both allocate (so they may throw, e.g.
+// std::bad_alloc); doing that inside this swallowing try is what lets the
+// noexcept teardown paths log without risking std::terminate when logging
+// itself fails. `detail` may be null when no exception message is available.
+void logTeardownFailureNoexcept(
+    const char* what, uint32_t seqId, const char* detail) noexcept {
+  try {
+    std::string msg = std::string("[ContinuousBatch] ") + what +
+                      " for seqId " + std::to_string(seqId);
+    if (detail != nullptr) {
+      msg += ": ";
+      msg += detail;
+    }
+    QLOG_IF(Priority::WARNING, msg);
+  } catch (...) {
+    // Logging is best-effort; never let a logging failure abort teardown.
+  }
+}
+
+void logTeardownFailureNoexcept(const char* what) noexcept {
+  try {
+    QLOG_IF(Priority::WARNING, std::string("[ContinuousBatch] ") + what);
+  } catch (...) {
+  }
+}
+
 /// Partition the whole-context KV pool uniformly across slots. Mirrors
 /// llama.cpp's `server` example which uses `n_ctx_slot = n_ctx /
 /// n_parallel` as the per-sequence hard ceiling.
@@ -482,7 +509,7 @@ ContinuousBatchScheduler::prefillCompleteFn() {
       };
 }
 
-void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) {
+void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) noexcept {
   auto* mem = llama_get_memory(shared_.lctx);
   if (mem != nullptr) {
     llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
@@ -518,8 +545,16 @@ ContinuousBatchScheduler::StepUnlockGuard::StepUnlockGuard(
   }
 }
 
-ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() {
+ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept(false) {
   if (lock_ != nullptr) {
+    // applyDeferredTeardownLocked() is noexcept, so the teardown below cannot
+    // throw. The re-acquire can: std::mutex::lock() may raise std::system_error
+    // on an unrecoverable lock failure (the OS failing to meet its
+    // pthread_mutex_lock specification for an initialised normal mutex). It is
+    // intentionally not caught -- the scheduler's only mutex is then gone, so
+    // there is no slot state we could safely touch to recover. The destructor
+    // is noexcept(false) so this single, unrecoverable system_error propagates
+    // instead of being turned into std::terminate here.
     lock_->lock();
     scheduler_.applyDeferredTeardownLocked();
   }
@@ -829,25 +864,54 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
   return occupied;
 }
 
-void ContinuousBatchScheduler::cancelSlotLocked(uint32_t seqId) {
+void ContinuousBatchScheduler::cancelSlotLocked(uint32_t seqId) noexcept {
   const bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
   if (!occupied) {
     return;
   }
   const Request* req = batcher_.requestAt(seqId);
   if (slots_[seqId]->driver) {
-    slots_[seqId]->driver->onCancel({});
-    if (req != nullptr) {
-      accumulateSlotRuntimeStats(*slots_[seqId], *req);
+    // Best-effort driver teardown on a cancelled slot. onCancel finalizes (and
+    // mutates) the slot's KV and saveCacheForSlot persists it, so contain both
+    // in one try: a throw here would otherwise escape this noexcept function
+    // (it runs from the noexcept StepUnlockGuard destructor) and std::terminate
+    // the process, and a failed finalize must skip the save rather than persist
+    // inconsistent state. The cleanup tail below (notifyDone/freeSlot) runs
+    // regardless, so the slot is always freed. The normal-completion save in
+    // drainFinishedLocked() is left throwing so live requests still surface the
+    // error.
+    try {
+      slots_[seqId]->driver->onCancel({});
+      if (req != nullptr) {
+        accumulateSlotRuntimeStats(*slots_[seqId], *req);
+      }
+      saveCacheForSlot(seqId, *slots_[seqId]);
+    } catch (const std::exception& e) {
+      logTeardownFailureNoexcept("cancel teardown failed", seqId, e.what());
+    } catch (...) {
+      logTeardownFailureNoexcept("cancel teardown failed", seqId, nullptr);
     }
-    saveCacheForSlot(seqId, *slots_[seqId]);
   }
   notifyDone(seqId);
-  batcher_.cancel(seqId, [this](uint32_t s) { clearSeqKv(s); });
+  // batcher_.cancel takes a KvClearFn callback so it is not noexcept; the
+  // clearSeqKv lambda cannot throw, but wrap defensively so this noexcept path
+  // cannot terminate if that ever changes.
+  try {
+    batcher_.cancel(seqId, [this](uint32_t s) { clearSeqKv(s); });
+  } catch (...) {
+    logTeardownFailureNoexcept("cancel: batcher_.cancel threw", seqId, nullptr);
+  }
+  // freeSlot runs regardless of the defensive catch above. If batcher_.cancel
+  // ever threw, its clear-KV-before-reset order leaves the batcher slot
+  // occupied, so admission — gated on the batcher's free list — never re-admits
+  // that seqId over un-cleared KV: the slot leaks but cannot corrupt. Freeing
+  // the scheduler SlotState anyway is the lesser leak (releases driver+sampler)
+  // and cannot make it worse, so free unconditionally rather than gate on the
+  // cancel succeeding.
   freeSlot(seqId);
 }
 
-void ContinuousBatchScheduler::applyDeferredTeardownLocked() {
+void ContinuousBatchScheduler::applyDeferredTeardownLocked() noexcept {
   for (const uint32_t seqId : pendingSlotCancels_) {
     cancelSlotLocked(seqId);
   }
@@ -873,21 +937,38 @@ void ContinuousBatchScheduler::clear() {
   }
 }
 
-void ContinuousBatchScheduler::clearLocked() {
+void ContinuousBatchScheduler::clearLocked() noexcept {
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value()) {
       if (slots_[seqId]->driver) {
-        slots_[seqId]->driver->onSequenceEnd({});
+        // onSequenceEnd is a virtual driver call (flushes buffered output) and
+        // may throw; contain it so this noexcept teardown cannot terminate.
+        try {
+          slots_[seqId]->driver->onSequenceEnd({});
+        } catch (const std::exception& e) {
+          logTeardownFailureNoexcept(
+              "clear: onSequenceEnd threw", seqId, e.what());
+        } catch (...) {
+          logTeardownFailureNoexcept(
+              "clear: onSequenceEnd threw", seqId, nullptr);
+        }
       }
       notifyDone(seqId);
       freeSlot(seqId);
     }
   }
-  batcher_.clear([this](uint32_t s) { clearSeqKv(s); });
+  // batcher_.clear takes a KvClearFn callback so it is not noexcept; the
+  // clearSeqKv lambda cannot throw, but wrap defensively so this noexcept path
+  // cannot terminate if that ever changes.
+  try {
+    batcher_.clear([this](uint32_t s) { clearSeqKv(s); });
+  } catch (...) {
+    logTeardownFailureNoexcept("clear: batcher_.clear threw unexpectedly");
+  }
 }
 
 void ContinuousBatchScheduler::completeGroupRequestLocked(
-    const std::shared_ptr<BatchGroup>& group) {
+    const std::shared_ptr<BatchGroup>& group) noexcept {
   if (!group || group->done) {
     return;
   }
@@ -948,17 +1029,28 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
   }
 }
 
-void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
+void ContinuousBatchScheduler::notifyDone(uint32_t seqId) noexcept {
   auto& slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {
-    slot->streams.onDone(seqId);
+    // The onDone stream callback is caller/JS-provided and may throw. Contain
+    // it here, not at the call site: this keeps cancelSlotLocked's noexcept
+    // contract honest (notifyDone runs on that teardown path), and — crucially
+    // — still runs completeGroupRequestLocked below, so a throwing callback
+    // can never leave the submitting caller blocked forever on the group.
+    try {
+      slot->streams.onDone(seqId);
+    } catch (const std::exception& e) {
+      logTeardownFailureNoexcept("onDone callback threw", seqId, e.what());
+    } catch (...) {
+      logTeardownFailureNoexcept("onDone callback threw", seqId, nullptr);
+    }
   }
   if (slot.has_value() && slot->group) {
     completeGroupRequestLocked(slot->group);
   }
 }
 
-void ContinuousBatchScheduler::freeSlot(uint32_t seqId) {
+void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   if (seqId < slots_.size()) {
     slots_[seqId].reset();
   }

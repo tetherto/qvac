@@ -1290,6 +1290,81 @@ TEST_F(
          "lock reacquisition.";
 }
 
+/// A per-slot cancel runs the slot's driver teardown -- onCancel + saveCache --
+/// from the noexcept StepUnlockGuard destructor (a cancel issued in the decode
+/// unlock window is applied on lock reacquisition). When saveCache throws --
+/// here forced by an unwritable cacheKey -- the throw must be swallowed in
+/// place: before the fix it escaped the noexcept destructor and
+/// std::terminate'd the whole process. The batch must instead survive: the
+/// cancelled slot is freed, its group completes, and the sibling sequence still
+/// finishes normally.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    PerSlotCancelSwallowsThrowingDriverTeardown) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // Admission is in submission order, so the second prompt owns seqId 1.
+  constexpr uint32_t kCancelSeqId = 1;
+
+  std::atomic<int> seqBTokens = 0;
+  std::atomic<bool> readyToCancel = false;
+  std::atomic<bool> cancelIssued = false;
+
+  // Issue the cancel from inside the decode unlock window so its teardown runs
+  // in the StepUnlockGuard destructor, then delegate to the real decode so the
+  // surviving sequence keeps generating.
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler,
+      [scheduler, &readyToCancel, &cancelIssued](
+          llama_context* ctx, llama_batch& batch) {
+        if (readyToCancel.load() && !cancelIssued.exchange(true)) {
+          scheduler->cancel(kCancelSeqId);
+        }
+        return llama_decode(ctx, batch);
+      });
+
+  // cacheKey under a directory that does not exist: llama_state_seq_save_file
+  // cannot open it, so TextLlmContext::saveCache throws on the cancel path.
+  const fs::path unwritable = fs::temp_directory_path() /
+                              ("no-such-dir-" + uniqueTestId()) / "cache.bin";
+
+  auto promptA =
+      makePrompt("Write a long, detailed paragraph about redwood forests.");
+  auto promptB =
+      makePrompt("Write a long, detailed paragraph about coral reefs.");
+  promptB.cacheKey = unwritable.string();
+  promptB.saveCacheToDisk = true;
+  // Arm the cancel only once seqId 1 is actively generating.
+  promptB.outputCallback = [&seqBTokens, &readyToCancel](const std::string&) {
+    if (seqBTokens.fetch_add(1) + 1 >= 2) {
+      readyToCancel.store(true);
+    }
+  };
+
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
+  // Returning from this call at all proves the throwing teardown did not
+  // std::terminate the process.
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  ASSERT_TRUE(cancelIssued.load())
+      << "test setup: seqId 1 never reached the cancel arming point";
+  EXPECT_FALSE(fs::exists(unwritable))
+      << "saveCache was expected to fail on the unwritable path, not write a "
+         "file";
+  EXPECT_FALSE(outputs[0].empty())
+      << "sibling sequence (seqId 0) must finish normally despite the throwing "
+         "teardown on seqId 1";
+}
+
 /// A batched sequence that outgrows its per-slot window (ctx / n_parallel)
 /// must slide (`contextSlides > 0`) and keep generating, like the
 /// single-prompt path does, instead of being hard-truncated at the window.
