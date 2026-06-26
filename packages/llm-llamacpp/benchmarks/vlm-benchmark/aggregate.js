@@ -18,7 +18,7 @@ try { CONFIG = require('./config.cjs') } catch (_) {}
 // the clean copy got truncated mid-JSON (losing [/VLMROW]) so the row vanished from the
 // report. The harness now omits `gold`; we resolve it by item id here. Markers that
 // still carry inline gold (older logs, desktop CLI path) win for back-compat.
-let GOLD_BY_ID = {}
+const GOLD_BY_ID = {}
 try {
   const FIXTURE = require('./fixture.data.cjs')
   for (const it of (FIXTURE.items || [])) GOLD_BY_ID[it.id] = it.gold
