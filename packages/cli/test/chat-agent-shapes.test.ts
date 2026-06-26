@@ -32,7 +32,7 @@ describe('chat agent OpenAI shapes', () => {
   it('emits JSON-serializable streaming tool-call deltas', () => {
     const deltas = sdkToolCallsToOpenaiDeltas([
       { id: 'call_weather', name: 'get_weather', arguments: { location: 'Tokyo' } }
-    ])
+    ]) ?? []
     const toolChunk = chatCompletionChunk({
       id: 'chatcmpl_stream',
       created: 100,
