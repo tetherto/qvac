@@ -91,9 +91,7 @@ Blocking JSON response (default):
   "created": 1718000000,
   "output_format": "png",
   "size": "1024x1024",
-  "data": [
-    { "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }
-  ]
+  "data": [{ "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }]
 }
 ```
 
