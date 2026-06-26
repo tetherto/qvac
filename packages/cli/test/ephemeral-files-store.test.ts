@@ -59,8 +59,10 @@ describe('createEphemeralFilesStore', () => {
   it('list returns entries newest-first', () => {
     let t = 1_000
     const store = createEphemeralFilesStore(() => t)
-    t = 1_000; const idOld = store.put({ data: Buffer.from('a'), fileName: 'a.txt', purpose: 'assistants' })
-    t = 2_000; const idNew = store.put({ data: Buffer.from('b'), fileName: 'b.txt', purpose: 'assistants' })
+    t = 1_000
+    const idOld = store.put({ data: Buffer.from('a'), fileName: 'a.txt', purpose: 'assistants' })
+    t = 2_000
+    const idNew = store.put({ data: Buffer.from('b'), fileName: 'b.txt', purpose: 'assistants' })
     const listed = store.list().map((e) => e.id)
     assert.deepEqual(listed, [idNew, idOld])
   })
@@ -68,9 +70,12 @@ describe('createEphemeralFilesStore', () => {
   it('evicts oldest entries when maxFiles is exceeded', () => {
     let t = 1_000
     const store = createEphemeralFilesStore(() => t, { maxFiles: 2, ttlMs: 0 })
-    t = 1_000; const a = store.put({ data: Buffer.from('a'), fileName: 'a', purpose: 'p' })
-    t = 2_000; const b = store.put({ data: Buffer.from('b'), fileName: 'b', purpose: 'p' })
-    t = 3_000; const c = store.put({ data: Buffer.from('c'), fileName: 'c', purpose: 'p' })
+    t = 1_000
+    const a = store.put({ data: Buffer.from('a'), fileName: 'a', purpose: 'p' })
+    t = 2_000
+    const b = store.put({ data: Buffer.from('b'), fileName: 'b', purpose: 'p' })
+    t = 3_000
+    const c = store.put({ data: Buffer.from('c'), fileName: 'c', purpose: 'p' })
     assert.equal(store.get(a), null)
     assert.notEqual(store.get(b), null)
     assert.notEqual(store.get(c), null)
@@ -79,8 +84,10 @@ describe('createEphemeralFilesStore', () => {
   it('evicts oldest entries when maxBytes is exceeded', () => {
     let t = 1_000
     const store = createEphemeralFilesStore(() => t, { maxBytes: 8, ttlMs: 0 })
-    t = 1_000; const a = store.put({ data: Buffer.alloc(5), fileName: 'a', purpose: 'p' })
-    t = 2_000; const b = store.put({ data: Buffer.alloc(5), fileName: 'b', purpose: 'p' })
+    t = 1_000
+    const a = store.put({ data: Buffer.alloc(5), fileName: 'a', purpose: 'p' })
+    t = 2_000
+    const b = store.put({ data: Buffer.alloc(5), fileName: 'b', purpose: 'p' })
     assert.equal(store.get(a), null)
     assert.notEqual(store.get(b), null)
   })
@@ -118,9 +125,12 @@ describe('createEphemeralFilesStore', () => {
       maxFiles: 2,
       onEvict: (id, reason) => evictions.push({ id, reason })
     })
-    t = 1_000; const a = store.put({ data: Buffer.from('a'), fileName: 'a', purpose: 'p' })
-    t = 2_000; store.put({ data: Buffer.from('b'), fileName: 'b', purpose: 'p' })
-    t = 3_000; store.put({ data: Buffer.from('c'), fileName: 'c', purpose: 'p' })
+    t = 1_000
+    const a = store.put({ data: Buffer.from('a'), fileName: 'a', purpose: 'p' })
+    t = 2_000
+    store.put({ data: Buffer.from('b'), fileName: 'b', purpose: 'p' })
+    t = 3_000
+    store.put({ data: Buffer.from('c'), fileName: 'c', purpose: 'p' })
     assert.deepEqual(evictions, [{ id: a, reason: 'max_files' }])
   })
 
@@ -132,8 +142,10 @@ describe('createEphemeralFilesStore', () => {
       maxBytes: 8,
       onEvict: (id, reason) => evictions.push({ id, reason })
     })
-    t = 1_000; const a = store.put({ data: Buffer.alloc(5), fileName: 'a', purpose: 'p' })
-    t = 2_000; store.put({ data: Buffer.alloc(5), fileName: 'b', purpose: 'p' })
+    t = 1_000
+    const a = store.put({ data: Buffer.alloc(5), fileName: 'a', purpose: 'p' })
+    t = 2_000
+    store.put({ data: Buffer.alloc(5), fileName: 'b', purpose: 'p' })
     assert.deepEqual(evictions, [{ id: a, reason: 'max_bytes' }])
   })
 })

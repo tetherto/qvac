@@ -3,19 +3,19 @@ import type { ToolCall, CompletionStats } from '@qvac/sdk'
 import { sdkToolCallsToOpenai } from './tool-calls.js'
 import { completionTokensFromStats } from './completion-result.js'
 
-export function responseId (): string {
+export function responseId(): string {
   return `resp_${randomId()}`
 }
 
-export function messageId (): string {
+export function messageId(): string {
   return `msg_${randomId()}`
 }
 
-export function functionCallOutputItemId (): string {
+export function functionCallOutputItemId(): string {
   return `fc_${randomId()}`
 }
 
-function randomId (): string {
+function randomId(): string {
   return crypto.randomUUID()
 }
 
@@ -47,8 +47,9 @@ export interface BuildResponseObjectParams {
   stopReason?: string
 }
 
-export function buildResponseObject (params: BuildResponseObjectParams): Record<string, unknown> {
-  const hasToolCalls = params.toolCalls !== null && params.toolCalls !== undefined && params.toolCalls.length > 0
+export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
+  const hasToolCalls =
+    params.toolCalls !== null && params.toolCalls !== undefined && params.toolCalls.length > 0
   const msgId = params.messageItemId ?? messageId()
   const output: unknown[] = []
 

@@ -49,7 +49,7 @@ declare interface TTSGgmlFiles {
 declare interface TTSGgmlRuntimeConfig {
   /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored on Apple (Metal), desktop (Vulkan/CUDA), and Android (Vulkan/OpenCL), where tts-cpp selects the backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali). */
+  /** Route inference through a GPU backend (Metal / Vulkan / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored on Apple (Metal), desktop (Vulkan), and Android (Vulkan/OpenCL), where tts-cpp selects the backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali). */
   useGPU?: boolean
   /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
   outputSampleRate?: number

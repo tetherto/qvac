@@ -68,15 +68,19 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('synthesizes tool_call content for assistant messages', () => {
-    const messages = [{
-      role: 'assistant',
-      content: null,
-      tool_calls: [{
-        id: 'call_1',
-        type: 'function',
-        function: { name: 'get_weather', arguments: '{"location":"Tokyo"}' }
-      }]
-    }]
+    const messages = [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"location":"Tokyo"}' }
+          }
+        ]
+      }
+    ]
     const history = openaiMessagesToHistory(messages)
     assert.equal(history[0]!.role, 'assistant')
     assert.ok(history[0]!.content.includes('<tool_call>'))
@@ -85,14 +89,16 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('handles multiple tool calls in single message', () => {
-    const messages = [{
-      role: 'assistant',
-      content: null,
-      tool_calls: [
-        { id: 'call_1', type: 'function', function: { name: 'fn_a', arguments: '{}' } },
-        { id: 'call_2', type: 'function', function: { name: 'fn_b', arguments: '{"x":1}' } }
-      ]
-    }]
+    const messages = [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_1', type: 'function', function: { name: 'fn_a', arguments: '{}' } },
+          { id: 'call_2', type: 'function', function: { name: 'fn_b', arguments: '{"x":1}' } }
+        ]
+      }
+    ]
     const history = openaiMessagesToHistory(messages)
     const content = history[0]!.content
     assert.ok(content.includes('fn_a'))
@@ -100,15 +106,19 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('handles malformed tool call arguments JSON', () => {
-    const messages = [{
-      role: 'assistant',
-      content: null,
-      tool_calls: [{
-        id: 'call_1',
-        type: 'function',
-        function: { name: 'broken', arguments: '{not valid json}' }
-      }]
-    }]
+    const messages = [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'broken', arguments: '{not valid json}' }
+          }
+        ]
+      }
+    ]
     const history = openaiMessagesToHistory(messages)
     assert.ok(history[0]!.content.includes('broken'))
   })
@@ -120,15 +130,32 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('concatenates text content parts into a string', () => {
-    const messages = [{ role: 'user', content: [{ type: 'text', text: 'hello ' }, { type: 'text', text: 'world' }] }]
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'hello ' },
+          { type: 'text', text: 'world' }
+        ]
+      }
+    ]
     const history = openaiMessagesToHistory(messages)
     assert.deepEqual(history[0], { role: 'user', content: 'hello world' })
   })
 
   it('decodes an image_url data URL into image bytes', () => {
     // 1x1 transparent PNG.
-    const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    const messages = [{ role: 'user', content: [{ type: 'text', text: 'what is this?' }, { type: 'image_url', image_url: { url: dataUrl } }] }]
+    const dataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'what is this?' },
+          { type: 'image_url', image_url: { url: dataUrl } }
+        ]
+      }
+    ]
     const history = openaiMessagesToHistory(messages)
     assert.equal(history[0]!.role, 'user')
     assert.equal(history[0]!.content, 'what is this?')
@@ -148,24 +175,44 @@ describe('openaiMessagesToHistory', () => {
   // Reviewer ask: an image the server cannot materialize must fail loudly (→ 400) instead of
   // silently dropping to a text-only completion the user never asked for.
   it('throws on a remote (non-data) image_url', () => {
-    const messages = [{ role: 'user', content: [{ type: 'image_url', image_url: 'https://example.com/x.png' }] }]
+    const messages = [
+      { role: 'user', content: [{ type: 'image_url', image_url: 'https://example.com/x.png' }] }
+    ]
     assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
   it('throws on an unsupported image format (e.g. webp)', () => {
     const webp = 'data:image/webp;base64,UklGRhIAAABXRUJQVlA4TAYAAAAvAAAAAAfQ//73v/+BiOh/AAA='
-    const messages = [{ role: 'user', content: [{ type: 'text', text: 'see this' }, { type: 'image_url', image_url: { url: webp } }] }]
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'see this' },
+          { type: 'image_url', image_url: { url: webp } }
+        ]
+      }
+    ]
     assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
   it('throws on a payload that is not valid base64 image data', () => {
-    const messages = [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,not*real*base64*data' } }] }]
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: 'data:image/png;base64,not*real*base64*data' } }
+        ]
+      }
+    ]
     assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
   it('writeChatImages materializes attachment bytes to flat temp files', async () => {
-    const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    const messages = [{ role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] }]
+    const dataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const messages = [
+      { role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] }
+    ]
     const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
     assert.equal(tmpPaths.length, 1)
     assert.ok(tmpPaths[0]!.endsWith('.png'))
@@ -186,14 +233,20 @@ describe('openaiToolsToSdk', () => {
   })
 
   it('converts a single function tool', () => {
-    const tools = [{
-      type: 'function',
-      function: {
-        name: 'get_weather',
-        description: 'Get weather for a location',
-        parameters: { type: 'object', properties: { location: { type: 'string' } }, required: ['location'] }
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'get_weather',
+          description: 'Get weather for a location',
+          parameters: {
+            type: 'object',
+            properties: { location: { type: 'string' } },
+            required: ['location']
+          }
+        }
       }
-    }]
+    ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
     assert.equal(result.length, 1)
@@ -212,10 +265,7 @@ describe('openaiToolsToSdk', () => {
   })
 
   it('filters out non-function tools', () => {
-    const tools = [
-      { type: 'retrieval' },
-      { type: 'function', function: { name: 'valid_fn' } }
-    ]
+    const tools = [{ type: 'retrieval' }, { type: 'function', function: { name: 'valid_fn' } }]
     const result = openaiToolsToSdk(tools as Parameters<typeof openaiToolsToSdk>[0])
     assert.ok(result)
     assert.equal(result.length, 1)
@@ -235,21 +285,23 @@ describe('openaiToolsToSdk', () => {
   })
 
   it('normalizes composite types like ["string", "null"] to "string"', () => {
-    const tools = [{
-      type: 'function',
-      function: {
-        name: 'read_file',
-        description: 'Read a file',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: { type: ['string', 'null'], description: 'File path' },
-            glob: { type: ['string', 'null'], description: 'Glob pattern' }
-          },
-          required: ['path']
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'read_file',
+          description: 'Read a file',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: { type: ['string', 'null'], description: 'File path' },
+              glob: { type: ['string', 'null'], description: 'Glob pattern' }
+            },
+            required: ['path']
+          }
         }
       }
-    }]
+    ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
     const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
@@ -258,19 +310,21 @@ describe('openaiToolsToSdk', () => {
   })
 
   it('normalizes ["integer", "null"] to "integer"', () => {
-    const tools = [{
-      type: 'function',
-      function: {
-        name: 'fetch',
-        description: 'Fetch data',
-        parameters: {
-          type: 'object',
-          properties: {
-            limit: { type: ['integer', 'null'] }
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'fetch',
+          description: 'Fetch data',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: { type: ['integer', 'null'] }
+            }
           }
         }
       }
-    }]
+    ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
     const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
@@ -278,19 +332,21 @@ describe('openaiToolsToSdk', () => {
   })
 
   it('falls back to "string" for unrecognized types', () => {
-    const tools = [{
-      type: 'function',
-      function: {
-        name: 'test',
-        description: 'Test',
-        parameters: {
-          type: 'object',
-          properties: {
-            field: { type: 'unknown_type' }
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'test',
+          description: 'Test',
+          parameters: {
+            type: 'object',
+            properties: {
+              field: { type: 'unknown_type' }
+            }
           }
         }
       }
-    }]
+    ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
     const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
@@ -298,23 +354,25 @@ describe('openaiToolsToSdk', () => {
   })
 
   it('preserves valid simple types unchanged', () => {
-    const tools = [{
-      type: 'function',
-      function: {
-        name: 'test',
-        description: 'Test',
-        parameters: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            count: { type: 'number' },
-            enabled: { type: 'boolean' },
-            items: { type: 'array' },
-            config: { type: 'object' }
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'test',
+          description: 'Test',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              count: { type: 'number' },
+              enabled: { type: 'boolean' },
+              items: { type: 'array' },
+              config: { type: 'object' }
+            }
           }
         }
       }
-    }]
+    ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
     const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
@@ -372,7 +430,8 @@ describe('sdkToolCallsToOpenaiDeltas', () => {
 })
 
 // Chat semantics: `max_completion_tokens` overrides `max_tokens`.
-const extractChat = (body: Record<string, unknown>) => extractGenerationParams(body, 'max_completion_tokens')
+const extractChat = (body: Record<string, unknown>) =>
+  extractGenerationParams(body, 'max_completion_tokens')
 
 describe('extractGenerationParams (chat semantics)', () => {
   it('returns undefined for empty body', () => {
@@ -562,36 +621,43 @@ describe('extractResponseFormat', () => {
 
   it('throws when json_schema.name is missing or empty', () => {
     assert.throws(
-      () => extractResponseFormat({
-        response_format: { type: 'json_schema', json_schema: { schema: { type: 'object' } } }
-      }),
+      () =>
+        extractResponseFormat({
+          response_format: { type: 'json_schema', json_schema: { schema: { type: 'object' } } }
+        }),
       InvalidResponseFormatError
     )
     assert.throws(
-      () => extractResponseFormat({
-        response_format: { type: 'json_schema', json_schema: { name: '', schema: { type: 'object' } } }
-      }),
+      () =>
+        extractResponseFormat({
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: '', schema: { type: 'object' } }
+          }
+        }),
       InvalidResponseFormatError
     )
   })
 
   it('throws when json_schema.schema is missing or not an object', () => {
     assert.throws(
-      () => extractResponseFormat({
-        response_format: { type: 'json_schema', json_schema: { name: 'P' } }
-      }),
+      () =>
+        extractResponseFormat({
+          response_format: { type: 'json_schema', json_schema: { name: 'P' } }
+        }),
       InvalidResponseFormatError
     )
     assert.throws(
-      () => extractResponseFormat({
-        response_format: { type: 'json_schema', json_schema: { name: 'P', schema: 'oops' } }
-      }),
+      () =>
+        extractResponseFormat({
+          response_format: { type: 'json_schema', json_schema: { name: 'P', schema: 'oops' } }
+        }),
       InvalidResponseFormatError
     )
   })
 })
 
-function fixtureMeta (overrides: Partial<VectorStoreMeta> = {}): VectorStoreMeta {
+function fixtureMeta(overrides: Partial<VectorStoreMeta> = {}): VectorStoreMeta {
   return {
     id: 'vs_abc123',
     createdAt: 1_700_000_000_000,
@@ -634,10 +700,12 @@ describe('vectorStoreToOpenAI', () => {
   })
 
   it('preserves expires_after and converts expires_at to seconds', () => {
-    const out = vectorStoreToOpenAI(fixtureMeta({
-      expiresAfter: { anchor: 'last_active_at', days: 7 },
-      expiresAt: 1_700_604_800_000
-    }))
+    const out = vectorStoreToOpenAI(
+      fixtureMeta({
+        expiresAfter: { anchor: 'last_active_at', days: 7 },
+        expiresAt: 1_700_604_800_000
+      })
+    )
     assert.deepEqual(out.expires_after, { anchor: 'last_active_at', days: 7 })
     assert.equal(out.expires_at, 1_700_604_800)
   })
@@ -715,16 +783,25 @@ describe('parseExpiresAfter', () => {
   })
 
   it('parses a valid expires_after object', () => {
-    assert.deepEqual(
-      parseExpiresAfter({ anchor: 'last_active_at', days: 30 }),
-      { anchor: 'last_active_at', days: 30 }
-    )
+    assert.deepEqual(parseExpiresAfter({ anchor: 'last_active_at', days: 30 }), {
+      anchor: 'last_active_at',
+      days: 30
+    })
   })
 
   it('throws on a wrong anchor or non-integer days', () => {
-    assert.throws(() => parseExpiresAfter({ anchor: 'created_at', days: 7 }), InvalidExpiresAfterError)
-    assert.throws(() => parseExpiresAfter({ anchor: 'last_active_at', days: 0 }), InvalidExpiresAfterError)
-    assert.throws(() => parseExpiresAfter({ anchor: 'last_active_at', days: 1.5 }), InvalidExpiresAfterError)
+    assert.throws(
+      () => parseExpiresAfter({ anchor: 'created_at', days: 7 }),
+      InvalidExpiresAfterError
+    )
+    assert.throws(
+      () => parseExpiresAfter({ anchor: 'last_active_at', days: 0 }),
+      InvalidExpiresAfterError
+    )
+    assert.throws(
+      () => parseExpiresAfter({ anchor: 'last_active_at', days: 1.5 }),
+      InvalidExpiresAfterError
+    )
   })
 
   it('throws on non-object inputs', () => {
@@ -767,28 +844,34 @@ describe('openaiResponsesInputToHistory', () => {
 
   it('prepends instructions as system', () => {
     const h = openaiResponsesInputToHistory('x', 'sys')
-    assert.deepEqual(h, [{ role: 'system', content: 'sys' }, { role: 'user', content: 'x' }])
+    assert.deepEqual(h, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'x' }
+    ])
   })
 
   it('maps message items', () => {
-    const h = openaiResponsesInputToHistory([
-      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] }
-    ], undefined)
+    const h = openaiResponsesInputToHistory(
+      [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] }],
+      undefined
+    )
     assert.equal(h[0]!.role, 'user')
     assert.equal(h[0]!.content, 'a')
   })
 
   it('maps function_call_output to tool role', () => {
-    const h = openaiResponsesInputToHistory([
-      { type: 'function_call_output', output: '{"ok":true}' }
-    ], undefined)
+    const h = openaiResponsesInputToHistory(
+      [{ type: 'function_call_output', output: '{"ok":true}' }],
+      undefined
+    )
     assert.deepEqual(h[0], { role: 'tool', content: '{"ok":true}' })
   })
 
   it('maps function_call to synthesized assistant tool markup', () => {
-    const h = openaiResponsesInputToHistory([
-      { type: 'function_call', name: 'x', arguments: '{"a":1}' }
-    ], undefined)
+    const h = openaiResponsesInputToHistory(
+      [{ type: 'function_call', name: 'x', arguments: '{"a":1}' }],
+      undefined
+    )
     assert.equal(h[0]!.role, 'assistant')
     assert.ok(h[0]!.content.includes('<tool_call>'))
     assert.ok(h[0]!.content.includes('x'))
@@ -797,12 +880,14 @@ describe('openaiResponsesInputToHistory', () => {
 
 describe('openaiResponsesToolsToSdk', () => {
   it('maps Responses-style function tools', () => {
-    const t = openaiResponsesToolsToSdk([{
-      type: 'function',
-      name: 'fn',
-      description: 'd',
-      parameters: { type: 'object', properties: {} }
-    }])
+    const t = openaiResponsesToolsToSdk([
+      {
+        type: 'function',
+        name: 'fn',
+        description: 'd',
+        parameters: { type: 'object', properties: {} }
+      }
+    ])
     assert.ok(t && t.length === 1)
     assert.equal(t[0]!.name, 'fn')
   })
@@ -869,7 +954,9 @@ describe('normalizeResponsesInputItemsForStorage', () => {
 describe('historyPrefixFromStoredResponse', () => {
   it('uses output_text when output array is empty', () => {
     const prefix = historyPrefixFromStoredResponse({
-      inputItems: [{ type: 'message', id: '1', role: 'user', content: [{ type: 'input_text', text: 'u' }] }],
+      inputItems: [
+        { type: 'message', id: '1', role: 'user', content: [{ type: 'input_text', text: 'u' }] }
+      ],
       responseObject: { output_text: 'assistant reply', output: [] }
     })
     assert.deepEqual(prefix, [
@@ -889,8 +976,12 @@ describe('historyPrefixFromStoredResponse', () => {
         ]
       }
     })
-    const assistantText = prefix.filter((p) => p.role === 'assistant' && !p.content.includes('tool_call'))
-    const toolCalls = prefix.filter((p) => p.role === 'assistant' && p.content.includes('tool_call'))
+    const assistantText = prefix.filter(
+      (p) => p.role === 'assistant' && !p.content.includes('tool_call')
+    )
+    const toolCalls = prefix.filter(
+      (p) => p.role === 'assistant' && p.content.includes('tool_call')
+    )
     assert.equal(assistantText.length, 1)
     assert.equal(assistantText[0]!.content, 'hello')
     assert.equal(toolCalls.length, 1)
@@ -898,16 +989,17 @@ describe('historyPrefixFromStoredResponse', () => {
 
   it('includes function_call_output from stored input items', () => {
     const prefix = historyPrefixFromStoredResponse({
-      inputItems: [
-        { type: 'function_call_output', output: '{"r":1}' }
-      ],
+      inputItems: [{ type: 'function_call_output', output: '{"r":1}' }],
       responseObject: { output: [], output_text: '' }
     })
     assert.deepEqual(prefix, [{ role: 'tool', content: '{"r":1}' }])
   })
 
   it('walks previous_response_id chain so depth-3 carries the grandparent turn', () => {
-    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+    const records: Record<
+      string,
+      { inputItems: unknown[]; responseObject: Record<string, unknown> }
+    > = {
       resp_1: {
         inputItems: [
           { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'A' }] }
@@ -927,36 +1019,47 @@ describe('historyPrefixFromStoredResponse', () => {
         responseObject: { output: [], output_text: 'Z', previous_response_id: 'resp_2' }
       }
     }
-    const prefix = historyPrefixFromStoredResponse(
-      records['resp_3']!,
-      (id) => records[id]
-    )
+    const prefix = historyPrefixFromStoredResponse(records['resp_3']!, (id) => records[id])
     assert.deepEqual(prefix, [
-      { role: 'user', content: 'A' }, { role: 'assistant', content: 'X' },
-      { role: 'user', content: 'B' }, { role: 'assistant', content: 'Y' },
-      { role: 'user', content: 'C' }, { role: 'assistant', content: 'Z' }
+      { role: 'user', content: 'A' },
+      { role: 'assistant', content: 'X' },
+      { role: 'user', content: 'B' },
+      { role: 'assistant', content: 'Y' },
+      { role: 'user', content: 'C' },
+      { role: 'assistant', content: 'Z' }
     ])
   })
 
   it('caps chain walk at maxDepth to bound work on pathological input', () => {
-    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+    const records: Record<
+      string,
+      { inputItems: unknown[]; responseObject: Record<string, unknown> }
+    > = {
       a: {
-        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'aIn' }] }],
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'aIn' }] }
+        ],
         responseObject: { output: [], output_text: 'aOut' }
       },
       b: {
-        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'bIn' }] }],
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'bIn' }] }
+        ],
         responseObject: { output: [], output_text: 'bOut', previous_response_id: 'a' }
       },
       c: {
-        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'cIn' }] }],
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'cIn' }] }
+        ],
         responseObject: { output: [], output_text: 'cOut', previous_response_id: 'b' }
       }
     }
     const prefix = historyPrefixFromStoredResponse(records['c']!, (id) => records[id], 1)
     assert.deepEqual(prefix, [
-      { role: 'user', content: 'bIn' }, { role: 'assistant', content: 'bOut' },
-      { role: 'user', content: 'cIn' }, { role: 'assistant', content: 'cOut' }
+      { role: 'user', content: 'bIn' },
+      { role: 'assistant', content: 'bOut' },
+      { role: 'user', content: 'cIn' },
+      { role: 'assistant', content: 'cOut' }
     ])
   })
 })
@@ -990,7 +1093,14 @@ describe('parseLegacyPrompt', () => {
 
   it('throws on array entries that are not strings (token IDs)', () => {
     assert.throws(() => parseLegacyPrompt([1, 2, 3]), InvalidPromptError)
-    assert.throws(() => parseLegacyPrompt([[1, 2], [3, 4]]), InvalidPromptError)
+    assert.throws(
+      () =>
+        parseLegacyPrompt([
+          [1, 2],
+          [3, 4]
+        ]),
+      InvalidPromptError
+    )
     assert.throws(() => parseLegacyPrompt(['ok', 7]), InvalidPromptError)
   })
 
@@ -1013,4 +1123,3 @@ describe('legacyPromptToHistory', () => {
     assert.deepEqual(legacyPromptToHistory('hello'), [{ role: 'user', content: 'hello' }])
   })
 })
-

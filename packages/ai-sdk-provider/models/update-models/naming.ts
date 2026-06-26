@@ -5,7 +5,7 @@ import type { ExportNameInput } from './types.ts'
 // Normalizes a name part to a valid JS export name fragment.
 // Strips ggml/gguf prefixes, shortens "instruct" to "inst",
 // and uppercases with underscore separators.
-export function cleanPart (p: string): string {
+export function cleanPart(p: string): string {
   if (!p) return ''
   return p
     .replace(/ggml-?/gi, '')
@@ -18,7 +18,7 @@ export function cleanPart (p: string): string {
 
 // Generates a unique export constant name for a model based on its
 // registry metadata, engine type, tags, and filename.
-export function generateExportName ({
+export function generateExportName({
   path: registryPath,
   engine,
   name: modelName,
@@ -78,7 +78,7 @@ export function generateExportName ({
 }
 
 // Resolves name collisions by appending quantization or a sequential counter.
-function resolveCollision (
+function resolveCollision(
   exportName: string,
   quantization: string,
   usedNames: Set<string>
@@ -119,7 +119,7 @@ interface BaseNameInput {
   tags: string[]
 }
 
-function generateBaseName (input: BaseNameInput): string {
+function generateBaseName(input: BaseNameInput): string {
   const { addon, lowerFilename } = input
 
   if (lowerFilename.includes('silero')) {
@@ -150,14 +150,14 @@ function generateBaseName (input: BaseNameInput): string {
   }
 }
 
-function generateVadSileroName ({ filename }: BaseNameInput): string {
+function generateVadSileroName({ filename }: BaseNameInput): string {
   const versionMatch = filename.match(/v(\d+\.\d+\.\d+)/i)
   const version = versionMatch ? versionMatch[1]! : ''
   const nameParts = ['SILERO', version].filter((p) => p && p !== '')
   return `VAD_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateWhisperName ({ filename, lowerFilename, quantization }: BaseNameInput): string {
+function generateWhisperName({ filename, lowerFilename, quantization }: BaseNameInput): string {
   const langPrefixMatch = filename.match(/^([a-z]{2})-/i)
   const isEnglishOnly = /\.en[-.]/.test(lowerFilename) || lowerFilename.endsWith('.en.bin')
 
@@ -194,7 +194,7 @@ function generateWhisperName ({ filename, lowerFilename, quantization }: BaseNam
   return `WHISPER_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateVadName ({ filename, tagType, tagName }: BaseNameInput): string {
+function generateVadName({ filename, tagType, tagName }: BaseNameInput): string {
   const versionMatch = filename.match(/v(\d+\.\d+\.\d+)/i)
   const version = versionMatch ? versionMatch[1]! : ''
   const typeName = tagType || tagName || 'SILERO'
@@ -202,7 +202,7 @@ function generateVadName ({ filename, tagType, tagName }: BaseNameInput): string
   return `VAD_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateNmtName (input: BaseNameInput): string {
+function generateNmtName(input: BaseNameInput): string {
   const { lowerPath, lowerFilename } = input
 
   if (lowerPath.includes('salamandra') || lowerFilename.includes('salamandra')) {
@@ -219,12 +219,12 @@ function generateNmtName (input: BaseNameInput): string {
   return `NMT_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateNmtSalamandraName ({ filename }: BaseNameInput): string {
+function generateNmtSalamandraName({ filename }: BaseNameInput): string {
   const base = filename.replace(/\.\w+$/, '').replace(/-\d{5}-of-\d{5}/, '')
   return cleanPart(base)
 }
 
-function generateNmtIndictransName ({ filename, quantization }: BaseNameInput): string {
+function generateNmtIndictransName({ filename, quantization }: BaseNameInput): string {
   const langMatch = filename.match(/(en-indic|indic-en|indic-indic)/i)
   const langDir = langMatch ? langMatch[1]! : ''
   const langMap: Record<string, string> = {
@@ -241,7 +241,7 @@ function generateNmtIndictransName ({ filename, quantization }: BaseNameInput): 
   return `MARIAN_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateNmtBergamotName ({ filename }: BaseNameInput): string {
+function generateNmtBergamotName({ filename }: BaseNameInput): string {
   const langMatch = filename.match(/[.]([a-z]{2,4})[.]/i)
   let langPair = ''
   if (langMatch) {
@@ -271,7 +271,7 @@ function generateNmtBergamotName ({ filename }: BaseNameInput): string {
   return `BERGAMOT_${langPair}${suffix}`
 }
 
-function generateLlmName ({
+function generateLlmName({
   filename,
   tagType,
   tagName,
@@ -316,7 +316,7 @@ function generateLlmName ({
   return exportName
 }
 
-function generateEmbeddingsName ({
+function generateEmbeddingsName({
   tagName,
   modelName,
   params,
@@ -327,7 +327,7 @@ function generateEmbeddingsName ({
   return nameParts.map(cleanPart).join('_')
 }
 
-function generateTtsName ({
+function generateTtsName({
   filename,
   tagName,
   modelName,
@@ -349,7 +349,7 @@ function generateTtsName ({
   return exportName
 }
 
-function generateOcrName ({ filename, tagName, modelName, tagExtra }: BaseNameInput): string {
+function generateOcrName({ filename, tagName, modelName, tagExtra }: BaseNameInput): string {
   const name = tagName || modelName || ''
   const language = tagExtra || ''
   let fileType = ''
@@ -362,7 +362,7 @@ function generateOcrName ({ filename, tagName, modelName, tagExtra }: BaseNameIn
   return `OCR_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateDiffusionName ({
+function generateDiffusionName({
   filename,
   modelName,
   quantization,
@@ -392,7 +392,7 @@ function generateDiffusionName ({
   return nameParts.map(cleanPart).join('_')
 }
 
-function generateParakeetName ({ filename, lowerPath, quantization }: BaseNameInput): string {
+function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
 
   let variant = ''

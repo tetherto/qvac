@@ -5,7 +5,12 @@ import { drainCompletion } from './completion-result.js'
 import { sdkToolCallsToOpenai } from './tool-calls.js'
 import type { GenerationParams, ResponseFormat } from '../../schemas/common.js'
 import { buildResponseObject, functionCallOutputItemId, messageId } from './responses-shape.js'
-import { RESPONSES_DEFAULT_TTL_SEC, RESPONSES_VOLATILE_STUB, type ResponsesStore, type StoredResponse } from './responses-store.js'
+import {
+  RESPONSES_DEFAULT_TTL_SEC,
+  RESPONSES_VOLATILE_STUB,
+  type ResponsesStore,
+  type StoredResponse
+} from './responses-store.js'
 
 interface ResponseWriterLogger {
   info: (message: string) => void
@@ -36,7 +41,7 @@ export interface ResponsesHandlerParams {
   previousResponseId: string | null
 }
 
-export async function writeBlockingResponse (
+export async function writeBlockingResponse(
   res: ServerResponse,
   p: ResponsesHandlerParams,
   result: CompletionRun
@@ -86,7 +91,7 @@ export async function writeBlockingResponse (
   return responseObject
 }
 
-export async function writeStreamingResponse (
+export async function writeStreamingResponse(
   res: ServerResponse,
   p: ResponsesHandlerParams,
   result: CompletionRun
@@ -96,7 +101,13 @@ export async function writeStreamingResponse (
 
   sendSSE(res, {
     type: 'response.created',
-    response: { id: p.rid, object: 'response', created_at: p.createdAtSec, status: 'in_progress', model: p.modelAlias }
+    response: {
+      id: p.rid,
+      object: 'response',
+      created_at: p.createdAtSec,
+      status: 'in_progress',
+      model: p.modelAlias
+    }
   })
   sendSSE(res, {
     type: 'response.output_item.added',
@@ -167,7 +178,14 @@ export async function writeStreamingResponse (
       sendSSE(res, {
         type: 'response.output_item.added',
         output_index: outputIndex,
-        item: { type: 'function_call', id: fcItemId, call_id: tc.id, name: tc.function.name, arguments: '', status: 'in_progress' },
+        item: {
+          type: 'function_call',
+          id: fcItemId,
+          call_id: tc.id,
+          name: tc.function.name,
+          arguments: '',
+          status: 'in_progress'
+        },
         response_id: p.rid
       })
       sendSSE(res, {
@@ -187,7 +205,14 @@ export async function writeStreamingResponse (
       sendSSE(res, {
         type: 'response.output_item.done',
         output_index: outputIndex,
-        item: { type: 'function_call', id: fcItemId, call_id: tc.id, name: tc.function.name, arguments: argsStr, status: 'completed' },
+        item: {
+          type: 'function_call',
+          id: fcItemId,
+          call_id: tc.id,
+          name: tc.function.name,
+          arguments: argsStr,
+          status: 'completed'
+        },
         response_id: p.rid
       })
       i++
@@ -225,7 +250,8 @@ export async function writeStreamingResponse (
     p.ctx.responsesStore.put(rec)
   }
 
-  const terminalType = responseObject['status'] === 'incomplete' ? 'response.incomplete' : 'response.completed'
+  const terminalType =
+    responseObject['status'] === 'incomplete' ? 'response.incomplete' : 'response.completed'
   sendSSE(res, { type: terminalType, response: responseObject })
   endSSE(res, { sentinel: false })
   p.ctx.logger.info(`  responses stream done id=${p.rid} stored=${p.storeEnabled}`)

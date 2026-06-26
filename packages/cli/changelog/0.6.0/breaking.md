@@ -13,6 +13,7 @@ Plugin import path: `@qvac/sdk/onnx-tts/plugin` → `@qvac/sdk/tts-ggml/plugin` 
 PR: [#2261](https://github.com/tetherto/qvac/pull/2261)
 
 **BEFORE:**
+
 ```json
 {
   "devDependencies": {
@@ -31,6 +32,7 @@ if (sdkVersion && !satisfiesMinVersion(sdkVersion, MIN_SDK_VERSION)) {
 ```
 
 **AFTER:**
+
 ```json
 {
   "dependencies": {
@@ -54,17 +56,19 @@ Installing `@qvac/cli` always pulls in `@qvac/sdk`. SDK compatibility is enforce
 PR: [#2267](https://github.com/tetherto/qvac/pull/2267)
 
 **BEFORE:**
+
 ```typescript
 type ResolvedModelEntry = {
-  src: string  // registry:// URL constructed by CLI
+  src: string // registry:// URL constructed by CLI
   // ...
 }
 ```
 
 **AFTER:**
+
 ```typescript
 type ResolvedModelEntry = {
-  modelSrc: string | ModelConstant  // SDK extracts registry:// URL
+  modelSrc: string | ModelConstant // SDK extracts registry:// URL
   // ...
 }
 ```
@@ -78,6 +82,7 @@ PR: [#2306](https://github.com/tetherto/qvac/pull/2306)
 Only the **order of validation** changed: image routes (`/v1/images/generations`, `/v1/images/edits`) now resolve the model before running per-parameter checks (`response_format`, `output_format`, `output_compression`, `background`). Previously those parameter checks ran first, so a request naming an unknown model could be rejected on a parameter before any model lookup. The error codes themselves are unchanged — a request that names an unknown model now surfaces `404 model_not_found` instead of a parameter error.
 
 **BEFORE:**
+
 ```sh
 $ curl -sX POST .../v1/images/generations \
     -H 'Content-Type: application/json' \
@@ -87,6 +92,7 @@ $ curl -sX POST .../v1/images/generations \
 ```
 
 **AFTER:**
+
 ```sh
 $ curl -sX POST .../v1/images/generations \
     -H 'Content-Type: application/json' \
@@ -96,4 +102,3 @@ $ curl -sX POST .../v1/images/generations \
 ```
 
 ---
-

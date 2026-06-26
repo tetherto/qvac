@@ -57,12 +57,20 @@ describe('serve: auth', () => {
   })
 
   it('wrong key returns 401', async () => {
-    const res = await server().inject({ method: 'GET', url: '/v1/models', headers: { authorization: 'Bearer wrong-key' } })
+    const res = await server().inject({
+      method: 'GET',
+      url: '/v1/models',
+      headers: { authorization: 'Bearer wrong-key' }
+    })
     assertStatusAndError(res, 401, 'invalid_api_key')
   })
 
   it('correct key returns 200', async () => {
-    const res = await server().inject({ method: 'GET', url: '/v1/models', headers: { authorization: 'Bearer test-secret-key-12345' } })
+    const res = await server().inject({
+      method: 'GET',
+      url: '/v1/models',
+      headers: { authorization: 'Bearer test-secret-key-12345' }
+    })
     assert.equal(res.statusCode, 200)
   })
 })

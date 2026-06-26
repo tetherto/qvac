@@ -179,12 +179,14 @@ The wire is the new `requestId` exposed synchronously on the SDK's decorated pro
 
 ```typescript
 // Inside qvac serve route handler (illustrative)
-import { sdkCompletion } from "@qvac/cli/serve/core/sdk";
-import { bindClientDisconnectCancel } from "@qvac/cli/serve/core/cancel-bridge";
+import { sdkCompletion } from '@qvac/cli/serve/core/sdk'
+import { bindClientDisconnectCancel } from '@qvac/cli/serve/core/cancel-bridge'
 
-const run = sdkCompletion({ /* ... */ });
-bindClientDisconnectCancel(req, res, run.requestId, logger);
-const final = await run.final;
+const run = sdkCompletion({
+  /* ... */
+})
+bindClientDisconnectCancel(req, res, run.requestId, logger)
+const final = await run.final
 ```
 
 The bridge is idempotent (`req.once('close', ...)`), short-circuits if the response already finished (`res.writableEnded`), and swallows the `sdkCancel` rejection so a slow-or-failed cancel never breaks the response handler.

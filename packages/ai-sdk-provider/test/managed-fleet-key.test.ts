@@ -20,7 +20,9 @@ test('fleet key is identical for identical configs', () => {
 
 test('fleet key changes with per-model config and with host', () => {
   const base = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024 } }])
-  const bigger = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 16384 } }])
+  const bigger = synthesizeServeConfig([
+    { name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 16384 } }
+  ])
   assert.notEqual(computeFleetKey(base, '127.0.0.1'), computeFleetKey(bigger, '127.0.0.1'))
   assert.notEqual(computeFleetKey(base, '127.0.0.1'), computeFleetKey(base, '0.0.0.0'))
 })
@@ -52,7 +54,11 @@ test('fleet key folds in a pinned servePort so pins do not share an auto serve',
 })
 
 test('fleet key is insensitive to key order within a per-model config object', () => {
-  const a = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024, reasoning_budget: 0 } }])
-  const b = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { reasoning_budget: 0, ctx_size: 1024 } }])
+  const a = synthesizeServeConfig([
+    { name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024, reasoning_budget: 0 } }
+  ])
+  const b = synthesizeServeConfig([
+    { name: 'QWEN3_600M_INST_Q4', config: { reasoning_budget: 0, ctx_size: 1024 } }
+  ])
   assert.equal(computeFleetKey(a, '127.0.0.1'), computeFleetKey(b, '127.0.0.1'))
 })
