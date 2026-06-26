@@ -1316,16 +1316,20 @@ TEST_F(
   std::atomic<int> seqBTokens = 0;
   std::atomic<bool> readyToCancel = false;
   std::atomic<bool> cancelIssued = false;
+  std::atomic<bool> cancelHitOccupied = false;
 
   // Issue the cancel from inside the decode unlock window so its teardown runs
   // in the StepUnlockGuard destructor, then delegate to the real decode so the
-  // surviving sequence keeps generating.
+  // surviving sequence keeps generating. Capture cancel()'s return: it is true
+  // only when seqId 1 was still occupied, i.e. the throwing teardown actually
+  // ran. Without it the test could pass vacuously when the slot finished first
+  // and the cancel was a no-op.
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
-      [scheduler, &readyToCancel, &cancelIssued](
+      [scheduler, &readyToCancel, &cancelIssued, &cancelHitOccupied](
           llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
-          scheduler->cancel(kCancelSeqId);
+          cancelHitOccupied.store(scheduler->cancel(kCancelSeqId));
         }
         return llama_decode(ctx, batch);
       });
@@ -1334,6 +1338,9 @@ TEST_F(
   // cannot open it, so TextLlmContext::saveCache throws on the cancel path.
   const fs::path unwritable = fs::temp_directory_path() /
                               ("no-such-dir-" + uniqueTestId()) / "cache.bin";
+  ASSERT_FALSE(fs::exists(unwritable.parent_path()))
+      << "precondition: the cacheKey's parent dir must be absent so saveCache "
+         "throws on the cancel path";
 
   auto promptA =
       makePrompt("Write a long, detailed paragraph about redwood forests.");
@@ -1341,11 +1348,13 @@ TEST_F(
       makePrompt("Write a long, detailed paragraph about coral reefs.");
   promptB.cacheKey = unwritable.string();
   promptB.saveCacheToDisk = true;
-  // Arm the cancel only once seqId 1 is actively generating.
+  // Arm the cancel as soon as seqId 1 streams its first token: the cancel then
+  // lands on the very next decode, leaving essentially no window for the slot
+  // to finish naturally first (which would instead hit the deliberately
+  // throwing normal-completion save path and fail the whole batch).
   promptB.outputCallback = [&seqBTokens, &readyToCancel](const std::string&) {
-    if (seqBTokens.fetch_add(1) + 1 >= 2) {
-      readyToCancel.store(true);
-    }
+    seqBTokens.fetch_add(1);
+    readyToCancel.store(true);
   };
 
   std::vector<LlamaModel::Prompt> prompts{
@@ -1357,9 +1366,10 @@ TEST_F(
   ASSERT_EQ(outputs.size(), 2u);
   ASSERT_TRUE(cancelIssued.load())
       << "test setup: seqId 1 never reached the cancel arming point";
-  EXPECT_FALSE(fs::exists(unwritable))
-      << "saveCache was expected to fail on the unwritable path, not write a "
-         "file";
+  ASSERT_TRUE(cancelHitOccupied.load())
+      << "cancel must hit the still-occupied seqId 1 so the throwing saveCache "
+         "teardown actually runs; false means the slot finished first and the "
+         "teardown path was never exercised";
   EXPECT_FALSE(outputs[0].empty())
       << "sibling sequence (seqId 0) must finish normally despite the throwing "
          "teardown on seqId 1";

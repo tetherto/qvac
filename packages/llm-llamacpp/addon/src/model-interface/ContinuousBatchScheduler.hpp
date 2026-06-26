@@ -351,10 +351,15 @@ private:
   /// StepUnlockGuard destructor's teardown step cannot throw -- the only thing
   /// that destructor can throw is the mutex re-acquire (see its declaration).
   void applyDeferredTeardownLocked() noexcept;
-  /// `noexcept`: invoked on the teardown path. Contains the caller-provided
-  /// onDone callback internally so a throwing callback can neither escape nor
-  /// skip the group-completion below.
-  void notifyDone(uint32_t seqId) noexcept;
+  /// Fire the slot's onDone stream callback, then complete its group. Throwing
+  /// variant for the normal-completion path: a throwing onDone propagates so
+  /// the worker loop surfaces it as a batch error rather than silently
+  /// completing the group as a success.
+  void notifyDone(uint32_t seqId);
+  /// `noexcept` teardown variant (cancel/clear/fail paths). Contains the
+  /// caller-provided onDone internally so a throwing callback can neither
+  /// escape a noexcept path nor skip the group-completion below.
+  void notifyDoneNoexcept(uint32_t seqId) noexcept;
   void freeSlot(uint32_t seqId) noexcept;
   /// Remove every KV-cache cell owned by `seqId` from the shared context.
   /// Single home for the cleanup repeated across all slot-teardown paths.

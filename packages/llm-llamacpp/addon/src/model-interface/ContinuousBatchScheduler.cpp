@@ -532,7 +532,7 @@ void ContinuousBatchScheduler::failSlotLocked(
       accumulateSlotRuntimeStats(*slot, *req);
     }
   }
-  notifyDone(seqId);
+  notifyDoneNoexcept(seqId);
   batcher_.cancel(seqId, [this](uint32_t sid) { clearSeqKv(sid); });
   freeSlot(seqId);
 }
@@ -892,7 +892,7 @@ void ContinuousBatchScheduler::cancelSlotLocked(uint32_t seqId) noexcept {
       logTeardownFailureNoexcept("cancel teardown failed", seqId, nullptr);
     }
   }
-  notifyDone(seqId);
+  notifyDoneNoexcept(seqId);
   // batcher_.cancel takes a KvClearFn callback so it is not noexcept; the
   // clearSeqKv lambda cannot throw, but wrap defensively so this noexcept path
   // cannot terminate if that ever changes.
@@ -953,7 +953,7 @@ void ContinuousBatchScheduler::clearLocked() noexcept {
               "clear: onSequenceEnd threw", seqId, nullptr);
         }
       }
-      notifyDone(seqId);
+      notifyDoneNoexcept(seqId);
       freeSlot(seqId);
     }
   }
@@ -1028,14 +1028,31 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
   }
 }
 
-void ContinuousBatchScheduler::notifyDone(uint32_t seqId) noexcept {
+void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
+  // Normal-completion path: a throwing onDone propagates so the worker loop
+  // fails the batch (failGroupLocked) instead of completing it as a success;
+  // teardown paths use notifyDoneNoexcept. The throw then skips freeSlot below,
+  // so recovery re-runs teardown (onCancel/saveCache/onDone) on this slot. That
+  // is benign and only happens when onDone itself threw: onGenerationFinished's
+  // generationStarted_ guard makes the re-run a no-op, recovery's onCancel({})
+  // re-emits nothing, and saveCache just rewrites the same file.
+  auto& slot = slots_[seqId];
+  if (slot.has_value() && slot->streams.onDone) {
+    slot->streams.onDone(seqId);
+  }
+  if (slot.has_value() && slot->group) {
+    completeGroupRequestLocked(slot->group);
+  }
+}
+
+void ContinuousBatchScheduler::notifyDoneNoexcept(uint32_t seqId) noexcept {
   auto& slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {
     // The onDone stream callback is caller/JS-provided and may throw. Contain
-    // it here, not at the call site: this keeps cancelSlotLocked's noexcept
-    // contract honest (notifyDone runs on that teardown path), and — crucially
-    // — still runs completeGroupRequestLocked below, so a throwing callback
-    // can never leave the submitting caller blocked forever on the group.
+    // it here, not at the call site: this keeps the noexcept teardown contract
+    // honest (cancel/clear/fail paths run it), and — crucially — still runs
+    // completeGroupRequestLocked below, so a throwing callback can never leave
+    // the submitting caller blocked forever on the group.
     try {
       slot->streams.onDone(seqId);
     } catch (const std::exception& e) {
