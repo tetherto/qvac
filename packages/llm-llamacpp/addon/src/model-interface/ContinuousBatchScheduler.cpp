@@ -758,7 +758,7 @@ bool ContinuousBatchScheduler::hasWork() const {
   return hasWorkLocked();
 }
 
-bool ContinuousBatchScheduler::hasWorkLocked() const {
+bool ContinuousBatchScheduler::hasWorkLocked() const noexcept {
   return numActiveLocked() > 0;
 }
 
@@ -767,7 +767,7 @@ unsigned ContinuousBatchScheduler::numActive() const {
   return numActiveLocked();
 }
 
-unsigned ContinuousBatchScheduler::numActiveLocked() const {
+unsigned ContinuousBatchScheduler::numActiveLocked() const noexcept {
   unsigned count = 0;
   for (const auto& s : slots_) {
     if (s.has_value()) {
@@ -981,7 +981,8 @@ void ContinuousBatchScheduler::completeGroupRequestLocked(
 }
 
 void ContinuousBatchScheduler::failGroupLocked(
-    const std::shared_ptr<BatchGroup>& group, std::exception_ptr error) {
+    const std::shared_ptr<BatchGroup>& group,
+    std::exception_ptr error) noexcept {
   if (!group || group->done) {
     return;
   }
@@ -989,18 +990,16 @@ void ContinuousBatchScheduler::failGroupLocked(
   group->stats = stats_;
   group->done = true;
 
+  // Per-slot teardown is identical to a cancel, so delegate to cancelSlotLocked
+  // rather than re-implement onCancel/save/notify/free here: it is noexcept and
+  // already contains every throwing step, which keeps this function noexcept on
+  // the worker error-recovery path (where a throw would escape the worker
+  // thread and std::terminate). The group is marked done above, so the
+  // completeGroupRequestLocked inside notifyDone no-ops rather than
+  // double-counting.
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value() && slots_[seqId]->group == group) {
-      if (slots_[seqId]->driver) {
-        slots_[seqId]->driver->onCancel({});
-        if (const Request* req = batcher_.requestAt(seqId); req != nullptr) {
-          accumulateSlotRuntimeStats(*slots_[seqId], *req);
-        }
-        saveCacheForSlot(seqId, *slots_[seqId]);
-      }
-      notifyDone(seqId);
-      batcher_.cancel(seqId, [this](uint32_t s) { clearSeqKv(s); });
-      freeSlot(seqId);
+      cancelSlotLocked(seqId);
     }
   }
   workCv_.notify_all();

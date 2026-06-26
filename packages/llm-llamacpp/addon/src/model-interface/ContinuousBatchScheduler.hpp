@@ -330,12 +330,13 @@ private:
   /// Extract finished requests and run the full per-slot drain (terminal
   /// driver hook with output flushing, stats, cache save, KV clear).
   void drainFinishedLocked();
-  [[nodiscard]] bool hasWorkLocked() const;
-  [[nodiscard]] unsigned numActiveLocked() const;
+  [[nodiscard]] bool hasWorkLocked() const noexcept;
+  [[nodiscard]] unsigned numActiveLocked() const noexcept;
   void completeGroupRequestLocked(
       const std::shared_ptr<BatchGroup>& group) noexcept;
   void failGroupLocked(
-      const std::shared_ptr<BatchGroup>& group, std::exception_ptr error);
+      const std::shared_ptr<BatchGroup>& group,
+      std::exception_ptr error) noexcept;
   void cancelPendingLocked();
   void clearLocked() noexcept;
   /// Tear down a single slot (cancel path). `noexcept`: callers run it from
