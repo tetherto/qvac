@@ -65,6 +65,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
+    "qvac-gate-test-dep": "0.0.1-tmp",
     "@types/node": "^24.2.1",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^5.2.3",
